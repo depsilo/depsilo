@@ -1,0 +1,23 @@
+# Build
+bin/
+web/dist/
+
+# Runtime data
+data/
+.dev.log
+.server.pid
+
+# Test
+testground/.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Non-open-source / private assets
+stitch/
+stitch_landingpage/

@@ -1,0 +1,57 @@
+package config
+
+import "time"
+
+type Config struct {
+	Server   ServerConfig   `mapstructure:"server"`
+	Database DatabaseConfig `mapstructure:"database"`
+	Storage  StorageConfig  `mapstructure:"storage"`
+	Cache    CacheConfig    `mapstructure:"cache"`
+	Auth     AuthConfig     `mapstructure:"auth"`
+	PyPI     AdapterConfig  `mapstructure:"pypi"`
+	APT      AdapterConfig  `mapstructure:"apt"`
+}
+
+type ServerConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
+}
+
+type DatabaseConfig struct {
+	Driver string `mapstructure:"driver"` // sqlite | postgres
+	DSN    string `mapstructure:"dsn"`
+}
+
+type StorageConfig struct {
+	Type      string `mapstructure:"type"` // local | s3
+	Path      string `mapstructure:"path"`
+	Bucket    string `mapstructure:"bucket"`
+	Endpoint  string `mapstructure:"endpoint"`
+	Region    string `mapstructure:"region"`
+	AccessKey string `mapstructure:"access_key"`
+	SecretKey string `mapstructure:"secret_key"`
+}
+
+type CacheConfig struct {
+	MaxSizeGB    int           `mapstructure:"max_size_gb"`
+	TTLIndex     time.Duration `mapstructure:"ttl_index"`
+	TTLBlob      time.Duration `mapstructure:"ttl_blob"`
+	LRUThreshold int           `mapstructure:"lru_threshold"`
+}
+
+type AuthConfig struct {
+	Enabled   bool          `mapstructure:"enabled"`
+	JWTSecret string        `mapstructure:"jwt_secret"`
+	TokenTTL  time.Duration `mapstructure:"token_ttl"`
+}
+
+type AdapterConfig struct {
+	Upstreams []UpstreamConfig `mapstructure:"upstreams"`
+}
+
+type UpstreamConfig struct {
+	Name     string `mapstructure:"name"`
+	URL      string `mapstructure:"url"`
+	Priority int    `mapstructure:"priority"`
+	Proxy    string `mapstructure:"proxy"`
+}

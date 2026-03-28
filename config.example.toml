@@ -1,0 +1,50 @@
+[server]
+host = "0.0.0.0"
+port = 23333
+
+[database]
+driver = "sqlite"           # sqlite | postgres
+dsn    = "./data/repocache.db"
+
+[storage]
+type = "local"              # local | s3
+path = "./data/cache"
+
+# S3 配置（type = "s3" 时生效）
+# bucket   = "repocache"
+# endpoint = "http://minio:9000"
+# region   = "us-east-1"
+# access_key = ""
+# secret_key = ""
+
+[cache]
+max_size_gb  = 20
+ttl_index    = "5m"         # PyPI simple / APT Release 等元数据
+ttl_blob     = "72h"        # wheel / .deb 文件
+lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
+
+[auth]
+enabled    = true
+jwt_secret = "change-me-in-production"
+token_ttl  = "168h"         # 7天
+
+[[pypi.upstreams]]
+name     = "tuna"
+url      = "https://pypi.tuna.tsinghua.edu.cn"
+priority = 1
+
+[[pypi.upstreams]]
+name     = "official"
+url      = "https://pypi.org"
+priority = 2
+proxy    = "http://127.0.0.1:7890"   # 可选，单独给此上游配 HTTP 代理
+
+[[apt.upstreams]]
+name     = "tuna"
+url      = "https://mirrors.tuna.tsinghua.edu.cn"
+priority = 1
+
+[[apt.upstreams]]
+name     = "aliyun"
+url      = "https://mirrors.aliyun.com"
+priority = 2
