@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"repocache/internal/config"
+	"depslio/internal/config"
 )
 
 type SettingsHandler struct {

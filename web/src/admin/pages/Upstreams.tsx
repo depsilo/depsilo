@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import Card from '@/components/Card'
@@ -24,6 +25,7 @@ const emptyForm: UpstreamForm = {
 }
 
 export default function Upstreams() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<'pypi' | 'apt'>('pypi')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -94,7 +96,7 @@ export default function Upstreams() {
     try {
       new URL(form.url)
     } catch {
-      setUrlError('请输入有效的 URL')
+      setUrlError(t('upstreams.invalidUrl'))
       return
     }
     setUrlError('')
@@ -114,7 +116,7 @@ export default function Upstreams() {
         <div />
         <Button onClick={openCreate}>
           <Icon name="add" size="sm" />
-          添加上游源
+          {t('upstreams.addUpstream')}
         </Button>
       </div>
 
@@ -137,9 +139,9 @@ export default function Upstreams() {
 
       {/* Upstream list */}
       <div className="space-y-3">
-        {isLoading && <p className="text-sm text-on-surface-variant">加载中...</p>}
+        {isLoading && <p className="text-sm text-on-surface-variant">{t('loading')}</p>}
         {!isLoading && filtered.length === 0 && (
-          <p className="text-sm text-on-surface-variant">暂无 {tab.toUpperCase()} 上游源</p>
+          <p className="text-sm text-on-surface-variant">{t('upstreams.noUpstreams', { type: tab.toUpperCase() })}</p>
         )}
         {filtered.map((u: any) => (
           <Card key={u.id} className="flex items-center justify-between">
@@ -150,7 +152,7 @@ export default function Upstreams() {
                   <span className="font-medium text-on-surface">{u.name}</span>
                   {u.proxy && (
                     <span className="text-xs text-secondary font-mono">
-                      · 代理: {u.proxy}
+                      {'· ' + t('upstreams.proxy') + ':'} {u.proxy}
                     </span>
                   )}
                 </div>
@@ -161,7 +163,7 @@ export default function Upstreams() {
               <div className="text-right">
                 <p className="text-sm font-mono text-on-surface">{u.avg_latency_ms || 0} ms</p>
                 <p className="text-[10px] text-on-surface-variant">
-                  可用率 {((u.success_rate || 0) * 100).toFixed(1)}%
+                  {t('upstreams.availability')} {((u.success_rate || 0) * 100).toFixed(1)}%
                 </p>
               </div>
               <div className="flex gap-1">
@@ -187,20 +189,20 @@ export default function Upstreams() {
       <Modal
         open={dialogOpen}
         onClose={closeDialog}
-        title={editId ? '编辑上游源' : '添加上游源'}
+        title={editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">名称</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('name')}</label>
             <Input
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="如 tuna"
+              placeholder="e.g. tuna"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">URL</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('upstreams.url')}</label>
             <Input
               mono
               value={form.url}
@@ -211,7 +213,7 @@ export default function Upstreams() {
             {urlError && <p className="text-xs text-error mt-1">{urlError}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">优先级</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('upstreams.priority')}</label>
             <Input
               type="number"
               min={1}
@@ -220,7 +222,7 @@ export default function Upstreams() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">HTTP 代理（可选）</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('upstreams.httpProxy')}</label>
             <Input
               mono
               value={form.proxy}
@@ -229,9 +231,9 @@ export default function Upstreams() {
             />
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={closeDialog}>取消</Button>
+            <Button type="button" variant="secondary" onClick={closeDialog}>{t('cancel')}</Button>
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? '保存中...' : '保存'}
+              {isSaving ? t('saving') : t('save')}
             </Button>
           </div>
         </form>
@@ -241,18 +243,18 @@ export default function Upstreams() {
       <Modal
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        title="确认删除"
+        title={t('upstreams.confirmDelete')}
       >
-        <p className="text-sm text-on-surface-variant mb-6">确定要删除此上游源吗？</p>
+        <p className="text-sm text-on-surface-variant mb-6">{t('upstreams.confirmDeleteMsg')}</p>
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>取消</Button>
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</Button>
           <Button
             variant="secondary"
             className="text-error border-error/30"
             disabled={deleteMutation.isPending}
             onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
           >
-            {deleteMutation.isPending ? '删除中...' : '删除'}
+            {deleteMutation.isPending ? t('deleting') : t('delete')}
           </Button>
         </div>
       </Modal>

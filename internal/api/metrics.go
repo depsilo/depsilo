@@ -6,7 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Metrics holds all Prometheus metrics for RepoCache.
+// Metrics holds all Prometheus metrics for Depslio.
 type Metrics struct {
 	RequestsTotal         *prometheus.CounterVec
 	RequestDuration       *prometheus.HistogramVec
@@ -22,14 +22,14 @@ func init() {
 	M = &Metrics{
 		RequestsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "repocache_requests_total",
+				Name: "depslio_requests_total",
 				Help: "Total number of proxy requests.",
 			},
 			[]string{"adapter_type", "hit"},
 		),
 		RequestDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "repocache_request_duration_seconds",
+				Name:    "depslio_request_duration_seconds",
 				Help:    "Histogram of request latencies in seconds.",
 				Buckets: prometheus.DefBuckets,
 			},
@@ -37,20 +37,20 @@ func init() {
 		),
 		UpstreamRequestsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "repocache_upstream_requests_total",
+				Name: "depslio_upstream_requests_total",
 				Help: "Total number of upstream fetch requests.",
 			},
 			[]string{"upstream", "success"},
 		),
 		CacheSizeBytes: prometheus.NewGauge(
 			prometheus.GaugeOpts{
-				Name: "repocache_cache_size_bytes",
+				Name: "depslio_cache_size_bytes",
 				Help: "Current cache storage usage in bytes.",
 			},
 		),
 		CacheFilesTotal: prometheus.NewGauge(
 			prometheus.GaugeOpts{
-				Name: "repocache_cache_files_total",
+				Name: "depslio_cache_files_total",
 				Help: "Number of cached files.",
 			},
 		),

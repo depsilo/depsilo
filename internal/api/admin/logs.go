@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"repocache/internal/db"
+	"depslio/internal/db"
 )
 
 type AccessLogHandler struct {
@@ -22,7 +22,10 @@ func (h *AccessLogHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
 	search := c.Query("search")
-	adapterType := c.Query("type")
+	adapterType := c.Query("adapter_type")
+	if adapterType == "" {
+		adapterType = c.Query("type")
+	}
 	hitFilter := c.Query("hit") // "true" | "false" | ""
 
 	if page < 1 {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import Card from '@/components/Card'
@@ -29,6 +30,7 @@ function formatTime(t: string): string {
 }
 
 export default function CacheManage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [adapterType, setAdapterType] = useState('all')
@@ -75,7 +77,7 @@ export default function CacheManage() {
     },
     {
       key: 'adapter_type',
-      label: '类型',
+      label: t('type'),
       render: (val: unknown) => (
         <Badge variant={(val as string) === 'pypi' ? 'pypi' : 'apt'}>
           {(val as string)?.toUpperCase()}
@@ -84,22 +86,22 @@ export default function CacheManage() {
     },
     {
       key: 'size',
-      label: '大小',
+      label: t('cache.size'),
       render: (val: unknown) => <span className="text-sm text-on-surface">{formatBytes((val as number) || 0)}</span>,
     },
     {
       key: 'hit_count',
-      label: '命中次数',
+      label: t('cache.hitCount'),
       render: (val: unknown) => <span className="font-mono text-sm text-on-surface">{(val as number) || 0}</span>,
     },
     {
       key: 'last_accessed',
-      label: '最后访问',
+      label: t('cache.lastAccessed'),
       render: (val: unknown) => <span className="text-xs text-on-surface-variant">{formatTime(val as string)}</span>,
     },
     {
       key: 'id',
-      label: '操作',
+      label: t('actions'),
       render: (_val: unknown, row: any) => (
         <button
           onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }}
@@ -117,7 +119,7 @@ export default function CacheManage() {
       <Card className="flex flex-wrap items-center gap-3">
         <div className="flex-1">
           <Input
-            placeholder="搜索缓存 key..."
+            placeholder={t('cache.searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           />
@@ -127,7 +129,7 @@ export default function CacheManage() {
           onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}
           className="bg-surface-low border-b-2 border-transparent focus:border-primary text-base text-on-surface px-3 py-2 rounded-[0.125rem] outline-none transition-colors cursor-pointer"
         >
-          <option value="all">全部</option>
+          <option value="all">{t('all')}</option>
           <option value="pypi">PyPI</option>
           <option value="apt">APT</option>
         </select>
@@ -137,16 +139,16 @@ export default function CacheManage() {
           onClick={() => setCleanupOpen(true)}
         >
           <Icon name="delete_sweep" size="sm" />
-          清理过期
+          {t('cache.cleanExpired')}
         </Button>
       </Card>
 
       {/* Table */}
       <Card className="p-0 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">加载中...</div>
+          <div className="p-8 text-center text-on-surface-variant text-sm">{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">暂无缓存数据</div>
+          <div className="p-8 text-center text-on-surface-variant text-sm">{t('cache.noCache')}</div>
         ) : (
           <DataTable columns={columns} data={items} />
         )}
@@ -156,51 +158,51 @@ export default function CacheManage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-on-surface-variant">
-            共 {total} 条，第 {page}/{totalPages} 页
+            {t('totalItems', { total, page, totalPages })}
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              上一页
+              {t('prevPage')}
             </Button>
             <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-              下一页
+              {t('nextPage')}
             </Button>
           </div>
         </div>
       )}
 
       {/* Delete Confirm Modal */}
-      <Modal open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title="确认删除">
+      <Modal open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('cache.confirmDelete')}>
         <p className="text-sm text-on-surface-variant mb-6">
-          确定要删除此缓存条目吗？此操作不可撤销。
+          {t('cache.confirmDeleteMsg')}
         </p>
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>取消</Button>
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</Button>
           <Button
             variant="secondary"
             className="text-error border-error/30"
             disabled={deleteMutation.isPending}
             onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
           >
-            {deleteMutation.isPending ? '删除中...' : '删除'}
+            {deleteMutation.isPending ? t('deleting') : t('delete')}
           </Button>
         </div>
       </Modal>
 
       {/* Cleanup Confirm Modal */}
-      <Modal open={cleanupOpen} onClose={() => setCleanupOpen(false)} title="清理过期缓存">
+      <Modal open={cleanupOpen} onClose={() => setCleanupOpen(false)} title={t('cache.cleanExpiredTitle')}>
         <p className="text-sm text-on-surface-variant mb-6">
-          将清理所有已过期的缓存文件和超过 LRU 阈值的旧文件，确定继续？
+          {t('cache.cleanExpiredMsg')}
         </p>
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setCleanupOpen(false)}>取消</Button>
+          <Button variant="secondary" onClick={() => setCleanupOpen(false)}>{t('cancel')}</Button>
           <Button
             variant="secondary"
             className="text-error border-error/30"
             disabled={cleanupMutation.isPending}
             onClick={() => cleanupMutation.mutate()}
           >
-            {cleanupMutation.isPending ? '清理中...' : '确认清理'}
+            {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
           </Button>
         </div>
       </Modal>

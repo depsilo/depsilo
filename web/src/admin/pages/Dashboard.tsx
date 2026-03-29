@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { adminApi } from '@/lib/api'
 import Card from '@/components/Card'
 import Icon from '@/components/Icon'
@@ -22,6 +23,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation()
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'dashboard'],
     queryFn: () => adminApi.getDashboard(),
@@ -63,10 +65,10 @@ export default function Dashboard() {
   const chartData = Object.values(chartDataMap).sort((a, b) => a.date.localeCompare(b.date))
 
   const metrics = [
-    { label: '今日请求', value: today.total_requests?.toLocaleString() || '0', icon: 'monitoring' },
-    { label: '命中率', value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: 'target' },
-    { label: '已服务流量', value: formatBytes(today.bytes_served || 0), icon: 'hard_drive' },
-    { label: '平均延迟', value: `${Math.round(today.avg_latency_ms || 0)} ms`, icon: 'timer' },
+    { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: 'monitoring' },
+    { label: t('dashboard.hitRate'), value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: 'target' },
+    { label: t('dashboard.bytesServed'), value: formatBytes(today.bytes_served || 0), icon: 'hard_drive' },
+    { label: t('dashboard.avgLatency'), value: `${Math.round(today.avg_latency_ms || 0)} ms`, icon: 'timer' },
   ]
 
   return (
@@ -89,7 +91,7 @@ export default function Dashboard() {
       {/* Line Chart */}
       <Card>
         <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
-          近 7 日请求趋势
+          {t('dashboard.trend7d')}
         </h3>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
@@ -115,11 +117,11 @@ export default function Dashboard() {
         {/* Upstream Status */}
         <Card>
           <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
-            上游源状态
+            {t('dashboard.upstreamStatus')}
           </h3>
           <div className="space-y-3">
             {upstreams.length === 0 && (
-              <p className="text-sm text-on-surface-variant">暂无上游源数据</p>
+              <p className="text-sm text-on-surface-variant">{t('dashboard.noUpstreams')}</p>
             )}
             {upstreams.map((u: any) => (
               <div key={u.name} className="flex items-center justify-between bg-surface-container rounded-[0.25rem] px-4 py-3">
@@ -133,7 +135,7 @@ export default function Dashboard() {
                 <div className="text-right">
                   <p className="text-sm font-mono text-on-surface">{u.avg_latency_ms} ms</p>
                   <p className="text-[10px] text-on-surface-variant">
-                    可用率 {((u.success_rate || 0) * 100).toFixed(1)}%
+                    {t('dashboard.availability')} {((u.success_rate || 0) * 100).toFixed(1)}%
                   </p>
                 </div>
               </div>
@@ -144,7 +146,7 @@ export default function Dashboard() {
         {/* Top Packages */}
         <Card>
           <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
-            热门包 TOP 10
+            {t('dashboard.topPackages')}
           </h3>
           <div className="grid gap-6 grid-cols-2">
             {/* PyPI */}
@@ -171,7 +173,7 @@ export default function Dashboard() {
                   )
                 })}
                 {(!topPackages.pypi || topPackages.pypi.length === 0) && (
-                  <p className="text-xs text-on-surface-variant">暂无数据</p>
+                  <p className="text-xs text-on-surface-variant">{t('noData')}</p>
                 )}
               </div>
             </div>
@@ -199,7 +201,7 @@ export default function Dashboard() {
                   )
                 })}
                 {(!topPackages.apt || topPackages.apt.length === 0) && (
-                  <p className="text-xs text-on-surface-variant">暂无数据</p>
+                  <p className="text-xs text-on-surface-variant">{t('noData')}</p>
                 )}
               </div>
             </div>

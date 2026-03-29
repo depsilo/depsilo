@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"repocache/internal/db"
+	"depslio/internal/db"
 )
 
 // StartLRUCleanup runs a background goroutine that periodically checks cache usage

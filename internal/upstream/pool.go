@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"repocache/internal/config"
+	"depslio/internal/config"
 )
 
 // Upstream represents a single upstream source with its HTTP client.
@@ -83,7 +83,7 @@ func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "repocache/0.1")
+	req.Header.Set("User-Agent", "depslio/0.1")
 
 	start := time.Now()
 	resp, err := u.client.Do(req)

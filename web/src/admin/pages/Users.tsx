@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import Card from '@/components/Card'
@@ -21,6 +22,7 @@ function formatTime(t: string | null): string {
 }
 
 export default function Users() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   // User dialog state
@@ -137,7 +139,7 @@ export default function Users() {
   const userColumns = [
     {
       key: 'username',
-      label: '用户',
+      label: t('users.user'),
       render: (_val: unknown, row: any) => (
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-primary text-sm font-medium shrink-0">
@@ -149,7 +151,7 @@ export default function Users() {
     },
     {
       key: 'role',
-      label: '角色',
+      label: t('users.role'),
       render: (val: unknown) => (
         <Badge variant={(val as string) === 'admin' ? 'pypi' : 'default'}>
           {val as string}
@@ -158,30 +160,30 @@ export default function Users() {
     },
     {
       key: 'enabled',
-      label: '状态',
+      label: t('status'),
       render: (val: unknown) => (
         <Badge variant={val ? 'success' : 'error'}>
-          {val ? '启用' : '禁用'}
+          {val ? t('users.enabled') : t('users.disabled')}
         </Badge>
       ),
     },
     {
       key: 'last_login_at',
-      label: '最后登录',
+      label: t('users.lastLogin'),
       render: (val: unknown) => (
         <span className="font-mono text-xs text-on-surface-variant">{formatTime(val as string)}</span>
       ),
     },
     {
       key: 'created_at',
-      label: '创建时间',
+      label: t('users.createdAt'),
       render: (val: unknown) => (
         <span className="font-mono text-xs text-on-surface-variant">{formatTime(val as string)}</span>
       ),
     },
     {
       key: 'id',
-      label: '操作',
+      label: t('actions'),
       render: (_val: unknown, row: any) => (
         <div className="flex gap-1">
           <button
@@ -204,31 +206,31 @@ export default function Users() {
   const tokenColumns = [
     {
       key: 'name',
-      label: '名称',
+      label: t('name'),
       render: (val: unknown) => <span className="font-medium text-on-surface">{val as string}</span>,
     },
     {
       key: 'permissions',
-      label: '权限',
+      label: t('users.permissions'),
       render: (val: unknown) => <Badge variant="default">{val as string}</Badge>,
     },
     {
       key: 'last_used_at',
-      label: '最后使用',
+      label: t('users.lastUsed'),
       render: (val: unknown) => (
         <span className="font-mono text-xs text-on-surface-variant">{formatTime(val as string)}</span>
       ),
     },
     {
       key: 'expires_at',
-      label: '过期时间',
+      label: t('users.expiresAt'),
       render: (val: unknown) => (
-        <span className="font-mono text-xs text-on-surface-variant">{val ? formatTime(val as string) : '永不过期'}</span>
+        <span className="font-mono text-xs text-on-surface-variant">{val ? formatTime(val as string) : t('users.neverExpires')}</span>
       ),
     },
     {
       key: 'id',
-      label: '操作',
+      label: t('actions'),
       render: (val: unknown) => (
         <Button
           variant="ghost"
@@ -236,7 +238,7 @@ export default function Users() {
           disabled={deleteTokenMutation.isPending}
           onClick={(e: React.MouseEvent) => { e.stopPropagation(); deleteTokenMutation.mutate(val as number) }}
         >
-          撤销
+          {t('users.revoke')}
         </Button>
       ),
     },
@@ -248,16 +250,16 @@ export default function Users() {
       <div className="flex items-center justify-end">
         <Button onClick={openCreateUser}>
           <Icon name="person_add" size="sm" />
-          添加用户
+          {t('users.addUser')}
         </Button>
       </div>
 
       {/* Users Table */}
       <Card className="p-0 overflow-hidden">
         {usersLoading ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">加载中...</div>
+          <div className="p-8 text-center text-on-surface-variant text-sm">{t('loading')}</div>
         ) : users.length === 0 ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">暂无用户</div>
+          <div className="p-8 text-center text-on-surface-variant text-sm">{t('users.noUsers')}</div>
         ) : (
           <DataTable columns={userColumns} data={users} />
         )}
@@ -271,14 +273,14 @@ export default function Users() {
           </h3>
           <Button variant="secondary" onClick={() => setTokenDialogOpen(true)}>
             <Icon name="key" size="sm" />
-            生成 Token
+            {t('users.generateToken')}
           </Button>
         </div>
         <div className="-mx-5 -mb-5 overflow-hidden rounded-b-[0.25rem]">
           {tokensLoading ? (
-            <div className="p-8 text-center text-on-surface-variant text-sm">加载中...</div>
+            <div className="p-8 text-center text-on-surface-variant text-sm">{t('loading')}</div>
           ) : tokens.length === 0 ? (
-            <div className="p-8 text-center text-on-surface-variant text-sm">暂无 Token</div>
+            <div className="p-8 text-center text-on-surface-variant text-sm">{t('users.noTokens')}</div>
           ) : (
             <DataTable columns={tokenColumns} data={tokens} />
           )}
@@ -289,11 +291,11 @@ export default function Users() {
       <Modal
         open={userDialogOpen}
         onClose={closeUserDialog}
-        title={editUserId ? '编辑用户' : '添加用户'}
+        title={editUserId ? t('users.editUser') : t('users.addUser')}
       >
         <form onSubmit={handleUserSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">用户名</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('login.username')}</label>
             <Input
               value={userForm.username}
               onChange={(e) => setUserForm({ ...userForm, username: e.target.value })}
@@ -303,7 +305,7 @@ export default function Users() {
           </div>
           <div>
             <label className="block text-sm font-medium text-on-surface mb-1">
-              {editUserId ? '新密码（留空不修改）' : '密码'}
+              {editUserId ? t('users.newPasswordHint') : t('login.password')}
             </label>
             <Input
               type="password"
@@ -313,7 +315,7 @@ export default function Users() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">角色</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('users.role')}</label>
             <select
               value={userForm.role}
               onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
@@ -324,9 +326,9 @@ export default function Users() {
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={closeUserDialog}>取消</Button>
+            <Button type="button" variant="secondary" onClick={closeUserDialog}>{t('cancel')}</Button>
             <Button type="submit" disabled={isUserSaving}>
-              {isUserSaving ? '保存中...' : '保存'}
+              {isUserSaving ? t('saving') : t('save')}
             </Button>
           </div>
         </form>
@@ -336,46 +338,46 @@ export default function Users() {
       <Modal
         open={tokenDialogOpen}
         onClose={() => setTokenDialogOpen(false)}
-        title="生成 API Token"
+        title={t('users.generateToken')}
       >
         <form onSubmit={handleTokenSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">名称</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('name')}</label>
             <Input
               value={tokenForm.name}
               onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })}
-              placeholder="如 CI/CD Pipeline"
+              placeholder="e.g. CI/CD Pipeline"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">权限</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('users.permissions')}</label>
             <select
               value={tokenForm.permissions}
               onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value })}
               className="w-full bg-surface-low border-b-2 border-transparent focus:border-primary text-base text-on-surface px-3 py-2 rounded-[0.125rem] outline-none transition-colors cursor-pointer"
             >
-              <option value="readonly">只读</option>
-              <option value="readwrite">读写</option>
+              <option value="readonly">{t('users.readonly')}</option>
+              <option value="readwrite">{t('users.readwrite')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">有效期</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('users.validity')}</label>
             <select
               value={tokenForm.ttl}
               onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value })}
               className="w-full bg-surface-low border-b-2 border-transparent focus:border-primary text-base text-on-surface px-3 py-2 rounded-[0.125rem] outline-none transition-colors cursor-pointer"
             >
-              <option value="7d">7 天</option>
-              <option value="30d">30 天</option>
-              <option value="90d">90 天</option>
-              <option value="never">永不过期</option>
+              <option value="7d">{t('users.days7')}</option>
+              <option value="30d">{t('users.days30')}</option>
+              <option value="90d">{t('users.days90')}</option>
+              <option value="never">{t('users.neverExpires')}</option>
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setTokenDialogOpen(false)}>取消</Button>
+            <Button type="button" variant="secondary" onClick={() => setTokenDialogOpen(false)}>{t('cancel')}</Button>
             <Button type="submit" disabled={createTokenMutation.isPending}>
-              {createTokenMutation.isPending ? '生成中...' : '生成'}
+              {createTokenMutation.isPending ? t('users.generating') : t('users.generate')}
             </Button>
           </div>
         </form>
@@ -385,10 +387,10 @@ export default function Users() {
       <Modal
         open={tokenResultOpen}
         onClose={() => setTokenResultOpen(false)}
-        title="Token 已生成"
+        title={t('users.tokenGenerated')}
       >
         <p className="text-sm text-on-surface-variant mb-3">
-          请立即复制此 Token，关闭后将无法再次查看。
+          {t('users.tokenCopyWarning')}
         </p>
         <div className="flex items-center gap-2 bg-surface-container rounded-[0.25rem] p-3">
           <code className="flex-1 font-mono text-sm text-on-surface break-all">{createdToken}</code>
@@ -400,10 +402,10 @@ export default function Users() {
           </button>
         </div>
         <p className="text-xs text-error mt-2">
-          此 Token 仅展示一次，请妥善保管。
+          {t('users.tokenSaveWarning')}
         </p>
         <div className="flex justify-end mt-4">
-          <Button onClick={() => setTokenResultOpen(false)}>确定</Button>
+          <Button onClick={() => setTokenResultOpen(false)}>{t('confirm')}</Button>
         </div>
       </Modal>
     </div>

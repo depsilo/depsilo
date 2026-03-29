@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
-	"repocache/internal/db"
+	"depslio/internal/db"
 )
 
 // Manager handles cache lookup, singleflight dedup, and storage writes.

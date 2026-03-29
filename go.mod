@@ -1,4 +1,4 @@
-module repocache
+module depslio
 
 go 1.25.6
 

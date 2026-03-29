@@ -1,7 +1,7 @@
 .PHONY: build run dev stop test test-pypi test-apt test-clean clean lint frontend help
 
 # ─── 变量 ─────────────────────────────────────
-APP        := repocache
+APP        := depslio
 BIN        := bin/$(APP)
 CONFIG     := config.toml
 PID_FILE   := .server.pid
@@ -17,11 +17,11 @@ build: frontend                 ## 构建前端 + 编译后端
 
 # ─── 运行 ─────────────────────────────────────
 run: build                      ## 编译并前台运行
-	REPOCACHE_CONFIG=$(CONFIG) ./$(BIN)
+	DEPSLIO_CONFIG=$(CONFIG) ./$(BIN)
 
 dev: build stop                 ## 编译并后台运行（dev 模式）
 	@echo ">>> starting $(APP) on :$(PORT) ..."
-	@REPOCACHE_CONFIG=$(CONFIG) ./$(BIN) > .dev.log 2>&1 & echo $$! > $(PID_FILE)
+	@DEPSLIO_CONFIG=$(CONFIG) ./$(BIN) > .dev.log 2>&1 & echo $$! > $(PID_FILE)
 	@sleep 2
 	@if curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1; then \
 		echo ">>> $(APP) running  pid=$$(cat $(PID_FILE))  http://localhost:$(PORT)"; \

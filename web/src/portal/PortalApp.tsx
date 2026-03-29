@@ -1,12 +1,16 @@
 import { Routes, Route, NavLink, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
+import Logo from '@/components/Logo'
+import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import Button from '@/components/Button'
 import QuickStart from '@/portal/pages/QuickStart'
 import ServiceStatus from '@/portal/pages/ServiceStatus'
 
 export default function PortalApp() {
+  const { t } = useTranslation()
   const { data } = useQuery<{ service: { status: string } }>({
     queryKey: ['stats-status'],
     queryFn: async () => {
@@ -24,8 +28,9 @@ export default function PortalApp() {
       <header className="fixed top-0 inset-x-0 z-50 h-14 bg-surface-low">
         <div className="mx-auto flex h-full max-w-4xl items-center justify-between px-6">
           {/* Left: Logo */}
-          <Link to="/" className="text-lg font-bold text-on-surface">
-            RepoCache
+          <Link to="/" className="flex items-center gap-2.5">
+            <Logo height={30} />
+            <span className="text-xl font-bold text-on-surface tracking-tight">Depsilo</span>
           </Link>
 
           {/* Center: Nav */}
@@ -41,7 +46,7 @@ export default function PortalApp() {
                 }`
               }
             >
-              快速开始
+              {t('portal.quickStart')}
             </NavLink>
             <NavLink
               to="/status"
@@ -53,12 +58,13 @@ export default function PortalApp() {
                 }`
               }
             >
-              服务状态
+              {t('portal.serviceStatus')}
             </NavLink>
           </nav>
 
           {/* Right: ThemeToggle + status pill + admin link */}
           <div className="flex items-center gap-3">
+            <LangToggle />
             <ThemeToggle />
 
             {data && (
@@ -69,14 +75,14 @@ export default function PortalApp() {
                   }`}
                 />
                 <span className={isHealthy ? 'text-success' : 'text-error'}>
-                  {isHealthy ? '服务在线' : '离线'}
+                  {isHealthy ? t('portal.online') : t('portal.offline')}
                 </span>
               </span>
             )}
 
             <Link to="/admin">
               <Button variant="ghost" className="text-xs">
-                管理后台 →
+                {t('portal.adminPanel')}
               </Button>
             </Link>
           </div>

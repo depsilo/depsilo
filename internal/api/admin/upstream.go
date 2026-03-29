@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"repocache/internal/db"
+	"depslio/internal/db"
 )
 
 type UpstreamHandler struct {

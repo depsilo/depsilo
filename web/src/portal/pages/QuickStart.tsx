@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Card from '@/components/Card'
 import Icon from '@/components/Icon'
 import CodeBlock from '@/portal/components/CodeBlock'
@@ -29,31 +30,32 @@ function Step({ number, title, description, children }: StepProps) {
   )
 }
 
-const tabMeta = {
-  pip: {
-    icon: 'code_blocks',
-    label: 'Python (pip)',
-    desc: 'pip / uv / Poetry 包管理器',
-  },
-  apt: {
-    icon: 'terminal',
-    label: 'APT (Debian)',
-    desc: 'Ubuntu / Debian 系统包管理器',
-  },
-} as const
-
 export default function QuickStart() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<Tab>('pip')
   const baseURL = useMemo(() => window.location.origin, [])
   const host = useMemo(() => window.location.hostname, [])
+
+  const tabMeta = {
+    pip: {
+      icon: 'code_blocks',
+      label: t('quickstart.pipLabel'),
+      desc: t('quickstart.pipDesc'),
+    },
+    apt: {
+      icon: 'terminal',
+      label: t('quickstart.aptLabel'),
+      desc: t('quickstart.aptDesc'),
+    },
+  } as const
 
   return (
     <div className="space-y-8">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-on-surface mb-1">快速开始</h1>
+        <h1 className="text-2xl font-bold text-on-surface mb-1">{t('quickstart.title')}</h1>
         <p className="text-on-surface-variant">
-          配置你的包管理器以使用 RepoCache 代理缓存，享受更快的下载速度。
+          {t('quickstart.subtitle')}
         </p>
       </div>
 
@@ -100,8 +102,8 @@ export default function QuickStart() {
           <>
             <Step
               number={1}
-              title="临时使用"
-              description="在单次安装命令中指定索引地址："
+              title={t('quickstart.tempUse')}
+              description={t('quickstart.tempUseDesc')}
             >
               <CodeBlock
                 language="bash"
@@ -111,8 +113,8 @@ export default function QuickStart() {
 
             <Step
               number={2}
-              title="永久配置"
-              description="编辑 pip 配置文件，所有安装命令自动走代理："
+              title={t('quickstart.permanentConfig')}
+              description={t('quickstart.permanentConfigDesc')}
             >
               <CodeBlock
                 filename="~/.config/pip/pip.conf"
@@ -122,8 +124,8 @@ export default function QuickStart() {
 
             <Step
               number={3}
-              title="uv 用户"
-              description="如果你使用 uv 作为包管理器："
+              title={t('quickstart.uvUser')}
+              description={t('quickstart.uvUserDesc')}
             >
               <CodeBlock
                 language="bash"
@@ -133,12 +135,12 @@ export default function QuickStart() {
 
             <Step
               number={4}
-              title="Poetry 用户"
-              description="在 pyproject.toml 中配置镜像源："
+              title={t('quickstart.poetryUser')}
+              description={t('quickstart.poetryUserDesc')}
             >
               <CodeBlock
                 filename="pyproject.toml"
-                code={`[[tool.poetry.source]]\nname = "repocache"\nurl = "${baseURL}/pypi/simple/"\npriority = "primary"`}
+                code={`[[tool.poetry.source]]\nname = "depslio"\nurl = "${baseURL}/pypi/simple/"\npriority = "primary"`}
               />
             </Step>
           </>
@@ -148,19 +150,19 @@ export default function QuickStart() {
           <>
             <Step
               number={1}
-              title="添加源配置"
-              description="创建新的 APT 源配置文件："
+              title={t('quickstart.addSource')}
+              description={t('quickstart.addSourceDesc')}
             >
               <CodeBlock
-                filename="/etc/apt/sources.list.d/repocache.list"
+                filename="/etc/apt/sources.list.d/depslio.list"
                 code={`deb ${baseURL}/apt/ubuntu noble main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-updates main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-security main restricted universe multiverse`}
               />
             </Step>
 
             <Step
               number={2}
-              title="一键替换现有源"
-              description="使用 sed 命令将现有源替换为 RepoCache 代理："
+              title={t('quickstart.replaceSource')}
+              description={t('quickstart.replaceSourceDesc')}
             >
               <CodeBlock
                 language="bash"
@@ -170,8 +172,8 @@ export default function QuickStart() {
 
             <Step
               number={3}
-              title="验证配置"
-              description="运行以下命令验证源配置是否生效："
+              title={t('quickstart.verifyConfig')}
+              description={t('quickstart.verifyConfigDesc')}
             >
               <CodeBlock language="bash" code="sudo apt update" />
             </Step>
@@ -183,10 +185,9 @@ export default function QuickStart() {
       <div className="bg-primary/5 border-l-2 border-primary p-4 rounded-[0.25rem] flex items-start gap-3">
         <Icon name="lightbulb" size="sm" className="text-primary shrink-0 mt-0.5" />
         <div className="space-y-1">
-          <p className="font-medium text-on-surface text-sm">首次下载说明</p>
+          <p className="font-medium text-on-surface text-sm">{t('quickstart.firstDownloadTitle')}</p>
           <p className="text-sm text-on-surface-variant">
-            首次请求某个包时，RepoCache 需要从上游源下载并缓存，速度取决于上游响应。
-            后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。
+            {t('quickstart.firstDownloadDesc')}
           </p>
         </div>
       </div>

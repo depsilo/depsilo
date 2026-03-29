@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"repocache/internal/cache"
-	"repocache/internal/db"
+	"depslio/internal/cache"
+	"depslio/internal/db"
 )
 
 type CacheHandler struct {
@@ -26,7 +26,10 @@ func (h *CacheHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	search := c.Query("search")
-	adapterType := c.Query("type")
+	adapterType := c.Query("adapter_type")
+	if adapterType == "" {
+		adapterType = c.Query("type")
+	}
 
 	if page < 1 {
 		page = 1

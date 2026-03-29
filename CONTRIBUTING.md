@@ -1,4 +1,4 @@
-# Contributing to RepoCache
+# Contributing to Depslio
 
 Contributions are welcome! Whether it's a bug fix, new feature, or documentation improvement — we appreciate your help.
 
@@ -15,8 +15,8 @@ Contributions are welcome! Whether it's a bug fix, new feature, or documentation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/repocache.git
-cd repocache
+git clone https://github.com/your-org/depslio.git
+cd depslio
 
 # Install Go dependencies
 go mod download
@@ -72,7 +72,7 @@ The frontend dev server runs on `http://localhost:5173` and proxies API requests
 ### Bug Reports
 
 Please include:
-- RepoCache version (`repocache --version` or Docker image tag)
+- Depslio version (`depslio --version` or Docker image tag)
 - Deployment method (binary / Docker / docker-compose)
 - Operating system and architecture
 - Steps to reproduce

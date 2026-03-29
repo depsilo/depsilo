@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Input from '@/components/Input'
 import Button from '@/components/Button'
+import Logo from '@/components/Logo'
 import { authApi } from '@/lib/api'
 
 export default function Login() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +25,7 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(user))
       navigate('/admin', { replace: true })
     } catch (err: any) {
-      setError(err.response?.data?.message || '登录失败，请检查用户名和密码')
+      setError(err.response?.data?.message || t('login.failed'))
     } finally {
       setLoading(false)
     }
@@ -36,34 +39,37 @@ export default function Login() {
 
       <div className="w-full max-w-sm bg-surface-container/80 backdrop-blur-xl border border-outline-variant/15 rounded-[0.5rem] p-8 relative z-10">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 className="text-xl font-bold text-on-surface">RepoCache</h1>
-          <p className="text-sm text-on-surface-variant mt-1">管理后台</p>
+        <div className="flex flex-col items-center mb-8">
+          <div className="flex items-center gap-3">
+            <Logo height={36} />
+            <h1 className="text-2xl font-bold text-on-surface tracking-tight">Depsilo</h1>
+          </div>
+          <p className="text-sm text-on-surface-variant mt-2">{t('login.title')}</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">用户名</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('login.username')}</label>
             <Input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="请输入用户名"
+              placeholder={t('login.usernamePlaceholder')}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">密码</label>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('login.password')}</label>
             <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="请输入密码"
+              placeholder={t('login.passwordPlaceholder')}
               required
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? '登录中...' : '登录'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </Button>
         </form>
 

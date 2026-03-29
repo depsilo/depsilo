@@ -8,9 +8,9 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in RepoCache, please report it responsibly.
+If you discover a security vulnerability in Depslio, please report it responsibly.
 
-**Email:** security@repocache.dev
+**Email:** security@depslio.dev
 
 **Please include:**
 - Description of the vulnerability
@@ -30,11 +30,11 @@ The following are known limitations, not vulnerabilities:
 - Default admin credentials (`admin:admin`) created on first run — this is documented and intended for initial setup only. Users are expected to change the password immediately.
 - The `config.example.toml` contains placeholder values (`change-me-in-production`) — these are not real secrets.
 - SQLite database is not encrypted at rest — use PostgreSQL with TLS for sensitive deployments.
-- Proxy traffic between RepoCache and upstream sources is not independently verified beyond HTTPS — this is by design to preserve GPG signature chains (especially for APT).
+- Proxy traffic between Depslio and upstream sources is not independently verified beyond HTTPS — this is by design to preserve GPG signature chains (especially for APT).
 
 ## Security Best Practices
 
-When deploying RepoCache in production:
+When deploying Depslio in production:
 
 1. **Change the default admin password** immediately after first login
 2. **Set a strong `jwt_secret`** in your configuration — never use the default

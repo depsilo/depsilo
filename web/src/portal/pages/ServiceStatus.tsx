@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
@@ -66,6 +67,7 @@ function SkeletonCard() {
 }
 
 export default function ServiceStatus() {
+  const { t } = useTranslation()
   const { data, isLoading } = useQuery<StatsData>({
     queryKey: ['stats'],
     queryFn: async () => {
@@ -78,7 +80,7 @@ export default function ServiceStatus() {
   if (isLoading || !data) {
     return (
       <div className="space-y-8">
-        <h1 className="text-2xl font-bold text-on-surface">服务状态</h1>
+        <h1 className="text-2xl font-bold text-on-surface">{t('serviceStatus.title')}</h1>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
@@ -99,24 +101,24 @@ export default function ServiceStatus() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-on-surface">服务状态</h1>
+      <h1 className="text-2xl font-bold text-on-surface">{t('serviceStatus.title')}</h1>
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          label="今日请求"
+          label={t('serviceStatus.todayRequests')}
           value={data.today.total_requests.toLocaleString()}
         />
         <MetricCard
-          label="缓存命中率"
+          label={t('serviceStatus.cacheHitRate')}
           value={`${(data.today.hit_rate * 100).toFixed(1)}%`}
         />
         <MetricCard
-          label="节省流量"
+          label={t('serviceStatus.savedTraffic')}
           value={formatBytes(data.today.bytes_saved)}
         />
         <MetricCard
-          label="缓存文件数"
+          label={t('serviceStatus.cacheFiles')}
           value={data.cache.total_files.toLocaleString()}
         />
       </div>
@@ -124,12 +126,12 @@ export default function ServiceStatus() {
       {/* Upstream health */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wider text-on-surface-variant">
-          上游源状态
+          {t('serviceStatus.upstreamStatus')}
         </h2>
         <Card>
           {data.upstreams.length === 0 ? (
             <p className="py-4 text-center text-sm text-on-surface-variant">
-              暂无上游源
+              {t('serviceStatus.noUpstreams')}
             </p>
           ) : (
             <div className="space-y-0">
@@ -176,7 +178,7 @@ export default function ServiceStatus() {
       {/* Top packages */}
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wider text-on-surface-variant">
-          热门包
+          {t('serviceStatus.topPackages')}
         </h2>
         <div className="grid gap-4 md:grid-cols-2">
           {/* PyPI */}
@@ -185,7 +187,7 @@ export default function ServiceStatus() {
               PyPI
             </p>
             {!data.top_packages.pypi || data.top_packages.pypi.length === 0 ? (
-              <p className="text-sm text-on-surface-variant">暂无数据</p>
+              <p className="text-sm text-on-surface-variant">{t('noData')}</p>
             ) : (
               <div className="space-y-3">
                 {data.top_packages.pypi.slice(0, 10).map((pkg) => (
@@ -218,7 +220,7 @@ export default function ServiceStatus() {
               APT
             </p>
             {!data.top_packages.apt || data.top_packages.apt.length === 0 ? (
-              <p className="text-sm text-on-surface-variant">暂无数据</p>
+              <p className="text-sm text-on-surface-variant">{t('noData')}</p>
             ) : (
               <div className="space-y-3">
                 {data.top_packages.apt.slice(0, 10).map((pkg) => (

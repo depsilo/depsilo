@@ -1,4 +1,4 @@
-# CLAUDE.md — RepoCache 项目全量指南
+# CLAUDE.md — Depslio 项目全量指南
 
 > 本文件是 Claude Code 的唯一权威参考。实现时严格遵循此文档，不得自行发明架构或引入未列出的依赖。
 
@@ -6,7 +6,7 @@
 
 ## 一、项目概述
 
-**RepoCache** 是一个轻量级依赖包代理缓存网关，用 Go 编写，单二进制部署。
+**Depslio** 是一个轻量级依赖包代理缓存网关，用 Go 编写，单二进制部署。
 
 ### 核心价值
 - 缓存 pip / apt 依赖包，局域网内秒级响应
@@ -45,7 +45,7 @@
 严格按照以下结构创建文件，不得随意新增顶层目录：
 
 ```
-repocache/
+depslio/
 ├── cmd/
 │   └── server/
 │       └── main.go                  # 入口：加载配置、初始化、启动
@@ -142,14 +142,14 @@ port = 8080
 
 [database]
 driver = "sqlite"           # sqlite | postgres
-dsn    = "./data/repocache.db"
+dsn    = "./data/depslio.db"
 
 [storage]
 type = "local"              # local | s3
 path = "./data/cache"
 
 # S3 配置（type = "s3" 时生效）
-# bucket   = "repocache"
+# bucket   = "depslio"
 # endpoint = "http://minio:9000"
 # region   = "us-east-1"
 # access_key = ""
@@ -671,10 +671,10 @@ export const authApi = { login: (body) => ..., logout: () => ... }
 
 dev:           # 同时启动前端 dev server 和后端（go run，热重载用 air）
 frontend:      # cd web && npm run build → 产物在 web/dist
-build:         # make frontend && go build -o bin/repocache ./cmd/server
+build:         # make frontend && go build -o bin/depslio ./cmd/server
 test:          # go test ./...
 lint:          # golangci-lint run && cd web && npm run type-check
-docker:        # docker build -t repocache .
+docker:        # docker build -t depslio .
 ```
 
 ### Dockerfile
@@ -696,15 +696,15 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/web/dist ./web/dist
-RUN go build -o repocache ./cmd/server
+RUN go build -o depslio ./cmd/server
 
 # Stage 3: 最终镜像
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=backend /app/repocache .
+COPY --from=backend /app/depslio .
 EXPOSE 8080
-CMD ["./repocache"]
+CMD ["./depslio"]
 ```
 
 ### docker-compose.yml
@@ -712,7 +712,7 @@ CMD ["./repocache"]
 ```yaml
 version: '3.8'
 services:
-  repocache:
+  depslio:
     build: .
     ports:
       - "8080:8080"
@@ -720,7 +720,7 @@ services:
       - ./data:/app/data
       - ./config.toml:/app/config.toml
     environment:
-      - REPOCACHE_CONFIG=/app/config.toml
+      - DEPSLIO_CONFIG=/app/config.toml
     restart: unless-stopped
 ```
 
@@ -731,7 +731,7 @@ services:
 Claude Code 应按以下顺序实现，每完成一步确保可运行后再进行下一步：
 
 ### Phase 1：后端骨架（可跑通健康检查）
-1. `go mod init repocache`，添加所有依赖到 go.mod
+1. `go mod init depslio`，添加所有依赖到 go.mod
 2. 实现 `config.go` + `loader.go`（viper 读取 TOML）
 3. 实现 `main.go`（初始化 Gin、注册 `/health` 路由）
 4. 实现 GORM 模型 + AutoMigrate（SQLite）

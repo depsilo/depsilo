@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
-import Badge from '@/components/Badge'
+import Logo from '@/components/Logo'
+import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import { authApi } from '@/lib/api'
 
@@ -9,27 +11,6 @@ interface NavItem {
   to: string
   icon: string
   end?: boolean
-}
-
-const monitorItems: NavItem[] = [
-  { label: 'Dashboard', to: '/admin', icon: 'dashboard', end: true },
-  { label: '访问日志', to: '/admin/logs', icon: 'receipt_long' },
-]
-
-const manageItems: NavItem[] = [
-  { label: '缓存管理', to: '/admin/cache', icon: 'storage' },
-  { label: '上游源', to: '/admin/upstreams', icon: 'cloud_sync' },
-  { label: '用户管理', to: '/admin/users', icon: 'group' },
-  { label: '系统设置', to: '/admin/settings', icon: 'settings' },
-]
-
-const pageTitles: Record<string, string> = {
-  '/admin': 'Dashboard',
-  '/admin/logs': '访问日志',
-  '/admin/cache': '缓存管理',
-  '/admin/upstreams': '上游源',
-  '/admin/users': '用户管理',
-  '/admin/settings': '系统设置',
 }
 
 function SidebarNavItem({ item }: { item: NavItem }) {
@@ -52,11 +33,33 @@ function SidebarNavItem({ item }: { item: NavItem }) {
 }
 
 export default function MainLayout() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const user = JSON.parse(localStorage.getItem('user') || '{"username":"admin","role":"admin"}')
 
-  const pageTitle = pageTitles[location.pathname] || 'Dashboard'
+  const monitorItems: NavItem[] = [
+    { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
+    { label: t('nav.accessLogs'), to: '/admin/logs', icon: 'receipt_long' },
+  ]
+
+  const manageItems: NavItem[] = [
+    { label: t('nav.cacheManage'), to: '/admin/cache', icon: 'storage' },
+    { label: t('nav.upstreams'), to: '/admin/upstreams', icon: 'cloud_sync' },
+    { label: t('nav.userManage'), to: '/admin/users', icon: 'group' },
+    { label: t('nav.settings'), to: '/admin/settings', icon: 'settings' },
+  ]
+
+  const pageTitles: Record<string, string> = {
+    '/admin': t('nav.dashboard'),
+    '/admin/logs': t('nav.accessLogs'),
+    '/admin/cache': t('nav.cacheManage'),
+    '/admin/upstreams': t('nav.upstreams'),
+    '/admin/users': t('nav.userManage'),
+    '/admin/settings': t('nav.settings'),
+  }
+
+  const pageTitle = pageTitles[location.pathname] || t('nav.dashboard')
 
   const handleLogout = async () => {
     try {
@@ -74,22 +77,22 @@ export default function MainLayout() {
       {/* Sidebar */}
       <aside className="fixed left-0 top-0 z-30 h-screen w-[200px] bg-surface-low border-r border-outline-variant/10 flex flex-col">
         {/* Logo */}
-        <div className="px-6 py-5">
-          <span className="text-base font-bold text-on-surface">RepoCache</span>
-          <span className="ml-2 text-[10px] text-on-surface-variant font-mono">v0.1.0</span>
+        <div className="px-5 py-5 flex items-center gap-2.5">
+          <Logo height={28} />
+          <span className="text-lg font-bold text-on-surface tracking-tight">Depsilo</span>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-2">
           <p className="px-6 mb-2 text-xs tracking-widest text-on-surface-variant font-medium uppercase">
-            监控
+            {t('nav.monitor')}
           </p>
           {monitorItems.map((item) => (
             <SidebarNavItem key={item.to} item={item} />
           ))}
 
           <p className="px-6 mt-6 mb-2 text-xs tracking-widest text-on-surface-variant font-medium uppercase">
-            管理
+            {t('nav.manage')}
           </p>
           {manageItems.map((item) => (
             <SidebarNavItem key={item.to} item={item} />
@@ -97,19 +100,28 @@ export default function MainLayout() {
         </nav>
 
         {/* User info */}
-        <div className="border-t border-outline-variant/10 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-primary text-sm font-medium shrink-0">
-              {user.username?.[0]?.toUpperCase() || 'A'}
+        <div className="border-t border-outline-variant/10 px-3 py-3">
+          <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-surface-container transition-colors group">
+            <div className="relative shrink-0">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/80 to-primary text-on-primary text-xs font-semibold shadow-sm">
+                {user.username?.[0]?.toUpperCase() || 'A'}
+              </div>
+              {user.role === 'admin' && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-success ring-2 ring-surface-low">
+                  <Icon name="check" className="text-[8px] text-white" />
+                </span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-on-surface truncate">{user.username}</p>
-              <Badge variant={user.role === 'admin' ? 'success' : 'default'}>{user.role}</Badge>
+              <p className="text-[13px] font-medium text-on-surface truncate leading-tight">{user.username}</p>
+              <p className="text-[10px] text-on-surface-variant leading-tight mt-0.5">
+                {user.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
+              </p>
             </div>
             <button
               onClick={handleLogout}
-              className="bg-transparent text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors p-1"
-              title="退出登录"
+              className="bg-transparent text-on-surface-variant/0 group-hover:text-on-surface-variant hover:!text-on-surface cursor-pointer transition-all p-1 rounded-md hover:bg-surface-low"
+              title={t('nav.logout')}
             >
               <Icon name="logout" size="sm" />
             </button>
@@ -121,14 +133,12 @@ export default function MainLayout() {
       <header className="fixed top-0 left-[200px] right-0 h-14 bg-surface-low/80 backdrop-blur-md z-40 border-b border-outline-variant/10 flex items-center justify-between px-8">
         <h1 className="text-sm font-medium text-on-surface">{pageTitle}</h1>
         <div className="flex items-center gap-3">
+          <LangToggle />
           <ThemeToggle />
           <span className="flex items-center gap-1.5 text-[10px] text-on-surface-variant font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
             Healthy
           </span>
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-container text-primary text-xs font-medium">
-            {user.username?.[0]?.toUpperCase() || 'A'}
-          </div>
         </div>
       </header>
 

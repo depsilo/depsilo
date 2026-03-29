@@ -19,7 +19,7 @@ case "${1:-}" in
         echo ">>> 删除虚拟环境..."
         rm -rf "$VENV"
         echo ">>> 删除服务端缓存..."
-        rm -rf ../data/cache ../data/repocache.db
+        rm -rf ../data/cache ../data/depslio.db
         echo ">>> done (需重启服务: make dev)"
         ;;
     *)

@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help us improve RepoCache
+about: Report a bug to help us improve Depslio
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -26,7 +26,7 @@ What actually happened.
 
 ## Environment
 
-- **RepoCache Version:** (e.g., v0.1.0, or Docker image tag)
+- **Depslio Version:** (e.g., v0.1.0, or Docker image tag)
 - **Deployment Method:** (binary / Docker / docker-compose)
 - **OS:** (e.g., Ubuntu 22.04, macOS 14)
 - **Architecture:** (amd64 / arm64)

@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"repocache/internal/adapter"
-	"repocache/internal/cache"
-	"repocache/internal/config"
-	"repocache/internal/upstream"
+	"depslio/internal/adapter"
+	"depslio/internal/cache"
+	"depslio/internal/config"
+	"depslio/internal/upstream"
 )
 
 // Handler implements the PyPI adapter.

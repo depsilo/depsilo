@@ -11,16 +11,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
-	"repocache/internal/adapter/apt"
-	"repocache/internal/adapter/pypi"
-	"repocache/internal/api"
-	"repocache/internal/cache"
-	"repocache/internal/config"
-	"repocache/internal/db"
-	"repocache/internal/middleware"
-	"repocache/internal/upstream"
-	web "repocache/web"
+	"depslio/internal/adapter/apt"
+	"depslio/internal/adapter/pypi"
+	"depslio/internal/api"
+	"depslio/internal/cache"
+	"depslio/internal/config"
+	"depslio/internal/db"
+	"depslio/internal/middleware"
+	"depslio/internal/upstream"
+	web "depslio/web"
 )
 
 func main() {
@@ -80,6 +81,10 @@ func main() {
 
 	// Initialize cache manager
 	cacheMgr := cache.NewManager(storage, database)
+
+	// Sync configured upstreams to database
+	syncUpstreams(database, "pypi", cfg.PyPI.Upstreams)
+	syncUpstreams(database, "apt", cfg.APT.Upstreams)
 
 	// Initialize upstream pools
 	pypiPool, err := upstream.NewPool(cfg.PyPI.Upstreams)
@@ -148,5 +153,36 @@ func main() {
 	zap.L().Info("starting server", zap.String("addr", addr))
 	if err := r.Run(addr); err != nil {
 		zap.L().Fatal("server failed", zap.Error(err))
+	}
+}
+
+// syncUpstreams ensures configured upstreams exist in the database.
+func syncUpstreams(database *gorm.DB, adapterType string, upstreams []config.UpstreamConfig) {
+	for _, u := range upstreams {
+		var record db.UpstreamRecord
+		result := database.Where("name = ? AND adapter_type = ?", u.Name, adapterType).First(&record)
+		if result.Error == gorm.ErrRecordNotFound {
+			record = db.UpstreamRecord{
+				AdapterType: adapterType,
+				Name:        u.Name,
+				URL:         u.URL,
+				Proxy:       u.Proxy,
+				Priority:    u.Priority,
+				Healthy:     true,
+				SuccessRate: 1.0,
+			}
+			if err := database.Create(&record).Error; err != nil {
+				zap.L().Warn("failed to sync upstream to db", zap.String("name", u.Name), zap.Error(err))
+			} else {
+				zap.L().Info("synced upstream to db", zap.String("name", u.Name), zap.String("type", adapterType))
+			}
+		} else if result.Error == nil {
+			// Update existing record with config values
+			database.Model(&record).Updates(map[string]interface{}{
+				"url":      u.URL,
+				"proxy":    u.Proxy,
+				"priority": u.Priority,
+			})
+		}
 	}
 }

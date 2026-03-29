@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import Card from '@/components/Card'
@@ -19,6 +20,7 @@ function formatTime(t: string): string {
 }
 
 export default function AccessLogs() {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [adapterType, setAdapterType] = useState('all')
   const [hitFilter, setHitFilter] = useState('all')
@@ -48,14 +50,14 @@ export default function AccessLogs() {
   const columns = [
     {
       key: 'created_at',
-      label: '时间',
+      label: t('logs.time'),
       render: (val: unknown) => (
         <span className="font-mono text-xs text-on-surface whitespace-nowrap">{formatTime(val as string)}</span>
       ),
     },
     {
       key: 'adapter_type',
-      label: '类型',
+      label: t('type'),
       render: (val: unknown) => (
         <Badge variant={(val as string) === 'pypi' ? 'pypi' : 'apt'}>
           {(val as string)?.toUpperCase()}
@@ -64,7 +66,7 @@ export default function AccessLogs() {
     },
     {
       key: 'package_name',
-      label: '包名',
+      label: t('logs.packageName'),
       render: (val: unknown, row: any) => (
         <span className="font-mono text-xs text-on-surface truncate block max-w-[200px]">
           {(val as string) || row.cache_key}
@@ -73,30 +75,30 @@ export default function AccessLogs() {
     },
     {
       key: 'hit',
-      label: '结果',
+      label: t('logs.result'),
       render: (val: unknown) => (
         <Badge variant={val ? 'success' : 'error'}>
-          {val ? '命中' : '未命中'}
+          {val ? t('logs.hit') : t('logs.miss')}
         </Badge>
       ),
     },
     {
       key: 'upstream',
-      label: '上游',
+      label: t('logs.upstream'),
       render: (val: unknown) => (
         <span className="text-xs text-on-surface-variant">{(val as string) || '-'}</span>
       ),
     },
     {
       key: 'latency_ms',
-      label: '耗时',
+      label: t('logs.latency'),
       render: (val: unknown) => (
         <span className="font-mono text-xs text-on-surface">{val as number} ms</span>
       ),
     },
     {
       key: 'client_ip',
-      label: '客户端 IP',
+      label: t('logs.clientIp'),
       render: (val: unknown) => (
         <span className="font-mono text-xs text-on-surface-variant">{val as string}</span>
       ),
@@ -109,7 +111,7 @@ export default function AccessLogs() {
       <Card className="flex flex-wrap items-center gap-3">
         <div className="flex-1">
           <Input
-            placeholder="搜索包名..."
+            placeholder={t('logs.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -120,7 +122,7 @@ export default function AccessLogs() {
           onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}
           className="bg-surface-low border-b-2 border-transparent focus:border-primary text-base text-on-surface px-3 py-2 rounded-[0.125rem] outline-none transition-colors cursor-pointer"
         >
-          <option value="all">全部</option>
+          <option value="all">{t('all')}</option>
           <option value="pypi">PyPI</option>
           <option value="apt">APT</option>
         </select>
@@ -129,19 +131,19 @@ export default function AccessLogs() {
           onChange={(e) => { setHitFilter(e.target.value); setPage(1) }}
           className="bg-surface-low border-b-2 border-transparent focus:border-primary text-base text-on-surface px-3 py-2 rounded-[0.125rem] outline-none transition-colors cursor-pointer"
         >
-          <option value="all">全部</option>
-          <option value="hit">命中</option>
-          <option value="miss">未命中</option>
+          <option value="all">{t('all')}</option>
+          <option value="hit">{t('logs.hit')}</option>
+          <option value="miss">{t('logs.miss')}</option>
         </select>
-        <Button variant="secondary" onClick={handleSearch}>搜索</Button>
+        <Button variant="secondary" onClick={handleSearch}>{t('search')}</Button>
       </Card>
 
       {/* Table */}
       <Card className="p-0 overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">加载中...</div>
+          <div className="p-8 text-center text-on-surface-variant text-sm">{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">暂无日志</div>
+          <div className="p-8 text-center text-on-surface-variant text-sm">{t('logs.noLogs')}</div>
         ) : (
           <DataTable columns={columns} data={items} />
         )}
@@ -151,14 +153,14 @@ export default function AccessLogs() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-on-surface-variant">
-            共 {total} 条，第 {page}/{totalPages} 页
+            {t('totalItems', { total, page, totalPages })}
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              上一页
+              {t('prevPage')}
             </Button>
             <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-              下一页
+              {t('nextPage')}
             </Button>
           </div>
         </div>

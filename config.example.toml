@@ -4,14 +4,14 @@ port = 23333
 
 [database]
 driver = "sqlite"           # sqlite | postgres
-dsn    = "./data/repocache.db"
+dsn    = "./data/depslio.db"
 
 [storage]
 type = "local"              # local | s3
 path = "./data/cache"
 
 # S3 配置（type = "s3" 时生效）
-# bucket   = "repocache"
+# bucket   = "depslio"
 # endpoint = "http://minio:9000"
 # region   = "us-east-1"
 # access_key = ""

@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"repocache/internal/db"
-	"repocache/internal/middleware"
+	"depslio/internal/db"
+	"depslio/internal/middleware"
 )
 
 type TokenHandler struct {
@@ -34,6 +34,7 @@ type createTokenRequest struct {
 	Name        string `json:"name" binding:"required"`
 	Permissions string `json:"permissions" binding:"required,oneof=readonly readwrite"`
 	TTLDays     int    `json:"ttl_days"` // 0 = never expires
+	TTL         string `json:"ttl"`      // "7d" | "30d" | "90d" | "never" (frontend format)
 }
 
 func (h *TokenHandler) Create(c *gin.Context) {
@@ -41,6 +42,20 @@ func (h *TokenHandler) Create(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
 		return
+	}
+
+	// Convert TTL string to TTLDays if provided
+	if req.TTL != "" && req.TTLDays == 0 {
+		switch req.TTL {
+		case "7d":
+			req.TTLDays = 7
+		case "30d":
+			req.TTLDays = 30
+		case "90d":
+			req.TTLDays = 90
+		case "never":
+			req.TTLDays = 0
+		}
 	}
 
 	userID, _ := c.Get(middleware.ContextKeyUserID)

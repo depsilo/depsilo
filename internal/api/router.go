@@ -7,12 +7,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"repocache/internal/api/admin"
-	"repocache/internal/api/public"
-	"repocache/internal/cache"
-	"repocache/internal/config"
-	"repocache/internal/middleware"
-	"repocache/internal/upstream"
+	"depslio/internal/api/admin"
+	"depslio/internal/api/public"
+	"depslio/internal/cache"
+	"depslio/internal/config"
+	"depslio/internal/middleware"
+	"depslio/internal/upstream"
 )
 
 var startTime = time.Now()
