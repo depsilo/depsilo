@@ -127,5 +127,5 @@ func EnsureDefaultAdmin(database *gorm.DB) {
 	if err := database.Create(&user).Error; err != nil {
 		zap.L().Fatal("failed to create default admin", zap.Error(err))
 	}
-	zap.L().Info("created default admin user (username: admin, password: admin)")
+	zap.L().Warn("created default admin user (username: admin, password: admin) — CHANGE THE PASSWORD IMMEDIATELY via the admin dashboard")
 }

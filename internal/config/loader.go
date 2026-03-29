@@ -73,5 +73,10 @@ func Load() (*Config, error) {
 		cfg.Auth.TokenTTL = d
 	}
 
+	// Warn if JWT secret is still the default placeholder
+	if cfg.Auth.JWTSecret == "change-me-in-production" {
+		zap.L().Warn("⚠ auth.jwt_secret is using the default value — this is INSECURE for production. Please set a strong secret in your config file or via REPOCACHE_AUTH_JWT_SECRET environment variable.")
+	}
+
 	return cfg, nil
 }

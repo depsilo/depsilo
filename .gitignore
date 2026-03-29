@@ -4,8 +4,17 @@ web/dist/
 
 # Runtime data
 data/
+*.db
+*.sqlite
+*.log
 .dev.log
 .server.pid
+
+# Config (real config — only config.example.toml is committed)
+config.toml
+.env
+.env.*
+!.env.example
 
 # Test
 testground/.venv/

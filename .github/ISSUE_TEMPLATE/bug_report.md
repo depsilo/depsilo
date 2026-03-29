@@ -1,0 +1,44 @@
+---
+name: Bug Report
+about: Report a bug to help us improve RepoCache
+title: "[Bug] "
+labels: bug
+assignees: ''
+---
+
+## Description
+
+A clear description of the bug.
+
+## Steps to Reproduce
+
+1.
+2.
+3.
+
+## Expected Behavior
+
+What you expected to happen.
+
+## Actual Behavior
+
+What actually happened.
+
+## Environment
+
+- **RepoCache Version:** (e.g., v0.1.0, or Docker image tag)
+- **Deployment Method:** (binary / Docker / docker-compose)
+- **OS:** (e.g., Ubuntu 22.04, macOS 14)
+- **Architecture:** (amd64 / arm64)
+- **Database:** (SQLite / PostgreSQL)
+- **Storage Backend:** (local / S3)
+
+## Relevant Logs
+
+```
+Paste relevant log output here (redact any secrets or internal IPs)
+```
+
+## Additional Context
+
+Any other information that might help diagnose the issue (screenshots, config snippets, etc.)

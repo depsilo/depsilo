@@ -25,7 +25,7 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
 [auth]
 enabled    = true
-jwt_secret = "change-me-in-production"
+jwt_secret = "change-me-in-production"   # ⚠ MUST change before production deployment!
 token_ttl  = "168h"         # 7天
 
 [[pypi.upstreams]]
@@ -37,7 +37,7 @@ priority = 1
 name     = "official"
 url      = "https://pypi.org"
 priority = 2
-proxy    = "http://127.0.0.1:7890"   # 可选，单独给此上游配 HTTP 代理
+# proxy    = "http://your-proxy:7890"   # 可选，单独给此上游配 HTTP 代理
 
 [[apt.upstreams]]
 name     = "tuna"
