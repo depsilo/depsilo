@@ -200,24 +200,29 @@ export default function CacheManage() {
                       strokeWidth={2}
                       rx={2}
                     />
-                    {width > 60 && height > 35 && (
+                    {width > 60 && height > 40 && (
                       <>
                         <text
                           x={x + width / 2}
-                          y={y + height / 2 - 6}
+                          y={y + height / 2 - 7}
                           textAnchor="middle"
+                          dominantBaseline="middle"
                           fill="var(--on-surface)"
-                          fontSize={11}
-                          fontWeight={600}
+                          fontSize={13}
+                          fontWeight={700}
+                          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
                         >
                           {name}
                         </text>
                         <text
                           x={x + width / 2}
-                          y={y + height / 2 + 10}
+                          y={y + height / 2 + 12}
                           textAnchor="middle"
-                          fill="var(--on-surface-variant)"
-                          fontSize={10}
+                          dominantBaseline="middle"
+                          fill="var(--on-surface)"
+                          fontSize={12}
+                          fontWeight={500}
+                          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
                         >
                           {formatBytes(size)}
                         </text>
