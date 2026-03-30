@@ -59,16 +59,18 @@ func ExtractPackageName(adapterType, key string) string {
 
 // Manager handles cache lookup, singleflight dedup, and storage writes.
 type Manager struct {
-	storage Storage
-	db      *gorm.DB
-	group   singleflight.Group
+	storage  Storage
+	db       *gorm.DB
+	group    singleflight.Group
+	eventBus *EventBus
 }
 
 // NewManager creates a new cache manager.
-func NewManager(storage Storage, database *gorm.DB) *Manager {
+func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus) *Manager {
 	return &Manager{
-		storage: storage,
-		db:      database,
+		storage:  storage,
+		db:       database,
+		eventBus: eventBus,
 	}
 }
 
@@ -106,6 +108,16 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 					"last_accessed": time.Now(),
 				})
 				zap.L().Debug("cache hit", zap.String("key", key))
+				if m.eventBus != nil {
+					parts := strings.Split(key, "/")
+					m.eventBus.Publish(CacheEvent{
+						Time:        time.Now(),
+						PackageName: ExtractPackageName(adapterType, key),
+						FileName:    parts[len(parts)-1],
+						AdapterType: adapterType,
+						Hit:         true,
+					})
+				}
 				return &GetResult{
 					Reader:      reader,
 					ContentType: entry.ContentType,
@@ -175,6 +187,18 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 					"last_accessed": now,
 				})
 			}
+		}
+
+		if m.eventBus != nil {
+			parts := strings.Split(key, "/")
+			m.eventBus.Publish(CacheEvent{
+				Time:        time.Now(),
+				PackageName: ExtractPackageName(adapterType, key),
+				FileName:    parts[len(parts)-1],
+				AdapterType: adapterType,
+				Hit:         false,
+				Size:        size,
+			})
 		}
 
 		return &sfResult{contentType: contentType, size: size}, nil

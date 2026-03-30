@@ -79,8 +79,9 @@ func main() {
 		zap.L().Fatal("unsupported storage type", zap.String("type", cfg.Storage.Type))
 	}
 
-	// Initialize cache manager
-	cacheMgr := cache.NewManager(storage, database)
+	// Initialize event bus and cache manager
+	eventBus := cache.NewEventBus()
+	cacheMgr := cache.NewManager(storage, database, eventBus)
 
 	// Sync configured upstreams to database
 	syncUpstreams(database, "pypi", cfg.PyPI.Upstreams)
@@ -115,6 +116,7 @@ func main() {
 		Config:   cfg,
 		PyPIPool: pypiPool,
 		APTPool:  aptPool,
+		EventBus: eventBus,
 	})
 
 	// Register PyPI adapter

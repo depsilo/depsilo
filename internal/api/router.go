@@ -24,6 +24,7 @@ type Deps struct {
 	Config   *config.Config
 	PyPIPool *upstream.Pool
 	APTPool  *upstream.Pool
+	EventBus *cache.EventBus
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
