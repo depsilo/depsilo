@@ -6,6 +6,7 @@ type CacheEntry struct {
 	ID           uint      `gorm:"primarykey" json:"id"`
 	Key          string    `gorm:"uniqueIndex;size:512" json:"key"`
 	AdapterType  string    `gorm:"size:16;index" json:"adapter_type"`
+	PackageName  string    `gorm:"size:256;index" json:"package_name"`
 	StoragePath  string    `gorm:"size:512" json:"storage_path"`
 	Size         int64     `json:"size"`
 	HitCount     int64     `gorm:"default:0" json:"hit_count"`
@@ -65,4 +66,13 @@ type APIToken struct {
 	ExpiresAt   *time.Time `json:"expires_at"`
 	LastUsedAt  *time.Time `json:"last_used_at"`
 	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type UpstreamLatencyLog struct {
+	ID         uint      `gorm:"primarykey" json:"id"`
+	UpstreamID uint      `gorm:"index" json:"upstream_id"`
+	Name       string    `gorm:"size:128;index" json:"name"`
+	LatencyMs  int64     `json:"latency_ms"`
+	Healthy    bool      `json:"healthy"`
+	CreatedAt  time.Time `gorm:"index" json:"created_at"`
 }
