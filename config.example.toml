@@ -48,3 +48,14 @@ priority = 1
 name     = "aliyun"
 url      = "https://mirrors.aliyun.com"
 priority = 2
+
+[[npm.upstreams]]
+name     = "npmmirror"
+url      = "https://registry.npmmirror.com"
+priority = 1
+
+[[npm.upstreams]]
+name     = "official"
+url      = "https://registry.npmjs.org"
+priority = 2
+proxy    = "http://127.0.0.1:7890"

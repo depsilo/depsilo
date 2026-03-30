@@ -10,6 +10,7 @@ type Config struct {
 	Auth     AuthConfig     `mapstructure:"auth"`
 	PyPI     AdapterConfig  `mapstructure:"pypi"`
 	APT      AdapterConfig  `mapstructure:"apt"`
+	NPM      AdapterConfig  `mapstructure:"npm"`
 }
 
 type ServerConfig struct {
