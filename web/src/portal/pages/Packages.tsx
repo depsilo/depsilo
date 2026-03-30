@@ -9,7 +9,7 @@ import Input from '@/components/Input'
 import Button from '@/components/Button'
 
 interface PackageItem {
-  name: string
+  package_name: string
   adapter_type: string
   version_count: number
   total_size: number
@@ -18,7 +18,7 @@ interface PackageItem {
 }
 
 interface PackagesResponse {
-  packages: PackageItem[]
+  items: PackageItem[]
   total: number
   page: number
   per_page: number
@@ -149,7 +149,7 @@ export default function Packages() {
             <SkeletonCard key={i} />
           ))}
         </div>
-      ) : !data || data.packages.length === 0 ? (
+      ) : !data || data.items.length === 0 ? (
         <Card>
           <p className="py-8 text-center text-sm text-on-surface-variant">
             {t('packages.noPackages')}
@@ -157,19 +157,19 @@ export default function Packages() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {data.packages.map((pkg) => (
+          {data.items.map((pkg) => (
             <Card
-              key={`${pkg.adapter_type}-${pkg.name}`}
+              key={`${pkg.adapter_type}-${pkg.package_name}`}
               className="cursor-pointer hover:bg-surface-container/50 transition-colors"
             >
               <div
                 className="flex items-center justify-between"
-                onClick={() => navigate(`/packages/${pkg.adapter_type}/${pkg.name}`)}
+                onClick={() => navigate(`/packages/${pkg.adapter_type}/${pkg.package_name}`)}
               >
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2.5">
                     <span className="text-base font-semibold text-on-surface truncate">
-                      {pkg.name}
+                      {pkg.package_name}
                     </span>
                     <Badge variant={pkg.adapter_type === 'pypi' ? 'pypi' : 'apt'}>
                       {pkg.adapter_type}

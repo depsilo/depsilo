@@ -54,9 +54,11 @@ func (h *PackagesHandler) List(c *gin.Context) {
 	// Determine sort order
 	orderClause := "total_hits DESC"
 	switch sort {
-	case "last_accessed":
+	case "hits", "total_hits":
+		orderClause = "total_hits DESC"
+	case "recent", "last_accessed":
 		orderClause = "last_accessed DESC"
-	case "total_size":
+	case "size", "total_size":
 		orderClause = "total_size DESC"
 	case "name":
 		orderClause = "package_name ASC"
@@ -87,9 +89,14 @@ func (h *PackagesHandler) List(c *gin.Context) {
 		items = []packageItem{}
 	}
 
+	totalPages := (total + int64(perPage) - 1) / int64(perPage)
+
 	c.JSON(http.StatusOK, gin.H{
-		"total": total,
-		"items": items,
+		"total":       total,
+		"page":        page,
+		"per_page":    perPage,
+		"total_pages": totalPages,
+		"items":       items,
 	})
 }
 

@@ -6,7 +6,6 @@ import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 
 interface FileEntry {
-  id: number
   file_name: string
   size: number
   hit_count: number
@@ -19,7 +18,7 @@ interface PackageDetailData {
   adapter_type: string
   total_hits: number
   total_size: number
-  files: FileEntry[]
+  versions: FileEntry[]
 }
 
 function formatBytes(bytes: number): string {
@@ -159,16 +158,16 @@ export default function PackageDetail() {
               </tr>
             </thead>
             <tbody>
-              {data.files.length === 0 ? (
+              {data.versions.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-on-surface-variant">
                     {t('noData')}
                   </td>
                 </tr>
               ) : (
-                data.files.map((file) => (
+                data.versions.map((file) => (
                   <tr
-                    key={file.id}
+                    key={file.file_name}
                     className="border-t border-outline-variant/10"
                   >
                     <td className="py-3 pr-4 font-mono text-on-surface truncate max-w-xs">
