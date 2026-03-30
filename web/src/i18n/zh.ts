@@ -171,6 +171,8 @@ const zh = {
     portal: {
       quickStart: '快速开始',
       serviceStatus: '服务状态',
+      packages: '包浏览',
+      live: '实时动态',
       adminPanel: '管理后台 →',
       online: '服务在线',
       offline: '离线',
@@ -201,6 +203,41 @@ const zh = {
       firstDownloadTitle: '首次下载说明',
       firstDownloadDesc:
         '首次请求某个包时，Depslio 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',
+    },
+
+    // Packages
+    packages: {
+      title: '包浏览',
+      searchPlaceholder: '搜索包名...',
+      sortHits: '命中最多',
+      sortRecent: '最近访问',
+      sortSize: '最大',
+      sortName: '名称',
+      versions: '个版本',
+      hits: '次命中',
+      noPackages: '暂无缓存包',
+      backToList: '包浏览',
+      totalHits: '总命中',
+      totalSize: '总大小',
+      fileName: '文件名',
+      size: '大小',
+      hitCount: '命中次数',
+      cachedAt: '缓存时间',
+      lastAccessed: '最后访问',
+      notFound: '未找到该包',
+    },
+
+    // Live Stream
+    live: {
+      title: '实时动态',
+      todayHits: '今日命中',
+      todayMisses: '今日未命中',
+      hitRate: '命中率',
+      pause: '暂停',
+      resume: '恢复',
+      noEvents: '等待事件...',
+      hit: '命中',
+      miss: '未命中',
     },
 
     // ServiceStatus

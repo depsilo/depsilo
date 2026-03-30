@@ -171,6 +171,8 @@ const en = {
     portal: {
       quickStart: 'Quick Start',
       serviceStatus: 'Service Status',
+      packages: 'Packages',
+      live: 'Live',
       adminPanel: 'Admin →',
       online: 'Online',
       offline: 'Offline',
@@ -201,6 +203,41 @@ const en = {
       firstDownloadTitle: 'First Download Note',
       firstDownloadDesc:
         'The first request for a package requires downloading from the upstream source. Subsequent requests for the same package will be served from the local cache at LAN speed.',
+    },
+
+    // Packages
+    packages: {
+      title: 'Package Browse',
+      searchPlaceholder: 'Search packages...',
+      sortHits: 'Most Hits',
+      sortRecent: 'Recently Accessed',
+      sortSize: 'Largest',
+      sortName: 'Name',
+      versions: 'versions',
+      hits: 'hits',
+      noPackages: 'No cached packages found',
+      backToList: 'Package Browse',
+      totalHits: 'Total Hits',
+      totalSize: 'Total Size',
+      fileName: 'File Name',
+      size: 'Size',
+      hitCount: 'Hits',
+      cachedAt: 'Cached At',
+      lastAccessed: 'Last Accessed',
+      notFound: 'Package not found',
+    },
+
+    // Live Stream
+    live: {
+      title: 'Live Stream',
+      todayHits: 'Today Hits',
+      todayMisses: 'Today Misses',
+      hitRate: 'Hit Rate',
+      pause: 'Pause',
+      resume: 'Resume',
+      noEvents: 'Waiting for events...',
+      hit: 'HIT',
+      miss: 'MISS',
     },
 
     // ServiceStatus

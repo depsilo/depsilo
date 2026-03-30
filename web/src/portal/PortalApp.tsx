@@ -7,6 +7,9 @@ import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import Button from '@/components/Button'
 import QuickStart from '@/portal/pages/QuickStart'
+import Packages from '@/portal/pages/Packages'
+import PackageDetail from '@/portal/pages/PackageDetail'
+import LiveStream from '@/portal/pages/LiveStream'
 import ServiceStatus from '@/portal/pages/ServiceStatus'
 
 export default function PortalApp() {
@@ -47,6 +50,30 @@ export default function PortalApp() {
               }
             >
               {t('portal.quickStart')}
+            </NavLink>
+            <NavLink
+              to="/packages"
+              className={({ isActive }) =>
+                `px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'text-primary'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`
+              }
+            >
+              {t('portal.packages')}
+            </NavLink>
+            <NavLink
+              to="/live"
+              className={({ isActive }) =>
+                `px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'text-primary'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`
+              }
+            >
+              {t('portal.live')}
             </NavLink>
             <NavLink
               to="/status"
@@ -93,6 +120,9 @@ export default function PortalApp() {
       <main className="pt-14 max-w-4xl mx-auto px-6 py-8">
         <Routes>
           <Route index element={<QuickStart />} />
+          <Route path="packages" element={<Packages />} />
+          <Route path="packages/:type/:name" element={<PackageDetail />} />
+          <Route path="live" element={<LiveStream />} />
           <Route path="status" element={<ServiceStatus />} />
         </Routes>
       </main>
