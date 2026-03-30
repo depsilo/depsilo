@@ -1,6 +1,6 @@
 # testground — 本地代理测试目录
 
-此目录用于通过 Depslio 代理模拟安装依赖包，支持反复测试。
+此目录用于通过 Depsilo 代理模拟安装依赖包，支持反复测试。
 
 ## 快速开始
 
@@ -27,7 +27,7 @@ make dev
 ```
 
 - 自动创建 `.venv`（如不存在）
-- 代理地址默认 `http://localhost:23333`，可通过 `DEPSLIO_PORT` 环境变量修改
+- 代理地址默认 `http://localhost:23333`，可通过 `DEPSILO_PORT` 环境变量修改
 
 ### pip_clean.sh — 清理环境
 

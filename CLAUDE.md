@@ -1,4 +1,4 @@
-# CLAUDE.md — Depslio 项目全量指南
+# CLAUDE.md — Depsilo 项目全量指南
 
 > 本文件是 Claude Code 的唯一权威参考。实现时严格遵循此文档，不得自行发明架构或引入未列出的依赖。
 
@@ -6,7 +6,7 @@
 
 ## 一、项目概述
 
-**Depslio** 是一个轻量级依赖包代理缓存网关，用 Go 编写，单二进制部署。
+**Depsilo** 是一个轻量级依赖包代理缓存网关，用 Go 编写，单二进制部署。
 
 ### 核心价值
 - 缓存 pip / apt 依赖包，局域网内秒级响应
@@ -720,7 +720,7 @@ services:
       - ./data:/app/data
       - ./config.toml:/app/config.toml
     environment:
-      - DEPSLIO_CONFIG=/app/config.toml
+      - DEPSILO_CONFIG=/app/config.toml
     restart: unless-stopped
 ```
 

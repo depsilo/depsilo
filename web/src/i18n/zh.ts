@@ -191,7 +191,7 @@ const zh = {
     // QuickStart
     quickstart: {
       title: '快速开始',
-      subtitle: '配置你的包管理器以使用 Depslio 代理缓存，享受更快的下载速度。',
+      subtitle: '配置你的包管理器以使用 Depsilo 代理缓存，享受更快的下载速度。',
       pipLabel: 'Python (pip)',
       pipDesc: 'pip / uv / Poetry 包管理器',
       aptLabel: 'APT (Debian)',
@@ -207,7 +207,7 @@ const zh = {
       addSource: '添加源配置',
       addSourceDesc: '创建新的 APT 源配置文件：',
       replaceSource: '一键替换现有源',
-      replaceSourceDesc: '使用 sed 命令将现有源替换为 Depslio 代理：',
+      replaceSourceDesc: '使用 sed 命令将现有源替换为 Depsilo 代理：',
       verifyConfig: '验证配置',
       verifyConfigDesc: '运行以下命令验证源配置是否生效：',
       dockerPip: 'Docker Build',
@@ -216,7 +216,7 @@ const zh = {
       dockerAptDesc: '构建镜像时通过 --network host 让容器访问宿主机代理：',
       firstDownloadTitle: '首次下载说明',
       firstDownloadDesc:
-        '首次请求某个包时，Depslio 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',
+        '首次请求某个包时，Depsilo 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',
     },
 
     // Packages

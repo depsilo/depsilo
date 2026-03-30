@@ -8,5 +8,5 @@ services:
       - ./data:/app/data
       - ./config.toml:/app/config.toml
     environment:
-      - DEPSLIO_CONFIG=/app/config.toml
+      - DEPSILO_CONFIG=/app/config.toml
     restart: unless-stopped

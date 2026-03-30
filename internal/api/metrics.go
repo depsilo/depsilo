@@ -6,7 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Metrics holds all Prometheus metrics for Depslio.
+// Metrics holds all Prometheus metrics for Depsilo.
 type Metrics struct {
 	RequestsTotal         *prometheus.CounterVec
 	RequestDuration       *prometheus.HistogramVec

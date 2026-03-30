@@ -191,7 +191,7 @@ const en = {
     // QuickStart
     quickstart: {
       title: 'Quick Start',
-      subtitle: 'Configure your package manager to use the Depslio proxy cache for faster downloads.',
+      subtitle: 'Configure your package manager to use the Depsilo proxy cache for faster downloads.',
       pipLabel: 'Python (pip)',
       pipDesc: 'pip / uv / Poetry package managers',
       aptLabel: 'APT (Debian)',
@@ -207,7 +207,7 @@ const en = {
       addSource: 'Add Source Config',
       addSourceDesc: 'Create a new APT source configuration file:',
       replaceSource: 'Replace Existing Sources',
-      replaceSourceDesc: 'Use sed to replace existing sources with the Depslio proxy:',
+      replaceSourceDesc: 'Use sed to replace existing sources with the Depsilo proxy:',
       verifyConfig: 'Verify Config',
       verifyConfigDesc: 'Run the following command to verify the source configuration:',
       dockerPip: 'Docker Build',

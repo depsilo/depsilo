@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# 通过 Depslio 代理安装 PyPI 包
+# 通过 Depsilo 代理安装 PyPI 包
 # 用法: ./pip_install.sh [包名...]
 # 示例: ./pip_install.sh requests flask numpy
 
 set -e
 cd "$(dirname "$0")"
 
-PORT=${DEPSLIO_PORT:-23333}
+PORT=${DEPSILO_PORT:-23333}
 INDEX_URL="http://localhost:${PORT}/pypi/simple/"
 VENV=".venv"
 
