@@ -210,6 +210,10 @@ const en = {
       replaceSourceDesc: 'Use sed to replace existing sources with the Depslio proxy:',
       verifyConfig: 'Verify Config',
       verifyConfigDesc: 'Run the following command to verify the source configuration:',
+      dockerPip: 'Docker Build',
+      dockerPipDesc: 'Inject proxy via --build-arg during image build, no Dockerfile changes needed:',
+      dockerApt: 'Docker Build',
+      dockerAptDesc: 'Use --network host to let the build container access the host proxy:',
       firstDownloadTitle: 'First Download Note',
       firstDownloadDesc:
         'The first request for a package requires downloading from the upstream source. Subsequent requests for the same package will be served from the local cache at LAN speed.',

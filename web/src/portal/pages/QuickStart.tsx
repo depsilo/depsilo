@@ -1,32 +1,33 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Card from '@/components/Card'
 import Icon from '@/components/Icon'
 import CodeBlock from '@/portal/components/CodeBlock'
 
 type Tab = 'pip' | 'apt'
 
-interface StepProps {
-  number: number
+interface MethodProps {
+  icon: string
   title: string
   description: string
   children: React.ReactNode
 }
 
-function Step({ number, title, description, children }: StepProps) {
+function Method({ icon, title, description, children }: MethodProps) {
   return (
-    <Card className="space-y-3">
-      <div className="flex items-start gap-3">
-        <span className="w-7 h-7 rounded-full bg-primary-container text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-          {number}
+    <div className="rounded-xl border border-outline-variant/15 bg-surface-low overflow-hidden">
+      <div className="px-5 py-4 flex items-start gap-3">
+        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+          <Icon name={icon} size="sm" />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-on-surface">{title}</p>
-          <p className="text-sm text-on-surface-variant mt-0.5">{description}</p>
+          <p className="font-semibold text-on-surface text-sm">{title}</p>
+          <p className="text-[13px] text-on-surface-variant mt-0.5 leading-relaxed">{description}</p>
         </div>
       </div>
-      <div className="ml-10">{children}</div>
-    </Card>
+      <div className="px-5 pb-5 -mt-1">
+        {children}
+      </div>
+    </div>
   )
 }
 
@@ -36,18 +37,10 @@ export default function QuickStart() {
   const baseURL = useMemo(() => window.location.origin, [])
   const host = useMemo(() => window.location.hostname, [])
 
-  const tabMeta = {
-    pip: {
-      icon: 'code_blocks',
-      label: t('quickstart.pipLabel'),
-      desc: t('quickstart.pipDesc'),
-    },
-    apt: {
-      icon: 'terminal',
-      label: t('quickstart.aptLabel'),
-      desc: t('quickstart.aptDesc'),
-    },
-  } as const
+  const tabs = [
+    { key: 'pip' as Tab, icon: 'code_blocks', label: t('quickstart.pipLabel'), desc: t('quickstart.pipDesc') },
+    { key: 'apt' as Tab, icon: 'terminal', label: t('quickstart.aptLabel'), desc: t('quickstart.aptDesc') },
+  ]
 
   return (
     <div className="space-y-8">
@@ -59,36 +52,35 @@ export default function QuickStart() {
         </p>
       </div>
 
-      {/* Tab selector — card style */}
-      <div className="grid grid-cols-2 gap-3">
-        {(['pip', 'apt'] as const).map((tab) => {
-          const meta = tabMeta[tab]
-          const isActive = activeTab === tab
+      {/* Tab selector */}
+      <div className="flex gap-2 p-1 bg-surface-container rounded-xl">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key
           return (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-4 rounded-[0.375rem] px-5 py-4 text-left transition-all cursor-pointer border-2 ${
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-3 flex-1 rounded-lg px-4 py-3 text-left transition-all cursor-pointer ${
                 isActive
-                  ? 'border-primary bg-primary/5'
-                  : 'border-outline-variant/15 bg-surface-low hover:border-outline-variant/30'
+                  ? 'bg-surface-bright shadow-sm'
+                  : 'bg-transparent hover:bg-surface-high/50'
               }`}
             >
               <span
-                className={`flex items-center justify-center w-10 h-10 rounded-[0.375rem] shrink-0 ${
+                className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 transition-colors ${
                   isActive
-                    ? 'bg-primary text-white'
-                    : 'bg-surface-container text-on-surface-variant'
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-high text-on-surface-variant'
                 }`}
               >
-                <Icon name={meta.icon} />
+                <Icon name={tab.icon} size="sm" />
               </span>
               <div>
-                <p className={`font-semibold text-sm ${isActive ? 'text-primary' : 'text-on-surface'}`}>
-                  {meta.label}
+                <p className={`font-semibold text-sm ${isActive ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                  {tab.label}
                 </p>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  {meta.desc}
+                <p className="text-[11px] text-on-surface-variant mt-0.5 leading-tight">
+                  {tab.desc}
                 </p>
               </div>
             </button>
@@ -96,12 +88,12 @@ export default function QuickStart() {
         })}
       </div>
 
-      {/* Steps */}
-      <div className="space-y-4">
+      {/* Methods */}
+      <div className="grid gap-4">
         {activeTab === 'pip' && (
           <>
-            <Step
-              number={1}
+            <Method
+              icon="bolt"
               title={t('quickstart.tempUse')}
               description={t('quickstart.tempUseDesc')}
             >
@@ -109,10 +101,10 @@ export default function QuickStart() {
                 language="bash"
                 code={`pip install <package> -i ${baseURL}/pypi/simple/ --trusted-host ${host}`}
               />
-            </Step>
+            </Method>
 
-            <Step
-              number={2}
+            <Method
+              icon="settings"
               title={t('quickstart.permanentConfig')}
               description={t('quickstart.permanentConfigDesc')}
             >
@@ -120,10 +112,10 @@ export default function QuickStart() {
                 filename="~/.config/pip/pip.conf"
                 code={`[global]\nindex-url = ${baseURL}/pypi/simple/\ntrusted-host = ${host}`}
               />
-            </Step>
+            </Method>
 
-            <Step
-              number={3}
+            <Method
+              icon="speed"
               title={t('quickstart.uvUser')}
               description={t('quickstart.uvUserDesc')}
             >
@@ -131,10 +123,10 @@ export default function QuickStart() {
                 language="bash"
                 code={`uv pip install <package> --index-url ${baseURL}/pypi/simple/`}
               />
-            </Step>
+            </Method>
 
-            <Step
-              number={4}
+            <Method
+              icon="library_books"
               title={t('quickstart.poetryUser')}
               description={t('quickstart.poetryUserDesc')}
             >
@@ -142,14 +134,25 @@ export default function QuickStart() {
                 filename="pyproject.toml"
                 code={`[[tool.poetry.source]]\nname = "depslio"\nurl = "${baseURL}/pypi/simple/"\npriority = "primary"`}
               />
-            </Step>
+            </Method>
+
+            <Method
+              icon="deployed_code"
+              title={t('quickstart.dockerPip')}
+              description={t('quickstart.dockerPipDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`DOCKER_BUILDKIT=1 docker build --network host \\\n  --build-arg PIP_INDEX_URL=${baseURL}/pypi/simple/ \\\n  --build-arg PIP_TRUSTED_HOST=${host} \\\n  -t myapp .`}
+              />
+            </Method>
           </>
         )}
 
         {activeTab === 'apt' && (
           <>
-            <Step
-              number={1}
+            <Method
+              icon="add_circle"
               title={t('quickstart.addSource')}
               description={t('quickstart.addSourceDesc')}
             >
@@ -157,10 +160,10 @@ export default function QuickStart() {
                 filename="/etc/apt/sources.list.d/depslio.list"
                 code={`deb ${baseURL}/apt/ubuntu noble main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-updates main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-security main restricted universe multiverse`}
               />
-            </Step>
+            </Method>
 
-            <Step
-              number={2}
+            <Method
+              icon="find_replace"
               title={t('quickstart.replaceSource')}
               description={t('quickstart.replaceSourceDesc')}
             >
@@ -168,25 +171,38 @@ export default function QuickStart() {
                 language="bash"
                 code={`sudo sed -i 's|https\\?://[^/]*/ubuntu|${baseURL}/apt/ubuntu|g' /etc/apt/sources.list`}
               />
-            </Step>
+            </Method>
 
-            <Step
-              number={3}
+            <Method
+              icon="verified"
               title={t('quickstart.verifyConfig')}
               description={t('quickstart.verifyConfigDesc')}
             >
               <CodeBlock language="bash" code="sudo apt update" />
-            </Step>
+            </Method>
+
+            <Method
+              icon="deployed_code"
+              title={t('quickstart.dockerApt')}
+              description={t('quickstart.dockerAptDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`DOCKER_BUILDKIT=1 docker build --network host \\\n  --build-arg http_proxy=${baseURL} \\\n  -t myapp .`}
+              />
+            </Method>
           </>
         )}
       </div>
 
       {/* Info tip */}
-      <div className="bg-primary/5 border-l-2 border-primary p-4 rounded-[0.25rem] flex items-start gap-3">
-        <Icon name="lightbulb" size="sm" className="text-primary shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-medium text-on-surface text-sm">{t('quickstart.firstDownloadTitle')}</p>
-          <p className="text-sm text-on-surface-variant">
+      <div className="flex items-start gap-3 rounded-xl bg-primary/5 border border-primary/10 px-5 py-4">
+        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 shrink-0">
+          <Icon name="lightbulb" size="sm" className="text-primary" />
+        </span>
+        <div>
+          <p className="font-semibold text-on-surface text-sm">{t('quickstart.firstDownloadTitle')}</p>
+          <p className="text-sm text-on-surface-variant mt-0.5 leading-relaxed">
             {t('quickstart.firstDownloadDesc')}
           </p>
         </div>

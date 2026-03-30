@@ -210,6 +210,10 @@ const zh = {
       replaceSourceDesc: '使用 sed 命令将现有源替换为 Depslio 代理：',
       verifyConfig: '验证配置',
       verifyConfigDesc: '运行以下命令验证源配置是否生效：',
+      dockerPip: 'Docker Build',
+      dockerPipDesc: '构建镜像时通过 --build-arg 注入代理，无需修改 Dockerfile：',
+      dockerApt: 'Docker Build',
+      dockerAptDesc: '构建镜像时通过 --network host 让容器访问宿主机代理：',
       firstDownloadTitle: '首次下载说明',
       firstDownloadDesc:
         '首次请求某个包时，Depslio 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',

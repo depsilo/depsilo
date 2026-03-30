@@ -18,37 +18,53 @@ export default function CodeBlock({ filename, code }: CodeBlockProps) {
   }, [code])
 
   return (
-    <div className="relative rounded-[0.375rem] overflow-hidden group"
+    <div
+      className="relative rounded-xl overflow-hidden group border border-outline-variant/10"
       style={{ background: 'var(--code-bg)' }}
     >
       {filename && (
-        <div className="px-4 py-2 border-b border-outline-variant/10"
+        <div
+          className="flex items-center justify-between px-4 py-2 border-b border-outline-variant/10"
           style={{ background: 'var(--code-header)' }}
         >
           <span className="text-xs font-mono" style={{ color: 'var(--code-dim)' }}>
             {filename}
           </span>
+          <button
+            onClick={handleCopy}
+            className="p-1 rounded-md bg-transparent hover:bg-white/10 transition-all cursor-pointer"
+            style={{ color: 'var(--code-dim)' }}
+          >
+            <Icon
+              name={copied ? 'check' : 'content_copy'}
+              size="sm"
+              className={copied ? 'text-success' : ''}
+            />
+          </button>
         </div>
       )}
       <div className="relative">
         <pre className="p-4 overflow-x-auto">
-          <code className="font-mono text-sm leading-relaxed whitespace-pre-wrap"
+          <code
+            className="font-mono text-sm leading-relaxed whitespace-pre-wrap"
             style={{ color: 'var(--code-text)' }}
           >
             {code}
           </code>
         </pre>
-        <button
-          onClick={handleCopy}
-          className="absolute top-3 right-3 p-1.5 rounded-[0.25rem] bg-transparent hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-          style={{ color: 'var(--code-dim)' }}
-        >
-          <Icon
-            name={copied ? 'check' : 'content_copy'}
-            size="sm"
-            className={copied ? 'text-success' : ''}
-          />
-        </button>
+        {!filename && (
+          <button
+            onClick={handleCopy}
+            className="absolute top-3 right-3 p-1.5 rounded-md bg-transparent hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+            style={{ color: 'var(--code-dim)' }}
+          >
+            <Icon
+              name={copied ? 'check' : 'content_copy'}
+              size="sm"
+              className={copied ? 'text-success' : ''}
+            />
+          </button>
+        )}
       </div>
     </div>
   )
