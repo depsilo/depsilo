@@ -53,6 +53,23 @@ func ExtractPackageName(adapterType, key string) string {
 		if len(parts) > 0 {
 			return parts[0]
 		}
+	case "npm":
+		// key: npm/<package>/metadata.json or npm/<package>/-/<filename>
+		// or npm/@<scope>/<package>/metadata.json or npm/@<scope>/<package>/-/<filename>
+		trimmed := strings.TrimPrefix(key, "npm/")
+		if strings.HasPrefix(trimmed, "@") {
+			// Scoped: @scope/package/...
+			parts := strings.SplitN(trimmed, "/", 3)
+			if len(parts) >= 2 {
+				return parts[0] + "/" + parts[1] // @scope/package
+			}
+		} else {
+			// Unscoped: package/...
+			parts := strings.SplitN(trimmed, "/", 2)
+			if len(parts) >= 1 {
+				return parts[0]
+			}
+		}
 	}
 	return ""
 }
