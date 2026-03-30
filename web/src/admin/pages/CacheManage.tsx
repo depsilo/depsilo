@@ -186,7 +186,7 @@ export default function CacheManage() {
               aspectRatio={4 / 3}
               stroke="var(--surface-low)"
               content={({ x, y, width, height, name, size }: any) => {
-                if (width < 40 || height < 25) return <g />
+                if (width < 4 || height < 4) return <g />
                 return (
                   <g>
                     <rect
@@ -195,22 +195,22 @@ export default function CacheManage() {
                       width={width}
                       height={height}
                       fill="var(--primary)"
-                      fillOpacity={0.3 + Math.min(0.7, (size / (distribution.top_packages[0]?.size || 1)) * 0.7)}
+                      fillOpacity={0.25 + Math.min(0.6, ((size || 0) / (distribution.top_packages[0]?.size || 1)) * 0.6)}
                       stroke="var(--surface-low)"
                       strokeWidth={2}
-                      rx={2}
+                      rx={3}
                     />
-                    {width > 60 && height > 40 && (
+                    {width > 70 && height > 44 && name && (
                       <>
                         <text
                           x={x + width / 2}
-                          y={y + height / 2 - 7}
+                          y={y + height / 2 - 8}
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          fill="var(--on-surface)"
-                          fontSize={13}
+                          fill="#ffffff"
+                          fontSize={14}
                           fontWeight={700}
-                          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
+                          fontFamily="system-ui, sans-serif"
                         >
                           {name}
                         </text>
@@ -219,12 +219,12 @@ export default function CacheManage() {
                           y={y + height / 2 + 12}
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          fill="var(--on-surface)"
+                          fill="rgba(255,255,255,0.8)"
                           fontSize={12}
                           fontWeight={500}
-                          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
+                          fontFamily="ui-monospace, monospace"
                         >
-                          {formatBytes(size)}
+                          {typeof size === 'number' ? formatBytes(size) : ''}
                         </text>
                       </>
                     )}
