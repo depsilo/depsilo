@@ -36,11 +36,21 @@
 ### Docker (recommended)
 
 ```bash
+# Docker Hub
 docker run -d \
   --name depsilo \
   -p 23333:23333 \
   -v depsilo-data:/app/data \
+  --restart unless-stopped \
   depsilo/depsilo:latest
+
+# or GitHub Container Registry
+docker run -d \
+  --name depsilo \
+  -p 23333:23333 \
+  -v depsilo-data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/depsilo/depsilo:latest
 ```
 
 ### docker-compose
