@@ -110,6 +110,47 @@ func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error)
 	}, nil
 }
 
+// FetchWithHeaders performs an HTTP GET with additional request headers.
+func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers map[string]string) (*FetchResult, error) {
+	reqURL := u.URL + path
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("User-Agent", "depsilo/0.1")
+
+	for k, v := range headers {
+		if v != "" {
+			req.Header.Set(k, v)
+		}
+	}
+
+	start := time.Now()
+	resp, err := u.client.Do(req)
+	latency := time.Since(start)
+
+	if err != nil {
+		u.Report(latency, false)
+		return nil, fmt.Errorf("fetch %s: %w", reqURL, err)
+	}
+
+	if resp.StatusCode >= 500 {
+		resp.Body.Close()
+		u.Report(latency, false)
+		return nil, fmt.Errorf("upstream %s returned %d", u.Name, resp.StatusCode)
+	}
+
+	u.Report(latency, true)
+
+	return &FetchResult{
+		Body:        resp.Body,
+		ContentType: resp.Header.Get("Content-Type"),
+		Size:        resp.ContentLength,
+		StatusCode:  resp.StatusCode,
+	}, nil
+}
+
 // Report records a request result for latency/health tracking.
 func (u *Upstream) Report(latency time.Duration, success bool) {
 	u.mu.Lock()
