@@ -1,21 +1,19 @@
-<p align="center">
-  <img src="docs/brand/icon-dark.svg" alt="Depsilo" width="80" height="80">
-  <br>
-  <h1>Depsilo</h1>
-  <br>
-  <em>One cache for all your dependencies</em>
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white" alt="Go"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-  <a href="https://hub.docker.com/r/depsilo/depsilo"><img src="https://img.shields.io/docker/pulls/depsilo/depsilo" alt="Docker Pulls"></a>
-  <a href="https://github.com/depsilo/depsilo/releases"><img src="https://img.shields.io/github/v/release/depsilo/depsilo" alt="Release"></a>
-</p>
+<img src="docs/brand/icon-dark.svg" alt="Depsilo" width="80" height="80">
 
-<p align="center">
-  <a href="README.md">English</a> &middot; <a href="docs/README_zh.md">中文</a>
-</p>
+### Depsilo
+
+*One cache for all your dependencies*
+
+[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/depsilo/depsilo)](https://hub.docker.com/r/depsilo/depsilo)
+[![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
+
+[English](README.md) · [中文](docs/README_zh.md)
+
+</div>
 
 ---
 
