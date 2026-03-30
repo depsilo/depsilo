@@ -56,6 +56,9 @@ func main() {
 	// Create default admin user if none exists
 	api.EnsureDefaultAdmin(database)
 
+	// Backfill PackageName for existing cache entries
+	backfillPackageNames(database)
+
 	// Initialize storage
 	var storage cache.Storage
 	switch cfg.Storage.Type {
@@ -157,6 +160,23 @@ func main() {
 	if err := r.Run(addr); err != nil {
 		zap.L().Fatal("server failed", zap.Error(err))
 	}
+}
+
+// backfillPackageNames updates existing cache entries that have an empty PackageName.
+func backfillPackageNames(database *gorm.DB) {
+	var entries []db.CacheEntry
+	database.Where("package_name = '' OR package_name IS NULL").Find(&entries)
+	if len(entries) == 0 {
+		return
+	}
+	zap.L().Info("backfilling package names", zap.Int("count", len(entries)))
+	for _, e := range entries {
+		name := cache.ExtractPackageName(e.AdapterType, e.Key)
+		if name != "" {
+			database.Model(&e).Update("package_name", name)
+		}
+	}
+	zap.L().Info("package name backfill complete")
 }
 
 // syncUpstreams ensures configured upstreams exist in the database.
