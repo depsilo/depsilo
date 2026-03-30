@@ -100,8 +100,9 @@ func main() {
 	// Start background goroutines
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go upstream.StartHealthCheck(ctx, pypiPool, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, aptPool, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, pypiPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, aptPool, database, 30*time.Second)
+	go upstream.StartLatencyLogCleanup(ctx, database)
 	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
 
 	// Setup Gin

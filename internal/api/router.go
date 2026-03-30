@@ -81,6 +81,10 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.DELETE("/upstreams/:id", upstreamHandler.Delete)
 	adminGroup.POST("/upstreams/:id/check", upstreamHandler.Check)
 
+	// Upstream latency history
+	latencyHandler := admin.NewLatencyHandler(deps.DB)
+	adminGroup.GET("/upstreams/:id/latency", latencyHandler.GetLatencyHistory)
+
 	// Access logs
 	logHandler := admin.NewAccessLogHandler(deps.DB)
 	adminGroup.GET("/logs", logHandler.List)
