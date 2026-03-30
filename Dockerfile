@@ -7,13 +7,14 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM golang:1.21-alpine AS backend
+FROM golang:1.25-alpine AS backend
+RUN apk add --no-cache gcc musl-dev
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/web/dist ./web/dist
-RUN go build -o depsilo ./cmd/server
+RUN CGO_ENABLED=1 go build -o depsilo ./cmd/server
 
 # Stage 3: Final image
 FROM alpine:latest
