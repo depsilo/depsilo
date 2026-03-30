@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="docs/brand/logo-horizontal-light.svg" alt="Depsilo" height="64">
-  <br><br>
+  <img src="docs/brand/icon-dark.svg" alt="Depsilo" width="80" height="80">
+  <br>
+  <h1>Depsilo</h1>
+  <br>
   <em>One cache for all your dependencies</em>
 </p>
 
