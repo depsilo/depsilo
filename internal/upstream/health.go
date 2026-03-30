@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"depslio/internal/db"
+	"depsilo/internal/db"
 )
 
 // StartHealthCheck runs periodic health checks on all upstreams in the pool.

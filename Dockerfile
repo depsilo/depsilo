@@ -13,12 +13,12 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/web/dist ./web/dist
-RUN go build -o depslio ./cmd/server
+RUN go build -o depsilo ./cmd/server
 
 # Stage 3: Final image
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=backend /app/depslio .
+COPY --from=backend /app/depsilo .
 EXPOSE 23333
-CMD ["./depslio"]
+CMD ["./depsilo"]

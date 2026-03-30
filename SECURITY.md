@@ -10,7 +10,7 @@
 
 If you discover a security vulnerability in Depslio, please report it responsibly.
 
-**Email:** security@depslio.dev
+**Email:** security@depsilo.dev
 
 **Please include:**
 - Description of the vulnerability

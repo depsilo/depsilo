@@ -13,10 +13,10 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"depslio/internal/adapter"
-	"depslio/internal/cache"
-	"depslio/internal/config"
-	"depslio/internal/upstream"
+	"depsilo/internal/adapter"
+	"depsilo/internal/cache"
+	"depsilo/internal/config"
+	"depsilo/internal/upstream"
 )
 
 // Handler implements the PyPI adapter.

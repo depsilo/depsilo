@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"depslio/internal/db"
+	"depsilo/internal/db"
 )
 
 type LatencyHandler struct {

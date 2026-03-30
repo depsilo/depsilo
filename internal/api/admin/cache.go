@@ -9,8 +9,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"depslio/internal/cache"
-	"depslio/internal/db"
+	"depsilo/internal/cache"
+	"depsilo/internal/db"
 )
 
 type CacheHandler struct {

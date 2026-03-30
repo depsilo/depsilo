@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"depslio/internal/config"
+	"depsilo/internal/config"
 )
 
 type SettingsHandler struct {

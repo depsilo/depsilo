@@ -132,7 +132,7 @@ export default function QuickStart() {
             >
               <CodeBlock
                 filename="pyproject.toml"
-                code={`[[tool.poetry.source]]\nname = "depslio"\nurl = "${baseURL}/pypi/simple/"\npriority = "primary"`}
+                code={`[[tool.poetry.source]]\nname = "depsilo"\nurl = "${baseURL}/pypi/simple/"\npriority = "primary"`}
               />
             </Method>
 
@@ -157,7 +157,7 @@ export default function QuickStart() {
               description={t('quickstart.addSourceDesc')}
             >
               <CodeBlock
-                filename="/etc/apt/sources.list.d/depslio.list"
+                filename="/etc/apt/sources.list.d/depsilo.list"
                 code={`deb ${baseURL}/apt/ubuntu noble main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-updates main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-security main restricted universe multiverse`}
               />
             </Method>

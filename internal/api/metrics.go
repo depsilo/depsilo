@@ -22,14 +22,14 @@ func init() {
 	M = &Metrics{
 		RequestsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "depslio_requests_total",
+				Name: "depsilo_requests_total",
 				Help: "Total number of proxy requests.",
 			},
 			[]string{"adapter_type", "hit"},
 		),
 		RequestDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name:    "depslio_request_duration_seconds",
+				Name:    "depsilo_request_duration_seconds",
 				Help:    "Histogram of request latencies in seconds.",
 				Buckets: prometheus.DefBuckets,
 			},
@@ -37,20 +37,20 @@ func init() {
 		),
 		UpstreamRequestsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "depslio_upstream_requests_total",
+				Name: "depsilo_upstream_requests_total",
 				Help: "Total number of upstream fetch requests.",
 			},
 			[]string{"upstream", "success"},
 		),
 		CacheSizeBytes: prometheus.NewGauge(
 			prometheus.GaugeOpts{
-				Name: "depslio_cache_size_bytes",
+				Name: "depsilo_cache_size_bytes",
 				Help: "Current cache storage usage in bytes.",
 			},
 		),
 		CacheFilesTotal: prometheus.NewGauge(
 			prometheus.GaugeOpts{
-				Name: "depslio_cache_files_total",
+				Name: "depsilo_cache_files_total",
 				Help: "Number of cached files.",
 			},
 		),

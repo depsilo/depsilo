@@ -8,7 +8,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"depslio/internal/db"
+	"depsilo/internal/db"
 )
 
 type UserHandler struct {

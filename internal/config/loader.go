@@ -16,7 +16,7 @@ func Load() (*Config, error) {
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 23333)
 	v.SetDefault("database.driver", "sqlite")
-	v.SetDefault("database.dsn", "./data/depslio.db")
+	v.SetDefault("database.dsn", "./data/depsilo.db")
 	v.SetDefault("storage.type", "local")
 	v.SetDefault("storage.path", "./data/cache")
 	v.SetDefault("cache.max_size_gb", 20)

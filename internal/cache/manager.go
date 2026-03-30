@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/singleflight"
 	"gorm.io/gorm"
 
-	"depslio/internal/db"
+	"depsilo/internal/db"
 )
 
 // ExtractPackageName extracts a human-readable package name from a cache key.

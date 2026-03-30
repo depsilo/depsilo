@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"depslio/internal/db"
-	"depslio/internal/middleware"
+	"depsilo/internal/db"
+	"depsilo/internal/middleware"
 )
 
 type TokenHandler struct {

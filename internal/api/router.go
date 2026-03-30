@@ -7,12 +7,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"depslio/internal/api/admin"
-	"depslio/internal/api/public"
-	"depslio/internal/cache"
-	"depslio/internal/config"
-	"depslio/internal/middleware"
-	"depslio/internal/upstream"
+	"depsilo/internal/api/admin"
+	"depsilo/internal/api/public"
+	"depsilo/internal/cache"
+	"depsilo/internal/config"
+	"depsilo/internal/middleware"
+	"depsilo/internal/upstream"
 )
 
 var startTime = time.Now()

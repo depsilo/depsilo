@@ -13,15 +13,15 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"depslio/internal/adapter/apt"
-	"depslio/internal/adapter/pypi"
-	"depslio/internal/api"
-	"depslio/internal/cache"
-	"depslio/internal/config"
-	"depslio/internal/db"
-	"depslio/internal/middleware"
-	"depslio/internal/upstream"
-	web "depslio/web"
+	"depsilo/internal/adapter/apt"
+	"depsilo/internal/adapter/pypi"
+	"depsilo/internal/api"
+	"depsilo/internal/cache"
+	"depsilo/internal/config"
+	"depsilo/internal/db"
+	"depsilo/internal/middleware"
+	"depsilo/internal/upstream"
+	web "depsilo/web"
 )
 
 func main() {

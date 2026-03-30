@@ -7,9 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"depslio/internal/cache"
-	"depslio/internal/db"
-	"depslio/internal/upstream"
+	"depsilo/internal/cache"
+	"depsilo/internal/db"
+	"depsilo/internal/upstream"
 )
 
 type StatsHandler struct {

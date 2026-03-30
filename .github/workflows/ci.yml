@@ -28,7 +28,7 @@ jobs:
         run: go test ./... -v -race
 
       - name: Build binary
-        run: go build -o bin/depslio ./cmd/server
+        run: go build -o bin/depsilo ./cmd/server
 
   test-frontend:
     name: Frontend Tests
@@ -78,7 +78,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/depslio:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/depslio:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/depsilo:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/depsilo:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

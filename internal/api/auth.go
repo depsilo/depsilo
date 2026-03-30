@@ -9,9 +9,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"depslio/internal/config"
-	"depslio/internal/db"
-	"depslio/internal/middleware"
+	"depsilo/internal/config"
+	"depsilo/internal/db"
+	"depsilo/internal/middleware"
 )
 
 type AuthHandler struct {

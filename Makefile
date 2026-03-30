@@ -1,7 +1,7 @@
 .PHONY: build run dev stop test test-pypi test-apt test-clean clean lint frontend help
 
 # ─── 变量 ─────────────────────────────────────
-APP        := depslio
+APP        := depsilo
 BIN        := bin/$(APP)
 CONFIG     := config.toml
 PID_FILE   := .server.pid

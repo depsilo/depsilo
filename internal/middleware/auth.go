@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"depslio/internal/db"
+	"depsilo/internal/db"
 )
 
 const (

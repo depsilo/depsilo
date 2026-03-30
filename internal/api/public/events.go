@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"depslio/internal/cache"
+	"depsilo/internal/cache"
 )
 
 type EventsHandler struct {
