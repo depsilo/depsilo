@@ -37,6 +37,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool)
 	apiV1.GET("/stats", statsHandler.GetStats)
 
+	// Public packages
+	pkgHandler := public.NewPackagesHandler(deps.DB)
+	apiV1.GET("/packages", pkgHandler.List)
+	apiV1.GET("/packages/:type/:name", pkgHandler.Detail)
+
 	// Auth routes
 	authHandler := NewAuthHandler(deps.DB, deps.Config.Auth)
 	authGroup := apiV1.Group("/auth")
