@@ -84,6 +84,8 @@ const en = {
       cleanExpiredMsg: 'This will remove all expired cache files and old files exceeding the LRU threshold. Continue?',
       cleaning: 'Cleaning...',
       confirmClean: 'Confirm Clean',
+      storageOverview: 'Storage Overview',
+      storageDistribution: 'Storage Distribution',
     },
 
     // Upstreams

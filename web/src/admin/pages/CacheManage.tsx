@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Treemap, ResponsiveContainer, Tooltip } from 'recharts'
 import { adminApi } from '@/lib/api'
 import Card from '@/components/Card'
 import Input from '@/components/Input'
@@ -41,6 +42,14 @@ export default function CacheManage() {
   const params: Record<string, any> = { page, page_size: 20 }
   if (search) params.search = search
   if (adapterType !== 'all') params.adapter_type = adapterType
+
+  const { data: distData } = useQuery({
+    queryKey: ['admin', 'cache', 'distribution'],
+    queryFn: () => adminApi.getCacheDistribution(),
+    refetchInterval: 30000,
+  })
+
+  const distribution = distData?.data
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'cache', params],
@@ -115,6 +124,127 @@ export default function CacheManage() {
 
   return (
     <div className="space-y-6">
+      {/* Storage Overview */}
+      {distribution && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium">
+              {t('cache.storageOverview')}
+            </h3>
+            <span className="text-sm font-mono text-on-surface">
+              {formatBytes(distribution.total_size)} / {formatBytes(distribution.max_size)}
+              <span className="text-on-surface-variant ml-1">({distribution.usage_percent.toFixed(1)}%)</span>
+            </span>
+          </div>
+
+          {/* Segmented progress bar */}
+          <div className="h-3 rounded-full bg-surface-container overflow-hidden flex">
+            {distribution.by_type.map((bt: any) => {
+              const pct = distribution.max_size > 0
+                ? (bt.size / distribution.max_size) * 100
+                : 0
+              return (
+                <div
+                  key={bt.type}
+                  className={`h-full transition-all ${bt.type === 'pypi' ? 'bg-primary' : 'bg-success'}`}
+                  style={{ width: `${pct}%` }}
+                  title={`${bt.type.toUpperCase()}: ${formatBytes(bt.size)} (${bt.file_count} files)`}
+                />
+              )
+            })}
+          </div>
+
+          {/* Legend */}
+          <div className="flex gap-6 mt-2">
+            {distribution.by_type.map((bt: any) => (
+              <div key={bt.type} className="flex items-center gap-2 text-xs text-on-surface-variant">
+                <span className={`h-2 w-2 rounded-full ${bt.type === 'pypi' ? 'bg-primary' : 'bg-success'}`} />
+                <span>{bt.type.toUpperCase()}</span>
+                <span className="font-mono">{formatBytes(bt.size)}</span>
+                <span>({bt.file_count} files)</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Storage Distribution Treemap */}
+      {distribution && distribution.top_packages && distribution.top_packages.length > 0 && (
+        <Card>
+          <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
+            {t('cache.storageDistribution')}
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <Treemap
+              data={distribution.top_packages.map((p: any) => ({
+                name: p.name,
+                size: p.size,
+                type: p.type,
+                hits: p.hit_count,
+              }))}
+              dataKey="size"
+              aspectRatio={4 / 3}
+              stroke="var(--surface-low)"
+              content={({ x, y, width, height, name, size }: any) => {
+                if (width < 40 || height < 25) return <g />
+                return (
+                  <g>
+                    <rect
+                      x={x}
+                      y={y}
+                      width={width}
+                      height={height}
+                      fill="var(--primary)"
+                      fillOpacity={0.3 + Math.min(0.7, (size / (distribution.top_packages[0]?.size || 1)) * 0.7)}
+                      stroke="var(--surface-low)"
+                      strokeWidth={2}
+                      rx={2}
+                    />
+                    {width > 60 && height > 35 && (
+                      <>
+                        <text
+                          x={x + width / 2}
+                          y={y + height / 2 - 6}
+                          textAnchor="middle"
+                          fill="var(--on-surface)"
+                          fontSize={11}
+                          fontWeight={600}
+                        >
+                          {name}
+                        </text>
+                        <text
+                          x={x + width / 2}
+                          y={y + height / 2 + 10}
+                          textAnchor="middle"
+                          fill="var(--on-surface-variant)"
+                          fontSize={10}
+                        >
+                          {formatBytes(size)}
+                        </text>
+                      </>
+                    )}
+                  </g>
+                )
+              }}
+            >
+              <Tooltip
+                content={({ payload }: any) => {
+                  if (!payload || !payload.length) return null
+                  const item = payload[0]?.payload
+                  return (
+                    <div className="bg-surface-container border border-outline-variant rounded-[0.25rem] p-2 text-xs">
+                      <p className="font-medium text-on-surface">{item.name}</p>
+                      <p className="text-on-surface-variant">{item.type?.toUpperCase()} · {formatBytes(item.size)}</p>
+                      <p className="text-on-surface-variant">{item.hits} hits</p>
+                    </div>
+                  )
+                }}
+              />
+            </Treemap>
+          </ResponsiveContainer>
+        </Card>
+      )}
+
       {/* Filters */}
       <Card className="flex flex-wrap items-center gap-3">
         <div className="flex-1">

@@ -84,6 +84,8 @@ const zh = {
       cleanExpiredMsg: '将清理所有已过期的缓存文件和超过 LRU 阈值的旧文件，确定继续？',
       cleaning: '清理中...',
       confirmClean: '确认清理',
+      storageOverview: '存储概览',
+      storageDistribution: '存储分布',
     },
 
     // Upstreams
