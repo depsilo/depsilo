@@ -1,0 +1,196 @@
+package npm
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+
+	"depsilo/internal/adapter"
+	"depsilo/internal/cache"
+	"depsilo/internal/config"
+	"depsilo/internal/upstream"
+)
+
+type Handler struct {
+	cacheMgr *cache.Manager
+	selector upstream.Selector
+	cfg      config.CacheConfig
+	db       *gorm.DB
+}
+
+func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
+	return &Handler{cacheMgr: cacheMgr, selector: selector, cfg: cfg, db: database}
+}
+
+func (h *Handler) Type() string { return "npm" }
+
+func (h *Handler) Register(rg *gin.RouterGroup) {
+	// Tarball routes (must be registered before metadata to avoid conflicts with /:package)
+	rg.GET("/:package/-/:filename", h.handleTarball)
+	rg.GET("/@:scope/:package/-/:filename", h.handleScopedTarball)
+	// Metadata routes
+	rg.GET("/:package", h.handleMetadata)
+	rg.GET("/@:scope/:package", h.handleScopedMetadata)
+}
+
+func (h *Handler) handleMetadata(c *gin.Context) {
+	pkg := c.Param("package")
+	if pkg == "-" {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	h.proxyMetadata(c, pkg, MetadataCacheKey(pkg), "/"+pkg)
+}
+
+func (h *Handler) handleScopedMetadata(c *gin.Context) {
+	scope := c.Param("scope")
+	pkg := c.Param("package")
+	fullName := "@" + scope + "/" + pkg
+	h.proxyMetadata(c, fullName, ScopedMetadataCacheKey(scope, pkg), "/"+fullName)
+}
+
+func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath string) {
+	start := time.Now()
+	baseURL := getBaseURL(c)
+	acceptHeader := c.GetHeader("Accept")
+
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "npm", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+		ups, err := h.selector.Select(ctx)
+		if err != nil {
+			return nil, "", 0, err
+		}
+
+		zap.L().Info("fetching npm metadata from upstream",
+			zap.String("package", fullName),
+			zap.String("upstream", ups.Name),
+		)
+
+		fetchResult, err := ups.FetchWithHeaders(ctx, upstreamPath, map[string]string{
+			"Accept": acceptHeader,
+		})
+		if err != nil {
+			return nil, "", 0, err
+		}
+
+		body, err := io.ReadAll(fetchResult.Body)
+		fetchResult.Body.Close()
+		if err != nil {
+			return nil, "", 0, err
+		}
+
+		// Rewrite tarball URLs with empty base (runtime base applied later)
+		rewritten, err := RewriteTarballURLs(body, "")
+		if err != nil {
+			zap.L().Warn("npm url rewrite failed, using original", zap.Error(err))
+			rewritten = body
+		}
+
+		ct := fetchResult.ContentType
+		if ct == "" {
+			ct = "application/json"
+		}
+
+		return io.NopCloser(strings.NewReader(string(rewritten))), ct, int64(len(rewritten)), nil
+	})
+
+	if err != nil {
+		zap.L().Error("failed to get npm metadata", zap.String("package", fullName), zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		return
+	}
+	defer result.Reader.Close()
+
+	body, err := io.ReadAll(result.Reader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "read cache"})
+		return
+	}
+
+	// Apply runtime base URL to cached tarball paths
+	content := strings.ReplaceAll(string(body), `"/npm/`, `"`+baseURL+`/npm/`)
+
+	ct := result.ContentType
+	if ct == "" {
+		ct = "application/json"
+	}
+	c.Header("Content-Type", ct)
+	c.String(http.StatusOK, content)
+
+	adapter.LogAccess(h.db, "npm", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+}
+
+func (h *Handler) handleTarball(c *gin.Context) {
+	pkg := c.Param("package")
+	filename := c.Param("filename")
+	h.proxyTarball(c, pkg, filename, TarballCacheKey(pkg, filename), "/"+pkg+"/-/"+filename)
+}
+
+func (h *Handler) handleScopedTarball(c *gin.Context) {
+	scope := c.Param("scope")
+	pkg := c.Param("package")
+	filename := c.Param("filename")
+	fullName := "@" + scope + "/" + pkg
+	h.proxyTarball(c, fullName, filename, ScopedTarballCacheKey(scope, pkg, filename), "/"+fullName+"/-/"+filename)
+}
+
+func (h *Handler) proxyTarball(c *gin.Context, fullName, filename, cacheKey, upstreamPath string) {
+	start := time.Now()
+
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "npm", h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+		ups, err := h.selector.Select(ctx)
+		if err != nil {
+			return nil, "", 0, err
+		}
+
+		zap.L().Info("fetching npm tarball from upstream",
+			zap.String("package", fullName),
+			zap.String("filename", filename),
+			zap.String("upstream", ups.Name),
+		)
+
+		fetchResult, err := ups.Fetch(ctx, upstreamPath)
+		if err != nil {
+			return nil, "", 0, err
+		}
+
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+	})
+
+	if err != nil {
+		zap.L().Error("failed to get npm tarball", zap.String("package", fullName), zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		return
+	}
+	defer result.Reader.Close()
+
+	ct := result.ContentType
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	c.Header("Content-Type", ct)
+	if result.Size > 0 {
+		c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
+	}
+	c.Status(http.StatusOK)
+	written, _ := io.Copy(c.Writer, result.Reader)
+
+	adapter.LogAccess(h.db, "npm", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+}
+
+func getBaseURL(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+	return scheme + "://" + c.Request.Host
+}
