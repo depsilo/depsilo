@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -13,6 +14,48 @@ import (
 
 	"depslio/internal/db"
 )
+
+// ExtractPackageName extracts a human-readable package name from a cache key.
+func ExtractPackageName(adapterType, key string) string {
+	switch adapterType {
+	case "pypi":
+		// key: pypi/simple/{package}/index.html or pypi/files/.../{filename}
+		if strings.HasPrefix(key, "pypi/simple/") {
+			parts := strings.SplitN(strings.TrimPrefix(key, "pypi/simple/"), "/", 2)
+			if len(parts) > 0 {
+				return parts[0]
+			}
+		}
+		if strings.HasPrefix(key, "pypi/files/") {
+			// Extract filename, e.g. "requests-2.31.0-py3-none-any.whl" → "requests"
+			path := strings.TrimPrefix(key, "pypi/files/")
+			parts := strings.Split(path, "/")
+			fname := parts[len(parts)-1]
+			// Split on '-' and take first part
+			if idx := strings.Index(fname, "-"); idx > 0 {
+				return fname[:idx]
+			}
+			return fname
+		}
+	case "apt":
+		// key: apt/{repo}/{path}, extract .deb name or path component
+		if strings.HasSuffix(key, ".deb") {
+			parts := strings.Split(key, "/")
+			fname := parts[len(parts)-1]
+			// "curl_7.68.0-1ubuntu2_amd64.deb" → "curl"
+			if idx := strings.Index(fname, "_"); idx > 0 {
+				return fname[:idx]
+			}
+			return fname
+		}
+		// For metadata files, use the repo name
+		parts := strings.SplitN(strings.TrimPrefix(key, "apt/"), "/", 2)
+		if len(parts) > 0 {
+			return parts[0]
+		}
+	}
+	return ""
+}
 
 // Manager handles cache lookup, singleflight dedup, and storage writes.
 type Manager struct {
@@ -118,6 +161,7 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 				Size:         size,
 				HitCount:     0,
 				ContentType:  contentType,
+				PackageName:  ExtractPackageName(adapterType, key),
 				ExpiresAt:    now.Add(ttl),
 				LastAccessed: now,
 			}
@@ -126,6 +170,7 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 				m.db.Where("key = ?", key).Updates(map[string]interface{}{
 					"size":          size,
 					"content_type":  contentType,
+					"package_name":  ExtractPackageName(adapterType, key),
 					"expires_at":    now.Add(ttl),
 					"last_accessed": now,
 				})
