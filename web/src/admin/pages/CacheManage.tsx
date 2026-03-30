@@ -187,6 +187,7 @@ export default function CacheManage() {
               stroke="var(--surface-low)"
               content={({ x, y, width, height, name, size }: any) => {
                 if (width < 4 || height < 4) return <g />
+                const showLabel = width > 70 && height > 44 && name
                 return (
                   <g>
                     <rect
@@ -200,33 +201,29 @@ export default function CacheManage() {
                       strokeWidth={2}
                       rx={3}
                     />
-                    {width > 70 && height > 44 && name && (
-                      <>
-                        <text
-                          x={x + width / 2}
-                          y={y + height / 2 - 8}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#ffffff"
-                          fontSize={14}
-                          fontWeight={700}
-                          fontFamily="system-ui, sans-serif"
+                    {showLabel && (
+                      <foreignObject x={x} y={y} width={width} height={height}>
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '4px',
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
+                          }}
                         >
-                          {name}
-                        </text>
-                        <text
-                          x={x + width / 2}
-                          y={y + height / 2 + 12}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="rgba(255,255,255,0.8)"
-                          fontSize={12}
-                          fontWeight={500}
-                          fontFamily="ui-monospace, monospace"
-                        >
-                          {typeof size === 'number' ? formatBytes(size) : ''}
-                        </text>
-                      </>
+                          <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>
+                            {name}
+                          </span>
+                          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: 500, fontFamily: 'ui-monospace, monospace', lineHeight: 1.4 }}>
+                            {typeof size === 'number' ? formatBytes(size) : ''}
+                          </span>
+                        </div>
+                      </foreignObject>
                     )}
                   </g>
                 )
