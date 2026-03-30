@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { adminApi } from '@/lib/api'
@@ -22,11 +23,64 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+function UpstreamCard({ upstream }: { upstream: any }) {
+  const { t } = useTranslation()
+  const { data: latencyData } = useQuery({
+    queryKey: ['admin', 'upstream-latency', upstream.id],
+    queryFn: () => adminApi.getUpstreamLatency(upstream.id, '24h'),
+    refetchInterval: 60000,
+  })
+
+  const points = latencyData?.data?.points || []
+
+  return (
+    <div className="flex items-center justify-between bg-surface-container rounded-[0.25rem] px-4 py-3">
+      <div className="flex items-center gap-3">
+        <span className={`h-2 w-2 rounded-full ${upstream.healthy ? 'bg-success' : 'bg-error'}`} />
+        <div>
+          <p className="text-sm font-medium text-on-surface">{upstream.name}</p>
+          <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">{upstream.adapter}</p>
+        </div>
+      </div>
+      {/* Sparkline */}
+      {points.length > 1 && (
+        <div className="w-[120px] h-[40px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={points}>
+              <Line
+                type="monotone"
+                dataKey="latency_ms"
+                stroke="var(--primary)"
+                strokeWidth={1.5}
+                dot={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <div className="text-right">
+        <p className="text-sm font-mono text-on-surface">{upstream.avg_latency_ms} ms</p>
+        <p className="text-[10px] text-on-surface-variant">
+          {t('dashboard.availability')} {((upstream.success_rate || 0) * 100).toFixed(1)}%
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { t } = useTranslation()
+  const [range, setRange] = useState('7d')
+
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'dashboard'],
     queryFn: () => adminApi.getDashboard(),
+    refetchInterval: 30000,
+  })
+
+  const { data: trendsData } = useQuery({
+    queryKey: ['admin', 'dashboard', 'trends', range],
+    queryFn: () => adminApi.getDashboardTrends(range),
     refetchInterval: 30000,
   })
 
@@ -46,23 +100,10 @@ export default function Dashboard() {
   }
 
   const today = dashboard?.today || {}
-  const dailyStats = dashboard?.daily_stats || []
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
 
-  // Pivot daily_stats [{date, adapter_type, count}] into [{date, pypi, apt}]
-  const chartDataMap: Record<string, { date: string; pypi: number; apt: number }> = {}
-  for (const entry of dailyStats) {
-    if (!chartDataMap[entry.date]) {
-      chartDataMap[entry.date] = { date: entry.date, pypi: 0, apt: 0 }
-    }
-    if (entry.adapter_type === 'pypi') {
-      chartDataMap[entry.date].pypi = entry.count
-    } else if (entry.adapter_type === 'apt') {
-      chartDataMap[entry.date].apt = entry.count
-    }
-  }
-  const chartData = Object.values(chartDataMap).sort((a, b) => a.date.localeCompare(b.date))
+  const trendPoints = trendsData?.data?.points || []
 
   const metrics = [
     { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: 'monitoring' },
@@ -88,13 +129,34 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Line Chart */}
+      {/* Time Range Selector */}
+      <div className="flex items-center gap-1 mb-4">
+        {[
+          { value: 'today', label: t('dashboard.rangeToday') },
+          { value: '7d', label: t('dashboard.range7d') },
+          { value: '30d', label: t('dashboard.range30d') },
+        ].map(r => (
+          <button
+            key={r.value}
+            onClick={() => setRange(r.value)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-[0.125rem] transition-colors ${
+              range === r.value
+                ? 'bg-primary text-on-primary'
+                : 'text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Hit/Miss Trend Chart */}
       <Card>
         <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
-          {t('dashboard.trend7d')}
+          {t('dashboard.hitMissTrend')}
         </h3>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData}>
+          <LineChart data={trendPoints}>
             <CartesianGrid stroke="var(--outline-variant)" strokeOpacity={0.15} strokeDasharray="3 3" />
             <XAxis dataKey="date" tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -107,8 +169,32 @@ export default function Dashboard() {
               }}
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="pypi" stroke="var(--primary)" name="PyPI" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="apt" stroke="var(--success)" name="APT" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="hits" stroke="var(--primary)" name={t('dashboard.hits')} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="misses" stroke="var(--error)" name={t('dashboard.misses')} strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Hit Rate Trend Chart */}
+      <Card>
+        <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
+          {t('dashboard.hitRateTrend')}
+        </h3>
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={trendPoints.map((p: any) => ({ ...p, hit_rate_pct: (p.hit_rate || 0) * 100 }))}>
+            <CartesianGrid stroke="var(--outline-variant)" strokeOpacity={0.15} strokeDasharray="3 3" />
+            <XAxis dataKey="date" tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 100]} tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
+            <Tooltip
+              contentStyle={{
+                background: 'var(--surface-container)',
+                border: '1px solid var(--outline-variant)',
+                borderRadius: '0.25rem',
+                fontSize: 12,
+              }}
+              formatter={(value) => [`${Number(value).toFixed(1)}%`, t('dashboard.hitRate2')]}
+            />
+            <Line type="monotone" dataKey="hit_rate_pct" stroke="var(--primary)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </Card>
@@ -124,21 +210,7 @@ export default function Dashboard() {
               <p className="text-sm text-on-surface-variant">{t('dashboard.noUpstreams')}</p>
             )}
             {upstreams.map((u: any) => (
-              <div key={u.name} className="flex items-center justify-between bg-surface-container rounded-[0.25rem] px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className={`h-2 w-2 rounded-full ${u.healthy ? 'bg-success' : 'bg-error'}`} />
-                  <div>
-                    <p className="text-sm font-medium text-on-surface">{u.name}</p>
-                    <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">{u.adapter}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-mono text-on-surface">{u.avg_latency_ms} ms</p>
-                  <p className="text-[10px] text-on-surface-variant">
-                    {t('dashboard.availability')} {((u.success_rate || 0) * 100).toFixed(1)}%
-                  </p>
-                </div>
-              </div>
+              <UpstreamCard key={u.name} upstream={u} />
             ))}
           </div>
         </Card>
