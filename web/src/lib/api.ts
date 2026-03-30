@@ -27,6 +27,13 @@ export const statsApi = {
   getStats: () => api.get('/stats'),
 }
 
+export const packagesApi = {
+  list: (params?: { q?: string; type?: string; sort?: string; page?: number; per_page?: number }) =>
+    api.get('/packages', { params }),
+  detail: (type: string, name: string) =>
+    api.get(`/packages/${type}/${name}`),
+}
+
 export const authApi = {
   login: (data: { username: string; password: string }) => api.post('/auth/login', data),
   logout: () => api.post('/auth/logout'),
@@ -35,11 +42,14 @@ export const authApi = {
 
 export const adminApi = {
   getDashboard: () => api.get('/admin/dashboard'),
+  getDashboardTrends: (range_: string = '7d') =>
+    api.get('/admin/dashboard/trends', { params: { range: range_ } }),
 
   // Cache
   listCache: (params: Record<string, any>) => api.get('/admin/cache', { params }),
   deleteCache: (id: number) => api.delete(`/admin/cache/${id}`),
   cleanupCache: () => api.post('/admin/cache/cleanup'),
+  getCacheDistribution: () => api.get('/admin/cache/distribution'),
 
   // Upstreams
   listUpstreams: () => api.get('/admin/upstreams'),
@@ -47,6 +57,8 @@ export const adminApi = {
   updateUpstream: (id: number, data: any) => api.put(`/admin/upstreams/${id}`, data),
   deleteUpstream: (id: number) => api.delete(`/admin/upstreams/${id}`),
   checkUpstream: (id: number) => api.post(`/admin/upstreams/${id}/check`),
+  getUpstreamLatency: (id: number, range_: string = '24h') =>
+    api.get(`/admin/upstreams/${id}/latency`, { params: { range: range_ } }),
 
   // Logs
   listLogs: (params: Record<string, any>) => api.get('/admin/logs', { params }),
