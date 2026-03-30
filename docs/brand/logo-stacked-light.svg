@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 160" width="280" height="160">
+  <defs>
+    <clipPath id="bolt">
+      <polygon points="57.6,0 128,0 70.4,57.6 108.8,57.6 19.2,128 57.6,70.4 19.2,70.4"/>
+    </clipPath>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700&amp;family=JetBrains+Mono:wght@400&amp;display=swap');
+    </style>
+  </defs>
+  <!-- Icon (centered) -->
+  <g transform="translate(110, 8) scale(0.46875)">
+    <rect width="128" height="128" rx="24" fill="#ffffff"/>
+    <rect width="128" height="128" rx="24" fill="none" stroke="#c2c6d2" stroke-width="0.5" stroke-opacity="0.15"/>
+    <rect x="12" y="37" width="104" height="14" rx="0" fill="#1D9E75"/>
+    <rect x="12" y="55" width="104" height="14" rx="0" fill="#378ADD" opacity="0.85"/>
+    <rect x="12" y="73" width="104" height="14" rx="0" fill="#85B7EB" opacity="0.60"/>
+    <g clip-path="url(#bolt)">
+      <rect x="24" y="14" width="80" height="100" fill="#ffffff"/>
+    </g>
+  </g>
+  <!-- Wordmark -->
+  <text x="140" y="100" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" font-size="34" letter-spacing="-1.5" fill="#0C447C">Depsilo</text>
+  <!-- Tagline -->
+  <text x="140" y="122" text-anchor="middle" font-family="JetBrains Mono, monospace" font-weight="400" font-size="10" letter-spacing="2" fill="#4c5f7c" opacity="0.7" text-transform="uppercase">DEPENDENCY CACHE GATEWAY</text>
+</svg>

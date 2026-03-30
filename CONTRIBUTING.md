@@ -1,4 +1,4 @@
-# Contributing to Depslio
+# Contributing to Depsilo
 
 Contributions are welcome! Whether it's a bug fix, new feature, or documentation improvement — we appreciate your help.
 
@@ -15,8 +15,8 @@ Contributions are welcome! Whether it's a bug fix, new feature, or documentation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/depslio.git
-cd depslio
+git clone https://github.com/depsilo/depsilo.git
+cd depsilo
 
 # Install Go dependencies
 go mod download
@@ -49,7 +49,7 @@ The frontend dev server runs on `http://localhost:5173` and proxies API requests
 ## Submitting a Pull Request
 
 1. **Fork** the repository
-2. **Create a branch** from `main`: `git checkout -b feat/my-feature`
+2. **Create a branch** from `master`: `git checkout -b feat/my-feature`
 3. **Make your changes** and commit using [Conventional Commits](https://www.conventionalcommits.org/):
    ```
    feat: add support for conda repositories
@@ -58,7 +58,7 @@ The frontend dev server runs on `http://localhost:5173` and proxies API requests
    refactor: extract cache key generation
    ```
 4. **Push** to your fork: `git push origin feat/my-feature`
-5. **Open a Pull Request** against `main`
+5. **Open a Pull Request** against `master`
 
 ### PR Guidelines
 
@@ -72,7 +72,7 @@ The frontend dev server runs on `http://localhost:5173` and proxies API requests
 ### Bug Reports
 
 Please include:
-- Depslio version (`depslio --version` or Docker image tag)
+- Depsilo version (`depsilo --version` or Docker image tag)
 - Deployment method (binary / Docker / docker-compose)
 - Operating system and architecture
 - Steps to reproduce

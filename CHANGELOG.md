@@ -1,29 +1,18 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to Depsilo will be documented here.
+Format based on [Keep a Changelog](https://keepachangelog.com/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [0.1.0] - 2026-03-29
+## [0.1.0] - 2025-03-30
 
 ### Added
-
-- PyPI package proxy with smart URL rewriting and caching
-- APT repository proxy with GPG signature passthrough
-- Multi-upstream support with priority-based selection
-- Per-upstream HTTP proxy configuration
-- Automatic health checking with latency tracking
-- Local filesystem and S3-compatible storage backends
-- SQLite and PostgreSQL database support
-- Singleflight deduplication to prevent cache stampede
-- Streaming response — no full buffering in memory
-- LRU cache eviction with configurable threshold
-- Circuit breaker and rate limiting per upstream
-- Web portal with Quick Start guide and service status
-- Admin dashboard with cache management, upstream control, access logs, user management
-- JWT authentication for admin API
-- API token support with scoped permissions
-- Prometheus metrics endpoint (`/metrics`)
-- Docker and docker-compose deployment support
-- Configurable via TOML file and environment variables
+- pip (PyPI) proxy and cache — production ready
+- apt (Ubuntu/Debian) proxy and cache — production ready
+- Web UI dashboard with cache stats and upstream health
+- Prometheus metrics endpoint at /metrics
+- Multi-upstream support with per-source HTTP proxy
+- Automatic upstream health checks and failover
+- Local filesystem storage backend
+- SQLite database (default)
+- Docker and docker-compose deployment
+- MIT License
