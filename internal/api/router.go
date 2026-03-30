@@ -43,6 +43,10 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1.GET("/packages", pkgHandler.List)
 	apiV1.GET("/packages/:type/:name", pkgHandler.Detail)
 
+	// Real-time events (SSE)
+	eventsHandler := public.NewEventsHandler(deps.EventBus)
+	apiV1.GET("/events/stream", eventsHandler.Stream)
+
 	// Auth routes
 	authHandler := NewAuthHandler(deps.DB, deps.Config.Auth)
 	authGroup := apiV1.Group("/auth")
