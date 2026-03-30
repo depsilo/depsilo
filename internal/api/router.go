@@ -68,10 +68,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
 
 	// Cache management
-	cacheHandler := admin.NewCacheHandler(deps.DB, deps.Storage)
+	cacheHandler := admin.NewCacheHandler(deps.DB, deps.Storage, deps.Config.Cache.MaxSizeGB)
 	adminGroup.GET("/cache", cacheHandler.List)
 	adminGroup.DELETE("/cache/:id", cacheHandler.Delete)
 	adminGroup.POST("/cache/cleanup", cacheHandler.Cleanup)
+	adminGroup.GET("/cache/distribution", cacheHandler.GetDistribution)
 
 	// Upstream management
 	upstreamHandler := admin.NewUpstreamHandler(deps.DB)

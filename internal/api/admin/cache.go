@@ -14,12 +14,13 @@ import (
 )
 
 type CacheHandler struct {
-	db      *gorm.DB
-	storage cache.Storage
+	db        *gorm.DB
+	storage   cache.Storage
+	maxSizeGB int
 }
 
-func NewCacheHandler(database *gorm.DB, storage cache.Storage) *CacheHandler {
-	return &CacheHandler{db: database, storage: storage}
+func NewCacheHandler(database *gorm.DB, storage cache.Storage, maxSizeGB int) *CacheHandler {
+	return &CacheHandler{db: database, storage: storage, maxSizeGB: maxSizeGB}
 }
 
 func (h *CacheHandler) List(c *gin.Context) {
@@ -100,5 +101,52 @@ func (h *CacheHandler) Cleanup(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "cleanup completed",
 		"deleted": deleted,
+	})
+}
+
+func (h *CacheHandler) GetDistribution(c *gin.Context) {
+	type TypeBreakdown struct {
+		Type      string `json:"type"`
+		Size      int64  `json:"size"`
+		FileCount int64  `json:"file_count"`
+	}
+
+	type PackageSize struct {
+		Name     string `json:"name"`
+		Type     string `json:"type"`
+		Size     int64  `json:"size"`
+		HitCount int64  `json:"hit_count"`
+	}
+
+	var byType []TypeBreakdown
+	h.db.Model(&db.CacheEntry{}).
+		Select("adapter_type as type, COALESCE(SUM(size), 0) as size, COUNT(*) as file_count").
+		Group("adapter_type").
+		Find(&byType)
+
+	var topPackages []PackageSize
+	h.db.Model(&db.CacheEntry{}).
+		Select("package_name as name, adapter_type as type, COALESCE(SUM(size), 0) as size, COALESCE(SUM(hit_count), 0) as hit_count").
+		Where("package_name != ''").
+		Group("package_name, adapter_type").
+		Order("size DESC").
+		Limit(30).
+		Find(&topPackages)
+
+	var totalSize int64
+	h.db.Model(&db.CacheEntry{}).Select("COALESCE(SUM(size), 0)").Scan(&totalSize)
+
+	maxSize := int64(h.maxSizeGB) * 1024 * 1024 * 1024
+	usagePercent := float64(0)
+	if maxSize > 0 {
+		usagePercent = float64(totalSize) / float64(maxSize) * 100
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_size":    totalSize,
+		"max_size":      maxSize,
+		"usage_percent": usagePercent,
+		"by_type":       byType,
+		"top_packages":  topPackages,
 	})
 }
