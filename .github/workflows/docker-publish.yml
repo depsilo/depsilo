@@ -71,10 +71,13 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Update Docker Hub description
+        # Requires DOCKERHUB_PASSWORD (account password, not access token)
+        # Set continue-on-error so image push still succeeds if this fails
+        continue-on-error: true
         uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
           repository: depsilo/depsilo
           short-description: >
             Lightweight self-hosted dependency cache for pip,
