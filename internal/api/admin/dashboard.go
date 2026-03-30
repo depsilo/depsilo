@@ -109,3 +109,68 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		},
 	})
 }
+
+func (h *DashboardHandler) GetTrends(c *gin.Context) {
+	rangeParam := c.DefaultQuery("range", "7d")
+
+	var days int
+	switch rangeParam {
+	case "today":
+		days = 1
+	case "7d":
+		days = 7
+	case "30d":
+		days = 30
+	default:
+		days = 7
+	}
+
+	startDate := time.Now().AddDate(0, 0, -days).Truncate(24 * time.Hour)
+
+	type TrendPoint struct {
+		Date        string  `json:"date"`
+		Requests    int64   `json:"requests"`
+		Hits        int64   `json:"hits"`
+		Misses      int64   `json:"misses"`
+		HitRate     float64 `json:"hit_rate"`
+		BytesServed int64   `json:"bytes_served"`
+	}
+
+	var rawPoints []struct {
+		Date        string
+		Requests    int64
+		Hits        int64
+		Misses      int64
+		BytesServed int64
+	}
+
+	h.db.Model(&db.AccessLog{}).
+		Select(`
+			DATE(created_at) as date,
+			COUNT(*) as requests,
+			SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END) as hits,
+			SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END) as misses,
+			COALESCE(SUM(bytes_sent), 0) as bytes_served
+		`).
+		Where("created_at >= ?", startDate).
+		Group("DATE(created_at)").
+		Order("date ASC").
+		Scan(&rawPoints)
+
+	points := make([]TrendPoint, 0, len(rawPoints))
+	for _, r := range rawPoints {
+		p := TrendPoint{
+			Date:        r.Date,
+			Requests:    r.Requests,
+			Hits:        r.Hits,
+			Misses:      r.Misses,
+			BytesServed: r.BytesServed,
+		}
+		if p.Requests > 0 {
+			p.HitRate = float64(p.Hits) / float64(p.Requests)
+		}
+		points = append(points, p)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"points": points})
+}

@@ -65,6 +65,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Dashboard
 	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool)
 	adminGroup.GET("/dashboard", dashHandler.GetDashboard)
+	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
 
 	// Cache management
 	cacheHandler := admin.NewCacheHandler(deps.DB, deps.Storage)
