@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter/apt"
+	"depsilo/internal/adapter/npm"
 	"depsilo/internal/adapter/pypi"
 	"depsilo/internal/api"
 	"depsilo/internal/cache"
@@ -89,6 +90,7 @@ func main() {
 	// Sync configured upstreams to database
 	syncUpstreams(database, "pypi", cfg.PyPI.Upstreams)
 	syncUpstreams(database, "apt", cfg.APT.Upstreams)
+	syncUpstreams(database, "npm", cfg.NPM.Upstreams)
 
 	// Initialize upstream pools
 	pypiPool, err := upstream.NewPool(cfg.PyPI.Upstreams)
@@ -99,12 +101,17 @@ func main() {
 	if err != nil {
 		zap.L().Fatal("failed to create apt upstream pool", zap.Error(err))
 	}
+	npmPool, err := upstream.NewPool(cfg.NPM.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create npm upstream pool", zap.Error(err))
+	}
 
 	// Start background goroutines
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go upstream.StartHealthCheck(ctx, pypiPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, aptPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, npmPool, database, 30*time.Second)
 	go upstream.StartLatencyLogCleanup(ctx, database)
 	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
 
@@ -120,6 +127,7 @@ func main() {
 		Config:   cfg,
 		PyPIPool: pypiPool,
 		APTPool:  aptPool,
+		NPMPool:  npmPool,
 		EventBus: eventBus,
 	})
 
@@ -132,6 +140,11 @@ func main() {
 	aptHandler := apt.New(cacheMgr, upstream.NewPrioritySelector(aptPool), cfg.Cache, database)
 	aptGroup := r.Group("/apt")
 	aptHandler.Register(aptGroup)
+
+	// Register npm adapter
+	npmHandler := npm.New(cacheMgr, upstream.NewPrioritySelector(npmPool), cfg.Cache, database)
+	npmGroup := r.Group("/npm")
+	npmHandler.Register(npmGroup)
 
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")

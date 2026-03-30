@@ -17,15 +17,17 @@ type StatsHandler struct {
 	storage   cache.Storage
 	pypiPool  *upstream.Pool
 	aptPool   *upstream.Pool
+	npmPool   *upstream.Pool
 	startTime time.Time
 }
 
-func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool *upstream.Pool) *StatsHandler {
+func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool *upstream.Pool) *StatsHandler {
 	return &StatsHandler{
 		db:        database,
 		storage:   storage,
 		pypiPool:  pypiPool,
 		aptPool:   aptPool,
+		npmPool:   npmPool,
 		startTime: time.Now(),
 	}
 }
@@ -77,6 +79,15 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 		upstreams = append(upstreams, gin.H{
 			"name":           u.Name,
 			"adapter":        "apt",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.npmPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "npm",
 			"healthy":        u.Healthy,
 			"avg_latency_ms": u.AvgLatency().Milliseconds(),
 			"success_rate":   u.SuccessRate(),
