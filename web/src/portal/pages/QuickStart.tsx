@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import CodeBlock from '@/portal/components/CodeBlock'
 
-type Tab = 'pip' | 'apt'
+type Tab = 'pip' | 'apt' | 'npm'
 
 interface MethodProps {
   icon: string
@@ -40,6 +40,7 @@ export default function QuickStart() {
   const tabs = [
     { key: 'pip' as Tab, icon: 'code_blocks', label: t('quickstart.pipLabel'), desc: t('quickstart.pipDesc') },
     { key: 'apt' as Tab, icon: 'terminal', label: t('quickstart.aptLabel'), desc: t('quickstart.aptDesc') },
+    { key: 'npm' as Tab, icon: 'package_2', label: t('quickstart.npmLabel'), desc: t('quickstart.npmDesc') },
   ]
 
   return (
@@ -189,6 +190,48 @@ export default function QuickStart() {
               <CodeBlock
                 language="bash"
                 code={`DOCKER_BUILDKIT=1 docker build --network host \\\n  --build-arg http_proxy=${baseURL} \\\n  -t myapp .`}
+              />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'npm' && (
+          <>
+            <Method
+              icon="bolt"
+              title={t('quickstart.npmTempUse')}
+              description={t('quickstart.npmTempUseDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`npm install <package> --registry ${baseURL}/npm/`}
+              />
+            </Method>
+
+            <Method
+              icon="settings"
+              title={t('quickstart.npmPermanentConfig')}
+              description={t('quickstart.npmPermanentConfigDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`npm config set registry ${baseURL}/npm/`}
+              />
+              <p className="text-[13px] text-on-surface-variant mt-3 mb-2">{t('quickstart.npmNpmrc')}</p>
+              <CodeBlock
+                filename="~/.npmrc"
+                code={`registry=${baseURL}/npm/`}
+              />
+            </Method>
+
+            <Method
+              icon="speed"
+              title={t('quickstart.npmYarnPnpm')}
+              description={t('quickstart.npmYarnPnpmDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`# yarn v1\nyarn config set registry ${baseURL}/npm/\n\n# pnpm (uses .npmrc automatically)`}
               />
             </Method>
           </>
