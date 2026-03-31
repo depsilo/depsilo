@@ -33,10 +33,30 @@ func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheCo
 func (h *Handler) Type() string { return "cargo" }
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
-	rg.GET("/config.json", h.handleConfig)
-	rg.GET("/api/v1/crates/:crate/:version/download", h.handleDownload)
-	// Index routes: catch-all for prefix/crate paths
-	rg.GET("/*path", h.handleIndex)
+	// Gin doesn't allow catch-all wildcard with sibling routes,
+	// so use a single catch-all and dispatch internally.
+	rg.GET("/*path", h.handleRequest)
+}
+
+func (h *Handler) handleRequest(c *gin.Context) {
+	path := strings.TrimPrefix(c.Param("path"), "/")
+
+	switch {
+	case path == "config.json":
+		h.handleConfig(c)
+	case strings.HasPrefix(path, "api/v1/crates/"):
+		// api/v1/crates/{crate}/{version}/download
+		parts := strings.Split(strings.TrimPrefix(path, "api/v1/crates/"), "/")
+		if len(parts) >= 3 && parts[2] == "download" {
+			c.Params = append(c.Params, gin.Param{Key: "crate", Value: parts[0]})
+			c.Params = append(c.Params, gin.Param{Key: "version", Value: parts[1]})
+			h.handleDownload(c)
+		} else {
+			c.Status(http.StatusNotFound)
+		}
+	default:
+		h.handleIndex(c)
+	}
 }
 
 // handleConfig proxies and rewrites config.json to point dl at our proxy.
