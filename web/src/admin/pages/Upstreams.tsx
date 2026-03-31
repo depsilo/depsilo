@@ -193,6 +193,19 @@ export default function Upstreams() {
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label className="block text-sm font-medium text-on-surface mb-1">{t('type')}</label>
+            <select
+              value={form.adapter_type}
+              onChange={(e) => setForm({ ...form, adapter_type: e.target.value })}
+              disabled={!!editId}
+              className="w-full bg-surface-low rounded-[0.125rem] px-3 py-2.5 text-base text-on-surface border-b-2 border-transparent focus:border-primary focus:outline-none transition-colors disabled:opacity-50"
+            >
+              <option value="pypi">PyPI</option>
+              <option value="apt">APT</option>
+              <option value="npm">npm</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-on-surface mb-1">{t('name')}</label>
             <Input
               value={form.name}
