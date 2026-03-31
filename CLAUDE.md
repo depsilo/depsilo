@@ -9,10 +9,29 @@
 **Depsilo** 是一个轻量级依赖包代理缓存网关，用 Go 编写，单二进制部署。
 
 ### 核心价值
-- 缓存 pip / apt 依赖包，局域网内秒级响应
+- 支持 12 种主流包管理生态：pip、apt、npm、Go Modules、Cargo、Maven、RubyGems、Composer、NuGet、Conda、CRAN、Helm
+- 局域网内秒级响应，所有生态共享同一套缓存引擎、存储后端和 Web UI
 - 多上游源支持，自动健康检查与延迟优选
 - 每个上游源可单独配置 HTTP 代理
 - 统一 Web 入口：用户门户（无需登录）+ 管理后台（需登录）
+- 新增生态通过 Adapter 插件实现，不影响核心逻辑
+
+### 已支持的生态
+
+| # | 协议 | 路径 | 语言/生态 | 代理类型 |
+|---|------|------|-----------|----------|
+| 1 | PyPI | `/pypi/` | Python (pip / uv / Poetry) | URL 重写（HTML） |
+| 2 | APT | `/apt/` | Debian / Ubuntu | Passthrough |
+| 3 | npm | `/npm/` | Node.js (npm / yarn / pnpm) | URL 重写（JSON） |
+| 4 | Go Modules | `/go/` | Go | Passthrough |
+| 5 | Cargo | `/crates/` | Rust | config.json 重写 |
+| 6 | Maven | `/maven/` | Java / Kotlin / Gradle | Passthrough |
+| 7 | RubyGems | `/rubygems/` | Ruby (bundler / gem) | Passthrough |
+| 8 | Composer | `/composer/` | PHP (Packagist) | metadata-url 重写 |
+| 9 | NuGet | `/nuget/` | .NET (dotnet) | service index 重写 |
+| 10 | Conda | `/conda/` | Python 数据科学 | Passthrough |
+| 11 | CRAN | `/cran/` | R | Passthrough |
+| 12 | Helm | `/helm/` | Kubernetes Charts | Passthrough |
 
 ### 竞品定位
 比 Nexus Repository 更轻量，10 分钟内完成部署，无复杂企业概念。
@@ -55,13 +74,47 @@ depsilo/
 │   │   └── loader.go                # viper 加载逻辑
 │   ├── adapter/
 │   │   ├── interface.go             # Adapter interface 定义
-│   │   ├── pypi/
-│   │   │   ├── handler.go           # Gin handler（simple API + 文件下载）
-│   │   │   ├── rewriter.go          # HTML 响应中的下载 URL 重写
-│   │   │   └── keyer.go             # cache key 生成
-│   │   └── apt/
-│   │       ├── handler.go           # Gin handler（Release/Packages/.deb）
-│   │       └── keyer.go             # cache key 生成
+│   │   ├── accesslog.go             # 访问日志记录 + 包名提取
+│   │   ├── pypi/                    # Python（URL 重写）
+│   │   │   ├── handler.go
+│   │   │   ├── rewriter.go
+│   │   │   └── keyer.go
+│   │   ├── apt/                     # Debian/Ubuntu（Passthrough）
+│   │   │   ├── handler.go
+│   │   │   └── keyer.go
+│   │   ├── npm/                     # Node.js（URL 重写）
+│   │   │   ├── handler.go
+│   │   │   ├── rewriter.go
+│   │   │   └── keyer.go
+│   │   ├── goproxy/                 # Go Modules（Passthrough）
+│   │   │   ├── handler.go
+│   │   │   └── keyer.go
+│   │   ├── cargo/                   # Rust（config.json 重写）
+│   │   │   ├── handler.go
+│   │   │   └── keyer.go
+│   │   ├── maven/                   # Java/Kotlin（Passthrough）
+│   │   │   ├── handler.go
+│   │   │   └── keyer.go
+│   │   ├── rubygems/                # Ruby（Passthrough）
+│   │   │   ├── handler.go
+│   │   │   └── keyer.go
+│   │   ├── composer/                # PHP（metadata-url 重写）
+│   │   │   ├── handler.go
+│   │   │   ├── rewriter.go
+│   │   │   └── keyer.go
+│   │   ├── nuget/                   # .NET（service index 重写）
+│   │   │   ├── handler.go
+│   │   │   ├── rewriter.go
+│   │   │   └── keyer.go
+│   │   ├── conda/                   # Python 数据科学（Passthrough）
+│   │   │   ├── handler.go
+│   │   │   └── keyer.go
+│   │   ├── cran/                    # R（Passthrough）
+│   │   │   ├── handler.go
+│   │   │   └── keyer.go
+│   │   └── helm/                    # Kubernetes（Passthrough）
+│   │       ├── handler.go
+│   │       └── keyer.go
 │   ├── cache/
 │   │   ├── manager.go               # 核心：单飞 + 回源 + 写缓存 + 流式透传
 │   │   ├── store.go                 # Storage interface
@@ -277,13 +330,86 @@ type Selector interface {
 - 路由格式：`GET /apt/:repo/dists/:dist/:component/binary-:arch/Packages`
 - Cache key 规范：`apt/{repo}/{完整路径}`
 
-### 4.6 GORM 数据模型（internal/db/models.go）
+### 4.6 npm 适配器要点（internal/adapter/npm/）
+
+- 代理 npm registry 协议，**必须重写 JSON 中所有 `dist.tarball` URL**
+- 支持 scoped packages（`@scope/package`），URL 编码和非编码形式均需处理
+- 透传 `Accept: application/vnd.npm.install-v1+json` 头以获取精简元数据
+- 客户端配置：`npm config set registry http://HOST:PORT/npm/`
+- Cache key 规范：`npm/{package}/metadata.json`、`npm/{package}/-/{filename}`
+
+### 4.7 Go Modules 适配器要点（internal/adapter/goproxy/）
+
+- 完全兼容 GOPROXY 协议，**不修改响应内容**
+- 5 个端点：`@v/list`、`@latest`（短 TTL）；`.info`、`.mod`、`.zip`（长 TTL，版本不可变）
+- 模块路径大写编码（`Azure` → `!azure`）由客户端处理，代理直接透传
+- 客户端配置：`GOPROXY=http://HOST:PORT/go,direct`
+
+### 4.8 Cargo 适配器要点（internal/adapter/cargo/）
+
+- 代理 crates.io Sparse Registry 协议
+- **必须重写 `config.json` 中的 `dl` 字段**指向本服务
+- Index 元数据（NDJSON 格式）passthrough，短 TTL
+- `.crate` 文件不可变，长 TTL，SHA-256 校验由客户端完成
+- 客户端配置：`~/.cargo/config.toml` 中 `[source.crates-io] replace-with = "depsilo"`
+
+### 4.9 Maven 适配器要点（internal/adapter/maven/）
+
+- 纯文件目录代理，**不修改任何响应内容**
+- `maven-metadata.xml` 和 `-SNAPSHOT` 路径：短 TTL
+- `.jar`、`.pom`、`.sha1` 等 release 版本文件：长 TTL（不可变）
+- 客户端配置：`~/.m2/settings.xml` 的 `<mirrors>` 中配置
+
+### 4.10 RubyGems 适配器要点（internal/adapter/rubygems/）
+
+- Passthrough 代理，支持 compact index 协议
+- `/versions`、`/info/*`：短 TTL
+- `/gems/*.gem`：长 TTL（不可变）
+- 客户端配置：`bundle config mirror.https://rubygems.org http://HOST:PORT/rubygems/`
+
+### 4.11 Composer 适配器要点（internal/adapter/composer/）
+
+- **必须重写 `packages.json` 中的 `metadata-url` 字段**指向本服务
+- 支持 Packagist V2（p2）协议
+- 元数据：短 TTL；dist 下载文件：长 TTL
+- 客户端配置：`composer config -g repo.packagist composer http://HOST:PORT/composer/`
+
+### 4.12 NuGet 适配器要点（internal/adapter/nuget/）
+
+- **必须重写 service index（`index.json`）中所有 `@id` 字段**指向本服务
+- 兼容 NuGet V3 协议
+- `.nupkg` 文件：长 TTL；注册信息、搜索结果：短 TTL
+- 客户端配置：`dotnet nuget add source http://HOST:PORT/nuget/v3/index.json -n depsilo`
+
+### 4.13 Conda 适配器要点（internal/adapter/conda/）
+
+- Passthrough 代理，不修改响应
+- `repodata.json`、`channeldata.json`：短 TTL
+- `.tar.bz2`、`.conda` 包文件：长 TTL（不可变）
+- 客户端配置：`~/.condarc` 中配置 channels
+
+### 4.14 CRAN 适配器要点（internal/adapter/cran/）
+
+- Passthrough 代理，纯文件目录
+- `PACKAGES`、`PACKAGES.gz`：短 TTL
+- `.tar.gz`、`.zip`、`.tgz` 包文件：长 TTL
+- 客户端配置：`options(repos = c(CRAN = "http://HOST:PORT/cran/"))`
+
+### 4.15 Helm 适配器要点（internal/adapter/helm/）
+
+- Passthrough 代理
+- `index.yaml`：短 TTL
+- `.tgz` chart 包：长 TTL（不可变）
+- 客户端配置：`helm repo add depsilo http://HOST:PORT/helm/`
+
+### 4.16 GORM 数据模型（internal/db/models.go）
 
 ```go
 type CacheEntry struct {
     ID           uint      `gorm:"primarykey"`
     Key          string    `gorm:"uniqueIndex;size:512"`
-    AdapterType  string    `gorm:"size:16;index"`  // pypi | apt
+    AdapterType  string    `gorm:"size:16;index"`  // pypi | apt | npm | go | cargo | maven | rubygems | composer | nuget | conda | cran | helm
+    PackageName  string    `gorm:"size:256;index"` // 从 key 提取的可读包名，用于搜索
     StoragePath  string    `gorm:"size:512"`
     Size         int64
     HitCount     int64     `gorm:"default:0"`
@@ -346,7 +472,7 @@ type APIToken struct {
 }
 ```
 
-### 4.7 API 路由总表（internal/api/router.go）
+### 4.17 API 路由总表（internal/api/router.go）
 
 ```
 # 公开路由（无需认证）
@@ -358,14 +484,47 @@ GET  /api/v1/stats                  → 公开统计（命中率、Top包、上�
 GET  /health                        → 健康检查
 GET  /metrics                       → Prometheus metrics
 
-# PyPI 代理（无需认证，支持 Token 可选认证）
+# PyPI 代理
 GET  /pypi/simple/
 GET  /pypi/simple/:package/
 GET  /pypi/files/*filepath
 
-# APT 代理（无需认证）
+# APT 代理
 GET  /apt/:repo/dists/*filepath
 GET  /apt/:repo/pool/*filepath
+
+# npm 代理
+GET  /npm/:package                         # 包元数据（JSON，需重写 tarball URL）
+GET  /npm/@:scope/:package                 # scoped 包元数据
+GET  /npm/:package/-/:filename             # tarball 下载
+GET  /npm/@:scope/:package/-/:filename     # scoped tarball 下载
+
+# Go Modules 代理（GOPROXY 协议）
+GET  /go/*path                             # @v/list, @v/version.info/.mod/.zip, @latest
+
+# Cargo 代理（Sparse Registry 协议）
+GET  /crates/*path                         # config.json, index, api/v1/crates 下载
+
+# Maven 代理
+GET  /maven/*path                          # 纯文件目录代理
+
+# RubyGems 代理
+GET  /rubygems/*path                       # compact index + gem 下载
+
+# Composer 代理
+GET  /composer/*path                       # packages.json, p2 元数据, dist 下载
+
+# NuGet 代理（V3 协议）
+GET  /nuget/*path                          # service index, registration, package 下载
+
+# Conda 代理
+GET  /conda/*path                          # repodata.json + 包下载
+
+# CRAN 代理
+GET  /cran/*path                           # PACKAGES + 源码/二进制下载
+
+# Helm 代理
+GET  /helm/*path                           # index.yaml + chart tgz 下载
 
 # 认证
 POST /api/v1/auth/login
@@ -394,7 +553,7 @@ GET  /api/v1/admin/settings
 PUT  /api/v1/admin/settings
 ```
 
-### 4.8 公开统计 API 响应格式（GET /api/v1/stats）
+### 4.18 公开统计 API 响应格式（GET /api/v1/stats）
 
 ```json
 {
@@ -437,7 +596,7 @@ PUT  /api/v1/admin/settings
 }
 ```
 
-### 4.9 错误处理规范
+### 4.19 错误处理规范
 
 ```go
 // 统一错误响应格式
@@ -453,7 +612,7 @@ type ErrorResponse struct {
 // 507 → StorageFull
 ```
 
-### 4.10 embed 前端打包（cmd/server/main.go）
+### 4.20 embed 前端打包（cmd/server/main.go）
 
 ```go
 //go:embed all:web/dist
@@ -517,15 +676,8 @@ npx shadcn@latest add sidebar chart
 #### QuickStart.tsx（快速开始页）
 **设计要求：**
 - 顶部展示服务地址栏（`ServiceUrlBar` 组件），从 `/api/v1/stats` 获取服务信息
-- pip / apt 两个 Tab（shadcn Tabs 组件）
-- **pip Tab** 分三个步骤：
-  1. 临时使用（单次命令）
-  2. 永久配置（`~/.config/pip/pip.conf`）
-  3. Poetry / uv 用户配置
-- **apt Tab** 分三个步骤：
-  1. 添加 sources.list.d 配置文件
-  2. 一键替换现有源（sed 命令）
-  3. 验证配置（apt update 命令）
+- 12 个包管理器 Tab（4 列网格布局），每个 Tab 包含对应生态的配置步骤
+- 覆盖：pip、apt、npm、Go、Cargo、Maven、RubyGems、Composer、NuGet、Conda、CRAN、Helm
 - 每个代码块使用 `CodeBlock` 组件，支持一键复制
 - 底部 tip 提示（首次回源说明 / GPG 签名说明）
 - 服务地址从 `window.location.origin` 自动拼接，**不得写死**
@@ -588,7 +740,8 @@ interface CodeBlockProps {
 
 #### Upstreams.tsx
 - 右上角"添加上游源"按钮
-- PyPI / APT 两个 Tab
+- 12 个生态的 Pill 按钮筛选器（pypi / apt / npm / go / cargo / maven / rubygems / composer / nuget / conda / cran / helm）
+- 新增/编辑弹窗包含类型选择器（新建时可选，编辑时置灰）
 - 每个上游源以卡片行展示：健康状态圆点、名称、URL（monospace）、延迟、可用率、操作按钮（编辑/删除）
 - 特殊展示：若配置了 proxy，在名称后以灰色小字展示 `· 代理: xxx`
 - 编辑/新增使用 Dialog 表单：
@@ -738,32 +891,55 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 5. 实现本地存储 `local.go`
 6. **验收：`go run ./cmd/server` 启动无报错，`GET /health` 返回 200**
 
-### Phase 2：PyPI 代理核心
+### Phase 2：PyPI 代理核心（已完成）
 1. 实现 upstream pool + priority selector
 2. 实现 cache manager（单飞 + 流式写入）
 3. 实现 PyPI adapter（simple API + URL 重写 + 文件下载）
-4. **验收：`pip install requests -i http://localhost:8080/pypi/simple/ --trusted-host localhost` 成功**
 
-### Phase 3：APT 代理
+### Phase 3：APT 代理（已完成）
 1. 实现 APT adapter（Release/Packages/.deb passthrough）
-2. **验收：配置 sources.list 后 `apt update` 成功**
 
-### Phase 4：管理 API
+### Phase 4：管理 API（已完成）
 1. 实现 JWT 认证（login/logout/middleware）
 2. 实现所有 `/api/v1/admin/*` 路由
 3. 实现公开统计 `/api/v1/stats`
 
-### Phase 5：前端
+### Phase 5：前端（已完成）
 1. 初始化 React 项目，配置 shadcn/ui
-2. 实现 Portal（用户门户）：QuickStart + ServiceStatus
-3. 实现 Admin（管理后台）：按 Dashboard → 缓存 → 上游 → 日志 → 用户 → 设置 顺序
+2. 实现 Portal（用户门户）：QuickStart + ServiceStatus + PackageBrowse + LiveStream
+3. 实现 Admin（管理后台）：Dashboard（趋势图表 + 延迟 sparkline） → 缓存（Treemap 可视化） → 上游 → 日志 → 用户 → 设置
 
-### Phase 6：收尾
+### Phase 6：收尾（已完成）
 1. S3 存储实现（`s3.go`）
 2. Prometheus metrics
 3. Dockerfile + docker-compose
-4. 健康检查完善（upstream 定时检查）
+4. 健康检查完善（upstream 定时检查 + 延迟日志）
 5. LRU 淘汰后台 goroutine
+
+### Phase 7：npm 支持（已完成）
+1. npm adapter（metadata JSON tarball URL 重写 + tarball 下载缓存）
+2. scoped packages 支持（@scope/package）
+
+### Phase 8：Go Modules 支持（已完成）
+1. GOPROXY 协议适配器（5 个端点，纯 passthrough）
+
+### Phase 9：Cargo 支持（已完成）
+1. Sparse Registry 协议适配器（config.json 重写 + index + crate 下载）
+
+### Phase 10：Maven / RubyGems / Composer / NuGet / Conda / CRAN / Helm（已完成）
+1. Maven — 纯文件目录代理
+2. RubyGems — compact index + gem 下载
+3. Composer — packages.json metadata-url 重写
+4. NuGet — V3 service index @id 字段重写
+5. Conda — channel repodata passthrough
+6. CRAN — PACKAGES + 包文件 passthrough
+7. Helm — chart repository passthrough
+
+### 后续 Phase（待开发）
+- Docker Registry 代理
+- 审计日志
+- 包 allow/deny 规则
+- License Key 验证系统
 
 ---
 
@@ -797,9 +973,14 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 2. **APT 不能修改响应**：任何对 Release/InRelease/Packages 文件的修改都会破坏 GPG 签名校验，apt 会报错拒绝安装
 3. **流式传输**：wheel 文件可能几百 MB（torch ~2GB），必须 stream，不能 buffer
 4. **singleflight 与流式的兼容**：第一个请求 stream 给客户端的同时写缓存，后续相同 key 的请求等待完成后从缓存读取（不复用第一个请求的 body）
-5. **服务地址动态化**：前端代码块中的 pip/apt 配置命令里的服务地址，必须用 `window.location.origin` 动态生成，不能写死
+5. **服务地址动态化**：前端代码块中所有配置命令里的服务地址，必须用 `window.location.origin` 动态生成，不能写死
 6. **Token 安全**：数据库只存 token 的 hash（bcrypt 或 SHA-256），明文只在生成时展示一次
 7. **SQLite 并发**：开启 WAL 模式（`PRAGMA journal_mode=WAL`），避免写锁争用
+8. **npm URL 重写**：和 PyPI 类似，registry 响应中的 `dist.tarball` URL 必须重写为本服务地址，否则 `npm install` 会绕过缓存直接回源
+9. **Cargo config.json 重写**：`/crates/` 下的 `config.json` 文件中 `dl` 字段必须指向本服务，这是 Cargo 找到下载地址的关键
+10. **NuGet service index 重写**：`index.json` 中所有服务端点 `@id` URL 必须重写，包括 SearchQueryService、RegistrationsBaseUrl、PackageBaseAddress 等
+11. **Go Modules 无需重写**：GOPROXY 协议本身不包含绝对 URL，客户端始终向 GOPROXY 环境变量指定的地址请求，纯 Passthrough 即可
+12. **Composer metadata-url 重写**：`packages.json` 中的 `metadata-url` 字段必须重写为本服务地址，否则 Composer 拉取包元数据时会绕过缓存
 
 ---
 
@@ -808,6 +989,14 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 - [PyPI Simple Repository API (PEP 503)](https://peps.python.org/pep-0503/)
 - [PyPI JSON API (PEP 691)](https://peps.python.org/pep-0691/)
 - [APT Repository Format](https://wiki.debian.org/DebianRepository/Format)
+- [npm Registry API](https://github.com/npm/registry/blob/main/docs/REGISTRY-API.md)
+- [Go Module Proxy Protocol](https://go.dev/ref/mod#goproxy-protocol)
+- [Cargo Sparse Registry (RFC 2789)](https://rust-lang.github.io/rfcs/2789-sparse-index.html)
+- [Maven Repository Layout](https://maven.apache.org/repository/layout.html)
+- [RubyGems Compact Index](https://guides.rubygems.org/rubygems-org-compact-index-api/)
+- [Composer Repository API](https://getcomposer.org/doc/05-repositories.md)
+- [NuGet V3 Protocol](https://learn.microsoft.com/en-us/nuget/api/overview)
+- [Helm Chart Repository](https://helm.sh/docs/topics/chart_repository/)
 - [Gin 文档](https://gin-gonic.com/docs/)
 - [GORM 文档](https://gorm.io/docs/)
 - [TanStack Query 文档](https://tanstack.com/query/latest)
