@@ -41,6 +41,7 @@ export default function MainLayout() {
   const monitorItems: NavItem[] = [
     { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
     { label: t('nav.accessLogs'), to: '/admin/logs', icon: 'receipt_long' },
+    { label: t('nav.auditLogs'), to: '/admin/audit', icon: 'policy' },
   ]
 
   const manageItems: NavItem[] = [
@@ -53,6 +54,7 @@ export default function MainLayout() {
   const pageTitles: Record<string, string> = {
     '/admin': t('nav.dashboard'),
     '/admin/logs': t('nav.accessLogs'),
+    '/admin/audit': t('nav.auditLogs'),
     '/admin/cache': t('nav.cacheManage'),
     '/admin/upstreams': t('nav.upstreams'),
     '/admin/users': t('nav.userManage'),
