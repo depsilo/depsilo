@@ -20,6 +20,11 @@ type Config struct {
 	Conda    AdapterConfig  `mapstructure:"conda"`
 	CRAN     AdapterConfig  `mapstructure:"cran"`
 	Helm     AdapterConfig  `mapstructure:"helm"`
+	License  LicenseConfig  `mapstructure:"license"`
+}
+
+type LicenseConfig struct {
+	Key string `mapstructure:"key"`
 }
 
 type ServerConfig struct {

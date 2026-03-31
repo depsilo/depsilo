@@ -73,6 +73,11 @@ func Load() (*Config, error) {
 		cfg.Auth.TokenTTL = d
 	}
 
+	// License key from env (overrides config file)
+	if envKey := os.Getenv("DEPSILO_LICENSE_KEY"); envKey != "" {
+		cfg.License.Key = envKey
+	}
+
 	// Warn if JWT secret is still the default placeholder
 	if cfg.Auth.JWTSecret == "change-me-in-production" {
 		zap.L().Warn("⚠ auth.jwt_secret is using the default value — this is INSECURE for production. Please set a strong secret in your config file or via DEPSILO_AUTH_JWT_SECRET environment variable.")
