@@ -9,6 +9,7 @@ import (
 
 	"depsilo/internal/api/admin"
 	"depsilo/internal/api/public"
+	"depsilo/internal/audit"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/license"
@@ -37,6 +38,7 @@ type Deps struct {
 	HelmPool       *upstream.Pool
 	EventBus       *cache.EventBus
 	LicenseManager *license.Manager
+	AuditLogger    *audit.Logger
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -124,6 +126,14 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	licenseHandler := admin.NewLicenseHandler(deps.LicenseManager)
 	adminGroup.GET("/license", licenseHandler.GetStatus)
 	adminGroup.POST("/license/revalidate", licenseHandler.Revalidate)
+
+	// Pro features (require license)
+	proGroup := adminGroup.Group("")
+	proGroup.Use(license.RequirePro(deps.LicenseManager))
+
+	auditHandler := admin.NewAuditHandler(deps.DB)
+	proGroup.GET("/audit-logs", auditHandler.List)
+	proGroup.GET("/audit-logs/export", auditHandler.Export)
 }
 
 func healthHandler(c *gin.Context) {

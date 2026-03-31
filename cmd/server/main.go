@@ -25,7 +25,9 @@ import (
 	"depsilo/internal/adapter/nuget"
 	"depsilo/internal/adapter/pypi"
 	"depsilo/internal/adapter/rubygems"
+	"depsilo/internal/adapter"
 	"depsilo/internal/api"
+	"depsilo/internal/audit"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/license"
@@ -170,6 +172,10 @@ func main() {
 
 	go licenseManager.Start(ctx)
 
+	auditLogger := audit.NewLogger(database, licenseManager)
+	go auditLogger.Start(ctx)
+	adapter.SetAuditLogger(auditLogger)
+
 	if cfg.License.Key == "" {
 		zap.L().Info("running as Community edition")
 	} else {
@@ -214,6 +220,7 @@ func main() {
 		HelmPool:     helmPool,
 		EventBus:       eventBus,
 		LicenseManager: licenseManager,
+		AuditLogger:    auditLogger,
 	})
 
 	// Register PyPI adapter

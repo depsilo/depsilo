@@ -10,6 +10,16 @@ import (
 	"depsilo/internal/db"
 )
 
+// auditLogger is the optional Pro audit logger, set via SetAuditLogger.
+var auditLogger interface {
+	Log(entry db.AuditLog)
+}
+
+// SetAuditLogger sets the audit logger used by LogAccess.
+func SetAuditLogger(l interface{ Log(entry db.AuditLog) }) {
+	auditLogger = l
+}
+
 // LogAccess asynchronously writes an access log entry.
 func LogAccess(database *gorm.DB, adapterType, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
 	entry := db.AccessLog{
@@ -29,6 +39,33 @@ func LogAccess(database *gorm.DB, adapterType, cacheKey string, hit bool, upstre
 			zap.L().Warn("failed to write access log", zap.Error(err))
 		}
 	}()
+
+	if auditLogger != nil {
+		action := "download"
+		if strings.HasSuffix(cacheKey, ".json") || strings.HasSuffix(cacheKey, ".html") ||
+			strings.HasSuffix(cacheKey, ".xml") || strings.Contains(cacheKey, "metadata") ||
+			strings.Contains(cacheKey, "index") || strings.Contains(cacheKey, "PACKAGES") ||
+			strings.Contains(cacheKey, "repodata") {
+			action = "metadata"
+		}
+		cacheResult := "miss"
+		if hit {
+			cacheResult = "hit"
+		}
+		if statusCode >= 500 {
+			cacheResult = "error"
+		}
+		auditLogger.Log(db.AuditLog{
+			Ecosystem:   adapterType,
+			PackageName: extractPackageName(adapterType, cacheKey),
+			Action:      action,
+			CacheResult: cacheResult,
+			ClientIP:    clientIP,
+			LatencyMs:   latency.Milliseconds(),
+			BytesSent:   bytesSent,
+			StatusCode:  statusCode,
+		})
+	}
 }
 
 // extractPackageName derives a human-readable package name from the cache key.

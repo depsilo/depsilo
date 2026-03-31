@@ -81,6 +81,10 @@ export const adminApi = {
   // License
   getLicense: () => api.get('/admin/license'),
   revalidateLicense: () => api.post('/admin/license/revalidate'),
+
+  // Audit Logs (Pro)
+  listAuditLogs: (params: Record<string, any>) => api.get('/admin/audit-logs', { params }),
+  exportAuditLogs: (params: Record<string, any>) => api.get('/admin/audit-logs/export', { params, responseType: 'blob' }),
 }
 
 export default api
