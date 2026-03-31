@@ -18,21 +18,27 @@ type StatsHandler struct {
 	pypiPool  *upstream.Pool
 	aptPool   *upstream.Pool
 	npmPool   *upstream.Pool
-	goPool    *upstream.Pool
-	cargoPool *upstream.Pool
-	startTime time.Time
+	goPool       *upstream.Pool
+	cargoPool    *upstream.Pool
+	mavenPool    *upstream.Pool
+	rubygemsPool *upstream.Pool
+	composerPool *upstream.Pool
+	startTime    time.Time
 }
 
-func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool *upstream.Pool) *StatsHandler {
+func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool, rubygemsPool, composerPool *upstream.Pool) *StatsHandler {
 	return &StatsHandler{
-		db:        database,
-		storage:   storage,
-		pypiPool:  pypiPool,
-		aptPool:   aptPool,
-		npmPool:   npmPool,
-		goPool:    goPool,
-		cargoPool: cargoPool,
-		startTime: time.Now(),
+		db:           database,
+		storage:      storage,
+		pypiPool:     pypiPool,
+		aptPool:      aptPool,
+		npmPool:      npmPool,
+		goPool:       goPool,
+		cargoPool:    cargoPool,
+		mavenPool:    mavenPool,
+		rubygemsPool: rubygemsPool,
+		composerPool: composerPool,
+		startTime:    time.Now(),
 	}
 }
 
@@ -110,6 +116,33 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 		upstreams = append(upstreams, gin.H{
 			"name":           u.Name,
 			"adapter":        "cargo",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.mavenPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "maven",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.rubygemsPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "rubygems",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.composerPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "composer",
 			"healthy":        u.Healthy,
 			"avg_latency_ms": u.AvgLatency().Milliseconds(),
 			"success_rate":   u.SuccessRate(),

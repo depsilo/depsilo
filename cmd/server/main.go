@@ -15,9 +15,12 @@ import (
 
 	"depsilo/internal/adapter/apt"
 	"depsilo/internal/adapter/cargo"
+	"depsilo/internal/adapter/composer"
 	"depsilo/internal/adapter/goproxy"
+	"depsilo/internal/adapter/maven"
 	"depsilo/internal/adapter/npm"
 	"depsilo/internal/adapter/pypi"
+	"depsilo/internal/adapter/rubygems"
 	"depsilo/internal/api"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -95,6 +98,9 @@ func main() {
 	syncUpstreams(database, "npm", cfg.NPM.Upstreams)
 	syncUpstreams(database, "go", cfg.Go.Upstreams)
 	syncUpstreams(database, "cargo", cfg.Cargo.Upstreams)
+	syncUpstreams(database, "maven", cfg.Maven.Upstreams)
+	syncUpstreams(database, "rubygems", cfg.RubyGems.Upstreams)
+	syncUpstreams(database, "composer", cfg.Composer.Upstreams)
 
 	// Initialize upstream pools
 	pypiPool, err := upstream.NewPool(cfg.PyPI.Upstreams)
@@ -117,6 +123,18 @@ func main() {
 	if err != nil {
 		zap.L().Fatal("failed to create cargo upstream pool", zap.Error(err))
 	}
+	mavenPool, err := upstream.NewPool(cfg.Maven.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create maven upstream pool", zap.Error(err))
+	}
+	rubygemsPool, err := upstream.NewPool(cfg.RubyGems.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create rubygems upstream pool", zap.Error(err))
+	}
+	composerPool, err := upstream.NewPool(cfg.Composer.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create composer upstream pool", zap.Error(err))
+	}
 
 	// Start background goroutines
 	ctx, cancel := context.WithCancel(context.Background())
@@ -126,6 +144,9 @@ func main() {
 	go upstream.StartHealthCheck(ctx, npmPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, goPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, cargoPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, mavenPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, rubygemsPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, composerPool, database, 30*time.Second)
 	go upstream.StartLatencyLogCleanup(ctx, database)
 	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
 
@@ -143,8 +164,11 @@ func main() {
 		APTPool:  aptPool,
 		NPMPool:  npmPool,
 		GoPool:    goPool,
-		CargoPool: cargoPool,
-		EventBus:  eventBus,
+		CargoPool:    cargoPool,
+		MavenPool:    mavenPool,
+		RubyGemsPool: rubygemsPool,
+		ComposerPool: composerPool,
+		EventBus:     eventBus,
 	})
 
 	// Register PyPI adapter
@@ -171,6 +195,21 @@ func main() {
 	cargoHandler := cargo.New(cacheMgr, upstream.NewPrioritySelector(cargoPool), cfg.Cache, database)
 	cargoGroup := r.Group("/crates")
 	cargoHandler.Register(cargoGroup)
+
+	// Register Maven adapter
+	mavenHandler := maven.New(cacheMgr, upstream.NewPrioritySelector(mavenPool), cfg.Cache, database)
+	mavenGroup := r.Group("/maven")
+	mavenHandler.Register(mavenGroup)
+
+	// Register RubyGems adapter
+	rubygemsHandler := rubygems.New(cacheMgr, upstream.NewPrioritySelector(rubygemsPool), cfg.Cache, database)
+	rubygemsGroup := r.Group("/rubygems")
+	rubygemsHandler.Register(rubygemsGroup)
+
+	// Register Composer adapter
+	composerHandler := composer.New(cacheMgr, upstream.NewPrioritySelector(composerPool), cfg.Cache, database)
+	composerGroup := r.Group("/composer")
+	composerHandler.Register(composerGroup)
 
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")

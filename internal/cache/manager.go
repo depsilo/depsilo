@@ -94,6 +94,42 @@ func ExtractPackageName(adapterType, key string) string {
 				return parts[len(parts)-1]
 			}
 		}
+	case "maven":
+		// key: maven/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar
+		// Extract artifactId (second-to-last path segment for versioned files)
+		parts := strings.Split(strings.TrimPrefix(key, "maven/"), "/")
+		if len(parts) >= 3 {
+			return parts[len(parts)-3] // artifactId
+		}
+	case "rubygems":
+		// key: rubygems/gems/rails-7.0.0.gem or rubygems/info/rails
+		trimmed := strings.TrimPrefix(key, "rubygems/")
+		if strings.HasPrefix(trimmed, "gems/") {
+			fname := strings.TrimPrefix(trimmed, "gems/")
+			// "rails-7.0.0.gem" -> "rails"
+			if idx := strings.LastIndex(fname, "-"); idx > 0 {
+				return fname[:idx]
+			}
+			return strings.TrimSuffix(fname, ".gem")
+		}
+		if strings.HasPrefix(trimmed, "info/") {
+			return strings.TrimPrefix(trimmed, "info/")
+		}
+	case "composer":
+		// key: composer/p2/monolog/monolog.json or composer/dist/monolog/monolog/abc123.zip
+		trimmed := strings.TrimPrefix(key, "composer/")
+		if strings.HasPrefix(trimmed, "p2/") {
+			name := strings.TrimPrefix(trimmed, "p2/")
+			name = strings.TrimSuffix(name, ".json")
+			name = strings.TrimSuffix(name, "~dev")
+			return name // "monolog/monolog"
+		}
+		if strings.HasPrefix(trimmed, "dist/") {
+			parts := strings.SplitN(strings.TrimPrefix(trimmed, "dist/"), "/", 3)
+			if len(parts) >= 2 {
+				return parts[0] + "/" + parts[1]
+			}
+		}
 	}
 	return ""
 }

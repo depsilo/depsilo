@@ -18,12 +18,15 @@ type DashboardHandler struct {
 	pypiPool  *upstream.Pool
 	aptPool   *upstream.Pool
 	npmPool   *upstream.Pool
-	goPool    *upstream.Pool
-	cargoPool *upstream.Pool
+	goPool       *upstream.Pool
+	cargoPool    *upstream.Pool
+	mavenPool    *upstream.Pool
+	rubygemsPool *upstream.Pool
+	composerPool *upstream.Pool
 }
 
-func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool *upstream.Pool) *DashboardHandler {
-	return &DashboardHandler{db: database, storage: storage, pypiPool: pypiPool, aptPool: aptPool, npmPool: npmPool, goPool: goPool, cargoPool: cargoPool}
+func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool, rubygemsPool, composerPool *upstream.Pool) *DashboardHandler {
+	return &DashboardHandler{db: database, storage: storage, pypiPool: pypiPool, aptPool: aptPool, npmPool: npmPool, goPool: goPool, cargoPool: cargoPool, mavenPool: mavenPool, rubygemsPool: rubygemsPool, composerPool: composerPool}
 }
 
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
@@ -102,6 +105,33 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		upstreams = append(upstreams, gin.H{
 			"name":           u.Name,
 			"adapter":        "cargo",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.mavenPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "maven",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.rubygemsPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "rubygems",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.composerPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "composer",
 			"healthy":        u.Healthy,
 			"avg_latency_ms": u.AvgLatency().Milliseconds(),
 			"success_rate":   u.SuccessRate(),

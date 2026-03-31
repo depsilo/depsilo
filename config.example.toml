@@ -81,3 +81,36 @@ name     = "crates-io"
 url      = "https://index.crates.io"
 priority = 2
 proxy    = "http://127.0.0.1:7890"
+
+[[maven.upstreams]]
+name     = "aliyun"
+url      = "https://maven.aliyun.com/repository/public"
+priority = 1
+
+[[maven.upstreams]]
+name     = "central"
+url      = "https://repo1.maven.org/maven2"
+priority = 2
+proxy    = "http://127.0.0.1:7890"
+
+[[rubygems.upstreams]]
+name     = "ruby-china"
+url      = "https://gems.ruby-china.com"
+priority = 1
+
+[[rubygems.upstreams]]
+name     = "rubygems"
+url      = "https://rubygems.org"
+priority = 2
+proxy    = "http://127.0.0.1:7890"
+
+[[composer.upstreams]]
+name     = "aliyun"
+url      = "https://mirrors.aliyun.com/composer"
+priority = 1
+
+[[composer.upstreams]]
+name     = "packagist"
+url      = "https://repo.packagist.org"
+priority = 2
+proxy    = "http://127.0.0.1:7890"

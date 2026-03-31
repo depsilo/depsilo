@@ -13,6 +13,9 @@ type Config struct {
 	NPM      AdapterConfig  `mapstructure:"npm"`
 	Go       AdapterConfig  `mapstructure:"go"`
 	Cargo    AdapterConfig  `mapstructure:"cargo"`
+	Maven    AdapterConfig  `mapstructure:"maven"`
+	RubyGems AdapterConfig  `mapstructure:"rubygems"`
+	Composer AdapterConfig  `mapstructure:"composer"`
 }
 
 type ServerConfig struct {
