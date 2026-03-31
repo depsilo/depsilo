@@ -29,20 +29,34 @@ type Manager struct {
 }
 
 // NewManager creates a new license Manager from the given config.
+// Special key "dev-pro-test" activates Pro without API validation (for testing only).
 func NewManager(cfg config.LicenseConfig) *Manager {
 	m := &Manager{key: strings.TrimSpace(cfg.Key)}
+
+	now := time.Now()
+
+	if m.key == "dev-pro-test" {
+		m.status = LicenseStatus{
+			IsPro:       true,
+			KeyMasked:   "dev-pro-***",
+			ActivatedAt: &now,
+			LastChecked: now,
+		}
+		zap.L().Warn("using dev-pro-test license key — for testing only, not for production")
+		return m
+	}
 
 	if m.key == "" {
 		m.status = LicenseStatus{
 			IsPro:       false,
 			KeyMasked:   "",
-			LastChecked: time.Now(),
+			LastChecked: now,
 		}
 	} else {
 		m.status = LicenseStatus{
 			IsPro:       false,
 			KeyMasked:   MaskKey(m.key),
-			LastChecked: time.Now(),
+			LastChecked: now,
 		}
 	}
 
@@ -52,7 +66,7 @@ func NewManager(cfg config.LicenseConfig) *Manager {
 // Start runs the initial validation and periodic re-validation every 24 hours.
 // It blocks until ctx is cancelled.
 func (m *Manager) Start(ctx context.Context) {
-	if m.key == "" {
+	if m.key == "" || m.key == "dev-pro-test" {
 		return
 	}
 
