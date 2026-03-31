@@ -28,6 +28,7 @@ import (
 	"depsilo/internal/api"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/license"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 	"depsilo/internal/upstream"
@@ -160,9 +161,20 @@ func main() {
 		zap.L().Fatal("failed to create helm upstream pool", zap.Error(err))
 	}
 
+	// Initialize license manager
+	licenseManager := license.NewManager(cfg.License)
+
 	// Start background goroutines
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	go licenseManager.Start(ctx)
+
+	if cfg.License.Key == "" {
+		zap.L().Info("running as Community edition")
+	} else {
+		zap.L().Info("license key configured, validation in progress")
+	}
 	go upstream.StartHealthCheck(ctx, pypiPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, aptPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, npmPool, database, 30*time.Second)
@@ -200,7 +212,8 @@ func main() {
 		CondaPool:    condaPool,
 		CRANPool:     cranPool,
 		HelmPool:     helmPool,
-		EventBus:     eventBus,
+		EventBus:       eventBus,
+		LicenseManager: licenseManager,
 	})
 
 	// Register PyPI adapter

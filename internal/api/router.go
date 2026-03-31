@@ -11,6 +11,7 @@ import (
 	"depsilo/internal/api/public"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/upstream"
 )
@@ -33,8 +34,9 @@ type Deps struct {
 	NuGetPool    *upstream.Pool
 	CondaPool    *upstream.Pool
 	CRANPool     *upstream.Pool
-	HelmPool     *upstream.Pool
-	EventBus     *cache.EventBus
+	HelmPool       *upstream.Pool
+	EventBus       *cache.EventBus
+	LicenseManager *license.Manager
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -117,6 +119,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	settingsHandler := admin.NewSettingsHandler(deps.Config)
 	adminGroup.GET("/settings", settingsHandler.Get)
 	adminGroup.PUT("/settings", settingsHandler.Update)
+
+	// License
+	licenseHandler := admin.NewLicenseHandler(deps.LicenseManager)
+	adminGroup.GET("/license", licenseHandler.GetStatus)
+	adminGroup.POST("/license/revalidate", licenseHandler.Revalidate)
 }
 
 func healthHandler(c *gin.Context) {

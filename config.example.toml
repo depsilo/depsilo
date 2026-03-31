@@ -28,6 +28,9 @@ enabled    = true
 jwt_secret = "change-me-in-production"   # ⚠ MUST change before production deployment!
 token_ttl  = "168h"         # 7天
 
+[license]
+key = ""   # Leave empty for Community edition, set License Key for Pro
+
 [[pypi.upstreams]]
 name     = "tuna"
 url      = "https://pypi.tuna.tsinghua.edu.cn"

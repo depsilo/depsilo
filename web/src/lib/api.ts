@@ -77,6 +77,10 @@ export const adminApi = {
   // Settings
   getSettings: () => api.get('/admin/settings'),
   updateSettings: (data: any) => api.put('/admin/settings', data),
+
+  // License
+  getLicense: () => api.get('/admin/license'),
+  revalidateLicense: () => api.post('/admin/license/revalidate'),
 }
 
 export default api
