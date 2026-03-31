@@ -11,6 +11,7 @@ type Config struct {
 	PyPI     AdapterConfig  `mapstructure:"pypi"`
 	APT      AdapterConfig  `mapstructure:"apt"`
 	NPM      AdapterConfig  `mapstructure:"npm"`
+	Go       AdapterConfig  `mapstructure:"go"`
 }
 
 type ServerConfig struct {
