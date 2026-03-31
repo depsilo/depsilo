@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import CodeBlock from '@/portal/components/CodeBlock'
 
-type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer'
+type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer' | 'nuget' | 'conda' | 'cran' | 'helm'
 
 interface MethodProps {
   icon: string
@@ -46,6 +46,10 @@ export default function QuickStart() {
     { key: 'maven' as Tab, icon: 'code_blocks', label: t('quickstart.mavenLabel'), desc: t('quickstart.mavenDesc') },
     { key: 'rubygems' as Tab, icon: 'diamond', label: t('quickstart.rubygemsLabel'), desc: t('quickstart.rubygemsDesc') },
     { key: 'composer' as Tab, icon: 'music_note', label: t('quickstart.composerLabel'), desc: t('quickstart.composerDesc') },
+    { key: 'nuget' as Tab, icon: 'deployed_code', label: t('quickstart.nugetLabel'), desc: t('quickstart.nugetDesc') },
+    { key: 'conda' as Tab, icon: 'science', label: t('quickstart.condaLabel'), desc: t('quickstart.condaDesc') },
+    { key: 'cran' as Tab, icon: 'analytics', label: t('quickstart.cranLabel'), desc: t('quickstart.cranDesc') },
+    { key: 'helm' as Tab, icon: 'sailing', label: t('quickstart.helmLabel'), desc: t('quickstart.helmDesc') },
   ]
 
   return (
@@ -372,6 +376,107 @@ export default function QuickStart() {
               <CodeBlock
                 language="bash"
                 code="composer config -g --list | grep repositories"
+              />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'nuget' && (
+          <>
+            <Method
+              icon="add_circle"
+              title={t('quickstart.nugetAddSource')}
+              description={t('quickstart.nugetAddSourceDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`dotnet nuget add source ${baseURL}/nuget/v3/index.json -n depsilo`}
+              />
+            </Method>
+
+            <Method
+              icon="verified"
+              title={t('quickstart.nugetVerify')}
+              description={t('quickstart.nugetVerifyDesc')}
+            >
+              <CodeBlock language="bash" code="dotnet nuget list source" />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'conda' && (
+          <>
+            <Method
+              icon="settings"
+              title={t('quickstart.condaConfig')}
+              description={t('quickstart.condaConfigDesc')}
+            >
+              <CodeBlock
+                filename="~/.condarc"
+                code={`channels:\n  - ${baseURL}/conda/pkgs/main\n  - defaults`}
+              />
+            </Method>
+
+            <Method
+              icon="terminal"
+              title={t('quickstart.condaCommand')}
+              description={t('quickstart.condaCommandDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`conda config --add channels ${baseURL}/conda/pkgs/main`}
+              />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'cran' && (
+          <>
+            <Method
+              icon="code"
+              title={t('quickstart.cranConfig')}
+              description={t('quickstart.cranConfigDesc')}
+            >
+              <CodeBlock
+                language="r"
+                code={`options(repos = c(CRAN = "${baseURL}/cran/"))`}
+              />
+            </Method>
+
+            <Method
+              icon="settings"
+              title={t('quickstart.cranRprofile')}
+              description={t('quickstart.cranRprofileDesc')}
+            >
+              <CodeBlock
+                filename="~/.Rprofile"
+                code={`# ~/.Rprofile\noptions(repos = c(CRAN = "${baseURL}/cran/"))`}
+              />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'helm' && (
+          <>
+            <Method
+              icon="add_circle"
+              title={t('quickstart.helmAddRepo')}
+              description={t('quickstart.helmAddRepoDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`helm repo add depsilo ${baseURL}/helm/`}
+              />
+            </Method>
+
+            <Method
+              icon="deployed_code"
+              title={t('quickstart.helmUse')}
+              description={t('quickstart.helmUseDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code="helm install my-release depsilo/nginx"
               />
             </Method>
           </>
