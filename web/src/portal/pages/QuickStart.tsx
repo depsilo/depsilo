@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import CodeBlock from '@/portal/components/CodeBlock'
 
-type Tab = 'pip' | 'apt' | 'npm'
+type Tab = 'pip' | 'apt' | 'npm' | 'go'
 
 interface MethodProps {
   icon: string
@@ -41,6 +41,7 @@ export default function QuickStart() {
     { key: 'pip' as Tab, icon: 'code_blocks', label: t('quickstart.pipLabel'), desc: t('quickstart.pipDesc') },
     { key: 'apt' as Tab, icon: 'terminal', label: t('quickstart.aptLabel'), desc: t('quickstart.aptDesc') },
     { key: 'npm' as Tab, icon: 'package_2', label: t('quickstart.npmLabel'), desc: t('quickstart.npmDesc') },
+    { key: 'go' as Tab, icon: 'code', label: t('quickstart.goLabel'), desc: t('quickstart.goDesc') },
   ]
 
   return (
@@ -233,6 +234,40 @@ export default function QuickStart() {
                 language="bash"
                 code={`# yarn v1\nyarn config set registry ${baseURL}/npm/\n\n# pnpm (uses .npmrc automatically)`}
               />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'go' && (
+          <>
+            <Method
+              icon="bolt"
+              title={t('quickstart.goTempUse')}
+              description={t('quickstart.goTempUseDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`GOPROXY=${baseURL}/go,direct go get <package>`}
+              />
+            </Method>
+
+            <Method
+              icon="settings"
+              title={t('quickstart.goPermanentConfig')}
+              description={t('quickstart.goPermanentConfigDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`go env -w GOPROXY=${baseURL}/go,direct`}
+              />
+            </Method>
+
+            <Method
+              icon="verified"
+              title={t('quickstart.goVerify')}
+              description={t('quickstart.goVerifyDesc')}
+            >
+              <CodeBlock language="bash" code="go env GOPROXY" />
             </Method>
           </>
         )}
