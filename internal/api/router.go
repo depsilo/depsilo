@@ -25,8 +25,9 @@ type Deps struct {
 	PyPIPool *upstream.Pool
 	APTPool  *upstream.Pool
 	NPMPool  *upstream.Pool
-	GoPool   *upstream.Pool
-	EventBus *cache.EventBus
+	GoPool    *upstream.Pool
+	CargoPool *upstream.Pool
+	EventBus  *cache.EventBus
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -37,7 +38,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1 := r.Group("/api/v1")
 
 	// Public stats
-	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool)
+	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool)
 	apiV1.GET("/stats", statsHandler.GetStats)
 
 	// Public packages
@@ -65,7 +66,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.Use(middleware.AdminRequired())
 
 	// Dashboard
-	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool)
+	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool)
 	adminGroup.GET("/dashboard", dashHandler.GetDashboard)
 	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
 
