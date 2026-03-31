@@ -85,6 +85,13 @@ export const adminApi = {
   // Audit Logs (Pro)
   listAuditLogs: (params: Record<string, any>) => api.get('/admin/audit-logs', { params }),
   exportAuditLogs: (params: Record<string, any>) => api.get('/admin/audit-logs/export', { params, responseType: 'blob' }),
+
+  // Package Rules (Pro)
+  listRules: () => api.get('/admin/rules'),
+  createRule: (data: any) => api.post('/admin/rules', data),
+  updateRule: (id: number, data: any) => api.put(`/admin/rules/${id}`, data),
+  deleteRule: (id: number) => api.delete(`/admin/rules/${id}`),
+  testRule: (data: { ecosystem: string; package: string; version: string }) => api.post('/admin/rules/test', data),
 }
 
 export default api

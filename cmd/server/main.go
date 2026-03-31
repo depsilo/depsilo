@@ -28,6 +28,7 @@ import (
 	"depsilo/internal/adapter"
 	"depsilo/internal/api"
 	"depsilo/internal/audit"
+	"depsilo/internal/rules"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/license"
@@ -172,6 +173,9 @@ func main() {
 
 	go licenseManager.Start(ctx)
 
+	rulesStore := rules.NewStore(database)
+	rulesEngine := rules.NewEngine(rulesStore, licenseManager)
+
 	auditLogger := audit.NewLogger(database, licenseManager)
 	go auditLogger.Start(ctx)
 	adapter.SetAuditLogger(auditLogger)
@@ -200,6 +204,7 @@ func main() {
 	r := gin.New()
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
+	r.Use(rules.Middleware(rulesEngine))
 
 	// Register all API routes
 	api.RegisterRoutes(r, api.Deps{
@@ -221,6 +226,8 @@ func main() {
 		EventBus:       eventBus,
 		LicenseManager: licenseManager,
 		AuditLogger:    auditLogger,
+		RulesStore:     rulesStore,
+		RulesEngine:    rulesEngine,
 	})
 
 	// Register PyPI adapter

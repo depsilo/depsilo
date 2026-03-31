@@ -14,6 +14,7 @@ import (
 	"depsilo/internal/config"
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
+	"depsilo/internal/rules"
 	"depsilo/internal/upstream"
 )
 
@@ -39,6 +40,8 @@ type Deps struct {
 	EventBus       *cache.EventBus
 	LicenseManager *license.Manager
 	AuditLogger    *audit.Logger
+	RulesStore     *rules.Store
+	RulesEngine    *rules.Engine
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -134,6 +137,13 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	auditHandler := admin.NewAuditHandler(deps.DB)
 	proGroup.GET("/audit-logs", auditHandler.List)
 	proGroup.GET("/audit-logs/export", auditHandler.Export)
+
+	rulesHandler := admin.NewRulesHandler(deps.DB, deps.RulesStore, deps.RulesEngine)
+	proGroup.GET("/rules", rulesHandler.List)
+	proGroup.POST("/rules", rulesHandler.Create)
+	proGroup.PUT("/rules/:id", rulesHandler.Update)
+	proGroup.DELETE("/rules/:id", rulesHandler.Delete)
+	proGroup.POST("/rules/test", rulesHandler.Test)
 }
 
 func healthHandler(c *gin.Context) {
