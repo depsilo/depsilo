@@ -120,16 +120,16 @@ export default function Upstreams() {
         </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-0 border-b border-outline-variant/10">
+      {/* Type selector */}
+      <div className="flex flex-wrap gap-1.5">
         {(['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-6 py-2.5 text-sm font-medium transition-colors cursor-pointer border-b-2 bg-transparent ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors cursor-pointer ${
               tab === t
-                ? 'border-primary text-on-surface'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-high'
             }`}
           >
             {t.toUpperCase()}

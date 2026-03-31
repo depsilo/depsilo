@@ -62,34 +62,34 @@ export default function QuickStart() {
         </p>
       </div>
 
-      {/* Tab selector */}
-      <div className="flex gap-2 p-1 bg-surface-container rounded-xl">
+      {/* Tab selector — grouped grid */}
+      <div className="grid grid-cols-4 gap-2">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key
           return (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-3 flex-1 rounded-lg px-4 py-3 text-left transition-all cursor-pointer ${
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-surface-bright shadow-sm'
-                  : 'bg-transparent hover:bg-surface-high/50'
+                  ? 'bg-primary/10 ring-1 ring-primary/30'
+                  : 'bg-surface-low hover:bg-surface-container'
               }`}
             >
               <span
-                className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 transition-colors ${
+                className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 transition-colors ${
                   isActive
                     ? 'bg-primary text-on-primary'
-                    : 'bg-surface-high text-on-surface-variant'
+                    : 'bg-surface-container text-on-surface-variant'
                 }`}
               >
                 <Icon name={tab.icon} size="sm" />
               </span>
-              <div>
-                <p className={`font-semibold text-sm ${isActive ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+              <div className="min-w-0">
+                <p className={`font-semibold text-sm truncate ${isActive ? 'text-on-surface' : 'text-on-surface-variant'}`}>
                   {tab.label}
                 </p>
-                <p className="text-[11px] text-on-surface-variant mt-0.5 leading-tight">
+                <p className="text-[10px] text-on-surface-variant truncate leading-tight">
                   {tab.desc}
                 </p>
               </div>
