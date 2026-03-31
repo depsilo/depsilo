@@ -53,5 +53,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&User{},
 		&APIToken{},
 		&UpstreamLatencyLog{},
+		&AuditLog{},
 	)
 }

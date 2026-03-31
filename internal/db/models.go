@@ -76,3 +76,19 @@ type UpstreamLatencyLog struct {
 	Healthy    bool      `json:"healthy"`
 	CreatedAt  time.Time `gorm:"index" json:"created_at"`
 }
+
+type AuditLog struct {
+	ID          uint      `gorm:"primarykey" json:"id"`
+	Ecosystem   string    `gorm:"size:16;index" json:"ecosystem"`
+	PackageName string    `gorm:"size:256;index" json:"package_name"`
+	Version     string    `gorm:"size:128" json:"version"`
+	Action      string    `gorm:"size:16" json:"action"`
+	CacheResult string    `gorm:"size:8" json:"cache_result"`
+	ClientIP    string    `gorm:"size:64;index" json:"client_ip"`
+	UserAgent   string    `gorm:"size:256" json:"user_agent"`
+	UpstreamURL string    `gorm:"size:512" json:"upstream_url"`
+	LatencyMs   int64     `json:"latency_ms"`
+	BytesSent   int64     `json:"bytes_sent"`
+	StatusCode  int       `json:"status_code"`
+	CreatedAt   time.Time `gorm:"index" json:"created_at"`
+}
