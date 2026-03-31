@@ -8,6 +8,7 @@ import AccessLogs from './pages/AccessLogs'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
 import AuditLogs from './pages/AuditLogs'
+import Rules from './pages/Rules'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -36,6 +37,7 @@ export default function AdminApp() {
         <Route path="upstreams" element={<Upstreams />} />
         <Route path="logs" element={<AccessLogs />} />
         <Route path="audit" element={<AuditLogs />} />
+        <Route path="rules" element={<Rules />} />
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
       </Route>

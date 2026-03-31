@@ -48,6 +48,7 @@ export default function MainLayout() {
     { label: t('nav.cacheManage'), to: '/admin/cache', icon: 'storage' },
     { label: t('nav.upstreams'), to: '/admin/upstreams', icon: 'cloud_sync' },
     { label: t('nav.userManage'), to: '/admin/users', icon: 'group' },
+    { label: t('nav.rules'), to: '/admin/rules', icon: 'shield' },
     { label: t('nav.settings'), to: '/admin/settings', icon: 'settings' },
   ]
 
@@ -58,6 +59,7 @@ export default function MainLayout() {
     '/admin/cache': t('nav.cacheManage'),
     '/admin/upstreams': t('nav.upstreams'),
     '/admin/users': t('nav.userManage'),
+    '/admin/rules': t('nav.rules'),
     '/admin/settings': t('nav.settings'),
   }
 
