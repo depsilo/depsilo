@@ -27,7 +27,7 @@ const emptyForm: UpstreamForm = {
 export default function Upstreams() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'pypi' | 'apt' | 'npm' | 'go' | 'cargo'>('pypi')
+  const [tab, setTab] = useState<'pypi' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer'>('pypi')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<UpstreamForm>(emptyForm)
@@ -122,7 +122,7 @@ export default function Upstreams() {
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-outline-variant/10">
-        {(['pypi', 'apt', 'npm', 'go', 'cargo'] as const).map((t) => (
+        {(['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -205,6 +205,9 @@ export default function Upstreams() {
               <option value="npm">npm</option>
               <option value="go">Go</option>
               <option value="cargo">Cargo</option>
+              <option value="maven">Maven</option>
+              <option value="rubygems">RubyGems</option>
+              <option value="composer">Composer</option>
             </select>
           </div>
           <div>

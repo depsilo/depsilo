@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import CodeBlock from '@/portal/components/CodeBlock'
 
-type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo'
+type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer'
 
 interface MethodProps {
   icon: string
@@ -43,6 +43,9 @@ export default function QuickStart() {
     { key: 'npm' as Tab, icon: 'package_2', label: t('quickstart.npmLabel'), desc: t('quickstart.npmDesc') },
     { key: 'go' as Tab, icon: 'code', label: t('quickstart.goLabel'), desc: t('quickstart.goDesc') },
     { key: 'cargo' as Tab, icon: 'settings', label: t('quickstart.cargoLabel'), desc: t('quickstart.cargoDesc') },
+    { key: 'maven' as Tab, icon: 'code_blocks', label: t('quickstart.mavenLabel'), desc: t('quickstart.mavenDesc') },
+    { key: 'rubygems' as Tab, icon: 'diamond', label: t('quickstart.rubygemsLabel'), desc: t('quickstart.rubygemsDesc') },
+    { key: 'composer' as Tab, icon: 'music_note', label: t('quickstart.composerLabel'), desc: t('quickstart.composerDesc') },
   ]
 
   return (
@@ -292,6 +295,84 @@ export default function QuickStart() {
               description={t('quickstart.cargoVerifyDesc')}
             >
               <CodeBlock language="bash" code="cargo install ripgrep" />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'maven' && (
+          <>
+            <Method
+              icon="settings"
+              title={t('quickstart.mavenSettings')}
+              description={t('quickstart.mavenSettingsDesc')}
+            >
+              <CodeBlock
+                filename="~/.m2/settings.xml"
+                code={`<settings>\n  <mirrors>\n    <mirror>\n      <id>depsilo</id>\n      <mirrorOf>central</mirrorOf>\n      <url>${baseURL}/maven/</url>\n    </mirror>\n  </mirrors>\n</settings>`}
+              />
+            </Method>
+
+            <Method
+              icon="code_blocks"
+              title={t('quickstart.mavenGradle')}
+              description={t('quickstart.mavenGradleDesc')}
+            >
+              <CodeBlock
+                filename="build.gradle"
+                code={`repositories {\n    maven { url "${baseURL}/maven/" }\n}`}
+              />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'rubygems' && (
+          <>
+            <Method
+              icon="settings"
+              title={t('quickstart.rubygemsBundler')}
+              description={t('quickstart.rubygemsBundlerDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`bundle config mirror.https://rubygems.org ${baseURL}/rubygems/`}
+              />
+            </Method>
+
+            <Method
+              icon="find_replace"
+              title={t('quickstart.rubygemsGemSource')}
+              description={t('quickstart.rubygemsGemSourceDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`gem sources --add ${baseURL}/rubygems/ --remove https://rubygems.org/`}
+              />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'composer' && (
+          <>
+            <Method
+              icon="settings"
+              title={t('quickstart.composerGlobal')}
+              description={t('quickstart.composerGlobalDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code={`composer config -g repo.packagist composer ${baseURL}/composer/`}
+              />
+            </Method>
+
+            <Method
+              icon="verified"
+              title={t('quickstart.composerVerify')}
+              description={t('quickstart.composerVerifyDesc')}
+            >
+              <CodeBlock
+                language="bash"
+                code="composer config -g --list | grep repositories"
+              />
             </Method>
           </>
         )}
