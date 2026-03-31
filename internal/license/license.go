@@ -2,6 +2,7 @@ package license
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -29,20 +30,20 @@ type Manager struct {
 }
 
 // NewManager creates a new license Manager from the given config.
-// Special key "dev-pro-test" activates Pro without API validation (for testing only).
+// Set DEPSILO_DEV_PRO=1 to activate Pro without API validation (development only).
 func NewManager(cfg config.LicenseConfig) *Manager {
 	m := &Manager{key: strings.TrimSpace(cfg.Key)}
 
 	now := time.Now()
 
-	if m.key == "dev-pro-test" {
+	if os.Getenv("DEPSILO_DEV_PRO") == "1" {
 		m.status = LicenseStatus{
 			IsPro:       true,
-			KeyMasked:   "dev-pro-***",
+			KeyMasked:   "dev-mode",
 			ActivatedAt: &now,
 			LastChecked: now,
 		}
-		zap.L().Warn("using dev-pro-test license key — for testing only, not for production")
+		zap.L().Warn("DEPSILO_DEV_PRO is set — Pro features activated without license validation")
 		return m
 	}
 
@@ -66,7 +67,7 @@ func NewManager(cfg config.LicenseConfig) *Manager {
 // Start runs the initial validation and periodic re-validation every 24 hours.
 // It blocks until ctx is cancelled.
 func (m *Manager) Start(ctx context.Context) {
-	if m.key == "" || m.key == "dev-pro-test" {
+	if m.key == "" || os.Getenv("DEPSILO_DEV_PRO") == "1" {
 		return
 	}
 
