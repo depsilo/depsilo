@@ -16,6 +16,10 @@ type Config struct {
 	Maven    AdapterConfig  `mapstructure:"maven"`
 	RubyGems AdapterConfig  `mapstructure:"rubygems"`
 	Composer AdapterConfig  `mapstructure:"composer"`
+	NuGet    AdapterConfig  `mapstructure:"nuget"`
+	Conda    AdapterConfig  `mapstructure:"conda"`
+	CRAN     AdapterConfig  `mapstructure:"cran"`
+	Helm     AdapterConfig  `mapstructure:"helm"`
 }
 
 type ServerConfig struct {

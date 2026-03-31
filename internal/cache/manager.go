@@ -130,6 +130,62 @@ func ExtractPackageName(adapterType, key string) string {
 				return parts[0] + "/" + parts[1]
 			}
 		}
+	case "conda":
+		// key: conda/pkgs/main/linux-64/numpy-1.24.0-py39h.tar.bz2
+		trimmed := strings.TrimPrefix(key, "conda/")
+		parts := strings.Split(trimmed, "/")
+		fname := parts[len(parts)-1]
+		if strings.HasSuffix(fname, ".tar.bz2") {
+			fname = strings.TrimSuffix(fname, ".tar.bz2")
+		} else if strings.HasSuffix(fname, ".conda") {
+			fname = strings.TrimSuffix(fname, ".conda")
+		} else {
+			return fname
+		}
+		if idx := strings.Index(fname, "-"); idx > 0 {
+			return fname[:idx]
+		}
+		return fname
+	case "cran":
+		// key: cran/src/contrib/ggplot2_3.4.0.tar.gz
+		trimmed := strings.TrimPrefix(key, "cran/")
+		parts := strings.Split(trimmed, "/")
+		fname := parts[len(parts)-1]
+		if idx := strings.Index(fname, "_"); idx > 0 {
+			return fname[:idx]
+		}
+		return strings.TrimSuffix(fname, ".tar.gz")
+	case "nuget":
+		// key: nuget/v3/package/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg
+		trimmed := strings.TrimPrefix(key, "nuget/")
+		if strings.HasPrefix(trimmed, "v3/package/") {
+			parts := strings.SplitN(strings.TrimPrefix(trimmed, "v3/package/"), "/", 2)
+			if len(parts) >= 1 {
+				return parts[0]
+			}
+		}
+		if strings.HasPrefix(trimmed, "v3/registration/") {
+			parts := strings.SplitN(strings.TrimPrefix(trimmed, "v3/registration/"), "/", 2)
+			if len(parts) >= 1 {
+				return parts[0]
+			}
+		}
+	case "helm":
+		// key: helm/nginx-15.0.0.tgz or helm/index.yaml
+		trimmed := strings.TrimPrefix(key, "helm/")
+		if strings.HasSuffix(trimmed, ".tgz") {
+			fname := trimmed
+			if idx := strings.LastIndex(fname, "/"); idx >= 0 {
+				fname = fname[idx+1:]
+			}
+			fname = strings.TrimSuffix(fname, ".tgz")
+			for i := len(fname) - 1; i >= 0; i-- {
+				if fname[i] == '-' && i+1 < len(fname) && fname[i+1] >= '0' && fname[i+1] <= '9' {
+					return fname[:i]
+				}
+			}
+			return fname
+		}
 	}
 	return ""
 }

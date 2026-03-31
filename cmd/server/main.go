@@ -16,9 +16,13 @@ import (
 	"depsilo/internal/adapter/apt"
 	"depsilo/internal/adapter/cargo"
 	"depsilo/internal/adapter/composer"
+	"depsilo/internal/adapter/conda"
+	"depsilo/internal/adapter/cran"
 	"depsilo/internal/adapter/goproxy"
+	"depsilo/internal/adapter/helm"
 	"depsilo/internal/adapter/maven"
 	"depsilo/internal/adapter/npm"
+	"depsilo/internal/adapter/nuget"
 	"depsilo/internal/adapter/pypi"
 	"depsilo/internal/adapter/rubygems"
 	"depsilo/internal/api"
@@ -101,6 +105,10 @@ func main() {
 	syncUpstreams(database, "maven", cfg.Maven.Upstreams)
 	syncUpstreams(database, "rubygems", cfg.RubyGems.Upstreams)
 	syncUpstreams(database, "composer", cfg.Composer.Upstreams)
+	syncUpstreams(database, "nuget", cfg.NuGet.Upstreams)
+	syncUpstreams(database, "conda", cfg.Conda.Upstreams)
+	syncUpstreams(database, "cran", cfg.CRAN.Upstreams)
+	syncUpstreams(database, "helm", cfg.Helm.Upstreams)
 
 	// Initialize upstream pools
 	pypiPool, err := upstream.NewPool(cfg.PyPI.Upstreams)
@@ -135,6 +143,22 @@ func main() {
 	if err != nil {
 		zap.L().Fatal("failed to create composer upstream pool", zap.Error(err))
 	}
+	nugetPool, err := upstream.NewPool(cfg.NuGet.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create nuget upstream pool", zap.Error(err))
+	}
+	condaPool, err := upstream.NewPool(cfg.Conda.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create conda upstream pool", zap.Error(err))
+	}
+	cranPool, err := upstream.NewPool(cfg.CRAN.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create cran upstream pool", zap.Error(err))
+	}
+	helmPool, err := upstream.NewPool(cfg.Helm.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create helm upstream pool", zap.Error(err))
+	}
 
 	// Start background goroutines
 	ctx, cancel := context.WithCancel(context.Background())
@@ -147,6 +171,10 @@ func main() {
 	go upstream.StartHealthCheck(ctx, mavenPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, rubygemsPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, composerPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, nugetPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, condaPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, cranPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, helmPool, database, 30*time.Second)
 	go upstream.StartLatencyLogCleanup(ctx, database)
 	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
 
@@ -168,6 +196,10 @@ func main() {
 		MavenPool:    mavenPool,
 		RubyGemsPool: rubygemsPool,
 		ComposerPool: composerPool,
+		NuGetPool:    nugetPool,
+		CondaPool:    condaPool,
+		CRANPool:     cranPool,
+		HelmPool:     helmPool,
 		EventBus:     eventBus,
 	})
 
@@ -210,6 +242,26 @@ func main() {
 	composerHandler := composer.New(cacheMgr, upstream.NewPrioritySelector(composerPool), cfg.Cache, database)
 	composerGroup := r.Group("/composer")
 	composerHandler.Register(composerGroup)
+
+	// Register NuGet adapter
+	nugetHandler := nuget.New(cacheMgr, upstream.NewPrioritySelector(nugetPool), cfg.Cache, database)
+	nugetGroup := r.Group("/nuget")
+	nugetHandler.Register(nugetGroup)
+
+	// Register Conda adapter
+	condaHandler := conda.New(cacheMgr, upstream.NewPrioritySelector(condaPool), cfg.Cache, database)
+	condaGroup := r.Group("/conda")
+	condaHandler.Register(condaGroup)
+
+	// Register CRAN adapter
+	cranHandler := cran.New(cacheMgr, upstream.NewPrioritySelector(cranPool), cfg.Cache, database)
+	cranGroup := r.Group("/cran")
+	cranHandler.Register(cranGroup)
+
+	// Register Helm adapter
+	helmHandler := helm.New(cacheMgr, upstream.NewPrioritySelector(helmPool), cfg.Cache, database)
+	helmGroup := r.Group("/helm")
+	helmHandler.Register(helmGroup)
 
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")

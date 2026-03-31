@@ -30,6 +30,10 @@ type Deps struct {
 	MavenPool    *upstream.Pool
 	RubyGemsPool *upstream.Pool
 	ComposerPool *upstream.Pool
+	NuGetPool    *upstream.Pool
+	CondaPool    *upstream.Pool
+	CRANPool     *upstream.Pool
+	HelmPool     *upstream.Pool
 	EventBus     *cache.EventBus
 }
 
@@ -41,7 +45,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1 := r.Group("/api/v1")
 
 	// Public stats
-	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool, deps.MavenPool, deps.RubyGemsPool, deps.ComposerPool)
+	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool, deps.MavenPool, deps.RubyGemsPool, deps.ComposerPool, deps.NuGetPool, deps.CondaPool, deps.CRANPool, deps.HelmPool)
 	apiV1.GET("/stats", statsHandler.GetStats)
 
 	// Public packages
@@ -69,7 +73,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.Use(middleware.AdminRequired())
 
 	// Dashboard
-	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool, deps.MavenPool, deps.RubyGemsPool, deps.ComposerPool)
+	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool, deps.MavenPool, deps.RubyGemsPool, deps.ComposerPool, deps.NuGetPool, deps.CondaPool, deps.CRANPool, deps.HelmPool)
 	adminGroup.GET("/dashboard", dashHandler.GetDashboard)
 	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
 

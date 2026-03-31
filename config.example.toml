@@ -114,3 +114,42 @@ name     = "packagist"
 url      = "https://repo.packagist.org"
 priority = 2
 proxy    = "http://127.0.0.1:7890"
+
+[[nuget.upstreams]]
+name     = "nuget"
+url      = "https://api.nuget.org"
+priority = 1
+proxy    = "http://127.0.0.1:7890"
+
+[[conda.upstreams]]
+name     = "tuna"
+url      = "https://mirrors.tuna.tsinghua.edu.cn/anaconda"
+priority = 1
+
+[[conda.upstreams]]
+name     = "official"
+url      = "https://repo.anaconda.com"
+priority = 2
+proxy    = "http://127.0.0.1:7890"
+
+[[cran.upstreams]]
+name     = "tuna"
+url      = "https://mirrors.tuna.tsinghua.edu.cn/CRAN"
+priority = 1
+
+[[cran.upstreams]]
+name     = "cloud-r"
+url      = "https://cloud.r-project.org"
+priority = 2
+proxy    = "http://127.0.0.1:7890"
+
+[[helm.upstreams]]
+name     = "azure-cn"
+url      = "https://mirror.azure.cn/kubernetes/charts"
+priority = 1
+
+[[helm.upstreams]]
+name     = "bitnami"
+url      = "https://charts.bitnami.com/bitnami"
+priority = 2
+proxy    = "http://127.0.0.1:7890"
