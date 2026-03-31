@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import CodeBlock from '@/portal/components/CodeBlock'
 
-type Tab = 'pip' | 'apt' | 'npm' | 'go'
+type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo'
 
 interface MethodProps {
   icon: string
@@ -42,6 +42,7 @@ export default function QuickStart() {
     { key: 'apt' as Tab, icon: 'terminal', label: t('quickstart.aptLabel'), desc: t('quickstart.aptDesc') },
     { key: 'npm' as Tab, icon: 'package_2', label: t('quickstart.npmLabel'), desc: t('quickstart.npmDesc') },
     { key: 'go' as Tab, icon: 'code', label: t('quickstart.goLabel'), desc: t('quickstart.goDesc') },
+    { key: 'cargo' as Tab, icon: 'settings', label: t('quickstart.cargoLabel'), desc: t('quickstart.cargoDesc') },
   ]
 
   return (
@@ -268,6 +269,29 @@ export default function QuickStart() {
               description={t('quickstart.goVerifyDesc')}
             >
               <CodeBlock language="bash" code="go env GOPROXY" />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'cargo' && (
+          <>
+            <Method
+              icon="settings"
+              title={t('quickstart.cargoConfig')}
+              description={t('quickstart.cargoConfigDesc')}
+            >
+              <CodeBlock
+                filename="~/.cargo/config.toml"
+                code={`[source.crates-io]\nreplace-with = "depsilo"\n\n[source.depsilo]\nregistry = "sparse+${baseURL}/crates/"`}
+              />
+            </Method>
+
+            <Method
+              icon="verified"
+              title={t('quickstart.cargoVerify')}
+              description={t('quickstart.cargoVerifyDesc')}
+            >
+              <CodeBlock language="bash" code="cargo install ripgrep" />
             </Method>
           </>
         )}

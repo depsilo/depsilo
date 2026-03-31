@@ -231,6 +231,12 @@ const zh = {
       goPermanentConfigDesc: '设置默认的 Go 模块代理：',
       goVerify: '验证配置',
       goVerifyDesc: '检查当前 GOPROXY 设置：',
+      cargoLabel: 'Cargo',
+      cargoDesc: 'Rust crates (cargo)',
+      cargoConfig: '配置 Registry',
+      cargoConfigDesc: '添加到 ~/.cargo/config.toml：',
+      cargoVerify: '验证配置',
+      cargoVerifyDesc: '安装一个 crate 测试代理：',
       firstDownloadTitle: '首次下载说明',
       firstDownloadDesc:
         '首次请求某个包时，Depsilo 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',

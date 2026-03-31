@@ -231,6 +231,12 @@ const en = {
       goPermanentConfigDesc: 'Set the default Go module proxy:',
       goVerify: 'Verify',
       goVerifyDesc: 'Check the current GOPROXY setting:',
+      cargoLabel: 'Cargo',
+      cargoDesc: 'Rust crates (cargo)',
+      cargoConfig: 'Configure Registry',
+      cargoConfigDesc: 'Add to ~/.cargo/config.toml:',
+      cargoVerify: 'Verify',
+      cargoVerifyDesc: 'Install a crate to test the proxy:',
       firstDownloadTitle: 'First Download Note',
       firstDownloadDesc:
         'The first request for a package requires downloading from the upstream source. Subsequent requests for the same package will be served from the local cache at LAN speed.',
