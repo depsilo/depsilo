@@ -12,6 +12,7 @@ type Config struct {
 	APT      AdapterConfig  `mapstructure:"apt"`
 	NPM      AdapterConfig  `mapstructure:"npm"`
 	Go       AdapterConfig  `mapstructure:"go"`
+	Cargo    AdapterConfig  `mapstructure:"cargo"`
 }
 
 type ServerConfig struct {

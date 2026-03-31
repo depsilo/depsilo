@@ -79,6 +79,21 @@ func ExtractPackageName(adapterType, key string) string {
 		if idx := strings.Index(trimmed, "/@latest"); idx > 0 {
 			return trimmed[:idx]
 		}
+	case "cargo":
+		// key: cargo/index/{prefix}/{crate} or cargo/crates/{crate}/{version}.crate
+		trimmed := strings.TrimPrefix(key, "cargo/")
+		if strings.HasPrefix(trimmed, "crates/") {
+			parts := strings.SplitN(strings.TrimPrefix(trimmed, "crates/"), "/", 2)
+			if len(parts) >= 1 {
+				return parts[0]
+			}
+		}
+		if strings.HasPrefix(trimmed, "index/") {
+			parts := strings.Split(trimmed, "/")
+			if len(parts) >= 1 {
+				return parts[len(parts)-1]
+			}
+		}
 	}
 	return ""
 }

@@ -70,3 +70,14 @@ name     = "official"
 url      = "https://proxy.golang.org"
 priority = 2
 proxy    = "http://127.0.0.1:7890"
+
+[[cargo.upstreams]]
+name     = "rsproxy"
+url      = "https://rsproxy.cn/index"
+priority = 1
+
+[[cargo.upstreams]]
+name     = "crates-io"
+url      = "https://index.crates.io"
+priority = 2
+proxy    = "http://127.0.0.1:7890"
