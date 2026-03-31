@@ -1,12 +1,122 @@
 import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { adminApi } from '@/lib/api'
 import Card from '@/components/Card'
+import Button from '@/components/Button'
 import Input from '@/components/Input'
 import Icon from '@/components/Icon'
 
-type TabKey = 'basic' | 'cache' | 'storage' | 'auth'
+type TabKey = 'basic' | 'cache' | 'storage' | 'auth' | 'license'
+
+function LicenseTab() {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+
+  const { data } = useQuery({
+    queryKey: ['admin', 'license'],
+    queryFn: () => adminApi.getLicense(),
+  })
+
+  const revalidateMutation = useMutation({
+    mutationFn: () => adminApi.revalidateLicense(),
+    onSuccess: () => {
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ['admin', 'license'] }), 2000)
+    },
+  })
+
+  const license = data?.data
+  const isPro = license?.is_pro
+
+  if (isPro) {
+    return (
+      <Card>
+        <div className="flex items-center gap-3 mb-6">
+          <span className="flex items-center justify-center w-10 h-10 rounded-full bg-success/15">
+            <Icon name="verified" size="sm" className="text-success" />
+          </span>
+          <div>
+            <p className="font-semibold text-on-surface">{t('settings.licenseProActive')}</p>
+            <p className="text-xs text-on-surface-variant">{t('settings.licenseProDesc')}</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between py-2 border-b border-outline-variant/10">
+            <span className="text-sm text-on-surface-variant">{t('settings.licenseKey')}</span>
+            <span className="text-sm font-mono text-on-surface">{license.key_masked || '—'}</span>
+          </div>
+          {license.activated_at && (
+            <div className="flex items-center justify-between py-2 border-b border-outline-variant/10">
+              <span className="text-sm text-on-surface-variant">{t('settings.licenseActivated')}</span>
+              <span className="text-sm text-on-surface">{new Date(license.activated_at).toLocaleDateString()}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-2 border-b border-outline-variant/10">
+            <span className="text-sm text-on-surface-variant">{t('settings.licenseExpires')}</span>
+            <span className="text-sm text-on-surface">
+              {license.expires_at ? new Date(license.expires_at).toLocaleDateString() : t('users.neverExpires')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-outline-variant/10">
+            <span className="text-sm text-on-surface-variant">{t('settings.licenseLastChecked')}</span>
+            <span className="text-sm text-on-surface">
+              {license.last_checked ? new Date(license.last_checked).toLocaleString() : '—'}
+            </span>
+          </div>
+        </div>
+        <div className="mt-6">
+          <Button
+            variant="secondary"
+            onClick={() => revalidateMutation.mutate()}
+            disabled={revalidateMutation.isPending}
+          >
+            <Icon name="refresh" size="sm" />
+            {revalidateMutation.isPending ? t('settings.licenseRevalidating') : t('settings.licenseRevalidate')}
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  // Community state
+  return (
+    <Card>
+      <div className="text-center py-4">
+        <h3 className="text-lg font-bold text-on-surface mb-1">{t('settings.licenseCommunityTitle')}</h3>
+        <p className="text-sm text-on-surface-variant mb-6">{t('settings.licenseCommunityDesc')}</p>
+
+        <div className="text-left max-w-sm mx-auto mb-8 space-y-2">
+          {[
+            { included: true, label: t('settings.licenseFeature12eco') },
+            { included: true, label: t('settings.licenseFeatureWebUI') },
+            { included: false, label: t('settings.licenseFeatureAudit') },
+            { included: false, label: t('settings.licenseFeatureRules') },
+            { included: false, label: t('settings.licenseFeatureS3') },
+            { included: false, label: t('settings.licenseFeaturePG') },
+          ].map((f) => (
+            <div key={f.label} className="flex items-center gap-2 text-sm">
+              <Icon
+                name={f.included ? 'check_circle' : 'cancel'}
+                size="sm"
+                className={f.included ? 'text-success' : 'text-on-surface-variant/40'}
+              />
+              <span className={f.included ? 'text-on-surface' : 'text-on-surface-variant'}>{f.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col items-center gap-2">
+          <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer">
+            <Button>{t('settings.licenseUpgrade')}</Button>
+          </a>
+          <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" className="text-xs">{t('settings.licenseYearly')}</Button>
+          </a>
+        </div>
+      </div>
+    </Card>
+  )
+}
 
 export default function Settings() {
   const { t } = useTranslation()
@@ -16,6 +126,7 @@ export default function Settings() {
     { key: 'cache' as const, label: t('settings.cachePolicy'), icon: 'cached' },
     { key: 'storage' as const, label: t('settings.storageBackend'), icon: 'database' },
     { key: 'auth' as const, label: t('settings.authSecurity'), icon: 'shield' },
+    { key: 'license' as const, label: t('settings.license'), icon: 'license' },
   ]
   const [activeTab, setActiveTab] = useState<TabKey>('basic')
   const [settings, setSettings] = useState<Record<string, any>>({})
@@ -265,6 +376,9 @@ export default function Settings() {
           </div>
         </Card>
       )}
+
+      {/* License Tab */}
+      {activeTab === 'license' && <LicenseTab />}
 
       {/* Auth Tab */}
       {activeTab === 'auth' && (
