@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter/apt"
+	"depsilo/internal/adapter/goproxy"
 	"depsilo/internal/adapter/npm"
 	"depsilo/internal/adapter/pypi"
 	"depsilo/internal/api"
@@ -91,6 +92,7 @@ func main() {
 	syncUpstreams(database, "pypi", cfg.PyPI.Upstreams)
 	syncUpstreams(database, "apt", cfg.APT.Upstreams)
 	syncUpstreams(database, "npm", cfg.NPM.Upstreams)
+	syncUpstreams(database, "go", cfg.Go.Upstreams)
 
 	// Initialize upstream pools
 	pypiPool, err := upstream.NewPool(cfg.PyPI.Upstreams)
@@ -105,6 +107,10 @@ func main() {
 	if err != nil {
 		zap.L().Fatal("failed to create npm upstream pool", zap.Error(err))
 	}
+	goPool, err := upstream.NewPool(cfg.Go.Upstreams)
+	if err != nil {
+		zap.L().Fatal("failed to create go upstream pool", zap.Error(err))
+	}
 
 	// Start background goroutines
 	ctx, cancel := context.WithCancel(context.Background())
@@ -112,6 +118,7 @@ func main() {
 	go upstream.StartHealthCheck(ctx, pypiPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, aptPool, database, 30*time.Second)
 	go upstream.StartHealthCheck(ctx, npmPool, database, 30*time.Second)
+	go upstream.StartHealthCheck(ctx, goPool, database, 30*time.Second)
 	go upstream.StartLatencyLogCleanup(ctx, database)
 	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
 
@@ -128,6 +135,7 @@ func main() {
 		PyPIPool: pypiPool,
 		APTPool:  aptPool,
 		NPMPool:  npmPool,
+		GoPool:   goPool,
 		EventBus: eventBus,
 	})
 
@@ -145,6 +153,11 @@ func main() {
 	npmHandler := npm.New(cacheMgr, upstream.NewPrioritySelector(npmPool), cfg.Cache, database)
 	npmGroup := r.Group("/npm")
 	npmHandler.Register(npmGroup)
+
+	// Register Go module proxy adapter
+	goHandler := goproxy.New(cacheMgr, upstream.NewPrioritySelector(goPool), cfg.Cache, database)
+	goGroup := r.Group("/go")
+	goHandler.Register(goGroup)
 
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")

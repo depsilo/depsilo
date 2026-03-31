@@ -86,6 +86,16 @@ func extractPackageName(adapterType, key string) string {
 				return parts[0]
 			}
 		}
+	case "go":
+		// key: go/<module>/@v/... or go/<module>/@latest
+		trimmed := strings.TrimPrefix(key, "go/")
+		// Find /@v/ or /@latest to extract the module path
+		if idx := strings.Index(trimmed, "/@v/"); idx > 0 {
+			return trimmed[:idx]
+		}
+		if idx := strings.Index(trimmed, "/@latest"); idx > 0 {
+			return trimmed[:idx]
+		}
 	}
 	return ""
 }

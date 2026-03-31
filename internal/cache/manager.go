@@ -70,6 +70,15 @@ func ExtractPackageName(adapterType, key string) string {
 				return parts[0]
 			}
 		}
+	case "go":
+		// key: go/<module>/@v/... or go/<module>/@latest
+		trimmed := strings.TrimPrefix(key, "go/")
+		if idx := strings.Index(trimmed, "/@v/"); idx > 0 {
+			return trimmed[:idx]
+		}
+		if idx := strings.Index(trimmed, "/@latest"); idx > 0 {
+			return trimmed[:idx]
+		}
 	}
 	return ""
 }

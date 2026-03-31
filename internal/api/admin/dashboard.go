@@ -18,10 +18,11 @@ type DashboardHandler struct {
 	pypiPool *upstream.Pool
 	aptPool  *upstream.Pool
 	npmPool  *upstream.Pool
+	goPool   *upstream.Pool
 }
 
-func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool *upstream.Pool) *DashboardHandler {
-	return &DashboardHandler{db: database, storage: storage, pypiPool: pypiPool, aptPool: aptPool, npmPool: npmPool}
+func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool *upstream.Pool) *DashboardHandler {
+	return &DashboardHandler{db: database, storage: storage, pypiPool: pypiPool, aptPool: aptPool, npmPool: npmPool, goPool: goPool}
 }
 
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
@@ -82,6 +83,15 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		upstreams = append(upstreams, gin.H{
 			"name":           u.Name,
 			"adapter":        "npm",
+			"healthy":        u.Healthy,
+			"avg_latency_ms": u.AvgLatency().Milliseconds(),
+			"success_rate":   u.SuccessRate(),
+		})
+	}
+	for _, u := range h.goPool.Upstreams() {
+		upstreams = append(upstreams, gin.H{
+			"name":           u.Name,
+			"adapter":        "go",
 			"healthy":        u.Healthy,
 			"avg_latency_ms": u.AvgLatency().Milliseconds(),
 			"success_rate":   u.SuccessRate(),
