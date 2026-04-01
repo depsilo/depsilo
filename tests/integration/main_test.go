@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -143,7 +144,13 @@ priority = 1
 }
 
 func startDepsilo(dir string, port int) {
+	// Resolve project root (tests/integration/ → ../../)
+	root, _ := os.Getwd()
+	if _, err := os.Stat(root + "/go.mod"); err != nil {
+		root, _ = filepath.Abs(root + "/../..")
+	}
 	cmd := exec.Command("go", "run", "./cmd/server")
+	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "DEPSILO_CONFIG="+dir+"/config.toml")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
