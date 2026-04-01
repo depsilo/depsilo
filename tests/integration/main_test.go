@@ -3,10 +3,12 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -14,9 +16,10 @@ import (
 )
 
 var (
-	depsiloURL string
-	mockServer *mock.MockUpstream
-	testDir    string
+	depsiloURL    string
+	mockServer    *mock.MockUpstream
+	testDir       string
+	depsiloCancel context.CancelFunc
 )
 
 func TestMain(m *testing.M) {
@@ -39,17 +42,25 @@ func TestMain(m *testing.M) {
 	depsiloURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	writeTestConfig(testDir, mockServer.URL(), port)
 
-	// 4. Start Depsilo in background
-	go startDepsilo(testDir, port)
+	// 4. Start Depsilo in background with cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	depsiloCancel = cancel
+	go startDepsilo(ctx, testDir)
 
 	// 5. Wait for ready
-	if err := waitForReady(depsiloURL+"/health", 10*time.Second); err != nil {
+	if err := waitForReady(depsiloURL+"/health", 15*time.Second); err != nil {
 		fmt.Fprintf(os.Stderr, "depsilo not ready: %v\n", err)
+		cancel()
 		os.Exit(1)
 	}
 
 	// 6. Run tests
 	code := m.Run()
+
+	// 7. Shutdown Depsilo before mock server closes
+	cancel()
+	time.Sleep(500 * time.Millisecond)
+
 	os.Exit(code)
 }
 
@@ -143,16 +154,21 @@ priority = 1
 	os.WriteFile(dir+"/config.toml", []byte(cfg), 0644)
 }
 
-func startDepsilo(dir string, port int) {
-	// Resolve project root (tests/integration/ → ../../)
+func startDepsilo(ctx context.Context, dir string) {
+	// Resolve project root
 	root, _ := os.Getwd()
 	if _, err := os.Stat(root + "/go.mod"); err != nil {
 		root, _ = filepath.Abs(root + "/../..")
 	}
-	cmd := exec.Command("go", "run", "./cmd/server")
+
+	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/server")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "DEPSILO_CONFIG="+dir+"/config.toml")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Discard output to avoid "I/O incomplete" on test exit
+	devNull, _ := os.Open(os.DevNull)
+	cmd.Stdout = devNull
+	cmd.Stderr = devNull
+	// Use process group so we can kill all child processes
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Run()
 }
