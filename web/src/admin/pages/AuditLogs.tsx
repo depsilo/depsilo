@@ -78,12 +78,9 @@ export default function AuditLogs() {
   if (appliedResult === 'error') params.result = 'error'
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['admin', 'audit-logs', params],
+    queryKey: ['admin', 'audit-logs', appliedSearch, appliedEcosystem, appliedResult, appliedTimeRange, page],
     queryFn: () => adminApi.listAuditLogs(params),
-    retry: (count, err: any) => {
-      if (err?.response?.status === 402) return false
-      return count < 2
-    },
+    retry: false,
   })
 
   const items = data?.data?.items || []
