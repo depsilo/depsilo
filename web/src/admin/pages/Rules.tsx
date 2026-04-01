@@ -79,6 +79,10 @@ export default function Rules() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin', 'rules'],
     queryFn: () => adminApi.listRules(),
+    retry: (count, err: any) => {
+      if (err?.response?.status === 402) return false
+      return count < 2
+    },
   })
 
   const items: any[] = data?.data?.items || data?.data || []
