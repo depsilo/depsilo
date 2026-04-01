@@ -1,4 +1,4 @@
-.PHONY: build run dev stop test test-pypi test-apt test-clean clean lint frontend help
+.PHONY: build run dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-clean clean lint frontend help
 
 # ─── 变量 ─────────────────────────────────────
 APP        := depsilo
@@ -40,7 +40,19 @@ logs:                           ## 查看 dev 模式日志
 	@tail -f .dev.log
 
 # ─── 测试 ─────────────────────────────────────
-test:                           ## 运行 Go 单元测试
+test: test-unit                 ## 运行 Go 单元测试
+
+test-unit:                      ## 运行单元测试
+	go test ./tests/unit/... -v -count=1
+
+test-integration:               ## 运行集成测试（启动服务 + mock 上游）
+	go test ./tests/integration/... -v -count=1 -timeout 300s -tags integration
+
+test-http:                      ## 运行集成测试（仅 HTTP 端点）
+	go test ./tests/integration/... -v -count=1 -timeout 120s -tags integration \
+		-run "Test[^_]+_(SimpleIndex|Metadata|Download|CacheHit|Release|Packages|ConfigJson|ModuleList|ArtifactDownload|Specs|PackagesJson|ServiceIndex|RepoData|IndexYaml)"
+
+test-all:                       ## 运行全部测试（单元 + 集成）
 	go test ./... -v -count=1
 
 $(TEST_DIR)/.venv:              ## 初始化测试用 Python 虚拟环境（uv）

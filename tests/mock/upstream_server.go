@@ -1,0 +1,236 @@
+package mock
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"time"
+)
+
+// RecordedRequest stores details of an HTTP request received by the mock.
+type RecordedRequest struct {
+	Method string
+	Path   string
+	Time   time.Time
+}
+
+// MockUpstream is a configurable mock HTTP server for testing upstream interactions.
+type MockUpstream struct {
+	server   *httptest.Server
+	mux      *http.ServeMux
+	mu       sync.Mutex
+	requests []RecordedRequest
+}
+
+// NewMockUpstream creates and starts a new mock upstream server.
+func NewMockUpstream() *MockUpstream {
+	m := &MockUpstream{
+		mux: http.NewServeMux(),
+	}
+	m.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m.mu.Lock()
+		m.requests = append(m.requests, RecordedRequest{Method: r.Method, Path: r.URL.Path, Time: time.Now()})
+		m.mu.Unlock()
+		m.mux.ServeHTTP(w, r)
+	}))
+	return m
+}
+
+// URL returns the base URL of the mock server.
+func (m *MockUpstream) URL() string { return m.server.URL }
+
+// Close shuts down the mock server.
+func (m *MockUpstream) Close() { m.server.Close() }
+
+// Requests returns a copy of all recorded requests.
+func (m *MockUpstream) Requests() []RecordedRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]RecordedRequest, len(m.requests))
+	copy(cp, m.requests)
+	return cp
+}
+
+// RequestCount returns the number of recorded requests.
+func (m *MockUpstream) RequestCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.requests)
+}
+
+// --- Register mock responses for each ecosystem ---
+
+// RegisterPyPI adds PyPI-compatible endpoints.
+func (m *MockUpstream) RegisterPyPI() {
+	m.mux.HandleFunc("/simple/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<!DOCTYPE html><html><body><a href="https://files.pythonhosted.org/packages/ab/cd/testpkg-1.0.0.tar.gz#sha256=abcd1234">testpkg-1.0.0.tar.gz</a></body></html>`)
+	})
+	m.mux.HandleFunc("/packages/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Write([]byte("FAKE_PACKAGE_DATA_1234567890"))
+	})
+}
+
+// RegisterAPT adds APT repository endpoints.
+func (m *MockUpstream) RegisterAPT() {
+	m.mux.HandleFunc("/ubuntu/dists/jammy/Release", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, "Origin: Ubuntu\nLabel: Ubuntu\nSuite: jammy\nCodename: jammy\n")
+	})
+	m.mux.HandleFunc("/ubuntu/dists/jammy/main/binary-amd64/Packages.gz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Write([]byte("FAKE_PACKAGES_GZ"))
+	})
+	m.mux.HandleFunc("/ubuntu/pool/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.debian.binary-package")
+		w.Write([]byte("FAKE_DEB_PACKAGE"))
+	})
+}
+
+// RegisterNpm adds npm registry endpoints.
+func (m *MockUpstream) RegisterNpm() {
+	m.mux.HandleFunc("/testpkg", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"name":"testpkg","dist-tags":{"latest":"1.0.0"},"versions":{"1.0.0":{"name":"testpkg","version":"1.0.0","dist":{"tarball":"%s/testpkg/-/testpkg-1.0.0.tgz","shasum":"abc123","integrity":"sha512-test"}}}}`, m.URL())
+	})
+	m.mux.HandleFunc("/testpkg/-/testpkg-1.0.0.tgz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Write([]byte("FAKE_NPM_TARBALL"))
+	})
+}
+
+// RegisterGoModules adds Go module proxy endpoints.
+func (m *MockUpstream) RegisterGoModules() {
+	m.mux.HandleFunc("/github.com/test/mod/@v/list", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "v1.0.0\nv1.1.0\n")
+	})
+	m.mux.HandleFunc("/github.com/test/mod/@v/v1.0.0.info", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"Version":"v1.0.0","Time":"2024-01-01T00:00:00Z"}`)
+	})
+	m.mux.HandleFunc("/github.com/test/mod/@v/v1.0.0.mod", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "module github.com/test/mod\n\ngo 1.21\n")
+	})
+	m.mux.HandleFunc("/github.com/test/mod/@v/v1.0.0.zip", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_GO_ZIP"))
+	})
+	m.mux.HandleFunc("/github.com/test/mod/@latest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"Version":"v1.1.0","Time":"2024-06-01T00:00:00Z"}`)
+	})
+}
+
+// RegisterCargo adds Cargo registry endpoints.
+func (m *MockUpstream) RegisterCargo() {
+	m.mux.HandleFunc("/config.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"dl":"%s/api/v1/crates","api":"%s"}`, m.URL(), m.URL())
+	})
+	m.mux.HandleFunc("/se/rd/serde", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"name":"serde","vers":"1.0.0","cksum":"abc123","deps":[],"features":{},"yanked":false}`)
+	})
+	m.mux.HandleFunc("/api/v1/crates/serde/1.0.0/download", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_CRATE"))
+	})
+}
+
+// RegisterMaven adds Maven repository endpoints.
+func (m *MockUpstream) RegisterMaven() {
+	m.mux.HandleFunc("/org/example/test/1.0.0/test-1.0.0.pom", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, `<project><groupId>org.example</groupId><artifactId>test</artifactId><version>1.0.0</version></project>`)
+	})
+	m.mux.HandleFunc("/org/example/test/1.0.0/test-1.0.0.jar", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_JAR"))
+	})
+	m.mux.HandleFunc("/org/example/test/maven-metadata.xml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, `<metadata><groupId>org.example</groupId><artifactId>test</artifactId><versioning><latest>1.0.0</latest><versions><version>1.0.0</version></versions></versioning></metadata>`)
+	})
+}
+
+// RegisterRubyGems adds RubyGems repository endpoints.
+func (m *MockUpstream) RegisterRubyGems() {
+	m.mux.HandleFunc("/specs.4.8.gz", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_SPECS"))
+	})
+	m.mux.HandleFunc("/info/testgem", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "---\n1.0.0 |checksum:abc123\n")
+	})
+	m.mux.HandleFunc("/gems/testgem-1.0.0.gem", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_GEM"))
+	})
+}
+
+// RegisterComposer adds Composer/Packagist endpoints.
+func (m *MockUpstream) RegisterComposer() {
+	m.mux.HandleFunc("/packages.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"packages":{},"metadata-url":"/p2/%package%.json"}`)
+	})
+	m.mux.HandleFunc("/p2/test/pkg.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"packages":{"test/pkg":[{"name":"test/pkg","version":"1.0.0","dist":{"url":"https://example.com/test.zip","type":"zip","reference":"abc"}}]}}`)
+	})
+}
+
+// RegisterNuGet adds NuGet V3 endpoints.
+func (m *MockUpstream) RegisterNuGet() {
+	m.mux.HandleFunc("/v3/index.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"version":"3.0.0","resources":[{"@id":"https://api.nuget.org/v3/search","@type":"SearchQueryService"},{"@id":"https://api.nuget.org/v3/registration","@type":"RegistrationsBaseUrl"}]}`)
+	})
+	m.mux.HandleFunc("/v3/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{}`)
+	})
+}
+
+// RegisterConda adds Conda repository endpoints.
+func (m *MockUpstream) RegisterConda() {
+	m.mux.HandleFunc("/pkgs/main/linux-64/repodata.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"info":{"subdir":"linux-64"},"packages":{"testpkg-1.0.0.tar.bz2":{"name":"testpkg","version":"1.0.0"}}}`)
+	})
+	m.mux.HandleFunc("/pkgs/main/linux-64/testpkg-1.0.0.tar.bz2", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_CONDA_PKG"))
+	})
+}
+
+// RegisterCRAN adds CRAN repository endpoints.
+func (m *MockUpstream) RegisterCRAN() {
+	m.mux.HandleFunc("/src/contrib/PACKAGES", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "Package: testpkg\nVersion: 1.0.0\n\n")
+	})
+	m.mux.HandleFunc("/src/contrib/testpkg_1.0.0.tar.gz", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_CRAN_PKG"))
+	})
+}
+
+// RegisterHelm adds Helm chart repository endpoints.
+func (m *MockUpstream) RegisterHelm() {
+	m.mux.HandleFunc("/index.yaml", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "apiVersion: v1\nentries:\n  testchart:\n  - name: testchart\n    version: 1.0.0\n    urls:\n    - %s/testchart-1.0.0.tgz\n", m.URL())
+	})
+	m.mux.HandleFunc("/testchart-1.0.0.tgz", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_HELM_CHART"))
+	})
+}
+
+// RegisterAll registers mock responses for all supported ecosystems.
+func (m *MockUpstream) RegisterAll() {
+	m.RegisterPyPI()
+	m.RegisterAPT()
+	m.RegisterNpm()
+	m.RegisterGoModules()
+	m.RegisterCargo()
+	m.RegisterMaven()
+	m.RegisterRubyGems()
+	m.RegisterComposer()
+	m.RegisterNuGet()
+	m.RegisterConda()
+	m.RegisterCRAN()
+	m.RegisterHelm()
+}
