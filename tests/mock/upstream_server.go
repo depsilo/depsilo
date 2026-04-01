@@ -168,7 +168,7 @@ func (m *MockUpstream) RegisterRubyGems() {
 func (m *MockUpstream) RegisterComposer() {
 	m.mux.HandleFunc("/packages.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"packages":{},"metadata-url":"/p2/%package%.json"}`)
+		w.Write([]byte(`{"packages":{},"metadata-url":"/p2/%package%.json"}`))
 	})
 	m.mux.HandleFunc("/p2/test/pkg.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
