@@ -1,4 +1,5 @@
-.PHONY: build run dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-clean clean lint frontend help
+.PHONY: build run dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-clean clean lint frontend help \
+	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test
 
 # ─── 变量 ─────────────────────────────────────
 APP        := depsilo
@@ -93,8 +94,73 @@ test-clean:                     ## 清理测试环境
 	rm -rf $(TEST_DIR)/.venv
 	@echo ">>> test venv removed"
 
+# ─── Docker ───────────────────────────────────
+DOCKER_IMAGE := depsilo/depsilo
+DOCKER_TAG   := local
+DOCKER_NAME  := depsilo-local
+
+docker-build:                   ## 本地构建 Docker 镜像
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+	@echo ">>> built $(DOCKER_IMAGE):$(DOCKER_TAG)"
+	@docker images $(DOCKER_IMAGE):$(DOCKER_TAG) --format "    Size: {{.Size}}"
+
+docker-run: docker-stop         ## 构建并运行本地容器
+	@mkdir -p data
+	@test -f config.toml || cp config.example.toml config.toml
+	docker run -d \
+		--name $(DOCKER_NAME) \
+		-p $(PORT):23333 \
+		-v $(PWD)/data:/app/data \
+		-v $(PWD)/config.toml:/app/config.toml:ro \
+		-e DEPSILO_CONFIG=/app/config.toml \
+		--restart unless-stopped \
+		$(DOCKER_IMAGE):$(DOCKER_TAG)
+	@sleep 2
+	@if curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1; then \
+		echo ">>> $(DOCKER_NAME) running  http://localhost:$(PORT)"; \
+	else \
+		echo ">>> container started, waiting for ready..."; \
+		sleep 3; \
+		curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1 && \
+			echo ">>> $(DOCKER_NAME) running  http://localhost:$(PORT)" || \
+			echo ">>> FAILED — check: docker logs $(DOCKER_NAME)"; \
+	fi
+
+docker-stop:                    ## 停止并删除本地容器
+	@docker rm -f $(DOCKER_NAME) 2>/dev/null || true
+
+docker-logs:                    ## 查看容器日志
+	docker logs -f $(DOCKER_NAME)
+
+docker-shell:                   ## 进入容器 shell
+	docker exec -it $(DOCKER_NAME) sh
+
+docker-status:                  ## 查看容器状态
+	@docker ps -f name=$(DOCKER_NAME) --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Size}}"
+	@echo ""
+	@curl -sf http://localhost:$(PORT)/health 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "health: unreachable"
+
+docker-compose-up:              ## 使用 docker-compose 构建并启动
+	docker-compose up -d --build
+	@echo ">>> running at http://localhost:$(PORT)"
+
+docker-compose-down:            ## 停止 docker-compose 服务
+	docker-compose down
+
+docker-test: docker-build docker-run  ## 构建镜像 + 启动 + 跑冒烟测试
+	@echo ""
+	@echo "=== Smoke Test ==="
+	@echo -n "  health:   " && curl -sf http://localhost:$(PORT)/health | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('status','FAIL'))" 2>/dev/null || echo "FAIL"
+	@echo -n "  pypi:     " && curl -sf -o /dev/null -w "%{http_code}" http://localhost:$(PORT)/pypi/simple/ && echo "" || echo "FAIL"
+	@echo -n "  npm:      " && curl -sf -o /dev/null -w "%{http_code}" http://localhost:$(PORT)/npm/lodash 2>/dev/null && echo "" || echo "FAIL (may need upstream)"
+	@echo -n "  go:       " && curl -sf -o /dev/null -w "%{http_code}" http://localhost:$(PORT)/go/github.com/gin-gonic/gin/@v/list 2>/dev/null && echo "" || echo "FAIL (may need upstream)"
+	@echo -n "  maven:    " && curl -sf -o /dev/null -w "%{http_code}" http://localhost:$(PORT)/maven/ 2>/dev/null && echo "" || echo "FAIL (may need upstream)"
+	@echo -n "  frontend: " && curl -sf -o /dev/null -w "%{http_code}" http://localhost:$(PORT)/ && echo "" || echo "FAIL"
+	@echo ""
+	@echo ">>> Done. Container still running. Use 'make docker-stop' to stop."
+
 # ─── 清理 ─────────────────────────────────────
-clean: stop                     ## 清理所有构建产物和缓存数据
+clean: stop docker-stop         ## 清理所有构建产物、容器和缓存数据
 	rm -rf bin/ data/ .dev.log $(PID_FILE)
 	@echo ">>> clean done"
 
