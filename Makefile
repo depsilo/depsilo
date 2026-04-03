@@ -1,4 +1,5 @@
 .PHONY: build run dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-clean clean lint frontend help \
+	test-docker-pip test-docker-apt test-docker \
 	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test
 
 # ─── 变量 ─────────────────────────────────────
@@ -91,9 +92,35 @@ test-apt: dev                   ## 通过代理获取 APT 元数据（端到端�
 	@echo "=== APT cached files ==="
 	@find data/cache/apt -type f 2>/dev/null | head -5 || echo "(no cache yet)"
 
+test-docker-pip: dev            ## Docker 环境测试 pip 通过代理安装 opencv
+	@echo ""
+	@echo "=== Docker pip test (opencv via proxy) ==="
+	docker build \
+		--build-arg PIP_INDEX_URL=http://$(HOST_IP):$(PORT)/pypi/simple/ \
+		--build-arg PIP_TRUSTED_HOST=$(HOST_IP) \
+		--progress=plain \
+		-t depsilo-test-pip \
+		$(TEST_DIR)/docker-pip
+	@echo ""
+	@echo ">>> PASS: opencv installed successfully via proxy"
+
+test-docker-apt: dev            ## Docker 环境测试 apt 通过代理安装包
+	@echo ""
+	@echo "=== Docker apt test (curl/wget/jq via proxy) ==="
+	docker build \
+		--build-arg APT_MIRROR=http://$(HOST_IP):$(PORT)/apt \
+		--progress=plain \
+		-t depsilo-test-apt \
+		$(TEST_DIR)/docker-apt
+	@echo ""
+	@echo ">>> PASS: apt packages installed successfully via proxy"
+
+test-docker: test-docker-pip test-docker-apt  ## 运行全部 Docker 代理测试
+
 test-clean:                     ## 清理测试环境
 	rm -rf $(TEST_DIR)/.venv
-	@echo ">>> test venv removed"
+	-docker rmi depsilo-test-pip depsilo-test-apt 2>/dev/null
+	@echo ">>> test env removed"
 
 # ─── Docker ───────────────────────────────────
 DOCKER_IMAGE := depsilo/depsilo
