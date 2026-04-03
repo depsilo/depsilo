@@ -274,7 +274,13 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 	}
 
 	val, err, _ := m.group.Do(key, func() (interface{}, error) {
-		body, contentType, size, err := fetchFn(ctx)
+		// Use a detached context for the upstream fetch so that if the
+		// first client disconnects, we still finish downloading and caching.
+		// Other clients waiting on this singleflight group will benefit.
+		fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer fetchCancel()
+
+		body, contentType, size, err := fetchFn(fetchCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +299,7 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 		}
 
 		// Write to storage
-		if err := m.storage.Put(ctx, key, bytes.NewReader(buf.Bytes()), size, contentType); err != nil {
+		if err := m.storage.Put(fetchCtx, key, bytes.NewReader(buf.Bytes()), size, contentType); err != nil {
 			zap.L().Warn("cache put failed", zap.String("key", key), zap.Error(err))
 			// Don't fail the request if storage write fails
 		} else {
