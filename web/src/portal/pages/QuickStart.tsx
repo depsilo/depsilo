@@ -152,8 +152,14 @@ export default function QuickStart() {
               description={t('quickstart.dockerPipDesc')}
             >
               <CodeBlock
+                filename="Dockerfile"
+                language="dockerfile"
+                code={`# Add these ARG lines before RUN pip install\nARG PIP_INDEX_URL\nARG PIP_TRUSTED_HOST`}
+              />
+              <div className="mt-3" />
+              <CodeBlock
                 language="bash"
-                code={`DOCKER_BUILDKIT=1 docker build --network host \\\n  --build-arg PIP_INDEX_URL=${baseURL}/pypi/simple/ \\\n  --build-arg PIP_TRUSTED_HOST=${host} \\\n  -t myapp .`}
+                code={`docker build \\\n  --build-arg PIP_INDEX_URL=${baseURL}/pypi/simple/ \\\n  --build-arg PIP_TRUSTED_HOST=${host} \\\n  -t myapp .`}
               />
             </Method>
           </>

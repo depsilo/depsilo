@@ -290,7 +290,7 @@ const zh = {
       verifyConfig: '验证配置',
       verifyConfigDesc: '运行以下命令验证源配置是否生效：',
       dockerPip: 'Docker Build',
-      dockerPipDesc: '构建镜像时通过 --build-arg 注入代理，无需修改 Dockerfile：',
+      dockerPipDesc: '在 Dockerfile 中添加 ARG 声明，然后构建时传入 --build-arg：',
       dockerApt: 'Docker Build',
       dockerAptDesc: '构建镜像时通过 --network host 让容器访问宿主机代理：',
       npmLabel: 'npm',

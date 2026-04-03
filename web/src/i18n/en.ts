@@ -290,7 +290,7 @@ const en = {
       verifyConfig: 'Verify Config',
       verifyConfigDesc: 'Run the following command to verify the source configuration:',
       dockerPip: 'Docker Build',
-      dockerPipDesc: 'Inject proxy via --build-arg during image build, no Dockerfile changes needed:',
+      dockerPipDesc: 'Add ARG declarations to your Dockerfile, then pass --build-arg when building:',
       dockerApt: 'Docker Build',
       dockerAptDesc: 'Use --network host to let the build container access the host proxy:',
       npmLabel: 'npm',
