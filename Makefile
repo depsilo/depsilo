@@ -8,6 +8,7 @@ CONFIG     := config.toml
 PID_FILE   := .server.pid
 PORT       := 23333
 TEST_DIR   := testground
+HOST_IP    := $(shell ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "172.17.0.1")
 
 # ─── 构建 ─────────────────────────────────────
 frontend:                       ## 构建前端
@@ -158,6 +159,32 @@ docker-test: docker-build docker-run  ## 构建镜像 + 启动 + 跑冒烟测试
 	@echo -n "  frontend: " && curl -sf -o /dev/null -w "%{http_code}" http://localhost:$(PORT)/ && echo "" || echo "FAIL"
 	@echo ""
 	@echo ">>> Done. Container still running. Use 'make docker-stop' to stop."
+
+proxy-env:                      ## 打印 Docker build 可用的代理参数
+	@echo "# ─── Depsilo Proxy for Docker Build ───"
+	@echo "# Host IP (docker0): $(HOST_IP)"
+	@echo ""
+	@echo "# pip (Python):"
+	@echo "  --build-arg PIP_INDEX_URL=http://$(HOST_IP):$(PORT)/pypi/simple/"
+	@echo "  --build-arg PIP_TRUSTED_HOST=$(HOST_IP)"
+	@echo ""
+	@echo "# npm (Node.js):"
+	@echo "  --build-arg NPM_CONFIG_REGISTRY=http://$(HOST_IP):$(PORT)/npm/"
+	@echo ""
+	@echo "# Go modules:"
+	@echo "  --build-arg GOPROXY=http://$(HOST_IP):$(PORT)/go,direct"
+	@echo ""
+	@echo "# Maven:"
+	@echo '  --build-arg MAVEN_OPTS="-Dmaven.repo.remote=http://$(HOST_IP):$(PORT)/maven/"'
+	@echo ""
+	@echo "# Composer (PHP):"
+	@echo "  --build-arg COMPOSER_MIRROR=http://$(HOST_IP):$(PORT)/composer/"
+	@echo ""
+	@echo "# Full example:"
+	@echo "  docker build \\"
+	@echo "    --build-arg PIP_INDEX_URL=http://$(HOST_IP):$(PORT)/pypi/simple/ \\"
+	@echo "    --build-arg PIP_TRUSTED_HOST=$(HOST_IP) \\"
+	@echo "    -t myapp ."
 
 # ─── 清理 ─────────────────────────────────────
 clean: stop docker-stop         ## 清理所有构建产物、容器和缓存数据
