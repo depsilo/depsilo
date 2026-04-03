@@ -94,10 +94,10 @@ func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error)
 		return nil, fmt.Errorf("fetch %s: %w", reqURL, err)
 	}
 
-	if resp.StatusCode >= 500 {
+	if resp.StatusCode >= 400 {
 		resp.Body.Close()
-		u.Report(latency, false)
-		return nil, fmt.Errorf("upstream %s returned %d", u.Name, resp.StatusCode)
+		u.Report(latency, resp.StatusCode < 500)
+		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, path)
 	}
 
 	u.Report(latency, true)
@@ -135,10 +135,10 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 		return nil, fmt.Errorf("fetch %s: %w", reqURL, err)
 	}
 
-	if resp.StatusCode >= 500 {
+	if resp.StatusCode >= 400 {
 		resp.Body.Close()
-		u.Report(latency, false)
-		return nil, fmt.Errorf("upstream %s returned %d", u.Name, resp.StatusCode)
+		u.Report(latency, resp.StatusCode < 500)
+		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, path)
 	}
 
 	u.Report(latency, true)

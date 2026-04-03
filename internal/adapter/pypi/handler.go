@@ -113,7 +113,13 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to get package index", zap.String("package", pkg), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		status := http.StatusBadGateway
+		code := "UPSTREAM_UNAVAILABLE"
+		if strings.Contains(err.Error(), "returned 404") {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
 	defer result.Reader.Close()
@@ -167,7 +173,13 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to get file", zap.String("filepath", filepath), zap.Error(err))
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		status := http.StatusBadGateway
+		code := "UPSTREAM_UNAVAILABLE"
+		if strings.Contains(err.Error(), "returned 404") {
+			status = http.StatusNotFound
+			code = "NOT_FOUND"
+		}
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
 	defer result.Reader.Close()
