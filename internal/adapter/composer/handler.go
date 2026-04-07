@@ -106,7 +106,7 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "composer", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 // proxyPassthrough proxies a request to the upstream with caching, no content modification.
@@ -151,7 +151,7 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 	c.Status(http.StatusOK)
 	written, _ := io.Copy(c.Writer, result.Reader)
 
-	adapter.LogAccess(h.db, "composer", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {

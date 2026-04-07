@@ -111,6 +111,7 @@ const en = {
       hit: 'Hit',
       miss: 'Miss',
       time: 'Time',
+      method: 'Method',
       packageName: 'Package',
       result: 'Result',
       upstream: 'Upstream',

@@ -59,9 +59,16 @@ export default function AccessLogs() {
       key: 'adapter_type',
       label: t('type'),
       render: (val: unknown) => (
-        <Badge variant={(val as string) === 'pypi' ? 'pypi' : 'apt'}>
+        <Badge variant={(val as string) === 'pypi' ? 'pypi' : (val as string) === 'apt' ? 'apt' : 'default'}>
           {(val as string)?.toUpperCase()}
         </Badge>
+      ),
+    },
+    {
+      key: 'method',
+      label: t('logs.method'),
+      render: (val: unknown) => (
+        <span className="font-mono text-xs text-on-surface-variant">{(val as string) || 'GET'}</span>
       ),
     },
     {
@@ -125,6 +132,16 @@ export default function AccessLogs() {
           <option value="all">{t('all')}</option>
           <option value="pypi">PyPI</option>
           <option value="apt">APT</option>
+          <option value="npm">npm</option>
+          <option value="go">Go</option>
+          <option value="cargo">Cargo</option>
+          <option value="maven">Maven</option>
+          <option value="rubygems">RubyGems</option>
+          <option value="composer">Composer</option>
+          <option value="nuget">NuGet</option>
+          <option value="conda">Conda</option>
+          <option value="cran">CRAN</option>
+          <option value="helm">Helm</option>
         </select>
         <select
           value={hitFilter}

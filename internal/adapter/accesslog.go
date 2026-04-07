@@ -21,9 +21,10 @@ func SetAuditLogger(l interface{ Log(entry db.AuditLog) }) {
 }
 
 // LogAccess asynchronously writes an access log entry.
-func LogAccess(database *gorm.DB, adapterType, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
+func LogAccess(database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
 	entry := db.AccessLog{
 		AdapterType: adapterType,
+		Method:      method,
 		CacheKey:    cacheKey,
 		PackageName: extractPackageName(adapterType, cacheKey),
 		Hit:         hit,

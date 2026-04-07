@@ -111,6 +111,7 @@ const zh = {
       hit: '命中',
       miss: '未命中',
       time: '时间',
+      method: '方法',
       packageName: '包名',
       result: '结果',
       upstream: '上游',

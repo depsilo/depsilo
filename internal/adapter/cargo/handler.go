@@ -117,7 +117,7 @@ func (h *Handler) handleConfig(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "cargo", ConfigCacheKey(), result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(h.db, "cargo", c.Request.Method, ConfigCacheKey(), result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 // handleIndex proxies crate index metadata (NDJSON).
@@ -180,7 +180,7 @@ func (h *Handler) handleIndex(c *gin.Context) {
 	c.Status(http.StatusOK)
 	written, _ := io.Copy(c.Writer, result.Reader)
 
-	adapter.LogAccess(h.db, "cargo", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "cargo", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 // handleDownload proxies crate file downloads (.crate files).
@@ -229,7 +229,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	c.Status(http.StatusOK)
 	written, _ := io.Copy(c.Writer, result.Reader)
 
-	adapter.LogAccess(h.db, "cargo", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "cargo", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {

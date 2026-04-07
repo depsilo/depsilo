@@ -20,6 +20,7 @@ type CacheEntry struct {
 type AccessLog struct {
 	ID          uint      `gorm:"primarykey" json:"id"`
 	AdapterType string    `gorm:"size:16;index" json:"adapter_type"`
+	Method      string    `gorm:"size:8" json:"method"`
 	CacheKey    string    `gorm:"size:512" json:"cache_key"`
 	PackageName string    `gorm:"size:256;index" json:"package_name"`
 	Hit         bool      `gorm:"index" json:"hit"`

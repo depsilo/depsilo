@@ -143,7 +143,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	c.Header("Content-Type", ct)
 	c.String(http.StatusOK, html)
 
-	adapter.LogAccess(h.db, "pypi", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
+	adapter.LogAccess(h.db, "pypi", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
 }
 
 // handleFileDownload proxies and caches package file downloads.
@@ -195,7 +195,7 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 	c.Status(http.StatusOK)
 	written, _ := io.Copy(c.Writer, result.Reader)
 
-	adapter.LogAccess(h.db, "pypi", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "pypi", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 // getBaseURL extracts the base URL from the request (scheme + host).

@@ -82,5 +82,5 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	c.Status(http.StatusOK)
 	written, _ := io.Copy(c.Writer, result.Reader)
 
-	adapter.LogAccess(h.db, "conda", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "conda", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }

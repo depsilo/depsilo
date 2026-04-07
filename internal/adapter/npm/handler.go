@@ -123,7 +123,7 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 	c.Header("Content-Type", ct)
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "npm", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(h.db, "npm", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 func (h *Handler) handleTarball(c *gin.Context) {
@@ -181,7 +181,7 @@ func (h *Handler) proxyTarball(c *gin.Context, fullName, filename, cacheKey, ups
 	c.Status(http.StatusOK)
 	written, _ := io.Copy(c.Writer, result.Reader)
 
-	adapter.LogAccess(h.db, "npm", cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "npm", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {
