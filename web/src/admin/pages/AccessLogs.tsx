@@ -75,9 +75,14 @@ export default function AccessLogs() {
       key: 'package_name',
       label: t('logs.packageName'),
       render: (val: unknown, row: any) => (
-        <span className="font-mono text-xs text-on-surface truncate block max-w-[200px]">
-          {(val as string) || row.cache_key}
-        </span>
+        <div className="max-w-[280px]">
+          <span className="font-mono text-xs text-on-surface truncate block">
+            {(val as string) || '-'}
+          </span>
+          <span className="font-mono text-[10px] text-on-surface-variant truncate block" title={row.cache_key}>
+            {row.cache_key}
+          </span>
+        </div>
       ),
     },
     {
