@@ -96,6 +96,7 @@ test-docker-pip: dev            ## Docker 环境测试 pip 通过代理安装 op
 	@echo ""
 	@echo "=== Docker pip test (opencv via proxy) ==="
 	docker build \
+		--no-cache \
 		--build-arg PIP_INDEX_URL=http://$(HOST_IP):$(PORT)/pypi/simple/ \
 		--build-arg PIP_TRUSTED_HOST=$(HOST_IP) \
 		--progress=plain \
@@ -108,6 +109,7 @@ test-docker-apt: dev            ## Docker 环境测试 apt 通过代理安装包
 	@echo ""
 	@echo "=== Docker apt test (curl/wget/jq via proxy) ==="
 	docker build \
+		--no-cache \
 		--build-arg APT_MIRROR=http://$(HOST_IP):$(PORT)/apt \
 		--progress=plain \
 		-t depsilo-test-apt \
