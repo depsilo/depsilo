@@ -362,28 +362,21 @@ const zh = {
       firstDownloadTitle: '首次下载说明',
       firstDownloadDesc:
         '首次请求某个包时，Depsilo 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',
-      aiInstructionsTitle: 'AI / 编程工具集成',
-      aiInstructionsDesc: '选择适合你工具链的集成格式，一键复制到项目中，让 AI 编程助手和开发环境自动使用 Depsilo 代理。',
-      aiInstructionsCopy: '复制内容',
-      aiInstructionsCopied: '已复制',
-      aiInstructionsExpand: '展开预览',
-      aiInstructionsCollapse: '收起预览',
-
-      // Format tab labels
-      fmt_markdown: 'Markdown',
-      fmt_env: '环境变量',
-      fmt_shell: 'Shell 脚本',
-      fmt_skill: 'Claude Skill',
-      fmt_mcp: 'MCP 配置',
-      fmt_devcontainer: 'DevContainer',
-
-      // Format descriptions
-      fmtDesc_markdown: '粘贴到 CLAUDE.md、.cursorrules、.github/copilot-instructions.md、.windsurfrules 或任何 AI 指令文件中。适用于 Claude Code、Cursor、GitHub Copilot、Windsurf、Aider、Continue、OpenClaw、Hermes Agent 等。',
-      fmtDesc_env: '添加到 .env 文件、~/.bashrc、CI/CD 环境变量，或 Docker --env-file。所有读取标准环境变量的工具都会自动走代理。',
-      fmtDesc_shell: '一键配置脚本，自动检测并配置所有已安装的包管理器。可直接执行或集成到项目的 setup 流程中。',
-      fmtDesc_skill: '保存为 .claude/commands/setup-proxy.md，在 Claude Code 中通过 /setup-proxy 命令一键执行。也适用于其他支持 Skill 文件的 Agent 框架。',
-      fmtDesc_mcp: '将 Depsilo 代理环境变量注入 MCP Server 的执行环境中。适用于 Claude Code (.claude/settings.json)、Cursor (.cursor/mcp.json) 等支持 MCP 协议的工具。',
-      fmtDesc_devcontainer: '添加到 .devcontainer/devcontainer.json，自动为 VS Code Dev Containers、GitHub Codespaces、JetBrains Gateway、DevPod 等注入代理环境变量。',
+      aiTitle: 'AI / 工具集成',
+      aiSubtitle: '— 复制到对应文件，自动走代理',
+      aiCopy: '复制',
+      aiCopied: '已复制',
+      aiPreview: '预览',
+      aiHide: '收起',
+      ai_claude: 'Claude Code',
+      ai_cursor: 'Cursor',
+      ai_copilot: 'Copilot',
+      ai_windsurf: 'Windsurf',
+      ai_skill: 'Skill 命令',
+      ai_mcp: 'MCP 环境',
+      ai_env: '环境变量',
+      ai_shell: 'Shell 脚本',
+      ai_devcontainer: 'DevContainer',
     },
 
     // Packages

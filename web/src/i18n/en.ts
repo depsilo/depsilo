@@ -362,28 +362,21 @@ const en = {
       firstDownloadTitle: 'First Download Note',
       firstDownloadDesc:
         'The first request for a package requires downloading from the upstream source. Subsequent requests for the same package will be served from the local cache at LAN speed.',
-      aiInstructionsTitle: 'AI / Coding Tool Integration',
-      aiInstructionsDesc: 'Choose the integration format for your toolchain. One-click copy into your project so AI assistants and dev environments automatically use the Depsilo proxy.',
-      aiInstructionsCopy: 'Copy',
-      aiInstructionsCopied: 'Copied',
-      aiInstructionsExpand: 'Show Preview',
-      aiInstructionsCollapse: 'Hide Preview',
-
-      // Format tab labels
-      fmt_markdown: 'Markdown',
-      fmt_env: 'Env Vars',
-      fmt_shell: 'Shell Script',
-      fmt_skill: 'Claude Skill',
-      fmt_mcp: 'MCP Config',
-      fmt_devcontainer: 'DevContainer',
-
-      // Format descriptions
-      fmtDesc_markdown: 'Paste into CLAUDE.md, .cursorrules, .github/copilot-instructions.md, .windsurfrules, or any AI instruction file. Works with Claude Code, Cursor, GitHub Copilot, Windsurf, Aider, Continue, OpenClaw, Hermes Agent, and more.',
-      fmtDesc_env: 'Add to .env files, ~/.bashrc, CI/CD variables, or Docker --env-file. Any tool that reads standard environment variables will automatically use the proxy.',
-      fmtDesc_shell: 'One-click setup script that detects and configures all installed package managers. Run directly or integrate into your project setup flow.',
-      fmtDesc_skill: 'Save as .claude/commands/setup-proxy.md to run via /setup-proxy in Claude Code. Also works with other agent frameworks that support skill files.',
-      fmtDesc_mcp: 'Injects Depsilo proxy env vars into MCP server execution environments. For Claude Code (.claude/settings.json), Cursor (.cursor/mcp.json), and other MCP-compatible tools.',
-      fmtDesc_devcontainer: 'Add to .devcontainer/devcontainer.json to inject proxy env vars into VS Code Dev Containers, GitHub Codespaces, JetBrains Gateway, DevPod, and more.',
+      aiTitle: 'AI / Tool Integration',
+      aiSubtitle: '— copy to the target file, proxy auto-configured',
+      aiCopy: 'Copy',
+      aiCopied: 'Copied',
+      aiPreview: 'Preview',
+      aiHide: 'Hide',
+      ai_claude: 'Claude Code',
+      ai_cursor: 'Cursor',
+      ai_copilot: 'Copilot',
+      ai_windsurf: 'Windsurf',
+      ai_skill: 'Skill Cmd',
+      ai_mcp: 'MCP Env',
+      ai_env: 'Env Vars',
+      ai_shell: 'Shell Script',
+      ai_devcontainer: 'DevContainer',
     },
 
     // Packages

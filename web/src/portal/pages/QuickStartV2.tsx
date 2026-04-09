@@ -6,435 +6,242 @@ import CodeBlockV2 from '@/portal/components/CodeBlockV2'
 
 type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer' | 'nuget' | 'conda' | 'cran' | 'helm'
 
-// ── Format generators ──────────────────────────────────────────────
+// ── Content generators (by tool) ───────────────────────────────────
 
-function genMarkdown(u: string, h: string): string {
-  return `# Package Proxy Configuration (Depsilo)
-
-> This project uses **Depsilo** (\`${u}\`) as the package proxy cache.
-> When installing any dependencies, you **MUST** use the proxy URLs below instead of the default public registries.
-
-## Proxy Address
-
-\`${u}\`
-
-## Configuration by Ecosystem
-
-### Python (pip / uv / Poetry)
-\`\`\`bash
-pip install <package> -i ${u}/pypi/simple/ --trusted-host ${h}
-uv pip install <package> --index-url ${u}/pypi/simple/
-\`\`\`
-
-### APT (Debian / Ubuntu)
-\`\`\`
-deb ${u}/apt/ubuntu noble main restricted universe multiverse
-\`\`\`
-
-### npm / yarn / pnpm
-\`\`\`bash
-npm config set registry ${u}/npm/
-\`\`\`
-
-### Go Modules
-\`\`\`bash
-go env -w GOPROXY=${u}/go,direct
-\`\`\`
-
-### Cargo (Rust)
-\`\`\`toml
-# ~/.cargo/config.toml
-[source.crates-io]
-replace-with = "depsilo"
-[source.depsilo]
-registry = "sparse+${u}/crates/"
-\`\`\`
-
-### Maven / Gradle
-\`\`\`xml
-<mirror><id>depsilo</id><mirrorOf>central</mirrorOf><url>${u}/maven/</url></mirror>
-\`\`\`
-
-### RubyGems
-\`\`\`bash
-bundle config mirror.https://rubygems.org ${u}/rubygems/
-\`\`\`
-
-### Composer (PHP)
-\`\`\`bash
-composer config -g repo.packagist composer ${u}/composer/
-\`\`\`
-
-### NuGet (.NET)
-\`\`\`bash
-dotnet nuget add source ${u}/nuget/v3/index.json -n depsilo
-\`\`\`
-
-### Conda
-\`\`\`yaml
-channels:
-  - ${u}/conda/pkgs/main
-  - defaults
-\`\`\`
-
-### CRAN (R)
-\`\`\`r
-options(repos = c(CRAN = "${u}/cran/"))
-\`\`\`
-
-### Helm
-\`\`\`bash
-helm repo add depsilo ${u}/helm/
-\`\`\`
-
-## Docker Build
-\`\`\`bash
-docker build --build-arg PIP_INDEX_URL=${u}/pypi/simple/ --build-arg PIP_TRUSTED_HOST=${h} -t myapp .
-\`\`\`
-
-## Rules
-- **Always** use the Depsilo proxy URLs when running install commands.
-- **Never** use default public registries (pypi.org, registry.npmjs.org, etc.) directly.
-`
+function genRulesBlock(u: string, h: string): string {
+  return [
+    `# Depsilo — Package Proxy (${u})`,
+    ``,
+    `> **All** dependency installs MUST go through this proxy. Never use public registries directly.`,
+    ``,
+    `## Quick Reference`,
+    ``,
+    `| Ecosystem | Command / Config |`,
+    `|-----------|-----------------|`,
+    `| pip       | \`pip install <pkg> -i ${u}/pypi/simple/ --trusted-host ${h}\` |`,
+    `| uv        | \`uv pip install <pkg> --index-url ${u}/pypi/simple/\` |`,
+    `| npm       | \`npm config set registry ${u}/npm/\` |`,
+    `| Go        | \`go env -w GOPROXY=${u}/go,direct\` |`,
+    `| Cargo     | registry = \`sparse+${u}/crates/\` in ~/.cargo/config.toml |`,
+    `| Maven     | mirror url = \`${u}/maven/\` in ~/.m2/settings.xml |`,
+    `| Composer  | \`composer config -g repo.packagist composer ${u}/composer/\` |`,
+    `| RubyGems  | \`bundle config mirror.https://rubygems.org ${u}/rubygems/\` |`,
+    `| NuGet     | \`dotnet nuget add source ${u}/nuget/v3/index.json -n depsilo\` |`,
+    `| Conda     | add \`${u}/conda/pkgs/main\` to ~/.condarc channels |`,
+    `| CRAN      | \`options(repos = c(CRAN = "${u}/cran/"))\` |`,
+    `| Helm      | \`helm repo add depsilo ${u}/helm/\` |`,
+    ``,
+    `## Environment Variables`,
+    ``,
+    `\`\`\`bash`,
+    `export PIP_INDEX_URL=${u}/pypi/simple/`,
+    `export PIP_TRUSTED_HOST=${h}`,
+    `export npm_config_registry=${u}/npm/`,
+    `export GOPROXY=${u}/go,direct`,
+    `\`\`\``,
+  ].join('\n')
 }
 
-function genEnvVars(u: string, h: string): string {
-  return `# Depsilo Proxy — Environment Variables
-# Add to .env, shell profile (~/.bashrc), or CI/CD environment
-
-# Python (pip / uv / Poetry)
-PIP_INDEX_URL=${u}/pypi/simple/
-PIP_TRUSTED_HOST=${h}
-UV_INDEX_URL=${u}/pypi/simple/
-
-# npm / yarn / pnpm
-npm_config_registry=${u}/npm/
-
-# Go Modules
-GOPROXY=${u}/go,direct
-
-# Conda
-CONDA_CHANNELS=${u}/conda/pkgs/main
-
-# NuGet
-NUGET_SOURCE=${u}/nuget/v3/index.json
-
-# Helm
-HELM_REPO_URL=${u}/helm/
-
-# Docker Build (pass as --build-arg)
-# PIP_INDEX_URL, PIP_TRUSTED_HOST, npm_config_registry, GOPROXY
-`
+function genEnvFile(u: string, h: string): string {
+  return [
+    `# .env — Depsilo Proxy`,
+    `PIP_INDEX_URL=${u}/pypi/simple/`,
+    `PIP_TRUSTED_HOST=${h}`,
+    `UV_INDEX_URL=${u}/pypi/simple/`,
+    `npm_config_registry=${u}/npm/`,
+    `GOPROXY=${u}/go,direct`,
+  ].join('\n')
 }
 
-function genShellScript(u: string, h: string): string {
-  return `#!/usr/bin/env bash
-# Depsilo Proxy — One-click setup script
-# Run: curl -fsSL ${u}/setup.sh | bash
-# Or copy this script and execute it locally.
-
-set -e
-PROXY="${u}"
-HOST="${h}"
-
-echo "🔧 Configuring package managers to use Depsilo proxy: $PROXY"
-
-# pip
-mkdir -p ~/.config/pip
-cat > ~/.config/pip/pip.conf << EOF
-[global]
-index-url = $PROXY/pypi/simple/
-trusted-host = $HOST
-EOF
-echo "  ✓ pip configured"
-
-# npm
-npm config set registry "$PROXY/npm/" 2>/dev/null && echo "  ✓ npm configured" || true
-
-# Go
-go env -w GOPROXY="$PROXY/go,direct" 2>/dev/null && echo "  ✓ Go configured" || true
-
-# Cargo
-mkdir -p ~/.cargo
-if ! grep -q 'source.depsilo' ~/.cargo/config.toml 2>/dev/null; then
-  cat >> ~/.cargo/config.toml << EOF
-
-[source.crates-io]
-replace-with = "depsilo"
-
-[source.depsilo]
-registry = "sparse+$PROXY/crates/"
-EOF
-  echo "  ✓ Cargo configured"
-fi
-
-# Conda
-if command -v conda &>/dev/null; then
-  conda config --add channels "$PROXY/conda/pkgs/main" 2>/dev/null
-  echo "  ✓ Conda configured"
-fi
-
-# Composer
-if command -v composer &>/dev/null; then
-  composer config -g repo.packagist composer "$PROXY/composer/" 2>/dev/null
-  echo "  ✓ Composer configured"
-fi
-
-# RubyGems
-if command -v bundle &>/dev/null; then
-  bundle config mirror.https://rubygems.org "$PROXY/rubygems/" 2>/dev/null
-  echo "  ✓ RubyGems configured"
-fi
-
-echo ""
-echo "✅ Done! All available package managers are now using Depsilo."
-`
+function genShellSetup(u: string, h: string): string {
+  return [
+    `#!/usr/bin/env bash`,
+    `set -e`,
+    `P="${u}" H="${h}"`,
+    ``,
+    `# pip`,
+    `mkdir -p ~/.config/pip`,
+    `printf "[global]\\nindex-url = $P/pypi/simple/\\ntrusted-host = $H\\n" > ~/.config/pip/pip.conf`,
+    ``,
+    `# npm`,
+    `npm config set registry "$P/npm/" 2>/dev/null || true`,
+    ``,
+    `# Go`,
+    `go env -w GOPROXY="$P/go,direct" 2>/dev/null || true`,
+    ``,
+    `# Cargo`,
+    `mkdir -p ~/.cargo`,
+    `grep -q 'source.depsilo' ~/.cargo/config.toml 2>/dev/null || \\`,
+    `  printf "\\n[source.crates-io]\\nreplace-with = \\"depsilo\\"\\n[source.depsilo]\\nregistry = \\"sparse+$P/crates/\\"\\n" >> ~/.cargo/config.toml`,
+    ``,
+    `echo "Done — all proxies configured."`,
+  ].join('\n')
 }
 
-function genClaudeSkill(u: string, h: string): string {
-  return `---
-name: setup-depsilo-proxy
-description: Configure all package managers to use the Depsilo proxy cache at ${u}
----
-
-Configure the following package manager proxies for this project.
-Apply the relevant ones based on the project's tech stack.
-
-**Proxy base URL:** \`${u}\`
-
-Python (pip):
-\`\`\`
-pip install <pkg> -i ${u}/pypi/simple/ --trusted-host ${h}
-\`\`\`
-Or set env: \`PIP_INDEX_URL=${u}/pypi/simple/ PIP_TRUSTED_HOST=${h}\`
-
-npm:
-\`\`\`
-npm config set registry ${u}/npm/
-\`\`\`
-
-Go:
-\`\`\`
-go env -w GOPROXY=${u}/go,direct
-\`\`\`
-
-Cargo (~/.cargo/config.toml):
-\`\`\`toml
-[source.crates-io]
-replace-with = "depsilo"
-[source.depsilo]
-registry = "sparse+${u}/crates/"
-\`\`\`
-
-Maven (~/.m2/settings.xml):
-\`\`\`xml
-<mirror><id>depsilo</id><mirrorOf>central</mirrorOf><url>${u}/maven/</url></mirror>
-\`\`\`
-
-Composer: \`composer config -g repo.packagist composer ${u}/composer/\`
-RubyGems: \`bundle config mirror.https://rubygems.org ${u}/rubygems/\`
-NuGet: \`dotnet nuget add source ${u}/nuget/v3/index.json -n depsilo\`
-Conda: add \`${u}/conda/pkgs/main\` to channels in ~/.condarc
-CRAN: \`options(repos = c(CRAN = "${u}/cran/"))\`
-Helm: \`helm repo add depsilo ${u}/helm/\`
-
-Docker build args:
-\`\`\`
---build-arg PIP_INDEX_URL=${u}/pypi/simple/
---build-arg PIP_TRUSTED_HOST=${h}
---build-arg npm_config_registry=${u}/npm/
---build-arg GOPROXY=${u}/go,direct
-\`\`\`
-`
+function genSkillFile(u: string, h: string): string {
+  return [
+    `---`,
+    `name: setup-depsilo-proxy`,
+    `description: Configure package managers to use Depsilo (${u})`,
+    `---`,
+    ``,
+    `Set these proxies based on the project's tech stack:`,
+    ``,
+    `- pip: \`PIP_INDEX_URL=${u}/pypi/simple/ PIP_TRUSTED_HOST=${h}\``,
+    `- npm: \`npm config set registry ${u}/npm/\``,
+    `- Go:  \`go env -w GOPROXY=${u}/go,direct\``,
+    `- Cargo: registry = \`sparse+${u}/crates/\` (in ~/.cargo/config.toml)`,
+    `- Maven: \`<url>${u}/maven/</url>\` (in settings.xml mirror)`,
+    `- Composer: \`composer config -g repo.packagist composer ${u}/composer/\``,
+    `- RubyGems: \`bundle config mirror.https://rubygems.org ${u}/rubygems/\``,
+    `- NuGet: \`dotnet nuget add source ${u}/nuget/v3/index.json -n depsilo\``,
+    `- Conda: \`${u}/conda/pkgs/main\` (add to ~/.condarc channels)`,
+    `- CRAN: \`options(repos = c(CRAN = "${u}/cran/"))\``,
+    `- Helm: \`helm repo add depsilo ${u}/helm/\``,
+  ].join('\n')
 }
 
-function genMCPConfig(u: string): string {
-  return `{
-  "mcpServers": {
-    "depsilo": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/proxy-mcp-server"],
-      "env": {
-        "DEPSILO_URL": "${u}",
-        "PIP_INDEX_URL": "${u}/pypi/simple/",
-        "npm_config_registry": "${u}/npm/",
-        "GOPROXY": "${u}/go,direct"
-      }
-    }
-  }
-}
-
-// ──────────────────────────────────────────────
-// NOTE: Depsilo itself is not an MCP server.
-// This config injects Depsilo proxy env vars
-// into any MCP server's execution environment.
-//
-// Usage:
-//   Claude Code  → .claude/settings.json
-//   Cursor       → .cursor/mcp.json
-//   Generic      → mcp_config.json
-//
-// Any MCP tool server that runs shell commands
-// (install deps, build, test) will automatically
-// use the Depsilo proxy via these env vars.
-// ──────────────────────────────────────────────
-`
+function genMCPEnv(u: string, h: string): string {
+  return JSON.stringify({
+    mcpServers: {
+      'your-server': {
+        command: 'npx',
+        args: ['-y', 'your-mcp-server'],
+        env: {
+          PIP_INDEX_URL: `${u}/pypi/simple/`,
+          PIP_TRUSTED_HOST: h,
+          npm_config_registry: `${u}/npm/`,
+          GOPROXY: `${u}/go,direct`,
+        },
+      },
+    },
+  }, null, 2)
 }
 
 function genDevcontainer(u: string, h: string): string {
-  return `// .devcontainer/devcontainer.json
-// Injects Depsilo proxy env vars into dev containers,
-// Codespaces, and any devcontainer-compatible IDE.
-{
-  "name": "Dev Container with Depsilo Proxy",
-  "remoteEnv": {
-    "PIP_INDEX_URL": "${u}/pypi/simple/",
-    "PIP_TRUSTED_HOST": "${h}",
-    "npm_config_registry": "${u}/npm/",
-    "GOPROXY": "${u}/go,direct",
-    "NUGET_SOURCE": "${u}/nuget/v3/index.json"
-  },
-  "postCreateCommand": "echo '✅ Depsilo proxy configured via env vars'"
-
-  // Works with:
-  //   VS Code Dev Containers
-  //   GitHub Codespaces
-  //   JetBrains Gateway
-  //   DevPod
-  //   Gitpod (use .gitpod.yml for Gitpod-native)
-}
-`
+  return JSON.stringify({
+    name: 'Dev Container with Depsilo',
+    remoteEnv: {
+      PIP_INDEX_URL: `${u}/pypi/simple/`,
+      PIP_TRUSTED_HOST: h,
+      npm_config_registry: `${u}/npm/`,
+      GOPROXY: `${u}/go,direct`,
+    },
+  }, null, 2)
 }
 
-// ── Format type definitions ────────────────────────────────────────
+// ── Tool definitions ───────────────────────────────────────────────
 
-type FormatKey = 'markdown' | 'env' | 'shell' | 'skill' | 'mcp' | 'devcontainer'
-
-interface FormatDef {
-  key: FormatKey
+interface ToolDef {
+  id: string
   icon: string
-  generate: (u: string, h: string) => string
+  file: string
+  gen: (u: string, h: string) => string
 }
 
-const FORMATS: FormatDef[] = [
-  { key: 'markdown', icon: 'description',     generate: genMarkdown },
-  { key: 'env',      icon: 'data_object',     generate: genEnvVars },
-  { key: 'shell',    icon: 'terminal',        generate: genShellScript },
-  { key: 'skill',    icon: 'auto_awesome',    generate: genClaudeSkill },
-  { key: 'mcp',      icon: 'hub',             generate: genMCPConfig },
-  { key: 'devcontainer', icon: 'deployed_code', generate: genDevcontainer },
+const AI_TOOLS: ToolDef[] = [
+  { id: 'claude',       icon: 'smart_toy',     file: 'CLAUDE.md',                           gen: genRulesBlock },
+  { id: 'cursor',       icon: 'edit_note',     file: '.cursorrules',                        gen: genRulesBlock },
+  { id: 'copilot',      icon: 'code',          file: '.github/copilot-instructions.md',     gen: genRulesBlock },
+  { id: 'windsurf',     icon: 'air',           file: '.windsurfrules',                      gen: genRulesBlock },
+  { id: 'skill',        icon: 'auto_awesome',  file: '.claude/commands/setup-proxy.md',     gen: genSkillFile },
+  { id: 'mcp',          icon: 'hub',           file: '.claude/settings.json (mcpServers)',  gen: genMCPEnv },
+  { id: 'env',          icon: 'data_object',   file: '.env',                                gen: genEnvFile },
+  { id: 'shell',        icon: 'terminal',      file: 'setup-proxy.sh',                      gen: genShellSetup },
+  { id: 'devcontainer', icon: 'deployed_code', file: '.devcontainer/devcontainer.json',     gen: genDevcontainer },
 ]
 
 // ── AI Integration Panel ───────────────────────────────────────────
 
 function AIInstructionsCard({ baseURL, host }: { baseURL: string; host: string }) {
   const { t } = useTranslation()
-  const [activeFormat, setActiveFormat] = useState<FormatKey>('markdown')
-  const [copied, setCopied] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
 
-  const content = useMemo(() => {
-    const fmt = FORMATS.find(f => f.key === activeFormat)!
-    return fmt.generate(baseURL, host)
-  }, [activeFormat, baseURL, host])
-
-  const handleCopy = useCallback(() => {
+  const handleCopy = useCallback((tool: ToolDef) => {
+    const content = tool.gen(baseURL, host)
     navigator.clipboard.writeText(content).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedId(tool.id)
+      setTimeout(() => setCopiedId(null), 2000)
     })
-  }, [content])
-
-  const formatLabel = (k: FormatKey) => t(`quickstart.fmt_${k}`)
-  const formatDesc = (k: FormatKey) => t(`quickstart.fmtDesc_${k}`)
+  }, [baseURL, host])
 
   return (
     <div
       className="rounded-[6px] overflow-hidden"
       style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}
     >
-      {/* Header */}
-      <div className="px-5 py-4 flex items-start gap-3">
-        <span
-          className="flex items-center justify-center w-9 h-9 rounded-[6px] shrink-0 mt-0.5"
-          style={{ background: 'linear-gradient(135deg, rgba(83,58,253,0.12), rgba(249,107,238,0.10))' }}
-        >
-          <Icon name="auto_awesome" size="sm" style={{ color: 'var(--stripe-purple)' }} />
+      {/* Header — one line */}
+      <div className="px-5 py-3 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+        <Icon name="auto_awesome" size="sm" style={{ color: 'var(--stripe-purple)' }} />
+        <span className="font-[400] text-[14px]" style={{ color: 'var(--heading)' }}>
+          {t('quickstart.aiTitle')}
         </span>
-        <div className="flex-1 min-w-0">
-          <p className="font-[400] text-[15px]" style={{ color: 'var(--heading)' }}>
-            {t('quickstart.aiInstructionsTitle')}
-          </p>
-          <p className="text-[13px] mt-0.5 leading-relaxed" style={{ color: 'var(--body)' }}>
-            {t('quickstart.aiInstructionsDesc')}
-          </p>
-        </div>
+        <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+          {t('quickstart.aiSubtitle')}
+        </span>
       </div>
 
-      {/* Format tabs */}
-      <div className="px-5 flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-        {FORMATS.map((fmt) => {
-          const isActive = activeFormat === fmt.key
+      {/* Tool rows */}
+      <div>
+        {AI_TOOLS.map((tool) => {
+          const isCopied = copiedId === tool.id
+          const isPreview = previewId === tool.id
           return (
-            <button
-              key={fmt.key}
-              onClick={() => { setActiveFormat(fmt.key); setCopied(false) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-[400] rounded-[4px] whitespace-nowrap cursor-pointer transition-all duration-150 shrink-0"
-              style={{
-                background: isActive ? 'var(--stripe-purple)' : 'transparent',
-                color: isActive ? 'var(--on-primary)' : 'var(--body)',
-                border: isActive ? '1px solid transparent' : '1px solid var(--border)',
-              }}
-            >
-              <Icon name={fmt.icon} size="sm" />
-              {formatLabel(fmt.key)}
-            </button>
+            <div key={tool.id}>
+              <div
+                className="flex items-center gap-3 px-5 py-2.5"
+                style={{ borderBottom: '1px solid var(--border)' }}
+              >
+                {/* Icon + Tool name */}
+                <Icon name={tool.icon} size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+                <span className="text-[13px] font-[400] w-[100px] shrink-0" style={{ color: 'var(--heading)' }}>
+                  {t(`quickstart.ai_${tool.id}`)}
+                </span>
+
+                {/* File path */}
+                <code className="flex-1 text-[12px] font-mono truncate" style={{ color: 'var(--body)' }}>
+                  {tool.file}
+                </code>
+
+                {/* Preview toggle */}
+                <button
+                  onClick={() => setPreviewId(isPreview ? null : tool.id)}
+                  className="bg-transparent p-1 rounded-[4px] cursor-pointer transition-colors duration-150 shrink-0"
+                  style={{ color: isPreview ? 'var(--stripe-purple)' : 'var(--body)' }}
+                  title={isPreview ? t('quickstart.aiHide') : t('quickstart.aiPreview')}
+                >
+                  <Icon name={isPreview ? 'visibility_off' : 'visibility'} size="sm" />
+                </button>
+
+                {/* Copy button */}
+                <button
+                  onClick={() => handleCopy(tool)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150 shrink-0"
+                  style={{
+                    background: isCopied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
+                    color: isCopied ? 'var(--success-text)' : 'var(--on-primary)',
+                    border: isCopied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
+                  }}
+                >
+                  <Icon name={isCopied ? 'check' : 'content_copy'} size="sm" />
+                  {isCopied ? t('quickstart.aiCopied') : t('quickstart.aiCopy')}
+                </button>
+              </div>
+
+              {/* Inline preview */}
+              {isPreview && (
+                <pre
+                  className="px-5 py-3 overflow-x-auto text-[11px] font-mono font-[500] leading-[1.6] whitespace-pre-wrap"
+                  style={{ background: 'var(--code-bg)', color: 'var(--code-text)', maxHeight: '320px', overflowY: 'auto' }}
+                >
+                  {tool.gen(baseURL, host)}
+                </pre>
+              )}
+            </div>
           )
         })}
       </div>
-
-      {/* Active format description + tool list */}
-      <div className="px-5 py-3">
-        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--body)' }}>
-          {formatDesc(activeFormat)}
-        </p>
-      </div>
-
-      {/* Actions */}
-      <div className="px-5 py-3 flex items-center gap-2" style={{ borderTop: '1px solid var(--border)' }}>
-        <button
-          onClick={handleCopy}
-          className="inline-flex items-center gap-2 px-4 py-2 text-[14px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150"
-          style={{
-            background: copied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
-            color: copied ? 'var(--success-text)' : 'var(--on-primary)',
-            border: copied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
-          }}
-        >
-          <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
-          {copied ? t('quickstart.aiInstructionsCopied') : t('quickstart.aiInstructionsCopy')}
-        </button>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-[400] rounded-[4px] bg-transparent cursor-pointer transition-colors duration-150"
-          style={{ color: 'var(--stripe-purple)', border: '1px solid var(--border-purple)' }}
-        >
-          <Icon name={expanded ? 'unfold_less' : 'unfold_more'} size="sm" />
-          {expanded ? t('quickstart.aiInstructionsCollapse') : t('quickstart.aiInstructionsExpand')}
-        </button>
-      </div>
-
-      {/* Collapsible preview */}
-      {expanded && (
-        <div style={{ borderTop: '1px solid var(--border)' }}>
-          <pre
-            className="px-5 py-4 overflow-x-auto text-[12px] font-mono font-[500] leading-[1.7] whitespace-pre-wrap"
-            style={{ background: 'var(--code-bg)', color: 'var(--code-text)', maxHeight: '480px', overflowY: 'auto' }}
-          >
-            {content}
-          </pre>
-        </div>
-      )}
     </div>
   )
 }
