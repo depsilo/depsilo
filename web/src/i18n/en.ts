@@ -362,6 +362,18 @@ const en = {
       firstDownloadTitle: 'First Download Note',
       firstDownloadDesc:
         'The first request for a package requires downloading from the upstream source. Subsequent requests for the same package will be served from the local cache at LAN speed.',
+      aiInstructionsTitle: 'AI / Coding Tool Integration',
+      aiInstructionsDesc: 'Copy the Markdown below into your project\'s AI instruction file (e.g. CLAUDE.md, .cursorrules, .github/copilot-instructions.md) so AI coding tools automatically use the Depsilo proxy when installing dependencies.',
+      aiInstructionsCopy: 'Copy Markdown',
+      aiInstructionsCopied: 'Copied',
+      aiInstructionsExpand: 'Show Preview',
+      aiInstructionsCollapse: 'Hide Preview',
+      aiSupportedTools: 'Supported AI Tools',
+      aiToolClaude: 'Claude Code → paste into project CLAUDE.md',
+      aiToolCursor: 'Cursor → paste into .cursorrules',
+      aiToolCopilot: 'GitHub Copilot → paste into .github/copilot-instructions.md',
+      aiToolWindsurf: 'Windsurf → paste into .windsurfrules',
+      aiToolGeneric: 'Other AI tools → paste into the corresponding instruction file',
     },
 
     // Packages

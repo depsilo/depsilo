@@ -1,10 +1,248 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import CodeBlockV2 from '@/portal/components/CodeBlockV2'
 
 type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer' | 'nuget' | 'conda' | 'cran' | 'helm'
+
+function generateAIMarkdown(baseURL: string, host: string): string {
+  return `# Package Proxy Configuration (Depsilo)
+
+> This project uses **Depsilo** (\`${baseURL}\`) as the package proxy cache.
+> When installing any dependencies, you **MUST** use the proxy URLs below instead of the default public registries.
+
+## Proxy Address
+
+\`${baseURL}\`
+
+## Configuration by Ecosystem
+
+### Python (pip / uv / Poetry)
+
+\`\`\`bash
+# pip
+pip install <package> -i ${baseURL}/pypi/simple/ --trusted-host ${host}
+
+# uv
+uv pip install <package> --index-url ${baseURL}/pypi/simple/
+
+# permanent config (~/.config/pip/pip.conf)
+[global]
+index-url = ${baseURL}/pypi/simple/
+trusted-host = ${host}
+\`\`\`
+
+### APT (Debian / Ubuntu)
+
+\`\`\`bash
+# Use this as the mirror base URL in sources.list:
+deb ${baseURL}/apt/ubuntu noble main restricted universe multiverse
+\`\`\`
+
+### npm / yarn / pnpm
+
+\`\`\`bash
+npm config set registry ${baseURL}/npm/
+# or in ~/.npmrc
+registry=${baseURL}/npm/
+\`\`\`
+
+### Go Modules
+
+\`\`\`bash
+go env -w GOPROXY=${baseURL}/go,direct
+\`\`\`
+
+### Cargo (Rust)
+
+\`\`\`toml
+# ~/.cargo/config.toml
+[source.crates-io]
+replace-with = "depsilo"
+
+[source.depsilo]
+registry = "sparse+${baseURL}/crates/"
+\`\`\`
+
+### Maven / Gradle (Java)
+
+\`\`\`xml
+<!-- ~/.m2/settings.xml -->
+<mirror>
+  <id>depsilo</id>
+  <mirrorOf>central</mirrorOf>
+  <url>${baseURL}/maven/</url>
+</mirror>
+\`\`\`
+
+### RubyGems
+
+\`\`\`bash
+bundle config mirror.https://rubygems.org ${baseURL}/rubygems/
+\`\`\`
+
+### Composer (PHP)
+
+\`\`\`bash
+composer config -g repo.packagist composer ${baseURL}/composer/
+\`\`\`
+
+### NuGet (.NET)
+
+\`\`\`bash
+dotnet nuget add source ${baseURL}/nuget/v3/index.json -n depsilo
+\`\`\`
+
+### Conda
+
+\`\`\`yaml
+# ~/.condarc
+channels:
+  - ${baseURL}/conda/pkgs/main
+  - defaults
+\`\`\`
+
+### CRAN (R)
+
+\`\`\`r
+options(repos = c(CRAN = "${baseURL}/cran/"))
+\`\`\`
+
+### Helm (Kubernetes)
+
+\`\`\`bash
+helm repo add depsilo ${baseURL}/helm/
+\`\`\`
+
+## Docker Build
+
+When building Docker images that install dependencies, pass the proxy via build args:
+
+\`\`\`bash
+# For pip
+docker build \\
+  --build-arg PIP_INDEX_URL=${baseURL}/pypi/simple/ \\
+  --build-arg PIP_TRUSTED_HOST=${host} \\
+  -t myapp .
+
+# For apt (add to Dockerfile: ARG http_proxy)
+docker build --network host \\
+  --build-arg http_proxy=${baseURL} \\
+  -t myapp .
+\`\`\`
+
+## Rules
+
+- **Always** use the Depsilo proxy URLs above when running install commands.
+- **Never** use the default public registry URLs (pypi.org, registry.npmjs.org, etc.) directly.
+- The first download of a package may be slower (fetched from upstream); subsequent downloads are served from cache at LAN speed.
+`
+}
+
+/** AI Instructions card with copy + collapsible preview */
+function AIInstructionsCard({ baseURL, host }: { baseURL: string; host: string }) {
+  const { t } = useTranslation()
+  const [copied, setCopied] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  const markdown = useMemo(() => generateAIMarkdown(baseURL, host), [baseURL, host])
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(markdown).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [markdown])
+
+  const tools = [
+    { icon: 'smart_toy', text: t('quickstart.aiToolClaude') },
+    { icon: 'edit_note', text: t('quickstart.aiToolCursor') },
+    { icon: 'code', text: t('quickstart.aiToolCopilot') },
+    { icon: 'air', text: t('quickstart.aiToolWindsurf') },
+    { icon: 'extension', text: t('quickstart.aiToolGeneric') },
+  ]
+
+  return (
+    <div
+      className="rounded-[6px] overflow-hidden"
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-soft)',
+      }}
+    >
+      {/* Header */}
+      <div className="px-5 py-4 flex items-start gap-3">
+        <span
+          className="flex items-center justify-center w-9 h-9 rounded-[6px] shrink-0 mt-0.5"
+          style={{ background: 'linear-gradient(135deg, rgba(83,58,253,0.12), rgba(249,107,238,0.10))' }}
+        >
+          <Icon name="auto_awesome" size="sm" style={{ color: 'var(--stripe-purple)' }} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="font-[400] text-[15px]" style={{ color: 'var(--heading)' }}>
+            {t('quickstart.aiInstructionsTitle')}
+          </p>
+          <p className="text-[13px] mt-0.5 leading-relaxed" style={{ color: 'var(--body)' }}>
+            {t('quickstart.aiInstructionsDesc')}
+          </p>
+        </div>
+      </div>
+
+      {/* Tool list */}
+      <div className="px-5 pb-3">
+        <p className="text-[11px] font-[400] uppercase tracking-widest mb-2" style={{ color: 'var(--body)' }}>
+          {t('quickstart.aiSupportedTools')}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          {tools.map((tool) => (
+            <div key={tool.text} className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--label)' }}>
+              <Icon name={tool.icon} size="sm" className="opacity-50" />
+              <span>{tool.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="px-5 py-3 flex items-center gap-2" style={{ borderTop: '1px solid var(--border)' }}>
+        <button
+          onClick={handleCopy}
+          className="inline-flex items-center gap-2 px-4 py-2 text-[14px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150"
+          style={{
+            background: copied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
+            color: copied ? 'var(--success-text)' : 'var(--on-primary)',
+            border: copied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
+          }}
+        >
+          <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
+          {copied ? t('quickstart.aiInstructionsCopied') : t('quickstart.aiInstructionsCopy')}
+        </button>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-[400] rounded-[4px] bg-transparent cursor-pointer transition-colors duration-150"
+          style={{ color: 'var(--stripe-purple)', border: '1px solid var(--border-purple)' }}
+        >
+          <Icon name={expanded ? 'unfold_less' : 'unfold_more'} size="sm" />
+          {expanded ? t('quickstart.aiInstructionsCollapse') : t('quickstart.aiInstructionsExpand')}
+        </button>
+      </div>
+
+      {/* Collapsible preview */}
+      {expanded && (
+        <div className="border-t" style={{ borderColor: 'var(--border)' }}>
+          <pre
+            className="px-5 py-4 overflow-x-auto text-[12px] font-mono font-[500] leading-[1.7] whitespace-pre-wrap"
+            style={{ background: 'var(--code-bg)', color: 'var(--code-text)', maxHeight: '480px', overflowY: 'auto' }}
+          >
+            {markdown}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface MethodProps {
   icon: string
@@ -67,6 +305,9 @@ export default function QuickStartV2() {
           {t('quickstart.subtitle')}
         </p>
       </div>
+
+      {/* AI Instructions Card */}
+      <AIInstructionsCard baseURL={baseURL} host={host} />
 
       {/* Ecosystem selector — 3 col grid */}
       <div className="grid grid-cols-3 gap-2">

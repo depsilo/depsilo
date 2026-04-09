@@ -362,6 +362,18 @@ const zh = {
       firstDownloadTitle: '首次下载说明',
       firstDownloadDesc:
         '首次请求某个包时，Depsilo 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',
+      aiInstructionsTitle: 'AI / 编程工具集成',
+      aiInstructionsDesc: '复制以下 Markdown 到你项目的 AI 指令文件中（如 CLAUDE.md、.cursorrules、.github/copilot-instructions.md 等），让 AI 编程工具自动使用 Depsilo 代理安装依赖。',
+      aiInstructionsCopy: '复制 Markdown',
+      aiInstructionsCopied: '已复制',
+      aiInstructionsExpand: '展开预览',
+      aiInstructionsCollapse: '收起预览',
+      aiSupportedTools: '支持的 AI 工具',
+      aiToolClaude: 'Claude Code → 粘贴到项目 CLAUDE.md',
+      aiToolCursor: 'Cursor → 粘贴到 .cursorrules',
+      aiToolCopilot: 'GitHub Copilot → 粘贴到 .github/copilot-instructions.md',
+      aiToolWindsurf: 'Windsurf → 粘贴到 .windsurfrules',
+      aiToolGeneric: '其他 AI 工具 → 粘贴到对应的指令配置文件',
     },
 
     // Packages
