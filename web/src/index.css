@@ -6,65 +6,163 @@
 @import "@fontsource/noto-sans-sc/700.css";
 @import "material-symbols/outlined.css";
 
-/* Dark theme — brand navy tones based on DESIGN.md Deep Navy #042C53 */
+/* ===================================================================
+   Stripe Design System — CSS Variable Foundation
+   Source: DESIGN.md
+   =================================================================== */
+
+/* ----- Light Theme (default) ----- */
 html,
-html[data-theme="dark"] {
-  --bg: #091a2a;
-  --surface: #091a2a;
-  --surface-low: #0c2035;
-  --surface-container: #112840;
-  --surface-high: #16304c;
-  --surface-highest: #1c3957;
-  --surface-bright: #234263;
-  --on-surface: #dfe6ef;
-  --on-surface-variant: #8da3bb;
-  --outline-variant: #2a4060;
-  --primary: #a4c9ff;
-  --primary-container: #185fa5;
-  --primary-dim: #85b7eb;
-  --on-primary: #003060;
-  --secondary: #8da3bb;
-  --secondary-container: #1a3050;
-  --error: #ffb4ab;
-  --error-container: #93000a;
-  --success: #1D9E75;
-  --tertiary: #ffb77c;
-  --tertiary-container: #6f3800;
-  --code-bg: #0c2035;
-  --code-header: #112840;
-  --code-text: #dfe6ef;
-  --code-dim: #5a7a96;
-}
-
-/* Light theme — DESIGN.md Material Design 3 surface & brand colors */
 html[data-theme="light"] {
-  --bg: #f8f9fa;
-  --surface: #f8f9fa;
-  --surface-low: #f3f4f5;
-  --surface-container: #edeeef;
-  --surface-high: #e7e8e9;
-  --surface-highest: #e1e3e4;
-  --surface-bright: #ffffff;
-  --on-surface: #191c1d;
-  --on-surface-variant: #424751;
-  --outline-variant: #c2c6d2;
-  --primary: #004782;
-  --primary-container: #185fa5;
-  --primary-dim: #0C447C;
+  /* Brand */
+  --stripe-purple: #533afd;
+  --stripe-purple-hover: #4434d4;
+  --stripe-purple-deep: #2e2b8c;
+  --stripe-purple-light: #b9b9f9;
+  --stripe-purple-mid: #665efd;
+
+  /* Text */
+  --heading: #061b31;
+  --label: #273951;
+  --body: #64748d;
   --on-primary: #ffffff;
-  --secondary: #4c5f7c;
-  --secondary-container: #c7dbfd;
-  --error: #ba1a1a;
-  --error-container: #ffdad6;
-  --success: #1D9E75;
-  --tertiary: #6f3800;
-  --tertiary-container: #924b00;
-  --code-bg: #2e3132;
-  --code-header: #383a3b;
-  --code-text: #f0f1f2;
-  --code-dim: #727782;
+
+  /* Surfaces */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-low: #f6f9fc;
+  --surface-container: #f0f3f7;
+  --surface-high: #e8ecf2;
+  --surface-highest: #e1e5ec;
+  --surface-bright: #ffffff;
+
+  /* Mapped semantic aliases (backward compat) */
+  --on-surface: #061b31;
+  --on-surface-variant: #64748d;
+
+  /* Brand dark sections */
+  --brand-dark: #1c1e54;
+  --dark-navy: #0d253d;
+
+  /* Accent / Decorative */
+  --ruby: #ea2261;
+  --magenta: #f96bee;
+  --magenta-light: #ffd7ef;
+  --lemon: #9b6829;
+
+  /* Status */
+  --success: #15be53;
+  --success-text: #108c3d;
+  --error: #ea2261;
+  --error-container: rgba(234, 34, 97, 0.08);
+
+  /* Borders */
+  --border: #e5edf5;
+  --border-purple: #b9b9f9;
+  --border-soft-purple: #d6d9fc;
+  --border-magenta: #ffd7ef;
+  --border-dashed: #362baa;
+
+  /* Shadows (Stripe signature blue-tinted) */
+  --shadow-elevated: rgba(50,50,93,0.25) 0px 30px 45px -30px, rgba(0,0,0,0.1) 0px 18px 36px -18px;
+  --shadow-ambient: rgba(23,23,23,0.08) 0px 15px 35px 0px;
+  --shadow-soft: rgba(23,23,23,0.06) 0px 3px 6px;
+  --shadow-deep: rgba(3,3,39,0.25) 0px 14px 21px -14px, rgba(0,0,0,0.1) 0px 8px 17px -8px;
+
+  /* Code blocks */
+  --code-bg: #1c1e54;
+  --code-header: #252763;
+  --code-text: #e8ecf2;
+  --code-dim: #9395c2;
+
+  /* Legacy compat aliases */
+  --primary: #533afd;
+  --primary-container: #533afd;
+  --primary-dim: #4434d4;
+  --outline-variant: #e5edf5;
+  --secondary: #64748d;
+  --secondary-container: #f0f3f7;
+  --error-legacy: #ea2261;
+  --tertiary: #9b6829;
+  --tertiary-container: #ffd7ef;
 }
 
+/* ----- Dark Theme ----- */
+html[data-theme="dark"] {
+  /* Brand */
+  --stripe-purple: #7c6dff;
+  --stripe-purple-hover: #6b5ef0;
+  --stripe-purple-deep: #9895ff;
+  --stripe-purple-light: #4a45a0;
+  --stripe-purple-mid: #8a80ff;
+
+  /* Text */
+  --heading: #f0f2f5;
+  --label: #c4cdd8;
+  --body: #8b99ab;
+  --on-primary: #ffffff;
+
+  /* Surfaces — brand-dark navy palette */
+  --bg: #0a0c2e;
+  --surface: #0f1140;
+  --surface-low: #13154a;
+  --surface-container: #1a1c5c;
+  --surface-high: #222468;
+  --surface-highest: #2a2d74;
+  --surface-bright: #353880;
+
+  /* Mapped semantic aliases */
+  --on-surface: #f0f2f5;
+  --on-surface-variant: #8b99ab;
+
+  /* Brand dark sections */
+  --brand-dark: #1c1e54;
+  --dark-navy: #0d253d;
+
+  /* Accent / Decorative */
+  --ruby: #ff4d7f;
+  --magenta: #ff85ef;
+  --magenta-light: #4a2040;
+  --lemon: #d4a44a;
+
+  /* Status */
+  --success: #22d464;
+  --success-text: #22d464;
+  --error: #ff6b8a;
+  --error-container: rgba(255, 107, 138, 0.12);
+
+  /* Borders */
+  --border: #2a2d74;
+  --border-purple: #4a45a0;
+  --border-soft-purple: #3a3880;
+  --border-magenta: #4a2040;
+  --border-dashed: #6865cc;
+
+  /* Shadows — darker, more subtle in dark mode */
+  --shadow-elevated: rgba(0,0,0,0.4) 0px 30px 45px -30px, rgba(0,0,0,0.25) 0px 18px 36px -18px;
+  --shadow-ambient: rgba(0,0,0,0.3) 0px 15px 35px 0px;
+  --shadow-soft: rgba(0,0,0,0.2) 0px 3px 6px;
+  --shadow-deep: rgba(0,0,0,0.5) 0px 14px 21px -14px, rgba(0,0,0,0.3) 0px 8px 17px -8px;
+
+  /* Code blocks */
+  --code-bg: #0a0c2e;
+  --code-header: #13154a;
+  --code-text: #e8ecf2;
+  --code-dim: #6668a0;
+
+  /* Legacy compat aliases */
+  --primary: #7c6dff;
+  --primary-container: #4a45a0;
+  --primary-dim: #6b5ef0;
+  --outline-variant: #2a2d74;
+  --secondary: #8b99ab;
+  --secondary-container: #1a1c5c;
+  --error-legacy: #ff6b8a;
+  --tertiary: #d4a44a;
+  --tertiary-container: #4a2040;
+}
+
+/* ----- Tailwind v4 @theme mapping ----- */
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -87,15 +185,23 @@ html[data-theme="light"] {
   --color-success: var(--success);
   --color-tertiary: var(--tertiary);
   --color-tertiary-container: var(--tertiary-container);
+  --color-stripe-purple: var(--stripe-purple);
+  --color-heading: var(--heading);
+  --color-label: var(--label);
+  --color-body: var(--body);
+  --color-border: var(--border);
+  --color-ruby: var(--ruby);
+  --color-magenta: var(--magenta);
   --font-sans: 'Inter Variable', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 }
 
+/* ----- Base styles ----- */
 @layer base {
   html {
     font-family: var(--font-sans);
     font-size: 16px;
-    line-height: 1.6;
+    line-height: 1.4;
     background: var(--bg);
     color: var(--on-surface);
     -webkit-font-smoothing: antialiased;
@@ -107,8 +213,15 @@ html[data-theme="light"] {
   * {
     box-sizing: border-box;
   }
+  /* Stripe typography: ss01 equivalent via Inter — use stylistic alternates */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--heading);
+    font-weight: 300;
+    letter-spacing: -0.02em;
+  }
 }
 
+/* ----- Material Symbols icon helpers (unchanged) ----- */
 .icon {
   font-family: 'Material Symbols Outlined';
   font-weight: normal;
@@ -124,9 +237,45 @@ html[data-theme="light"] {
   font-feature-settings: 'liga';
   -webkit-font-smoothing: antialiased;
 }
-.icon-sm {
-  font-size: 18px;
-}
-.icon-lg {
-  font-size: 24px;
+.icon-sm { font-size: 18px; }
+.icon-lg { font-size: 24px; }
+
+/* ----- Stripe-style utility classes ----- */
+@layer utilities {
+  /* Stripe shadows */
+  .stripe-shadow { box-shadow: var(--shadow-elevated); }
+  .stripe-shadow-ambient { box-shadow: var(--shadow-ambient); }
+  .stripe-shadow-soft { box-shadow: var(--shadow-soft); }
+  .stripe-shadow-deep { box-shadow: var(--shadow-deep); }
+
+  /* Focus ring — Stripe style */
+  .stripe-focus-ring:focus-visible {
+    outline: 2px solid var(--stripe-purple);
+    outline-offset: 2px;
+  }
+
+  /* Heading weights matching Stripe's 300 */
+  .font-display { font-weight: 300; letter-spacing: -0.025em; }
+
+  /* Tabular numbers for data */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  /* Ping animation for health dots */
+  @keyframes ping-health {
+    0% { transform: scale(1); opacity: 1; }
+    75% { transform: scale(2.2); opacity: 0; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  .animate-ping-health {
+    animation: ping-health 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Fade-in for live events */
+  @keyframes fade-in-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fade-in-down 0.3s ease-out;
+  }
 }
