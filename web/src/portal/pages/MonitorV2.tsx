@@ -92,17 +92,17 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   }, [realPoints, upstream.avg_latency_ms, upstream.success_rate])
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ height: 18 }}>
       <div
-        className="flex items-end gap-[1px]"
+        className="absolute bottom-0 left-0 right-0 flex items-end gap-[1px]"
         onMouseLeave={() => setHoveredIdx(null)}
       >
         {beats.map((lat, i) => (
           <div
             key={i}
-            className="rounded-[1px] cursor-pointer transition-opacity duration-75"
+            className="rounded-[1px] cursor-pointer transition-all duration-75"
             style={{
-              height: hoveredIdx === i ? 14 : 10,
+              height: hoveredIdx === i ? 16 : 10,
               width: `${100 / HEARTBEAT_SLOTS}%`,
               minWidth: 2,
               background: beatColor(lat),
