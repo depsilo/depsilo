@@ -5,7 +5,6 @@ import { statsApi, adminApi } from '@/lib/api'
 import CardV2 from '@/components/CardV2'
 import BadgeV2 from '@/components/BadgeV2'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import Icon from '@/components/Icon'
 
 interface CacheEvent {
   id: string
