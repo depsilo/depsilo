@@ -100,13 +100,14 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
         {beats.map((lat, i) => (
           <div
             key={i}
-            className="rounded-[1px] cursor-pointer transition-all duration-75"
+            className="rounded-[1px] cursor-pointer"
             style={{
               height: hoveredIdx === i ? 16 : 10,
-              width: `${100 / HEARTBEAT_SLOTS}%`,
+              flex: '1 1 0%',
               minWidth: 2,
               background: beatColor(lat),
               opacity: lat === null ? 0.25 : (hoveredIdx !== null && hoveredIdx !== i ? 0.5 : 1),
+              transition: 'height 75ms, opacity 75ms',
             }}
             onMouseEnter={() => setHoveredIdx(i)}
           />
