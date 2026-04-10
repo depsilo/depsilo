@@ -296,59 +296,61 @@ export default function DashboardV2() {
         {metrics.map((m) => <MetricCardV2 key={m.label} label={m.label} value={m.value} icon={m.icon} />)}
       </div>
 
-      {/* Combined Chart: bars (hits/misses) + line (hit rate %) */}
-      <CardV2>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--body)' }}>
-            {t('dashboard.hitMissTrend')}
-          </h3>
-          <div className="flex items-center gap-1">
-            {ranges.map(r => (
-              <button
-                key={r.value}
-                onClick={() => setRange(r.value)}
-                className="px-2.5 py-1 text-[11px] font-[400] rounded-[4px] cursor-pointer transition-colors duration-150"
-                style={{
-                  background: range === r.value ? 'var(--stripe-purple)' : 'transparent',
-                  color: range === r.value ? 'var(--on-primary)' : 'var(--body)',
-                  border: range === r.value ? 'none' : '1px solid var(--border)',
-                }}
-              >
-                {r.label}
-              </button>
-            ))}
+      {/* Chart + Top Packages side by side */}
+      <div className="grid gap-4 grid-cols-3">
+        {/* Chart — 2/3 width */}
+        <CardV2 className="col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--body)' }}>
+              {t('dashboard.hitMissTrend')}
+            </h3>
+            <div className="flex items-center gap-1">
+              {ranges.map(r => (
+                <button
+                  key={r.value}
+                  onClick={() => setRange(r.value)}
+                  className="px-2 py-0.5 text-[11px] font-[400] rounded-[4px] cursor-pointer transition-colors duration-150"
+                  style={{
+                    background: range === r.value ? 'var(--stripe-purple)' : 'transparent',
+                    color: range === r.value ? 'var(--on-primary)' : 'var(--body)',
+                    border: range === r.value ? 'none' : '1px solid var(--border)',
+                  }}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <ResponsiveContainer width="100%" height={320}>
-          <ComposedChart data={trendPoints}>
-            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-            <XAxis dataKey="date" tick={{ fill: 'var(--body)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="count" tick={{ fill: 'var(--body)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fill: 'var(--body)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
-            <Tooltip content={<ChartTooltip />} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Bar yAxisId="count" dataKey="hits" fill="var(--stripe-purple)" name={t('dashboard.hits')} radius={[2, 2, 0, 0]} opacity={0.8} />
-            <Bar yAxisId="count" dataKey="misses" fill="var(--error)" name={t('dashboard.misses')} radius={[2, 2, 0, 0]} opacity={0.6} />
-            <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--success)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </CardV2>
-
-      {/* Upstreams + Top Packages */}
-      <div className="grid gap-6 grid-cols-2">
-        <CardV2>
-          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--body)' }}>
-            {t('dashboard.upstreamStatus')}
-          </h3>
-          <UpstreamPanel upstreams={upstreams} />
+          <ResponsiveContainer width="100%" height={180}>
+            <ComposedChart data={trendPoints}>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="count" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+              <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={35} />
+              <Tooltip content={<ChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="count" dataKey="hits" fill="var(--stripe-purple)" name={t('dashboard.hits')} radius={[2, 2, 0, 0]} opacity={0.8} />
+              <Bar yAxisId="count" dataKey="misses" fill="var(--error)" name={t('dashboard.misses')} radius={[2, 2, 0, 0]} opacity={0.6} />
+              <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--success)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
         </CardV2>
 
+        {/* Top Packages — 1/3 width */}
         <CardV2>
-          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--body)' }}>
+          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
             {t('dashboard.topPackages')}
           </h3>
           <TopPackagesList topPackages={topPackages} />
         </CardV2>
+      </div>
+
+      {/* Upstreams — full width */}
+      <div>
+        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
+          {t('dashboard.upstreamStatus')}
+        </h3>
+        <UpstreamPanel upstreams={upstreams} />
       </div>
     </div>
   )
