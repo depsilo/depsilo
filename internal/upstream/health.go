@@ -11,6 +11,43 @@ import (
 	"depsilo/internal/db"
 )
 
+// RestoreFromDB loads the most recent latency data from the database to
+// warm up in-memory metrics after a server restart. Without this, all
+// upstreams show 0ms / "--" until the first health check completes.
+func RestoreFromDB(pool *Pool, database *gorm.DB) {
+	if database == nil {
+		return
+	}
+	for _, u := range pool.Upstreams() {
+		var logs []db.UpstreamLatencyLog
+		database.Where("name = ? AND healthy = ?", u.Name, true).
+			Order("created_at DESC").
+			Limit(10).
+			Find(&logs)
+
+		if len(logs) == 0 {
+			continue
+		}
+
+		var total int64
+		for _, l := range logs {
+			total += l.LatencyMs
+		}
+		avgMs := total / int64(len(logs))
+
+		u.mu.Lock()
+		u.avgLatency = time.Duration(avgMs) * time.Millisecond
+		u.Healthy = logs[0].Healthy
+		u.mu.Unlock()
+
+		zap.L().Debug("restored upstream metrics from db",
+			zap.String("upstream", u.Name),
+			zap.Int64("avg_latency_ms", avgMs),
+			zap.Int("data_points", len(logs)),
+		)
+	}
+}
+
 // StartHealthCheck runs periodic health checks on all upstreams in the pool.
 func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, interval time.Duration) {
 	ticker := time.NewTicker(interval)

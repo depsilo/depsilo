@@ -185,18 +185,18 @@ func main() {
 	} else {
 		zap.L().Info("license key configured, validation in progress")
 	}
-	go upstream.StartHealthCheck(ctx, pypiPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, aptPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, npmPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, goPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, cargoPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, mavenPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, rubygemsPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, composerPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, nugetPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, condaPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, cranPool, database, 30*time.Second)
-	go upstream.StartHealthCheck(ctx, helmPool, database, 30*time.Second)
+	// Restore latency metrics from DB before starting health checks
+	allPools := []*upstream.Pool{
+		pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool,
+		rubygemsPool, composerPool, nugetPool, condaPool, cranPool, helmPool,
+	}
+	for _, pool := range allPools {
+		upstream.RestoreFromDB(pool, database)
+	}
+
+	for _, pool := range allPools {
+		go upstream.StartHealthCheck(ctx, pool, database, 30*time.Second)
+	}
 	go upstream.StartLatencyLogCleanup(ctx, database)
 	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
 
