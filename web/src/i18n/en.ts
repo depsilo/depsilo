@@ -444,6 +444,7 @@ const en = {
       noEvents: 'Waiting for events...',
       upstreams: 'Upstream Status',
       noUpstreams: 'No upstreams',
+      healthy: 'healthy',
       topPackages: 'Top Packages',
     },
   },

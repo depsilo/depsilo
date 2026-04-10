@@ -444,6 +444,7 @@ const zh = {
       noEvents: '等待事件...',
       upstreams: '上游源状态',
       noUpstreams: '暂无上游源',
+      healthy: '健康',
       topPackages: '热门包',
     },
   },

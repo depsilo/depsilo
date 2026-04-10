@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { statsApi } from '@/lib/api'
+import { statsApi, adminApi } from '@/lib/api'
 import CardV2 from '@/components/CardV2'
 import BadgeV2 from '@/components/BadgeV2'
 import ButtonV2 from '@/components/ButtonV2'
@@ -37,6 +37,164 @@ function formatTime(dateStr: string): string {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
+
+// ── Uptime Kuma–style heartbeat bar ────────────────────────────────
+
+/** Color a single beat: green < 100ms, yellow < 500ms, red >= 500ms, gray = no data */
+function beatColor(latency: number | null): string {
+  if (latency === null) return 'var(--surface-container)'
+  if (latency < 100) return 'var(--success)'
+  if (latency < 500) return 'var(--lemon, #9b6829)'
+  return 'var(--error)'
+}
+
+function HeartbeatBar({ upstreamId }: { upstreamId: number }) {
+  const { data } = useQuery({
+    queryKey: ['upstream-heartbeat', upstreamId],
+    queryFn: () => adminApi.getUpstreamLatency(upstreamId, '24h'),
+    refetchInterval: 60000,
+  })
+
+  // Normalize to 45 slots (each ~32 min in a 24h window)
+  const SLOTS = 45
+  const points: Array<{ latency_ms: number }> = data?.data?.points || []
+
+  const beats = useMemo(() => {
+    if (points.length === 0) return Array(SLOTS).fill(null)
+    if (points.length <= SLOTS) {
+      const padded: (number | null)[] = Array(SLOTS - points.length).fill(null)
+      return [...padded, ...points.map(p => p.latency_ms)]
+    }
+    // Downsample: pick evenly spaced points
+    const step = points.length / SLOTS
+    return Array.from({ length: SLOTS }, (_, i) => {
+      const idx = Math.min(Math.floor(i * step), points.length - 1)
+      return points[idx].latency_ms
+    })
+  }, [points])
+
+  return (
+    <div className="flex items-center gap-[2px]" title={points.length > 0 ? `${points.length} data points (24h)` : 'No data'}>
+      {beats.map((lat, i) => (
+        <div
+          key={i}
+          className="h-[22px] rounded-[1px] transition-colors duration-150"
+          style={{
+            width: `${100 / SLOTS}%`,
+            minWidth: 3,
+            background: beatColor(lat),
+            opacity: lat === null ? 0.4 : 1,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ── Upstream panel grouped by ecosystem ────────────────────────────
+
+interface UpstreamItem {
+  id?: number
+  name: string
+  adapter: string
+  healthy: boolean
+  avg_latency_ms: number
+  success_rate: number
+}
+
+function UpstreamStatusPanel({ upstreams }: { upstreams: UpstreamItem[] }) {
+  const { t } = useTranslation()
+
+  // Group by adapter type
+  const groups = useMemo(() => {
+    const map = new Map<string, UpstreamItem[]>()
+    for (const u of upstreams) {
+      const key = u.adapter
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(u)
+    }
+    return Array.from(map.entries())
+  }, [upstreams])
+
+  if (upstreams.length === 0) {
+    return (
+      <CardV2>
+        <h3 className="text-[12px] font-[400] uppercase tracking-wider mb-3" style={{ color: 'var(--body)' }}>
+          {t('monitor.upstreams')}
+        </h3>
+        <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('monitor.noUpstreams')}</p>
+      </CardV2>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--body)' }}>
+        {t('monitor.upstreams')}
+      </h3>
+      {groups.map(([adapter, items]) => (
+        <CardV2 key={adapter}>
+          {/* Group header */}
+          <div className="flex items-center gap-2 mb-3">
+            <EcosystemIcon type={adapter as any} size={16} />
+            <span className="text-[13px] font-[400]" style={{ color: 'var(--heading)' }}>
+              {adapter.toUpperCase()}
+            </span>
+            <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--body)' }}>
+              {items.filter(u => u.healthy).length}/{items.length} {t('monitor.healthy')}
+            </span>
+          </div>
+
+          {/* Upstream rows */}
+          <div className="space-y-3">
+            {items.map((u) => (
+              <div key={u.name}>
+                {/* Row 1: name + status + latency + uptime */}
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    {u.healthy && (
+                      <span
+                        className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75"
+                        style={{ background: 'var(--success)' }}
+                      />
+                    )}
+                    <span
+                      className="relative inline-flex rounded-full h-2 w-2"
+                      style={{ background: u.healthy ? 'var(--success)' : 'var(--error)' }}
+                    />
+                  </span>
+                  <span className="text-[13px] font-[400] flex-1 truncate" style={{ color: 'var(--heading)' }}>
+                    {u.name}
+                  </span>
+                  <span
+                    className="font-mono text-[12px] tabular-nums shrink-0"
+                    style={{
+                      color: u.avg_latency_ms < 100
+                        ? 'var(--success-text)'
+                        : u.avg_latency_ms < 500
+                          ? 'var(--body)'
+                          : 'var(--error)',
+                    }}
+                  >
+                    {u.avg_latency_ms}ms
+                  </span>
+                  <BadgeV2 variant={u.success_rate >= 0.99 ? 'success' : u.success_rate >= 0.9 ? 'warning' : 'error'}>
+                    {(u.success_rate * 100).toFixed(1)}%
+                  </BadgeV2>
+                </div>
+
+                {/* Row 2: heartbeat bar */}
+                {u.id && <HeartbeatBar upstreamId={u.id} />}
+              </div>
+            ))}
+          </div>
+        </CardV2>
+      ))}
+    </div>
+  )
+}
+
+// ── Main page ──────────────────────────────────────────────────────
 
 export default function MonitorV2() {
   const { t } = useTranslation()
@@ -178,92 +336,56 @@ export default function MonitorV2() {
         </div>
       </div>
 
-      {/* Two columns: Upstreams + Top packages */}
+      {/* Upstreams — grouped by ecosystem, with heartbeat bars */}
+      <UpstreamStatusPanel upstreams={upstreams} />
+
+      {/* Top packages */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Upstream health */}
-        <CardV2>
-          <h3 className="text-[12px] font-[400] uppercase tracking-wider mb-3" style={{ color: 'var(--body)' }}>
-            {t('monitor.upstreams')}
-          </h3>
-          {upstreams.length === 0 ? (
-            <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('monitor.noUpstreams')}</p>
-          ) : (
-            <div className="space-y-0">
-              {upstreams.map((u, i) => (
-                <div
-                  key={u.name}
-                  className="flex items-center gap-3 py-2"
-                  style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}
-                >
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    {u.healthy && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--success)' }} />}
-                    <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: u.healthy ? 'var(--success)' : 'var(--error)' }} />
-                  </span>
-                  <EcosystemIcon type={u.adapter as any} size={14} />
-                  <span className="text-[13px] font-[400] truncate flex-1" style={{ color: 'var(--heading)' }}>{u.name}</span>
-                  <span className="font-mono text-[12px] tabular-nums shrink-0" style={{ color: u.avg_latency_ms < 100 ? 'var(--success-text)' : u.avg_latency_ms < 500 ? 'var(--body)' : 'var(--error)' }}>
-                    {u.avg_latency_ms}ms
-                  </span>
-                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>
-                    {(u.success_rate * 100).toFixed(0)}%
-                  </span>
+        {topPypi.length > 0 && (
+          <CardV2>
+            <div className="flex items-center gap-1.5 mb-3">
+              <EcosystemIcon type="pypi" size={14} />
+              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--body)' }}>
+                {t('monitor.topPackages')} — PyPI
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {topPypi.slice(0, 8).map(pkg => (
+                <div key={pkg.name} className="flex items-center gap-2">
+                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--heading)' }}>{pkg.name}</span>
+                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>{pkg.hit_count.toLocaleString()}</span>
+                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxPypi) * 100}%`, background: 'var(--stripe-purple)' }} />
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </CardV2>
-
-        {/* Top packages */}
-        <CardV2>
-          <h3 className="text-[12px] font-[400] uppercase tracking-wider mb-3" style={{ color: 'var(--body)' }}>
-            {t('monitor.topPackages')}
-          </h3>
-          <div className="space-y-4">
-            {/* PyPI */}
-            {topPypi.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <EcosystemIcon type="pypi" size={12} />
-                  <span className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--body)' }}>PyPI</span>
+          </CardV2>
+        )}
+        {topApt.length > 0 && (
+          <CardV2>
+            <div className="flex items-center gap-1.5 mb-3">
+              <EcosystemIcon type="apt" size={14} />
+              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--body)' }}>
+                {t('monitor.topPackages')} — APT
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {topApt.slice(0, 8).map(pkg => (
+                <div key={pkg.name} className="flex items-center gap-2">
+                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--heading)' }}>{pkg.name}</span>
+                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>{pkg.hit_count.toLocaleString()}</span>
+                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxApt) * 100}%`, background: 'var(--success)' }} />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  {topPypi.slice(0, 5).map(pkg => (
-                    <div key={pkg.name} className="flex items-center gap-2">
-                      <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--heading)' }}>{pkg.name}</span>
-                      <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>{pkg.hit_count.toLocaleString()}</span>
-                      <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
-                        <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxPypi) * 100}%`, background: 'var(--stripe-purple)' }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* APT */}
-            {topApt.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <EcosystemIcon type="apt" size={12} />
-                  <span className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--body)' }}>APT</span>
-                </div>
-                <div className="space-y-1.5">
-                  {topApt.slice(0, 5).map(pkg => (
-                    <div key={pkg.name} className="flex items-center gap-2">
-                      <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--heading)' }}>{pkg.name}</span>
-                      <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>{pkg.hit_count.toLocaleString()}</span>
-                      <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
-                        <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxApt) * 100}%`, background: 'var(--success)' }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {topPypi.length === 0 && topApt.length === 0 && (
-              <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p>
-            )}
-          </div>
-        </CardV2>
+              ))}
+            </div>
+          </CardV2>
+        )}
+        {topPypi.length === 0 && topApt.length === 0 && (
+          <CardV2><p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p></CardV2>
+        )}
       </div>
     </div>
   )
