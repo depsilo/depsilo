@@ -69,6 +69,7 @@ const en = {
       upstreamStatus: 'Upstream Status',
       noUpstreams: 'No upstream data',
       availability: 'Avail.',
+      healthy: 'healthy',
       topPackages: 'Top 10 Packages',
     },
 

@@ -69,6 +69,7 @@ const zh = {
       upstreamStatus: '上游源状态',
       noUpstreams: '暂无上游源数据',
       availability: '可用率',
+      healthy: '健康',
       topPackages: '热门包 TOP 10',
     },
 
