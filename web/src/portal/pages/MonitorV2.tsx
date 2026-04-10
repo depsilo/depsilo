@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi, adminApi } from '@/lib/api'
 import CardV2 from '@/components/CardV2'
 import BadgeV2 from '@/components/BadgeV2'
-import ButtonV2 from '@/components/ButtonV2'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 
@@ -236,13 +235,9 @@ function UpstreamStatusPanel({ upstreams }: { upstreams: UpstreamItem[] }) {
 export default function MonitorV2() {
   const { t } = useTranslation()
   const [events, setEvents] = useState<CacheEvent[]>([])
-  const [paused, setPaused] = useState(false)
-  const pausedRef = useRef(false)
   const [extraHits, setExtraHits] = useState(0)
   const [extraMisses, setExtraMisses] = useState(0)
   const [connected, setConnected] = useState(false)
-
-  useEffect(() => { pausedRef.current = paused }, [paused])
 
   // Stats from API
   const { data } = useQuery<StatsData>({
@@ -253,7 +248,6 @@ export default function MonitorV2() {
 
   // SSE
   const handleEvent = useCallback((e: MessageEvent) => {
-    if (pausedRef.current) return
     try {
       const event: CacheEvent = JSON.parse(e.data)
       if (!event.id) event.id = `${event.timestamp}-${Math.random().toString(36).slice(2, 8)}`
@@ -285,19 +279,9 @@ export default function MonitorV2() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
-          {t('monitor.title')}
-        </h1>
-        <ButtonV2
-          variant={paused ? 'primary' : 'secondary'}
-          size="sm"
-          onClick={() => setPaused(p => !p)}
-        >
-          <Icon name={paused ? 'play_arrow' : 'pause'} size="sm" />
-          {paused ? t('monitor.resume') : t('monitor.pause')}
-        </ButtonV2>
-      </div>
+      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
+        {t('monitor.title')}
+      </h1>
 
       {/* Metrics row — 4 cols in one bar */}
       <div
