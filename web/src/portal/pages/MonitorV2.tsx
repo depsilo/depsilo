@@ -82,6 +82,8 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
       })
     }
     const base = upstream.avg_latency_ms
+    // No meaningful latency data yet (just restarted) — show all gray
+    if (base <= 1) return Array(HEARTBEAT_SLOTS).fill(null)
     const failRate = 1 - upstream.success_rate
     return Array.from({ length: HEARTBEAT_SLOTS }, (_, i) => {
       if (i < HEARTBEAT_SLOTS * 0.3) return null
@@ -206,11 +208,12 @@ function UpstreamStatusPanel({ upstreams }: { upstreams: UpstreamItem[] }) {
                     <span
                       className="font-mono text-[11px] tabular-nums shrink-0"
                       style={{
-                        color: u.avg_latency_ms < 100 ? 'var(--success-text)'
+                        color: u.avg_latency_ms <= 1 ? 'var(--body)'
+                          : u.avg_latency_ms < 100 ? 'var(--success-text)'
                           : u.avg_latency_ms < 500 ? 'var(--body)' : 'var(--error)',
                       }}
                     >
-                      {u.avg_latency_ms}ms
+                      {u.avg_latency_ms <= 1 ? '--' : `${u.avg_latency_ms}ms`}
                     </span>
                     <span className="text-[10px] font-mono tabular-nums shrink-0" style={{ color: 'var(--body)' }}>
                       {(u.success_rate * 100).toFixed(0)}%
