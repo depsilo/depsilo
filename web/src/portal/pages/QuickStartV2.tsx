@@ -1,5 +1,7 @@
 import { useMemo, useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { statsApi } from '@/lib/api'
 import Icon from '@/components/Icon'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import CodeBlockV2 from '@/portal/components/CodeBlockV2'
@@ -151,12 +153,80 @@ const AI_TOOLS: ToolDef[] = [
   { id: 'devcontainer', icon: 'deployed_code', file: '.devcontainer/devcontainer.json',     gen: genDevcontainer },
 ]
 
-// ── AI Integration Panel ───────────────────────────────────────────
+// ── Status Bar ─────────────────────────────────────────────────────
+
+function StatusBar() {
+  const { t } = useTranslation()
+  const url = window.location.origin
+
+  const { data } = useQuery<{
+    service: { status: string }
+    today: { total_requests: number; hit_rate: number; bytes_saved: number }
+  }>({
+    queryKey: ['stats-bar'],
+    queryFn: async () => { const r = await statsApi.getStats(); return r.data },
+    refetchInterval: 30000,
+  })
+
+  const isHealthy = data?.service?.status === 'healthy'
+  const [copied, setCopied] = useState(false)
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [url])
+
+  function fmtBytes(b: number): string {
+    if (!b) return '0 B'
+    const u = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(b) / Math.log(1024))
+    return `${(b / Math.pow(1024, i)).toFixed(1)} ${u[i]}`
+  }
+
+  return (
+    <div
+      className="rounded-[6px] px-5 py-3 flex items-center gap-4 flex-wrap"
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}
+    >
+      {/* Service URL + copy */}
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="relative flex h-2 w-2 shrink-0">
+          {isHealthy && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--success)' }} />}
+          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: data ? (isHealthy ? 'var(--success)' : 'var(--error)') : 'var(--body)' }} />
+        </span>
+        <code className="font-mono text-[13px] truncate" style={{ color: 'var(--stripe-purple)' }}>{url}</code>
+        <button
+          onClick={handleCopy}
+          className="bg-transparent p-0.5 rounded-[4px] cursor-pointer shrink-0"
+          style={{ color: copied ? 'var(--success)' : 'var(--body)' }}
+        >
+          <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
+        </button>
+      </div>
+
+      {/* Divider */}
+      <div className="h-4 w-px shrink-0" style={{ background: 'var(--border)' }} />
+
+      {/* Stats */}
+      {data && (
+        <div className="flex items-center gap-4 text-[12px] font-mono tabular-nums" style={{ color: 'var(--body)' }}>
+          <span>{t('quickstart.statRequests', { count: data.today.total_requests.toLocaleString() })}</span>
+          <span>{t('quickstart.statHitRate', { rate: (data.today.hit_rate * 100).toFixed(1) })}</span>
+          <span>{t('quickstart.statSaved', { size: fmtBytes(data.today.bytes_saved) })}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── AI Integration (collapsed by default) ──────────────────────────
 
 function AIInstructionsCard({ baseURL, host }: { baseURL: string; host: string }) {
   const { t } = useTranslation()
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [previewId, setPreviewId] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
 
   const handleCopy = useCallback((tool: ToolDef) => {
     const content = tool.gen(baseURL, host)
@@ -167,84 +237,137 @@ function AIInstructionsCard({ baseURL, host }: { baseURL: string; host: string }
   }, [baseURL, host])
 
   return (
-    <div
-      className="rounded-[6px] overflow-hidden"
-      style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}
-    >
-      {/* Header — one line */}
-      <div className="px-5 py-3 flex items-center gap-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
+    <div className="rounded-[6px] overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      {/* Toggle header */}
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2.5 px-5 py-3 bg-transparent cursor-pointer transition-colors duration-150 text-left"
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
+      >
         <Icon name="auto_awesome" size="sm" style={{ color: 'var(--stripe-purple)' }} />
-        <span className="font-[400] text-[14px]" style={{ color: 'var(--heading)' }}>
+        <span className="flex-1 text-[14px] font-[400]" style={{ color: 'var(--heading)' }}>
           {t('quickstart.aiTitle')}
         </span>
         <span className="text-[12px]" style={{ color: 'var(--body)' }}>
           {t('quickstart.aiSubtitle')}
         </span>
-      </div>
+        <Icon name={open ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--body)' }} />
+      </button>
 
-      {/* Tool rows */}
-      <div>
-        {AI_TOOLS.map((tool) => {
-          const isCopied = copiedId === tool.id
-          const isPreview = previewId === tool.id
-          return (
-            <div key={tool.id}>
-              <div
-                className="flex items-center gap-3 px-5 py-2.5"
-                style={{ borderBottom: '1px solid var(--border)' }}
-              >
-                {/* Icon + Tool name */}
-                <Icon name={tool.icon} size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
-                <span className="text-[13px] font-[400] w-[100px] shrink-0" style={{ color: 'var(--heading)' }}>
-                  {t(`quickstart.ai_${tool.id}`)}
-                </span>
-
-                {/* File path */}
-                <code className="flex-1 text-[12px] font-mono truncate" style={{ color: 'var(--body)' }}>
-                  {tool.file}
-                </code>
-
-                {/* Preview toggle */}
-                <button
-                  onClick={() => setPreviewId(isPreview ? null : tool.id)}
-                  className="bg-transparent p-1 rounded-[4px] cursor-pointer transition-colors duration-150 shrink-0"
-                  style={{ color: isPreview ? 'var(--stripe-purple)' : 'var(--body)' }}
-                  title={isPreview ? t('quickstart.aiHide') : t('quickstart.aiPreview')}
-                >
-                  <Icon name={isPreview ? 'visibility_off' : 'visibility'} size="sm" />
-                </button>
-
-                {/* Copy button */}
-                <button
-                  onClick={() => handleCopy(tool)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150 shrink-0"
-                  style={{
-                    background: isCopied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
-                    color: isCopied ? 'var(--success-text)' : 'var(--on-primary)',
-                    border: isCopied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
-                  }}
-                >
-                  <Icon name={isCopied ? 'check' : 'content_copy'} size="sm" />
-                  {isCopied ? t('quickstart.aiCopied') : t('quickstart.aiCopy')}
-                </button>
+      {/* Expanded tool list */}
+      {open && (
+        <div style={{ borderTop: '1px solid var(--border)' }}>
+          {AI_TOOLS.map((tool) => {
+            const isCopied = copiedId === tool.id
+            const isPreview = previewId === tool.id
+            return (
+              <div key={tool.id}>
+                <div className="flex items-center gap-3 px-5 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
+                  <Icon name={tool.icon} size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+                  <span className="text-[13px] font-[400] w-[100px] shrink-0" style={{ color: 'var(--heading)' }}>
+                    {t(`quickstart.ai_${tool.id}`)}
+                  </span>
+                  <code className="flex-1 text-[12px] font-mono truncate" style={{ color: 'var(--body)' }}>{tool.file}</code>
+                  <button
+                    onClick={() => setPreviewId(isPreview ? null : tool.id)}
+                    className="bg-transparent p-1 rounded-[4px] cursor-pointer shrink-0"
+                    style={{ color: isPreview ? 'var(--stripe-purple)' : 'var(--body)' }}
+                  >
+                    <Icon name={isPreview ? 'visibility_off' : 'visibility'} size="sm" />
+                  </button>
+                  <button
+                    onClick={() => handleCopy(tool)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150 shrink-0"
+                    style={{
+                      background: isCopied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
+                      color: isCopied ? 'var(--success-text)' : 'var(--on-primary)',
+                      border: isCopied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
+                    }}
+                  >
+                    <Icon name={isCopied ? 'check' : 'content_copy'} size="sm" />
+                    {isCopied ? t('quickstart.aiCopied') : t('quickstart.aiCopy')}
+                  </button>
+                </div>
+                {isPreview && (
+                  <pre
+                    className="px-5 py-3 overflow-x-auto text-[11px] font-mono font-[500] leading-[1.6] whitespace-pre-wrap"
+                    style={{ background: 'var(--code-bg)', color: 'var(--code-text)', maxHeight: '320px', overflowY: 'auto' }}
+                  >
+                    {tool.gen(baseURL, host)}
+                  </pre>
+                )}
               </div>
-
-              {/* Inline preview */}
-              {isPreview && (
-                <pre
-                  className="px-5 py-3 overflow-x-auto text-[11px] font-mono font-[500] leading-[1.6] whitespace-pre-wrap"
-                  style={{ background: 'var(--code-bg)', color: 'var(--code-text)', maxHeight: '320px', overflowY: 'auto' }}
-                >
-                  {tool.gen(baseURL, host)}
-                </pre>
-              )}
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
+
+// ── Config test button ─────────────────────────────────────────────
+
+function TestButton({ ecosystem, baseURL }: { ecosystem: Tab; baseURL: string }) {
+  const { t } = useTranslation()
+  const [status, setStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+
+  const testPaths: Record<Tab, string> = {
+    pip: '/pypi/simple/',
+    apt: '/apt/',
+    npm: '/npm/',
+    go: '/go/',
+    cargo: '/crates/config.json',
+    maven: '/maven/',
+    rubygems: '/rubygems/',
+    composer: '/composer/packages.json',
+    nuget: '/nuget/v3/index.json',
+    conda: '/conda/',
+    cran: '/cran/',
+    helm: '/helm/',
+  }
+
+  const handleTest = async () => {
+    setStatus('testing')
+    try {
+      const res = await fetch(`${baseURL}${testPaths[ecosystem]}`, { method: 'HEAD', mode: 'no-cors' })
+      // no-cors always gives opaque response, but if fetch doesn't throw, connection is ok
+      setStatus(res.type === 'opaque' || res.ok ? 'ok' : 'fail')
+    } catch {
+      setStatus('fail')
+    }
+    setTimeout(() => setStatus('idle'), 3000)
+  }
+
+  const colors = {
+    idle: { bg: 'transparent', color: 'var(--stripe-purple)', border: 'var(--border-purple)' },
+    testing: { bg: 'transparent', color: 'var(--body)', border: 'var(--border)' },
+    ok: { bg: 'rgba(21,190,83,0.1)', color: 'var(--success-text)', border: 'rgba(21,190,83,0.3)' },
+    fail: { bg: 'var(--error-container)', color: 'var(--error)', border: 'var(--error)' },
+  }
+  const c = colors[status]
+  const labels = {
+    idle: t('quickstart.testConnection'),
+    testing: t('quickstart.testing'),
+    ok: t('quickstart.testOk'),
+    fail: t('quickstart.testFail'),
+  }
+  const icons = { idle: 'wifi_tethering', testing: 'hourglass_empty', ok: 'check_circle', fail: 'error' }
+
+  return (
+    <button
+      onClick={handleTest}
+      disabled={status === 'testing'}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150 disabled:cursor-wait"
+      style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}` }}
+    >
+      <Icon name={icons[status]} size="sm" />
+      {labels[status]}
+    </button>
+  )
+}
+
+// ── Method card ────────────────────────────────────────────────────
 
 interface MethodProps {
   icon: string
@@ -275,77 +398,71 @@ function Method({ icon, title, description, children }: MethodProps) {
   )
 }
 
+// ── Main Page ──────────────────────────────────────────────────────
+
 export default function QuickStartV2() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<Tab>('pip')
   const baseURL = useMemo(() => window.location.origin, [])
   const host = useMemo(() => window.location.hostname, [])
 
-  const tabs: { key: Tab; label: string; desc: string }[] = [
-    { key: 'pip', label: t('quickstart.pipLabel'), desc: t('quickstart.pipDesc') },
-    { key: 'apt', label: t('quickstart.aptLabel'), desc: t('quickstart.aptDesc') },
-    { key: 'npm', label: t('quickstart.npmLabel'), desc: t('quickstart.npmDesc') },
-    { key: 'go', label: t('quickstart.goLabel'), desc: t('quickstart.goDesc') },
-    { key: 'cargo', label: t('quickstart.cargoLabel'), desc: t('quickstart.cargoDesc') },
-    { key: 'maven', label: t('quickstart.mavenLabel'), desc: t('quickstart.mavenDesc') },
-    { key: 'rubygems', label: t('quickstart.rubygemsLabel'), desc: t('quickstart.rubygemsDesc') },
-    { key: 'composer', label: t('quickstart.composerLabel'), desc: t('quickstart.composerDesc') },
-    { key: 'nuget', label: t('quickstart.nugetLabel'), desc: t('quickstart.nugetDesc') },
-    { key: 'conda', label: t('quickstart.condaLabel'), desc: t('quickstart.condaDesc') },
-    { key: 'cran', label: t('quickstart.cranLabel'), desc: t('quickstart.cranDesc') },
-    { key: 'helm', label: t('quickstart.helmLabel'), desc: t('quickstart.helmDesc') },
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'pip', label: 'pip' },
+    { key: 'apt', label: 'APT' },
+    { key: 'npm', label: 'npm' },
+    { key: 'go', label: 'Go' },
+    { key: 'cargo', label: 'Cargo' },
+    { key: 'maven', label: 'Maven' },
+    { key: 'rubygems', label: 'RubyGems' },
+    { key: 'composer', label: 'Composer' },
+    { key: 'nuget', label: 'NuGet' },
+    { key: 'conda', label: 'Conda' },
+    { key: 'cran', label: 'CRAN' },
+    { key: 'helm', label: 'Helm' },
   ]
 
   return (
-    <div className="space-y-8">
-      {/* Page header — Stripe style */}
-      <div>
-        <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
-          {t('quickstart.title')}
-        </h1>
-        <p className="text-[16px] font-[300] mt-1" style={{ color: 'var(--body)' }}>
-          {t('quickstart.subtitle')}
-        </p>
-      </div>
+    <div className="space-y-6">
+      {/* Page header */}
+      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
+        {t('quickstart.title')}
+      </h1>
 
-      {/* AI Instructions Card */}
-      <AIInstructionsCard baseURL={baseURL} host={host} />
+      {/* Status bar — shows service health + today stats */}
+      <StatusBar />
 
-      {/* Ecosystem selector — 3 col grid */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Ecosystem selector — compact 4×3, icon + name only */}
+      <div className="grid grid-cols-4 gap-1.5">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key
           return (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-3 rounded-[5px] px-3 py-3 text-left transition-all duration-150 cursor-pointer"
+              className="flex items-center gap-2 rounded-[4px] px-3 py-2 text-left transition-all duration-150 cursor-pointer"
               style={{
                 border: isActive ? '1px solid var(--border-purple)' : '1px solid var(--border)',
                 background: isActive ? 'rgba(83,58,253,0.04)' : 'var(--surface)',
               }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.transform = 'translateY(-1px)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = ''
-              }}
             >
-              <EcosystemIcon type={tab.key} size={20} />
-              <div className="min-w-0">
-                <p className="font-[400] text-[14px] truncate" style={{ color: isActive ? 'var(--heading)' : 'var(--label)' }}>
-                  {tab.label}
-                </p>
-                <p className="text-[11px] truncate leading-tight" style={{ color: 'var(--body)' }}>
-                  {tab.desc}
-                </p>
-              </div>
+              <EcosystemIcon type={tab.key} size={16} />
+              <span className="text-[13px] font-[400]" style={{ color: isActive ? 'var(--heading)' : 'var(--label)' }}>
+                {tab.label}
+              </span>
             </button>
           )
         })}
       </div>
 
-      {/* Methods — identical business logic, new styling */}
+      {/* Test connection for active ecosystem */}
+      <div className="flex items-center gap-3">
+        <TestButton ecosystem={activeTab} baseURL={baseURL} />
+        <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+          {t('quickstart.testHint')}
+        </span>
+      </div>
+
+      {/* Methods */}
       <div className="grid gap-4">
         {activeTab === 'pip' && (
           <>
@@ -504,17 +621,15 @@ export default function QuickStartV2() {
         )}
       </div>
 
-      {/* Info tip — Stripe accent style */}
+      {/* AI Integration — collapsed */}
+      <AIInstructionsCard baseURL={baseURL} host={host} />
+
+      {/* Info tip */}
       <div
         className="flex items-start gap-3 rounded-[5px] px-5 py-4"
         style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}
       >
-        <span
-          className="flex items-center justify-center w-8 h-8 rounded-[6px] shrink-0"
-          style={{ background: 'rgba(83,58,253,0.08)' }}
-        >
-          <Icon name="lightbulb" size="sm" style={{ color: 'var(--stripe-purple)' }} />
-        </span>
+        <Icon name="lightbulb" size="sm" style={{ color: 'var(--stripe-purple)', marginTop: 2 }} />
         <div>
           <p className="font-[400] text-[14px]" style={{ color: 'var(--heading)' }}>{t('quickstart.firstDownloadTitle')}</p>
           <p className="text-[14px] font-[300] mt-0.5 leading-relaxed" style={{ color: 'var(--body)' }}>

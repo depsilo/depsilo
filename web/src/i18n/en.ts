@@ -260,9 +260,7 @@ const en = {
     // Portal
     portal: {
       quickStart: 'Quick Start',
-      serviceStatus: 'Service Status',
-      packages: 'Packages',
-      live: 'Live',
+      monitor: 'Monitor',
       adminPanel: 'Admin →',
       online: 'Online',
       offline: 'Offline',
@@ -359,6 +357,14 @@ const en = {
       helmAddRepoDesc: 'Add Depsilo as a Helm chart repo:',
       helmUse: 'Install Chart',
       helmUseDesc: 'Install a chart from the proxy:',
+      statRequests: '{{count}} requests',
+      statHitRate: '{{rate}}% hit rate',
+      statSaved: '{{size}} saved',
+      testConnection: 'Test Connection',
+      testing: 'Testing...',
+      testOk: 'Connected',
+      testFail: 'Failed',
+      testHint: 'Verify the proxy endpoint is reachable',
       firstDownloadTitle: 'First Download Note',
       firstDownloadDesc:
         'The first request for a package requires downloading from the upstream source. Subsequent requests for the same package will be served from the local cache at LAN speed.',
@@ -422,6 +428,21 @@ const en = {
       savedTraffic: 'Traffic Saved',
       cacheFiles: 'Cached Files',
       upstreamStatus: 'Upstream Status',
+      noUpstreams: 'No upstreams',
+      topPackages: 'Top Packages',
+    },
+
+    // Monitor
+    monitor: {
+      title: 'Live Monitor',
+      hitRate: 'Hit Rate',
+      requests: 'Requests',
+      hits: 'Hits',
+      misses: 'Misses',
+      pause: 'Pause',
+      resume: 'Resume',
+      noEvents: 'Waiting for events...',
+      upstreams: 'Upstream Status',
       noUpstreams: 'No upstreams',
       topPackages: 'Top Packages',
     },

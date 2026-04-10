@@ -260,11 +260,9 @@ const zh = {
     // Portal
     portal: {
       quickStart: '快速开始',
-      serviceStatus: '服务状态',
-      packages: '包浏览',
-      live: '实时动态',
+      monitor: '监控',
       adminPanel: '管理后台 →',
-      online: '服务在线',
+      online: '在线',
       offline: '离线',
     },
 
@@ -359,6 +357,14 @@ const zh = {
       helmAddRepoDesc: '添加 Depsilo 为 Helm chart 仓库：',
       helmUse: '安装 Chart',
       helmUseDesc: '从代理安装 chart：',
+      statRequests: '{{count}} 请求',
+      statHitRate: '{{rate}}% 命中',
+      statSaved: '节省 {{size}}',
+      testConnection: '测试连通',
+      testing: '测试中...',
+      testOk: '连通正常',
+      testFail: '连接失败',
+      testHint: '验证代理端点是否可访问',
       firstDownloadTitle: '首次下载说明',
       firstDownloadDesc:
         '首次请求某个包时，Depsilo 需要从上游源下载并缓存，速度取决于上游响应。后续相同包的请求将直接从本地缓存返回，享受局域网级别的下载速度。',
@@ -422,6 +428,21 @@ const zh = {
       savedTraffic: '节省流量',
       cacheFiles: '缓存文件数',
       upstreamStatus: '上游源状态',
+      noUpstreams: '暂无上游源',
+      topPackages: '热门包',
+    },
+
+    // Monitor
+    monitor: {
+      title: '实时监控',
+      hitRate: '命中率',
+      requests: '请求数',
+      hits: '命中',
+      misses: '未命中',
+      pause: '暂停',
+      resume: '恢复',
+      noEvents: '等待事件...',
+      upstreams: '上游源状态',
       noUpstreams: '暂无上游源',
       topPackages: '热门包',
     },
