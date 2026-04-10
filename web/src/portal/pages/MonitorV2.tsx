@@ -40,24 +40,25 @@ function formatTime(dateStr: string): string {
 
 // ── Uptime Kuma–style heartbeat bar ────────────────────────────────
 
-const HEARTBEAT_SLOTS = 45
+const HEARTBEAT_SLOTS = 90
 
-/** Color a single beat: green < 100ms, yellow < 500ms, red >= 500ms, gray = no data */
 function beatColor(latency: number | null): string {
   if (latency === null) return 'var(--surface-container)'
-  if (latency < 0) return 'var(--error)' // -1 = failed
+  if (latency < 0) return 'var(--error)'
   if (latency < 100) return 'var(--success)'
   if (latency < 500) return 'var(--lemon, #9b6829)'
   return 'var(--error)'
 }
 
-/**
- * HeartbeatBar renders for any upstream. It tries to fetch real latency
- * history via the admin API. If that fails (no auth / no id), it falls
- * back to a synthetic bar based on current success_rate + avg_latency.
- */
+function beatLabel(latency: number | null): string {
+  if (latency === null) return 'No data'
+  if (latency < 0) return 'Failed'
+  return `${latency}ms`
+}
+
 function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
-  // Try fetching real history (may 401 for portal users — that's ok)
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+
   const { data } = useQuery({
     queryKey: ['upstream-heartbeat', upstream.id ?? upstream.name],
     queryFn: () => upstream.id ? adminApi.getUpstreamLatency(upstream.id, '24h') : Promise.resolve(null),
@@ -69,7 +70,6 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   const realPoints: Array<{ latency_ms: number }> = data?.data?.points || []
 
   const beats = useMemo(() => {
-    // Use real data if available
     if (realPoints.length > 0) {
       if (realPoints.length <= HEARTBEAT_SLOTS) {
         const padded: (number | null)[] = Array(HEARTBEAT_SLOTS - realPoints.length).fill(null)
@@ -81,42 +81,56 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
         return realPoints[idx].latency_ms
       })
     }
-
-    // Fallback: synthetic bar from current status
-    // Paint recent slots as current latency, older slots with some variance
     const base = upstream.avg_latency_ms
     const failRate = 1 - upstream.success_rate
     return Array.from({ length: HEARTBEAT_SLOTS }, (_, i) => {
-      // Older slots (left) have more "no data", recent slots (right) show current
-      if (i < HEARTBEAT_SLOTS * 0.3) return null // no data for oldest 30%
-      // Simulate occasional failures based on success_rate
+      if (i < HEARTBEAT_SLOTS * 0.3) return null
       if (failRate > 0 && Math.random() < failRate) return -1
-      // Add slight variance to make it look natural
       const variance = (Math.random() - 0.5) * base * 0.4
       return Math.max(1, Math.round(base + variance))
     })
   }, [realPoints, upstream.avg_latency_ms, upstream.success_rate])
 
   return (
-    <div className="flex items-center gap-[2px]">
-      {beats.map((lat, i) => (
+    <div className="relative">
+      <div
+        className="flex items-end gap-[1px]"
+        onMouseLeave={() => setHoveredIdx(null)}
+      >
+        {beats.map((lat, i) => (
+          <div
+            key={i}
+            className="rounded-[1px] cursor-pointer transition-opacity duration-75"
+            style={{
+              height: hoveredIdx === i ? 14 : 10,
+              width: `${100 / HEARTBEAT_SLOTS}%`,
+              minWidth: 2,
+              background: beatColor(lat),
+              opacity: lat === null ? 0.25 : (hoveredIdx !== null && hoveredIdx !== i ? 0.5 : 1),
+            }}
+            onMouseEnter={() => setHoveredIdx(i)}
+          />
+        ))}
+      </div>
+      {/* Hover tooltip */}
+      {hoveredIdx !== null && (
         <div
-          key={i}
-          className="rounded-[1px]"
+          className="absolute bottom-full mb-1 px-2 py-1 rounded-[4px] text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
           style={{
-            height: 20,
-            width: `${100 / HEARTBEAT_SLOTS}%`,
-            minWidth: 3,
-            background: beatColor(lat),
-            opacity: lat === null ? 0.3 : 1,
+            background: 'var(--heading)',
+            color: 'var(--bg)',
+            left: `${(hoveredIdx / HEARTBEAT_SLOTS) * 100}%`,
+            transform: 'translateX(-50%)',
           }}
-        />
-      ))}
+        >
+          {beatLabel(beats[hoveredIdx])}
+        </div>
+      )}
     </div>
   )
 }
 
-// ── Upstream panel grouped by ecosystem ────────────────────────────
+// ── Upstream panel — grid layout, grouped by ecosystem ─────────────
 
 interface UpstreamItem {
   id?: number
@@ -130,13 +144,11 @@ interface UpstreamItem {
 function UpstreamStatusPanel({ upstreams }: { upstreams: UpstreamItem[] }) {
   const { t } = useTranslation()
 
-  // Group by adapter type
   const groups = useMemo(() => {
     const map = new Map<string, UpstreamItem[]>()
     for (const u of upstreams) {
-      const key = u.adapter
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(u)
+      if (!map.has(u.adapter)) map.set(u.adapter, [])
+      map.get(u.adapter)!.push(u)
     }
     return Array.from(map.entries())
   }, [upstreams])
@@ -153,68 +165,64 @@ function UpstreamStatusPanel({ upstreams }: { upstreams: UpstreamItem[] }) {
   }
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--body)' }}>
+    <div>
+      <h3 className="text-[12px] font-[400] uppercase tracking-wider mb-3" style={{ color: 'var(--body)' }}>
         {t('monitor.upstreams')}
       </h3>
-      {groups.map(([adapter, items]) => (
-        <CardV2 key={adapter}>
-          {/* Group header */}
-          <div className="flex items-center gap-2 mb-3">
-            <EcosystemIcon type={adapter as any} size={16} />
-            <span className="text-[13px] font-[400]" style={{ color: 'var(--heading)' }}>
-              {adapter.toUpperCase()}
-            </span>
-            <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--body)' }}>
-              {items.filter(u => u.healthy).length}/{items.length} {t('monitor.healthy')}
-            </span>
-          </div>
 
-          {/* Upstream rows */}
-          <div className="space-y-3">
-            {items.map((u) => (
-              <div key={u.name}>
-                {/* Row 1: name + status + latency + uptime */}
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    {u.healthy && (
-                      <span
-                        className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75"
-                        style={{ background: 'var(--success)' }}
-                      />
-                    )}
+      {/* 2-column grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {groups.map(([adapter, items]) => (
+          <div
+            key={adapter}
+            className="rounded-[5px] p-4"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+          >
+            {/* Group header: icon + name + healthy count */}
+            <div className="flex items-center gap-2 mb-2.5">
+              <EcosystemIcon type={adapter as any} size={14} />
+              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--heading)' }}>
+                {adapter}
+              </span>
+              <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--body)' }}>
+                {items.filter(u => u.healthy).length}/{items.length} {t('monitor.healthy')}
+              </span>
+            </div>
+
+            {/* Upstream items */}
+            <div className="space-y-2.5">
+              {items.map((u) => (
+                <div key={u.name}>
+                  {/* Info row */}
+                  <div className="flex items-center gap-1.5 mb-1">
                     <span
-                      className="relative inline-flex rounded-full h-2 w-2"
+                      className="inline-block h-1.5 w-1.5 rounded-full shrink-0"
                       style={{ background: u.healthy ? 'var(--success)' : 'var(--error)' }}
                     />
-                  </span>
-                  <span className="text-[13px] font-[400] flex-1 truncate" style={{ color: 'var(--heading)' }}>
-                    {u.name}
-                  </span>
-                  <span
-                    className="font-mono text-[12px] tabular-nums shrink-0"
-                    style={{
-                      color: u.avg_latency_ms < 100
-                        ? 'var(--success-text)'
-                        : u.avg_latency_ms < 500
-                          ? 'var(--body)'
-                          : 'var(--error)',
-                    }}
-                  >
-                    {u.avg_latency_ms}ms
-                  </span>
-                  <BadgeV2 variant={u.success_rate >= 0.99 ? 'success' : u.success_rate >= 0.9 ? 'warning' : 'error'}>
-                    {(u.success_rate * 100).toFixed(1)}%
-                  </BadgeV2>
+                    <span className="text-[12px] font-[400] truncate flex-1" style={{ color: 'var(--heading)' }}>
+                      {u.name}
+                    </span>
+                    <span
+                      className="font-mono text-[11px] tabular-nums shrink-0"
+                      style={{
+                        color: u.avg_latency_ms < 100 ? 'var(--success-text)'
+                          : u.avg_latency_ms < 500 ? 'var(--body)' : 'var(--error)',
+                      }}
+                    >
+                      {u.avg_latency_ms}ms
+                    </span>
+                    <span className="text-[10px] font-mono tabular-nums shrink-0" style={{ color: 'var(--body)' }}>
+                      {(u.success_rate * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  {/* Heartbeat */}
+                  <HeartbeatBar upstream={u} />
                 </div>
-
-                {/* Row 2: heartbeat bar (always shown) */}
-                <HeartbeatBar upstream={u} />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </CardV2>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
