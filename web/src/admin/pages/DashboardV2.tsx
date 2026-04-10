@@ -1,11 +1,10 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { adminApi } from '@/lib/api'
 import CardV2 from '@/components/CardV2'
 import MetricCardV2 from '@/components/MetricCardV2'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import BadgeV2 from '@/components/BadgeV2'
 import Icon from '@/components/Icon'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
