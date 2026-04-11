@@ -100,48 +100,36 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   const uptime = validBeats.length > 0 ? ((healthyBeats.length / validBeats.length) * 100).toFixed(2) : '--'
 
   return (
-    <div>
-      {/* Bar */}
-      <div className="relative" style={{ height: 34 }}>
-        <div
-          className="absolute bottom-0 left-0 right-0 flex items-end gap-[2px]"
-          onMouseLeave={() => setHoveredIdx(null)}
-        >
-          {beats.map((lat, i) => (
-            <div
-              key={i}
-              className="cursor-pointer"
-              style={{
-                height: hoveredIdx === i ? 32 : 26,
-                flex: '1 1 0%',
-                minWidth: 3,
-                borderRadius: 3,
-                background: beatColor(lat),
-                opacity: lat === null ? 0.2 : (hoveredIdx !== null && hoveredIdx !== i ? 0.6 : 1),
-                transition: 'height 75ms, opacity 75ms',
-              }}
-              onMouseEnter={() => setHoveredIdx(i)}
-            />
-          ))}
-        </div>
-        {/* Tooltip */}
-        {hoveredIdx !== null && (
+    <div className="relative" style={{ height: 22 }}>
+      <div
+        className="absolute bottom-0 left-0 right-0 flex items-end gap-[1.5px]"
+        onMouseLeave={() => setHoveredIdx(null)}
+      >
+        {beats.map((lat, i) => (
           <div
-            className="absolute bottom-full mb-1.5 px-2.5 py-1 rounded-[4px] text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
-            style={{ background: 'var(--heading)', color: 'var(--bg)', left: `${(hoveredIdx / HEARTBEAT_SLOTS) * 100}%`, transform: 'translateX(-50%)' }}
-          >
-            {beatLabel(beats[hoveredIdx])}
-          </div>
-        )}
+            key={i}
+            className="cursor-pointer"
+            style={{
+              height: hoveredIdx === i ? 20 : 16,
+              flex: '1 1 0%',
+              minWidth: 2,
+              borderRadius: 2,
+              background: beatColor(lat),
+              opacity: lat === null ? 0.2 : (hoveredIdx !== null && hoveredIdx !== i ? 0.5 : 1),
+              transition: 'height 75ms, opacity 75ms',
+            }}
+            onMouseEnter={() => setHoveredIdx(i)}
+          />
+        ))}
       </div>
-      {/* Labels: 24h ago — uptime% — Now */}
-      <div className="flex items-center justify-between mt-1">
-        <span className="text-[10px]" style={{ color: 'var(--body)' }}>24h ago</span>
-        <span className="text-[10px] font-mono tabular-nums" style={{ color: 'var(--body)' }}>
-          {uptime !== '--' ? `${uptime}% ${t('monitor.uptime') || 'uptime'}` : ''}
-        </span>
-        <span className="text-[10px]" style={{ color: 'var(--body)' }}>{t('monitor.now') || 'Now'}</span>
-      </div>
+      {hoveredIdx !== null && (
+        <div
+          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[10px] font-mono whitespace-nowrap pointer-events-none z-10"
+          style={{ background: 'var(--heading)', color: 'var(--bg)', left: `${(hoveredIdx / HEARTBEAT_SLOTS) * 100}%`, transform: 'translateX(-50%)' }}
+        >
+          {beatLabel(beats[hoveredIdx])}
+        </div>
+      )}
     </div>
   )
 }
@@ -186,42 +174,40 @@ function UpstreamStatusPanel({ upstreams }: { upstreams: UpstreamItem[] }) {
         {t('monitor.upstreams')}
       </h3>
 
-      {/* Upstream cards — each upstream gets its own full-width row like status pages */}
-      <div className="space-y-3">
+      {/* Grouped upstream cards — 2 columns */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {groups.map(([adapter, items]) => (
-          <div key={adapter}>
-            {/* Group label */}
-            <div className="flex items-center gap-2 mb-2">
+          <div
+            key={adapter}
+            className="rounded-[5px] p-4"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+          >
+            {/* Group header */}
+            <div className="flex items-center gap-2 mb-3">
               <EcosystemIcon type={adapter as any} size={14} />
               <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--heading)' }}>
                 {adapter}
               </span>
-              <span className="text-[10px] font-mono tabular-nums" style={{ color: 'var(--body)' }}>
-                {items.filter(u => u.healthy).length}/{items.length} {t('monitor.healthy')}
+              <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--body)' }}>
+                {items.filter(u => u.healthy).length}/{items.length}
               </span>
             </div>
 
-            {/* Each upstream = its own card with full-width heartbeat */}
-            <div className="space-y-2">
+            {/* Upstream rows inside one card */}
+            <div className="space-y-3">
               {items.map((u) => (
-                <div
-                  key={u.name}
-                  className="rounded-[5px] px-4 py-3"
-                  style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-                >
-                  {/* Title row: name + status */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[13px] font-[400]" style={{ color: 'var(--heading)' }}>
-                      {u.name}
-                    </span>
-                    <span
-                      className="text-[12px] font-[400]"
-                      style={{ color: u.healthy ? '#3bd671' : 'var(--error)' }}
-                    >
-                      {u.healthy ? (t('monitor.operational') || 'Operational') : (t('monitor.down') || 'Down')}
-                    </span>
+                <div key={u.name}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[12px] font-[400]" style={{ color: 'var(--heading)' }}>{u.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[11px] tabular-nums" style={{ color: (u.avg_latency_ms || 0) <= 1 ? 'var(--body)' : u.avg_latency_ms < 100 ? '#3bd671' : u.avg_latency_ms < 500 ? 'var(--body)' : 'var(--error)' }}>
+                        {(u.avg_latency_ms || 0) <= 1 ? '--' : `${u.avg_latency_ms}ms`}
+                      </span>
+                      <span className="text-[10px]" style={{ color: u.healthy ? '#3bd671' : 'var(--error)' }}>
+                        {u.healthy ? '●' : '○'}
+                      </span>
+                    </div>
                   </div>
-                  {/* Full-width heartbeat bar */}
                   <HeartbeatBar upstream={u} />
                 </div>
               ))}
