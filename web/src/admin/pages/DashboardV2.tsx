@@ -7,7 +7,7 @@ import MetricCardV2 from '@/components/MetricCardV2'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
 } from 'recharts'
 
@@ -323,14 +323,24 @@ export default function DashboardV2() {
           </div>
           <ResponsiveContainer width="100%" height={180}>
             <ComposedChart data={trendPoints}>
+              <defs>
+                <linearGradient id="gradHits" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--stripe-purple)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="var(--stripe-purple)" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="gradMisses" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--error)" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="var(--error)" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
               <XAxis dataKey="date" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis yAxisId="count" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
               <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={35} />
               <Tooltip content={<ChartTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar yAxisId="count" dataKey="hits" fill="var(--stripe-purple)" name={t('dashboard.hits')} radius={[2, 2, 0, 0]} opacity={0.8} />
-              <Bar yAxisId="count" dataKey="misses" fill="var(--error)" name={t('dashboard.misses')} radius={[2, 2, 0, 0]} opacity={0.6} />
+              <Area yAxisId="count" type="monotone" dataKey="hits" stroke="var(--stripe-purple)" strokeWidth={1.5} fill="url(#gradHits)" name={t('dashboard.hits')} />
+              <Area yAxisId="count" type="monotone" dataKey="misses" stroke="var(--error)" strokeWidth={1.5} fill="url(#gradMisses)" name={t('dashboard.misses')} />
               <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--success)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
