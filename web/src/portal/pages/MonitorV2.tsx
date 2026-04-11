@@ -90,14 +90,8 @@ function useBeats(upstream: UpstreamItem) {
 }
 
 function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
-  const { t } = useTranslation()
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const beats = useBeats(upstream)
-
-  // Compute uptime from beats
-  const validBeats = beats.filter(b => b !== null)
-  const healthyBeats = validBeats.filter(b => b !== null && b >= 0)
-  const uptime = validBeats.length > 0 ? ((healthyBeats.length / validBeats.length) * 100).toFixed(2) : '--'
 
   return (
     <div className="relative" style={{ height: 22 }}>
