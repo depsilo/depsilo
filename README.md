@@ -1,73 +1,70 @@
 <div align="center">
 
-<img src="docs/brand/icon-dark.svg" alt="Depsilo" width="80" height="80">
+<img src="docs/brand/logo-stacked-dark.svg" alt="Depsilo" width="200">
 
-### Depsilo
+**One cache for all your dependencies.**
 
-*One cache for all your dependencies*
+Deploy in minutes. LAN-speed installs for 12 package managers.<br>
+Single binary, ~50 MB memory, zero complexity.
 
-[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/depsilo/depsilo)](https://hub.docker.com/r/depsilo/depsilo)
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
 
-[English](README.md) · [中文](docs/README_zh.md)
+[Website](https://depsilo.com) &bull; [English](README.md) &bull; [中文](docs/README_zh.md)
 
 </div>
 
 ---
 
-## What is Depsilo?
+## Why Depsilo?
 
-A lightweight dependency proxy cache gateway. Single binary, ~50 MB memory, deploy in minutes. Caches packages from upstream registries so your team gets LAN-speed installs.
+Your team runs `pip install`, `npm install`, `go get`, `cargo build` hundreds of times a day. Every install hits the public internet, burning bandwidth and slowing CI. If an upstream goes down, your builds break.
 
-## Supported Package Managers
+**Depsilo sits between your team and the public registries.** First request fetches from upstream; every request after that is served from local cache at LAN speed.
 
-| Manager | Language / Ecosystem | Route | URL Rewriting |
-|---------|---------------------|-------|---------------|
-| **PyPI** | Python (pip / uv / Poetry) | `/pypi/` | Yes (HTML) |
-| **APT** | Debian / Ubuntu | `/apt/` | No |
-| **npm** | Node.js (npm / yarn / pnpm) | `/npm/` | Yes (JSON) |
-| **Go Modules** | Go | `/go/` | No |
-| **Cargo** | Rust | `/crates/` | Yes (config.json) |
-| **Maven** | Java / Kotlin / Gradle | `/maven/` | No |
-| **RubyGems** | Ruby (bundler / gem) | `/rubygems/` | No |
-| **Composer** | PHP (Packagist) | `/composer/` | Yes (metadata-url) |
-| **NuGet** | .NET (dotnet) | `/nuget/` | Yes (service index) |
-| **Conda** | Python data science | `/conda/` | No |
-| **CRAN** | R | `/cran/` | No |
-| **Helm** | Kubernetes charts | `/helm/` | No |
+| | Nexus / Artifactory | Depsilo |
+|---|---|---|
+| Deploy time | 30+ min, Java runtime, config wizards | `docker run` — done |
+| Memory | 2+ GB | ~50 MB |
+| Binary | WAR/JAR + JVM | Single static binary |
+| Config | XML/YAML, web wizard, LDAP, roles... | One TOML file |
+| Ecosystems | Many (with per-ecosystem setup) | 12, unified config |
 
-## Features
+> Depsilo is **not** a full artifact repository. It's a caching proxy — purpose-built to be fast, light, and invisible.
 
-- **12 package managers** in one service
-- **Singleflight** deduplication — 100 concurrent requests = 1 upstream fetch
-- **Multi-upstream** with per-source HTTP proxy and priority/latency-based selection
-- **Automatic health checks** with latency monitoring and failover
-- **Local filesystem or S3-compatible** storage backend
-- **Web UI** — portal with quick-start guides, package browser, real-time cache stream
-- **Admin dashboard** — trend charts, storage treemap, upstream latency sparklines
-- **Prometheus** `/metrics` endpoint
-- **Single binary**, SQLite default, ~50 MB memory
-- **One-line Docker** deployment
+## Supported Ecosystems
+
+| Manager | Ecosystem | Proxy Type |
+|---------|-----------|------------|
+| **pip** / uv / Poetry | Python | URL rewrite |
+| **apt** | Debian / Ubuntu | Passthrough |
+| **npm** / yarn / pnpm | Node.js | URL rewrite |
+| **go get** | Go Modules | Passthrough |
+| **cargo** | Rust | config.json rewrite |
+| **maven** / gradle | Java / Kotlin | Passthrough |
+| **gem** / bundler | Ruby | Passthrough |
+| **composer** | PHP | metadata-url rewrite |
+| **dotnet** | .NET (NuGet) | service index rewrite |
+| **conda** | Data science | Passthrough |
+| **Rscript** | R (CRAN) | Passthrough |
+| **helm** | Kubernetes | Passthrough |
 
 ## Quick Start
 
-### Docker (recommended)
-
 ```bash
-docker run -d \
-  --name depsilo \
-  -p 23333:23333 \
-  -v depsilo-data:/app/data \
-  --restart unless-stopped \
-  depsilo/depsilo:latest
+docker run -d --name depsilo -p 23333:23333 -v depsilo-data:/app/data depsilo/depsilo:latest
 ```
 
-### docker-compose
+Open `http://localhost:23333` — the portal shows copy-paste config for all 12 ecosystems.
+
+Default admin login: `admin` / `admin` at `/admin`.
+
+<details>
+<summary><b>docker-compose</b></summary>
 
 ```yaml
-version: '3.8'
 services:
   depsilo:
     image: depsilo/depsilo:latest
@@ -76,18 +73,19 @@ services:
     volumes:
       - ./data:/app/data
       - ./config.toml:/app/config.toml
-    environment:
-      - DEPSILO_CONFIG=/app/config.toml
     restart: unless-stopped
 ```
 
 ```bash
 curl -O https://raw.githubusercontent.com/depsilo/depsilo/master/config.example.toml
 mv config.example.toml config.toml
-docker-compose up -d
+docker compose up -d
 ```
 
-### Build from source
+</details>
+
+<details>
+<summary><b>Build from source</b></summary>
 
 ```bash
 git clone https://github.com/depsilo/depsilo.git
@@ -97,132 +95,107 @@ cp config.example.toml config.toml
 ./bin/depsilo
 ```
 
-The server starts on `http://localhost:23333`. Default admin: `admin` / `admin`.
+Requires Go 1.21+ and Node.js 20+.
 
-## Usage
+</details>
 
-Open `http://YOUR_IP:23333` for the portal with copy-paste config commands for all 12 package managers.
-
-### pip
+## Usage Examples
 
 ```bash
-pip install <package> -i http://YOUR_IP:23333/pypi/simple/ --trusted-host YOUR_IP
+# Python
+pip install requests -i http://YOUR_HOST:23333/pypi/simple/ --trusted-host YOUR_HOST
+
+# Node.js
+npm config set registry http://YOUR_HOST:23333/npm/
+
+# Go
+export GOPROXY=http://YOUR_HOST:23333/go,direct
+
+# Rust
+# ~/.cargo/config.toml
+# [source.crates-io]
+# replace-with = "depsilo"
+# [source.depsilo]
+# registry = "sparse+http://YOUR_HOST:23333/crates/"
 ```
 
-### npm
+See the built-in **Quick Start** page for all 12 ecosystems, including Maven, Composer, NuGet, Conda, CRAN, and Helm.
 
-```bash
-npm install <package> --registry http://YOUR_IP:23333/npm/
-```
+## Key Features
 
-### Go
+**Caching Engine**
+- **Singleflight** — 100 concurrent requests for the same package = 1 upstream fetch
+- **Stale-while-revalidate** — expired cache is served immediately while refreshing in the background
+- **Offline fallback** — if all upstreams are down, stale cache keeps your builds running
+- **Streaming** — large packages (torch ~2 GB) are never buffered in memory
 
-```bash
-GOPROXY=http://YOUR_IP:23333/go,direct go get <package>
-```
+**Upstream Management**
+- Multiple upstreams per ecosystem with priority or latency-based selection
+- Per-upstream HTTP proxy support
+- Automatic health checks with failover
+- Circuit breaker for unhealthy upstreams
 
-### Maven (~/.m2/settings.xml)
+**Storage**
+- Local filesystem (default) or S3-compatible (MinIO, AWS S3)
+- LRU eviction when cache exceeds configured threshold
+- Per-ecosystem cache size tracking
 
-```xml
-<settings>
-  <mirrors>
-    <mirror>
-      <id>depsilo</id>
-      <mirrorOf>central</mirrorOf>
-      <url>http://YOUR_IP:23333/maven/</url>
-    </mirror>
-  </mirrors>
-</settings>
-```
+**Observability**
+- Web portal with quick-start guides and real-time cache event stream
+- Admin dashboard with trend charts, storage visualization, upstream latency monitoring
+- Prometheus `/metrics` endpoint
+- Access logs with filtering and export
+- Audit trail for admin operations
 
-### Cargo (~/.cargo/config.toml)
-
-```toml
-[source.crates-io]
-replace-with = "depsilo"
-
-[source.depsilo]
-registry = "sparse+http://YOUR_IP:23333/crates/"
-```
-
-### More
-
-See the **Quick Start** page in the web UI for apt, RubyGems, Composer, NuGet, Conda, CRAN, Helm, and Docker build configurations.
+**Security**
+- JWT authentication for admin API
+- API token management (hash-only storage)
+- Package allow/deny rules
+- SQLite WAL mode for safe concurrent access
 
 ## Configuration
 
-Copy `config.example.toml` to `config.toml`. Key sections:
-
 ```toml
 [server]
-host = "0.0.0.0"
 port = 23333
 
 [storage]
-type = "local"       # local | s3
+type = "local"              # local | s3
 path = "./data/cache"
 
 [cache]
 max_size_gb   = 20
-ttl_index     = "5m"    # metadata
-ttl_blob      = "72h"   # package files
-lru_threshold = 90
+ttl_index     = "5m"        # metadata refresh interval
+ttl_blob      = "72h"       # package file TTL
+lru_threshold = 90           # trigger LRU cleanup at 90% capacity
 
-# Each adapter has its own [[<type>.upstreams]] section
 [[pypi.upstreams]]
 name     = "tuna"
 url      = "https://pypi.tuna.tsinghua.edu.cn"
 priority = 1
 
-[[npm.upstreams]]
-name     = "npmmirror"
-url      = "https://registry.npmmirror.com"
-priority = 1
+[[pypi.upstreams]]
+name     = "official"
+url      = "https://pypi.org"
+priority = 2
+proxy    = "http://127.0.0.1:7890"    # optional per-upstream proxy
 ```
 
-See `config.example.toml` for the full reference with all 12 adapter configurations.
-
-## Web UI
-
-**Portal** (`/`) — no login required:
-- Quick Start — copy-paste config for all package managers
-- Package Browse — search and explore cached packages
-- Live Stream — real-time cache hit/miss events (SSE)
-- Service Status — upstream health and statistics
-
-**Admin** (`/admin`) — login required:
-- Dashboard — trend charts, hit rate, latency sparklines
-- Cache Management — storage treemap, search, cleanup
-- Upstreams — add/edit/delete upstream sources
-- Access Logs — request history with filtering
-- Users — user and API token management
-- Settings — cache policy, storage, auth configuration
-
-## Metrics
-
-Prometheus metrics at `/metrics`:
-
-```
-depsilo_requests_total
-depsilo_request_duration_seconds
-depsilo_upstream_requests_total
-depsilo_cache_size_bytes
-depsilo_cache_files_total
-```
+See [`config.example.toml`](config.example.toml) for the full reference.
 
 ## Roadmap
 
-- [x] 12 package manager proxies (pip, apt, npm, Go, Cargo, Maven, RubyGems, Composer, NuGet, Conda, CRAN, Helm)
+- [x] 12 ecosystem proxies
 - [x] Web UI (portal + admin dashboard)
 - [x] Real-time cache event stream (SSE)
-- [x] Package search and browsing
-- [x] Storage distribution treemap
-- [x] Upstream latency monitoring
+- [x] Storage visualization & package search
 - [x] Prometheus metrics
-- [x] Docker deployment
+- [x] Audit logs
+- [x] Package allow/deny rules
 - [ ] Docker Registry proxy
-- [ ] Audit logs
-- [ ] Package allow/deny rules
+- [ ] Cluster mode (multi-node shared cache)
+- [ ] LDAP / SSO integration
+- [ ] Bandwidth savings reports
 
 ## Contributing
 
@@ -231,3 +204,11 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 ## License
 
 [MIT License](LICENSE)
+
+---
+
+<div align="center">
+
+[depsilo.com](https://depsilo.com)
+
+</div>
