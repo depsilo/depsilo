@@ -5,7 +5,7 @@ import { statsApi } from '@/lib/api'
 import CardV2 from '@/components/CardV2'
 import BadgeV2 from '@/components/BadgeV2'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
+import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 
 interface CacheEvent {
   id: string
