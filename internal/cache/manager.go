@@ -19,7 +19,6 @@ import (
 func ExtractPackageName(adapterType, key string) string {
 	switch adapterType {
 	case "pypi":
-		// key: pypi/simple/{package}/index.html or pypi/files/.../{filename}
 		if strings.HasPrefix(key, "pypi/simple/") {
 			parts := strings.SplitN(strings.TrimPrefix(key, "pypi/simple/"), "/", 2)
 			if len(parts) > 0 {
@@ -27,51 +26,41 @@ func ExtractPackageName(adapterType, key string) string {
 			}
 		}
 		if strings.HasPrefix(key, "pypi/files/") {
-			// Extract filename, e.g. "requests-2.31.0-py3-none-any.whl" → "requests"
 			path := strings.TrimPrefix(key, "pypi/files/")
 			parts := strings.Split(path, "/")
 			fname := parts[len(parts)-1]
-			// Split on '-' and take first part
 			if idx := strings.Index(fname, "-"); idx > 0 {
 				return fname[:idx]
 			}
 			return fname
 		}
 	case "apt":
-		// key: apt/{repo}/{path}, extract .deb name or path component
 		if strings.HasSuffix(key, ".deb") {
 			parts := strings.Split(key, "/")
 			fname := parts[len(parts)-1]
-			// "curl_7.68.0-1ubuntu2_amd64.deb" → "curl"
 			if idx := strings.Index(fname, "_"); idx > 0 {
 				return fname[:idx]
 			}
 			return fname
 		}
-		// For metadata files, use the repo name
 		parts := strings.SplitN(strings.TrimPrefix(key, "apt/"), "/", 2)
 		if len(parts) > 0 {
 			return parts[0]
 		}
 	case "npm":
-		// key: npm/<package>/metadata.json or npm/<package>/-/<filename>
-		// or npm/@<scope>/<package>/metadata.json or npm/@<scope>/<package>/-/<filename>
 		trimmed := strings.TrimPrefix(key, "npm/")
 		if strings.HasPrefix(trimmed, "@") {
-			// Scoped: @scope/package/...
 			parts := strings.SplitN(trimmed, "/", 3)
 			if len(parts) >= 2 {
-				return parts[0] + "/" + parts[1] // @scope/package
+				return parts[0] + "/" + parts[1]
 			}
 		} else {
-			// Unscoped: package/...
 			parts := strings.SplitN(trimmed, "/", 2)
 			if len(parts) >= 1 {
 				return parts[0]
 			}
 		}
 	case "go":
-		// key: go/<module>/@v/... or go/<module>/@latest
 		trimmed := strings.TrimPrefix(key, "go/")
 		if idx := strings.Index(trimmed, "/@v/"); idx > 0 {
 			return trimmed[:idx]
@@ -80,7 +69,6 @@ func ExtractPackageName(adapterType, key string) string {
 			return trimmed[:idx]
 		}
 	case "cargo":
-		// key: cargo/index/{prefix}/{crate} or cargo/crates/{crate}/{version}.crate
 		trimmed := strings.TrimPrefix(key, "cargo/")
 		if strings.HasPrefix(trimmed, "crates/") {
 			parts := strings.SplitN(strings.TrimPrefix(trimmed, "crates/"), "/", 2)
@@ -95,18 +83,14 @@ func ExtractPackageName(adapterType, key string) string {
 			}
 		}
 	case "maven":
-		// key: maven/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar
-		// Extract artifactId (second-to-last path segment for versioned files)
 		parts := strings.Split(strings.TrimPrefix(key, "maven/"), "/")
 		if len(parts) >= 3 {
-			return parts[len(parts)-3] // artifactId
+			return parts[len(parts)-3]
 		}
 	case "rubygems":
-		// key: rubygems/gems/rails-7.0.0.gem or rubygems/info/rails
 		trimmed := strings.TrimPrefix(key, "rubygems/")
 		if strings.HasPrefix(trimmed, "gems/") {
 			fname := strings.TrimPrefix(trimmed, "gems/")
-			// "rails-7.0.0.gem" -> "rails"
 			if idx := strings.LastIndex(fname, "-"); idx > 0 {
 				return fname[:idx]
 			}
@@ -116,13 +100,12 @@ func ExtractPackageName(adapterType, key string) string {
 			return strings.TrimPrefix(trimmed, "info/")
 		}
 	case "composer":
-		// key: composer/p2/monolog/monolog.json or composer/dist/monolog/monolog/abc123.zip
 		trimmed := strings.TrimPrefix(key, "composer/")
 		if strings.HasPrefix(trimmed, "p2/") {
 			name := strings.TrimPrefix(trimmed, "p2/")
 			name = strings.TrimSuffix(name, ".json")
 			name = strings.TrimSuffix(name, "~dev")
-			return name // "monolog/monolog"
+			return name
 		}
 		if strings.HasPrefix(trimmed, "dist/") {
 			parts := strings.SplitN(strings.TrimPrefix(trimmed, "dist/"), "/", 3)
@@ -131,7 +114,6 @@ func ExtractPackageName(adapterType, key string) string {
 			}
 		}
 	case "conda":
-		// key: conda/pkgs/main/linux-64/numpy-1.24.0-py39h.tar.bz2
 		trimmed := strings.TrimPrefix(key, "conda/")
 		parts := strings.Split(trimmed, "/")
 		fname := parts[len(parts)-1]
@@ -147,7 +129,6 @@ func ExtractPackageName(adapterType, key string) string {
 		}
 		return fname
 	case "cran":
-		// key: cran/src/contrib/ggplot2_3.4.0.tar.gz
 		trimmed := strings.TrimPrefix(key, "cran/")
 		parts := strings.Split(trimmed, "/")
 		fname := parts[len(parts)-1]
@@ -156,7 +137,6 @@ func ExtractPackageName(adapterType, key string) string {
 		}
 		return strings.TrimSuffix(fname, ".tar.gz")
 	case "nuget":
-		// key: nuget/v3/package/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg
 		trimmed := strings.TrimPrefix(key, "nuget/")
 		if strings.HasPrefix(trimmed, "v3/package/") {
 			parts := strings.SplitN(strings.TrimPrefix(trimmed, "v3/package/"), "/", 2)
@@ -171,7 +151,6 @@ func ExtractPackageName(adapterType, key string) string {
 			}
 		}
 	case "helm":
-		// key: helm/nginx-15.0.0.tgz or helm/index.yaml
 		trimmed := strings.TrimPrefix(key, "helm/")
 		if strings.HasSuffix(trimmed, ".tgz") {
 			fname := trimmed
@@ -191,6 +170,13 @@ func ExtractPackageName(adapterType, key string) string {
 }
 
 // Manager handles cache lookup, singleflight dedup, and storage writes.
+// Strategy: stale-while-revalidate + offline fallback.
+//   - Cache entries are NEVER deleted by TTL expiration.
+//   - If cache exists and is fresh (< TTL): serve immediately (HIT).
+//   - If cache exists but is stale (>= TTL): serve immediately (HIT),
+//     then trigger a background refresh from upstream.
+//   - If cache miss: fetch from upstream, store, serve (MISS).
+//   - If upstream fails on miss but stale cache exists: serve stale (HIT).
 type Manager struct {
 	storage  Storage
 	db       *gorm.DB
@@ -208,7 +194,6 @@ func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus) *Manager
 }
 
 // FetchFunc is called on cache miss to fetch data from upstream.
-// It returns the response body, content type, and size.
 type FetchFunc func(ctx context.Context) (body io.ReadCloser, contentType string, size int64, err error)
 
 // GetResult holds the result of a cache get operation.
@@ -219,38 +204,46 @@ type GetResult struct {
 	Hit         bool
 }
 
-// Get tries the cache first; on miss, calls fetchFn via singleflight,
-// stores the result, and returns it.
+// Get implements stale-while-revalidate caching:
+//  1. Cache fresh → return immediately
+//  2. Cache stale → return immediately + background refresh
+//  3. Cache miss  → fetch from upstream → store → return
+//  4. Upstream fail + stale cache exists → return stale cache
 func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) (*GetResult, error) {
-	// Try cache first
+	// Check if we have a cached version (fresh or stale)
 	exists, err := m.storage.Exists(ctx, key)
 	if err != nil {
 		zap.L().Warn("cache exists check failed", zap.String("key", key), zap.Error(err))
 	}
 
 	if exists {
-		// Check if expired in DB
 		var entry db.CacheEntry
-		result := m.db.Where("key = ?", key).First(&entry)
-		if result.Error == nil && time.Now().Before(entry.ExpiresAt) {
-			reader, size, err := m.storage.Get(ctx, key)
-			if err == nil {
-				// Update hit count and last accessed
+		dbErr := m.db.Where("key = ?", key).First(&entry).Error
+
+		if dbErr == nil {
+			isFresh := time.Now().Before(entry.ExpiresAt)
+
+			// Serve from cache (both fresh and stale)
+			reader, size, readErr := m.storage.Get(ctx, key)
+			if readErr == nil {
+				// Update hit count
 				m.db.Model(&entry).Updates(map[string]interface{}{
 					"hit_count":     gorm.Expr("hit_count + 1"),
 					"last_accessed": time.Now(),
 				})
-				zap.L().Debug("cache hit", zap.String("key", key))
-				if m.eventBus != nil {
-					parts := strings.Split(key, "/")
-					m.eventBus.Publish(CacheEvent{
-						Time:        time.Now(),
-						PackageName: ExtractPackageName(adapterType, key),
-						FileName:    parts[len(parts)-1],
-						AdapterType: adapterType,
-						Hit:         true,
-					})
+
+				zap.L().Debug("cache hit",
+					zap.String("key", key),
+					zap.Bool("fresh", isFresh),
+				)
+
+				m.publishEvent(key, adapterType, true, 0)
+
+				// If stale, trigger background refresh (non-blocking)
+				if !isFresh {
+					go m.backgroundRefresh(key, adapterType, ttl, fetchFn)
 				}
+
 				return &GetResult{
 					Reader:      reader,
 					ContentType: entry.ContentType,
@@ -258,25 +251,35 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 					Hit:         true,
 				}, nil
 			}
-			zap.L().Warn("cache get failed despite exists", zap.String("key", key), zap.Error(err))
-		} else if result.Error == nil {
-			// Expired, clean up
-			zap.L().Debug("cache expired", zap.String("key", key))
-			m.storage.Delete(ctx, key)
-			m.db.Delete(&entry)
+			zap.L().Warn("cache read failed despite exists", zap.String("key", key), zap.Error(readErr))
 		}
 	}
 
-	// Cache miss — use singleflight to deduplicate concurrent fetches
+	// Cache miss — fetch from upstream via singleflight
+	result, err := m.fetchAndStore(ctx, key, adapterType, ttl, fetchFn)
+	if err != nil {
+		// Upstream failed — try serving stale cache as last resort
+		if exists {
+			zap.L().Warn("upstream failed, serving stale cache",
+				zap.String("key", key),
+				zap.Error(err),
+			)
+			return m.serveStale(ctx, key, adapterType)
+		}
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// fetchAndStore fetches from upstream via singleflight, stores to cache, returns result.
+func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) (*GetResult, error) {
 	type sfResult struct {
 		contentType string
 		size        int64
 	}
 
 	val, err, _ := m.group.Do(key, func() (interface{}, error) {
-		// Use a detached context for the upstream fetch so that if the
-		// first client disconnects, we still finish downloading and caching.
-		// Other clients waiting on this singleflight group will benefit.
 		fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer fetchCancel()
 
@@ -286,9 +289,6 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 		}
 		defer body.Close()
 
-		// Read the body into a buffer so we can store it and return it.
-		// For large files (Phase 6 optimization), this should be streamed via io.TeeReader.
-		// For now, buffer to ensure correctness with singleflight.
 		var buf bytes.Buffer
 		written, err := io.Copy(&buf, body)
 		if err != nil {
@@ -299,11 +299,10 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 		}
 
 		// Write to storage
-		if err := m.storage.Put(fetchCtx, key, bytes.NewReader(buf.Bytes()), size, contentType); err != nil {
-			zap.L().Warn("cache put failed", zap.String("key", key), zap.Error(err))
-			// Don't fail the request if storage write fails
+		if putErr := m.storage.Put(fetchCtx, key, bytes.NewReader(buf.Bytes()), size, contentType); putErr != nil {
+			zap.L().Warn("cache put failed", zap.String("key", key), zap.Error(putErr))
 		} else {
-			// Record in DB
+			// Upsert DB entry (never delete, just update expiry)
 			now := time.Now()
 			entry := db.CacheEntry{
 				Key:          key,
@@ -316,8 +315,8 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 				ExpiresAt:    now.Add(ttl),
 				LastAccessed: now,
 			}
-			if err := m.db.Create(&entry).Error; err != nil {
-				// Might be duplicate key from race, try update
+			if createErr := m.db.Create(&entry).Error; createErr != nil {
+				// Already exists — update instead
 				m.db.Where("key = ?", key).Updates(map[string]interface{}{
 					"size":          size,
 					"content_type":  contentType,
@@ -328,17 +327,7 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 			}
 		}
 
-		if m.eventBus != nil {
-			parts := strings.Split(key, "/")
-			m.eventBus.Publish(CacheEvent{
-				Time:        time.Now(),
-				PackageName: ExtractPackageName(adapterType, key),
-				FileName:    parts[len(parts)-1],
-				AdapterType: adapterType,
-				Hit:         false,
-				Size:        size,
-			})
-		}
+		m.publishEvent(key, adapterType, false, size)
 
 		return &sfResult{contentType: contentType, size: size}, nil
 	})
@@ -361,6 +350,95 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 		Size:        size,
 		Hit:         false,
 	}, nil
+}
+
+// backgroundRefresh refreshes a stale cache entry in the background.
+// It uses singleflight so concurrent requests for the same key share one fetch.
+func (m *Manager) backgroundRefresh(key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	_, err, _ := m.group.Do("bg:"+key, func() (interface{}, error) {
+		body, contentType, size, err := fetchFn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer body.Close()
+
+		var buf bytes.Buffer
+		written, err := io.Copy(&buf, body)
+		if err != nil {
+			return nil, fmt.Errorf("bg refresh read body: %w", err)
+		}
+		if size <= 0 {
+			size = written
+		}
+
+		if putErr := m.storage.Put(ctx, key, bytes.NewReader(buf.Bytes()), size, contentType); putErr != nil {
+			return nil, fmt.Errorf("bg refresh put: %w", putErr)
+		}
+
+		now := time.Now()
+		m.db.Where("key = ?", key).Updates(map[string]interface{}{
+			"size":          size,
+			"content_type":  contentType,
+			"expires_at":    now.Add(ttl),
+			"last_accessed": now,
+		})
+
+		zap.L().Debug("background refresh done", zap.String("key", key))
+		return nil, nil
+	})
+
+	if err != nil {
+		zap.L().Warn("background refresh failed",
+			zap.String("key", key),
+			zap.Error(err),
+		)
+	}
+}
+
+// serveStale returns a stale cached version when upstream is unavailable.
+func (m *Manager) serveStale(ctx context.Context, key string, adapterType string) (*GetResult, error) {
+	var entry db.CacheEntry
+	if err := m.db.Where("key = ?", key).First(&entry).Error; err != nil {
+		return nil, fmt.Errorf("no stale cache for %s", key)
+	}
+
+	reader, size, err := m.storage.Get(ctx, key)
+	if err != nil {
+		return nil, fmt.Errorf("stale cache read failed: %w", err)
+	}
+
+	m.db.Model(&entry).Updates(map[string]interface{}{
+		"hit_count":     gorm.Expr("hit_count + 1"),
+		"last_accessed": time.Now(),
+	})
+
+	m.publishEvent(key, adapterType, true, 0)
+
+	return &GetResult{
+		Reader:      reader,
+		ContentType: entry.ContentType,
+		Size:        size,
+		Hit:         true,
+	}, nil
+}
+
+// publishEvent sends a cache event to the SSE bus.
+func (m *Manager) publishEvent(key, adapterType string, hit bool, size int64) {
+	if m.eventBus == nil {
+		return
+	}
+	parts := strings.Split(key, "/")
+	m.eventBus.Publish(CacheEvent{
+		Time:        time.Now(),
+		PackageName: ExtractPackageName(adapterType, key),
+		FileName:    parts[len(parts)-1],
+		AdapterType: adapterType,
+		Hit:         hit,
+		Size:        size,
+	})
 }
 
 // Storage returns the underlying storage for direct access.
