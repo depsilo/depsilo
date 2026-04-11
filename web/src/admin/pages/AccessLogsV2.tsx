@@ -2,13 +2,10 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
-import CardV2 from '@/components/CardV2'
-import InputV2 from '@/components/InputV2'
 import ButtonV2 from '@/components/ButtonV2'
 import BadgeV2 from '@/components/BadgeV2'
-import DataTableV2 from '@/components/DataTableV2'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import SelectV2 from '@/components/SelectV2'
+import Icon from '@/components/Icon'
 
 function formatTime(t: string): string {
   if (!t) return '-'
@@ -17,12 +14,21 @@ function formatTime(t: string): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const ECOSYSTEMS = ['pypi','apt','npm','go','cargo','maven','rubygems','composer','nuget','conda','cran','helm']
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm']
+
+function latencyColor(ms: number): string {
+  if (ms < 100) return '#3bd671'
+  if (ms < 500) return 'var(--body)'
+  return 'var(--error)'
+}
 
 export default function AccessLogsV2() {
   const { t } = useTranslation()
-  const [search, setSearch] = useState(''); const [adapterType, setAdapterType] = useState('all')
-  const [hitFilter, setHitFilter] = useState('all'); const [page, setPage] = useState(1); const [appliedSearch, setAppliedSearch] = useState('')
+  const [search, setSearch] = useState('')
+  const [adapterType, setAdapterType] = useState('all')
+  const [hitFilter, setHitFilter] = useState('all')
+  const [page, setPage] = useState(1)
+  const [appliedSearch, setAppliedSearch] = useState('')
 
   const params: Record<string, any> = { page, page_size: 50 }
   if (appliedSearch) params.search = appliedSearch
@@ -30,48 +36,165 @@ export default function AccessLogsV2() {
   if (hitFilter === 'hit') params.hit = true
   if (hitFilter === 'miss') params.hit = false
 
-  const { data, isLoading } = useQuery({ queryKey: ['admin', 'logs', params], queryFn: () => adminApi.listLogs(params) })
-  const items = data?.data?.items || []; const total = data?.data?.total || 0; const totalPages = Math.ceil(total / 50)
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'logs', params],
+    queryFn: () => adminApi.listLogs(params),
+  })
+
+  const items = data?.data?.items || []
+  const total = data?.data?.total || 0
+  const totalPages = Math.ceil(total / 50)
 
   function handleSearch() { setAppliedSearch(search); setPage(1) }
 
-  const columns = [
-    { key: 'created_at', label: t('logs.time'), render: (val: unknown) => <span className="font-mono text-[12px] whitespace-nowrap tabular-nums" style={{ color: 'var(--heading)' }}>{formatTime(val as string)}</span> },
-    { key: 'adapter_type', label: t('type'), render: (val: unknown) => <div className="flex items-center gap-1.5"><EcosystemIcon type={val as any} size={14} /><BadgeV2 variant="ecosystem">{(val as string)?.toUpperCase()}</BadgeV2></div> },
-    { key: 'method', label: t('logs.method'), render: (val: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--body)' }}>{(val as string) || 'GET'}</span> },
-    { key: 'package_name', label: t('logs.packageName'), render: (val: unknown, row: any) => (<div className="max-w-[280px]"><span className="font-mono text-[12px] truncate block" style={{ color: 'var(--heading)' }}>{(val as string) || '-'}</span><span className="font-mono text-[10px] truncate block" style={{ color: 'var(--body)' }} title={row.cache_key}>{row.cache_key}</span></div>) },
-    { key: 'hit', label: t('logs.result'), render: (val: unknown) => <BadgeV2 variant={val ? 'success' : 'error'}>{val ? t('logs.hit') : t('logs.miss')}</BadgeV2> },
-    { key: 'upstream', label: t('logs.upstream'), render: (val: unknown) => <span className="text-[12px]" style={{ color: 'var(--body)' }}>{(val as string) || '-'}</span> },
-    { key: 'latency_ms', label: t('logs.latency'), render: (val: unknown) => <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--heading)' }}>{val as number} ms</span> },
-    { key: 'client_ip', label: t('logs.clientIp'), render: (val: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--body)' }}>{val as string}</span> },
-  ]
+  // Inline select style
+  const selStyle: React.CSSProperties = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    color: 'var(--heading)',
+    borderRadius: 4,
+    padding: '4px 8px',
+    fontSize: 12,
+    outline: 'none',
+    cursor: 'pointer',
+  }
 
   return (
-    <div className="space-y-6">
-      <CardV2 className="flex flex-wrap items-center gap-3">
-        <div className="flex-1"><InputV2 placeholder={t('logs.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} /></div>
-        <SelectV2 value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} className="w-auto">
+    <div className="space-y-4">
+      {/* Single-row filter bar */}
+      <div
+        className="flex items-center gap-2 rounded-[5px] px-3 py-2"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
+        {/* Search input */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <Icon name="search" size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+          <input
+            className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
+            style={{ color: 'var(--heading)' }}
+            placeholder={t('logs.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          />
+        </div>
+
+        {/* Divider */}
+        <div className="h-5 w-px shrink-0" style={{ background: 'var(--border)' }} />
+
+        {/* Ecosystem filter */}
+        <select value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
           {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
-        </SelectV2>
-        <SelectV2 value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }} className="w-auto">
+        </select>
+
+        {/* Hit/Miss filter */}
+        <select value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
           <option value="hit">{t('logs.hit')}</option>
           <option value="miss">{t('logs.miss')}</option>
-        </SelectV2>
-        <ButtonV2 variant="secondary" onClick={handleSearch}>{t('search')}</ButtonV2>
-      </CardV2>
-      <CardV2 noPad>
-        {isLoading ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
-        : items.length === 0 ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('logs.noLogs')}</div>
-        : <DataTableV2 columns={columns} data={items} />}
-      </CardV2>
+        </select>
+
+        {/* Search button */}
+        <ButtonV2 variant="primary" size="sm" onClick={handleSearch}>
+          {t('search')}
+        </ButtonV2>
+      </div>
+
+      {/* Table */}
+      <div
+        className="rounded-[5px] overflow-hidden"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
+        {isLoading ? (
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
+        ) : items.length === 0 ? (
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('logs.noLogs')}</div>
+        ) : (
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp')].map(h => (
+                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--body)' }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row: any, i: number) => (
+                <tr
+                  key={i}
+                  className="transition-colors duration-75"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
+                >
+                  {/* Time */}
+                  <td className="py-2 px-3 pl-4 whitespace-nowrap">
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--body)' }}>{formatTime(row.created_at)}</span>
+                  </td>
+
+                  {/* Ecosystem */}
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-1.5">
+                      <EcosystemIcon type={row.adapter_type} size={13} />
+                      <span className="text-[11px] uppercase" style={{ color: 'var(--heading)' }}>{row.adapter_type}</span>
+                    </div>
+                  </td>
+
+                  {/* Package name + cache key */}
+                  <td className="py-2 px-3 max-w-[260px]">
+                    <span className="font-mono truncate block" style={{ color: 'var(--heading)' }}>{row.package_name || '-'}</span>
+                    <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--body)' }} title={row.cache_key}>{row.cache_key}</span>
+                  </td>
+
+                  {/* Result */}
+                  <td className="py-2 px-3">
+                    <BadgeV2 variant={row.hit ? 'success' : 'error'}>
+                      {row.hit ? 'HIT' : 'MISS'}
+                    </BadgeV2>
+                  </td>
+
+                  {/* Latency */}
+                  <td className="py-2 px-3 whitespace-nowrap">
+                    <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>
+                      {row.latency_ms}ms
+                    </span>
+                  </td>
+
+                  {/* Upstream */}
+                  <td className="py-2 px-3">
+                    <span style={{ color: 'var(--body)' }}>{row.upstream || '-'}</span>
+                  </td>
+
+                  {/* Client IP */}
+                  <td className="py-2 px-3">
+                    <span className="font-mono" style={{ color: 'var(--body)' }}>{row.client_ip}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('totalItems', { total, page, totalPages })}</p>
-          <div className="flex gap-2">
-            <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('prevPage')}</ButtonV2>
-            <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>{t('nextPage')}</ButtonV2>
+          <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+            {t('totalItems', { total, page, totalPages })}
+          </span>
+          <div className="flex items-center gap-1">
+            <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+              {t('prevPage')}
+            </ButtonV2>
+            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--body)' }}>
+              {page}/{totalPages}
+            </span>
+            <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+              {t('nextPage')}
+            </ButtonV2>
           </div>
         </div>
       )}
