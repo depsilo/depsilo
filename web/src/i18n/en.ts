@@ -71,6 +71,7 @@ const en = {
       availability: 'Avail.',
       healthy: 'healthy',
       topPackages: 'Top 10 Packages',
+      storageWarning: 'Cache usage at {{percent}}% — consider cleanup or expanding storage',
     },
 
     // Cache
@@ -131,6 +132,7 @@ const en = {
       latency: 'Latency',
       clientIp: 'Client IP',
       noLogs: 'No logs',
+      export: 'Export CSV',
     },
 
     // Audit Logs

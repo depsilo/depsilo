@@ -95,6 +95,21 @@ export default function AccessLogsV2() {
           <option value="miss">{t('logs.miss')}</option>
         </select>
 
+        {/* Export button */}
+        <ButtonV2 variant="ghost" size="sm" onClick={() => {
+          adminApi.exportLogs(params).then(res => {
+            const url = URL.createObjectURL(new Blob([res.data]))
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `depsilo-access-logs-${new Date().toISOString().slice(0, 10)}.csv`
+            a.click()
+            URL.revokeObjectURL(url)
+          })
+        }}>
+          <Icon name="download" size="sm" />
+          {t('logs.export')}
+        </ButtonV2>
+
         {/* Search button */}
         <ButtonV2 variant="primary" size="sm" onClick={handleSearch}>
           {t('search')}

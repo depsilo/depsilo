@@ -112,6 +112,7 @@ export default function DashboardV2() {
   }
 
   const today = dashboard?.today || {} as any
+  const yesterday = dashboard?.yesterday || {} as any
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
   const trendPoints = (trendsData?.data?.points || []).map((p: any) => ({
@@ -120,10 +121,10 @@ export default function DashboardV2() {
   }))
 
   const metrics = [
-    { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: <Icon name="monitoring" size="sm" /> },
-    { label: t('dashboard.hitRate'), value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: <Icon name="target" size="sm" /> },
-    { label: t('dashboard.bytesServed'), value: formatBytes(today.bytes_served || 0), icon: <Icon name="hard_drive" size="sm" /> },
-    { label: t('dashboard.avgLatency'), value: (today.avg_latency_ms || 0) <= 1 ? '--' : `${Math.round(today.avg_latency_ms)} ms`, icon: <Icon name="timer" size="sm" /> },
+    { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: <Icon name="monitoring" size="sm" />, change: yesterday.total_requests ? ((today.total_requests - yesterday.total_requests) / yesterday.total_requests * 100) : null },
+    { label: t('dashboard.hitRate'), value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: <Icon name="target" size="sm" />, change: yesterday.hit_rate ? ((today.hit_rate - yesterday.hit_rate) / yesterday.hit_rate * 100) : null },
+    { label: t('dashboard.bytesServed'), value: formatBytes(today.bytes_served || 0), icon: <Icon name="hard_drive" size="sm" />, change: yesterday.bytes_served ? ((today.bytes_served - yesterday.bytes_served) / yesterday.bytes_served * 100) : null },
+    { label: t('dashboard.avgLatency'), value: (today.avg_latency_ms || 0) <= 1 ? '--' : `${Math.round(today.avg_latency_ms)} ms`, icon: <Icon name="timer" size="sm" />, change: yesterday.avg_latency_ms ? ((today.avg_latency_ms - yesterday.avg_latency_ms) / yesterday.avg_latency_ms * 100) : null },
   ]
 
   const ranges = [
@@ -136,8 +137,23 @@ export default function DashboardV2() {
     <div className="space-y-6">
       {/* Metrics */}
       <div className="grid gap-4 grid-cols-4">
-        {metrics.map((m) => <MetricCardV2 key={m.label} label={m.label} value={m.value} icon={m.icon} />)}
+        {metrics.map((m) => <MetricCardV2 key={m.label} label={m.label} value={m.value} icon={m.icon} change={m.change} />)}
       </div>
+
+      {/* Storage alert */}
+      {dashboard?.cache_usage_percent > 80 && (
+        <div
+          className="flex items-center gap-2 rounded-[5px] px-4 py-2.5 text-[13px]"
+          style={{
+            background: dashboard.cache_usage_percent > 95 ? 'var(--error-container)' : 'rgba(245,166,35,0.1)',
+            color: dashboard.cache_usage_percent > 95 ? 'var(--error)' : 'var(--lemon, #9b6829)',
+            border: `1px solid ${dashboard.cache_usage_percent > 95 ? 'var(--error)' : 'rgba(245,166,35,0.3)'}`,
+          }}
+        >
+          <Icon name="warning" size="sm" />
+          {t('dashboard.storageWarning', { percent: dashboard.cache_usage_percent?.toFixed(1) })}
+        </div>
+      )}
 
       {/* Chart + Top Packages side by side */}
       <div className="grid gap-4 grid-cols-3">

@@ -63,6 +63,7 @@ export const adminApi = {
 
   // Logs
   listLogs: (params: Record<string, any>) => api.get('/admin/logs', { params }),
+  exportLogs: (params: Record<string, any>) => api.get('/admin/logs/export', { params, responseType: 'blob' }),
 
   // Users
   listUsers: () => api.get('/admin/users'),

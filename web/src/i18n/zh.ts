@@ -71,6 +71,7 @@ const zh = {
       availability: '可用率',
       healthy: '健康',
       topPackages: '热门包 TOP 10',
+      storageWarning: '缓存使用率已达 {{percent}}%，建议清理或扩容',
     },
 
     // Cache
@@ -131,6 +132,7 @@ const zh = {
       latency: '耗时',
       clientIp: '客户端 IP',
       noLogs: '暂无日志',
+      export: '导出 CSV',
     },
 
     // Audit Logs
