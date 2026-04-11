@@ -19,7 +19,7 @@ path = "./data/cache"
 
 [cache]
 max_size_gb  = 20
-ttl_index    = "5m"         # PyPI simple / APT Release 等元数据
+ttl_index    = "1h"         # 索引元数据刷新间隔（过期后后台静默刷新，不影响服务）
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
