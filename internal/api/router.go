@@ -37,6 +37,7 @@ type Deps struct {
 	CondaPool    *upstream.Pool
 	CRANPool     *upstream.Pool
 	HelmPool       *upstream.Pool
+	CacheMgr       *cache.Manager
 	EventBus       *cache.EventBus
 	LicenseManager *license.Manager
 	AuditLogger    *audit.Logger
@@ -90,6 +91,17 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.DELETE("/cache/:id", cacheHandler.Delete)
 	adminGroup.POST("/cache/cleanup", cacheHandler.Cleanup)
 	adminGroup.GET("/cache/distribution", cacheHandler.GetDistribution)
+
+	// Cache warmup
+	warmupPools := map[string]*upstream.Pool{
+		"pypi": deps.PyPIPool, "apt": deps.APTPool, "npm": deps.NPMPool,
+		"go": deps.GoPool, "cargo": deps.CargoPool, "maven": deps.MavenPool,
+		"rubygems": deps.RubyGemsPool, "composer": deps.ComposerPool,
+		"nuget": deps.NuGetPool, "conda": deps.CondaPool, "cran": deps.CRANPool,
+		"helm": deps.HelmPool,
+	}
+	warmupHandler := admin.NewWarmupHandler(deps.CacheMgr, warmupPools, deps.Config)
+	adminGroup.POST("/cache/warmup", warmupHandler.Warmup)
 
 	// Upstream management
 	upstreamHandler := admin.NewUpstreamHandler(deps.DB)

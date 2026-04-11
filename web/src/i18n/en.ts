@@ -89,6 +89,14 @@ const en = {
       confirmClean: 'Confirm Clean',
       storageOverview: 'Storage Overview',
       storageDistribution: 'Storage Distribution',
+      warmup: 'Warmup',
+      warmupTitle: 'Cache Warmup',
+      warmupEcosystem: 'Ecosystem',
+      warmupPackages: 'Package list (one per line, supports requirements.txt format)',
+      warmupPlaceholder: 'numpy\nrequests>=2.0\ntorch\npandas',
+      warmupStart: 'Start Warmup',
+      warmupLoading: 'Warming up...',
+      warmupStarted: 'Started warmup for {{count}} packages (running in background)',
     },
 
     // Upstreams

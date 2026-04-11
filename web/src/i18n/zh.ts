@@ -89,6 +89,14 @@ const zh = {
       confirmClean: '确认清理',
       storageOverview: '存储概览',
       storageDistribution: '存储分布',
+      warmup: '预热',
+      warmupTitle: '缓存预热',
+      warmupEcosystem: '生态',
+      warmupPackages: '包名列表（每行一个，支持 requirements.txt 格式）',
+      warmupPlaceholder: 'numpy\nrequests>=2.0\ntorch\npandas',
+      warmupStart: '开始预热',
+      warmupLoading: '预热中...',
+      warmupStarted: '已启动 {{count}} 个包的预热任务（后台运行）',
     },
 
     // Upstreams

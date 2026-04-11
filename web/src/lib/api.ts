@@ -50,6 +50,7 @@ export const adminApi = {
   deleteCache: (id: number) => api.delete(`/admin/cache/${id}`),
   cleanupCache: () => api.post('/admin/cache/cleanup'),
   getCacheDistribution: () => api.get('/admin/cache/distribution'),
+  warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post('/admin/cache/warmup', data),
 
   // Upstreams
   listUpstreams: () => api.get('/admin/upstreams'),

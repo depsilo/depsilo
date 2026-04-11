@@ -5,6 +5,7 @@ import { Treemap, ResponsiveContainer, Tooltip } from 'recharts'
 import { adminApi } from '@/lib/api'
 import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
+import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import EcosystemIcon from '@/components/EcosystemIcon'
@@ -40,6 +41,11 @@ export default function CacheManageV2() {
   const [page, setPage] = useState(1)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [cleanupOpen, setCleanupOpen] = useState(false)
+  const [warmupOpen, setWarmupOpen] = useState(false)
+  const [warmupEco, setWarmupEco] = useState('pypi')
+  const [warmupText, setWarmupText] = useState('')
+  const [warmupLoading, setWarmupLoading] = useState(false)
+  const [warmupResult, setWarmupResult] = useState<string | null>(null)
 
   const params: Record<string, any> = { page, page_size: 20 }
   if (search) params.search = search
@@ -206,6 +212,10 @@ export default function CacheManageV2() {
           <option value="all">{t('all')}</option>
           {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
         </select>
+        <ButtonV2 variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupResult(null) }}>
+          <Icon name="download" size="sm" />
+          {t('cache.warmup')}
+        </ButtonV2>
         <ButtonV2 variant="danger" size="sm" onClick={() => setCleanupOpen(true)}>
           <Icon name="delete_sweep" size="sm" />
           {t('cache.cleanExpired')}
@@ -306,6 +316,51 @@ export default function CacheManageV2() {
           <ButtonV2 variant="danger" disabled={cleanupMutation.isPending} onClick={() => cleanupMutation.mutate()}>
             {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
           </ButtonV2>
+        </div>
+      </ModalV2>
+
+      {/* Warmup Modal */}
+      <ModalV2 open={warmupOpen} onClose={() => setWarmupOpen(false)} title={t('cache.warmupTitle')}>
+        <div className="space-y-4">
+          <SelectV2 label={t('cache.warmupEcosystem')} value={warmupEco} onChange={(e) => setWarmupEco(e.target.value)}>
+            {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
+          </SelectV2>
+          <div>
+            <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--label)' }}>
+              {t('cache.warmupPackages')}
+            </label>
+            <textarea
+              className="w-full rounded-[4px] px-3 py-2 text-[13px] font-mono resize-none"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--heading)', outline: 'none', height: 160 }}
+              placeholder={t('cache.warmupPlaceholder')}
+              value={warmupText}
+              onChange={(e) => setWarmupText(e.target.value)}
+            />
+          </div>
+          {warmupResult && (
+            <div className="rounded-[4px] px-3 py-2 text-[13px]" style={{ background: 'rgba(21,190,83,0.1)', color: 'var(--success-text)', border: '1px solid rgba(21,190,83,0.3)' }}>
+              {warmupResult}
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
+            <ButtonV2 variant="secondary" onClick={() => setWarmupOpen(false)}>{t('cancel')}</ButtonV2>
+            <ButtonV2
+              disabled={warmupLoading || !warmupText.trim()}
+              onClick={async () => {
+                setWarmupLoading(true)
+                setWarmupResult(null)
+                try {
+                  const packages = warmupText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+                  const res = await adminApi.warmupCache({ ecosystem: warmupEco, packages })
+                  setWarmupResult(t('cache.warmupStarted', { count: res.data?.packages || packages.length }))
+                } catch { setWarmupResult('Failed') }
+                finally { setWarmupLoading(false) }
+              }}
+            >
+              <Icon name="download" size="sm" />
+              {warmupLoading ? t('cache.warmupLoading') : t('cache.warmupStart')}
+            </ButtonV2>
+          </div>
         </div>
       </ModalV2>
     </div>

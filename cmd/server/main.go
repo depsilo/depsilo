@@ -223,6 +223,7 @@ func main() {
 		CondaPool:    condaPool,
 		CRANPool:     cranPool,
 		HelmPool:     helmPool,
+		CacheMgr:       cacheMgr,
 		EventBus:       eventBus,
 		LicenseManager: licenseManager,
 		AuditLogger:    auditLogger,
