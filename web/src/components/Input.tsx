@@ -1,14 +1,42 @@
 import { type InputHTMLAttributes } from 'react'
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface InputV2Props extends InputHTMLAttributes<HTMLInputElement> {
   mono?: boolean
+  label?: string
 }
 
-export default function Input({ className = '', mono, ...rest }: InputProps) {
-  return (
+export default function InputV2({ className = '', mono, label, ...rest }: InputV2Props) {
+  const input = (
     <input
-      className={`w-full bg-surface-low rounded-[0.125rem] px-3 py-2.5 text-base text-on-surface placeholder:text-on-surface-variant border-b-2 border-transparent focus:border-b-2 focus:border-primary focus:outline-none transition-colors ${mono ? 'font-mono' : ''} ${className}`}
+      className={`w-full rounded-[4px] px-3 py-2 text-[16px] transition-colors duration-150 stripe-focus-ring ${mono ? 'font-mono' : ''} ${className}`}
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        color: 'var(--heading)',
+        outline: 'none',
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = 'var(--stripe-purple)'
+        rest.onFocus?.(e)
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border)'
+        rest.onBlur?.(e)
+      }}
       {...rest}
     />
   )
+
+  if (label) {
+    return (
+      <div>
+        <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--label)' }}>
+          {label}
+        </label>
+        {input}
+      </div>
+    )
+  }
+
+  return input
 }

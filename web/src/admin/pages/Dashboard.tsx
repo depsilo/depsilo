@@ -1,74 +1,88 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { adminApi } from '@/lib/api'
-import Card from '@/components/Card'
+import CardV2 from '@/components/Card'
+import MetricCardV2 from '@/components/MetricCard'
+import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
+import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer,
 } from 'recharts'
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const k = 1024; const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-function UpstreamCard({ upstream }: { upstream: any }) {
-  const { t } = useTranslation()
-  const { data: latencyData } = useQuery({
-    queryKey: ['admin', 'upstream-latency', upstream.id],
-    queryFn: () => adminApi.getUpstreamLatency(upstream.id, '24h'),
-    refetchInterval: 60000,
-  })
+// ── Top packages (merged, sorted by hits) ──────────────────────────
 
-  const points = latencyData?.data?.points || []
+function TopPackagesList({ topPackages }: { topPackages: { pypi?: any[]; apt?: any[] } }) {
+  const { t } = useTranslation()
+
+  const merged = useMemo(() => {
+    const all: Array<{ name: string; hit_count: number; ecosystem: string }> = []
+    for (const p of topPackages.pypi || []) all.push({ ...p, ecosystem: 'pypi' })
+    for (const p of topPackages.apt || []) all.push({ ...p, ecosystem: 'apt' })
+    all.sort((a, b) => b.hit_count - a.hit_count)
+    return all.slice(0, 10)
+  }, [topPackages])
+
+  if (merged.length === 0) {
+    return <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p>
+  }
+
+  const max = merged[0].hit_count || 1
 
   return (
-    <div className="flex items-center justify-between bg-surface-container rounded-[0.25rem] px-4 py-3">
-      <div className="flex items-center gap-3">
-        <span className={`h-2 w-2 rounded-full ${upstream.healthy ? 'bg-success' : 'bg-error'}`} />
-        <div>
-          <p className="text-sm font-medium text-on-surface">{upstream.name}</p>
-          <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">{upstream.adapter}</p>
+    <div className="space-y-2">
+      {merged.map((p, i) => (
+        <div key={`${p.ecosystem}-${p.name}`} className="flex items-center gap-2">
+          <span className="text-[11px] font-mono tabular-nums w-5 shrink-0 text-right" style={{ color: 'var(--body)' }}>
+            {i + 1}
+          </span>
+          <EcosystemIcon type={p.ecosystem as any} size={12} />
+          <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--heading)' }}>
+            {p.name}
+          </span>
+          <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>
+            {p.hit_count.toLocaleString()}
+          </span>
+          <div className="w-20 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${(p.hit_count / max) * 100}%`, background: 'var(--stripe-purple)' }}
+            />
+          </div>
         </div>
-      </div>
-      {/* Sparkline */}
-      {points.length > 1 && (
-        <div className="w-[120px] h-[40px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points}>
-              <Line
-                type="monotone"
-                dataKey="latency_ms"
-                stroke="var(--primary)"
-                strokeWidth={1.5}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      <div className="text-right">
-        <p className="text-sm font-mono text-on-surface">{upstream.avg_latency_ms} ms</p>
-        <p className="text-[10px] text-on-surface-variant">
-          {t('dashboard.availability')} {((upstream.success_rate || 0) * 100).toFixed(1)}%
-        </p>
-      </div>
+      ))}
     </div>
   )
 }
 
-export default function Dashboard() {
+// ── Custom tooltip ─────────────────────────────────────────────────
+
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}>
+      <p className="font-[400] mb-1" style={{ color: 'var(--heading)' }}>{label}</p>
+      {payload.map((entry: any) => (
+        <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
+          {entry.name}: {entry.dataKey === 'hit_rate_pct' ? `${Number(entry.value).toFixed(1)}%` : entry.value?.toLocaleString()}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+// ── Main Dashboard ─────────────────────────────────────────────────
+
+export default function DashboardV2() {
   const { t } = useTranslation()
   const [range, setRange] = useState('7d')
 
@@ -90,195 +104,106 @@ export default function Dashboard() {
     return (
       <div className="space-y-6">
         <div className="grid gap-4 grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="h-24 animate-pulse" />
-          ))}
+          {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />)}
         </div>
-        <Card className="h-80 animate-pulse" />
+        <div className="h-80 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
       </div>
     )
   }
 
-  const today = dashboard?.today || {}
+  const today = dashboard?.today || {} as any
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
-
-  const trendPoints = trendsData?.data?.points || []
+  const trendPoints = (trendsData?.data?.points || []).map((p: any) => ({
+    ...p,
+    hit_rate_pct: (p.hit_rate || 0) * 100,
+  }))
 
   const metrics = [
-    { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: 'monitoring' },
-    { label: t('dashboard.hitRate'), value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: 'target' },
-    { label: t('dashboard.bytesServed'), value: formatBytes(today.bytes_served || 0), icon: 'hard_drive' },
-    { label: t('dashboard.avgLatency'), value: `${Math.round(today.avg_latency_ms || 0)} ms`, icon: 'timer' },
+    { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: <Icon name="monitoring" size="sm" /> },
+    { label: t('dashboard.hitRate'), value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: <Icon name="target" size="sm" /> },
+    { label: t('dashboard.bytesServed'), value: formatBytes(today.bytes_served || 0), icon: <Icon name="hard_drive" size="sm" /> },
+    { label: t('dashboard.avgLatency'), value: (today.avg_latency_ms || 0) <= 1 ? '--' : `${Math.round(today.avg_latency_ms)} ms`, icon: <Icon name="timer" size="sm" /> },
+  ]
+
+  const ranges = [
+    { value: 'today', label: t('dashboard.rangeToday') },
+    { value: '7d', label: t('dashboard.range7d') },
+    { value: '30d', label: t('dashboard.range30d') },
   ]
 
   return (
     <div className="space-y-6">
-      {/* Metric Cards */}
+      {/* Metrics */}
       <div className="grid gap-4 grid-cols-4">
-        {metrics.map((m) => (
-          <Card key={m.label}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs uppercase tracking-wider text-on-surface-variant font-medium">
-                {m.label}
-              </span>
-              <Icon name={m.icon} size="sm" className="text-on-surface-variant" />
+        {metrics.map((m) => <MetricCardV2 key={m.label} label={m.label} value={m.value} icon={m.icon} />)}
+      </div>
+
+      {/* Chart + Top Packages side by side */}
+      <div className="grid gap-4 grid-cols-3">
+        {/* Chart — 2/3 width */}
+        <CardV2 className="col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--body)' }}>
+              {t('dashboard.hitMissTrend')}
+            </h3>
+            <div className="flex items-center gap-1">
+              {ranges.map(r => (
+                <button
+                  key={r.value}
+                  onClick={() => setRange(r.value)}
+                  className="px-2 py-0.5 text-[11px] font-[400] rounded-[4px] cursor-pointer transition-colors duration-150"
+                  style={{
+                    background: range === r.value ? 'var(--stripe-purple)' : 'transparent',
+                    color: range === r.value ? 'var(--on-primary)' : 'var(--body)',
+                    border: range === r.value ? 'none' : '1px solid var(--border)',
+                  }}
+                >
+                  {r.label}
+                </button>
+              ))}
             </div>
-            <p className="text-2xl font-mono font-bold text-on-surface">{m.value}</p>
-          </Card>
-        ))}
-      </div>
-
-      {/* Time Range Selector */}
-      <div className="flex items-center gap-1 mb-4">
-        {[
-          { value: 'today', label: t('dashboard.rangeToday') },
-          { value: '7d', label: t('dashboard.range7d') },
-          { value: '30d', label: t('dashboard.range30d') },
-        ].map(r => (
-          <button
-            key={r.value}
-            onClick={() => setRange(r.value)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-[0.125rem] transition-colors ${
-              range === r.value
-                ? 'bg-primary text-on-primary'
-                : 'text-on-surface-variant hover:bg-surface-container'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Hit/Miss Trend Chart */}
-      <Card>
-        <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
-          {t('dashboard.hitMissTrend')}
-        </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={trendPoints}>
-            <CartesianGrid stroke="var(--outline-variant)" strokeOpacity={0.15} strokeDasharray="3 3" />
-            <XAxis dataKey="date" tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip
-              contentStyle={{
-                background: 'var(--surface-container)',
-                border: '1px solid var(--outline-variant)',
-                borderRadius: '0.25rem',
-                fontSize: 12,
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="hits" stroke="var(--primary)" name={t('dashboard.hits')} strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="misses" stroke="var(--error)" name={t('dashboard.misses')} strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </Card>
-
-      {/* Hit Rate Trend Chart */}
-      <Card>
-        <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
-          {t('dashboard.hitRateTrend')}
-        </h3>
-        <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={trendPoints.map((p: any) => ({ ...p, hit_rate_pct: (p.hit_rate || 0) * 100 }))}>
-            <CartesianGrid stroke="var(--outline-variant)" strokeOpacity={0.15} strokeDasharray="3 3" />
-            <XAxis dataKey="date" tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis domain={[0, 100]} tick={{ fill: 'var(--on-surface-variant)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
-            <Tooltip
-              contentStyle={{
-                background: 'var(--surface-container)',
-                border: '1px solid var(--outline-variant)',
-                borderRadius: '0.25rem',
-                fontSize: 12,
-              }}
-              formatter={(value) => [`${Number(value).toFixed(1)}%`, t('dashboard.hitRate2')]}
-            />
-            <Line type="monotone" dataKey="hit_rate_pct" stroke="var(--primary)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </Card>
-
-      <div className="grid gap-6 grid-cols-2">
-        {/* Upstream Status */}
-        <Card>
-          <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
-            {t('dashboard.upstreamStatus')}
-          </h3>
-          <div className="space-y-3">
-            {upstreams.length === 0 && (
-              <p className="text-sm text-on-surface-variant">{t('dashboard.noUpstreams')}</p>
-            )}
-            {upstreams.map((u: any) => (
-              <UpstreamCard key={u.name} upstream={u} />
-            ))}
           </div>
-        </Card>
+          <ResponsiveContainer width="100%" height={180}>
+            <ComposedChart data={trendPoints}>
+              <defs>
+                <linearGradient id="gradHits" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--stripe-purple)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="var(--stripe-purple)" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="gradMisses" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--error)" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="var(--error)" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="count" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
+              <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={35} />
+              <Tooltip content={<ChartTooltip />} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Area yAxisId="count" type="monotone" dataKey="hits" stroke="var(--stripe-purple)" strokeWidth={1.5} fill="url(#gradHits)" name={t('dashboard.hits')} />
+              <Area yAxisId="count" type="monotone" dataKey="misses" stroke="var(--error)" strokeWidth={1.5} fill="url(#gradMisses)" name={t('dashboard.misses')} />
+              <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--success)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </CardV2>
 
-        {/* Top Packages */}
-        <Card>
-          <h3 className="text-xs uppercase tracking-wider text-on-surface-variant font-medium mb-4">
+        {/* Top Packages — 1/3 width */}
+        <CardV2>
+          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
             {t('dashboard.topPackages')}
           </h3>
-          <div className="grid gap-6 grid-cols-2">
-            {/* PyPI */}
-            <div>
-              <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">PyPI</p>
-              <div className="space-y-2">
-                {(topPackages.pypi || []).slice(0, 10).map((p: any, i: number) => {
-                  const max = topPackages.pypi?.[0]?.hit_count || 1
-                  return (
-                    <div key={p.name} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="truncate font-mono text-on-surface">
-                          {i + 1}. {p.name}
-                        </span>
-                        <span className="text-on-surface-variant font-mono ml-2">{p.hit_count}</span>
-                      </div>
-                      <div className="h-1 w-full rounded-full bg-surface-container">
-                        <div
-                          className="h-1 rounded-full bg-primary transition-all"
-                          style={{ width: `${(p.hit_count / max) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-                {(!topPackages.pypi || topPackages.pypi.length === 0) && (
-                  <p className="text-xs text-on-surface-variant">{t('noData')}</p>
-                )}
-              </div>
-            </div>
-            {/* APT */}
-            <div>
-              <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wider mb-3">APT</p>
-              <div className="space-y-2">
-                {(topPackages.apt || []).slice(0, 10).map((p: any, i: number) => {
-                  const max = topPackages.apt?.[0]?.hit_count || 1
-                  return (
-                    <div key={p.name} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="truncate font-mono text-on-surface">
-                          {i + 1}. {p.name}
-                        </span>
-                        <span className="text-on-surface-variant font-mono ml-2">{p.hit_count}</span>
-                      </div>
-                      <div className="h-1 w-full rounded-full bg-surface-container">
-                        <div
-                          className="h-1 rounded-full bg-success transition-all"
-                          style={{ width: `${(p.hit_count / max) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-                {(!topPackages.apt || topPackages.apt.length === 0) && (
-                  <p className="text-xs text-on-surface-variant">{t('noData')}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
+          <TopPackagesList topPackages={topPackages} />
+        </CardV2>
+      </div>
+
+      {/* Upstreams — full width */}
+      <div>
+        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
+          {t('dashboard.upstreamStatus')}
+        </h3>
+        <UpstreamGroupedPanel upstreams={upstreams} />
       </div>
     </div>
   )

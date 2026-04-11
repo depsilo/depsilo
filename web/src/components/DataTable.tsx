@@ -6,26 +6,27 @@ interface Column<T> {
   render?: (value: unknown, row: T, index: number) => ReactNode
 }
 
-interface DataTableProps<T> {
+interface DataTableV2Props<T> {
   columns: Column<T>[]
   data: T[]
   onRowClick?: (row: T, index: number) => void
 }
 
-export default function DataTable<T extends Record<string, unknown>>({
+export default function DataTableV2<T extends Record<string, unknown>>({
   columns,
   data,
   onRowClick,
-}: DataTableProps<T>) {
+}: DataTableV2Props<T>) {
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full text-[0.9375rem]">
+      <table className="w-full text-[14px]">
         <thead>
-          <tr>
+          <tr style={{ borderBottom: '1px solid var(--border)' }}>
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="text-left text-sm font-medium uppercase tracking-wider text-on-surface-variant py-3 px-4"
+                className="text-left text-[12px] font-[400] uppercase tracking-wider py-3 px-4"
+                style={{ color: 'var(--body)' }}
               >
                 {col.label}
               </th>
@@ -37,7 +38,16 @@ export default function DataTable<T extends Record<string, unknown>>({
             <tr
               key={rowIndex}
               onClick={() => onRowClick?.(row, rowIndex)}
-              className={`${rowIndex % 2 === 0 ? 'bg-surface-low' : 'bg-surface'} hover:bg-surface-container transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+              className={`transition-colors duration-100 ${onRowClick ? 'cursor-pointer' : ''}`}
+              style={{
+                borderBottom: '1px solid var(--border)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--surface-low)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+              }}
             >
               {columns.map((col) => (
                 <td key={col.key} className="py-3 px-4">

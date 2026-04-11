@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useParams, Link } from 'react-router-dom'
 import { packagesApi } from '@/lib/api'
-import CardV2 from '@/components/CardV2'
-import BadgeV2 from '@/components/BadgeV2'
+import CardV2 from '@/components/Card'
+import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 
 interface FileEntry {

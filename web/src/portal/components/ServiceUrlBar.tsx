@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react'
-import Card from '@/components/Card'
 import Icon from '@/components/Icon'
 
-export default function ServiceUrlBar() {
+export default function ServiceUrlBarV2() {
   const [copied, setCopied] = useState(false)
   const url = window.location.origin
 
@@ -14,23 +13,25 @@ export default function ServiceUrlBar() {
   }, [url])
 
   return (
-    <Card bordered className="flex items-center gap-4 p-4">
-      <span className="text-xs uppercase tracking-widest font-medium text-on-surface-variant shrink-0">
+    <div
+      className="flex items-center gap-4 rounded-[5px] px-4 py-3"
+      style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}
+    >
+      <span className="text-[12px] uppercase tracking-widest font-[400] shrink-0" style={{ color: 'var(--body)' }}>
         Service Address
       </span>
-      <code className="flex-1 font-mono text-primary-dim text-base truncate">
+      <code className="flex-1 font-mono text-[14px] truncate" style={{ color: 'var(--stripe-purple)' }}>
         {url}
       </code>
       <button
         onClick={handleCopy}
-        className="shrink-0 p-1.5 rounded-[0.125rem] bg-transparent hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+        className="shrink-0 p-1.5 rounded-[4px] bg-transparent cursor-pointer transition-colors duration-150"
+        style={{ color: 'var(--body)' }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--heading)' }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--body)' }}
       >
-        <Icon
-          name={copied ? 'check' : 'content_copy'}
-          size="sm"
-          className={copied ? 'text-success' : ''}
-        />
+        <Icon name={copied ? 'check' : 'content_copy'} size="sm" className={copied ? 'text-success' : ''} />
       </button>
-    </Card>
+    </div>
   )
 }

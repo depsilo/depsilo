@@ -2,284 +2,238 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
-import Card from '@/components/Card'
-import Button from '@/components/Button'
-import Input from '@/components/Input'
+import ButtonV2 from '@/components/Button'
+import InputV2 from '@/components/Input'
+import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
-import Modal from '@/components/Modal'
+import ModalV2 from '@/components/Modal'
+import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
 
-interface UpstreamForm {
-  name: string
-  url: string
-  priority: number
-  proxy: string
-  adapter_type: string
-}
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm'] as const
 
-const emptyForm: UpstreamForm = {
-  name: '',
-  url: '',
-  priority: 1,
-  proxy: '',
-  adapter_type: 'pypi',
-}
+interface UpstreamForm { name: string; url: string; priority: number; proxy: string; adapter_type: string }
+const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi' }
 
-export default function Upstreams() {
+export default function UpstreamsV2() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'pypi' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer' | 'nuget' | 'conda' | 'cran' | 'helm'>('pypi')
+
+  // CRUD state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<UpstreamForm>(emptyForm)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [urlError, setUrlError] = useState('')
 
+  // Health check settings (UI state)
+  const [autoProbe, setAutoProbe] = useState(true)
+  const [probeInterval, setProbeInterval] = useState('30s')
+  const [checking, setChecking] = useState(false)
+
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'upstreams'],
     queryFn: () => adminApi.listUpstreams(),
   })
-
   const allUpstreams: any[] = data?.data?.items || data?.data || []
-  const filtered = allUpstreams.filter((u: any) => u.adapter_type === tab)
+
+  // Map to UpstreamItem shape
+  const upstreamItems: UpstreamItem[] = allUpstreams.map((u: any) => ({
+    id: u.id,
+    name: u.name,
+    adapter: u.adapter_type,
+    healthy: u.healthy,
+    avg_latency_ms: u.avg_latency_ms || 0,
+    success_rate: u.success_rate || 0,
+    url: u.url,
+    proxy: u.proxy,
+    priority: u.priority,
+  }))
 
   const createMutation = useMutation({
     mutationFn: (d: any) => adminApi.createUpstream(d),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
-      closeDialog()
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() },
   })
-
   const updateMutation = useMutation({
     mutationFn: ({ id, data: d }: { id: number; data: any }) => adminApi.updateUpstream(id, d),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
-      closeDialog()
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() },
   })
-
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminApi.deleteUpstream(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
-      setDeleteTarget(null)
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); setDeleteTarget(null) },
   })
 
-  function closeDialog() {
-    setDialogOpen(false)
-    setEditId(null)
-    setForm(emptyForm)
-    setUrlError('')
-  }
-
-  function openCreate() {
-    setEditId(null)
-    setForm({ ...emptyForm, adapter_type: tab })
-    setDialogOpen(true)
-  }
-
+  function closeDialog() { setDialogOpen(false); setEditId(null); setForm(emptyForm); setUrlError('') }
+  function openCreate() { setEditId(null); setForm({ ...emptyForm }); setDialogOpen(true) }
   function openEdit(u: any) {
-    setEditId(u.id)
-    setForm({
-      name: u.name,
-      url: u.url,
-      priority: u.priority,
-      proxy: u.proxy || '',
-      adapter_type: u.adapter_type,
-    })
+    const orig = allUpstreams.find((x: any) => x.id === u.id || x.name === u.name)
+    if (!orig) return
+    setEditId(orig.id)
+    setForm({ name: orig.name, url: orig.url, priority: orig.priority, proxy: orig.proxy || '', adapter_type: orig.adapter_type })
     setDialogOpen(true)
   }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    try {
-      new URL(form.url)
-    } catch {
-      setUrlError(t('upstreams.invalidUrl'))
-      return
-    }
+    try { new URL(form.url) } catch { setUrlError(t('upstreams.invalidUrl')); return }
     setUrlError('')
-    if (editId) {
-      updateMutation.mutate({ id: editId, data: form })
-    } else {
-      createMutation.mutate(form)
+    if (editId) updateMutation.mutate({ id: editId, data: form })
+    else createMutation.mutate(form)
+  }
+
+  async function checkAll() {
+    setChecking(true)
+    try {
+      await Promise.allSettled(
+        allUpstreams.filter((u: any) => u.id).map((u: any) => adminApi.checkUpstream(u.id))
+      )
+      queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+    } finally {
+      setChecking(false)
     }
+  }
+
+  async function checkOne(id: number) {
+    await adminApi.checkUpstream(id)
+    queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending
 
+  // Inline select style
+  const selStyle: React.CSSProperties = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    color: 'var(--heading)',
+    borderRadius: 4,
+    padding: '4px 8px',
+    fontSize: 12,
+    outline: 'none',
+    cursor: 'pointer',
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div />
-        <Button onClick={openCreate}>
+    <div className="space-y-4">
+      {/* Header: health check settings + add button */}
+      <div
+        className="flex items-center gap-3 rounded-[5px] px-4 py-2.5"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
+        {/* Auto probe toggle */}
+        <label className="flex items-center gap-2 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={autoProbe}
+            onChange={(e) => setAutoProbe(e.target.checked)}
+            className="h-3.5 w-3.5 rounded"
+            style={{ accentColor: 'var(--stripe-purple)' }}
+          />
+          <span className="text-[12px] font-[400]" style={{ color: 'var(--heading)' }}>
+            {t('upstreams.autoProbe')}
+          </span>
+        </label>
+
+        {/* Interval selector */}
+        {autoProbe && (
+          <select value={probeInterval} onChange={(e) => setProbeInterval(e.target.value)} style={selStyle}>
+            <option value="15s">15s</option>
+            <option value="30s">30s</option>
+            <option value="1m">1m</option>
+            <option value="5m">5m</option>
+          </select>
+        )}
+
+        {/* Manual check */}
+        <ButtonV2
+          variant="secondary"
+          size="sm"
+          onClick={checkAll}
+          disabled={checking}
+        >
+          <Icon name="refresh" size="sm" />
+          {checking ? t('upstreams.checking') : t('upstreams.checkAll')}
+        </ButtonV2>
+
+        <div className="flex-1" />
+
+        {/* Add upstream */}
+        <ButtonV2 size="sm" onClick={openCreate}>
           <Icon name="add" size="sm" />
           {t('upstreams.addUpstream')}
-        </Button>
+        </ButtonV2>
       </div>
 
-      {/* Type selector */}
-      <div className="flex flex-wrap gap-1.5">
-        {(['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors cursor-pointer ${
-              tab === t
-                ? 'bg-primary text-on-primary'
-                : 'bg-surface-container text-on-surface-variant hover:text-on-surface hover:bg-surface-high'
-            }`}
-          >
-            {t.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      {/* Upstream list */}
-      <div className="space-y-3">
-        {isLoading && <p className="text-sm text-on-surface-variant">{t('loading')}</p>}
-        {!isLoading && filtered.length === 0 && (
-          <p className="text-sm text-on-surface-variant">{t('upstreams.noUpstreams', { type: tab.toUpperCase() })}</p>
-        )}
-        {filtered.map((u: any) => (
-          <Card key={u.id} className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${u.healthy ? 'bg-success' : 'bg-error'}`} />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-on-surface">{u.name}</span>
-                  {u.proxy && (
-                    <span className="text-xs text-secondary font-mono">
-                      {'· ' + t('upstreams.proxy') + ':'} {u.proxy}
-                    </span>
-                  )}
-                </div>
-                <p className="font-mono text-sm text-on-surface-variant truncate">{u.url}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 shrink-0">
-              <div className="text-right">
-                <p className="text-sm font-mono text-on-surface">{u.avg_latency_ms || 0} ms</p>
-                <p className="text-[10px] text-on-surface-variant">
-                  {t('upstreams.availability')} {((u.success_rate || 0) * 100).toFixed(1)}%
-                </p>
-              </div>
-              <div className="flex gap-1">
+      {/* Upstream grid with heartbeat bars */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+          ))}
+        </div>
+      ) : (
+        <UpstreamGroupedPanel
+          upstreams={upstreamItems}
+          renderActions={(u) => (
+            <div className="flex gap-0.5 ml-1">
+              {u.id && (
                 <button
-                  onClick={() => openEdit(u)}
-                  className="bg-transparent text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors p-1.5"
+                  onClick={() => checkOne(u.id!)}
+                  className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                  style={{ color: 'var(--body)' }}
+                  title={t('upstreams.checkOne')}
                 >
-                  <Icon name="edit" size="sm" />
+                  <Icon name="refresh" size="sm" />
                 </button>
+              )}
+              <button
+                onClick={() => openEdit(u as any)}
+                className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                style={{ color: 'var(--body)' }}
+              >
+                <Icon name="edit" size="sm" />
+              </button>
+              {u.id && (
                 <button
-                  onClick={() => setDeleteTarget(u.id)}
-                  className="bg-transparent text-on-surface-variant hover:text-error cursor-pointer transition-colors p-1.5"
+                  onClick={() => setDeleteTarget(u.id!)}
+                  className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                  style={{ color: 'var(--body)' }}
                 >
                   <Icon name="delete" size="sm" />
                 </button>
-              </div>
+              )}
             </div>
-          </Card>
-        ))}
-      </div>
+          )}
+        />
+      )}
 
       {/* Create/Edit Modal */}
-      <Modal
-        open={dialogOpen}
-        onClose={closeDialog}
-        title={editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}
-      >
+      <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <SelectV2 label={t('type')} value={form.adapter_type} onChange={(e) => setForm({ ...form, adapter_type: e.target.value })} disabled={!!editId}>
+            {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
+          </SelectV2>
+          <InputV2 label={t('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. tuna" required />
           <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">{t('type')}</label>
-            <select
-              value={form.adapter_type}
-              onChange={(e) => setForm({ ...form, adapter_type: e.target.value })}
-              disabled={!!editId}
-              className="w-full bg-surface-low rounded-[0.125rem] px-3 py-2.5 text-base text-on-surface border-b-2 border-transparent focus:border-primary focus:outline-none transition-colors disabled:opacity-50"
-            >
-              <option value="pypi">PyPI</option>
-              <option value="apt">APT</option>
-              <option value="npm">npm</option>
-              <option value="go">Go</option>
-              <option value="cargo">Cargo</option>
-              <option value="maven">Maven</option>
-              <option value="rubygems">RubyGems</option>
-              <option value="composer">Composer</option>
-              <option value="nuget">NuGet</option>
-              <option value="conda">Conda</option>
-              <option value="cran">CRAN</option>
-              <option value="helm">Helm</option>
-            </select>
+            <InputV2 label={t('upstreams.url')} mono value={form.url} onChange={(e) => { setForm({ ...form, url: e.target.value }); setUrlError('') }} placeholder="https://pypi.tuna.tsinghua.edu.cn" required />
+            {urlError && <p className="text-[12px] mt-1" style={{ color: 'var(--error)' }}>{urlError}</p>}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">{t('name')}</label>
-            <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. tuna"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">{t('upstreams.url')}</label>
-            <Input
-              mono
-              value={form.url}
-              onChange={(e) => { setForm({ ...form, url: e.target.value }); setUrlError('') }}
-              placeholder="https://pypi.tuna.tsinghua.edu.cn"
-              required
-            />
-            {urlError && <p className="text-xs text-error mt-1">{urlError}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">{t('upstreams.priority')}</label>
-            <Input
-              type="number"
-              min={1}
-              value={form.priority}
-              onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value) || 1 })}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">{t('upstreams.httpProxy')}</label>
-            <Input
-              mono
-              value={form.proxy}
-              onChange={(e) => setForm({ ...form, proxy: e.target.value })}
-              placeholder="http://127.0.0.1:7890"
-            />
-          </div>
+          <InputV2 label={t('upstreams.priority')} type="number" min={1} value={form.priority} onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value) || 1 })} />
+          <InputV2 label={t('upstreams.httpProxy')} mono value={form.proxy} onChange={(e) => setForm({ ...form, proxy: e.target.value })} placeholder="http://127.0.0.1:7890" />
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={closeDialog}>{t('cancel')}</Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? t('saving') : t('save')}
-            </Button>
+            <ButtonV2 type="button" variant="secondary" onClick={closeDialog}>{t('cancel')}</ButtonV2>
+            <ButtonV2 type="submit" disabled={isSaving}>{isSaving ? t('saving') : t('save')}</ButtonV2>
           </div>
         </form>
-      </Modal>
+      </ModalV2>
 
-      {/* Delete Confirm Modal */}
-      <Modal
-        open={deleteTarget !== null}
-        onClose={() => setDeleteTarget(null)}
-        title={t('upstreams.confirmDelete')}
-      >
-        <p className="text-sm text-on-surface-variant mb-6">{t('upstreams.confirmDeleteMsg')}</p>
+      {/* Delete Modal */}
+      <ModalV2 open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('upstreams.confirmDelete')}>
+        <p className="text-[14px] mb-6" style={{ color: 'var(--body)' }}>{t('upstreams.confirmDeleteMsg')}</p>
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</Button>
-          <Button
-            variant="secondary"
-            className="text-error border-error/30"
-            disabled={deleteMutation.isPending}
-            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
-          >
+          <ButtonV2 variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</ButtonV2>
+          <ButtonV2 variant="danger" disabled={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
             {deleteMutation.isPending ? t('deleting') : t('delete')}
-          </Button>
+          </ButtonV2>
         </div>
-      </Modal>
+      </ModalV2>
     </div>
   )
 }

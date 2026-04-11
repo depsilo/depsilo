@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import Input from '@/components/Input'
-import Button from '@/components/Button'
+import InputV2 from '@/components/Input'
+import ButtonV2 from '@/components/Button'
 import Logo from '@/components/Logo'
 import { authApi } from '@/lib/api'
 
-export default function Login() {
+export default function LoginV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
@@ -32,62 +32,65 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center relative overflow-hidden">
-      {/* Decorative blurred circles */}
-      <div className="absolute top-1/4 -left-20 w-60 h-60 rounded-full bg-primary/5 blur-[120px]" />
-      <div className="absolute bottom-1/4 -right-20 w-60 h-60 rounded-full bg-tertiary/5 blur-[120px]" />
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ background: 'var(--bg)' }}>
+      {/* Decorative */}
+      <div className="absolute top-1/4 -left-20 w-60 h-60 rounded-full blur-[120px]" style={{ background: 'rgba(83,58,253,0.06)' }} />
+      <div className="absolute bottom-1/4 -right-20 w-60 h-60 rounded-full blur-[120px]" style={{ background: 'rgba(233,34,97,0.04)' }} />
 
-      <div className="w-full max-w-sm bg-surface-container/80 backdrop-blur-xl border border-outline-variant/15 rounded-[0.5rem] p-8 relative z-10">
+      <div
+        className="w-full max-w-sm rounded-[8px] p-8 relative z-10"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)' }}
+      >
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-3">
-            <Logo height={36} />
-            <h1 className="text-2xl font-bold text-on-surface tracking-tight">Depsilo</h1>
+            <Logo height={32} />
+            <h1 className="text-[22px] font-[300] tracking-[-0.22px]" style={{ color: 'var(--heading)' }}>Depsilo</h1>
           </div>
-          <p className="text-sm text-on-surface-variant mt-2">{t('login.title')}</p>
+          <p className="text-[14px] font-[300] mt-2" style={{ color: 'var(--body)' }}>{t('login.title')}</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">{t('login.username')}</label>
-            <Input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={t('login.usernamePlaceholder')}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-on-surface mb-1">{t('login.password')}</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('login.passwordPlaceholder')}
-              required
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <InputV2
+            label={t('login.username')}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder={t('login.usernamePlaceholder')}
+            required
+          />
+          <InputV2
+            label={t('login.password')}
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={t('login.passwordPlaceholder')}
+            required
+          />
+          <ButtonV2 type="submit" className="w-full" disabled={loading}>
             {loading ? t('login.submitting') : t('login.submit')}
-          </Button>
+          </ButtonV2>
         </form>
 
-        {/* Error */}
-        {error && (
-          <p className="mt-3 text-error text-sm text-center">{error}</p>
-        )}
+        {error && <p className="mt-3 text-[14px] text-center" style={{ color: 'var(--error)' }}>{error}</p>}
 
-        {/* Status indicators */}
+        {/* Status */}
         <div className="mt-6 flex items-center justify-center gap-6">
-          <span className="text-[10px] text-on-surface-variant font-mono flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+          <span className="text-[10px] font-mono flex items-center gap-1.5" style={{ color: 'var(--body)' }}>
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
             Nodes: Active
           </span>
-          <span className="text-[10px] text-on-surface-variant font-mono flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+          <span className="text-[10px] font-mono flex items-center gap-1.5" style={{ color: 'var(--body)' }}>
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
             Cache: Synced
           </span>
+        </div>
+
+        {/* Back link */}
+        <div className="mt-4 text-center">
+          <Link to="/" className="text-[13px] no-underline transition-colors duration-150" style={{ color: 'var(--stripe-purple)' }}>
+            ← {t('login.backToPortal') || 'Back to Portal'}
+          </Link>
         </div>
       </div>
     </div>

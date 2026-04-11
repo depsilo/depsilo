@@ -2,24 +2,27 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
-import Card from '@/components/Card'
-import Input from '@/components/Input'
-import Button from '@/components/Button'
-import Badge from '@/components/Badge'
-import DataTable from '@/components/DataTable'
+import ButtonV2 from '@/components/Button'
+import BadgeV2 from '@/components/Badge'
+import EcosystemIcon from '@/components/EcosystemIcon'
+import Icon from '@/components/Icon'
 
 function formatTime(t: string): string {
   if (!t) return '-'
-  const d = new Date(t)
-  const now = new Date()
-  const isToday = d.toDateString() === now.toDateString()
-  if (isToday) {
-    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  }
+  const d = new Date(t); const now = new Date()
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export default function AccessLogs() {
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm']
+
+function latencyColor(ms: number): string {
+  if (ms < 100) return '#3bd671'
+  if (ms < 500) return 'var(--body)'
+  return 'var(--error)'
+}
+
+export default function AccessLogsV2() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [adapterType, setAdapterType] = useState('all')
@@ -42,148 +45,156 @@ export default function AccessLogs() {
   const total = data?.data?.total || 0
   const totalPages = Math.ceil(total / 50)
 
-  function handleSearch() {
-    setAppliedSearch(search)
-    setPage(1)
+  function handleSearch() { setAppliedSearch(search); setPage(1) }
+
+  // Inline select style
+  const selStyle: React.CSSProperties = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    color: 'var(--heading)',
+    borderRadius: 4,
+    padding: '4px 8px',
+    fontSize: 12,
+    outline: 'none',
+    cursor: 'pointer',
   }
 
-  const columns = [
-    {
-      key: 'created_at',
-      label: t('logs.time'),
-      render: (val: unknown) => (
-        <span className="font-mono text-xs text-on-surface whitespace-nowrap">{formatTime(val as string)}</span>
-      ),
-    },
-    {
-      key: 'adapter_type',
-      label: t('type'),
-      render: (val: unknown) => (
-        <Badge variant={(val as string) === 'pypi' ? 'pypi' : (val as string) === 'apt' ? 'apt' : 'default'}>
-          {(val as string)?.toUpperCase()}
-        </Badge>
-      ),
-    },
-    {
-      key: 'method',
-      label: t('logs.method'),
-      render: (val: unknown) => (
-        <span className="font-mono text-xs text-on-surface-variant">{(val as string) || 'GET'}</span>
-      ),
-    },
-    {
-      key: 'package_name',
-      label: t('logs.packageName'),
-      render: (val: unknown, row: any) => (
-        <div className="max-w-[280px]">
-          <span className="font-mono text-xs text-on-surface truncate block">
-            {(val as string) || '-'}
-          </span>
-          <span className="font-mono text-[10px] text-on-surface-variant truncate block" title={row.cache_key}>
-            {row.cache_key}
-          </span>
-        </div>
-      ),
-    },
-    {
-      key: 'hit',
-      label: t('logs.result'),
-      render: (val: unknown) => (
-        <Badge variant={val ? 'success' : 'error'}>
-          {val ? t('logs.hit') : t('logs.miss')}
-        </Badge>
-      ),
-    },
-    {
-      key: 'upstream',
-      label: t('logs.upstream'),
-      render: (val: unknown) => (
-        <span className="text-xs text-on-surface-variant">{(val as string) || '-'}</span>
-      ),
-    },
-    {
-      key: 'latency_ms',
-      label: t('logs.latency'),
-      render: (val: unknown) => (
-        <span className="font-mono text-xs text-on-surface">{val as number} ms</span>
-      ),
-    },
-    {
-      key: 'client_ip',
-      label: t('logs.clientIp'),
-      render: (val: unknown) => (
-        <span className="font-mono text-xs text-on-surface-variant">{val as string}</span>
-      ),
-    },
-  ]
-
   return (
-    <div className="space-y-6">
-      {/* Filters */}
-      <Card className="flex flex-wrap items-center gap-3">
-        <div className="flex-1">
-          <Input
+    <div className="space-y-4">
+      {/* Single-row filter bar */}
+      <div
+        className="flex items-center gap-2 rounded-[5px] px-3 py-2"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
+        {/* Search input */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <Icon name="search" size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+          <input
+            className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
+            style={{ color: 'var(--heading)' }}
             placeholder={t('logs.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
-        <select
-          value={adapterType}
-          onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}
-          className="bg-surface-low border-b-2 border-transparent focus:border-primary text-base text-on-surface px-3 py-2 rounded-[0.125rem] outline-none transition-colors cursor-pointer"
-        >
+
+        {/* Divider */}
+        <div className="h-5 w-px shrink-0" style={{ background: 'var(--border)' }} />
+
+        {/* Ecosystem filter */}
+        <select value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
-          <option value="pypi">PyPI</option>
-          <option value="apt">APT</option>
-          <option value="npm">npm</option>
-          <option value="go">Go</option>
-          <option value="cargo">Cargo</option>
-          <option value="maven">Maven</option>
-          <option value="rubygems">RubyGems</option>
-          <option value="composer">Composer</option>
-          <option value="nuget">NuGet</option>
-          <option value="conda">Conda</option>
-          <option value="cran">CRAN</option>
-          <option value="helm">Helm</option>
+          {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
         </select>
-        <select
-          value={hitFilter}
-          onChange={(e) => { setHitFilter(e.target.value); setPage(1) }}
-          className="bg-surface-low border-b-2 border-transparent focus:border-primary text-base text-on-surface px-3 py-2 rounded-[0.125rem] outline-none transition-colors cursor-pointer"
-        >
+
+        {/* Hit/Miss filter */}
+        <select value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
           <option value="hit">{t('logs.hit')}</option>
           <option value="miss">{t('logs.miss')}</option>
         </select>
-        <Button variant="secondary" onClick={handleSearch}>{t('search')}</Button>
-      </Card>
+
+        {/* Search button */}
+        <ButtonV2 variant="primary" size="sm" onClick={handleSearch}>
+          {t('search')}
+        </ButtonV2>
+      </div>
 
       {/* Table */}
-      <Card className="p-0 overflow-hidden">
+      <div
+        className="rounded-[5px] overflow-hidden"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
         {isLoading ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">{t('loading')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-on-surface-variant text-sm">{t('logs.noLogs')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('logs.noLogs')}</div>
         ) : (
-          <DataTable columns={columns} data={items} />
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp')].map(h => (
+                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--body)' }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row: any, i: number) => (
+                <tr
+                  key={i}
+                  className="transition-colors duration-75"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
+                >
+                  {/* Time */}
+                  <td className="py-2 px-3 pl-4 whitespace-nowrap">
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--body)' }}>{formatTime(row.created_at)}</span>
+                  </td>
+
+                  {/* Ecosystem */}
+                  <td className="py-2 px-3">
+                    <div className="flex items-center gap-1.5">
+                      <EcosystemIcon type={row.adapter_type} size={13} />
+                      <span className="text-[11px] uppercase" style={{ color: 'var(--heading)' }}>{row.adapter_type}</span>
+                    </div>
+                  </td>
+
+                  {/* Package name + cache key */}
+                  <td className="py-2 px-3 max-w-[260px]">
+                    <span className="font-mono truncate block" style={{ color: 'var(--heading)' }}>{row.package_name || '-'}</span>
+                    <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--body)' }} title={row.cache_key}>{row.cache_key}</span>
+                  </td>
+
+                  {/* Result */}
+                  <td className="py-2 px-3">
+                    <BadgeV2 variant={row.hit ? 'success' : 'error'}>
+                      {row.hit ? 'HIT' : 'MISS'}
+                    </BadgeV2>
+                  </td>
+
+                  {/* Latency */}
+                  <td className="py-2 px-3 whitespace-nowrap">
+                    <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>
+                      {row.latency_ms}ms
+                    </span>
+                  </td>
+
+                  {/* Upstream */}
+                  <td className="py-2 px-3">
+                    <span style={{ color: 'var(--body)' }}>{row.upstream || '-'}</span>
+                  </td>
+
+                  {/* Client IP */}
+                  <td className="py-2 px-3">
+                    <span className="font-mono" style={{ color: 'var(--body)' }}>{row.client_ip}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-      </Card>
+      </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-on-surface-variant">
+          <span className="text-[12px]" style={{ color: 'var(--body)' }}>
             {t('totalItems', { total, page, totalPages })}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          </span>
+          <div className="flex items-center gap-1">
+            <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
               {t('prevPage')}
-            </Button>
-            <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+            </ButtonV2>
+            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--body)' }}>
+              {page}/{totalPages}
+            </span>
+            <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
               {t('nextPage')}
-            </Button>
+            </ButtonV2>
           </div>
         </div>
       )}

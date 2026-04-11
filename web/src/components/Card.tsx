@@ -1,19 +1,26 @@
 import { type ReactNode } from 'react'
 
-interface CardProps {
+interface CardV2Props {
   children?: ReactNode
   className?: string
-  bordered?: boolean
+  elevated?: boolean
+  noPad?: boolean
 }
 
-export default function Card({
+export default function CardV2({
   children,
   className = '',
-  bordered = false,
-}: CardProps) {
+  elevated = false,
+  noPad = false,
+}: CardV2Props) {
   return (
     <div
-      className={`bg-surface-low rounded-[0.25rem] p-5 ${bordered ? 'border border-outline-variant/15' : ''} ${className}`}
+      className={`rounded-[5px] ${noPad ? '' : 'p-5'} ${className}`}
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        boxShadow: elevated ? 'var(--shadow-elevated)' : 'var(--shadow-soft)',
+      }}
     >
       {children}
     </div>

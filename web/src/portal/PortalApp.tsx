@@ -5,14 +5,11 @@ import { statsApi } from '@/lib/api'
 import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
-import Button from '@/components/Button'
-import QuickStart from '@/portal/pages/QuickStart'
-import Packages from '@/portal/pages/Packages'
-import PackageDetail from '@/portal/pages/PackageDetail'
-import LiveStream from '@/portal/pages/LiveStream'
-import ServiceStatus from '@/portal/pages/ServiceStatus'
+import BadgeV2 from '@/components/Badge'
+import QuickStartV2 from '@/portal/pages/QuickStart'
+import MonitorV2 from '@/portal/pages/Monitor'
 
-export default function PortalApp() {
+export default function PortalAppV2() {
   const { t } = useTranslation()
   const { data } = useQuery<{ service: { status: string } }>({
     queryKey: ['stats-status'],
@@ -25,105 +22,74 @@ export default function PortalApp() {
 
   const isHealthy = data?.service?.status === 'healthy'
 
+  const navStyle = ({ isActive }: { isActive: boolean }) => ({
+    color: isActive ? 'var(--heading)' : 'var(--body)',
+    borderBottomColor: isActive ? 'var(--stripe-purple)' : 'transparent',
+  })
+
   return (
-    <div className="min-h-screen bg-bg">
-      {/* Fixed header */}
-      <header className="fixed top-0 inset-x-0 z-50 h-14 bg-surface-low">
-        <div className="mx-auto flex h-full max-w-4xl items-center justify-between px-6">
+    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
+      <header
+        className="fixed top-0 inset-x-0 z-50 h-14"
+        style={{
+          background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <div className="mx-auto relative h-full max-w-[1080px] px-6">
           {/* Left: Logo */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <Logo height={30} />
-            <span className="text-xl font-bold text-on-surface tracking-tight">Depsilo</span>
+          <Link to="/" className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2.5 no-underline">
+            <Logo height={28} />
+            <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--heading)' }}>Depsilo</span>
           </Link>
 
-          {/* Center: Nav */}
-          <nav className="flex items-center gap-1">
+          {/* Center: Nav — 2 items */}
+          <nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1">
             <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                `px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-primary'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`
-              }
+              to="/" end
+              className="px-3 py-1.5 text-[14px] font-[400] transition-colors duration-150 border-b-2"
+              style={navStyle}
             >
               {t('portal.quickStart')}
             </NavLink>
             <NavLink
-              to="/packages"
-              className={({ isActive }) =>
-                `px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-primary'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`
-              }
+              to="/monitor"
+              className="px-3 py-1.5 text-[14px] font-[400] transition-colors duration-150 border-b-2"
+              style={navStyle}
             >
-              {t('portal.packages')}
-            </NavLink>
-            <NavLink
-              to="/live"
-              className={({ isActive }) =>
-                `px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-primary'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`
-              }
-            >
-              {t('portal.live')}
-            </NavLink>
-            <NavLink
-              to="/status"
-              className={({ isActive }) =>
-                `px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-primary'
-                    : 'text-on-surface-variant hover:text-on-surface'
-                }`
-              }
-            >
-              {t('portal.serviceStatus')}
+              {t('portal.monitor')}
             </NavLink>
           </nav>
 
-          {/* Right: ThemeToggle + status pill + admin link */}
-          <div className="flex items-center gap-3">
+          {/* Right */}
+          <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-3">
             <LangToggle />
             <ThemeToggle />
-
             {data && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container px-2.5 py-1 text-xs font-medium">
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    isHealthy ? 'bg-success' : 'bg-error'
-                  }`}
-                />
-                <span className={isHealthy ? 'text-success' : 'text-error'}>
+              <span className="inline-flex items-center justify-center min-w-[72px]">
+                <BadgeV2 variant={isHealthy ? 'success' : 'error'} className="whitespace-nowrap">
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${isHealthy ? 'bg-success' : 'bg-error'}`} />
                   {isHealthy ? t('portal.online') : t('portal.offline')}
-                </span>
+                </BadgeV2>
               </span>
             )}
-
-            <Link to="/admin">
-              <Button variant="ghost" className="text-xs">
-                {t('portal.adminPanel')}
-              </Button>
+            <Link
+              to="/admin"
+              className="inline-flex items-center justify-center min-w-[88px] text-[14px] font-[400] no-underline transition-colors duration-150 whitespace-nowrap"
+              style={{ color: 'var(--stripe-purple)' }}
+            >
+              {t('portal.adminPanel')}
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="pt-14 max-w-4xl mx-auto px-6 py-8">
+      <main className="pt-14 max-w-[1080px] mx-auto px-6 py-8">
         <Routes>
-          <Route index element={<QuickStart />} />
-          <Route path="packages" element={<Packages />} />
-          <Route path="packages/:type/:name" element={<PackageDetail />} />
-          <Route path="live" element={<LiveStream />} />
-          <Route path="status" element={<ServiceStatus />} />
+          <Route index element={<QuickStartV2 />} />
+          <Route path="monitor" element={<MonitorV2 />} />
         </Routes>
       </main>
     </div>

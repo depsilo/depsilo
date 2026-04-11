@@ -3,12 +3,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { packagesApi } from '@/lib/api'
-import BadgeV2 from '@/components/BadgeV2'
-import InputV2 from '@/components/InputV2'
-import ButtonV2 from '@/components/ButtonV2'
+import BadgeV2 from '@/components/Badge'
+import InputV2 from '@/components/Input'
+import ButtonV2 from '@/components/Button'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import EmptyStateV2 from '@/components/EmptyStateV2'
-import SelectV2 from '@/components/SelectV2'
+import EmptyStateV2 from '@/components/EmptyState'
+import SelectV2 from '@/components/Select'
 
 interface PackageItem {
   package_name: string

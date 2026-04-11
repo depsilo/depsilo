@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
-import CardV2 from '@/components/CardV2'
-import MetricCardV2 from '@/components/MetricCardV2'
-import BadgeV2 from '@/components/BadgeV2'
+import CardV2 from '@/components/Card'
+import MetricCardV2 from '@/components/MetricCard'
+import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 
 interface StatsData {

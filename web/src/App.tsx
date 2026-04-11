@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import PortalApp from '@/portal/PortalAppV2'
-import AdminApp from '@/admin/AdminAppV2'
+import PortalApp from '@/portal/PortalApp'
+import AdminApp from '@/admin/AdminApp'
 
 const queryClient = new QueryClient({
   defaultOptions: {

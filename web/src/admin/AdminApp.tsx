@@ -1,14 +1,14 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import MainLayout from './components/MainLayout'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import CacheManage from './pages/CacheManage'
-import Upstreams from './pages/Upstreams'
-import AccessLogs from './pages/AccessLogs'
-import Users from './pages/Users'
-import Settings from './pages/Settings'
-import AuditLogs from './pages/AuditLogs'
-import Rules from './pages/Rules'
+import MainLayoutV2 from './components/MainLayout'
+import LoginV2 from './pages/Login'
+import DashboardV2 from './pages/Dashboard'
+import CacheManageV2 from './pages/CacheManage'
+import UpstreamsV2 from './pages/Upstreams'
+import AccessLogsV2 from './pages/AccessLogs'
+import UsersV2 from './pages/Users'
+import SettingsV2 from './pages/Settings'
+import AuditLogsV2 from './pages/AuditLogs'
+import RulesV2 from './pages/Rules'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -21,25 +21,25 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-export default function AdminApp() {
+export default function AdminAppV2() {
   return (
     <Routes>
-      <Route path="login" element={<Login />} />
+      <Route path="login" element={<LoginV2 />} />
       <Route
         element={
           <RequireAuth>
-            <MainLayout />
+            <MainLayoutV2 />
           </RequireAuth>
         }
       >
-        <Route index element={<Dashboard />} />
-        <Route path="cache" element={<CacheManage />} />
-        <Route path="upstreams" element={<Upstreams />} />
-        <Route path="logs" element={<AccessLogs />} />
-        <Route path="audit" element={<AuditLogs />} />
-        <Route path="rules" element={<Rules />} />
-        <Route path="users" element={<Users />} />
-        <Route path="settings" element={<Settings />} />
+        <Route index element={<DashboardV2 />} />
+        <Route path="cache" element={<CacheManageV2 />} />
+        <Route path="upstreams" element={<UpstreamsV2 />} />
+        <Route path="logs" element={<AccessLogsV2 />} />
+        <Route path="audit" element={<AuditLogsV2 />} />
+        <Route path="rules" element={<RulesV2 />} />
+        <Route path="users" element={<UsersV2 />} />
+        <Route path="settings" element={<SettingsV2 />} />
       </Route>
     </Routes>
   )
