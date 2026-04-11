@@ -104,6 +104,10 @@ const zh = {
       invalidUrl: '请输入有效的 URL',
       confirmDelete: '确认删除',
       confirmDeleteMsg: '确定要删除此上游源吗？',
+      autoProbe: '自动探测',
+      checking: '检测中...',
+      checkAll: '全部检测',
+      checkOne: '手动检测',
     },
 
     // Access Logs

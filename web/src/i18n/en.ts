@@ -104,6 +104,10 @@ const en = {
       invalidUrl: 'Please enter a valid URL',
       confirmDelete: 'Confirm Delete',
       confirmDeleteMsg: 'Are you sure you want to delete this upstream?',
+      autoProbe: 'Auto Probe',
+      checking: 'Checking...',
+      checkAll: 'Check All',
+      checkOne: 'Manual Check',
     },
 
     // Access Logs

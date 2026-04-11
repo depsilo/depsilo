@@ -2,40 +2,75 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
-import CardV2 from '@/components/CardV2'
 import ButtonV2 from '@/components/ButtonV2'
 import InputV2 from '@/components/InputV2'
 import SelectV2 from '@/components/SelectV2'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/ModalV2'
-import EcosystemIcon from '@/components/EcosystemIcon'
+import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
+
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm'] as const
 
 interface UpstreamForm { name: string; url: string; priority: number; proxy: string; adapter_type: string }
 const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi' }
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm'] as const
-
 export default function UpstreamsV2() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<string>('pypi')
+
+  // CRUD state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<UpstreamForm>(emptyForm)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [urlError, setUrlError] = useState('')
 
-  const { data, isLoading } = useQuery({ queryKey: ['admin', 'upstreams'], queryFn: () => adminApi.listUpstreams() })
-  const allUpstreams: any[] = data?.data?.items || data?.data || []
-  const filtered = allUpstreams.filter((u: any) => u.adapter_type === tab)
+  // Health check settings (UI state)
+  const [autoProbe, setAutoProbe] = useState(true)
+  const [probeInterval, setProbeInterval] = useState('30s')
+  const [checking, setChecking] = useState(false)
 
-  const createMutation = useMutation({ mutationFn: (d: any) => adminApi.createUpstream(d), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() } })
-  const updateMutation = useMutation({ mutationFn: ({ id, data: d }: { id: number; data: any }) => adminApi.updateUpstream(id, d), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() } })
-  const deleteMutation = useMutation({ mutationFn: (id: number) => adminApi.deleteUpstream(id), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); setDeleteTarget(null) } })
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'upstreams'],
+    queryFn: () => adminApi.listUpstreams(),
+  })
+  const allUpstreams: any[] = data?.data?.items || data?.data || []
+
+  // Map to UpstreamItem shape
+  const upstreamItems: UpstreamItem[] = allUpstreams.map((u: any) => ({
+    id: u.id,
+    name: u.name,
+    adapter: u.adapter_type,
+    healthy: u.healthy,
+    avg_latency_ms: u.avg_latency_ms || 0,
+    success_rate: u.success_rate || 0,
+    url: u.url,
+    proxy: u.proxy,
+    priority: u.priority,
+  }))
+
+  const createMutation = useMutation({
+    mutationFn: (d: any) => adminApi.createUpstream(d),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() },
+  })
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data: d }: { id: number; data: any }) => adminApi.updateUpstream(id, d),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() },
+  })
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => adminApi.deleteUpstream(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); setDeleteTarget(null) },
+  })
 
   function closeDialog() { setDialogOpen(false); setEditId(null); setForm(emptyForm); setUrlError('') }
-  function openCreate() { setEditId(null); setForm({ ...emptyForm, adapter_type: tab }); setDialogOpen(true) }
-  function openEdit(u: any) { setEditId(u.id); setForm({ name: u.name, url: u.url, priority: u.priority, proxy: u.proxy || '', adapter_type: u.adapter_type }); setDialogOpen(true) }
+  function openCreate() { setEditId(null); setForm({ ...emptyForm }); setDialogOpen(true) }
+  function openEdit(u: any) {
+    const orig = allUpstreams.find((x: any) => x.id === u.id || x.name === u.name)
+    if (!orig) return
+    setEditId(orig.id)
+    setForm({ name: orig.name, url: orig.url, priority: orig.priority, proxy: orig.proxy || '', adapter_type: orig.adapter_type })
+    setDialogOpen(true)
+  }
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try { new URL(form.url) } catch { setUrlError(t('upstreams.invalidUrl')); return }
@@ -43,66 +78,131 @@ export default function UpstreamsV2() {
     if (editId) updateMutation.mutate({ id: editId, data: form })
     else createMutation.mutate(form)
   }
+
+  async function checkAll() {
+    setChecking(true)
+    try {
+      await Promise.allSettled(
+        allUpstreams.filter((u: any) => u.id).map((u: any) => adminApi.checkUpstream(u.id))
+      )
+      queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  async function checkOne(id: number) {
+    await adminApi.checkUpstream(id)
+    queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+  }
+
   const isSaving = createMutation.isPending || updateMutation.isPending
 
+  // Inline select style
+  const selStyle: React.CSSProperties = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    color: 'var(--heading)',
+    borderRadius: 4,
+    padding: '4px 8px',
+    fontSize: 12,
+    outline: 'none',
+    cursor: 'pointer',
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div />
-        <ButtonV2 onClick={openCreate}><Icon name="add" size="sm" />{t('upstreams.addUpstream')}</ButtonV2>
+    <div className="space-y-4">
+      {/* Header: health check settings + add button */}
+      <div
+        className="flex items-center gap-3 rounded-[5px] px-4 py-2.5"
+        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+      >
+        {/* Auto probe toggle */}
+        <label className="flex items-center gap-2 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={autoProbe}
+            onChange={(e) => setAutoProbe(e.target.checked)}
+            className="h-3.5 w-3.5 rounded"
+            style={{ accentColor: 'var(--stripe-purple)' }}
+          />
+          <span className="text-[12px] font-[400]" style={{ color: 'var(--heading)' }}>
+            {t('upstreams.autoProbe')}
+          </span>
+        </label>
+
+        {/* Interval selector */}
+        {autoProbe && (
+          <select value={probeInterval} onChange={(e) => setProbeInterval(e.target.value)} style={selStyle}>
+            <option value="15s">15s</option>
+            <option value="30s">30s</option>
+            <option value="1m">1m</option>
+            <option value="5m">5m</option>
+          </select>
+        )}
+
+        {/* Manual check */}
+        <ButtonV2
+          variant="secondary"
+          size="sm"
+          onClick={checkAll}
+          disabled={checking}
+        >
+          <Icon name="refresh" size="sm" />
+          {checking ? t('upstreams.checking') : t('upstreams.checkAll')}
+        </ButtonV2>
+
+        <div className="flex-1" />
+
+        {/* Add upstream */}
+        <ButtonV2 size="sm" onClick={openCreate}>
+          <Icon name="add" size="sm" />
+          {t('upstreams.addUpstream')}
+        </ButtonV2>
       </div>
 
-      {/* Ecosystem pills */}
-      <div className="flex flex-wrap gap-1.5">
-        {ECOSYSTEMS.map((eco) => (
-          <button
-            key={eco} onClick={() => setTab(eco)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-[400] rounded-[4px] transition-colors duration-150 cursor-pointer"
-            style={{
-              background: tab === eco ? 'var(--stripe-purple)' : 'var(--surface)',
-              color: tab === eco ? 'var(--on-primary)' : 'var(--body)',
-              border: tab === eco ? 'none' : '1px solid var(--border)',
-            }}
-          >
-            {tab !== eco && <EcosystemIcon type={eco} size={14} useColor={false} />}
-            {eco.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      {/* Upstream list */}
-      <div className="space-y-3">
-        {isLoading && <p className="text-[14px]" style={{ color: 'var(--body)' }}>{t('loading')}</p>}
-        {!isLoading && filtered.length === 0 && <p className="text-[14px]" style={{ color: 'var(--body)' }}>{t('upstreams.noUpstreams', { type: tab.toUpperCase() })}</p>}
-        {filtered.map((u: any) => (
-          <CardV2 key={u.id} className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                {u.healthy && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--success)' }} />}
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: u.healthy ? 'var(--success)' : 'var(--error)' }} />
-              </span>
-              <EcosystemIcon type={u.adapter_type} size={18} />
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-[400] text-[14px]" style={{ color: 'var(--heading)' }}>{u.name}</span>
-                  {u.proxy && <span className="text-[12px] font-mono" style={{ color: 'var(--body)' }}>· {t('upstreams.proxy')}: {u.proxy}</span>}
-                </div>
-                <p className="font-mono text-[13px] truncate" style={{ color: 'var(--body)' }}>{u.url}</p>
-              </div>
+      {/* Upstream grid with heartbeat bars */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+          ))}
+        </div>
+      ) : (
+        <UpstreamGroupedPanel
+          upstreams={upstreamItems}
+          renderActions={(u) => (
+            <div className="flex gap-0.5 ml-1">
+              {u.id && (
+                <button
+                  onClick={() => checkOne(u.id!)}
+                  className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                  style={{ color: 'var(--body)' }}
+                  title={t('upstreams.checkOne')}
+                >
+                  <Icon name="refresh" size="sm" />
+                </button>
+              )}
+              <button
+                onClick={() => openEdit(u as any)}
+                className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                style={{ color: 'var(--body)' }}
+              >
+                <Icon name="edit" size="sm" />
+              </button>
+              {u.id && (
+                <button
+                  onClick={() => setDeleteTarget(u.id!)}
+                  className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                  style={{ color: 'var(--body)' }}
+                >
+                  <Icon name="delete" size="sm" />
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-4 shrink-0">
-              <div className="text-right">
-                <p className="text-[13px] font-mono tabular-nums" style={{ color: 'var(--heading)' }}>{u.avg_latency_ms || 0} ms</p>
-                <p className="text-[10px]" style={{ color: 'var(--body)' }}>{t('upstreams.availability')} {((u.success_rate || 0) * 100).toFixed(1)}%</p>
-              </div>
-              <div className="flex gap-1">
-                <button onClick={() => openEdit(u)} className="bg-transparent cursor-pointer transition-colors duration-150 p-1.5 rounded-[4px]" style={{ color: 'var(--body)' }}><Icon name="edit" size="sm" /></button>
-                <button onClick={() => setDeleteTarget(u.id)} className="bg-transparent cursor-pointer transition-colors duration-150 p-1.5 rounded-[4px]" style={{ color: 'var(--body)' }}><Icon name="delete" size="sm" /></button>
-              </div>
-            </div>
-          </CardV2>
-        ))}
-      </div>
+          )}
+        />
+      )}
 
       {/* Create/Edit Modal */}
       <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}>
