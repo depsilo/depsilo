@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { adminApi } from '@/lib/api'
 import CardV2 from '@/components/Card'
 import MetricCardV2 from '@/components/MetricCard'
@@ -8,7 +9,7 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 import {
-  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
 } from 'recharts'
 
@@ -96,6 +97,12 @@ export default function DashboardV2() {
     queryKey: ['admin', 'dashboard', 'trends', range],
     queryFn: () => adminApi.getDashboardTrends(range),
     refetchInterval: 30000,
+  })
+
+  const { data: bwData } = useQuery({
+    queryKey: ['admin', 'bandwidth', '7d'],
+    queryFn: () => adminApi.getBandwidthReport({ range: '7d' }),
+    refetchInterval: 60000,
   })
 
   const dashboard = data?.data
@@ -213,6 +220,70 @@ export default function DashboardV2() {
           <TopPackagesList topPackages={topPackages} />
         </CardV2>
       </div>
+
+      {/* Bandwidth savings summary */}
+      {bwData?.data?.summary && (() => {
+        const bw = bwData.data.summary
+        const bwDaily = bwData.data.daily || []
+        const fmtTime = (ms: number) => {
+          if (ms <= 0) return '0s'
+          const s = Math.floor(ms / 1000); const m = Math.floor(s / 60); const h = Math.floor(m / 60)
+          if (h > 0) return `${h}${t('bandwidth.hours')} ${m % 60}${t('bandwidth.minutes')}`
+          if (m > 0) return `${m}${t('bandwidth.minutes')} ${s % 60}${t('bandwidth.seconds')}`
+          return `${s}${t('bandwidth.seconds')}`
+        }
+        return (
+          <CardV2>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--body)' }}>
+                {t('bandwidth.bandwidthSummary')}
+              </h3>
+              <Link
+                to="/admin/bandwidth"
+                className="text-[11px] font-[400] no-underline transition-colors duration-150"
+                style={{ color: 'var(--stripe-purple)' }}
+              >
+                {t('bandwidth.viewFullReport')}
+              </Link>
+            </div>
+            <div className="grid grid-cols-4 gap-4 mb-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--body)' }}>{t('bandwidth.totalTraffic')}</p>
+                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: 'var(--heading)' }}>{formatBytes(bw.total_bytes || 0)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--body)' }}>{t('bandwidth.trafficSaved')}</p>
+                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: '#10b981' }}>{formatBytes(bw.hit_bytes || 0)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--body)' }}>{t('bandwidth.savingsRate')}</p>
+                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: bw.savings_rate > 0.5 ? '#10b981' : 'var(--heading)' }}>
+                  {bw.savings_rate != null ? `${(bw.savings_rate * 100).toFixed(1)}%` : '0%'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--body)' }}>{t('bandwidth.timeSaved')}</p>
+                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: '#10b981' }}>{fmtTime(bw.time_saved_ms || 0)}</p>
+              </div>
+            </div>
+            {bwDaily.length > 0 && (
+              <ResponsiveContainer width="100%" height={100}>
+                <AreaChart data={bwDaily}>
+                  <defs>
+                    <linearGradient id="gradBwHit" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" tick={{ fill: 'var(--body)', fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Area type="monotone" dataKey="hit_bytes" stroke="#10b981" strokeWidth={1.5} fill="url(#gradBwHit)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardV2>
+        )
+      })()}
 
       {/* Upstreams — full width */}
       <div>
