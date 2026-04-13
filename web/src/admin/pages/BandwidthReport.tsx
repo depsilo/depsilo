@@ -228,7 +228,7 @@ export default function BandwidthReport() {
                       <Cell key={i} fill={ECO_COLORS[i % ECO_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => formatBytes(value)} />
+                  <Tooltip formatter={(value) => formatBytes(Number(value))} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1.5 mt-2">
@@ -285,7 +285,7 @@ export default function BandwidthReport() {
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatBytes(v)} />
                 <YAxis type="category" dataKey="upstream" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
-                <Tooltip formatter={(value: number) => formatBytes(value)} />
+                <Tooltip formatter={(value) => formatBytes(Number(value))} />
                 <Bar dataKey="miss_bytes" fill="var(--stripe-purple)" radius={[0, 3, 3, 0]} barSize={16} name={t('bandwidth.totalBandwidth')} />
               </BarChart>
             </ResponsiveContainer>
