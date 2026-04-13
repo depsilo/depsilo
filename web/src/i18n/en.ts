@@ -74,6 +74,35 @@ const en = {
       storageWarning: 'Cache usage at {{percent}}% — consider cleanup or expanding storage',
     },
 
+    // Bandwidth Report
+    bandwidth: {
+      title: 'Bandwidth Report',
+      totalTraffic: 'Total Traffic',
+      trafficSaved: 'Traffic Saved',
+      savingsRate: 'Savings Rate',
+      timeSaved: 'Time Saved',
+      dailyTrend: 'Daily Trend',
+      byEcosystem: 'By Ecosystem',
+      topPackages: 'Top Packages',
+      byUpstream: 'By Upstream',
+      hitBytes: 'Cache Hit',
+      missBytes: 'Cache Miss',
+      latencyComparison: 'Latency Comparison',
+      avgHitLatency: 'Hit Avg',
+      avgMissLatency: 'Miss Avg',
+      viewFullReport: 'View Full Report →',
+      last7d: '7 Days',
+      last30d: '30 Days',
+      last90d: '90 Days',
+      custom: 'Custom',
+      bandwidthSummary: 'Bandwidth Savings',
+      hours: 'h',
+      minutes: 'min',
+      seconds: 's',
+      totalBandwidth: 'Total',
+      savedBandwidth: 'Saved',
+    },
+
     // Cache
     cache: {
       searchPlaceholder: 'Search cache key...',

@@ -94,6 +94,10 @@ export const adminApi = {
   updateRule: (id: number, data: any) => api.put(`/admin/rules/${id}`, data),
   deleteRule: (id: number) => api.delete(`/admin/rules/${id}`),
   testRule: (data: { ecosystem: string; package: string; version: string }) => api.post('/admin/rules/test', data),
+
+  // Bandwidth report
+  getBandwidthReport: (params: { range?: string; start?: string; end?: string }) =>
+    api.get('/admin/bandwidth', { params }),
 }
 
 export default api

@@ -74,6 +74,35 @@ const zh = {
       storageWarning: '缓存使用率已达 {{percent}}%，建议清理或扩容',
     },
 
+    // Bandwidth Report
+    bandwidth: {
+      title: '带宽报告',
+      totalTraffic: '总流量',
+      trafficSaved: '节省流量',
+      savingsRate: '节省率',
+      timeSaved: '节省时间',
+      dailyTrend: '每日趋势',
+      byEcosystem: '按生态',
+      topPackages: '热门包',
+      byUpstream: '按上游',
+      hitBytes: '缓存命中',
+      missBytes: '缓存未命中',
+      latencyComparison: '延迟对比',
+      avgHitLatency: '命中平均',
+      avgMissLatency: '未命中平均',
+      viewFullReport: '查看完整报告 →',
+      last7d: '7 天',
+      last30d: '30 天',
+      last90d: '90 天',
+      custom: '自定义',
+      bandwidthSummary: '带宽节省',
+      hours: '时',
+      minutes: '分',
+      seconds: '秒',
+      totalBandwidth: '总量',
+      savedBandwidth: '已节省',
+    },
+
     // Cache
     cache: {
       searchPlaceholder: '搜索缓存 key...',
