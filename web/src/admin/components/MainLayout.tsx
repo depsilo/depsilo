@@ -42,6 +42,7 @@ export default function MainLayoutV2() {
 
   const monitorItems: NavItem[] = [
     { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
+    { label: t('bandwidth.title'), to: '/admin/bandwidth', icon: 'bar_chart' },
     { label: t('nav.accessLogs'), to: '/admin/logs', icon: 'receipt_long' },
     { label: t('nav.auditLogs'), to: '/admin/audit', icon: 'policy', pro: true },
   ]
@@ -56,6 +57,7 @@ export default function MainLayoutV2() {
 
   const pageTitles: Record<string, string> = {
     '/admin': t('nav.dashboard'),
+    '/admin/bandwidth': t('bandwidth.title'),
     '/admin/logs': t('nav.accessLogs'),
     '/admin/audit': t('nav.auditLogs'),
     '/admin/cache': t('nav.cacheManage'),
