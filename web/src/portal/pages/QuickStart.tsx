@@ -6,7 +6,7 @@ import Icon from '@/components/Icon'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import CodeBlockV2 from '@/portal/components/CodeBlock'
 
-type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer' | 'nuget' | 'conda' | 'cran' | 'helm'
+type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer' | 'nuget' | 'conda' | 'cran' | 'helm' | 'docker'
 
 // ── Content generators (by tool) ───────────────────────────────────
 
@@ -325,6 +325,7 @@ function TestButton({ ecosystem, baseURL }: { ecosystem: Tab; baseURL: string })
     conda: '/conda/',
     cran: '/cran/',
     helm: '/helm/',
+    docker: '/v2/',
   }
 
   const handleTest = async () => {
@@ -419,6 +420,7 @@ export default function QuickStartV2() {
     { key: 'conda', label: 'Conda' },
     { key: 'cran', label: 'CRAN' },
     { key: 'helm', label: 'Helm' },
+    { key: 'docker', label: 'Docker' },
   ]
 
   return (
@@ -616,6 +618,23 @@ export default function QuickStartV2() {
             </Method>
             <Method icon="deployed_code" title={t('quickstart.helmUse')} description={t('quickstart.helmUseDesc')}>
               <CodeBlockV2 language="bash" code="helm install my-release depsilo/nginx" />
+            </Method>
+          </>
+        )}
+
+        {activeTab === 'docker' && (
+          <>
+            <Method icon="settings" title={t('quickstart.dockerMirror')} description={t('quickstart.dockerMirrorDesc')}>
+              <CodeBlockV2 filename="/etc/docker/daemon.json" language="json" code={`{\n  "registry-mirrors": ["${baseURL}"]\n}`} />
+            </Method>
+            <Method icon="restart_alt" title={t('quickstart.dockerRestart')} description={t('quickstart.dockerRestartDesc')}>
+              <CodeBlockV2 language="bash" code="sudo systemctl restart docker" />
+            </Method>
+            <Method icon="download" title={t('quickstart.dockerDirect')} description={t('quickstart.dockerDirectDesc')}>
+              <CodeBlockV2 language="bash" code={`docker pull ${host}:${location.port || '23333'}/nginx:latest`} />
+            </Method>
+            <Method icon="cloud_sync" title={t('quickstart.dockerOther')} description={t('quickstart.dockerOtherDesc')}>
+              <CodeBlockV2 language="bash" code={`docker pull ${host}:${location.port || '23333'}/ghcr.io/owner/repo:tag`} />
             </Method>
           </>
         )}
