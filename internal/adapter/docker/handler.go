@@ -44,19 +44,16 @@ func New(cacheMgr *cache.Manager, cacheCfg config.CacheConfig, database *gorm.DB
 func (h *Handler) Type() string { return "docker" }
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
-	rg.GET("/", h.handleVersionCheck)
 	rg.HEAD("/*path", h.handleRequest)
 	rg.GET("/*path", h.handleRequest)
 }
 
-func (h *Handler) handleVersionCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{})
-}
-
 func (h *Handler) handleRequest(c *gin.Context) {
 	path := strings.TrimPrefix(c.Param("path"), "/")
-	if path == "" {
-		c.Status(http.StatusNotFound)
+
+	// GET /v2/ — version check
+	if path == "" || path == "/" {
+		c.JSON(http.StatusOK, gin.H{})
 		return
 	}
 
