@@ -11,6 +11,7 @@ import {
   siAnaconda,
   siR,
   siHelm,
+  siDocker,
 } from 'simple-icons'
 
 type EcosystemType =
@@ -26,6 +27,7 @@ type EcosystemType =
   | 'conda'
   | 'cran'
   | 'helm'
+  | 'docker'
 
 interface EcosystemIconProps {
   type: EcosystemType
@@ -50,6 +52,7 @@ const iconMap: Record<string, typeof siPython> = {
   conda: siAnaconda,
   cran: siR,
   helm: siHelm,
+  docker: siDocker,
 }
 
 // Icons whose brand color is too dark for dark mode
