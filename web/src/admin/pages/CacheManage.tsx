@@ -149,7 +149,7 @@ export default function CacheManageV2() {
               <ResponsiveContainer width="100%" height={160}>
                 <Treemap
                   data={distribution.top_packages.map((p: any) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
-                  dataKey="size" aspectRatio={4 / 3} stroke="var(--surface)"
+                  dataKey="size" aspectRatio={4 / 3} stroke="var(--surface)" isAnimationActive={false}
                   content={({ x, y, width, height, name, size }: any) => {
                     if (width < 4 || height < 4) return <g />
                     const showLabel = width > 60 && height > 30 && name
