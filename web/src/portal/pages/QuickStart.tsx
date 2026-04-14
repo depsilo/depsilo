@@ -624,8 +624,8 @@ export default function QuickStartV2() {
 
         {activeTab === 'docker' && (
           <>
-            <Method icon="settings" title={t('quickstart.dockerMirror')} description={t('quickstart.dockerMirrorDesc')}>
-              <CodeBlockV2 filename="/etc/docker/daemon.json" language="json" code={`{\n  "registry-mirrors": ["${baseURL}"]\n}`} />
+            <Method icon="shield" title={t('quickstart.dockerInsecure')} description={t('quickstart.dockerInsecureDesc')}>
+              <CodeBlockV2 filename="/etc/docker/daemon.json" language="json" code={`{\n  "insecure-registries": ["${host}:${location.port || '23333'}"],\n  "registry-mirrors": ["http://${host}:${location.port || '23333'}"]\n}`} />
             </Method>
             <Method icon="restart_alt" title={t('quickstart.dockerRestart')} description={t('quickstart.dockerRestartDesc')}>
               <CodeBlockV2 language="bash" code="sudo systemctl restart docker" />
