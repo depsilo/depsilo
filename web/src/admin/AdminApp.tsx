@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import MainLayoutV2 from './components/MainLayout'
 import LoginV2 from './pages/Login'
 import DashboardV2 from './pages/Dashboard'
+import BandwidthReportV2 from './pages/BandwidthReport'
 import CacheManageV2 from './pages/CacheManage'
 import UpstreamsV2 from './pages/Upstreams'
 import AccessLogsV2 from './pages/AccessLogs'
@@ -33,6 +34,7 @@ export default function AdminAppV2() {
         }
       >
         <Route index element={<DashboardV2 />} />
+        <Route path="bandwidth" element={<BandwidthReportV2 />} />
         <Route path="cache" element={<CacheManageV2 />} />
         <Route path="upstreams" element={<UpstreamsV2 />} />
         <Route path="logs" element={<AccessLogsV2 />} />

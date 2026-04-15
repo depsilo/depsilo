@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"time"
 )
@@ -219,6 +220,56 @@ func (m *MockUpstream) RegisterHelm() {
 	})
 }
 
+// RegisterDocker adds Docker Registry V2 endpoints with Bearer token auth.
+func (m *MockUpstream) RegisterDocker() {
+	const mockToken = "mock-docker-token-12345"
+
+	// Token endpoint — accepts any credentials, returns fixed token
+	m.mux.HandleFunc("/auth/token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"token":"%s","expires_in":300}`, mockToken)
+	})
+
+	// /v2/ — returns 401 with WWW-Authenticate to trigger token flow
+	m.mux.HandleFunc("/v2/", func(w http.ResponseWriter, r *http.Request) {
+		// Check if authenticated
+		auth := r.Header.Get("Authorization")
+		if auth == "Bearer "+mockToken {
+			// Authenticated — serve registry endpoints
+			path := strings.TrimPrefix(r.URL.Path, "/v2/")
+			if path == "" || path == "/" {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{}`)
+				return
+			}
+
+			if strings.Contains(path, "/manifests/") {
+				w.Header().Set("Content-Type", "application/vnd.docker.distribution.manifest.v2+json")
+				w.Header().Set("Docker-Content-Digest", "sha256:fakedigest")
+				fmt.Fprint(w, `{"schemaVersion":2,"mediaType":"application/vnd.docker.distribution.manifest.v2+json","config":{"digest":"sha256:fakeconfig"}}`)
+				return
+			}
+			if strings.Contains(path, "/blobs/") {
+				w.Header().Set("Content-Type", "application/octet-stream")
+				w.Write([]byte("FAKE_DOCKER_BLOB_DATA"))
+				return
+			}
+			if strings.HasSuffix(path, "/tags/list") {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{"name":"library/testimg","tags":["latest","v1.0"]}`)
+				return
+			}
+			http.NotFound(w, r)
+			return
+		}
+
+		// Not authenticated — send challenge
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="%s/auth/token",service="mock-registry"`, m.URL()))
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, `{"errors":[{"code":"UNAUTHORIZED"}]}`)
+	})
+}
+
 // RegisterAll registers mock responses for all supported ecosystems.
 func (m *MockUpstream) RegisterAll() {
 	m.RegisterPyPI()
@@ -233,4 +284,5 @@ func (m *MockUpstream) RegisterAll() {
 	m.RegisterConda()
 	m.RegisterCRAN()
 	m.RegisterHelm()
+	m.RegisterDocker()
 }

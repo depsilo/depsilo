@@ -156,3 +156,19 @@ name     = "bitnami"
 url      = "https://charts.bitnami.com/bitnami"
 priority = 2
 proxy    = "http://127.0.0.1:7890"
+
+[docker]
+default_registry = "docker.io"
+
+[[docker.registries]]
+name     = "dockerhub"
+url      = "https://registry-1.docker.io"
+# username = ""
+# password = ""
+# proxy    = "http://127.0.0.1:7890"
+
+# [[docker.registries]]
+# name     = "ghcr"
+# url      = "https://ghcr.io"
+# username = "github-user"
+# password = "ghp_xxx"

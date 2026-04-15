@@ -24,7 +24,7 @@ function formatTime(t: string): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm']
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
 
 // Assign distinct colors per ecosystem
 const ECO_COLORS: Record<string, string> = {
@@ -149,7 +149,7 @@ export default function CacheManageV2() {
               <ResponsiveContainer width="100%" height={160}>
                 <Treemap
                   data={distribution.top_packages.map((p: any) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
-                  dataKey="size" aspectRatio={4 / 3} stroke="var(--surface)"
+                  dataKey="size" aspectRatio={4 / 3} stroke="var(--surface)" isAnimationActive={false}
                   content={({ x, y, width, height, name, size }: any) => {
                     if (width < 4 || height < 4) return <g />
                     const showLabel = width > 60 && height > 30 && name

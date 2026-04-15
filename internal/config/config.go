@@ -20,6 +20,7 @@ type Config struct {
 	Conda    AdapterConfig  `mapstructure:"conda"`
 	CRAN     AdapterConfig  `mapstructure:"cran"`
 	Helm     AdapterConfig  `mapstructure:"helm"`
+	Docker   DockerConfig   `mapstructure:"docker"`
 	License  LicenseConfig  `mapstructure:"license"`
 }
 
@@ -69,5 +70,18 @@ type UpstreamConfig struct {
 	Name     string `mapstructure:"name"`
 	URL      string `mapstructure:"url"`
 	Priority int    `mapstructure:"priority"`
+	Proxy    string `mapstructure:"proxy"`
+}
+
+type DockerConfig struct {
+	DefaultRegistry string           `mapstructure:"default_registry"`
+	Registries      []RegistryConfig `mapstructure:"registries"`
+}
+
+type RegistryConfig struct {
+	Name     string `mapstructure:"name"`
+	URL      string `mapstructure:"url"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
 	Proxy    string `mapstructure:"proxy"`
 }

@@ -19,6 +19,7 @@ import (
 	"depsilo/internal/adapter/conda"
 	"depsilo/internal/adapter/cran"
 	"depsilo/internal/adapter/goproxy"
+	dockeradapter "depsilo/internal/adapter/docker"
 	"depsilo/internal/adapter/helm"
 	"depsilo/internal/adapter/maven"
 	"depsilo/internal/adapter/npm"
@@ -290,6 +291,17 @@ func main() {
 	helmHandler := helm.New(cacheMgr, upstream.NewPrioritySelector(helmPool), cfg.Cache, database)
 	helmGroup := r.Group("/helm")
 	helmHandler.Register(helmGroup)
+
+	// Register Docker Registry adapter (only if registries configured)
+	if len(cfg.Docker.Registries) > 0 {
+		dockerHandler := dockeradapter.New(cacheMgr, cfg.Cache, database, cfg.Docker)
+		dockerGroup := r.Group("/v2")
+		dockerHandler.Register(dockerGroup)
+		zap.L().Info("docker registry proxy enabled",
+			zap.Int("registries", len(cfg.Docker.Registries)),
+			zap.String("default", cfg.Docker.DefaultRegistry),
+		)
+	}
 
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")

@@ -34,8 +34,8 @@ type AccessLog struct {
 
 type UpstreamRecord struct {
 	ID            uint      `gorm:"primarykey" json:"id"`
-	AdapterType   string    `gorm:"size:16;index" json:"adapter_type"`
-	Name          string    `gorm:"size:128;uniqueIndex" json:"name"`
+	AdapterType   string    `gorm:"size:16;index;uniqueIndex:idx_upstream_name_type" json:"adapter_type"`
+	Name          string    `gorm:"size:128;uniqueIndex:idx_upstream_name_type" json:"name"`
 	URL           string    `gorm:"size:512" json:"url"`
 	Proxy         string    `gorm:"size:256" json:"proxy"`
 	Priority      int       `json:"priority"`

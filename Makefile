@@ -1,4 +1,4 @@
-.PHONY: build run dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-clean clean lint frontend help \
+.PHONY: build run run-pro dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-clean clean lint frontend help \
 	test-docker-pip test-docker-apt test-docker \
 	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test
 
@@ -21,6 +21,9 @@ build: frontend                 ## 构建前端 + 编译后端
 # ─── 运行 ─────────────────────────────────────
 run: build                      ## 编译并前台运行
 	DEPSILO_CONFIG=$(CONFIG) ./$(BIN)
+
+run-pro: build                  ## 编译并前台运行（开启全部 Pro 功能）
+	DEPSILO_DEV_PRO=1 DEPSILO_CONFIG=$(CONFIG) ./$(BIN)
 
 dev: build stop                 ## 编译并后台运行（dev 模式）
 	@echo ">>> starting $(APP) on :$(PORT) ..."

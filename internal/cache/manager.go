@@ -165,6 +165,26 @@ func ExtractPackageName(adapterType, key string) string {
 			}
 			return fname
 		}
+	case "docker":
+		if strings.Contains(key, "/manifests/") {
+			parts := strings.SplitN(key, "/manifests/", 2)
+			if len(parts) == 2 {
+				image := parts[1]
+				if idx := strings.LastIndex(image, "/"); idx > 0 {
+					return image[:idx]
+				}
+				return image
+			}
+		}
+		if strings.Contains(key, "/tags/") {
+			parts := strings.SplitN(key, "/tags/", 2)
+			if len(parts) == 2 {
+				return strings.TrimSuffix(parts[1], "/list")
+			}
+		}
+		if strings.Contains(key, "/blobs/") {
+			return ""
+		}
 	}
 	return ""
 }

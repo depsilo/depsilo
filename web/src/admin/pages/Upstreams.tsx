@@ -9,7 +9,7 @@ import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm'] as const
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker'] as const
 
 interface UpstreamForm { name: string; url: string; priority: number; proxy: string; adapter_type: string }
 const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi' }

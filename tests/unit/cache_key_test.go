@@ -9,6 +9,7 @@ import (
 	composerAdapter "depsilo/internal/adapter/composer"
 	condaAdapter "depsilo/internal/adapter/conda"
 	cranAdapter "depsilo/internal/adapter/cran"
+	dockerAdapter "depsilo/internal/adapter/docker"
 	goProxy "depsilo/internal/adapter/goproxy"
 	helmAdapter "depsilo/internal/adapter/helm"
 	mavenAdapter "depsilo/internal/adapter/maven"
@@ -270,6 +271,36 @@ func TestCacheKey_Helm(t *testing.T) {
 	}
 }
 
+// ---------- Docker ----------
+
+func TestCacheKey_Docker_Manifest(t *testing.T) {
+	key := dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "latest")
+	if key != "docker/dockerhub/manifests/library/nginx/latest" {
+		t.Errorf("got %s", key)
+	}
+}
+
+func TestCacheKey_Docker_ManifestDigest(t *testing.T) {
+	key := dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "sha256:abc123")
+	if key != "docker/dockerhub/manifests/library/nginx/sha256__abc123" {
+		t.Errorf("got %s", key)
+	}
+}
+
+func TestCacheKey_Docker_Blob(t *testing.T) {
+	key := dockerAdapter.BlobCacheKey("dockerhub", "sha256:abc123")
+	if key != "docker/dockerhub/blobs/sha256__abc123" {
+		t.Errorf("got %s", key)
+	}
+}
+
+func TestCacheKey_Docker_TagList(t *testing.T) {
+	key := dockerAdapter.TagListCacheKey("dockerhub", "library/nginx")
+	if key != "docker/dockerhub/tags/library/nginx/list" {
+		t.Errorf("got %s", key)
+	}
+}
+
 // ---------- Cross-ecosystem collision ----------
 
 func TestCacheKey_NoCollision(t *testing.T) {
@@ -286,6 +317,7 @@ func TestCacheKey_NoCollision(t *testing.T) {
 		"conda":    condaAdapter.CacheKey("pkgs/main/linux-64/numpy-1.0.tar.bz2"),
 		"cran":     cranAdapter.CacheKey("src/contrib/ggplot2_3.4.0.tar.gz"),
 		"helm":     helmAdapter.CacheKey("nginx-15.0.0.tgz"),
+		"docker":   dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "latest"),
 	}
 
 	seen := make(map[string]string)
@@ -315,6 +347,10 @@ func TestCacheKey_ValidFilesystemPath(t *testing.T) {
 		condaAdapter.CacheKey("pkgs/main/linux-64/numpy.tar.bz2"),
 		cranAdapter.CacheKey("src/contrib/ggplot2_3.4.0.tar.gz"),
 		helmAdapter.CacheKey("nginx-15.0.0.tgz"),
+		dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "latest"),
+		dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "sha256:abc123"),
+		dockerAdapter.BlobCacheKey("dockerhub", "sha256:abc123"),
+		dockerAdapter.TagListCacheKey("dockerhub", "library/nginx"),
 	}
 
 	illegalChars := []string{"\x00", "\\", ":", "*", "?", "\"", "<", ">", "|"}
