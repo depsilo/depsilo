@@ -146,10 +146,18 @@ priority = 1
 name = "mock"
 url = "%s"
 priority = 1
+
+[docker]
+default_registry = "mock"
+
+[[docker.registries]]
+name = "mock"
+url = "%s"
 `, port, dir, dir,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
-		upstreamURL, upstreamURL, upstreamURL, upstreamURL)
+		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
+		upstreamURL)
 
 	os.WriteFile(dir+"/config.toml", []byte(cfg), 0644)
 }
