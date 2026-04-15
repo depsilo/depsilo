@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"depsilo/internal/config"
+	"go.uber.org/zap"
 )
 
 // Registry holds runtime state for a configured registry.
@@ -97,6 +98,18 @@ func NewResolver(cfg config.DockerConfig) *Resolver {
 		r.domainMap["index.docker.io"] = name
 	}
 
+	// Log warnings for default registry resolution
+	if cfg.DefaultRegistry != "" && r.defaultReg == "" {
+		zap.L().Warn("docker: configured default_registry not found, no default set",
+			zap.String("default_registry", cfg.DefaultRegistry),
+		)
+	} else if cfg.DefaultRegistry != "" && r.defaultReg != cfg.DefaultRegistry {
+		zap.L().Info("docker: default_registry resolved",
+			zap.String("configured", cfg.DefaultRegistry),
+			zap.String("resolved_to", r.defaultReg),
+		)
+	}
+
 	return r
 }
 
@@ -128,6 +141,10 @@ func (r *Resolver) Resolve(path string) (reg *Registry, imageName string, endpoi
 			imageName = strings.Join(parts[1:endpointIdx], "/")
 			return reg, imageName, endpoint
 		}
+		zap.L().Info("docker: unregistered domain in path, using default registry",
+			zap.String("domain", firstPart),
+			zap.String("default", r.defaultReg),
+		)
 	}
 
 	if r.defaultReg != "" {
