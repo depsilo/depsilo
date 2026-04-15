@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 type tokenEntry struct {
@@ -20,6 +21,7 @@ type tokenEntry struct {
 type AuthManager struct {
 	mu     sync.RWMutex
 	tokens map[string]*tokenEntry // key: "registryName:scope"
+	sf     singleflight.Group
 }
 
 func NewAuthManager() *AuthManager {
@@ -31,6 +33,7 @@ func NewAuthManager() *AuthManager {
 func (a *AuthManager) GetToken(client *http.Client, registryURL, registryName, username, password, scope string) (string, error) {
 	cacheKey := registryName + ":" + scope
 
+	// Fast path: check cache
 	a.mu.RLock()
 	if entry, ok := a.tokens[cacheKey]; ok && time.Now().Before(entry.ExpiresAt) {
 		a.mu.RUnlock()
@@ -38,29 +41,42 @@ func (a *AuthManager) GetToken(client *http.Client, registryURL, registryName, u
 	}
 	a.mu.RUnlock()
 
-	// Discover token endpoint from /v2/ challenge
-	realm, service, err := a.discoverAuth(client, registryURL)
+	// Deduplicated fetch via singleflight
+	val, err, _ := a.sf.Do(cacheKey, func() (interface{}, error) {
+		// Double-check after winning the singleflight
+		a.mu.RLock()
+		if entry, ok := a.tokens[cacheKey]; ok && time.Now().Before(entry.ExpiresAt) {
+			a.mu.RUnlock()
+			return entry.Token, nil
+		}
+		a.mu.RUnlock()
+
+		realm, service, err := a.discoverAuth(client, registryURL)
+		if err != nil {
+			return "", fmt.Errorf("auth discovery failed: %w", err)
+		}
+		if realm == "" {
+			return "", nil
+		}
+
+		token, expiresIn, err := a.fetchToken(client, realm, service, scope, username, password)
+		if err != nil {
+			return "", fmt.Errorf("token fetch failed: %w", err)
+		}
+
+		a.mu.Lock()
+		a.tokens[cacheKey] = &tokenEntry{
+			Token:     token,
+			ExpiresAt: time.Now().Add(time.Duration(expiresIn-30) * time.Second),
+		}
+		a.mu.Unlock()
+
+		return token, nil
+	})
 	if err != nil {
-		return "", fmt.Errorf("auth discovery failed: %w", err)
+		return "", err
 	}
-	if realm == "" {
-		// No auth required (e.g., insecure registry)
-		return "", nil
-	}
-
-	token, expiresIn, err := a.fetchToken(client, realm, service, scope, username, password)
-	if err != nil {
-		return "", fmt.Errorf("token fetch failed: %w", err)
-	}
-
-	a.mu.Lock()
-	a.tokens[cacheKey] = &tokenEntry{
-		Token:     token,
-		ExpiresAt: time.Now().Add(time.Duration(expiresIn-30) * time.Second), // refresh 30s early
-	}
-	a.mu.Unlock()
-
-	return token, nil
+	return val.(string), nil
 }
 
 // discoverAuth sends GET /v2/ and parses the WWW-Authenticate header.
