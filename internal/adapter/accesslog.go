@@ -195,6 +195,12 @@ func extractPackageName(adapterType, key string) string {
 				return image
 			}
 		}
+		if strings.Contains(key, "/tags/") {
+			parts := strings.SplitN(key, "/tags/", 2)
+			if len(parts) == 2 {
+				return strings.TrimSuffix(parts[1], "/list")
+			}
+		}
 		if strings.Contains(key, "/blobs/") {
 			return ""
 		}
