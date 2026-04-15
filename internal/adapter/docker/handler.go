@@ -62,6 +62,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	reg, imageName, endpoint := h.resolver.Resolve(path)
 	if reg == nil || imageName == "" || endpoint == "" {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "invalid path"})
+		adapter.LogAccess(h.db, "docker", c.Request.Method, "docker/unknown/"+path, false, "", time.Since(start), http.StatusNotFound, c.ClientIP(), 0)
 		return
 	}
 
@@ -73,6 +74,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		h.handleTagList(c, reg, imageName, start)
 	} else {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "unsupported endpoint"})
+		adapter.LogAccess(h.db, "docker", c.Request.Method, "docker/unknown/"+path, false, "", time.Since(start), http.StatusNotFound, c.ClientIP(), 0)
 	}
 }
 
@@ -98,6 +100,7 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 	if err != nil {
 		zap.L().Error("docker manifest fetch failed", zap.String("image", imageName), zap.String("ref", reference), zap.Error(err))
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		adapter.LogAccess(h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
 	defer result.Reader.Close()
@@ -116,6 +119,7 @@ func (h *Handler) handleBlob(c *gin.Context, reg *Registry, imageName, endpoint 
 	if err != nil {
 		zap.L().Error("docker blob fetch failed", zap.String("digest", digest), zap.Error(err))
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		adapter.LogAccess(h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
 	defer result.Reader.Close()
@@ -134,6 +138,7 @@ func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName string,
 	if err != nil {
 		zap.L().Error("docker tags list failed", zap.String("image", imageName), zap.Error(err))
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		adapter.LogAccess(h.db, "docker", c.Request.Method, cacheKey, false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		return
 	}
 	defer result.Reader.Close()
