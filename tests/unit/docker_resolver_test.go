@@ -120,3 +120,23 @@ func TestResolver_NoEndpointKeyword(t *testing.T) {
 		t.Errorf("expected nil registry for path without endpoint keyword, got %v", reg)
 	}
 }
+
+func TestParseAuthParam(t *testing.T) {
+	header := `Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:library/nginx:pull"`
+
+	tests := []struct {
+		name     string
+		expected string
+	}{
+		{"realm", "https://auth.docker.io/token"},
+		{"service", "registry.docker.io"},
+		{"scope", "repository:library/nginx:pull"},
+		{"missing", ""},
+	}
+	for _, tt := range tests {
+		got := docker.ParseAuthParam(header, tt.name)
+		if got != tt.expected {
+			t.Errorf("ParseAuthParam(%q) = %q, want %q", tt.name, got, tt.expected)
+		}
+	}
+}

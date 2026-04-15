@@ -85,8 +85,8 @@ func (a *AuthManager) discoverAuth(client *http.Client, registryURL string) (rea
 		return "", "", fmt.Errorf("no WWW-Authenticate header")
 	}
 
-	realm = parseAuthParam(challenge, "realm")
-	service = parseAuthParam(challenge, "service")
+	realm = ParseAuthParam(challenge, "realm")
+	service = ParseAuthParam(challenge, "service")
 	return realm, service, nil
 }
 
@@ -135,9 +135,9 @@ func (a *AuthManager) fetchToken(client *http.Client, realm, service, scope, use
 	return token, expiresIn, nil
 }
 
-// parseAuthParam extracts a named parameter from a WWW-Authenticate header.
+// ParseAuthParam extracts a named parameter from a WWW-Authenticate header.
 // Example: `Bearer realm="https://auth.docker.io/token",service="registry.docker.io"`
-func parseAuthParam(header, name string) string {
+func ParseAuthParam(header, name string) string {
 	search := name + "=\""
 	idx := strings.Index(header, search)
 	if idx < 0 {

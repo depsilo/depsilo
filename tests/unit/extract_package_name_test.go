@@ -171,6 +171,25 @@ func TestExtractPackageName_Helm(t *testing.T) {
 	}
 }
 
+func TestExtractPackageName_Docker(t *testing.T) {
+	tests := []struct {
+		key      string
+		expected string
+	}{
+		{"docker/dockerhub/manifests/library/nginx/latest", "library/nginx"},
+		{"docker/ghcr/manifests/owner/repo/sha256__abc", "owner/repo"},
+		{"docker/dockerhub/manifests/team/service/api/v1.0", "team/service/api"},
+		{"docker/dockerhub/blobs/sha256__abc", ""},
+		{"docker/dockerhub/tags/library/nginx/list", "library/nginx"},
+	}
+	for _, tt := range tests {
+		got := cache.ExtractPackageName("docker", tt.key)
+		if got != tt.expected {
+			t.Errorf("ExtractPackageName(docker, %q) = %q, want %q", tt.key, got, tt.expected)
+		}
+	}
+}
+
 func TestExtractPackageName_Unknown(t *testing.T) {
 	got := cache.ExtractPackageName("unknown", "some/key")
 	if got != "" {
