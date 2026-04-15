@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/api"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 )
@@ -188,6 +189,8 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 	}
 	c.Status(http.StatusOK)
 
+	api.M.RequestsTotal.WithLabelValues("docker", "false").Inc()
+	api.M.RequestDuration.WithLabelValues("docker").Observe(time.Since(start).Seconds())
 	adapter.LogAccess(h.db, "docker", "HEAD", cacheKey, false, reg.Name, time.Since(start), http.StatusOK, c.ClientIP(), 0)
 }
 
@@ -217,15 +220,18 @@ func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageNam
 
 	resp, err := reg.Client.Do(req)
 	if err != nil {
+		api.M.UpstreamRequestsTotal.WithLabelValues(reg.Name, "false").Inc()
 		return nil, "", 0, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		api.M.UpstreamRequestsTotal.WithLabelValues(reg.Name, "false").Inc()
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		return nil, "", 0, fmt.Errorf("upstream returned %d: %s", resp.StatusCode, string(body))
 	}
 
+	api.M.UpstreamRequestsTotal.WithLabelValues(reg.Name, "true").Inc()
 	return resp.Body, resp.Header.Get("Content-Type"), resp.ContentLength, nil
 }
 
@@ -240,6 +246,14 @@ func (h *Handler) streamResponse(c *gin.Context, result *cache.GetResult, cacheK
 	}
 	c.Status(http.StatusOK)
 	written, _ := io.Copy(c.Writer, result.Reader)
+
+	// Prometheus metrics
+	hitStr := "false"
+	if result.Hit {
+		hitStr = "true"
+	}
+	api.M.RequestsTotal.WithLabelValues("docker", hitStr).Inc()
+	api.M.RequestDuration.WithLabelValues("docker").Observe(time.Since(start).Seconds())
 
 	adapter.LogAccess(h.db, "docker", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
