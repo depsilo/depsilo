@@ -3,6 +3,8 @@ package config
 import "time"
 
 type Config struct {
+	IsDefault  bool   `mapstructure:"-" json:"-"`  // true when no config file found
+	ConfigPath string `mapstructure:"-" json:"-"`  // resolved path for config file
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Storage  StorageConfig  `mapstructure:"storage"`

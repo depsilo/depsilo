@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/user"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/viper"
@@ -27,28 +29,54 @@ func Load() (*Config, error) {
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")
 
-	// Config file path from env or default
+	// Config file path resolution
 	configPath := os.Getenv("DEPSILO_CONFIG")
+	isDefault := false
+	resolvedPath := ""
+
 	if configPath != "" {
 		v.SetConfigFile(configPath)
+		resolvedPath = configPath
 	} else {
 		v.SetConfigName("config")
 		v.SetConfigType("toml")
 		v.AddConfigPath(".")
 		v.AddConfigPath("/app")
+		// Also search ~/.depsilo/
+		if usr, err := user.Current(); err == nil {
+			depsiloDir := filepath.Join(usr.HomeDir, ".depsilo")
+			v.AddConfigPath(depsiloDir)
+			resolvedPath = filepath.Join(depsiloDir, "config.toml")
+		}
 	}
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
-		zap.L().Warn("config file not found, using defaults")
+		isDefault = true
+		zap.L().Warn("config file not found, using defaults — visit the web UI to run setup")
+
+		// When no config file, use ~/.depsilo/ paths as defaults
+		if usr, err := user.Current(); err == nil {
+			depsiloDir := filepath.Join(usr.HomeDir, ".depsilo")
+			v.Set("database.dsn", filepath.Join(depsiloDir, "data", "depsilo.db"))
+			v.Set("storage.path", filepath.Join(depsiloDir, "data", "cache"))
+			if resolvedPath == "" {
+				resolvedPath = filepath.Join(depsiloDir, "config.toml")
+			}
+		}
+	} else {
+		resolvedPath = v.ConfigFileUsed()
 	}
 
 	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
+
+	cfg.IsDefault = isDefault
+	cfg.ConfigPath = resolvedPath
 
 	// Parse duration fields from string
 	if raw := v.GetString("cache.ttl_index"); raw != "" {
