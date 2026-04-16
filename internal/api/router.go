@@ -17,6 +17,7 @@ import (
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
 	"depsilo/internal/upstream"
+	"depsilo/internal/version"
 )
 
 var startTime = time.Now()
@@ -180,7 +181,8 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 
 func healthHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "healthy",
-		"uptime": time.Since(startTime).String(),
+		"status":  "healthy",
+		"version": version.Version,
+		"uptime":  time.Since(startTime).String(),
 	})
 }
