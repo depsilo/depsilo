@@ -35,6 +35,7 @@ import (
 	"depsilo/internal/license"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
+	"depsilo/internal/security"
 	"depsilo/internal/upstream"
 	web "depsilo/web"
 )
@@ -181,6 +182,32 @@ func main() {
 	go auditLogger.Start(ctx)
 	adapter.SetAuditLogger(auditLogger)
 
+	// Security scanner
+	secCfg := cfg.Security
+	if secCfg.OSVURL == "" {
+		secCfg.OSVURL = "https://api.osv.dev"
+	}
+	if secCfg.ScanInterval == 0 {
+		secCfg.ScanInterval = 24 * time.Hour
+	}
+	if secCfg.CheckTTL == 0 {
+		secCfg.CheckTTL = 24 * time.Hour
+	}
+
+	osvFetcher := security.NewFetcher(secCfg.OSVURL, secCfg.Proxy)
+	securityScanner := security.NewScanner(database, osvFetcher, secCfg.CheckTTL)
+	securityImporter := security.NewImporter(database)
+
+	if secCfg.Enabled {
+		go security.StartBackgroundScan(ctx, securityScanner, secCfg.ScanInterval)
+		zap.L().Info("security vulnerability scanner enabled",
+			zap.Duration("scan_interval", secCfg.ScanInterval),
+			zap.Duration("check_ttl", secCfg.CheckTTL),
+		)
+	}
+
+	cache.SetSecurityScanner(securityScanner)
+
 	if cfg.License.Key == "" {
 		zap.L().Info("running as Community edition")
 	} else {
@@ -226,10 +253,12 @@ func main() {
 		HelmPool:     helmPool,
 		CacheMgr:       cacheMgr,
 		EventBus:       eventBus,
-		LicenseManager: licenseManager,
-		AuditLogger:    auditLogger,
-		RulesStore:     rulesStore,
-		RulesEngine:    rulesEngine,
+		LicenseManager:  licenseManager,
+		AuditLogger:     auditLogger,
+		RulesStore:      rulesStore,
+		RulesEngine:     rulesEngine,
+		SecurityScanner:  securityScanner,
+		SecurityImporter: securityImporter,
 	})
 
 	// Register PyPI adapter

@@ -189,6 +189,16 @@ func ExtractPackageName(adapterType, key string) string {
 	return ""
 }
 
+// securityScanner is the optional security scanner, set via SetSecurityScanner.
+var securityScanner interface {
+	ScanPackage(ctx context.Context, ecosystem, packageName string) error
+}
+
+// SetSecurityScanner sets the security scanner used to check new packages.
+func SetSecurityScanner(s interface{ ScanPackage(ctx context.Context, ecosystem, packageName string) error }) {
+	securityScanner = s
+}
+
 // Manager handles cache lookup, singleflight dedup, and storage writes.
 // Strategy: stale-while-revalidate + offline fallback.
 //   - Cache entries are NEVER deleted by TTL expiration.
@@ -348,6 +358,18 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		}
 
 		m.publishEvent(key, adapterType, false, size)
+
+		// Trigger async security scan for new packages
+		if securityScanner != nil {
+			pkgName := ExtractPackageName(adapterType, key)
+			if pkgName != "" {
+				go func() {
+					if err := securityScanner.ScanPackage(context.Background(), adapterType, pkgName); err != nil {
+						zap.L().Debug("security scan for new package failed", zap.Error(err))
+					}
+				}()
+			}
+		}
 
 		return &sfResult{contentType: contentType, size: size}, nil
 	})
