@@ -38,6 +38,7 @@ const zh = {
       logout: '退出登录',
       admin: '管理员',
       readonly: '只读',
+      setup: '初始配置',
     },
 
     // Login
@@ -545,6 +546,37 @@ const zh = {
       upstreamStatus: '上游源状态',
       noUpstreams: '暂无上游源',
       topPackages: '热门包',
+    },
+
+    // Setup wizard
+    setup: {
+      welcome: '欢迎使用 Depsilo',
+      welcomeDesc: '为团队打造的轻量级依赖缓存',
+      getStarted: '开始配置',
+      basicSettings: '基础设置',
+      port: '监听端口',
+      portDesc: '包管理器客户端使用的 HTTP 端口',
+      storagePath: '缓存存储路径',
+      storagePathDesc: '缓存包文件的存储目录',
+      selectEcosystems: '选择生态',
+      selectEcosystemsDesc: '选择需要代理的包管理器',
+      configureUpstreams: '配置上游源',
+      configureUpstreamsDesc: '为每个生态设置镜像源地址',
+      addUpstream: '添加上游源',
+      removeUpstream: '移除',
+      upstreamName: '名称',
+      upstreamUrl: '地址',
+      upstreamPriority: '优先级',
+      upstreamProxy: 'HTTP 代理（可选）',
+      complete: '配置完成',
+      summary: '配置摘要',
+      saveAndStart: '保存并启动',
+      saving: '正在保存配置...',
+      restarting: '正在重启服务...',
+      prev: '上一步',
+      next: '下一步',
+      ecosystemCount: '个生态已选择',
+      upstreamCount: '个上游源',
     },
 
     // Monitor

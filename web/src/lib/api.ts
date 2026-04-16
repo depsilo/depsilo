@@ -112,4 +112,10 @@ export const adminApi = {
   updateSecurityPolicy: (ecosystem: string, data: any) => api.put(`/admin/security/policies/${ecosystem}`, data),
 }
 
+// Setup wizard (no auth)
+export const setupApi = {
+  getStatus: () => api.get('/setup/status'),
+  complete: (data: any) => api.post('/setup/complete', data),
+}
+
 export default api

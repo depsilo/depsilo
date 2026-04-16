@@ -38,6 +38,7 @@ const en = {
       logout: 'Sign out',
       admin: 'Admin',
       readonly: 'Read-only',
+      setup: 'Setup',
     },
 
     // Login
@@ -545,6 +546,37 @@ const en = {
       upstreamStatus: 'Upstream Status',
       noUpstreams: 'No upstreams',
       topPackages: 'Top Packages',
+    },
+
+    // Setup wizard
+    setup: {
+      welcome: 'Welcome to Depsilo',
+      welcomeDesc: 'Lightweight dependency cache for your team',
+      getStarted: 'Get Started',
+      basicSettings: 'Basic Settings',
+      port: 'Listen Port',
+      portDesc: 'HTTP port for package manager clients',
+      storagePath: 'Cache Storage Path',
+      storagePathDesc: 'Directory for cached packages',
+      selectEcosystems: 'Select Ecosystems',
+      selectEcosystemsDesc: 'Choose which package managers to proxy',
+      configureUpstreams: 'Configure Upstream Sources',
+      configureUpstreamsDesc: 'Set mirror URLs for each ecosystem',
+      addUpstream: 'Add Upstream',
+      removeUpstream: 'Remove',
+      upstreamName: 'Name',
+      upstreamUrl: 'URL',
+      upstreamPriority: 'Priority',
+      upstreamProxy: 'HTTP Proxy (optional)',
+      complete: 'Setup Complete',
+      summary: 'Configuration Summary',
+      saveAndStart: 'Save & Start',
+      saving: 'Saving configuration...',
+      restarting: 'Restarting server...',
+      prev: 'Previous',
+      next: 'Next',
+      ecosystemCount: 'ecosystems selected',
+      upstreamCount: 'upstream sources',
     },
 
     // Monitor
