@@ -15,6 +15,7 @@ import (
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/rules"
+	"depsilo/internal/security"
 	"depsilo/internal/upstream"
 )
 
@@ -39,10 +40,12 @@ type Deps struct {
 	HelmPool       *upstream.Pool
 	CacheMgr       *cache.Manager
 	EventBus       *cache.EventBus
-	LicenseManager *license.Manager
-	AuditLogger    *audit.Logger
-	RulesStore     *rules.Store
-	RulesEngine    *rules.Engine
+	LicenseManager  *license.Manager
+	AuditLogger     *audit.Logger
+	RulesStore      *rules.Store
+	RulesEngine     *rules.Engine
+	SecurityScanner  *security.Scanner
+	SecurityImporter *security.Importer
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -160,6 +163,19 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	proGroup.PUT("/rules/:id", rulesHandler.Update)
 	proGroup.DELETE("/rules/:id", rulesHandler.Delete)
 	proGroup.POST("/rules/test", rulesHandler.Test)
+
+	// Security intelligence (Pro)
+	securityHandler := admin.NewSecurityHandler(deps.DB, deps.SecurityScanner, deps.SecurityImporter)
+	proGroup.GET("/security/dashboard", securityHandler.Dashboard)
+	proGroup.GET("/security/vulnerabilities", securityHandler.ListVulnerabilities)
+	proGroup.GET("/security/packages", securityHandler.ListPackages)
+	proGroup.GET("/security/suggestions", securityHandler.ListSuggestions)
+	proGroup.POST("/security/suggestions/:vuln_id/approve", securityHandler.ApproveSuggestion)
+	proGroup.POST("/security/suggestions/:vuln_id/dismiss", securityHandler.DismissSuggestion)
+	proGroup.POST("/security/scan", securityHandler.TriggerScan)
+	proGroup.POST("/security/import", securityHandler.ImportData)
+	proGroup.GET("/security/policies", securityHandler.ListPolicies)
+	proGroup.PUT("/security/policies/:ecosystem", securityHandler.UpdatePolicy)
 }
 
 func healthHandler(c *gin.Context) {
