@@ -55,5 +55,9 @@ func AutoMigrate(db *gorm.DB) error {
 		&UpstreamLatencyLog{},
 		&AuditLog{},
 		&PackageRule{},
+		&Vulnerability{},
+		&VulnerabilityCheck{},
+		&SecurityPolicy{},
+		&DismissedVuln{},
 	)
 }

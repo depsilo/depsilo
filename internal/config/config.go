@@ -22,6 +22,7 @@ type Config struct {
 	Helm     AdapterConfig  `mapstructure:"helm"`
 	Docker   DockerConfig   `mapstructure:"docker"`
 	License  LicenseConfig  `mapstructure:"license"`
+	Security SecurityConfig `mapstructure:"security"`
 }
 
 type LicenseConfig struct {
@@ -84,4 +85,12 @@ type RegistryConfig struct {
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 	Proxy    string `mapstructure:"proxy"`
+}
+
+type SecurityConfig struct {
+	Enabled      bool          `mapstructure:"enabled"`
+	OSVURL       string        `mapstructure:"osv_api_url"`
+	ScanInterval time.Duration `mapstructure:"scan_interval"`
+	CheckTTL     time.Duration `mapstructure:"check_ttl"`
+	Proxy        string        `mapstructure:"proxy"`
 }

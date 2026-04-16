@@ -105,3 +105,50 @@ type AuditLog struct {
 	StatusCode  int       `json:"status_code"`
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 }
+
+type Vulnerability struct {
+	ID             uint      `gorm:"primarykey" json:"id"`
+	OSVID          string    `gorm:"size:64;uniqueIndex" json:"osv_id"`
+	Ecosystem      string    `gorm:"size:16;index" json:"ecosystem"`
+	PackageName    string    `gorm:"size:256;index" json:"package_name"`
+	AffectedRanges string    `gorm:"type:text" json:"affected_ranges"`
+	Severity       string    `gorm:"size:16;index" json:"severity"`
+	CVSSScore      float32   `gorm:"default:0" json:"cvss_score"`
+	Summary        string    `gorm:"type:text" json:"summary"`
+	Details        string    `gorm:"type:text" json:"details"`
+	Aliases        string    `gorm:"size:512" json:"aliases"`
+	References     string    `gorm:"type:text" json:"references"`
+	PublishedAt    time.Time `gorm:"index" json:"published_at"`
+	ModifiedAt     time.Time `json:"modified_at"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type VulnerabilityCheck struct {
+	ID                 uint      `gorm:"primarykey" json:"id"`
+	Ecosystem          string    `gorm:"size:16;uniqueIndex:idx_vuln_check_eco_pkg" json:"ecosystem"`
+	PackageName        string    `gorm:"size:256;uniqueIndex:idx_vuln_check_eco_pkg" json:"package_name"`
+	HasVulnerabilities bool      `gorm:"default:false" json:"has_vulnerabilities"`
+	VulnerabilityCount int       `gorm:"default:0" json:"vulnerability_count"`
+	LastFetchedAt      time.Time `gorm:"index" json:"last_fetched_at"`
+	NextFetchAt        time.Time `gorm:"index" json:"next_fetch_at"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type SecurityPolicy struct {
+	ID               uint      `gorm:"primarykey" json:"id"`
+	Ecosystem        string    `gorm:"size:16;uniqueIndex" json:"ecosystem"`
+	AutoBlockEnabled bool      `gorm:"default:false" json:"auto_block_enabled"`
+	MinCVSSScore     float32   `gorm:"default:9.0" json:"min_cvss_score"`
+	CreatedBy        string    `gorm:"size:64" json:"created_by"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type DismissedVuln struct {
+	ID              uint      `gorm:"primarykey" json:"id"`
+	VulnerabilityID uint      `gorm:"uniqueIndex:idx_dismissed" json:"vulnerability_id"`
+	DismissedBy     string    `gorm:"size:64" json:"dismissed_by"`
+	CreatedAt       time.Time `json:"created_at"`
+}

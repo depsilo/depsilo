@@ -172,3 +172,10 @@ url      = "https://registry-1.docker.io"
 # url      = "https://ghcr.io"
 # username = "github-user"
 # password = "ghp_xxx"
+
+[security]
+enabled = true
+osv_api_url = "https://api.osv.dev"
+scan_interval = "24h"
+check_ttl = "24h"
+# proxy = "http://127.0.0.1:7890"
