@@ -34,6 +34,7 @@ const zh = {
       settings: '系统设置',
       auditLogs: '审计日志',
       rules: '包治理',
+      security: '包安全',
       logout: '退出登录',
       admin: '管理员',
       readonly: '只读',
@@ -219,6 +220,63 @@ const zh = {
       noMatch: '未匹配到规则（默认：允许）',
       proRequired: '包治理规则需要 Depsilo Pro',
       proDesc: '控制哪些包可以被下载。阻止漏洞版本，强制使用已批准的包。',
+      upgrade: '升级到 Pro',
+    },
+
+    // Security
+    security: {
+      title: '包安全',
+      overview: '总览',
+      vulnerabilities: '漏洞列表',
+      suggestions: '建议规则',
+      policies: '策略配置',
+
+      totalVulnerabilities: '漏洞总数',
+      affectedPackages: '受影响包',
+      criticalCount: '严重漏洞',
+      lastScan: '上次扫描',
+      autoBlocked: '已自动拦截',
+
+      severity: '严重性',
+      critical: '严重',
+      high: '高危',
+      medium: '中危',
+      low: '低危',
+      unknown: '未知',
+
+      scanNow: '立即扫描',
+      scanning: '扫描中...',
+      scanStarted: '扫描已启动',
+      scanConflict: '扫描正在进行中',
+      neverScanned: '从未扫描',
+
+      osvId: 'OSV ID',
+      cvssScore: 'CVSS',
+      package: '包名',
+      ecosystem: '生态',
+      publishedAt: '发布日期',
+      affectedVersions: '受影响版本',
+
+      approve: '审批拦截',
+      dismiss: '忽略',
+      ruleCreated: '规则已创建',
+      dismissed: '已忽略',
+      noSuggestions: '暂无建议规则',
+      noVulnerabilities: '暂无漏洞',
+
+      autoBlock: '自动拦截',
+      minCvss: '最低 CVSS',
+      enabled: '已启用',
+      disabled: '已禁用',
+      saved: '策略已保存',
+
+      importFile: '导入漏洞数据',
+      importDesc: '上传 OSV JSON 文件',
+      importSuccess: '条漏洞已导入',
+      importFormat: 'OSV JSON 格式',
+
+      proRequired: '包安全功能需要 Depsilo Pro',
+      proDesc: '监控缓存包的已知漏洞，自动拦截高危版本。',
       upgrade: '升级到 Pro',
     },
 

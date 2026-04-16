@@ -34,6 +34,7 @@ const en = {
       settings: 'Settings',
       auditLogs: 'Audit Logs',
       rules: 'Package Rules',
+      security: 'Package Security',
       logout: 'Sign out',
       admin: 'Admin',
       readonly: 'Read-only',
@@ -219,6 +220,63 @@ const en = {
       noMatch: 'No rule matched (default: allow)',
       proRequired: 'Package rules require Depsilo Pro',
       proDesc: 'Control which packages can be downloaded. Block vulnerable versions, enforce approved packages.',
+      upgrade: 'Upgrade to Pro',
+    },
+
+    // Security
+    security: {
+      title: 'Package Security',
+      overview: 'Overview',
+      vulnerabilities: 'Vulnerabilities',
+      suggestions: 'Suggested Rules',
+      policies: 'Policies',
+
+      totalVulnerabilities: 'Total Vulnerabilities',
+      affectedPackages: 'Affected Packages',
+      criticalCount: 'Critical',
+      lastScan: 'Last Scan',
+      autoBlocked: 'Auto-blocked',
+
+      severity: 'Severity',
+      critical: 'Critical',
+      high: 'High',
+      medium: 'Medium',
+      low: 'Low',
+      unknown: 'Unknown',
+
+      scanNow: 'Scan Now',
+      scanning: 'Scanning...',
+      scanStarted: 'Scan started',
+      scanConflict: 'Scan already in progress',
+      neverScanned: 'Never',
+
+      osvId: 'OSV ID',
+      cvssScore: 'CVSS',
+      package: 'Package',
+      ecosystem: 'Ecosystem',
+      publishedAt: 'Published',
+      affectedVersions: 'Affected Versions',
+
+      approve: 'Block',
+      dismiss: 'Dismiss',
+      ruleCreated: 'Rule created',
+      dismissed: 'Dismissed',
+      noSuggestions: 'No suggested rules',
+      noVulnerabilities: 'No vulnerabilities found',
+
+      autoBlock: 'Auto Block',
+      minCvss: 'Min CVSS Score',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      saved: 'Policy saved',
+
+      importFile: 'Import Vulnerabilities',
+      importDesc: 'Upload OSV JSON file',
+      importSuccess: 'vulnerabilities imported',
+      importFormat: 'OSV JSON format',
+
+      proRequired: 'Package Security requires Depsilo Pro',
+      proDesc: 'Monitor cached packages for known CVEs, auto-block vulnerable versions.',
       upgrade: 'Upgrade to Pro',
     },
 

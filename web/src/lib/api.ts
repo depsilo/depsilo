@@ -98,6 +98,18 @@ export const adminApi = {
   // Bandwidth report
   getBandwidthReport: (params: { range?: string; start?: string; end?: string }) =>
     api.get('/admin/bandwidth', { params }),
+
+  // Package Security (Pro)
+  getSecurityDashboard: () => api.get('/admin/security/dashboard'),
+  listVulnerabilities: (params: Record<string, any>) => api.get('/admin/security/vulnerabilities', { params }),
+  listVulnerablePackages: (params: Record<string, any>) => api.get('/admin/security/packages', { params }),
+  listSuggestions: (params: Record<string, any>) => api.get('/admin/security/suggestions', { params }),
+  approveSuggestion: (vulnId: number, data?: any) => api.post(`/admin/security/suggestions/${vulnId}/approve`, data),
+  dismissSuggestion: (vulnId: number) => api.post(`/admin/security/suggestions/${vulnId}/dismiss`),
+  triggerSecurityScan: () => api.post('/admin/security/scan'),
+  importVulnerabilities: (formData: FormData) => api.post('/admin/security/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  listSecurityPolicies: () => api.get('/admin/security/policies'),
+  updateSecurityPolicy: (ecosystem: string, data: any) => api.put(`/admin/security/policies/${ecosystem}`, data),
 }
 
 export default api
