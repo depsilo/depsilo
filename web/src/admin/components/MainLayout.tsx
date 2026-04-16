@@ -52,6 +52,7 @@ export default function MainLayoutV2() {
     { label: t('nav.upstreams'), to: '/admin/upstreams', icon: 'cloud_sync' },
     { label: t('nav.userManage'), to: '/admin/users', icon: 'group' },
     { label: t('nav.rules'), to: '/admin/rules', icon: 'shield', pro: true },
+    { label: t('nav.security'), to: '/admin/security', icon: 'security', pro: true },
     { label: t('nav.settings'), to: '/admin/settings', icon: 'settings' },
   ]
 
@@ -64,6 +65,7 @@ export default function MainLayoutV2() {
     '/admin/upstreams': t('nav.upstreams'),
     '/admin/users': t('nav.userManage'),
     '/admin/rules': t('nav.rules'),
+    '/admin/security': t('nav.security'),
     '/admin/settings': t('nav.settings'),
   }
 

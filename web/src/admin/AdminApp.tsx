@@ -10,6 +10,7 @@ import UsersV2 from './pages/Users'
 import SettingsV2 from './pages/Settings'
 import AuditLogsV2 from './pages/AuditLogs'
 import RulesV2 from './pages/Rules'
+import Security from './pages/Security'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -40,6 +41,7 @@ export default function AdminAppV2() {
         <Route path="logs" element={<AccessLogsV2 />} />
         <Route path="audit" element={<AuditLogsV2 />} />
         <Route path="rules" element={<RulesV2 />} />
+        <Route path="security" element={<Security />} />
         <Route path="users" element={<UsersV2 />} />
         <Route path="settings" element={<SettingsV2 />} />
       </Route>
