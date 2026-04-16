@@ -15,8 +15,11 @@ HOST_IP    := $(shell ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\s
 frontend:                       ## 构建前端
 	@export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" && cd web && npm run build
 
-build: frontend                 ## 构建前端 + 编译后端
-	go build -o $(BIN) ./cmd/server
+build: frontend                 ## 构建前端 + 编译后端（服务器模式）
+	CGO_ENABLED=0 go build -o $(BIN) ./cmd/server
+
+build-desktop: frontend         ## 构建前端 + 编译桌面版
+	go build -tags "desktop,production" -o bin/$(APP)-desktop ./cmd/server
 
 # ─── 运行 ─────────────────────────────────────
 run: build                      ## 编译并前台运行
