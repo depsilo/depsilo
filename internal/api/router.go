@@ -69,6 +69,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	eventsHandler := public.NewEventsHandler(deps.EventBus)
 	apiV1.GET("/events/stream", eventsHandler.Stream)
 
+	// Setup wizard (no auth required)
+	setupHandler := NewSetupHandler(deps.Config)
+	apiV1.GET("/setup/status", setupHandler.Status)
+	apiV1.POST("/setup/complete", setupHandler.Complete)
+
 	// Auth routes
 	authHandler := NewAuthHandler(deps.DB, deps.Config.Auth)
 	authGroup := apiV1.Group("/auth")
