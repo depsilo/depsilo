@@ -189,6 +189,181 @@ func ExtractPackageName(adapterType, key string) string {
 	return ""
 }
 
+// ExtractPackageVersion derives a version string from the cache key.
+func ExtractPackageVersion(adapterType, key string) string {
+	switch adapterType {
+	case "pypi":
+		// key: pypi/files/.../requests-2.31.0-py3-none-any.whl or requests-2.31.0.tar.gz
+		if !strings.HasPrefix(key, "pypi/files/") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		// Remove extension
+		for _, ext := range []string{".whl", ".tar.gz", ".zip", ".egg"} {
+			fname = strings.TrimSuffix(fname, ext)
+		}
+		// Format: name-version or name-version-pyver-abi-platform
+		dashParts := strings.SplitN(fname, "-", 3)
+		if len(dashParts) >= 2 {
+			return dashParts[1]
+		}
+	case "npm":
+		// key: npm/lodash/-/lodash-4.17.21.tgz
+		if !strings.HasSuffix(key, ".tgz") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		fname = strings.TrimSuffix(fname, ".tgz")
+		// name-version.tgz — find last hyphen before version
+		if idx := strings.LastIndex(fname, "-"); idx > 0 {
+			return fname[idx+1:]
+		}
+	case "go":
+		// key: go/github.com/gin-gonic/gin/@v/v1.9.1.zip
+		if idx := strings.Index(key, "/@v/"); idx > 0 {
+			ver := key[idx+4:]
+			for _, ext := range []string{".zip", ".mod", ".info"} {
+				ver = strings.TrimSuffix(ver, ext)
+			}
+			return ver
+		}
+	case "cargo":
+		// key: cargo/crates/serde/1.0.0.crate
+		if !strings.HasSuffix(key, ".crate") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		return strings.TrimSuffix(fname, ".crate")
+	case "apt":
+		// key: apt/.../curl_7.68.0-1ubuntu2_amd64.deb
+		if !strings.HasSuffix(key, ".deb") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		fname = strings.TrimSuffix(fname, ".deb")
+		// name_version_arch.deb
+		underParts := strings.SplitN(fname, "_", 3)
+		if len(underParts) >= 2 {
+			return underParts[1]
+		}
+	case "maven":
+		// key: maven/.../commons-lang3/3.14.0/commons-lang3-3.14.0.jar
+		parts := strings.Split(strings.TrimPrefix(key, "maven/"), "/")
+		if len(parts) >= 3 {
+			return parts[len(parts)-2]
+		}
+	case "rubygems":
+		// key: rubygems/gems/rails-7.0.0.gem
+		if !strings.HasSuffix(key, ".gem") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		fname = strings.TrimSuffix(fname, ".gem")
+		if idx := strings.LastIndex(fname, "-"); idx > 0 {
+			return fname[idx+1:]
+		}
+	case "nuget":
+		// key: nuget/v3/package/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg
+		parts := strings.Split(strings.TrimPrefix(key, "nuget/"), "/")
+		if len(parts) >= 3 && strings.HasPrefix(parts[0], "v3/package") {
+			// v3/package/{name}/{version}/{file}.nupkg
+			return parts[2]
+		}
+		// Try: v3/package/name/version/...
+		for i, p := range parts {
+			if p == "package" && i+2 < len(parts) {
+				return parts[i+2]
+			}
+		}
+	case "conda":
+		// key: conda/.../numpy-1.24.0-py39h.tar.bz2
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		for _, ext := range []string{".tar.bz2", ".conda"} {
+			fname = strings.TrimSuffix(fname, ext)
+		}
+		// name-version-build
+		dashParts := strings.SplitN(fname, "-", 3)
+		if len(dashParts) >= 2 {
+			return dashParts[1]
+		}
+	case "cran":
+		// key: cran/.../ggplot2_3.4.0.tar.gz
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		fname = strings.TrimSuffix(fname, ".tar.gz")
+		fname = strings.TrimSuffix(fname, ".zip")
+		fname = strings.TrimSuffix(fname, ".tgz")
+		if idx := strings.Index(fname, "_"); idx > 0 {
+			return fname[idx+1:]
+		}
+	case "helm":
+		// key: helm/nginx-15.0.0.tgz
+		if !strings.HasSuffix(key, ".tgz") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := parts[len(parts)-1]
+		fname = strings.TrimSuffix(fname, ".tgz")
+		// Find last hyphen before version number
+		for i := len(fname) - 1; i >= 0; i-- {
+			if fname[i] == '-' && i+1 < len(fname) && fname[i+1] >= '0' && fname[i+1] <= '9' {
+				return fname[i+1:]
+			}
+		}
+	case "docker":
+		// key: docker/{registry}/manifests/{image}/{ref}
+		if strings.Contains(key, "/manifests/") {
+			parts := strings.SplitN(key, "/manifests/", 2)
+			if len(parts) == 2 {
+				if idx := strings.LastIndex(parts[1], "/"); idx > 0 {
+					return parts[1][idx+1:]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// IsPackageFile returns true if the cache key represents an actual package file download
+// (as opposed to metadata/index requests). Only package files should be recorded for SBOM.
+func IsPackageFile(adapterType, key string) bool {
+	switch adapterType {
+	case "pypi":
+		return strings.HasPrefix(key, "pypi/files/")
+	case "npm":
+		return strings.HasSuffix(key, ".tgz")
+	case "go":
+		return strings.HasSuffix(key, ".zip")
+	case "cargo":
+		return strings.HasSuffix(key, ".crate")
+	case "apt":
+		return strings.HasSuffix(key, ".deb")
+	case "maven":
+		return strings.HasSuffix(key, ".jar") || strings.HasSuffix(key, ".aar") || strings.HasSuffix(key, ".pom")
+	case "rubygems":
+		return strings.HasSuffix(key, ".gem")
+	case "composer":
+		return strings.HasSuffix(key, ".zip")
+	case "nuget":
+		return strings.HasSuffix(key, ".nupkg")
+	case "conda":
+		return strings.HasSuffix(key, ".tar.bz2") || strings.HasSuffix(key, ".conda")
+	case "cran":
+		return strings.HasSuffix(key, ".tar.gz") || strings.HasSuffix(key, ".zip") || strings.HasSuffix(key, ".tgz")
+	case "helm":
+		return strings.HasSuffix(key, ".tgz")
+	case "docker":
+		return strings.Contains(key, "/blobs/") || strings.Contains(key, "/manifests/")
+	}
+	return false
+}
+
 // securityScanner is the optional security scanner, set via SetSecurityScanner.
 var securityScanner interface {
 	ScanPackage(ctx context.Context, ecosystem, packageName string) error

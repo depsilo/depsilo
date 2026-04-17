@@ -59,5 +59,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&VulnerabilityCheck{},
 		&SecurityPolicy{},
 		&DismissedVuln{},
+		&Project{},
+		&ProjectPackage{},
 	)
 }

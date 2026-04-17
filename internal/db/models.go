@@ -152,3 +152,27 @@ type DismissedVuln struct {
 	DismissedBy     string    `gorm:"size:64" json:"dismissed_by"`
 	CreatedAt       time.Time `json:"created_at"`
 }
+
+type Project struct {
+	ID          uint      `gorm:"primarykey" json:"id"`
+	Name        string    `gorm:"size:128;uniqueIndex" json:"name"`
+	Slug        string    `gorm:"size:128;uniqueIndex" json:"slug"`
+	Description string    `gorm:"size:512" json:"description"`
+	TokenHash   string    `gorm:"size:256;uniqueIndex" json:"-"`
+	CreatedBy   string    `gorm:"size:64" json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type ProjectPackage struct {
+	ID            uint      `gorm:"primarykey" json:"id"`
+	ProjectID     uint      `gorm:"index;uniqueIndex:idx_proj_pkg" json:"project_id"`
+	Ecosystem     string    `gorm:"size:16;uniqueIndex:idx_proj_pkg" json:"ecosystem"`
+	PackageName   string    `gorm:"size:256;uniqueIndex:idx_proj_pkg" json:"package_name"`
+	Version       string    `gorm:"size:128;uniqueIndex:idx_proj_pkg" json:"version"`
+	FirstSeenAt   time.Time `json:"first_seen_at"`
+	LastSeenAt    time.Time `gorm:"index" json:"last_seen_at"`
+	DownloadCount int       `gorm:"default:1" json:"download_count"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
