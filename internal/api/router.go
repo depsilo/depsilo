@@ -182,6 +182,16 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	proGroup.POST("/security/import", securityHandler.ImportData)
 	proGroup.GET("/security/policies", securityHandler.ListPolicies)
 	proGroup.PUT("/security/policies/:ecosystem", securityHandler.UpdatePolicy)
+
+	// Project management (Pro)
+	projectsHandler := admin.NewProjectsHandler(deps.DB)
+	proGroup.GET("/projects", projectsHandler.List)
+	proGroup.POST("/projects", projectsHandler.Create)
+	proGroup.GET("/projects/:id", projectsHandler.Detail)
+	proGroup.PUT("/projects/:id", projectsHandler.Update)
+	proGroup.DELETE("/projects/:id", projectsHandler.Delete)
+	proGroup.GET("/projects/:id/packages", projectsHandler.ListPackages)
+	proGroup.POST("/projects/:id/token", projectsHandler.RegenerateToken)
 }
 
 func healthHandler(c *gin.Context) {

@@ -221,6 +221,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
 	r.Use(rules.Middleware(rulesEngine))
+	r.Use(middleware.ProjectTokenMiddleware(database))
 
 	// Register all API routes
 	api.RegisterRoutes(r, api.Deps{
@@ -307,6 +308,23 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 			zap.String("default", cfg.Docker.DefaultRegistry),
 		)
 	}
+
+	// Project-scoped proxy routes (/p/:slug/...)
+	projectGroup := r.Group("/p/:slug")
+	projectGroup.Use(middleware.ProjectSlugMiddleware(database))
+	// Re-register all adapter handlers under the project group
+	pypiHandler.Register(projectGroup.Group("/pypi"))
+	aptHandler.Register(projectGroup.Group("/apt"))
+	npmHandler.Register(projectGroup.Group("/npm"))
+	goHandler.Register(projectGroup.Group("/go"))
+	cargoHandler.Register(projectGroup.Group("/crates"))
+	mavenHandler.Register(projectGroup.Group("/maven"))
+	rubygemsHandler.Register(projectGroup.Group("/rubygems"))
+	composerHandler.Register(projectGroup.Group("/composer"))
+	nugetHandler.Register(projectGroup.Group("/nuget"))
+	condaHandler.Register(projectGroup.Group("/conda"))
+	cranHandler.Register(projectGroup.Group("/cran"))
+	helmHandler.Register(projectGroup.Group("/helm"))
 
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")
