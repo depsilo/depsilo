@@ -53,6 +53,7 @@ export default function MainLayoutV2() {
     { label: t('nav.userManage'), to: '/admin/users', icon: 'group' },
     { label: t('nav.rules'), to: '/admin/rules', icon: 'shield', pro: true },
     { label: t('nav.security'), to: '/admin/security', icon: 'security', pro: true },
+    { label: t('nav.projects'), to: '/admin/projects', icon: 'folder_managed', pro: true },
     { label: t('nav.settings'), to: '/admin/settings', icon: 'settings' },
   ]
 
@@ -66,6 +67,7 @@ export default function MainLayoutV2() {
     '/admin/users': t('nav.userManage'),
     '/admin/rules': t('nav.rules'),
     '/admin/security': t('nav.security'),
+    '/admin/projects': t('nav.projects'),
     '/admin/settings': t('nav.settings'),
   }
 
