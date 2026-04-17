@@ -110,6 +110,17 @@ export const adminApi = {
   importVulnerabilities: (formData: FormData) => api.post('/admin/security/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   listSecurityPolicies: () => api.get('/admin/security/policies'),
   updateSecurityPolicy: (ecosystem: string, data: any) => api.put(`/admin/security/policies/${ecosystem}`, data),
+
+  // Projects (Pro)
+  listProjects: () => api.get('/admin/projects'),
+  createProject: (data: any) => api.post('/admin/projects', data),
+  getProject: (id: number) => api.get(`/admin/projects/${id}`),
+  updateProject: (id: number, data: any) => api.put(`/admin/projects/${id}`, data),
+  deleteProject: (id: number) => api.delete(`/admin/projects/${id}`),
+  listProjectPackages: (id: number, params: Record<string, any>) => api.get(`/admin/projects/${id}/packages`, { params }),
+  regenerateProjectToken: (id: number) => api.post(`/admin/projects/${id}/token`),
+  exportSbom: (id: number, params: { format: string; ecosystem?: string }) =>
+    api.get(`/admin/projects/${id}/sbom`, { params, responseType: 'blob' }),
 }
 
 // Setup wizard (no auth)
