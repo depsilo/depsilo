@@ -192,6 +192,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	proGroup.DELETE("/projects/:id", projectsHandler.Delete)
 	proGroup.GET("/projects/:id/packages", projectsHandler.ListPackages)
 	proGroup.POST("/projects/:id/token", projectsHandler.RegenerateToken)
+	proGroup.GET("/projects/:id/sbom", projectsHandler.ExportSBOM)
 }
 
 func healthHandler(c *gin.Context) {

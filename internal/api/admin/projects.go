@@ -3,6 +3,7 @@ package admin
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
+	"depsilo/internal/sbom"
 )
 
 type ProjectsHandler struct {
@@ -257,6 +259,50 @@ func (h *ProjectsHandler) ListPackages(c *gin.Context) {
 		Find(&packages)
 
 	c.JSON(http.StatusOK, gin.H{"items": packages, "total": total, "page": page})
+}
+
+// ExportSBOM generates and downloads an SBOM for a project.
+func (h *ProjectsHandler) ExportSBOM(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	var project db.Project
+	if err := h.db.First(&project, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "project not found"})
+		return
+	}
+
+	// Get packages
+	query := h.db.Where("project_id = ?", project.ID)
+	if eco := c.Query("ecosystem"); eco != "" {
+		query = query.Where("ecosystem = ?", eco)
+	}
+
+	var packages []db.ProjectPackage
+	query.Order("ecosystem, package_name, version").Find(&packages)
+
+	format := c.DefaultQuery("format", "spdx")
+	gen := sbom.NewGenerator(h.db)
+
+	var data []byte
+	var err error
+	var filename string
+
+	switch format {
+	case "cyclonedx":
+		data, err = gen.GenerateCycloneDX(&project, packages)
+		filename = fmt.Sprintf("%s-sbom-%s.cyclonedx.json", project.Slug, time.Now().Format("2006-01-02"))
+	default:
+		data, err = gen.GenerateSPDX(&project, packages)
+		filename = fmt.Sprintf("%s-sbom-%s.spdx.json", project.Slug, time.Now().Format("2006-01-02"))
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "GENERATE_FAILED", "message": err.Error()})
+		return
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Data(http.StatusOK, "application/json", data)
 }
 
 // RegenerateToken creates a new token for a project.
