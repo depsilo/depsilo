@@ -515,19 +515,15 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		}
 		defer body.Close()
 
-		var buf bytes.Buffer
-		written, err := io.Copy(&buf, body)
-		if err != nil {
-			return nil, fmt.Errorf("read upstream body: %w", err)
-		}
-		if size <= 0 {
-			size = written
-		}
+		cr := NewCountingReader(body)
 
-		// Write to storage
-		if putErr := m.storage.Put(fetchCtx, key, bytes.NewReader(buf.Bytes()), size, contentType); putErr != nil {
+		// Write to storage (streams directly from upstream)
+		if putErr := m.storage.Put(fetchCtx, key, cr, size, contentType); putErr != nil {
 			zap.L().Warn("cache put failed", zap.String("key", key), zap.Error(putErr))
 		} else {
+			if size <= 0 {
+				size = cr.BytesRead()
+			}
 			// Upsert DB entry (never delete, just update expiry)
 			now := time.Now()
 			entry := db.CacheEntry{
