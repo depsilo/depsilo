@@ -95,68 +95,36 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	eventBus := cache.NewEventBus()
 	cacheMgr := cache.NewManager(storage, database, eventBus)
 
-	// Sync configured upstreams to database
-	syncUpstreams(database, "pypi", cfg.PyPI.Upstreams)
-	syncUpstreams(database, "apt", cfg.APT.Upstreams)
-	syncUpstreams(database, "npm", cfg.NPM.Upstreams)
-	syncUpstreams(database, "go", cfg.Go.Upstreams)
-	syncUpstreams(database, "cargo", cfg.Cargo.Upstreams)
-	syncUpstreams(database, "maven", cfg.Maven.Upstreams)
-	syncUpstreams(database, "rubygems", cfg.RubyGems.Upstreams)
-	syncUpstreams(database, "composer", cfg.Composer.Upstreams)
-	syncUpstreams(database, "nuget", cfg.NuGet.Upstreams)
-	syncUpstreams(database, "conda", cfg.Conda.Upstreams)
-	syncUpstreams(database, "cran", cfg.CRAN.Upstreams)
-	syncUpstreams(database, "helm", cfg.Helm.Upstreams)
+	// Ecosystem definitions: name, route path, and upstream config
+	type ecosystemDef struct {
+		name      string
+		route     string
+		upstreams []config.UpstreamConfig
+	}
+	ecosystems := []ecosystemDef{
+		{"pypi", "/pypi", cfg.PyPI.Upstreams},
+		{"apt", "/apt", cfg.APT.Upstreams},
+		{"npm", "/npm", cfg.NPM.Upstreams},
+		{"go", "/go", cfg.Go.Upstreams},
+		{"cargo", "/crates", cfg.Cargo.Upstreams},
+		{"maven", "/maven", cfg.Maven.Upstreams},
+		{"rubygems", "/rubygems", cfg.RubyGems.Upstreams},
+		{"composer", "/composer", cfg.Composer.Upstreams},
+		{"nuget", "/nuget", cfg.NuGet.Upstreams},
+		{"conda", "/conda", cfg.Conda.Upstreams},
+		{"cran", "/cran", cfg.CRAN.Upstreams},
+		{"helm", "/helm", cfg.Helm.Upstreams},
+	}
 
-	// Initialize upstream pools
-	pypiPool, err := upstream.NewPool(cfg.PyPI.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create pypi pool: %w", err)
-	}
-	aptPool, err := upstream.NewPool(cfg.APT.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create apt pool: %w", err)
-	}
-	npmPool, err := upstream.NewPool(cfg.NPM.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create npm pool: %w", err)
-	}
-	goPool, err := upstream.NewPool(cfg.Go.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create go pool: %w", err)
-	}
-	cargoPool, err := upstream.NewPool(cfg.Cargo.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create cargo pool: %w", err)
-	}
-	mavenPool, err := upstream.NewPool(cfg.Maven.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create maven pool: %w", err)
-	}
-	rubygemsPool, err := upstream.NewPool(cfg.RubyGems.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create rubygems pool: %w", err)
-	}
-	composerPool, err := upstream.NewPool(cfg.Composer.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create composer pool: %w", err)
-	}
-	nugetPool, err := upstream.NewPool(cfg.NuGet.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create nuget pool: %w", err)
-	}
-	condaPool, err := upstream.NewPool(cfg.Conda.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create conda pool: %w", err)
-	}
-	cranPool, err := upstream.NewPool(cfg.CRAN.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create cran pool: %w", err)
-	}
-	helmPool, err := upstream.NewPool(cfg.Helm.Upstreams)
-	if err != nil {
-		return nil, fmt.Errorf("create helm pool: %w", err)
+	// Sync upstreams and create pools
+	pools := make(map[string]*upstream.Pool, len(ecosystems))
+	for _, eco := range ecosystems {
+		syncUpstreams(database, eco.name, eco.upstreams)
+		pool, err := upstream.NewPool(eco.upstreams)
+		if err != nil {
+			return nil, fmt.Errorf("create %s pool: %w", eco.name, err)
+		}
+		pools[eco.name] = pool
 	}
 
 	// Initialize license manager
@@ -203,9 +171,9 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	}
 
 	// Restore latency metrics from DB before starting health checks
-	allPools := []*upstream.Pool{
-		pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool,
-		rubygemsPool, composerPool, nugetPool, condaPool, cranPool, helmPool,
+	allPools := make([]*upstream.Pool, 0, len(pools))
+	for _, eco := range ecosystems {
+		allPools = append(allPools, pools[eco.name])
 	}
 	for _, pool := range allPools {
 		upstream.RestoreFromDB(pool, database)
@@ -228,18 +196,18 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		DB:               database,
 		Storage:          storage,
 		Config:           cfg,
-		PyPIPool:         pypiPool,
-		APTPool:          aptPool,
-		NPMPool:          npmPool,
-		GoPool:           goPool,
-		CargoPool:        cargoPool,
-		MavenPool:        mavenPool,
-		RubyGemsPool:     rubygemsPool,
-		ComposerPool:     composerPool,
-		NuGetPool:        nugetPool,
-		CondaPool:        condaPool,
-		CRANPool:         cranPool,
-		HelmPool:         helmPool,
+		PyPIPool:         pools["pypi"],
+		APTPool:          pools["apt"],
+		NPMPool:          pools["npm"],
+		GoPool:           pools["go"],
+		CargoPool:        pools["cargo"],
+		MavenPool:        pools["maven"],
+		RubyGemsPool:     pools["rubygems"],
+		ComposerPool:     pools["composer"],
+		NuGetPool:        pools["nuget"],
+		CondaPool:        pools["conda"],
+		CRANPool:         pools["cran"],
+		HelmPool:         pools["helm"],
 		CacheMgr:         cacheMgr,
 		EventBus:         eventBus,
 		LicenseManager:   licenseManager,
@@ -251,53 +219,30 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	})
 
 	// Register adapter handlers
-	pypiHandler := pypi.New(cacheMgr, upstream.NewPrioritySelector(pypiPool), cfg.Cache, database)
-	pypiGroup := r.Group("/pypi")
-	pypiHandler.Register(pypiGroup)
+	type adapterFactory func(*cache.Manager, upstream.Selector, config.CacheConfig, *gorm.DB) adapter.Adapter
 
-	aptHandler := apt.New(cacheMgr, upstream.NewPrioritySelector(aptPool), cfg.Cache, database)
-	aptGroup := r.Group("/apt")
-	aptHandler.Register(aptGroup)
+	adapterFactories := map[string]adapterFactory{
+		"pypi":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return pypi.New(cm, s, cc, db) },
+		"apt":      func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return apt.New(cm, s, cc, db) },
+		"npm":      func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return npm.New(cm, s, cc, db) },
+		"go":       func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return goproxy.New(cm, s, cc, db) },
+		"cargo":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return cargo.New(cm, s, cc, db) },
+		"maven":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return maven.New(cm, s, cc, db) },
+		"rubygems": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return rubygems.New(cm, s, cc, db) },
+		"composer": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return composer.New(cm, s, cc, db) },
+		"nuget":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return nuget.New(cm, s, cc, db) },
+		"conda":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return conda.New(cm, s, cc, db) },
+		"cran":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return cran.New(cm, s, cc, db) },
+		"helm":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return helm.New(cm, s, cc, db) },
+	}
 
-	npmHandler := npm.New(cacheMgr, upstream.NewPrioritySelector(npmPool), cfg.Cache, database)
-	npmGroup := r.Group("/npm")
-	npmHandler.Register(npmGroup)
-
-	goHandler := goproxy.New(cacheMgr, upstream.NewPrioritySelector(goPool), cfg.Cache, database)
-	goGroup := r.Group("/go")
-	goHandler.Register(goGroup)
-
-	cargoHandler := cargo.New(cacheMgr, upstream.NewPrioritySelector(cargoPool), cfg.Cache, database)
-	cargoGroup := r.Group("/crates")
-	cargoHandler.Register(cargoGroup)
-
-	mavenHandler := maven.New(cacheMgr, upstream.NewPrioritySelector(mavenPool), cfg.Cache, database)
-	mavenGroup := r.Group("/maven")
-	mavenHandler.Register(mavenGroup)
-
-	rubygemsHandler := rubygems.New(cacheMgr, upstream.NewPrioritySelector(rubygemsPool), cfg.Cache, database)
-	rubygemsGroup := r.Group("/rubygems")
-	rubygemsHandler.Register(rubygemsGroup)
-
-	composerHandler := composer.New(cacheMgr, upstream.NewPrioritySelector(composerPool), cfg.Cache, database)
-	composerGroup := r.Group("/composer")
-	composerHandler.Register(composerGroup)
-
-	nugetHandler := nuget.New(cacheMgr, upstream.NewPrioritySelector(nugetPool), cfg.Cache, database)
-	nugetGroup := r.Group("/nuget")
-	nugetHandler.Register(nugetGroup)
-
-	condaHandler := conda.New(cacheMgr, upstream.NewPrioritySelector(condaPool), cfg.Cache, database)
-	condaGroup := r.Group("/conda")
-	condaHandler.Register(condaGroup)
-
-	cranHandler := cran.New(cacheMgr, upstream.NewPrioritySelector(cranPool), cfg.Cache, database)
-	cranGroup := r.Group("/cran")
-	cranHandler.Register(cranGroup)
-
-	helmHandler := helm.New(cacheMgr, upstream.NewPrioritySelector(helmPool), cfg.Cache, database)
-	helmGroup := r.Group("/helm")
-	helmHandler.Register(helmGroup)
+	handlers := make(map[string]adapter.Adapter, len(ecosystems))
+	for _, eco := range ecosystems {
+		factory := adapterFactories[eco.name]
+		h := factory(cacheMgr, upstream.NewPrioritySelector(pools[eco.name]), cfg.Cache, database)
+		h.Register(r.Group(eco.route))
+		handlers[eco.name] = h
+	}
 
 	if len(cfg.Docker.Registries) > 0 {
 		dockerHandler := dockeradapter.New(cacheMgr, cfg.Cache, database, cfg.Docker)
@@ -313,18 +258,9 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	projectGroup := r.Group("/p/:slug")
 	projectGroup.Use(middleware.ProjectSlugMiddleware(database))
 	// Re-register all adapter handlers under the project group
-	pypiHandler.Register(projectGroup.Group("/pypi"))
-	aptHandler.Register(projectGroup.Group("/apt"))
-	npmHandler.Register(projectGroup.Group("/npm"))
-	goHandler.Register(projectGroup.Group("/go"))
-	cargoHandler.Register(projectGroup.Group("/crates"))
-	mavenHandler.Register(projectGroup.Group("/maven"))
-	rubygemsHandler.Register(projectGroup.Group("/rubygems"))
-	composerHandler.Register(projectGroup.Group("/composer"))
-	nugetHandler.Register(projectGroup.Group("/nuget"))
-	condaHandler.Register(projectGroup.Group("/conda"))
-	cranHandler.Register(projectGroup.Group("/cran"))
-	helmHandler.Register(projectGroup.Group("/helm"))
+	for _, eco := range ecosystems {
+		handlers[eco.name].Register(projectGroup.Group(eco.route))
+	}
 
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")
