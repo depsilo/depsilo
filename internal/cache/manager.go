@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -599,17 +598,13 @@ func (m *Manager) backgroundRefresh(key string, adapterType string, ttl time.Dur
 		}
 		defer body.Close()
 
-		var buf bytes.Buffer
-		written, err := io.Copy(&buf, body)
-		if err != nil {
-			return nil, fmt.Errorf("bg refresh read body: %w", err)
+		cr := NewCountingReader(body)
+
+		if putErr := m.storage.Put(ctx, key, cr, size, contentType); putErr != nil {
+			return nil, fmt.Errorf("bg refresh put: %w", putErr)
 		}
 		if size <= 0 {
-			size = written
-		}
-
-		if putErr := m.storage.Put(ctx, key, bytes.NewReader(buf.Bytes()), size, contentType); putErr != nil {
-			return nil, fmt.Errorf("bg refresh put: %w", putErr)
+			size = cr.BytesRead()
 		}
 
 		now := time.Now()
