@@ -15,6 +15,27 @@ import (
 	"depsilo/internal/db"
 )
 
+// countingReader wraps an io.Reader and counts bytes read through it.
+// Used to determine actual body size when upstream doesn't report Content-Length.
+type countingReader struct {
+	r io.Reader
+	n int64
+}
+
+func NewCountingReader(r io.Reader) *countingReader {
+	return &countingReader{r: r}
+}
+
+func (cr *countingReader) Read(p []byte) (int, error) {
+	n, err := cr.r.Read(p)
+	cr.n += int64(n)
+	return n, err
+}
+
+func (cr *countingReader) BytesRead() int64 {
+	return cr.n
+}
+
 // ExtractPackageName extracts a human-readable package name from a cache key.
 func ExtractPackageName(adapterType, key string) string {
 	switch adapterType {
