@@ -1,0 +1,23 @@
+services:
+  depsilo:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    volumes:
+      - ./config.e2e.toml:/app/config.toml:ro
+    environment:
+      - DEPSILO_CONFIG=/app/config.toml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:23333/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  e2e-runner:
+    build:
+      context: ./runner
+    depends_on:
+      depsilo:
+        condition: service_healthy
+    environment:
+      - DEPSILO_URL=http://depsilo:23333
