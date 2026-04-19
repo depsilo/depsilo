@@ -245,7 +245,10 @@ func (h *Handler) streamResponse(c *gin.Context, result *cache.GetResult, cacheK
 		c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
 	}
 	c.Status(http.StatusOK)
-	written, _ := io.Copy(c.Writer, result.Reader)
+	written, copyErr := io.Copy(c.Writer, result.Reader)
+	if copyErr != nil {
+		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
+	}
 
 	// Prometheus metrics
 	hitStr := "false"

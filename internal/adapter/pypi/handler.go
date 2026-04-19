@@ -64,7 +64,10 @@ func (h *Handler) handleSimpleIndex(c *gin.Context) {
 
 	c.Header("Content-Type", result.ContentType)
 	c.Status(result.StatusCode)
-	io.Copy(c.Writer, result.Body)
+	_, copyErr := io.Copy(c.Writer, result.Body)
+	if copyErr != nil {
+		zap.L().Warn("copy to client failed", zap.String("key", "/pypi/simple/"), zap.Error(copyErr))
+	}
 }
 
 // handlePackageRedirect redirects /simple/:package to /simple/:package/
@@ -193,7 +196,10 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 		c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
 	}
 	c.Status(http.StatusOK)
-	written, _ := io.Copy(c.Writer, result.Reader)
+	written, copyErr := io.Copy(c.Writer, result.Reader)
+	if copyErr != nil {
+		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
+	}
 
 	adapter.LogAccess(h.db, "pypi", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }

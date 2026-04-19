@@ -149,7 +149,10 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 		c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
 	}
 	c.Status(http.StatusOK)
-	written, _ := io.Copy(c.Writer, result.Reader)
+	written, copyErr := io.Copy(c.Writer, result.Reader)
+	if copyErr != nil {
+		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
+	}
 
 	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }

@@ -144,7 +144,10 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 		c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
 	}
 	c.Status(http.StatusOK)
-	written, _ := io.Copy(c.Writer, result.Reader)
+	written, copyErr := io.Copy(c.Writer, result.Reader)
+	if copyErr != nil {
+		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
+	}
 
 	adapter.LogAccess(h.db, "nuget", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
