@@ -1,4 +1,4 @@
-.PHONY: build run run-pro dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-clean clean lint frontend help \
+.PHONY: build run run-pro dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-e2e test-clean clean lint frontend help \
 	test-docker-pip test-docker-apt test-docker \
 	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test
 
@@ -124,6 +124,10 @@ test-docker-apt: dev            ## Docker 环境测试 apt 通过代理安装包
 	@echo ">>> PASS: apt packages installed successfully via proxy"
 
 test-docker: test-docker-pip test-docker-apt  ## 运行全部 Docker 代理测试
+
+test-e2e:                       ## Docker 冒烟测试（pip/npm/go/apt 端到端）
+	docker compose -f tests/e2e/docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner
+	docker compose -f tests/e2e/docker-compose.e2e.yml down -v
 
 test-clean:                     ## 清理测试环境
 	rm -rf $(TEST_DIR)/.venv
