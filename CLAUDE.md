@@ -1050,3 +1050,110 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 - [GORM 文档](https://gorm.io/docs/)
 - [TanStack Query 文档](https://tanstack.com/query/latest)
 - [shadcn/ui 文档](https://ui.shadcn.com/)
+
+---
+
+## 十一、项目现状快照（2026-04-19 更新）
+
+> 本节记录项目深度审查的结论，供后续开发决策参考。上次更新：2026-04-19。
+
+### 11.1 规模统计
+
+- 208 个 commits，~13,500 行 Go 代码，117 个 Go 文件
+- 前端 50 个 TSX/TS 文件，~7,000+ 行
+- 22 个测试文件（单元 + 集成）
+- 13 个生态适配器已实现（含 Docker Registry，已验证 `docker pull` 可用）
+- 10 个设计 spec 文档
+- Docker 冒烟测试覆盖 pip / npm / go / apt（`make test-e2e`）
+
+### 11.2 架构优势
+
+- **Adapter 模式**：接口只有 `Register()` + `Type()`，新增生态不碰核心代码
+- **Stale-While-Revalidate 缓存**：过期不删除、后台异步刷新、上游故障降级返回旧缓存
+- **Singleflight 防击穿**：同一 key 并发请求只回源一次
+- **流式传输**：上游响应通过 `countingReader` 直接流向 `storage.Put`，不做内存缓冲
+- **依赖注入**：`router.go` 的 `Deps` 结构体传递所有依赖，无全局变量
+- **表驱动初始化**：`server.go` 使用 `ecosystemDef` 表 + 循环注册 12 个生态
+- **前端完成度高**：React 19 + TanStack Query + i18n + 暗色主题 + Stripe 风格设计系统
+
+### 11.3 已修复的技术债（2026-04-19）
+
+| 问题 | 修复方式 | Commits |
+| ---- | -------- | ------- |
+| Cache Manager 大文件 OOM | `bytes.Buffer` → `countingReader` 流式直写 storage | c55b7ce, a5c76b2, 9264951, c6b5d13 |
+| `io.Copy` 错误被忽略 | 15 处 adapter 改为 `zap.L().Warn` 记录错误 | 5bdbba4 |
+| `server.go` 过长 (408 行) | 表驱动循环，-64 行 (→344 行) | 7b3a44a |
+| 前端工具函数重复 | 提取到 `web/src/lib/utils.ts`，11 文件清理 | 5380960 |
+| Docker Registry Cloudflare 403 | 所有上游请求加 `User-Agent: docker/27.0.0 depsilo` | b04314f |
+
+### 11.4 剩余已知问题
+
+| 问题 | 严重度 | 说明 |
+| ---- | ------ | ---- |
+| i18n key 无编译时校验 | 低 | en.ts 与 zh.ts 目前同步（478 key），但缺少自动检查机制 |
+| `api.Deps` 仍有 12 个独立 Pool 字段 | 低 | 可改为 `Pools map[string]*Pool`，需联动改 dashboard.go / stats.go |
+| 部分 `formatTime` 变体未统一 | 低 | Projects/Rules/Security/LiveStream/Monitor 有不同逻辑的本地实现 |
+| Docker Registry 缺少 E2E 冒烟测试 | 低 | `docker pull` 已手动验证，但未加入 `make test-e2e`（需要 Docker-in-Docker） |
+| Docker token 缓存非持久化 | 低 | 重启后丢失，影响首次请求延迟（~1s），非功能性问题 |
+
+### 11.5 竞品对比定位
+
+| &nbsp; | Nexus / Artifactory | Verdaccio | **Depsilo** |
+| ------ | ------------------- | --------- | ----------- |
+| 部署复杂度 | 高（JVM） | 低（仅 npm） | **极低（单二进制）** |
+| 生态覆盖 | 广 | 仅 npm | **13 种** |
+| 资源占用 | 重（GB 级内存） | 轻 | **轻（Go + SQLite）** |
+| 学习成本 | 高 | 低 | **低** |
+
+核心 slogan：**"10 分钟部署，13 种生态"**
+
+### 11.6 路线图优先级
+
+**P0（必须做）：**
+
+1. ~~修复 cache manager 大文件内存问题~~ ✅ 已完成（`countingReader` 流式写入）
+2. ~~Docker Registry 代理完善~~ ✅ 已完成（`docker pull` 验证通过，修复 Cloudflare UA 拦截）
+3. ~~端到端测试~~ ✅ 已完成（Docker 冒烟测试：pip/npm/go/apt 4/4 通过，`make test-e2e`）
+
+**P1（应该做）：**
+
+1. 带宽/流量统计仪表盘（帮用户量化节省的带宽）
+2. 高可用部署文档（PostgreSQL + S3 + 多实例）
+3. CLI 工具（`depsilo status` / `depsilo cache warmup`）
+
+**P2（可以做）：**
+
+1. 包安全扫描完整流程（OSV 已集成，需跑通展示）
+2. 访问控制 allow/deny 规则
+3. Webhook 通知（缓存未命中、上游异常 → Slack/DingTalk）
+
+**建议推迟：**
+
+- Wails 桌面版：投入产出比低，维护成本高
+- License Key 系统：除非确定走商业化 Pro 版
+
+### 11.7 商业化方向
+
+**推荐 Open Core 模式：**
+
+| 开源版（免费） | Pro 版（付费） |
+| -------------- | -------------- |
+| 所有 13 种生态代理 | 审计日志 |
+| 本地存储 + SQLite | SBOM 导出 |
+| 单用户管理 | 多项目/多团队 |
+| 基础统计 | 高级报表 + 趋势分析 |
+| | LDAP/OIDC 集成 |
+| | 包安全扫描 |
+| | 优先技术支持 |
+
+**目标用户：**
+
+1. 国内中小企业（内网环境、代理加速、不想运维 Nexus）
+2. CI/CD 场景（自建 runner 重复下载依赖）
+3. 教育/科研（实验室统一管理 Python/R/Conda 包源）
+
+### 11.8 推广策略
+
+- README 需要 GIF/视频展示 "docker run → pip install 成功" 全流程（30 秒内）
+- 目标渠道：Awesome 列表、Hacker News、Reddit r/selfhosted
+- Docker Hub 一键部署：`docker run -p 8080:8080 depsilo/depsilo` 必须能直接跑
