@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { adminApi } from '@/lib/api'
+import { formatBytes } from '@/lib/utils'
 import CardV2 from '@/components/Card'
 import MetricCardV2 from '@/components/MetricCard'
 import EcosystemIcon from '@/components/EcosystemIcon'
@@ -12,13 +13,6 @@ import {
   ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
 } from 'recharts'
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024; const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
 
 // ── Top packages (merged, sorted by hits) ──────────────────────────
 

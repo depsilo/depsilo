@@ -3,26 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Treemap, ResponsiveContainer, Tooltip } from 'recharts'
 import { adminApi } from '@/lib/api'
+import { formatBytes, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import EcosystemIcon from '@/components/EcosystemIcon'
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024; const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
-}
-
-function formatTime(t: string): string {
-  if (!t) return '-'
-  const d = new Date(t); const now = new Date()
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
 

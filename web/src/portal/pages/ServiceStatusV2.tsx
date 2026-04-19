@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
+import { formatBytes } from '@/lib/utils'
 import CardV2 from '@/components/Card'
 import MetricCardV2 from '@/components/MetricCard'
 import BadgeV2 from '@/components/Badge'
@@ -18,13 +19,6 @@ interface StatsData {
     pypi: Array<{ name: string; hit_count: number }>
     apt: Array<{ name: string; hit_count: number }>
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
 export default function ServiceStatusV2() {

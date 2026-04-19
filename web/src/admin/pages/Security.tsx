@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
+import { formatDate } from '@/lib/utils'
 import CardV2 from '@/components/Card'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
@@ -52,12 +53,6 @@ function formatTime(t: string): string {
   if (diff === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   if (diff < 30) return `${diff}d ago`
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function formatDate(t: string): string {
-  if (!t) return '-'
-  const d = new Date(t)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // ─── Overview Tab ────────────────────────────────────────────────────

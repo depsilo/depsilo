@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
+import { formatTime } from '@/lib/utils'
 import CardV2 from '@/components/Card'
 import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
@@ -10,13 +11,6 @@ import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import DataTableV2 from '@/components/DataTable'
 import ModalV2 from '@/components/Modal'
-
-function formatTime(t: string | null): string {
-  if (!t) return '-'
-  const d = new Date(t); const now = new Date()
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
 
 export default function UsersV2() {
   const { t } = useTranslation()

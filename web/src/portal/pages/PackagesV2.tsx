@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { packagesApi } from '@/lib/api'
+import { formatBytes } from '@/lib/utils'
 import BadgeV2 from '@/components/Badge'
 import InputV2 from '@/components/Input'
 import ButtonV2 from '@/components/Button'
@@ -25,13 +26,6 @@ interface PackagesResponse {
   page: number
   per_page: number
   total_pages: number
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
 function timeAgo(dateStr: string): string {

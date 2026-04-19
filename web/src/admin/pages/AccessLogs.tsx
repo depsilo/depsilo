@@ -2,17 +2,11 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
+import { formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-
-function formatTime(t: string): string {
-  if (!t) return '-'
-  const d = new Date(t); const now = new Date()
-  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
 
