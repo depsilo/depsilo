@@ -160,6 +160,7 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "REQUEST_ERROR", "message": err.Error()})
 		return
 	}
+	req.Header.Set("User-Agent", "docker/27.0.0 depsilo")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -205,6 +206,7 @@ func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageNam
 	if err != nil {
 		return nil, "", 0, err
 	}
+	req.Header.Set("User-Agent", "docker/27.0.0 depsilo")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}

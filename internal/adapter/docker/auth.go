@@ -81,7 +81,12 @@ func (a *AuthManager) GetToken(client *http.Client, registryURL, registryName, u
 
 // discoverAuth sends GET /v2/ and parses the WWW-Authenticate header.
 func (a *AuthManager) discoverAuth(client *http.Client, registryURL string) (realm, service string, err error) {
-	resp, err := client.Get(registryURL + "/v2/")
+	req, err := http.NewRequest("GET", registryURL+"/v2/", nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("User-Agent", "docker/27.0.0 depsilo")
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", err
 	}
@@ -114,6 +119,7 @@ func (a *AuthManager) fetchToken(client *http.Client, realm, service, scope, use
 	if err != nil {
 		return "", 0, err
 	}
+	req.Header.Set("User-Agent", "docker/27.0.0 depsilo")
 	if username != "" {
 		req.SetBasicAuth(username, password)
 	}
