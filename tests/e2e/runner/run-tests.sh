@@ -43,7 +43,7 @@ echo ""
 
 # ─── Test 1: pip ──────────────────────────────
 echo "── Test 1: pip install requests ──"
-if pip3 install --quiet --break-system-packages \
+if pip3 install --quiet \
     --index-url "${DEPSILO_URL}/pypi/simple/" \
     --trusted-host depsilo \
     requests 2>&1; then
@@ -80,7 +80,8 @@ echo ""
 echo "── Test 3: go get golang.org/x/text ──"
 export GOPROXY="${DEPSILO_URL}/go,direct"
 export GONOSUMDB="*"
-export GOFLAGS="-insecure"
+export GOINSECURE="*"
+export GONOSUMCHECK="*"
 WORKDIR_GO=$(mktemp -d)
 cd "$WORKDIR_GO"
 go mod init e2etest > /dev/null 2>&1
