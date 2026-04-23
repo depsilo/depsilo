@@ -24,7 +24,8 @@ type Config struct {
 	Helm     AdapterConfig  `mapstructure:"helm"`
 	Docker   DockerConfig   `mapstructure:"docker"`
 	License  LicenseConfig  `mapstructure:"license"`
-	Security SecurityConfig `mapstructure:"security"`
+	Security     SecurityConfig   `mapstructure:"security"`
+	ExtraIndexes []ExtraIndexConfig `mapstructure:"extra_indexes"`
 }
 
 type LicenseConfig struct {
@@ -66,6 +67,12 @@ type AuthConfig struct {
 }
 
 type AdapterConfig struct {
+	Upstreams []UpstreamConfig `mapstructure:"upstreams"`
+}
+
+type ExtraIndexConfig struct {
+	Name      string           `mapstructure:"name"`
+	Path      string           `mapstructure:"path"`
 	Upstreams []UpstreamConfig `mapstructure:"upstreams"`
 }
 

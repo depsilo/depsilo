@@ -15,7 +15,7 @@ import (
 
 func TestURLRewrite_PyPI_AbsoluteURL(t *testing.T) {
 	html := `<a href="https://files.pythonhosted.org/packages/ab/cd/requests-2.31.0.tar.gz#sha256=abcd1234">requests-2.31.0.tar.gz</a>`
-	result := pypi.RewriteURLs(html, "http://localhost:8080")
+	result := pypi.RewriteURLs(html, "http://localhost:8080", "/pypi")
 	if strings.Contains(result, "pythonhosted.org") {
 		t.Error("external URL not rewritten")
 	}
@@ -29,7 +29,7 @@ func TestURLRewrite_PyPI_AbsoluteURL(t *testing.T) {
 
 func TestURLRewrite_PyPI_RelativeURL(t *testing.T) {
 	html := `<a href="../../packages/ab/cd/requests-2.31.0.tar.gz#sha256=abcd">requests</a>`
-	result := pypi.RewriteURLs(html, "http://localhost:8080")
+	result := pypi.RewriteURLs(html, "http://localhost:8080", "/pypi")
 	if !strings.Contains(result, "http://localhost:8080/pypi/files/packages/ab/cd/requests-2.31.0.tar.gz") {
 		t.Errorf("relative URL not properly rewritten: %s", result)
 	}
@@ -38,7 +38,7 @@ func TestURLRewrite_PyPI_RelativeURL(t *testing.T) {
 func TestURLRewrite_PyPI_MultipleURLs(t *testing.T) {
 	html := `<a href="https://files.pythonhosted.org/packages/a/b/pkg-1.0.whl#sha256=aaa">pkg-1.0.whl</a>
 <a href="https://files.pythonhosted.org/packages/c/d/pkg-1.0.tar.gz#sha256=bbb">pkg-1.0.tar.gz</a>`
-	result := pypi.RewriteURLs(html, "http://localhost:8080")
+	result := pypi.RewriteURLs(html, "http://localhost:8080", "/pypi")
 	if strings.Contains(result, "pythonhosted.org") {
 		t.Error("some external URLs not rewritten")
 	}
@@ -52,7 +52,7 @@ func TestURLRewrite_PyPI_MultipleURLs(t *testing.T) {
 
 func TestURLRewrite_PyPI_NonPackageURL(t *testing.T) {
 	html := `<a href="https://example.com/some-other-page">link</a>`
-	result := pypi.RewriteURLs(html, "http://localhost:8080")
+	result := pypi.RewriteURLs(html, "http://localhost:8080", "/pypi")
 	// Non-package URLs should not be rewritten
 	if !strings.Contains(result, "https://example.com/some-other-page") {
 		t.Error("non-package URL should not be rewritten")
@@ -61,7 +61,7 @@ func TestURLRewrite_PyPI_NonPackageURL(t *testing.T) {
 
 func TestURLRewrite_PyPI_TrailingSlashBaseURL(t *testing.T) {
 	html := `<a href="https://files.pythonhosted.org/packages/a/b/pkg-1.0.whl">pkg</a>`
-	result := pypi.RewriteURLs(html, "http://localhost:8080/")
+	result := pypi.RewriteURLs(html, "http://localhost:8080/", "/pypi")
 	// Should not have double slash
 	if strings.Contains(result, "8080//pypi") {
 		t.Error("double slash in rewritten URL")

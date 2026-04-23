@@ -21,23 +21,38 @@ import (
 
 // Handler implements the PyPI adapter.
 type Handler struct {
-	cacheMgr *cache.Manager
-	selector upstream.Selector
-	cfg      config.CacheConfig
-	db       *gorm.DB
+	cacheMgr   *cache.Manager
+	selector   upstream.Selector
+	cfg        config.CacheConfig
+	db         *gorm.DB
+	pathPrefix string
+	adapterID  string
 }
 
 // New creates a new PyPI handler.
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
 	return &Handler{
-		cacheMgr: cacheMgr,
-		selector: selector,
-		cfg:      cfg,
-		db:       database,
+		cacheMgr:   cacheMgr,
+		selector:   selector,
+		cfg:        cfg,
+		db:         database,
+		pathPrefix: "/pypi",
+		adapterID:  "pypi",
 	}
 }
 
-func (h *Handler) Type() string { return "pypi" }
+func NewWithPrefix(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB, pathPrefix, adapterID string) *Handler {
+	return &Handler{
+		cacheMgr:   cacheMgr,
+		selector:   selector,
+		cfg:        cfg,
+		db:         database,
+		pathPrefix: pathPrefix,
+		adapterID:  adapterID,
+	}
+}
+
+func (h *Handler) Type() string { return h.adapterID }
 
 // Register mounts PyPI routes.
 func (h *Handler) Register(rg *gin.RouterGroup) {
@@ -66,25 +81,25 @@ func (h *Handler) handleSimpleIndex(c *gin.Context) {
 	c.Status(result.StatusCode)
 	_, copyErr := io.Copy(c.Writer, result.Body)
 	if copyErr != nil {
-		zap.L().Warn("copy to client failed", zap.String("key", "/pypi/simple/"), zap.Error(copyErr))
+		zap.L().Warn("copy to client failed", zap.String("key", h.pathPrefix+"/simple/"), zap.Error(copyErr))
 	}
 }
 
 // handlePackageRedirect redirects /simple/:package to /simple/:package/
 func (h *Handler) handlePackageRedirect(c *gin.Context) {
 	pkg := c.Param("package")
-	c.Redirect(http.StatusMovedPermanently, "/pypi/simple/"+pkg+"/")
+	c.Redirect(http.StatusMovedPermanently, h.pathPrefix+"/simple/"+pkg+"/")
 }
 
 // handlePackageIndex proxies and caches a package's simple index, rewriting URLs.
 func (h *Handler) handlePackageIndex(c *gin.Context) {
 	pkg := c.Param("package")
-	cacheKey := IndexCacheKey(pkg)
+	cacheKey := IndexCacheKey(h.adapterID, pkg)
 	start := time.Now()
 
 	baseURL := getBaseURL(c)
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "pypi", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
 			return nil, "", 0, err
@@ -109,7 +124,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 
 		html := string(body)
 		// Rewrite all download URLs to point through our proxy (stored with empty base)
-		html = RewriteURLs(html, "")
+		html = RewriteURLs(html, "", h.pathPrefix)
 
 		return io.NopCloser(strings.NewReader(html)), fetchResult.ContentType, int64(len(html)), nil
 	})
@@ -137,7 +152,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	// The cached version has relative /pypi/files/... paths.
 	// Replace them with the full base URL for the client.
 	html := string(body)
-	html = strings.ReplaceAll(html, `href="/pypi/files/`, `href="`+baseURL+`/pypi/files/`)
+	html = strings.ReplaceAll(html, `href="`+h.pathPrefix+`/files/`, `href="`+baseURL+h.pathPrefix+`/files/`)
 
 	ct := result.ContentType
 	if ct == "" {
@@ -146,16 +161,16 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	c.Header("Content-Type", ct)
 	c.String(http.StatusOK, html)
 
-	adapter.LogAccess(h.db, "pypi", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
+	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
 }
 
 // handleFileDownload proxies and caches package file downloads.
 func (h *Handler) handleFileDownload(c *gin.Context) {
 	filepath := c.Param("filepath")
-	cacheKey := FileCacheKey(filepath)
+	cacheKey := FileCacheKey(h.adapterID, filepath)
 	start := time.Now()
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "pypi", h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
 			return nil, "", 0, err
@@ -201,7 +216,7 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "pypi", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 // getBaseURL extracts the base URL from the request (scheme + host).

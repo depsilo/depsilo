@@ -22,31 +22,31 @@ import (
 // ---------- PyPI ----------
 
 func TestCacheKey_PyPI_Index(t *testing.T) {
-	key := pypi.IndexCacheKey("requests")
+	key := pypi.IndexCacheKey("pypi", "requests")
 	if key != "pypi/simple/requests/index.html" {
 		t.Errorf("expected pypi/simple/requests/index.html, got %s", key)
 	}
 	// Deterministic
-	if pypi.IndexCacheKey("requests") != key {
+	if pypi.IndexCacheKey("pypi", "requests") != key {
 		t.Error("IndexCacheKey is not deterministic")
 	}
 }
 
 func TestCacheKey_PyPI_IndexNormalizesCase(t *testing.T) {
-	if pypi.IndexCacheKey("Requests") != "pypi/simple/requests/index.html" {
+	if pypi.IndexCacheKey("pypi", "Requests") != "pypi/simple/requests/index.html" {
 		t.Error("IndexCacheKey should lowercase package name")
 	}
 }
 
 func TestCacheKey_PyPI_File(t *testing.T) {
-	fkey := pypi.FileCacheKey("/packages/ab/cd/requests-2.31.0.tar.gz")
+	fkey := pypi.FileCacheKey("pypi", "/packages/ab/cd/requests-2.31.0.tar.gz")
 	if fkey != "pypi/files/packages/ab/cd/requests-2.31.0.tar.gz" {
 		t.Errorf("got %s", fkey)
 	}
 }
 
 func TestCacheKey_PyPI_FileNoLeadingSlash(t *testing.T) {
-	fkey := pypi.FileCacheKey("packages/ab/cd/foo-1.0.whl")
+	fkey := pypi.FileCacheKey("pypi", "packages/ab/cd/foo-1.0.whl")
 	if fkey != "pypi/files/packages/ab/cd/foo-1.0.whl" {
 		t.Errorf("got %s", fkey)
 	}
@@ -305,7 +305,7 @@ func TestCacheKey_Docker_TagList(t *testing.T) {
 
 func TestCacheKey_NoCollision(t *testing.T) {
 	keys := map[string]string{
-		"pypi":     pypi.IndexCacheKey("requests"),
+		"pypi":     pypi.IndexCacheKey("pypi", "requests"),
 		"npm":      npm.MetadataCacheKey("requests"),
 		"apt":      aptAdapter.CacheKey("ubuntu", "dists/jammy/InRelease"),
 		"go":       goProxy.InfoCacheKey("github.com/test/mod", "v1.0.0"),
@@ -333,8 +333,8 @@ func TestCacheKey_NoCollision(t *testing.T) {
 
 func TestCacheKey_ValidFilesystemPath(t *testing.T) {
 	keys := []string{
-		pypi.IndexCacheKey("requests"),
-		pypi.FileCacheKey("/packages/ab/cd/requests-2.31.0.tar.gz"),
+		pypi.IndexCacheKey("pypi", "requests"),
+		pypi.FileCacheKey("pypi", "/packages/ab/cd/requests-2.31.0.tar.gz"),
 		npm.MetadataCacheKey("lodash"),
 		npm.TarballCacheKey("lodash", "lodash-4.17.21.tgz"),
 		aptAdapter.CacheKey("ubuntu", "dists/jammy/InRelease"),
