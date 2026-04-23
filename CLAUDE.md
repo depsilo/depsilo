@@ -1117,7 +1117,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 **P1（应该做）：**
 
-1. 带宽/流量统计仪表盘（帮用户量化节省的带宽）
+1. ~~带宽/流量统计仪表盘~~ ✅ 已完成（后端聚合 API + 前端 5 图表 + Dashboard 摘要，审查时发现已实现）
 2. 高可用部署文档（PostgreSQL + S3 + 多实例）
 3. CLI 工具（`depsilo status` / `depsilo cache warmup`）
 

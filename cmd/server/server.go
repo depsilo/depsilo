@@ -262,6 +262,27 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		handlers[eco.name].Register(projectGroup.Group(eco.route))
 	}
 
+	// Register extra PyPI-compatible indexes
+	for _, idx := range cfg.ExtraIndexes {
+		idxPool, err := upstream.NewPool(idx.Upstreams)
+		if err != nil {
+			return nil, fmt.Errorf("create extra index %s pool: %w", idx.Name, err)
+		}
+		syncUpstreams(database, "extra:"+idx.Name, idx.Upstreams)
+		upstream.RestoreFromDB(idxPool, database)
+		go upstream.StartHealthCheck(ctx, idxPool, database, 30*time.Second)
+
+		idxHandler := pypi.NewWithPrefix(cacheMgr, upstream.NewPrioritySelector(idxPool), cfg.Cache, database, "/"+idx.Path, "extra:"+idx.Name)
+		idxHandler.Register(r.Group("/" + idx.Path))
+		idxHandler.Register(projectGroup.Group("/" + idx.Path))
+
+		zap.L().Info("extra index registered",
+			zap.String("name", idx.Name),
+			zap.String("path", "/"+idx.Path),
+			zap.Int("upstreams", len(idx.Upstreams)),
+		)
+	}
+
 	// Serve embedded frontend (SPA fallback)
 	distFS, err := fs.Sub(web.DistFS, "dist")
 	if err != nil {

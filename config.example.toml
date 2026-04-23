@@ -173,6 +173,29 @@ url      = "https://registry-1.docker.io"
 # username = "github-user"
 # password = "ghp_xxx"
 
+# ─── Extra PyPI-compatible indexes ───────────
+# Proxy additional PyPI indexes at custom paths.
+# Useful for CUDA-specific wheels (PyTorch, vLLM).
+#
+# [[extra_indexes]]
+# name = "pytorch-cu130"
+# path = "pypi-torch-cu130"
+# [[extra_indexes.upstreams]]
+# name = "pytorch"
+# url = "https://download.pytorch.org/whl/cu130"
+# priority = 1
+#
+# [[extra_indexes]]
+# name = "vllm-cu130"
+# path = "pypi-vllm-cu130"
+# [[extra_indexes.upstreams]]
+# name = "vllm-wheels"
+# url = "https://wheels.vllm.ai/0.19.1/cu130"
+# priority = 1
+#
+# Usage:
+#   pip install torch --index-url http://HOST:PORT/pypi-torch-cu130/simple/
+
 [security]
 enabled = true
 osv_api_url = "https://api.osv.dev"
