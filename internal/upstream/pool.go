@@ -189,8 +189,10 @@ func (u *Upstream) SuccessRate() float64 {
 
 func buildClient(proxy string) (*http.Client, error) {
 	transport := &http.Transport{
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second, // timeout for headers only, not body
+		TLSHandshakeTimeout:   15 * time.Second,
 	}
 
 	if proxy != "" {
@@ -204,6 +206,7 @@ func buildClient(proxy string) (*http.Client, error) {
 
 	return &http.Client{
 		Transport: transport,
-		Timeout:   60 * time.Second,
+		// No client-level Timeout — large files (torch ~2GB) need unlimited
+		// body read time. Connection/header timeouts are handled by transport.
 	}, nil
 }
