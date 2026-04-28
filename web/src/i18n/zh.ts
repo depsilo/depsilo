@@ -500,6 +500,8 @@ const zh = {
       ai_env: '环境变量',
       ai_shell: 'Shell 脚本',
       ai_devcontainer: 'DevContainer',
+      extraIndexes: 'CUDA / 额外 PyPI 源',
+      extraIndexesDesc: '以下额外源已配置，可通过 --index-url 安装 CUDA 专用包。所有下载均通过代理缓存。',
     },
 
     // Packages

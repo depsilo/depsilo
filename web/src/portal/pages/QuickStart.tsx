@@ -407,6 +407,15 @@ export default function QuickStartV2() {
   const baseURL = useMemo(() => window.location.origin, [])
   const host = useMemo(() => window.location.hostname, [])
 
+  const { data: statsData } = useQuery<{
+    extra_indexes?: { name: string; path: string }[]
+  }>({
+    queryKey: ['stats-extra'],
+    queryFn: async () => { const r = await statsApi.getStats(); return r.data },
+    staleTime: Infinity,
+  })
+  const extraIndexes = statsData?.extra_indexes || []
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'pip', label: 'pip' },
     { key: 'apt', label: 'APT' },
@@ -484,6 +493,18 @@ export default function QuickStartV2() {
               <CodeBlockV2 filename="Dockerfile" language="dockerfile" code={`# Add these ARG lines before RUN pip install\nARG PIP_INDEX_URL\nARG PIP_TRUSTED_HOST`} />
               <CodeBlockV2 language="bash" code={`docker build \\\n  --build-arg PIP_INDEX_URL=${baseURL}/pypi/simple/ \\\n  --build-arg PIP_TRUSTED_HOST=${host} \\\n  -t myapp .`} />
             </Method>
+            {extraIndexes.length > 0 && (
+              <Method icon="memory" title={t('quickstart.extraIndexes')} description={t('quickstart.extraIndexesDesc')}>
+                {extraIndexes.map((idx) => (
+                  <div key={idx.name}>
+                    <p className="text-[13px] font-[500] mb-1.5" style={{ color: 'var(--heading)' }}>{idx.name}</p>
+                    <CodeBlockV2 language="bash" code={`pip3 install torch torchvision --index-url ${baseURL}/${idx.path}/simple/`} />
+                  </div>
+                ))}
+                <p className="text-[13px] font-[500] mt-3 mb-1.5" style={{ color: 'var(--heading)' }}>Dockerfile</p>
+                <CodeBlockV2 filename="Dockerfile" language="dockerfile" code={`ARG PIP_INDEX_URL=${baseURL}/pypi/simple/\nARG PIP_TRUSTED_HOST=${host}\n\n# Standard packages (via main index)\nRUN pip3 install --no-cache-dir transformers accelerate\n\n# CUDA packages (via extra index)\nRUN pip3 install --no-cache-dir torch torchvision \\\n    --index-url ${baseURL}/${extraIndexes[0]?.path}/simple/`} />
+              </Method>
+            )}
           </>
         )}
 

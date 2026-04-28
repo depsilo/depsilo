@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/cache"
+	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
@@ -28,9 +29,10 @@ type StatsHandler struct {
 	cranPool     *upstream.Pool
 	helmPool     *upstream.Pool
 	startTime    time.Time
+	extraIndexes []config.ExtraIndexConfig
 }
 
-func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool, rubygemsPool, composerPool, nugetPool, condaPool, cranPool, helmPool *upstream.Pool) *StatsHandler {
+func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool, rubygemsPool, composerPool, nugetPool, condaPool, cranPool, helmPool *upstream.Pool, extraIndexes []config.ExtraIndexConfig) *StatsHandler {
 	return &StatsHandler{
 		db:           database,
 		storage:      storage,
@@ -47,6 +49,7 @@ func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool
 		cranPool:     cranPool,
 		helmPool:     helmPool,
 		startTime:    time.Now(),
+		extraIndexes: extraIndexes,
 	}
 }
 
@@ -211,6 +214,15 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 		Group("package_name").Order("hit_count DESC").Limit(10).
 		Scan(&aptTop)
 
+	// Extra indexes
+	extraIdxs := make([]gin.H, 0, len(h.extraIndexes))
+	for _, idx := range h.extraIndexes {
+		extraIdxs = append(extraIdxs, gin.H{
+			"name": idx.Name,
+			"path": idx.Path,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"service": gin.H{
 			"version":        "0.1.0",
@@ -236,5 +248,6 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 			"pypi": pypiTop,
 			"apt":  aptTop,
 		},
+		"extra_indexes": extraIdxs,
 	})
 }

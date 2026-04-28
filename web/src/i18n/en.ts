@@ -500,6 +500,8 @@ const en = {
       ai_env: 'Env Vars',
       ai_shell: 'Shell Script',
       ai_devcontainer: 'DevContainer',
+      extraIndexes: 'CUDA / Extra Indexes',
+      extraIndexesDesc: 'The following extra PyPI indexes are configured. Use --index-url to install CUDA-specific packages. All downloads are cached.',
     },
 
     // Packages
