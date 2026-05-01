@@ -25,7 +25,7 @@ function AppRoutes() {
   if (setupLoading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div style={{ color: 'var(--body)' }}>Loading...</div>
+        <div style={{ color: 'var(--text-soft)' }}>Loading...</div>
       </div>
     )
   }
@@ -46,6 +46,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <div className="page-wash" />
         <AppRoutes />
       </BrowserRouter>
     </QueryClientProvider>
