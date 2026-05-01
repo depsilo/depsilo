@@ -19,14 +19,27 @@ export default function TabsV2({ items, active, onChange }: TabsV2Props) {
           <button
             key={tab.key}
             onClick={() => onChange(tab.key)}
-            className="flex items-center gap-2 px-4 py-2.5 text-[14px] font-[400] bg-transparent cursor-pointer transition-colors duration-150"
+            className="flex items-center gap-2 px-4 py-2.5 text-[14px] bg-transparent cursor-pointer transition-colors duration-150"
             style={{
-              color: isActive ? 'var(--heading)' : 'var(--body)',
-              borderBottom: isActive ? '2px solid var(--stripe-purple)' : '2px solid transparent',
+              position: 'relative',
+              color: isActive ? 'var(--text)' : 'var(--text-soft)',
+              fontWeight: isActive ? 600 : 500,
+              letterSpacing: isActive ? '-0.005em' : undefined,
             }}
           >
             {tab.icon}
             {tab.label}
+            {isActive && (
+              <span style={{
+                position: 'absolute',
+                left: 10,
+                right: 10,
+                bottom: -1,
+                height: 1.5,
+                background: 'var(--grad-brand)',
+                borderRadius: 1,
+              }} />
+            )}
           </button>
         )
       })}
