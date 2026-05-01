@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useId } from 'react';
 
 interface Props {
   data: number[];
@@ -16,13 +16,9 @@ const toneConfig = {
   neutral: { stroke: ['var(--border-strong)', 'var(--border)'],         area: 0.06 },
 } as const;
 
-let idCounter = 0;
-
 export default function Sparkline({ data, width = 80, height = 28, tone = 'brand' }: Props) {
-  const ids = useMemo(() => {
-    const n = idCounter++;
-    return { stroke: `spk-s-${n}`, area: `spk-a-${n}` };
-  }, []);
+  const uid = useId().replace(/:/g, '');
+  const ids = { stroke: `spk-s-${uid}`, area: `spk-a-${uid}` };
 
   if (data.length < 2) return null;
 
