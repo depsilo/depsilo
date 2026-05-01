@@ -44,8 +44,8 @@ function NavTab({ to, label, isActive }: NavTabProps) {
               position: 'absolute',
               left: 10,
               right: 10,
-              bottom: -15,
-              height: 1.5,
+              bottom: '-15px',
+              height: '1.5px',
               background: 'var(--grad-brand)',
               borderRadius: 1,
             }}
