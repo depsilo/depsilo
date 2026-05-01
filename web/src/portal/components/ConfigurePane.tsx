@@ -16,7 +16,8 @@ function relTime(ts: number): string {
 }
 
 // Footer: listens to SSE for requests matching the manager
-function LiveDetector({ endpoint, managerId }: { endpoint: string; managerId: string }) {
+// managerId: reserved for future per-ecosystem filtering
+function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; managerId: string }) {
   const [hits, setHits] = useState<{ id: string; path: string; ms: number; t: number }[]>([])
   const [, setTick] = useState(0)
 
@@ -305,7 +306,7 @@ export default function ConfigurePane({ languageId, endpoint }: Props) {
   useEffect(() => {
     setMgrId(lang?.managers[0]?.id ?? '')
     setShowPrompt(false)
-  }, [languageId, lang])
+  }, [languageId])
 
   if (!lang) return null
 

@@ -6,7 +6,7 @@ import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import StatusDot from '@/components/StatusDot'
-import QuickStartV2 from '@/portal/pages/QuickStart'
+import QuickStart from '@/portal/pages/QuickStart'
 import MonitorV2 from '@/portal/pages/Monitor'
 
 const VERSION = 'v2.4.1'
@@ -165,7 +165,7 @@ export default function PortalAppV2() {
 
       <main style={{ maxWidth: 1240, margin: '0 auto', padding: '32px 28px' }}>
         <Routes>
-          <Route index element={<QuickStartV2 />} />
+          <Route index element={<QuickStart />} />
           <Route path="monitor" element={<MonitorV2 />} />
         </Routes>
       </main>
