@@ -5,6 +5,7 @@ import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import BadgeV2 from '@/components/Badge'
+import StatusDot from '@/components/StatusDot'
 import { authApi } from '@/lib/api'
 
 interface NavItem {
@@ -20,11 +21,12 @@ function SidebarNavItem({ item }: { item: NavItem }) {
     <NavLink
       to={item.to}
       end={item.end}
-      className="flex items-center gap-3 px-5 py-2 text-[14px] font-[400] transition-colors duration-150 no-underline relative"
+      className="flex items-center gap-3 px-5 py-2 text-[14px] transition-colors duration-150 no-underline relative"
       style={({ isActive }) => ({
-        color: isActive ? 'var(--heading)' : 'var(--body)',
-        background: isActive ? 'rgba(83,58,253,0.06)' : 'transparent',
-        borderLeft: isActive ? '2px solid var(--stripe-purple)' : '2px solid transparent',
+        color: isActive ? 'var(--brand-text)' : 'var(--text-soft)',
+        background: isActive ? 'var(--brand-soft)' : 'transparent',
+        borderLeft: isActive ? '2px solid var(--brand)' : '2px solid transparent',
+        fontWeight: isActive ? 600 : 500,
       })}
     >
       <Icon name={item.icon} size="sm" />
@@ -81,29 +83,29 @@ export default function MainLayoutV2() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
-      {/* Sidebar — 240px */}
+    <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
+      {/* Sidebar — 220px */}
       <aside
-        className="fixed left-0 top-0 z-30 h-screen w-[240px] flex flex-col"
-        style={{ background: 'var(--surface)', borderRight: '1px solid var(--border)' }}
+        className="fixed left-0 top-0 z-30 h-screen w-[220px] flex flex-col"
+        style={{ background: 'var(--bg-card)', borderRight: '0.5px solid var(--border)' }}
       >
         {/* Logo */}
         <div className="px-5 py-5 flex items-center gap-2.5">
           <Logo size={26} />
-          <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--heading)' }}>Depsilo</span>
-          <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" style={{ background: 'var(--surface-low)', color: 'var(--body)', border: '1px solid var(--border)' }}>v0.1</span>
+          <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--text-base)' }}>Depsilo</span>
+          <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>v0.1</span>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-2">
-          <p className="px-5 mb-1 text-[11px] tracking-widest font-[400] uppercase" style={{ color: 'var(--body)' }}>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-subtle)', padding: '8px 16px 4px' }}>
             {t('nav.monitor')}
           </p>
           {monitorItems.map((item) => (
             <SidebarNavItem key={item.to} item={item} />
           ))}
 
-          <p className="px-5 mt-6 mb-1 text-[11px] tracking-widest font-[400] uppercase" style={{ color: 'var(--body)' }}>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-subtle)', padding: '24px 16px 4px' }}>
             {t('nav.manage')}
           </p>
           {manageItems.map((item) => (
@@ -112,30 +114,30 @@ export default function MainLayoutV2() {
         </nav>
 
         {/* User info */}
-        <div style={{ borderTop: '1px solid var(--border)' }} className="px-3 py-3">
+        <div style={{ borderTop: '0.5px solid var(--border)' }} className="px-3 py-3">
           <div className="flex items-center gap-2.5 rounded-[6px] px-2 py-2 group transition-colors duration-150 cursor-default"
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
           >
             <div
               className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[400] shrink-0"
-              style={{ background: 'var(--stripe-purple)', color: 'var(--on-primary)' }}
+              style={{ background: 'var(--brand)', color: 'white' }}
             >
               {user.username?.[0]?.toUpperCase() || 'A'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-[400] truncate leading-tight" style={{ color: 'var(--heading)' }}>{user.username}</p>
-              <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--body)' }}>
+              <p className="text-[13px] font-[400] truncate leading-tight" style={{ color: 'var(--text-base)' }}>{user.username}</p>
+              <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-soft)' }}>
                 {user.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
               </p>
             </div>
             <button
               onClick={handleLogout}
               className="bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all duration-150 p-1 rounded-[4px]"
-              style={{ color: 'var(--body)' }}
+              style={{ color: 'var(--text-soft)' }}
               title={t('nav.logout')}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--heading)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--body)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-base)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-soft)' }}
             >
               <Icon name="logout" size="sm" />
             </button>
@@ -143,29 +145,30 @@ export default function MainLayoutV2() {
         </div>
       </aside>
 
-      {/* Top bar — 56px */}
+      {/* Top bar — 48px */}
       <header
-        className="fixed top-0 left-[240px] right-0 h-14 z-40 flex items-center justify-between px-8"
+        className="fixed top-0 left-[220px] right-0 z-40 flex items-center justify-between px-8"
         style={{
-          background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: '1px solid var(--border)',
+          height: 48,
+          background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
+          backdropFilter: 'saturate(180%) blur(8px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(8px)',
+          borderBottom: '0.5px solid var(--border)',
         }}
       >
-        <h1 className="text-[14px] font-[400]" style={{ color: 'var(--heading)' }}>{pageTitle}</h1>
+        <h1 className="text-[14px] font-[400]" style={{ color: 'var(--text-base)' }}>{pageTitle}</h1>
         <div className="flex items-center gap-3">
           <LangToggle />
           <ThemeToggle />
-          <div className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: 'var(--body)' }}>
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
+          <div className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: 'var(--text-soft)' }}>
+            <StatusDot status="healthy" size={6} />
             Healthy
           </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="ml-[240px] mt-14 p-8 min-h-[calc(100vh-3.5rem)]" style={{ background: 'var(--bg)' }}>
+      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 48, background: 'var(--bg-page)' }}>
         <Outlet />
       </main>
     </div>
