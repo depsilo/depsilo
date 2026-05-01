@@ -18,13 +18,13 @@ export default function CodeBlockV2({ filename, code }: CodeBlockV2Props) {
   }, [code])
 
   return (
-    <div className="relative rounded-[6px] overflow-hidden group" style={{ background: 'var(--code-bg)', border: '1px solid var(--border)' }}>
+    <div className="relative rounded-[6px] overflow-hidden group" style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', borderLeft: '2px solid var(--stripe-purple)' }}>
       {filename && (
         <div
           className="flex items-center justify-between px-4 py-2"
           style={{ background: 'var(--code-header)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         >
-          <span className="text-[12px] font-mono font-[500]" style={{ color: 'var(--code-dim)' }}>
+          <span className="text-[10px] uppercase tracking-wider font-mono font-[500]" style={{ color: 'var(--code-dim)' }}>
             {filename}
           </span>
           <button

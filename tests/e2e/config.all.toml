@@ -1,0 +1,142 @@
+[server]
+host = "0.0.0.0"
+port = 23333
+
+[database]
+driver = "sqlite"
+dsn = "/app/data/depsilo.db"
+
+[storage]
+type = "local"
+path = "/app/data/cache"
+
+[cache]
+max_size_gb = 5
+ttl_index = "1h"
+ttl_blob = "72h"
+lru_threshold = 90
+
+[auth]
+enabled = false
+
+[[pypi.upstreams]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn"
+priority = 1
+
+[[pypi.upstreams]]
+name = "official"
+url = "https://pypi.org"
+priority = 2
+
+[[apt.upstreams]]
+name = "tuna"
+url = "https://mirrors.tuna.tsinghua.edu.cn"
+priority = 1
+
+[[apt.upstreams]]
+name = "official"
+url = "http://archive.ubuntu.com"
+priority = 2
+
+[[npm.upstreams]]
+name = "npmmirror"
+url = "https://registry.npmmirror.com"
+priority = 1
+
+[[npm.upstreams]]
+name = "official"
+url = "https://registry.npmjs.org"
+priority = 2
+
+[[go.upstreams]]
+name = "goproxy-cn"
+url = "https://goproxy.cn"
+priority = 1
+
+[[go.upstreams]]
+name = "official"
+url = "https://proxy.golang.org"
+priority = 2
+
+[[cargo.upstreams]]
+name = "rsproxy"
+url = "https://rsproxy.cn/index"
+priority = 1
+
+[[cargo.upstreams]]
+name = "crates-io"
+url = "https://index.crates.io"
+priority = 2
+
+[[maven.upstreams]]
+name = "aliyun"
+url = "https://maven.aliyun.com/repository/public"
+priority = 1
+
+[[maven.upstreams]]
+name = "central"
+url = "https://repo1.maven.org/maven2"
+priority = 2
+
+[[rubygems.upstreams]]
+name = "ruby-china"
+url = "https://gems.ruby-china.com"
+priority = 1
+
+[[rubygems.upstreams]]
+name = "rubygems"
+url = "https://rubygems.org"
+priority = 2
+
+[[composer.upstreams]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/composer"
+priority = 1
+
+[[composer.upstreams]]
+name = "packagist"
+url = "https://repo.packagist.org"
+priority = 2
+
+[[nuget.upstreams]]
+name = "nuget"
+url = "https://api.nuget.org"
+priority = 1
+
+[[conda.upstreams]]
+name = "tuna"
+url = "https://mirrors.tuna.tsinghua.edu.cn/anaconda"
+priority = 1
+
+[[conda.upstreams]]
+name = "official"
+url = "https://repo.anaconda.com"
+priority = 2
+
+[[cran.upstreams]]
+name = "tuna"
+url = "https://mirrors.tuna.tsinghua.edu.cn/CRAN"
+priority = 1
+
+[[cran.upstreams]]
+name = "cloud-r"
+url = "https://cloud.r-project.org"
+priority = 2
+
+[[helm.upstreams]]
+name = "azure-cn"
+url = "https://mirror.azure.cn/kubernetes/charts"
+priority = 1
+
+[[helm.upstreams]]
+name = "bitnami"
+url = "https://charts.bitnami.com/bitnami"
+priority = 2
+
+[docker]
+default_registry = "docker.io"
+
+[[docker.registries]]
+name = "dockerhub"
+url = "https://registry-1.docker.io"

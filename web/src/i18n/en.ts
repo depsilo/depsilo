@@ -539,18 +539,6 @@ const en = {
       miss: 'MISS',
     },
 
-    // ServiceStatus
-    serviceStatus: {
-      title: 'Service Status',
-      todayRequests: 'Requests Today',
-      cacheHitRate: 'Cache Hit Rate',
-      savedTraffic: 'Traffic Saved',
-      cacheFiles: 'Cached Files',
-      upstreamStatus: 'Upstream Status',
-      noUpstreams: 'No upstreams',
-      topPackages: 'Top Packages',
-    },
-
     // Setup wizard
     setup: {
       welcome: 'Welcome to Depsilo',

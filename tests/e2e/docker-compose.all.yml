@@ -1,0 +1,33 @@
+services:
+  depsilo:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.e2e
+    volumes:
+      - ./config.all.toml:/app/config.toml:ro
+      - ./data:/app/data
+    environment:
+      - DEPSILO_CONFIG=/app/config.toml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:23333/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    networks:
+      - e2e-net
+
+  e2e-runner:
+    build:
+      context: ./runner
+      dockerfile: Dockerfile.all
+    depends_on:
+      depsilo:
+        condition: service_healthy
+    environment:
+      - DEPSILO_URL=http://depsilo:23333
+    networks:
+      - e2e-net
+
+networks:
+  e2e-net:
+    driver: bridge

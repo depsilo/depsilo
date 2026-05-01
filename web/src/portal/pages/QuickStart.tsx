@@ -153,6 +153,24 @@ const AI_TOOLS: ToolDef[] = [
   { id: 'devcontainer', icon: 'deployed_code', file: '.devcontainer/devcontainer.json',     gen: genDevcontainer },
 ]
 
+// ── Ecosystem tabs (flat list, 4-column grid) ────────────────────
+
+const tabs: { key: Tab; label: string }[] = [
+  { key: 'pip', label: 'pip' },
+  { key: 'conda', label: 'Conda' },
+  { key: 'npm', label: 'npm' },
+  { key: 'go', label: 'Go' },
+  { key: 'maven', label: 'Maven' },
+  { key: 'nuget', label: 'NuGet' },
+  { key: 'cargo', label: 'Cargo' },
+  { key: 'rubygems', label: 'RubyGems' },
+  { key: 'composer', label: 'Composer' },
+  { key: 'cran', label: 'CRAN' },
+  { key: 'apt', label: 'APT' },
+  { key: 'docker', label: 'Docker' },
+  { key: 'helm', label: 'Helm' },
+]
+
 // ── Status Bar ─────────────────────────────────────────────────────
 
 function StatusBar() {
@@ -186,8 +204,14 @@ function StatusBar() {
 
   return (
     <div
-      className="rounded-[6px] px-5 py-3 flex items-center gap-4 flex-wrap"
-      style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}
+      className="rounded-[6px] px-4 py-2.5 flex items-center gap-4 flex-wrap"
+      style={{
+        background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
+        border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-soft)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}
     >
       {/* Service URL + copy */}
       <div className="flex items-center gap-2 min-w-0">
@@ -220,13 +244,12 @@ function StatusBar() {
   )
 }
 
-// ── AI Integration (collapsed by default) ──────────────────────────
+// ── AI Integration (inline link + expandable panel) ───────────────
 
-function AIInstructionsCard({ baseURL, host }: { baseURL: string; host: string }) {
+function AIInstructionsLink({ baseURL, host }: { baseURL: string; host: string }) {
   const { t } = useTranslation()
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [previewId, setPreviewId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const handleCopy = useCallback((tool: ToolDef) => {
     const content = tool.gen(baseURL, host)
@@ -237,66 +260,45 @@ function AIInstructionsCard({ baseURL, host }: { baseURL: string; host: string }
   }, [baseURL, host])
 
   return (
-    <div className="rounded-[6px] overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-      {/* Toggle header */}
+    <div>
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2.5 px-5 py-3 bg-transparent cursor-pointer transition-colors duration-150 text-left"
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
+        className="inline-flex items-center gap-1.5 bg-transparent cursor-pointer text-[13px] font-[400] transition-colors duration-150 p-0"
+        style={{ color: 'var(--stripe-purple)', border: 'none' }}
       >
-        <Icon name="auto_awesome" size="sm" style={{ color: 'var(--stripe-purple)' }} />
-        <span className="flex-1 text-[14px] font-[400]" style={{ color: 'var(--heading)' }}>
-          {t('quickstart.aiTitle')}
-        </span>
-        <span className="text-[12px]" style={{ color: 'var(--body)' }}>
-          {t('quickstart.aiSubtitle')}
-        </span>
+        <Icon name="auto_awesome" size="sm" />
+        <span>{t('quickstart.aiTitle')}</span>
+        <span className="text-[12px]" style={{ color: 'var(--body)' }}>— {t('quickstart.aiSubtitle')}</span>
         <Icon name={open ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--body)' }} />
       </button>
 
-      {/* Expanded tool list */}
       {open && (
-        <div style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="mt-3 rounded-[5px] overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
           {AI_TOOLS.map((tool) => {
             const isCopied = copiedId === tool.id
-            const isPreview = previewId === tool.id
             return (
-              <div key={tool.id}>
-                <div className="flex items-center gap-3 px-5 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
-                  <Icon name={tool.icon} size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
-                  <span className="text-[13px] font-[400] w-[100px] shrink-0" style={{ color: 'var(--heading)' }}>
-                    {t(`quickstart.ai_${tool.id}`)}
-                  </span>
-                  <code className="flex-1 text-[12px] font-mono truncate" style={{ color: 'var(--body)' }}>{tool.file}</code>
-                  <button
-                    onClick={() => setPreviewId(isPreview ? null : tool.id)}
-                    className="bg-transparent p-1 rounded-[4px] cursor-pointer shrink-0"
-                    style={{ color: isPreview ? 'var(--stripe-purple)' : 'var(--body)' }}
-                  >
-                    <Icon name={isPreview ? 'visibility_off' : 'visibility'} size="sm" />
-                  </button>
-                  <button
-                    onClick={() => handleCopy(tool)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150 shrink-0"
-                    style={{
-                      background: isCopied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
-                      color: isCopied ? 'var(--success-text)' : 'var(--on-primary)',
-                      border: isCopied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
-                    }}
-                  >
-                    <Icon name={isCopied ? 'check' : 'content_copy'} size="sm" />
-                    {isCopied ? t('quickstart.aiCopied') : t('quickstart.aiCopy')}
-                  </button>
-                </div>
-                {isPreview && (
-                  <pre
-                    className="px-5 py-3 overflow-x-auto text-[11px] font-mono font-[500] leading-[1.6] whitespace-pre-wrap"
-                    style={{ background: 'var(--code-bg)', color: 'var(--code-text)', maxHeight: '320px', overflowY: 'auto' }}
-                  >
-                    {tool.gen(baseURL, host)}
-                  </pre>
-                )}
+              <div
+                key={tool.id}
+                className="flex items-center gap-3 px-4 py-1.5"
+                style={{ borderBottom: '1px solid var(--border)' }}
+              >
+                <Icon name={tool.icon} size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+                <span className="text-[12px] font-[400] w-[90px] shrink-0" style={{ color: 'var(--heading)' }}>
+                  {t(`quickstart.ai_${tool.id}`)}
+                </span>
+                <code className="flex-1 text-[11px] font-mono truncate" style={{ color: 'var(--body)' }}>{tool.file}</code>
+                <button
+                  onClick={() => handleCopy(tool)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-[400] rounded-[3px] cursor-pointer transition-all duration-150 shrink-0"
+                  style={{
+                    background: isCopied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
+                    color: isCopied ? 'var(--success-text)' : 'var(--on-primary)',
+                    border: isCopied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
+                  }}
+                >
+                  <Icon name={isCopied ? 'check' : 'content_copy'} size="sm" />
+                  {isCopied ? t('quickstart.aiCopied') : t('quickstart.aiCopy')}
+                </button>
               </div>
             )
           })}
@@ -341,10 +343,10 @@ function TestButton({ ecosystem, baseURL }: { ecosystem: Tab; baseURL: string })
   }
 
   const colors = {
-    idle: { bg: 'transparent', color: 'var(--stripe-purple)', border: 'var(--border-purple)' },
-    testing: { bg: 'transparent', color: 'var(--body)', border: 'var(--border)' },
-    ok: { bg: 'rgba(21,190,83,0.1)', color: 'var(--success-text)', border: 'rgba(21,190,83,0.3)' },
-    fail: { bg: 'var(--error-container)', color: 'var(--error)', border: 'var(--error)' },
+    idle: { bg: 'transparent', color: 'var(--stripe-purple)', border: 'var(--border-purple)', shadow: '0 0 8px rgba(83,58,253,0.25)' },
+    testing: { bg: 'transparent', color: 'var(--body)', border: 'var(--border)', shadow: 'none' },
+    ok: { bg: 'rgba(21,190,83,0.1)', color: 'var(--success-text)', border: 'rgba(21,190,83,0.3)', shadow: 'none' },
+    fail: { bg: 'var(--error-container)', color: 'var(--error)', border: 'var(--error)', shadow: 'none' },
   }
   const c = colors[status]
   const labels = {
@@ -360,7 +362,7 @@ function TestButton({ ecosystem, baseURL }: { ecosystem: Tab; baseURL: string })
       onClick={handleTest}
       disabled={status === 'testing'}
       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-[400] rounded-[4px] cursor-pointer transition-all duration-150 disabled:cursor-wait"
-      style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}` }}
+      style={{ background: c.bg, color: c.color, border: `1px solid ${c.border}`, boxShadow: c.shadow }}
     >
       <Icon name={icons[status]} size="sm" />
       {labels[status]}
@@ -379,17 +381,17 @@ interface MethodProps {
 
 function Method({ icon, title, description, children }: MethodProps) {
   return (
-    <div className="rounded-[5px] overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
+    <div className="rounded-[5px] overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--surface)', boxShadow: 'var(--shadow-soft)' }}>
       <div className="px-5 py-4 flex items-start gap-3">
         <span
-          className="flex items-center justify-center w-8 h-8 rounded-[6px] shrink-0 mt-0.5"
-          style={{ background: 'rgba(83,58,253,0.08)', color: 'var(--stripe-purple)' }}
+          className="flex items-center justify-center w-7 h-7 rounded-[4px] shrink-0 mt-0.5"
+          style={{ background: 'linear-gradient(135deg, var(--stripe-purple), var(--stripe-purple-mid))', color: 'var(--on-primary)' }}
         >
           <Icon name={icon} size="sm" />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="font-[400] text-[14px]" style={{ color: 'var(--heading)' }}>{title}</p>
-          <p className="text-[13px] mt-0.5 leading-relaxed" style={{ color: 'var(--body)' }}>{description}</p>
+          <p className="font-[400] text-[13px]" style={{ color: 'var(--heading)' }}>{title}</p>
+          <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: 'var(--body)' }}>{description}</p>
         </div>
       </div>
       <div className="px-5 pb-5 -mt-1 space-y-3">
@@ -416,48 +418,49 @@ export default function QuickStartV2() {
   })
   const extraIndexes = statsData?.extra_indexes || []
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'pip', label: 'pip' },
-    { key: 'apt', label: 'APT' },
-    { key: 'npm', label: 'npm' },
-    { key: 'go', label: 'Go' },
-    { key: 'cargo', label: 'Cargo' },
-    { key: 'maven', label: 'Maven' },
-    { key: 'rubygems', label: 'RubyGems' },
-    { key: 'composer', label: 'Composer' },
-    { key: 'nuget', label: 'NuGet' },
-    { key: 'conda', label: 'Conda' },
-    { key: 'cran', label: 'CRAN' },
-    { key: 'helm', label: 'Helm' },
-    { key: 'docker', label: 'Docker' },
-  ]
-
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
-        {t('quickstart.title')}
-      </h1>
+      <div>
+        <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
+          {t('quickstart.title')}
+        </h1>
+        <p className="text-[14px] mt-1" style={{ color: 'var(--body)' }}>
+          {t('quickstart.subtitle')}
+        </p>
+      </div>
 
       {/* Status bar — shows service health + today stats */}
       <StatusBar />
 
-      {/* Ecosystem selector — compact 4×3, icon + name only */}
-      <div className="grid grid-cols-4 gap-1.5">
+      {/* Ecosystem selector — flat 4-column grid */}
+      <div className="grid grid-cols-4 gap-2">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key
           return (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-2 rounded-[4px] px-3 py-2 text-left transition-all duration-150 cursor-pointer"
+              className="flex items-center gap-2 px-3 py-2 text-left cursor-pointer"
               style={{
-                border: isActive ? '1px solid var(--border-purple)' : '1px solid var(--border)',
-                background: isActive ? 'rgba(83,58,253,0.04)' : 'var(--surface)',
+                border: 'none',
+                borderBottom: isActive ? '2px solid var(--stripe-purple)' : '2px solid transparent',
+                background: 'transparent',
+                transition: 'all 0.2s ease',
+                transform: 'translateY(0)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
               }}
             >
               <EcosystemIcon type={tab.key} size={16} />
-              <span className="text-[13px] font-[400]" style={{ color: isActive ? 'var(--heading)' : 'var(--label)' }}>
+              <span className="text-[13px] font-[400]" style={{ color: isActive ? 'var(--heading)' : 'var(--body)', transition: 'color 0.2s ease' }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--heading)' }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--body)' }}
+              >
                 {tab.label}
               </span>
             </button>
@@ -474,7 +477,7 @@ export default function QuickStartV2() {
       </div>
 
       {/* Methods */}
-      <div className="grid gap-4">
+      <div className="grid gap-5">
         {activeTab === 'pip' && (
           <>
             <Method icon="bolt" title={t('quickstart.tempUse')} description={t('quickstart.tempUseDesc')}>
@@ -661,12 +664,12 @@ export default function QuickStartV2() {
         )}
       </div>
 
-      {/* AI Integration — collapsed */}
-      <AIInstructionsCard baseURL={baseURL} host={host} />
+      {/* AI Integration — inline link */}
+      <AIInstructionsLink baseURL={baseURL} host={host} />
 
       {/* Info tip */}
       <div
-        className="flex items-start gap-3 rounded-[5px] px-5 py-4"
+        className="flex items-start gap-3 rounded-[5px] px-4 py-3"
         style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}
       >
         <Icon name="lightbulb" size="sm" style={{ color: 'var(--stripe-purple)', marginTop: 2 }} />

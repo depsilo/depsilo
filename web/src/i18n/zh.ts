@@ -539,18 +539,6 @@ const zh = {
       miss: '未命中',
     },
 
-    // ServiceStatus
-    serviceStatus: {
-      title: '服务状态',
-      todayRequests: '今日请求',
-      cacheHitRate: '缓存命中率',
-      savedTraffic: '节省流量',
-      cacheFiles: '缓存文件数',
-      upstreamStatus: '上游源状态',
-      noUpstreams: '暂无上游源',
-      topPackages: '热门包',
-    },
-
     // Setup wizard
     setup: {
       welcome: '欢迎使用 Depsilo',

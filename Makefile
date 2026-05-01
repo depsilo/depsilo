@@ -13,10 +13,13 @@ HOST_IP    := $(shell ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\s
 
 # ─── 构建 ─────────────────────────────────────
 frontend:                       ## 构建前端
-	@export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" && cd web && npm run build
+	cd web && npm run build
 
-build: frontend                 ## 构建前端 + 编译后端（服务器模式）
-	CGO_ENABLED=0 go build -o $(BIN) ./cmd/server
+build: frontend                 ## 构建前端 + 编译后端（统一 CLI+Server 二进制）
+	CGO_ENABLED=0 go build -o $(BIN) ./cmd/depsilo
+
+build-server: frontend          ## 构建前端 + 编译后端（纯服务器模式，用于桌面版）
+	CGO_ENABLED=0 go build -o $(BIN)-server ./cmd/server
 
 build-desktop: frontend         ## 构建前端 + 编译桌面版
 	go build -tags "desktop,production" -o bin/$(APP)-desktop ./cmd/server
@@ -47,6 +50,22 @@ stop:                           ## 停止后台 dev 服务
 
 logs:                           ## 查看 dev 模式日志
 	@tail -f .dev.log
+
+# ─── CLI 管理 ────────────────────────────────
+cli-status:                     ## 显示 Depsilo 状态
+	@./$(BIN) status
+
+cli-activate:                   ## 输出 Shell 环境变量配置
+	@./$(BIN) activate
+
+cli-warmup:                     ## 预热缓存 (make cli-warmup ECO=pypi PKGS="requests numpy")
+	@./$(BIN) warmup $(ECO) $(PKGS)
+
+cli-flush:                      ## 清除过期缓存
+	@./$(BIN) flush
+
+cli-stop:                       ## 停止后台 daemon
+	@./$(BIN) stop
 
 # ─── 测试 ─────────────────────────────────────
 test: test-unit                 ## 运行 Go 单元测试
@@ -199,9 +218,9 @@ docker-test: docker-build docker-run  ## 构建镜像 + 启动 + 跑冒烟测试
 	@echo ""
 	@echo ">>> Done. Container still running. Use 'make docker-stop' to stop."
 
-proxy-env:                      ## 打印 Docker build 可用的代理参数
-	@echo "# ─── Depsilo Proxy for Docker Build ───"
-	@echo "# Host IP (docker0): $(HOST_IP)"
+proxy-env:                      ## 打印可用的代理配置（推荐使用 depsilo activate）
+	@echo "# ─── Depsilo Proxy Configuration ───"
+	@echo "# Better: eval \"$$(./$(BIN) activate)\""
 	@echo ""
 	@echo "# pip (Python):"
 	@echo "  --build-arg PIP_INDEX_URL=http://$(HOST_IP):$(PORT)/pypi/simple/"

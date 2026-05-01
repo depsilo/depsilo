@@ -14,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"go.uber.org/zap"
 
+	"depsilo/internal/server"
 	web "depsilo/web"
 )
 
@@ -38,7 +39,7 @@ func main() {
 	// Desktop mode: start server + Wails window
 	ctx, cancel := context.WithCancel(context.Background())
 
-	srv, err := StartServer(ctx)
+	srv, err := server.StartServer(ctx)
 	if err != nil {
 		zap.L().Fatal("failed to start server", zap.Error(err))
 	}
@@ -74,7 +75,7 @@ func runHeadless() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	srv, err := StartServer(ctx)
+	srv, err := server.StartServer(ctx)
 	if err != nil {
 		zap.L().Fatal("failed to start server", zap.Error(err))
 	}

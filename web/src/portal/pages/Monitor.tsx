@@ -84,7 +84,7 @@ export default function MonitorV2() {
   const maxApt = Math.max(...topApt.map(p => p.hit_count), 1)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
         {t('monitor.title')}
@@ -92,7 +92,7 @@ export default function MonitorV2() {
 
       {/* Metrics row — 4 cols in one bar */}
       <div
-        className="grid grid-cols-4 rounded-[6px] overflow-hidden"
+        className="grid grid-cols-4 gap-6 rounded-[6px] overflow-hidden px-5 py-4"
         style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {[
@@ -100,15 +100,11 @@ export default function MonitorV2() {
           { label: t('monitor.requests'), value: totalRequests.toLocaleString() },
           { label: t('monitor.hits'), value: totalHits.toLocaleString() },
           { label: t('monitor.misses'), value: totalMisses.toLocaleString() },
-        ].map((m, i) => (
-          <div
-            key={m.label}
-            className="px-5 py-4"
-            style={{ borderLeft: i > 0 ? '1px solid var(--border)' : 'none' }}
-          >
+        ].map((m) => (
+          <div key={m.label}>
             <p className="text-[11px] font-[400] uppercase tracking-wider mb-1" style={{ color: 'var(--body)' }}>{m.label}</p>
             <p
-              className="text-[22px] font-[300] font-mono tabular-nums tracking-tight"
+              className="text-[20px] font-[300] font-mono tabular-nums tracking-tight"
               style={{ color: m.accent ? 'var(--stripe-purple)' : 'var(--heading)' }}
             >
               {m.value}
@@ -138,16 +134,16 @@ export default function MonitorV2() {
               {events.map((event, i) => (
                 <div
                   key={event.id}
-                  className="flex items-center gap-3 px-4 py-2 animate-fade-in"
+                  className="flex items-center gap-3 px-3 py-1.5 animate-fade-in"
                   style={{
                     borderBottom: i < events.length - 1 ? '1px solid var(--border)' : 'none',
-                    borderLeft: `3px solid ${event.hit ? 'var(--success)' : 'var(--lemon, #9b6829)'}`,
+                    borderLeft: `2px solid ${event.hit ? 'var(--success)' : 'var(--label)'}`,
                   }}
                 >
-                  <span className="text-[11px] font-mono tabular-nums shrink-0 w-14" style={{ color: 'var(--body)' }}>
+                  <span className="text-[11px] font-mono tabular-nums shrink-0 w-12" style={{ color: 'var(--body)' }}>
                     {formatTime(event.timestamp)}
                   </span>
-                  <EcosystemIcon type={event.adapter_type as any} size={14} />
+                  <EcosystemIcon type={event.adapter_type as any} size={12} />
                   <span className="font-mono text-[12px] truncate min-w-0 flex-1" style={{ color: 'var(--heading)' }}>
                     {event.package_name}
                   </span>

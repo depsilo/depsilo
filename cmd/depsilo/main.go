@@ -11,11 +11,31 @@ import (
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/cli"
 	"depsilo/internal/server"
 )
 
 func main() {
-	// Initialize logger
+	// CLI mode: if a recognized subcommand is provided, dispatch to CLI
+	if len(os.Args) > 1 {
+		cmd := os.Args[1]
+		switch cmd {
+		case "serve", "server":
+			// Fall through to server mode
+		case "status", "activate", "start", "stop", "warmup", "flush", "version":
+			os.Exit(cli.Run(cmd, os.Args[2:]))
+		case "help", "--help", "-h":
+			cli.PrintHelp()
+			os.Exit(0)
+		default:
+			// Unknown command
+			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", cmd)
+			cli.PrintHelp()
+			os.Exit(1)
+		}
+	}
+
+	// Server mode (default for no args or "serve"/"server")
 	logger, err := zap.NewProduction()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
