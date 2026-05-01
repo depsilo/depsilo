@@ -89,7 +89,7 @@ export default function MainLayoutV2() {
       >
         {/* Logo */}
         <div className="px-5 py-5 flex items-center gap-2.5">
-          <Logo height={26} />
+          <Logo size={26} />
           <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--heading)' }}>Depsilo</span>
           <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" style={{ background: 'var(--surface-low)', color: 'var(--body)', border: '1px solid var(--border)' }}>v0.1</span>
         </div>

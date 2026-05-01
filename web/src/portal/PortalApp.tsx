@@ -41,7 +41,7 @@ export default function PortalAppV2() {
         <div className="mx-auto relative h-full max-w-[1080px] px-6">
           {/* Left: Logo */}
           <Link to="/" className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2.5 no-underline">
-            <Logo height={28} />
+            <Logo size={28} />
             <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--heading)' }}>Depsilo</span>
           </Link>
 

@@ -44,7 +44,7 @@ export default function LoginV2() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-3">
-            <Logo height={32} />
+            <Logo size={32} />
             <h1 className="text-[22px] font-[300] tracking-[-0.22px]" style={{ color: 'var(--heading)' }}>Depsilo</h1>
           </div>
           <p className="text-[14px] font-[300] mt-2" style={{ color: 'var(--body)' }}>{t('login.title')}</p>

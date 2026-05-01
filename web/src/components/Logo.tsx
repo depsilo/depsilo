@@ -2,13 +2,12 @@ import { useId } from 'react';
 
 interface Props {
   size?: number;
-  height?: number;
 }
 
-export default function Logo({ size, height }: Props) {
+export default function Logo({ size = 28 }: Props) {
   const uid = useId().replace(/:/g, '');
   const gradId = `logo-grad-${uid}`;
-  const dim = size ?? height ?? 28;
+  const dim = size;
 
   return (
     <svg
