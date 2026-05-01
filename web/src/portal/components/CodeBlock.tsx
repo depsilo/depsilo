@@ -1,13 +1,12 @@
 import { useState, useCallback } from 'react'
-import Icon from '@/components/Icon'
 
-interface CodeBlockV2Props {
+interface CodeBlockProps {
   filename?: string
   code: string
   language?: string
 }
 
-export default function CodeBlockV2({ filename, code }: CodeBlockV2Props) {
+export default function CodeBlock({ filename, code }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(() => {
@@ -18,43 +17,77 @@ export default function CodeBlockV2({ filename, code }: CodeBlockV2Props) {
   }, [code])
 
   return (
-    <div className="relative rounded-[6px] overflow-hidden group" style={{ background: 'var(--code-bg)', border: '1px solid var(--border)', borderLeft: '2px solid var(--stripe-purple)' }}>
-      {filename && (
-        <div
-          className="flex items-center justify-between px-4 py-2"
-          style={{ background: 'var(--code-header)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+    <div
+      className="group"
+      style={{
+        background: 'var(--bg-soft)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 'var(--r-card)',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          background: 'var(--bg-card)',
+          borderBottom: '0.5px solid var(--border)',
+          height: 28,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text-subtle)',
+          }}
         >
-          <span className="text-[10px] uppercase tracking-wider font-mono font-[500]" style={{ color: 'var(--code-dim)' }}>
-            {filename}
-          </span>
-          <button
-            onClick={handleCopy}
-            className="p-1 rounded-[4px] bg-transparent hover:bg-white/10 transition-all duration-150 cursor-pointer"
-            style={{ color: 'var(--code-dim)' }}
-          >
-            <Icon name={copied ? 'check' : 'content_copy'} size="sm" className={copied ? 'text-success' : ''} />
-          </button>
-        </div>
-      )}
-      <div className="relative">
-        <pre className="p-4 overflow-x-auto">
-          <code
-            className="font-mono text-[12px] font-[500] leading-[2] whitespace-pre-wrap"
-            style={{ color: 'var(--code-text)' }}
-          >
-            {code}
-          </code>
-        </pre>
-        {!filename && (
-          <button
-            onClick={handleCopy}
-            className="absolute top-3 right-3 p-1.5 rounded-[4px] bg-transparent hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer"
-            style={{ color: 'var(--code-dim)' }}
-          >
-            <Icon name={copied ? 'check' : 'content_copy'} size="sm" className={copied ? 'text-success' : ''} />
-          </button>
-        )}
+          {filename ?? ''}
+        </span>
+        <button
+          onClick={handleCopy}
+          style={{
+            color: copied ? 'var(--ok)' : 'var(--text-subtle)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '2px 4px',
+            borderRadius: 4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 11,
+          }}
+        >
+          {copied ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          )}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
       </div>
+      <pre
+        style={{
+          margin: 0,
+          padding: '12px 16px',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: 'var(--text)',
+          overflowX: 'auto',
+          background: 'transparent',
+        }}
+      >
+        <code>{code}</code>
+      </pre>
     </div>
   )
 }

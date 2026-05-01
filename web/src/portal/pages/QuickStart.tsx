@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
 import Icon from '@/components/Icon'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import CodeBlockV2 from '@/portal/components/CodeBlock'
+import CodeBlock from '@/portal/components/CodeBlock'
 
 type Tab = 'pip' | 'apt' | 'npm' | 'go' | 'cargo' | 'maven' | 'rubygems' | 'composer' | 'nuget' | 'conda' | 'cran' | 'helm' | 'docker'
 
@@ -481,31 +481,31 @@ export default function QuickStartV2() {
         {activeTab === 'pip' && (
           <>
             <Method icon="bolt" title={t('quickstart.tempUse')} description={t('quickstart.tempUseDesc')}>
-              <CodeBlockV2 language="bash" code={`pip install <package> -i ${baseURL}/pypi/simple/ --trusted-host ${host}`} />
+              <CodeBlock language="bash" code={`pip install <package> -i ${baseURL}/pypi/simple/ --trusted-host ${host}`} />
             </Method>
             <Method icon="settings" title={t('quickstart.permanentConfig')} description={t('quickstart.permanentConfigDesc')}>
-              <CodeBlockV2 filename="~/.config/pip/pip.conf" code={`[global]\nindex-url = ${baseURL}/pypi/simple/\ntrusted-host = ${host}`} />
+              <CodeBlock filename="~/.config/pip/pip.conf" code={`[global]\nindex-url = ${baseURL}/pypi/simple/\ntrusted-host = ${host}`} />
             </Method>
             <Method icon="speed" title={t('quickstart.uvUser')} description={t('quickstart.uvUserDesc')}>
-              <CodeBlockV2 language="bash" code={`uv pip install <package> --index-url ${baseURL}/pypi/simple/`} />
+              <CodeBlock language="bash" code={`uv pip install <package> --index-url ${baseURL}/pypi/simple/`} />
             </Method>
             <Method icon="library_books" title={t('quickstart.poetryUser')} description={t('quickstart.poetryUserDesc')}>
-              <CodeBlockV2 filename="pyproject.toml" code={`[[tool.poetry.source]]\nname = "depsilo"\nurl = "${baseURL}/pypi/simple/"\npriority = "primary"`} />
+              <CodeBlock filename="pyproject.toml" code={`[[tool.poetry.source]]\nname = "depsilo"\nurl = "${baseURL}/pypi/simple/"\npriority = "primary"`} />
             </Method>
             <Method icon="deployed_code" title={t('quickstart.dockerPip')} description={t('quickstart.dockerPipDesc')}>
-              <CodeBlockV2 filename="Dockerfile" language="dockerfile" code={`# Add these ARG lines before RUN pip install\nARG PIP_INDEX_URL\nARG PIP_TRUSTED_HOST`} />
-              <CodeBlockV2 language="bash" code={`docker build \\\n  --build-arg PIP_INDEX_URL=${baseURL}/pypi/simple/ \\\n  --build-arg PIP_TRUSTED_HOST=${host} \\\n  -t myapp .`} />
+              <CodeBlock filename="Dockerfile" language="dockerfile" code={`# Add these ARG lines before RUN pip install\nARG PIP_INDEX_URL\nARG PIP_TRUSTED_HOST`} />
+              <CodeBlock language="bash" code={`docker build \\\n  --build-arg PIP_INDEX_URL=${baseURL}/pypi/simple/ \\\n  --build-arg PIP_TRUSTED_HOST=${host} \\\n  -t myapp .`} />
             </Method>
             {extraIndexes.length > 0 && (
               <Method icon="memory" title={t('quickstart.extraIndexes')} description={t('quickstart.extraIndexesDesc')}>
                 {extraIndexes.map((idx) => (
                   <div key={idx.name}>
                     <p className="text-[13px] font-[500] mb-1.5" style={{ color: 'var(--heading)' }}>{idx.name}</p>
-                    <CodeBlockV2 language="bash" code={`pip3 install torch torchvision --index-url ${baseURL}/${idx.path}/simple/`} />
+                    <CodeBlock language="bash" code={`pip3 install torch torchvision --index-url ${baseURL}/${idx.path}/simple/`} />
                   </div>
                 ))}
                 <p className="text-[13px] font-[500] mt-3 mb-1.5" style={{ color: 'var(--heading)' }}>Dockerfile</p>
-                <CodeBlockV2 filename="Dockerfile" language="dockerfile" code={`ARG PIP_INDEX_URL=${baseURL}/pypi/simple/\nARG PIP_TRUSTED_HOST=${host}\n\n# Standard packages (via main index)\nRUN pip3 install --no-cache-dir transformers accelerate\n\n# CUDA packages (via extra index)\nRUN pip3 install --no-cache-dir torch torchvision \\\n    --index-url ${baseURL}/${extraIndexes[0]?.path}/simple/`} />
+                <CodeBlock filename="Dockerfile" language="dockerfile" code={`ARG PIP_INDEX_URL=${baseURL}/pypi/simple/\nARG PIP_TRUSTED_HOST=${host}\n\n# Standard packages (via main index)\nRUN pip3 install --no-cache-dir transformers accelerate\n\n# CUDA packages (via extra index)\nRUN pip3 install --no-cache-dir torch torchvision \\\n    --index-url ${baseURL}/${extraIndexes[0]?.path}/simple/`} />
               </Method>
             )}
           </>
@@ -514,16 +514,16 @@ export default function QuickStartV2() {
         {activeTab === 'apt' && (
           <>
             <Method icon="add_circle" title={t('quickstart.addSource')} description={t('quickstart.addSourceDesc')}>
-              <CodeBlockV2 filename="/etc/apt/sources.list.d/depsilo.list" code={`deb ${baseURL}/apt/ubuntu noble main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-updates main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-security main restricted universe multiverse`} />
+              <CodeBlock filename="/etc/apt/sources.list.d/depsilo.list" code={`deb ${baseURL}/apt/ubuntu noble main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-updates main restricted universe multiverse\ndeb ${baseURL}/apt/ubuntu noble-security main restricted universe multiverse`} />
             </Method>
             <Method icon="find_replace" title={t('quickstart.replaceSource')} description={t('quickstart.replaceSourceDesc')}>
-              <CodeBlockV2 language="bash" code={`sudo sed -i 's|https\\?://[^/]*/ubuntu|${baseURL}/apt/ubuntu|g' /etc/apt/sources.list`} />
+              <CodeBlock language="bash" code={`sudo sed -i 's|https\\?://[^/]*/ubuntu|${baseURL}/apt/ubuntu|g' /etc/apt/sources.list`} />
             </Method>
             <Method icon="verified" title={t('quickstart.verifyConfig')} description={t('quickstart.verifyConfigDesc')}>
-              <CodeBlockV2 language="bash" code="sudo apt update" />
+              <CodeBlock language="bash" code="sudo apt update" />
             </Method>
             <Method icon="deployed_code" title={t('quickstart.dockerApt')} description={t('quickstart.dockerAptDesc')}>
-              <CodeBlockV2 language="bash" code={`DOCKER_BUILDKIT=1 docker build --network host \\\n  --build-arg http_proxy=${baseURL} \\\n  -t myapp .`} />
+              <CodeBlock language="bash" code={`DOCKER_BUILDKIT=1 docker build --network host \\\n  --build-arg http_proxy=${baseURL} \\\n  -t myapp .`} />
             </Method>
           </>
         )}
@@ -531,15 +531,15 @@ export default function QuickStartV2() {
         {activeTab === 'npm' && (
           <>
             <Method icon="bolt" title={t('quickstart.npmTempUse')} description={t('quickstart.npmTempUseDesc')}>
-              <CodeBlockV2 language="bash" code={`npm install <package> --registry ${baseURL}/npm/`} />
+              <CodeBlock language="bash" code={`npm install <package> --registry ${baseURL}/npm/`} />
             </Method>
             <Method icon="settings" title={t('quickstart.npmPermanentConfig')} description={t('quickstart.npmPermanentConfigDesc')}>
-              <CodeBlockV2 language="bash" code={`npm config set registry ${baseURL}/npm/`} />
+              <CodeBlock language="bash" code={`npm config set registry ${baseURL}/npm/`} />
               <p className="text-[13px] mt-3 mb-2" style={{ color: 'var(--body)' }}>{t('quickstart.npmNpmrc')}</p>
-              <CodeBlockV2 filename="~/.npmrc" code={`registry=${baseURL}/npm/`} />
+              <CodeBlock filename="~/.npmrc" code={`registry=${baseURL}/npm/`} />
             </Method>
             <Method icon="speed" title={t('quickstart.npmYarnPnpm')} description={t('quickstart.npmYarnPnpmDesc')}>
-              <CodeBlockV2 language="bash" code={`# yarn v1\nyarn config set registry ${baseURL}/npm/\n\n# pnpm (uses .npmrc automatically)`} />
+              <CodeBlock language="bash" code={`# yarn v1\nyarn config set registry ${baseURL}/npm/\n\n# pnpm (uses .npmrc automatically)`} />
             </Method>
           </>
         )}
@@ -547,13 +547,13 @@ export default function QuickStartV2() {
         {activeTab === 'go' && (
           <>
             <Method icon="bolt" title={t('quickstart.goTempUse')} description={t('quickstart.goTempUseDesc')}>
-              <CodeBlockV2 language="bash" code={`GOPROXY=${baseURL}/go,direct go get <package>`} />
+              <CodeBlock language="bash" code={`GOPROXY=${baseURL}/go,direct go get <package>`} />
             </Method>
             <Method icon="settings" title={t('quickstart.goPermanentConfig')} description={t('quickstart.goPermanentConfigDesc')}>
-              <CodeBlockV2 language="bash" code={`go env -w GOPROXY=${baseURL}/go,direct`} />
+              <CodeBlock language="bash" code={`go env -w GOPROXY=${baseURL}/go,direct`} />
             </Method>
             <Method icon="verified" title={t('quickstart.goVerify')} description={t('quickstart.goVerifyDesc')}>
-              <CodeBlockV2 language="bash" code="go env GOPROXY" />
+              <CodeBlock language="bash" code="go env GOPROXY" />
             </Method>
           </>
         )}
@@ -561,10 +561,10 @@ export default function QuickStartV2() {
         {activeTab === 'cargo' && (
           <>
             <Method icon="settings" title={t('quickstart.cargoConfig')} description={t('quickstart.cargoConfigDesc')}>
-              <CodeBlockV2 filename="~/.cargo/config.toml" code={`[source.crates-io]\nreplace-with = "depsilo"\n\n[source.depsilo]\nregistry = "sparse+${baseURL}/crates/"`} />
+              <CodeBlock filename="~/.cargo/config.toml" code={`[source.crates-io]\nreplace-with = "depsilo"\n\n[source.depsilo]\nregistry = "sparse+${baseURL}/crates/"`} />
             </Method>
             <Method icon="verified" title={t('quickstart.cargoVerify')} description={t('quickstart.cargoVerifyDesc')}>
-              <CodeBlockV2 language="bash" code="cargo install ripgrep" />
+              <CodeBlock language="bash" code="cargo install ripgrep" />
             </Method>
           </>
         )}
@@ -572,10 +572,10 @@ export default function QuickStartV2() {
         {activeTab === 'maven' && (
           <>
             <Method icon="settings" title={t('quickstart.mavenSettings')} description={t('quickstart.mavenSettingsDesc')}>
-              <CodeBlockV2 filename="~/.m2/settings.xml" code={`<settings>\n  <mirrors>\n    <mirror>\n      <id>depsilo</id>\n      <mirrorOf>central</mirrorOf>\n      <url>${baseURL}/maven/</url>\n    </mirror>\n  </mirrors>\n</settings>`} />
+              <CodeBlock filename="~/.m2/settings.xml" code={`<settings>\n  <mirrors>\n    <mirror>\n      <id>depsilo</id>\n      <mirrorOf>central</mirrorOf>\n      <url>${baseURL}/maven/</url>\n    </mirror>\n  </mirrors>\n</settings>`} />
             </Method>
             <Method icon="code_blocks" title={t('quickstart.mavenGradle')} description={t('quickstart.mavenGradleDesc')}>
-              <CodeBlockV2 filename="build.gradle" code={`repositories {\n    maven { url "${baseURL}/maven/" }\n}`} />
+              <CodeBlock filename="build.gradle" code={`repositories {\n    maven { url "${baseURL}/maven/" }\n}`} />
             </Method>
           </>
         )}
@@ -583,10 +583,10 @@ export default function QuickStartV2() {
         {activeTab === 'rubygems' && (
           <>
             <Method icon="settings" title={t('quickstart.rubygemsBundler')} description={t('quickstart.rubygemsBundlerDesc')}>
-              <CodeBlockV2 language="bash" code={`bundle config mirror.https://rubygems.org ${baseURL}/rubygems/`} />
+              <CodeBlock language="bash" code={`bundle config mirror.https://rubygems.org ${baseURL}/rubygems/`} />
             </Method>
             <Method icon="find_replace" title={t('quickstart.rubygemsGemSource')} description={t('quickstart.rubygemsGemSourceDesc')}>
-              <CodeBlockV2 language="bash" code={`gem sources --add ${baseURL}/rubygems/ --remove https://rubygems.org/`} />
+              <CodeBlock language="bash" code={`gem sources --add ${baseURL}/rubygems/ --remove https://rubygems.org/`} />
             </Method>
           </>
         )}
@@ -594,10 +594,10 @@ export default function QuickStartV2() {
         {activeTab === 'composer' && (
           <>
             <Method icon="settings" title={t('quickstart.composerGlobal')} description={t('quickstart.composerGlobalDesc')}>
-              <CodeBlockV2 language="bash" code={`composer config -g repo.packagist composer ${baseURL}/composer/`} />
+              <CodeBlock language="bash" code={`composer config -g repo.packagist composer ${baseURL}/composer/`} />
             </Method>
             <Method icon="verified" title={t('quickstart.composerVerify')} description={t('quickstart.composerVerifyDesc')}>
-              <CodeBlockV2 language="bash" code="composer config -g --list | grep repositories" />
+              <CodeBlock language="bash" code="composer config -g --list | grep repositories" />
             </Method>
           </>
         )}
@@ -605,10 +605,10 @@ export default function QuickStartV2() {
         {activeTab === 'nuget' && (
           <>
             <Method icon="add_circle" title={t('quickstart.nugetAddSource')} description={t('quickstart.nugetAddSourceDesc')}>
-              <CodeBlockV2 language="bash" code={`dotnet nuget add source ${baseURL}/nuget/v3/index.json -n depsilo`} />
+              <CodeBlock language="bash" code={`dotnet nuget add source ${baseURL}/nuget/v3/index.json -n depsilo`} />
             </Method>
             <Method icon="verified" title={t('quickstart.nugetVerify')} description={t('quickstart.nugetVerifyDesc')}>
-              <CodeBlockV2 language="bash" code="dotnet nuget list source" />
+              <CodeBlock language="bash" code="dotnet nuget list source" />
             </Method>
           </>
         )}
@@ -616,10 +616,10 @@ export default function QuickStartV2() {
         {activeTab === 'conda' && (
           <>
             <Method icon="settings" title={t('quickstart.condaConfig')} description={t('quickstart.condaConfigDesc')}>
-              <CodeBlockV2 filename="~/.condarc" code={`channels:\n  - ${baseURL}/conda/pkgs/main\n  - defaults`} />
+              <CodeBlock filename="~/.condarc" code={`channels:\n  - ${baseURL}/conda/pkgs/main\n  - defaults`} />
             </Method>
             <Method icon="terminal" title={t('quickstart.condaCommand')} description={t('quickstart.condaCommandDesc')}>
-              <CodeBlockV2 language="bash" code={`conda config --add channels ${baseURL}/conda/pkgs/main`} />
+              <CodeBlock language="bash" code={`conda config --add channels ${baseURL}/conda/pkgs/main`} />
             </Method>
           </>
         )}
@@ -627,10 +627,10 @@ export default function QuickStartV2() {
         {activeTab === 'cran' && (
           <>
             <Method icon="code" title={t('quickstart.cranConfig')} description={t('quickstart.cranConfigDesc')}>
-              <CodeBlockV2 language="r" code={`options(repos = c(CRAN = "${baseURL}/cran/"))`} />
+              <CodeBlock language="r" code={`options(repos = c(CRAN = "${baseURL}/cran/"))`} />
             </Method>
             <Method icon="settings" title={t('quickstart.cranRprofile')} description={t('quickstart.cranRprofileDesc')}>
-              <CodeBlockV2 filename="~/.Rprofile" code={`# ~/.Rprofile\noptions(repos = c(CRAN = "${baseURL}/cran/"))`} />
+              <CodeBlock filename="~/.Rprofile" code={`# ~/.Rprofile\noptions(repos = c(CRAN = "${baseURL}/cran/"))`} />
             </Method>
           </>
         )}
@@ -638,10 +638,10 @@ export default function QuickStartV2() {
         {activeTab === 'helm' && (
           <>
             <Method icon="add_circle" title={t('quickstart.helmAddRepo')} description={t('quickstart.helmAddRepoDesc')}>
-              <CodeBlockV2 language="bash" code={`helm repo add depsilo ${baseURL}/helm/`} />
+              <CodeBlock language="bash" code={`helm repo add depsilo ${baseURL}/helm/`} />
             </Method>
             <Method icon="deployed_code" title={t('quickstart.helmUse')} description={t('quickstart.helmUseDesc')}>
-              <CodeBlockV2 language="bash" code="helm install my-release depsilo/nginx" />
+              <CodeBlock language="bash" code="helm install my-release depsilo/nginx" />
             </Method>
           </>
         )}
@@ -649,16 +649,16 @@ export default function QuickStartV2() {
         {activeTab === 'docker' && (
           <>
             <Method icon="shield" title={t('quickstart.dockerInsecure')} description={t('quickstart.dockerInsecureDesc')}>
-              <CodeBlockV2 filename="/etc/docker/daemon.json" language="json" code={`{\n  "insecure-registries": ["${host}:${location.port || '23333'}"],\n  "registry-mirrors": ["http://${host}:${location.port || '23333'}"]\n}`} />
+              <CodeBlock filename="/etc/docker/daemon.json" language="json" code={`{\n  "insecure-registries": ["${host}:${location.port || '23333'}"],\n  "registry-mirrors": ["http://${host}:${location.port || '23333'}"]\n}`} />
             </Method>
             <Method icon="restart_alt" title={t('quickstart.dockerRestart')} description={t('quickstart.dockerRestartDesc')}>
-              <CodeBlockV2 language="bash" code="sudo systemctl restart docker" />
+              <CodeBlock language="bash" code="sudo systemctl restart docker" />
             </Method>
             <Method icon="download" title={t('quickstart.dockerDirect')} description={t('quickstart.dockerDirectDesc')}>
-              <CodeBlockV2 language="bash" code={`docker pull ${host}:${location.port || '23333'}/nginx:latest`} />
+              <CodeBlock language="bash" code={`docker pull ${host}:${location.port || '23333'}/nginx:latest`} />
             </Method>
             <Method icon="cloud_sync" title={t('quickstart.dockerOther')} description={t('quickstart.dockerOtherDesc')}>
-              <CodeBlockV2 language="bash" code={`docker pull ${host}:${location.port || '23333'}/ghcr.io/owner/repo:tag`} />
+              <CodeBlock language="bash" code={`docker pull ${host}:${location.port || '23333'}/ghcr.io/owner/repo:tag`} />
             </Method>
           </>
         )}
