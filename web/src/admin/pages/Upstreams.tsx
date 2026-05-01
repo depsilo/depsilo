@@ -100,9 +100,9 @@ export default function UpstreamsV2() {
 
   // Inline select style
   const selStyle: React.CSSProperties = {
-    background: 'var(--surface)',
+    background: 'var(--bg-card)',
     border: '1px solid var(--border)',
-    color: 'var(--heading)',
+    color: 'var(--text)',
     borderRadius: 4,
     padding: '4px 8px',
     fontSize: 12,
@@ -115,7 +115,7 @@ export default function UpstreamsV2() {
       {/* Header: health check settings + add button */}
       <div
         className="flex items-center gap-3 rounded-[5px] px-4 py-2.5"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {/* Auto probe toggle */}
         <label className="flex items-center gap-2 cursor-pointer shrink-0">
@@ -124,9 +124,9 @@ export default function UpstreamsV2() {
             checked={autoProbe}
             onChange={(e) => setAutoProbe(e.target.checked)}
             className="h-3.5 w-3.5 rounded"
-            style={{ accentColor: 'var(--stripe-purple)' }}
+            style={{ accentColor: 'var(--brand)' }}
           />
-          <span className="text-[12px] font-[400]" style={{ color: 'var(--heading)' }}>
+          <span className="text-[12px] font-[400]" style={{ color: 'var(--text)' }}>
             {t('upstreams.autoProbe')}
           </span>
         </label>
@@ -165,7 +165,7 @@ export default function UpstreamsV2() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+            <div key={i} className="h-32 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
           ))}
         </div>
       ) : (
@@ -177,7 +177,7 @@ export default function UpstreamsV2() {
                 <button
                   onClick={() => checkOne(u.id!)}
                   className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
-                  style={{ color: 'var(--body)' }}
+                  style={{ color: 'var(--text-soft)' }}
                   title={t('upstreams.checkOne')}
                 >
                   <Icon name="refresh" size="sm" />
@@ -186,7 +186,7 @@ export default function UpstreamsV2() {
               <button
                 onClick={() => openEdit(u as any)}
                 className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
-                style={{ color: 'var(--body)' }}
+                style={{ color: 'var(--text-soft)' }}
               >
                 <Icon name="edit" size="sm" />
               </button>
@@ -194,7 +194,7 @@ export default function UpstreamsV2() {
                 <button
                   onClick={() => setDeleteTarget(u.id!)}
                   className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
-                  style={{ color: 'var(--body)' }}
+                  style={{ color: 'var(--text-soft)' }}
                 >
                   <Icon name="delete" size="sm" />
                 </button>
@@ -213,7 +213,7 @@ export default function UpstreamsV2() {
           <InputV2 label={t('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. tuna" required />
           <div>
             <InputV2 label={t('upstreams.url')} mono value={form.url} onChange={(e) => { setForm({ ...form, url: e.target.value }); setUrlError('') }} placeholder="https://pypi.tuna.tsinghua.edu.cn" required />
-            {urlError && <p className="text-[12px] mt-1" style={{ color: 'var(--error)' }}>{urlError}</p>}
+            {urlError && <p className="text-[12px] mt-1" style={{ color: 'var(--danger)' }}>{urlError}</p>}
           </div>
           <InputV2 label={t('upstreams.priority')} type="number" min={1} value={form.priority} onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value) || 1 })} />
           <InputV2 label={t('upstreams.httpProxy')} mono value={form.proxy} onChange={(e) => setForm({ ...form, proxy: e.target.value })} placeholder="http://127.0.0.1:7890" />
@@ -226,7 +226,7 @@ export default function UpstreamsV2() {
 
       {/* Delete Modal */}
       <ModalV2 open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('upstreams.confirmDelete')}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--body)' }}>{t('upstreams.confirmDeleteMsg')}</p>
+        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('upstreams.confirmDeleteMsg')}</p>
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</ButtonV2>
           <ButtonV2 variant="danger" disabled={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>

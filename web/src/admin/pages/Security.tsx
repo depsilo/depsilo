@@ -83,7 +83,7 @@ function OverviewTab() {
       <div className="space-y-6">
         <div className="grid gap-4 grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+            <div key={i} className="h-24 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
           ))}
         </div>
       </div>
@@ -120,10 +120,10 @@ function OverviewTab() {
       <CardV2>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-[14px] font-[400]" style={{ color: 'var(--heading)' }}>
+            <h3 className="text-[14px] font-[400]" style={{ color: 'var(--text)' }}>
               {t('security.scanStatus')}
             </h3>
-            <p className="text-[12px] mt-1" style={{ color: 'var(--body)' }}>
+            <p className="text-[12px] mt-1" style={{ color: 'var(--text-soft)' }}>
               {t('security.lastScan')}: {dashboard.last_scan_at ? formatTime(dashboard.last_scan_at) : t('security.never')}
             </p>
           </div>
@@ -140,7 +140,7 @@ function OverviewTab() {
 
       {/* Severity distribution */}
       <CardV2>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--body)' }}>
+        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--text-soft)' }}>
           {t('security.severityDistribution')}
         </h3>
         {severityDist.length > 0 ? (
@@ -148,9 +148,9 @@ function OverviewTab() {
             {severityDist.map((item) => {
               const variant = SEVERITY_BADGE_MAP[item.severity] || 'default'
               const barColors: Record<string, string> = {
-                critical: 'var(--error)',
+                critical: 'var(--danger)',
                 high: 'var(--lemon)',
-                medium: 'var(--body)',
+                medium: 'var(--text-soft)',
                 low: '#10b981',
               }
               return (
@@ -158,17 +158,17 @@ function OverviewTab() {
                   <div className="w-20 shrink-0">
                     <BadgeV2 variant={variant}>{item.severity.toUpperCase()}</BadgeV2>
                   </div>
-                  <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--surface-container)' }}>
+                  <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--bg-soft)' }}>
                     <div
                       className="h-full rounded-full transition-all duration-300"
                       style={{
                         width: `${(item.count / maxCount) * 100}%`,
-                        background: barColors[item.severity] || 'var(--stripe-purple)',
+                        background: barColors[item.severity] || 'var(--brand)',
                         minWidth: item.count > 0 ? '4px' : '0',
                       }}
                     />
                   </div>
-                  <span className="font-mono text-[12px] tabular-nums w-8 text-right shrink-0" style={{ color: 'var(--heading)' }}>
+                  <span className="font-mono text-[12px] tabular-nums w-8 text-right shrink-0" style={{ color: 'var(--text)' }}>
                     {item.count}
                   </span>
                 </div>
@@ -176,7 +176,7 @@ function OverviewTab() {
             })}
           </div>
         ) : (
-          <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('security.noVulnerabilities')}</p>
+          <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('security.noVulnerabilities')}</p>
         )}
       </CardV2>
     </div>
@@ -211,7 +211,7 @@ function VulnerabilitiesTab() {
       key: 'osv_id',
       label: t('security.osvId'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] font-[400]" style={{ color: 'var(--heading)' }}>{v as string}</span>
+        <span className="font-mono text-[12px] font-[400]" style={{ color: 'var(--text)' }}>{v as string}</span>
       ),
     },
     {
@@ -228,7 +228,7 @@ function VulnerabilitiesTab() {
       key: 'package_name',
       label: t('security.package'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px]" style={{ color: 'var(--heading)' }}>{v as string}</span>
+        <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span>
       ),
     },
     {
@@ -244,7 +244,7 @@ function VulnerabilitiesTab() {
       key: 'cvss_score',
       label: t('security.cvssScore'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--heading)' }}>
+        <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--text)' }}>
           {v != null ? Number(v).toFixed(1) : '-'}
         </span>
       ),
@@ -253,7 +253,7 @@ function VulnerabilitiesTab() {
       key: 'published_at',
       label: t('security.published'),
       render: (v: unknown) => (
-        <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--body)' }}>{formatDate(v as string)}</span>
+        <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatDate(v as string)}</span>
       ),
     },
   ]
@@ -297,9 +297,9 @@ function VulnerabilitiesTab() {
       {/* Table */}
       <CardV2 noPad>
         {isLoading ? (
-          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
+          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('security.noVulnerabilities')}</div>
+          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('security.noVulnerabilities')}</div>
         ) : (
           <DataTableV2 columns={columns} data={items} />
         )}
@@ -308,14 +308,14 @@ function VulnerabilitiesTab() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {t('security.showingResults', { from: (page - 1) * perPage + 1, to: Math.min(page * perPage, total), total })}
           </span>
           <div className="flex gap-1">
             <ButtonV2 variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
               <Icon name="chevron_left" size="sm" />
             </ButtonV2>
-            <span className="flex items-center px-2 text-[12px] font-mono tabular-nums" style={{ color: 'var(--heading)' }}>
+            <span className="flex items-center px-2 text-[12px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>
               {page} / {totalPages}
             </span>
             <ButtonV2 variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
@@ -360,7 +360,7 @@ function SuggestionsTab() {
     return (
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-28 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+          <div key={i} className="h-28 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
         ))}
       </div>
     )
@@ -369,8 +369,8 @@ function SuggestionsTab() {
   if (items.length === 0) {
     return (
       <div className="text-center py-12">
-        <Icon name="verified" size="lg" style={{ color: 'var(--success)' }} />
-        <p className="text-[14px] mt-3" style={{ color: 'var(--body)' }}>{t('security.noSuggestions')}</p>
+        <Icon name="verified" size="lg" style={{ color: 'var(--ok)' }} />
+        <p className="text-[14px] mt-3" style={{ color: 'var(--text-soft)' }}>{t('security.noSuggestions')}</p>
       </div>
     )
   }
@@ -387,24 +387,24 @@ function SuggestionsTab() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-[13px] font-[400]" style={{ color: 'var(--heading)' }}>
+                  <span className="font-mono text-[13px] font-[400]" style={{ color: 'var(--text)' }}>
                     {item.osv_id}
                   </span>
                   <BadgeV2 variant={severityVariant}>{item.severity?.toUpperCase()}</BadgeV2>
                   {item.cvss_score != null && (
-                    <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--body)' }}>
+                    <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
                       CVSS {Number(item.cvss_score).toFixed(1)}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 mb-1">
                   {item.ecosystem && <EcosystemIcon type={item.ecosystem} size={14} />}
-                  <span className="font-mono text-[13px]" style={{ color: 'var(--heading)' }}>
+                  <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>
                     {item.package_name}
                   </span>
                 </div>
                 {item.proposed_version && (
-                  <p className="text-[12px] mt-1" style={{ color: 'var(--body)' }}>
+                  <p className="text-[12px] mt-1" style={{ color: 'var(--text-soft)' }}>
                     {t('security.proposedVersion')}: <span className="font-mono">{item.proposed_version}</span>
                   </p>
                 )}
@@ -439,7 +439,7 @@ function SuggestionsTab() {
         <ButtonV2 variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
           <Icon name="chevron_left" size="sm" />
         </ButtonV2>
-        <span className="flex items-center text-[12px] font-mono tabular-nums" style={{ color: 'var(--heading)' }}>
+        <span className="flex items-center text-[12px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>
           {page}
         </span>
         <ButtonV2 variant="ghost" size="sm" disabled={items.length < 20} onClick={() => setPage(page + 1)}>
@@ -523,7 +523,7 @@ function PoliciesTab() {
     return (
       <div className="space-y-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-16 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+          <div key={i} className="h-16 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
         ))}
       </div>
     )
@@ -533,7 +533,7 @@ function PoliciesTab() {
     <div className="space-y-6">
       {/* Per-ecosystem policies */}
       <CardV2>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--body)' }}>
+        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--text-soft)' }}>
           {t('security.ecosystemPolicies')}
         </h3>
         <div className="space-y-3">
@@ -544,24 +544,24 @@ function PoliciesTab() {
               <div
                 key={eco}
                 className="flex items-center gap-4 py-3 px-4 rounded-[4px]"
-                style={{ background: 'var(--surface-low)', border: '1px solid var(--border)' }}
+                style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}
               >
                 <div className="flex items-center gap-2 w-32 shrink-0">
                   <EcosystemIcon type={eco as any} size={16} />
-                  <span className="text-[13px] font-[400]" style={{ color: 'var(--heading)' }}>
+                  <span className="text-[13px] font-[400]" style={{ color: 'var(--text)' }}>
                     {eco.toUpperCase()}
                   </span>
                 </div>
 
                 {/* Auto-block toggle */}
                 <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                  <span className="text-[12px]" style={{ color: 'var(--body)' }}>{t('security.autoBlock')}</span>
+                  <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('security.autoBlock')}</span>
                   <button
                     type="button"
                     onClick={() => setPolicy(eco, { auto_block: !policy.auto_block })}
                     className="relative w-9 h-5 rounded-full cursor-pointer transition-colors duration-200"
                     style={{
-                      background: policy.auto_block ? 'var(--stripe-purple)' : 'var(--surface-container)',
+                      background: policy.auto_block ? 'var(--brand)' : 'var(--bg-soft)',
                       border: 'none',
                     }}
                   >
@@ -577,7 +577,7 @@ function PoliciesTab() {
 
                 {/* CVSS threshold */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[12px]" style={{ color: 'var(--body)' }}>{t('security.cvssThreshold')}</span>
+                  <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('security.cvssThreshold')}</span>
                   <input
                     type="number"
                     min={0}
@@ -586,7 +586,7 @@ function PoliciesTab() {
                     value={policy.cvss_threshold}
                     onChange={(e) => setPolicy(eco, { cvss_threshold: parseFloat(e.target.value) || 0 })}
                     className="w-16 rounded-[4px] px-2 py-1 text-[13px] font-mono text-center"
-                    style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--heading)', outline: 'none' }}
+                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }}
                   />
                 </div>
 
@@ -603,17 +603,17 @@ function PoliciesTab() {
 
       {/* Offline import */}
       <CardV2>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
+        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
           {t('security.offlineImport')}
         </h3>
-        <p className="text-[13px] mb-4" style={{ color: 'var(--body)' }}>
+        <p className="text-[13px] mb-4" style={{ color: 'var(--text-soft)' }}>
           {t('security.offlineImportDesc')}
         </p>
         <div
           className="rounded-[4px] p-6 text-center cursor-pointer transition-colors duration-150"
           style={{
             border: '2px dashed var(--border)',
-            background: 'var(--surface-low)',
+            background: 'var(--bg-soft)',
           }}
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
@@ -628,8 +628,8 @@ function PoliciesTab() {
             }
           }}
         >
-          <Icon name="upload_file" size="lg" style={{ color: 'var(--body)' }} />
-          <p className="text-[13px] mt-2" style={{ color: 'var(--body)' }}>
+          <Icon name="upload_file" size="lg" style={{ color: 'var(--text-soft)' }} />
+          <p className="text-[13px] mt-2" style={{ color: 'var(--text-soft)' }}>
             {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
           </p>
           <input
@@ -641,10 +641,10 @@ function PoliciesTab() {
           />
         </div>
         {importMutation.isSuccess && (
-          <p className="text-[12px] mt-2" style={{ color: 'var(--success)' }}>{t('security.importSuccess')}</p>
+          <p className="text-[12px] mt-2" style={{ color: 'var(--ok)' }}>{t('security.importSuccess')}</p>
         )}
         {importMutation.isError && (
-          <p className="text-[12px] mt-2" style={{ color: 'var(--error)' }}>{t('security.importError')}</p>
+          <p className="text-[12px] mt-2" style={{ color: 'var(--danger)' }}>{t('security.importError')}</p>
         )}
       </CardV2>
     </div>
@@ -671,10 +671,10 @@ export default function Security() {
         <div className="text-center py-12 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}>
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.08)' }}>
-              <Icon name="shield" size="lg" style={{ color: 'var(--stripe-purple)' }} />
+              <Icon name="shield" size="lg" style={{ color: 'var(--brand)' }} />
             </div>
-            <h3 className="text-[18px] font-[300]" style={{ color: 'var(--heading)' }}>{t('security.proRequired')}</h3>
-            <p className="text-[14px] max-w-md" style={{ color: 'var(--body)' }}>{t('security.proDesc')}</p>
+            <h3 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{t('security.proRequired')}</h3>
+            <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>{t('security.proDesc')}</p>
             <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer">
               <ButtonV2>{t('security.upgrade')}</ButtonV2>
             </a>

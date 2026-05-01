@@ -44,7 +44,7 @@ function CopyButton({ text }: { text: string }) {
     <button
       onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
       className="bg-transparent cursor-pointer p-1 rounded-[4px] transition-colors duration-150"
-      style={{ color: copied ? 'var(--success)' : 'var(--body)' }}
+      style={{ color: copied ? 'var(--ok)' : 'var(--text-soft)' }}
       title="Copy"
     >
       <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
@@ -163,10 +163,10 @@ export default function ProjectsV2() {
         <div className="text-center py-12 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}>
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center justify-center w-14 h-14 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.08)' }}>
-              <Icon name="folder_managed" size="lg" style={{ color: 'var(--stripe-purple)' }} />
+              <Icon name="folder_managed" size="lg" style={{ color: 'var(--brand)' }} />
             </div>
-            <h3 className="text-[18px] font-[300]" style={{ color: 'var(--heading)' }}>{t('projects.proRequired')}</h3>
-            <p className="text-[14px] max-w-md" style={{ color: 'var(--body)' }}>{t('projects.proDesc')}</p>
+            <h3 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{t('projects.proRequired')}</h3>
+            <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>{t('projects.proDesc')}</p>
             <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer">
               <ButtonV2>{t('rules.upgrade')}</ButtonV2>
             </a>
@@ -195,27 +195,27 @@ export default function ProjectsV2() {
       {
         key: 'name',
         label: t('name'),
-        render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--heading)' }}>{v as string}</span>,
+        render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span>,
       },
       {
         key: 'version',
         label: t('projects.version'),
-        render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--body)' }}>{(v as string) || '-'}</span>,
+        render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) || '-'}</span>,
       },
       {
         key: 'first_seen',
         label: t('projects.firstSeen'),
-        render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--body)' }}>{formatTime(v as string)}</span>,
+        render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span>,
       },
       {
         key: 'last_seen',
         label: t('projects.lastSeen'),
-        render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--body)' }}>{formatTime(v as string)}</span>,
+        render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span>,
       },
       {
         key: 'downloads',
         label: t('projects.downloads'),
-        render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--body)' }}>{(v as number) ?? 0}</span>,
+        render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span>,
       },
     ]
 
@@ -226,34 +226,34 @@ export default function ProjectsV2() {
           <button
             onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
             className="bg-transparent cursor-pointer p-1.5 rounded-[4px] transition-colors duration-150"
-            style={{ color: 'var(--body)' }}
+            style={{ color: 'var(--text-soft)' }}
           >
             <Icon name="arrow_back" size="sm" />
           </button>
-          <h2 className="text-[18px] font-[300]" style={{ color: 'var(--heading)' }}>{projectDetail?.name}</h2>
+          <h2 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
         </div>
 
         {/* Project info card */}
         <CardV2>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <span className="text-[14px] font-[400]" style={{ color: 'var(--label)' }}>{t('projects.proxyUrl')}</span>
-              <span className="font-mono text-[13px] px-2 py-1 rounded-[4px]" style={{ background: 'var(--surface-low)', color: 'var(--heading)' }}>{proxyUrl}</span>
+              <span className="text-[14px] font-[400]" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</span>
+              <span className="font-mono text-[13px] px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}>{proxyUrl}</span>
               <CopyButton text={proxyUrl} />
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-[14px] font-[400]" style={{ color: 'var(--label)' }}>{t('projects.packageCount')}</span>
-              <span className="text-[14px]" style={{ color: 'var(--heading)' }}>{projectDetail?.package_count ?? 0}</span>
+              <span className="text-[14px] font-[400]" style={{ color: 'var(--text-muted)' }}>{t('projects.packageCount')}</span>
+              <span className="text-[14px]" style={{ color: 'var(--text)' }}>{projectDetail?.package_count ?? 0}</span>
             </div>
             {Object.keys(ecosystems).length > 0 && (
               <div>
-                <span className="text-[14px] font-[400] block mb-2" style={{ color: 'var(--label)' }}>{t('projects.ecosystemBreakdown')}</span>
+                <span className="text-[14px] font-[400] block mb-2" style={{ color: 'var(--text-muted)' }}>{t('projects.ecosystemBreakdown')}</span>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(ecosystems).map(([eco, count]) => (
-                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-[4px]" style={{ background: 'var(--surface-low)', border: '1px solid var(--border)' }}>
+                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
                       <EcosystemIcon type={eco as any} size={12} />
-                      <span className="text-[12px]" style={{ color: 'var(--heading)' }}>{eco.toUpperCase()}</span>
-                      <span className="text-[12px] font-mono" style={{ color: 'var(--body)' }}>{count}</span>
+                      <span className="text-[12px]" style={{ color: 'var(--text)' }}>{eco.toUpperCase()}</span>
+                      <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{count}</span>
                     </div>
                   ))}
                 </div>
@@ -264,7 +264,7 @@ export default function ProjectsV2() {
 
         {/* SBOM export */}
         <CardV2>
-          <h3 className="text-[14px] font-[400] mb-4" style={{ color: 'var(--heading)' }}>{t('sbom.export')}</h3>
+          <h3 className="text-[14px] font-[400] mb-4" style={{ color: 'var(--text)' }}>{t('sbom.export')}</h3>
           <div className="flex items-end gap-3 flex-wrap">
             <SelectV2 label={t('sbom.format')} value={sbomFormat} onChange={(e) => setSbomFormat(e.target.value)}>
               <option value="spdx">{t('sbom.spdx')}</option>
@@ -285,7 +285,7 @@ export default function ProjectsV2() {
 
         {/* Package table */}
         <div className="flex items-center justify-between">
-          <h3 className="text-[14px] font-[400]" style={{ color: 'var(--heading)' }}>{t('projects.packages')}</h3>
+          <h3 className="text-[14px] font-[400]" style={{ color: 'var(--text)' }}>{t('projects.packages')}</h3>
           <SelectV2 value={pkgEcosystem} onChange={(e) => { setPkgEcosystem(e.target.value); setPkgPage(1) }}>
             {ECOSYSTEM_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.value === '' ? t('all') : opt.label}</option>
@@ -294,15 +294,15 @@ export default function ProjectsV2() {
         </div>
         <CardV2 noPad>
           {pkgLoading ? (
-            <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
+            <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
           ) : packages.length === 0 ? (
-            <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('projects.noPackages')}</div>
+            <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('projects.noPackages')}</div>
           ) : (
             <DataTableV2 columns={pkgColumns} data={packages} />
           )}
         </CardV2>
         {pkgTotalPages > 1 && (
-          <div className="flex items-center justify-between text-[13px]" style={{ color: 'var(--body)' }}>
+          <div className="flex items-center justify-between text-[13px]" style={{ color: 'var(--text-soft)' }}>
             <span>{t('totalItems', { total: pkgTotal, page: pkgPage, totalPages: pkgTotalPages })}</span>
             <div className="flex gap-2">
               <ButtonV2 variant="ghost" size="sm" disabled={pkgPage <= 1} onClick={() => setPkgPage(p => p - 1)}>{t('prevPage')}</ButtonV2>
@@ -319,17 +319,17 @@ export default function ProjectsV2() {
     {
       key: 'name',
       label: t('projects.name'),
-      render: (v: unknown) => <span className="font-[400] text-[14px]" style={{ color: 'var(--heading)' }}>{v as string}</span>,
+      render: (v: unknown) => <span className="font-[400] text-[14px]" style={{ color: 'var(--text)' }}>{v as string}</span>,
     },
     {
       key: 'package_count',
       label: t('projects.packageCount'),
-      render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--body)' }}>{(v as number) ?? 0}</span>,
+      render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span>,
     },
     {
       key: 'last_activity',
       label: t('projects.lastActivity'),
-      render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--body)' }}>{formatTime(v as string)}</span>,
+      render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span>,
     },
     {
       key: 'id',
@@ -339,14 +339,14 @@ export default function ProjectsV2() {
           <button
             onClick={(e) => { e.stopPropagation(); setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }}
             className="bg-transparent cursor-pointer p-1.5 rounded-[4px]"
-            style={{ color: 'var(--body)' }}
+            style={{ color: 'var(--text-soft)' }}
           >
             <Icon name="visibility" size="sm" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }}
             className="bg-transparent cursor-pointer p-1.5 rounded-[4px]"
-            style={{ color: 'var(--body)' }}
+            style={{ color: 'var(--text-soft)' }}
           >
             <Icon name="delete" size="sm" />
           </button>
@@ -366,9 +366,9 @@ export default function ProjectsV2() {
 
       <CardV2 noPad>
         {isLoading ? (
-          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
+          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : projects.length === 0 ? (
-          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--body)' }}>{t('projects.noProjects')}</div>
+          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('projects.noProjects')}</div>
         ) : (
           <DataTableV2
             columns={columns}
@@ -414,18 +414,18 @@ export default function ProjectsV2() {
               </div>
             </div>
             <div>
-              <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--label)' }}>{t('projects.token')}</label>
+              <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--surface-low)', color: 'var(--heading)', border: '1px solid var(--border)' }}>
+                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.token}
                 </code>
                 <CopyButton text={tokenData.token} />
               </div>
             </div>
             <div>
-              <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--label)' }}>{t('projects.proxyUrl')}</label>
+              <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--surface-low)', color: 'var(--heading)', border: '1px solid var(--border)' }}>
+                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.proxy_url}
                 </code>
                 <CopyButton text={tokenData.proxy_url} />
@@ -440,7 +440,7 @@ export default function ProjectsV2() {
 
       {/* Delete confirmation modal */}
       <ModalV2 open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('projects.confirmDelete')}>
-        <p className="text-[14px] mb-2" style={{ color: 'var(--body)' }}>{t('projects.deleteWarning')}</p>
+        <p className="text-[14px] mb-2" style={{ color: 'var(--text-soft)' }}>{t('projects.deleteWarning')}</p>
         <div className="flex justify-end gap-3 pt-4">
           <ButtonV2 variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</ButtonV2>
           <ButtonV2

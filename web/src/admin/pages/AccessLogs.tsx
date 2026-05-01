@@ -12,8 +12,8 @@ const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'c
 
 function latencyColor(ms: number): string {
   if (ms < 100) return '#3bd671'
-  if (ms < 500) return 'var(--body)'
-  return 'var(--error)'
+  if (ms < 500) return 'var(--text-soft)'
+  return 'var(--danger)'
 }
 
 export default function AccessLogsV2() {
@@ -43,9 +43,9 @@ export default function AccessLogsV2() {
 
   // Inline select style
   const selStyle: React.CSSProperties = {
-    background: 'var(--surface)',
+    background: 'var(--bg-card)',
     border: '1px solid var(--border)',
-    color: 'var(--heading)',
+    color: 'var(--text)',
     borderRadius: 4,
     padding: '4px 8px',
     fontSize: 12,
@@ -58,14 +58,14 @@ export default function AccessLogsV2() {
       {/* Single-row filter bar */}
       <div
         className="flex items-center gap-2 rounded-[5px] px-3 py-2"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {/* Search input */}
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Icon name="search" size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
-            style={{ color: 'var(--heading)' }}
+            style={{ color: 'var(--text)' }}
             placeholder={t('logs.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -113,18 +113,18 @@ export default function AccessLogsV2() {
       {/* Table */}
       <div
         className="rounded-[5px] overflow-hidden"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {isLoading ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('logs.noLogs')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('logs.noLogs')}</div>
         ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp')].map(h => (
-                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--body)' }}>
+                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--text-soft)' }}>
                     {h}
                   </th>
                 ))}
@@ -136,26 +136,26 @@ export default function AccessLogsV2() {
                   key={i}
                   className="transition-colors duration-75"
                   style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-soft)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
                 >
                   {/* Time */}
                   <td className="py-2 px-3 pl-4 whitespace-nowrap">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--body)' }}>{formatTime(row.created_at)}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
                   </td>
 
                   {/* Ecosystem */}
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       <EcosystemIcon type={row.adapter_type} size={13} />
-                      <span className="text-[11px] uppercase" style={{ color: 'var(--heading)' }}>{row.adapter_type}</span>
+                      <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.adapter_type}</span>
                     </div>
                   </td>
 
                   {/* Package name + cache key */}
                   <td className="py-2 px-3 max-w-[260px]">
-                    <span className="font-mono truncate block" style={{ color: 'var(--heading)' }}>{row.package_name || '-'}</span>
-                    <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--body)' }} title={row.cache_key}>{row.cache_key}</span>
+                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '-'}</span>
+                    <span className="font-mono text-[10px] truncate block" style={{ color: 'var(--text-soft)' }} title={row.cache_key}>{row.cache_key}</span>
                   </td>
 
                   {/* Result */}
@@ -174,12 +174,12 @@ export default function AccessLogsV2() {
 
                   {/* Upstream */}
                   <td className="py-2 px-3">
-                    <span style={{ color: 'var(--body)' }}>{row.upstream || '-'}</span>
+                    <span style={{ color: 'var(--text-soft)' }}>{row.upstream || '-'}</span>
                   </td>
 
                   {/* Client IP */}
                   <td className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--body)' }}>{row.client_ip}</span>
+                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip}</span>
                   </td>
                 </tr>
               ))}
@@ -191,14 +191,14 @@ export default function AccessLogsV2() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {t('totalItems', { total, page, totalPages })}
           </span>
           <div className="flex items-center gap-1">
             <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
               {t('prevPage')}
             </ButtonV2>
-            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--body)' }}>
+            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--text-soft)' }}>
               {page}/{totalPages}
             </span>
             <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>

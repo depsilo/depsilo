@@ -12,8 +12,8 @@ const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'c
 
 function latencyColor(ms: number): string {
   if (ms < 100) return '#3bd671'
-  if (ms < 500) return 'var(--body)'
-  return 'var(--error)'
+  if (ms < 500) return 'var(--text-soft)'
+  return 'var(--danger)'
 }
 
 function resultBadge(result: string, t: (k: string) => string) {
@@ -75,9 +75,9 @@ export default function AuditLogsV2() {
   }
 
   const selStyle: React.CSSProperties = {
-    background: 'var(--surface)',
+    background: 'var(--bg-card)',
     border: '1px solid var(--border)',
-    color: 'var(--heading)',
+    color: 'var(--text)',
     borderRadius: 4,
     padding: '4px 8px',
     fontSize: 12,
@@ -92,10 +92,10 @@ export default function AuditLogsV2() {
       <div className="text-center py-16 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}>
         <div className="flex flex-col items-center gap-4">
           <div className="flex items-center justify-center w-14 h-14 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.08)' }}>
-            <Icon name="lock" size="lg" style={{ color: 'var(--stripe-purple)' }} />
+            <Icon name="lock" size="lg" style={{ color: 'var(--brand)' }} />
           </div>
-          <h3 className="text-[18px] font-[300]" style={{ color: 'var(--heading)' }}>{t('audit.proRequired')}</h3>
-          <p className="text-[14px] max-w-md" style={{ color: 'var(--body)' }}>{t('audit.proDesc')}</p>
+          <h3 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{t('audit.proRequired')}</h3>
+          <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>{t('audit.proDesc')}</p>
           <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer">
             <ButtonV2>{t('audit.upgrade')}</ButtonV2>
           </a>
@@ -114,14 +114,14 @@ export default function AuditLogsV2() {
       {/* Single-row filter bar */}
       <div
         className="flex items-center gap-2 rounded-[5px] px-3 py-2"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {/* Search input */}
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Icon name="search" size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
-            style={{ color: 'var(--heading)' }}
+            style={{ color: 'var(--text)' }}
             placeholder={t('audit.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -155,8 +155,8 @@ export default function AuditLogsV2() {
               onClick={() => setTimeRange(r)}
               className="px-2.5 py-1 text-[11px] rounded-[4px] transition-colors duration-150 cursor-pointer"
               style={{
-                background: timeRange === r ? 'var(--stripe-purple)' : 'transparent',
-                color: timeRange === r ? 'var(--on-primary)' : 'var(--body)',
+                background: timeRange === r ? 'var(--brand)' : 'transparent',
+                color: timeRange === r ? 'white' : 'var(--text-soft)',
                 border: timeRange === r ? 'none' : '1px solid var(--border)',
               }}
             >
@@ -180,18 +180,18 @@ export default function AuditLogsV2() {
       {/* Table */}
       <div
         className="rounded-[5px] overflow-hidden"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {isLoading ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('audit.noLogs')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('audit.noLogs')}</div>
         ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {headers.map(h => (
-                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--body)' }}>
+                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--text-soft)' }}>
                     {h}
                   </th>
                 ))}
@@ -203,23 +203,23 @@ export default function AuditLogsV2() {
                   key={i}
                   className="transition-colors duration-75"
                   style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-soft)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
                 >
                   <td className="py-2 px-3 pl-4 whitespace-nowrap">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--body)' }}>{formatTime(row.created_at)}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
                   </td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       <EcosystemIcon type={row.ecosystem} size={13} />
-                      <span className="text-[11px] uppercase" style={{ color: 'var(--heading)' }}>{row.ecosystem}</span>
+                      <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.ecosystem}</span>
                     </div>
                   </td>
                   <td className="py-2 px-3 max-w-[220px]">
-                    <span className="font-mono truncate block" style={{ color: 'var(--heading)' }}>{row.package_name || '—'}</span>
+                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '—'}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--body)' }}>{row.version || '—'}</span>
+                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.version || '—'}</span>
                   </td>
                   <td className="py-2 px-3">
                     {resultBadge(row.result || (row.cache_result === 'hit' ? 'hit' : row.cache_result === 'error' ? 'error' : 'miss'), t)}
@@ -228,10 +228,10 @@ export default function AuditLogsV2() {
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>{row.latency_ms}ms</span>
                   </td>
                   <td className="py-2 px-3 whitespace-nowrap">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--body)' }}>{formatBytes(row.bytes_sent)}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(row.bytes_sent)}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--body)' }}>{row.client_ip}</span>
+                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip}</span>
                   </td>
                 </tr>
               ))}
@@ -243,14 +243,14 @@ export default function AuditLogsV2() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {t('totalItems', { total, page, totalPages })}
           </span>
           <div className="flex items-center gap-1">
             <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
               {t('prevPage')}
             </ButtonV2>
-            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--body)' }}>
+            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--text-soft)' }}>
               {page}/{totalPages}
             </span>
             <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>

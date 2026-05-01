@@ -15,7 +15,7 @@ const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'c
 
 // Assign distinct colors per ecosystem
 const ECO_COLORS: Record<string, string> = {
-  pypi: 'var(--stripe-purple)', apt: '#3bd671', npm: '#cb3837', go: '#00add8',
+  pypi: 'var(--brand)', apt: '#3bd671', npm: '#cb3837', go: '#00add8',
   cargo: '#dea584', maven: '#c71a36', rubygems: '#e9573f', composer: '#885630',
   nuget: '#004880', conda: '#44a833', cran: '#2266b8', helm: '#0f1689',
 }
@@ -65,7 +65,7 @@ export default function CacheManageV2() {
   const totalPages = Math.ceil(total / 20)
 
   const selStyle: React.CSSProperties = {
-    background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--heading)',
+    background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)',
     borderRadius: 4, padding: '4px 8px', fontSize: 12, outline: 'none', cursor: 'pointer',
   }
 
@@ -77,29 +77,29 @@ export default function CacheManageV2() {
           {/* Left: usage bar + ecosystem breakdown */}
           <div
             className="col-span-1 rounded-[5px] p-4"
-            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
           >
             {/* Total usage */}
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--body)' }}>
+              <span className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--text-soft)' }}>
                 {t('cache.storageOverview')}
               </span>
             </div>
-            <p className="text-[20px] font-[300] font-mono tabular-nums mb-1" style={{ color: 'var(--heading)' }}>
+            <p className="text-[20px] font-[300] font-mono tabular-nums mb-1" style={{ color: 'var(--text)' }}>
               {formatBytes(distribution.total_size)}
-              <span className="text-[12px] font-[400] ml-1" style={{ color: 'var(--body)' }}>
+              <span className="text-[12px] font-[400] ml-1" style={{ color: 'var(--text-soft)' }}>
                 / {formatBytes(distribution.max_size)}
               </span>
             </p>
             {/* Progress bar */}
-            <div className="h-2 rounded-full overflow-hidden flex mb-4" style={{ background: 'var(--surface-container)' }}>
+            <div className="h-2 rounded-full overflow-hidden flex mb-4" style={{ background: 'var(--bg-soft)' }}>
               {distribution.by_type.map((bt: any) => {
                 const pct = distribution.max_size > 0 ? (bt.size / distribution.max_size) * 100 : 0
                 return (
                   <div
                     key={bt.type}
                     className="h-full"
-                    style={{ width: `${pct}%`, background: ECO_COLORS[bt.type] || 'var(--stripe-purple)' }}
+                    style={{ width: `${pct}%`, background: ECO_COLORS[bt.type] || 'var(--brand)' }}
                     title={`${bt.type.toUpperCase()}: ${formatBytes(bt.size)}`}
                   />
                 )
@@ -112,12 +112,12 @@ export default function CacheManageV2() {
                 const pct = distribution.total_size > 0 ? ((bt.size / distribution.total_size) * 100).toFixed(1) : '0'
                 return (
                   <div key={bt.type} className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[bt.type] || 'var(--stripe-purple)' }} />
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[bt.type] || 'var(--brand)' }} />
                     <EcosystemIcon type={bt.type} size={12} />
-                    <span className="text-[11px] uppercase flex-1" style={{ color: 'var(--heading)' }}>{bt.type}</span>
-                    <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--body)' }}>{formatBytes(bt.size)}</span>
-                    <span className="text-[10px] font-mono tabular-nums w-10 text-right" style={{ color: 'var(--body)' }}>{pct}%</span>
-                    <span className="text-[10px]" style={{ color: 'var(--body)' }}>{bt.file_count}f</span>
+                    <span className="text-[11px] uppercase flex-1" style={{ color: 'var(--text)' }}>{bt.type}</span>
+                    <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(bt.size)}</span>
+                    <span className="text-[10px] font-mono tabular-nums w-10 text-right" style={{ color: 'var(--text-soft)' }}>{pct}%</span>
+                    <span className="text-[10px]" style={{ color: 'var(--text-soft)' }}>{bt.file_count}f</span>
                   </div>
                 )
               })}
@@ -127,16 +127,16 @@ export default function CacheManageV2() {
           {/* Right: Treemap (compact) */}
           <div
             className="col-span-2 rounded-[5px] p-4"
-            style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
           >
-            <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-2" style={{ color: 'var(--body)' }}>
+            <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-2" style={{ color: 'var(--text-soft)' }}>
               {t('cache.storageDistribution')}
             </h3>
             {distribution.top_packages && distribution.top_packages.length > 0 ? (
               <ResponsiveContainer width="100%" height={160}>
                 <Treemap
                   data={distribution.top_packages.map((p: any) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
-                  dataKey="size" aspectRatio={4 / 3} stroke="var(--surface)" isAnimationActive={false}
+                  dataKey="size" aspectRatio={4 / 3} stroke="var(--bg-card)" isAnimationActive={false}
                   content={({ x, y, width, height, name, size }: any) => {
                     if (width < 4 || height < 4) return <g />
                     const showLabel = width > 60 && height > 30 && name
@@ -144,9 +144,9 @@ export default function CacheManageV2() {
                     return (
                       <g>
                         <rect x={x} y={y} width={width} height={height}
-                          fill={ECO_COLORS[type] || 'var(--stripe-purple)'}
+                          fill={ECO_COLORS[type] || 'var(--brand)'}
                           fillOpacity={0.25 + Math.min(0.5, ((size || 0) / (distribution.top_packages[0]?.size || 1)) * 0.5)}
-                          stroke="var(--surface)" strokeWidth={1.5} rx={3}
+                          stroke="var(--bg-card)" strokeWidth={1.5} rx={3}
                         />
                         {showLabel && (
                           <foreignObject x={x} y={y} width={width} height={height}>
@@ -164,16 +164,16 @@ export default function CacheManageV2() {
                     if (!payload?.length) return null
                     const item = payload[0]?.payload
                     return (
-                      <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                        <p className="font-[400]" style={{ color: 'var(--heading)' }}>{item.name}</p>
-                        <p style={{ color: 'var(--body)' }}>{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
+                      <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                        <p className="font-[400]" style={{ color: 'var(--text)' }}>{item.name}</p>
+                        <p style={{ color: 'var(--text-soft)' }}>{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
                       </div>
                     )
                   }} />
                 </Treemap>
               </ResponsiveContainer>
             ) : (
-              <p className="text-[13px] py-8 text-center" style={{ color: 'var(--body)' }}>{t('noData')}</p>
+              <p className="text-[13px] py-8 text-center" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p>
             )}
           </div>
         </div>
@@ -182,13 +182,13 @@ export default function CacheManageV2() {
       {/* Filter bar — single row */}
       <div
         className="flex items-center gap-2 rounded-[5px] px-3 py-2"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <Icon name="search" size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
+          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
-            style={{ color: 'var(--heading)' }}
+            style={{ color: 'var(--text)' }}
             placeholder={t('cache.searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
@@ -212,18 +212,18 @@ export default function CacheManageV2() {
       {/* Table */}
       <div
         className="rounded-[5px] overflow-hidden"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {isLoading ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('loading')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--body)' }}>{t('cache.noCache')}</div>
+          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('cache.noCache')}</div>
         ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Key', t('type'), t('cache.size'), t('cache.hitCount'), t('cache.lastAccessed'), t('actions')].map(h => (
-                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--body)' }}>{h}</th>
+                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--text-soft)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -233,11 +233,11 @@ export default function CacheManageV2() {
                   key={i}
                   className="transition-colors duration-75"
                   style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-low)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-soft)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
                 >
                   <td className="py-2 px-3 pl-4 max-w-[260px]">
-                    <span className="font-mono truncate block" style={{ color: 'var(--heading)' }}>{row.key}</span>
+                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.key}</span>
                   </td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
@@ -246,19 +246,19 @@ export default function CacheManageV2() {
                     </div>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--heading)' }}>{formatBytes(row.size || 0)}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{formatBytes(row.size || 0)}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--heading)' }}>{row.hit_count || 0}</span>
+                    <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{row.hit_count || 0}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span style={{ color: 'var(--body)' }}>{formatTime(row.last_accessed)}</span>
+                    <span style={{ color: 'var(--text-soft)' }}>{formatTime(row.last_accessed)}</span>
                   </td>
                   <td className="py-2 px-3">
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }}
                       className="bg-transparent cursor-pointer p-1 rounded-[3px] opacity-40 hover:opacity-100 transition-opacity"
-                      style={{ color: 'var(--error)' }}
+                      style={{ color: 'var(--danger)' }}
                     >
                       <Icon name="delete" size="sm" />
                     </button>
@@ -273,12 +273,12 @@ export default function CacheManageV2() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {t('totalItems', { total, page, totalPages })}
           </span>
           <div className="flex items-center gap-1">
             <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('prevPage')}</ButtonV2>
-            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--body)' }}>{page}/{totalPages}</span>
+            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--text-soft)' }}>{page}/{totalPages}</span>
             <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>{t('nextPage')}</ButtonV2>
           </div>
         </div>
@@ -286,7 +286,7 @@ export default function CacheManageV2() {
 
       {/* Delete Modal */}
       <ModalV2 open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('cache.confirmDelete')}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--body)' }}>{t('cache.confirmDeleteMsg')}</p>
+        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p>
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</ButtonV2>
           <ButtonV2 variant="danger" disabled={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
@@ -297,7 +297,7 @@ export default function CacheManageV2() {
 
       {/* Cleanup Modal */}
       <ModalV2 open={cleanupOpen} onClose={() => setCleanupOpen(false)} title={t('cache.cleanExpiredTitle')}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--body)' }}>{t('cache.cleanExpiredMsg')}</p>
+        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" onClick={() => setCleanupOpen(false)}>{t('cancel')}</ButtonV2>
           <ButtonV2 variant="danger" disabled={cleanupMutation.isPending} onClick={() => cleanupMutation.mutate()}>
@@ -313,19 +313,19 @@ export default function CacheManageV2() {
             {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
           </SelectV2>
           <div>
-            <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--label)' }}>
+            <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>
               {t('cache.warmupPackages')}
             </label>
             <textarea
               className="w-full rounded-[4px] px-3 py-2 text-[13px] font-mono resize-none"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--heading)', outline: 'none', height: 160 }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none', height: 160 }}
               placeholder={t('cache.warmupPlaceholder')}
               value={warmupText}
               onChange={(e) => setWarmupText(e.target.value)}
             />
           </div>
           {warmupResult && (
-            <div className="rounded-[4px] px-3 py-2 text-[13px]" style={{ background: 'rgba(21,190,83,0.1)', color: 'var(--success-text)', border: '1px solid rgba(21,190,83,0.3)' }}>
+            <div className="rounded-[4px] px-3 py-2 text-[13px]" style={{ background: 'rgba(21,190,83,0.1)', color: 'var(--ok-text)', border: '1px solid rgba(21,190,83,0.3)' }}>
               {warmupResult}
             </div>
           )}

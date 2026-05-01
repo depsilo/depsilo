@@ -23,7 +23,7 @@ function formatTimeSaved(ms: number, t: (key: string) => string): string {
 }
 
 const ECO_COLORS = [
-  'var(--stripe-purple)', '#3b82f6', '#10b981', '#f59e0b',
+  'var(--brand)', '#3b82f6', '#10b981', '#f59e0b',
   '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4',
   '#84cc16', '#f97316', '#6366f1', '#14b8a6',
 ]
@@ -31,8 +31,8 @@ const ECO_COLORS = [
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}>
-      <p className="font-[400] mb-1" style={{ color: 'var(--heading)' }}>{label}</p>
+    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)',  }}>
+      <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
       {payload.map((entry: any) => (
         <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
           {entry.name}: {formatBytes(entry.value)}
@@ -45,8 +45,8 @@ function ChartTooltip({ active, payload, label }: any) {
 function LatencyTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}>
-      <p className="font-[400] mb-1" style={{ color: 'var(--heading)' }}>{label}</p>
+    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)',  }}>
+      <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
       {payload.map((entry: any) => (
         <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
           {entry.name}: {Math.round(entry.value)} ms
@@ -107,9 +107,9 @@ export default function BandwidthReport() {
     return (
       <div className="space-y-6">
         <div className="grid gap-4 grid-cols-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />)}
+          {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />)}
         </div>
-        <div className="h-80 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+        <div className="h-80 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
       </div>
     )
   }
@@ -124,8 +124,8 @@ export default function BandwidthReport() {
             onClick={() => setRange(r.value)}
             className="px-3 py-1 text-[12px] font-[400] rounded-[4px] cursor-pointer transition-colors duration-150"
             style={{
-              background: range === r.value ? 'var(--stripe-purple)' : 'transparent',
-              color: range === r.value ? 'var(--on-primary)' : 'var(--body)',
+              background: range === r.value ? 'var(--brand)' : 'transparent',
+              color: range === r.value ? 'white' : 'var(--text-soft)',
               border: range === r.value ? 'none' : '1px solid var(--border)',
             }}
           >
@@ -139,15 +139,15 @@ export default function BandwidthReport() {
               value={customStart}
               onChange={e => setCustomStart(e.target.value)}
               className="px-2 py-1 text-[12px] rounded-[4px] font-mono"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--heading)' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
             />
-            <span className="text-[12px]" style={{ color: 'var(--body)' }}>—</span>
+            <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>—</span>
             <input
               type="date"
               value={customEnd}
               onChange={e => setCustomEnd(e.target.value)}
               className="px-2 py-1 text-[12px] rounded-[4px] font-mono"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--heading)' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
             />
           </div>
         )}
@@ -179,7 +179,7 @@ export default function BandwidthReport() {
 
       {/* Daily trend — stacked area chart */}
       <CardV2>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
+        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
           {t('bandwidth.dailyTrend')}
         </h3>
         <ResponsiveContainer width="100%" height={240}>
@@ -190,17 +190,17 @@ export default function BandwidthReport() {
                 <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="gradMissBytes" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--error)" stopOpacity={0.2} />
-                <stop offset="100%" stopColor="var(--error)" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="var(--danger)" stopOpacity={0.2} />
+                <stop offset="100%" stopColor="var(--danger)" stopOpacity={0.02} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-            <XAxis dataKey="date" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => formatBytes(v)} />
+            <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => formatBytes(v)} />
             <Tooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Area type="monotone" dataKey="hit_bytes" stackId="1" stroke="#10b981" strokeWidth={1.5} fill="url(#gradHitBytes)" name={t('bandwidth.hitBytes')} />
-            <Area type="monotone" dataKey="miss_bytes" stackId="1" stroke="var(--error)" strokeWidth={1.5} fill="url(#gradMissBytes)" name={t('bandwidth.missBytes')} />
+            <Area type="monotone" dataKey="miss_bytes" stackId="1" stroke="var(--danger)" strokeWidth={1.5} fill="url(#gradMissBytes)" name={t('bandwidth.missBytes')} />
           </AreaChart>
         </ResponsiveContainer>
       </CardV2>
@@ -209,7 +209,7 @@ export default function BandwidthReport() {
       <div className="grid gap-4 grid-cols-3">
         {/* Ecosystem donut */}
         <CardV2>
-          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
+          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
             {t('bandwidth.byEcosystem')}
           </h3>
           {ecoDonutData.length > 0 ? (
@@ -229,20 +229,20 @@ export default function BandwidthReport() {
                   <div key={e.name} className="flex items-center gap-2 text-[11px]">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[i % ECO_COLORS.length] }} />
                     <EcosystemIcon type={e.name} size={12} />
-                    <span className="font-mono" style={{ color: 'var(--heading)' }}>{e.name}</span>
-                    <span className="ml-auto font-mono tabular-nums" style={{ color: 'var(--body)' }}>{formatBytes(e.value)}</span>
+                    <span className="font-mono" style={{ color: 'var(--text)' }}>{e.name}</span>
+                    <span className="ml-auto font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(e.value)}</span>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p>
+            <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p>
           )}
         </CardV2>
 
         {/* Top packages */}
         <CardV2>
-          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
+          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
             {t('bandwidth.topPackages')}
           </h3>
           {topPackages.length > 0 ? (
@@ -251,39 +251,39 @@ export default function BandwidthReport() {
                 const max = topPackages[0]?.total_bytes || 1
                 return (
                   <div key={`${p.ecosystem}-${p.package_name}`} className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono tabular-nums w-4 shrink-0 text-right" style={{ color: 'var(--body)' }}>{i + 1}</span>
+                    <span className="text-[11px] font-mono tabular-nums w-4 shrink-0 text-right" style={{ color: 'var(--text-soft)' }}>{i + 1}</span>
                     <EcosystemIcon type={p.ecosystem} size={12} />
-                    <span className="font-mono text-[11px] truncate flex-1" style={{ color: 'var(--heading)' }}>{p.package_name}</span>
-                    <span className="font-mono text-[10px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>{formatBytes(p.total_bytes)}</span>
-                    <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${(p.total_bytes / max) * 100}%`, background: 'var(--stripe-purple)' }} />
+                    <span className="font-mono text-[11px] truncate flex-1" style={{ color: 'var(--text)' }}>{p.package_name}</span>
+                    <span className="font-mono text-[10px] tabular-nums shrink-0" style={{ color: 'var(--text-soft)' }}>{formatBytes(p.total_bytes)}</span>
+                    <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${(p.total_bytes / max) * 100}%`, background: 'var(--brand)' }} />
                     </div>
                   </div>
                 )
               })}
             </div>
           ) : (
-            <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p>
+            <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p>
           )}
         </CardV2>
 
         {/* Upstream bar */}
         <CardV2>
-          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--body)' }}>
+          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
             {t('bandwidth.byUpstream')}
           </h3>
           {byUpstream.length > 0 ? (
             <ResponsiveContainer width="100%" height={Math.max(160, byUpstream.length * 32)}>
               <BarChart data={byUpstream} layout="vertical" margin={{ left: 0, right: 10 }}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatBytes(v)} />
-                <YAxis type="category" dataKey="upstream" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
+                <XAxis type="number" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatBytes(v)} />
+                <YAxis type="category" dataKey="upstream" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
                 <Tooltip formatter={(value) => formatBytes(Number(value))} />
-                <Bar dataKey="miss_bytes" fill="var(--stripe-purple)" radius={[0, 3, 3, 0]} barSize={16} name={t('bandwidth.totalBandwidth')} />
+                <Bar dataKey="miss_bytes" fill="var(--brand)" radius={[0, 3, 3, 0]} barSize={16} name={t('bandwidth.totalBandwidth')} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p>
+            <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p>
           )}
         </CardV2>
       </div>
@@ -291,10 +291,10 @@ export default function BandwidthReport() {
       {/* Latency comparison */}
       <CardV2>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--body)' }}>
+          <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--text-soft)' }}>
             {t('bandwidth.latencyComparison')}
           </h3>
-          <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--success)' }}>
+          <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--ok)' }}>
             {t('bandwidth.timeSaved')}: {formatTimeSaved(summary.time_saved_ms || 0, t)}
           </span>
         </div>
@@ -302,16 +302,16 @@ export default function BandwidthReport() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={latencyData}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-              <XAxis dataKey="ecosystem" tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'var(--body)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}ms`} />
+              <XAxis dataKey="ecosystem" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}ms`} />
               <Tooltip content={<LatencyTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="hit" fill="#10b981" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgHitLatency')} />
-              <Bar dataKey="miss" fill="var(--error)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgMissLatency')} />
+              <Bar dataKey="miss" fill="var(--danger)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgMissLatency')} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p>
+          <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p>
         )}
       </CardV2>
     </div>

@@ -39,15 +39,15 @@ export default function LoginV2() {
 
       <div
         className="w-full max-w-sm rounded-[8px] p-8 relative z-10"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-elevated)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)',  }}
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-3">
             <Logo size={32} />
-            <h1 className="text-[22px] font-[300] tracking-[-0.22px]" style={{ color: 'var(--heading)' }}>Depsilo</h1>
+            <h1 className="text-[22px] font-[300] tracking-[-0.22px]" style={{ color: 'var(--text)' }}>Depsilo</h1>
           </div>
-          <p className="text-[14px] font-[300] mt-2" style={{ color: 'var(--body)' }}>{t('login.title')}</p>
+          <p className="text-[14px] font-[300] mt-2" style={{ color: 'var(--text-soft)' }}>{t('login.title')}</p>
         </div>
 
         {/* Form */}
@@ -72,23 +72,23 @@ export default function LoginV2() {
           </ButtonV2>
         </form>
 
-        {error && <p className="mt-3 text-[14px] text-center" style={{ color: 'var(--error)' }}>{error}</p>}
+        {error && <p className="mt-3 text-[14px] text-center" style={{ color: 'var(--danger)' }}>{error}</p>}
 
         {/* Status */}
         <div className="mt-6 flex items-center justify-center gap-6">
-          <span className="text-[10px] font-mono flex items-center gap-1.5" style={{ color: 'var(--body)' }}>
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
+          <span className="text-[10px] font-mono flex items-center gap-1.5" style={{ color: 'var(--text-soft)' }}>
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--ok)' }} />
             Nodes: Active
           </span>
-          <span className="text-[10px] font-mono flex items-center gap-1.5" style={{ color: 'var(--body)' }}>
-            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--success)' }} />
+          <span className="text-[10px] font-mono flex items-center gap-1.5" style={{ color: 'var(--text-soft)' }}>
+            <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--ok)' }} />
             Cache: Synced
           </span>
         </div>
 
         {/* Back link */}
         <div className="mt-4 text-center">
-          <Link to="/" className="text-[13px] no-underline transition-colors duration-150" style={{ color: 'var(--stripe-purple)' }}>
+          <Link to="/" className="text-[13px] no-underline transition-colors duration-150" style={{ color: 'var(--brand)' }}>
             ← {t('login.backToPortal') || 'Back to Portal'}
           </Link>
         </div>
