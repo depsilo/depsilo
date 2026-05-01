@@ -13,8 +13,18 @@ export default function LangToggle() {
   return (
     <button
       onClick={toggle}
-      className="bg-transparent text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors text-xs font-medium px-1.5 py-1 rounded-md hover:bg-surface-container"
       title={isZh ? 'Switch to English' : '切换到中文'}
+      style={{
+        fontSize: 11,
+        fontWeight: 500,
+        padding: '4px 8px',
+        color: 'var(--text-muted)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 6,
+        fontFamily: 'var(--font-mono)',
+        background: 'none',
+        cursor: 'pointer',
+      }}
     >
       {isZh ? 'EN' : '中'}
     </button>
