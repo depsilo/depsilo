@@ -6,222 +6,177 @@
 @import "@fontsource/noto-sans-sc/700.css";
 @import "material-symbols/outlined.css";
 
-/* ===================================================================
-   Stripe Design System — CSS Variable Foundation
-   Source: DESIGN.md
-   =================================================================== */
+/* ── Tailwind v4 @theme — turns CSS vars into utility classes ── */
+@theme {
+  --color-bg-page:   #FFFFFF;
+  --color-bg-panel:  #FFFFFF;
+  --color-bg-card:   #FFFFFF;
+  --color-bg-soft:   #F5F5F5;
+  --color-bg-hover:  rgba(0, 0, 0, 0.035);
 
-/* ----- Light Theme (default) ----- */
-html,
-html[data-theme="light"] {
-  /* Brand */
-  --stripe-purple: #533afd;
-  --stripe-purple-hover: #4434d4;
-  --stripe-purple-deep: #2e2b8c;
-  --stripe-purple-light: #b9b9f9;
-  --stripe-purple-mid: #665efd;
+  --color-border:        rgba(0, 0, 0, 0.09);
+  --color-border-soft:   rgba(0, 0, 0, 0.05);
+  --color-border-strong: rgba(0, 0, 0, 0.18);
 
-  /* Text */
-  --heading: #061b31;
-  --label: #273951;
-  --body: #64748d;
-  --on-primary: #ffffff;
+  --color-text:        #0a0a0a;
+  --color-text-muted:  #555555;
+  --color-text-soft:   #767676;
+  --color-text-subtle: #8a8a8a;
 
-  /* Surfaces */
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-low: #f6f9fc;
-  --surface-container: #f0f3f7;
-  --surface-high: #e8ecf2;
-  --surface-highest: #e1e5ec;
-  --surface-bright: #ffffff;
+  --color-brand:        oklch(0.55 0.16 295);
+  --color-brand-strong: oklch(0.48 0.17 295);
+  --color-brand-soft:   oklch(0.55 0.16 295 / 0.09);
+  --color-brand-border: oklch(0.55 0.16 295 / 0.30);
+  --color-brand-text:   oklch(0.40 0.14 295);
 
-  /* Mapped semantic aliases (backward compat) */
-  --on-surface: #061b31;
-  --on-surface-variant: #64748d;
+  --color-spec-1: oklch(0.62 0.18 305);
+  --color-spec-2: oklch(0.66 0.15 260);
+  --color-spec-3: oklch(0.72 0.12 210);
+  --color-spec-4: oklch(0.78 0.13 75);
 
-  /* Brand dark sections */
-  --brand-dark: #1c1e54;
-  --dark-navy: #0d253d;
+  --color-ok:          oklch(0.58 0.12 155);
+  --color-ok-fill:     oklch(0.58 0.12 155 / 0.10);
+  --color-ok-border:   oklch(0.58 0.12 155 / 0.28);
+  --color-ok-text:     oklch(0.40 0.10 155);
 
-  /* Accent / Decorative */
-  --ruby: #ea2261;
-  --magenta: #f96bee;
-  --magenta-light: #ffd7ef;
-  --lemon: #9b6829;
+  --color-warn:        oklch(0.70 0.14 65);
+  --color-warn-fill:   oklch(0.70 0.14 65 / 0.12);
+  --color-warn-border: oklch(0.70 0.14 65 / 0.30);
+  --color-warn-text:   oklch(0.45 0.12 55);
 
-  /* Status */
-  --success: #15be53;
-  --success-text: #108c3d;
-  --error: #ea2261;
-  --error-container: rgba(234, 34, 97, 0.08);
+  --color-danger:        oklch(0.60 0.17 25);
+  --color-danger-fill:   oklch(0.60 0.17 25 / 0.10);
+  --color-danger-border: oklch(0.60 0.17 25 / 0.30);
+  --color-danger-text:   oklch(0.42 0.15 25);
 
-  /* Borders */
-  --border: #e5edf5;
-  --border-purple: #b9b9f9;
-  --border-soft-purple: #d6d9fc;
-  --border-magenta: #ffd7ef;
-  --border-dashed: #362baa;
-
-  /* Shadows (Stripe signature blue-tinted) */
-  --shadow-elevated: rgba(50,50,93,0.25) 0px 30px 45px -30px, rgba(0,0,0,0.1) 0px 18px 36px -18px;
-  --shadow-ambient: rgba(23,23,23,0.08) 0px 15px 35px 0px;
-  --shadow-soft: rgba(23,23,23,0.06) 0px 3px 6px;
-  --shadow-deep: rgba(3,3,39,0.25) 0px 14px 21px -14px, rgba(0,0,0,0.1) 0px 8px 17px -8px;
-
-  /* Code blocks */
-  --code-bg: #1c1e54;
-  --code-header: #252763;
-  --code-text: #e8ecf2;
-  --code-dim: #9395c2;
-
-  /* Legacy compat aliases */
-  --primary: #533afd;
-  --primary-container: #533afd;
-  --primary-dim: #4434d4;
-  --outline-variant: #e5edf5;
-  --secondary: #64748d;
-  --secondary-container: #f0f3f7;
-  --error-legacy: #ea2261;
-  --tertiary: #9b6829;
-  --tertiary-container: #ffd7ef;
-}
-
-/* ----- Dark Theme ----- */
-html[data-theme="dark"] {
-  /* Brand */
-  --stripe-purple: #7c6dff;
-  --stripe-purple-hover: #6b5ef0;
-  --stripe-purple-deep: #9895ff;
-  --stripe-purple-light: #4a45a0;
-  --stripe-purple-mid: #8a80ff;
-
-  /* Text */
-  --heading: #f0f2f5;
-  --label: #c4cdd8;
-  --body: #8b99ab;
-  --on-primary: #ffffff;
-
-  /* Surfaces — brand-dark navy palette */
-  --bg: #0a0c2e;
-  --surface: #0f1140;
-  --surface-low: #13154a;
-  --surface-container: #1a1c5c;
-  --surface-high: #222468;
-  --surface-highest: #2a2d74;
-  --surface-bright: #353880;
-
-  /* Mapped semantic aliases */
-  --on-surface: #f0f2f5;
-  --on-surface-variant: #8b99ab;
-
-  /* Brand dark sections */
-  --brand-dark: #1c1e54;
-  --dark-navy: #0d253d;
-
-  /* Accent / Decorative */
-  --ruby: #ff4d7f;
-  --magenta: #ff85ef;
-  --magenta-light: #4a2040;
-  --lemon: #d4a44a;
-
-  /* Status */
-  --success: #22d464;
-  --success-text: #22d464;
-  --error: #ff6b8a;
-  --error-container: rgba(255, 107, 138, 0.12);
-
-  /* Borders */
-  --border: #2a2d74;
-  --border-purple: #4a45a0;
-  --border-soft-purple: #3a3880;
-  --border-magenta: #4a2040;
-  --border-dashed: #6865cc;
-
-  /* Shadows — darker, more subtle in dark mode */
-  --shadow-elevated: rgba(0,0,0,0.4) 0px 30px 45px -30px, rgba(0,0,0,0.25) 0px 18px 36px -18px;
-  --shadow-ambient: rgba(0,0,0,0.3) 0px 15px 35px 0px;
-  --shadow-soft: rgba(0,0,0,0.2) 0px 3px 6px;
-  --shadow-deep: rgba(0,0,0,0.5) 0px 14px 21px -14px, rgba(0,0,0,0.3) 0px 8px 17px -8px;
-
-  /* Code blocks */
-  --code-bg: #0a0c2e;
-  --code-header: #13154a;
-  --code-text: #e8ecf2;
-  --code-dim: #6668a0;
-
-  /* Legacy compat aliases */
-  --primary: #7c6dff;
-  --primary-container: #4a45a0;
-  --primary-dim: #6b5ef0;
-  --outline-variant: #2a2d74;
-  --secondary: #8b99ab;
-  --secondary-container: #1a1c5c;
-  --error-legacy: #ff6b8a;
-  --tertiary: #d4a44a;
-  --tertiary-container: #4a2040;
-}
-
-/* ----- Tailwind v4 @theme mapping ----- */
-@theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-low: var(--surface-low);
-  --color-surface-container: var(--surface-container);
-  --color-surface-high: var(--surface-high);
-  --color-surface-highest: var(--surface-highest);
-  --color-surface-bright: var(--surface-bright);
-  --color-on-surface: var(--on-surface);
-  --color-on-surface-variant: var(--on-surface-variant);
-  --color-outline-variant: var(--outline-variant);
-  --color-primary: var(--primary);
-  --color-primary-container: var(--primary-container);
-  --color-primary-dim: var(--primary-dim);
-  --color-on-primary: var(--on-primary, #ffffff);
-  --color-secondary: var(--secondary);
-  --color-secondary-container: var(--secondary-container);
-  --color-error: var(--error);
-  --color-error-container: var(--error-container);
-  --color-success: var(--success);
-  --color-tertiary: var(--tertiary);
-  --color-tertiary-container: var(--tertiary-container);
-  --color-stripe-purple: var(--stripe-purple);
-  --color-heading: var(--heading);
-  --color-label: var(--label);
-  --color-body: var(--body);
-  --color-border: var(--border);
-  --color-ruby: var(--ruby);
-  --color-magenta: var(--magenta);
+  /* Keep Chinese fallbacks for i18n support */
   --font-sans: 'Inter Variable', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --spacing-1:  4px;
+  --spacing-2:  8px;
+  --spacing-3:  12px;
+  --spacing-4:  16px;
+  --spacing-6:  24px;
+  --spacing-8:  32px;
+  --spacing-12: 48px;
+
+  --radius-pill:  4px;
+  --radius-tag:   6px;
+  --radius-card:  10px;
+  --radius-shell: 14px;
 }
 
-/* ----- Base styles ----- */
-@layer base {
-  html {
-    font-family: var(--font-sans);
-    font-size: 16px;
-    line-height: 1.4;
-    background: var(--bg);
-    color: var(--on-surface);
-    -webkit-font-smoothing: antialiased;
-    overflow-y: scroll;
-  }
-  body {
-    margin: 0;
-  }
-  * {
-    box-sizing: border-box;
-  }
-  /* Stripe typography: ss01 equivalent via Inter — use stylistic alternates */
-  h1, h2, h3, h4, h5, h6 {
-    color: var(--heading);
-    font-weight: 300;
-    letter-spacing: -0.02em;
-  }
+/* ── :root mirror — keeps var(--text) etc. working in inline styles ── */
+:root {
+  --bg-page:   #FFFFFF;
+  --bg-panel:  #FFFFFF;
+  --bg-card:   #FFFFFF;
+  --bg-soft:   #F5F5F5;
+  --bg-hover:  rgba(0, 0, 0, 0.035);
+
+  --border:        rgba(0, 0, 0, 0.09);
+  --border-soft:   rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.18);
+
+  --text:        #0a0a0a;
+  --text-muted:  #555555;
+  --text-soft:   #767676;
+  --text-subtle: #8a8a8a;
+
+  --brand:        oklch(0.55 0.16 295);
+  --brand-strong: oklch(0.48 0.17 295);
+  --brand-soft:   oklch(0.55 0.16 295 / 0.09);
+  --brand-border: oklch(0.55 0.16 295 / 0.30);
+  --brand-text:   oklch(0.40 0.14 295);
+
+  --spec-1: oklch(0.62 0.18 305);
+  --spec-2: oklch(0.66 0.15 260);
+  --spec-3: oklch(0.72 0.12 210);
+  --spec-4: oklch(0.78 0.13 75);
+
+  --grad-aurora: linear-gradient(
+    115deg,
+    var(--spec-1) 0%,
+    var(--spec-2) 40%,
+    var(--spec-3) 75%,
+    var(--spec-4) 100%
+  );
+  --grad-brand: linear-gradient(
+    120deg,
+    oklch(0.50 0.18 305) 0%,
+    oklch(0.58 0.16 275) 100%
+  );
+  --grad-rim: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(0.55 0.16 295 / 0.45) 25%,
+    oklch(0.66 0.15 230 / 0.45) 60%,
+    transparent 100%
+  );
+
+  --ok:          oklch(0.58 0.12 155);
+  --ok-fill:     oklch(0.58 0.12 155 / 0.10);
+  --ok-border:   oklch(0.58 0.12 155 / 0.28);
+  --ok-text:     oklch(0.40 0.10 155);
+
+  --warn:        oklch(0.70 0.14 65);
+  --warn-fill:   oklch(0.70 0.14 65 / 0.12);
+  --warn-border: oklch(0.70 0.14 65 / 0.30);
+  --warn-text:   oklch(0.45 0.12 55);
+
+  --danger:        oklch(0.60 0.17 25);
+  --danger-fill:   oklch(0.60 0.17 25 / 0.10);
+  --danger-border: oklch(0.60 0.17 25 / 0.30);
+  --danger-text:   oklch(0.42 0.15 25);
+
+  --r-pill: 4px;
+  --r-tag:  6px;
+  --r-card: 10px;
+  --r-shell: 14px;
+
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-6: 24px; --s-8: 32px; --s-12: 48px;
+
+  --shadow-card: none;
+  --shadow-pop:  none;
 }
 
-/* ----- Material Symbols icon helpers (unchanged) ----- */
+/* ── Body defaults ── */
+html, body {
+  background: var(--bg-page);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+body { margin: 0; }
+* { box-sizing: border-box; }
+
+h1, h2, h3, h4 {
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0;
+}
+h1 { font-size: 44px; letter-spacing: -0.04em; line-height: 1.02; }
+h2 { font-size: 26px; letter-spacing: -0.03em; }
+h3 { font-size: 17px; letter-spacing: -0.02em; line-height: 1.2; }
+h4 { font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+
+::selection { background: var(--brand-soft); }
+
+.num, .mono, [data-tabular] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ── Material Symbols (unchanged) ── */
 .icon {
   font-family: 'Material Symbols Outlined';
   font-weight: normal;
@@ -240,42 +195,169 @@ html[data-theme="dark"] {
 .icon-sm { font-size: 18px; }
 .icon-lg { font-size: 24px; }
 
-/* ----- Stripe-style utility classes ----- */
-@layer utilities {
-  /* Stripe shadows */
-  .stripe-shadow { box-shadow: var(--shadow-elevated); }
-  .stripe-shadow-ambient { box-shadow: var(--shadow-ambient); }
-  .stripe-shadow-soft { box-shadow: var(--shadow-soft); }
-  .stripe-shadow-deep { box-shadow: var(--shadow-deep); }
+/* ── Iridescent utilities ── */
 
-  /* Focus ring — Stripe style */
-  .stripe-focus-ring:focus-visible {
-    outline: 2px solid var(--stripe-purple);
-    outline-offset: 2px;
-  }
-
-  /* Heading weights matching Stripe's 300 */
-  .font-display { font-weight: 300; letter-spacing: -0.025em; }
-
-  /* Tabular numbers for data */
-  .tabular-nums { font-variant-numeric: tabular-nums; }
-
-  /* Ping animation for health dots */
-  @keyframes ping-health {
-    0% { transform: scale(1); opacity: 1; }
-    75% { transform: scale(2.2); opacity: 0; }
-    100% { transform: scale(2.2); opacity: 0; }
-  }
-  .animate-ping-health {
-    animation: ping-health 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
-  }
-
-  /* Fade-in for live events */
-  @keyframes fade-in-down {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .animate-fade-in {
-    animation: fade-in-down 0.3s ease-out;
-  }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
 }
+
+.grad-text {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+          color: transparent;
+}
+
+.grad-text-aurora {
+  background: var(--grad-aurora);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+          color: transparent;
+}
+
+.aurora-rim {
+  position: relative;
+}
+.aurora-rim::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 12px; right: 12px;
+  height: 1px;
+  background: var(--grad-rim);
+  opacity: 0.9;
+  pointer-events: none;
+  border-radius: 1px;
+}
+
+.page-wash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(900px 360px at 12% -10%, oklch(0.62 0.18 305 / 0.05), transparent 60%),
+    radial-gradient(720px 320px at 88% -8%,  oklch(0.72 0.12 210 / 0.045), transparent 60%);
+}
+
+.grad-ring {
+  position: relative;
+  background: var(--bg-card);
+  border-radius: inherit;
+}
+.grad-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--grad-aurora);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+.aurora-glow {
+  position: relative;
+}
+.aurora-glow::after {
+  content: '';
+  position: absolute;
+  left: -8%; right: -8%;
+  top: 30%; bottom: -20%;
+  background: radial-gradient(60% 80% at 50% 50%, oklch(0.62 0.18 305 / 0.10), transparent 70%);
+  filter: blur(24px);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dot-halo {
+  position: relative;
+}
+.dot-halo::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, currentColor 0%, transparent 70%);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50%       { box-shadow: 0 0 0 4px transparent; }
+}
+.dot-live {
+  animation: dotPulse 1.6s ease-in-out infinite;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-card);
+}
+
+.shell {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-shell);
+}
+
+.divider-h {
+  height: 0.5px;
+  background: var(--border);
+}
+
+.row-hover { transition: background 140ms ease; }
+.row-hover:hover { background: var(--bg-hover); }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 220ms ease both; }
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 0.85; }
+}
+.skeleton {
+  background: var(--bg-soft);
+  border-radius: 4px;
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+/* Keep existing animate-* helpers for pages that use them */
+@keyframes ping-health {
+  0%   { transform: scale(1); opacity: 1; }
+  75%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@layer utilities {
+  .animate-ping-health { animation: ping-health 1.5s cubic-bezier(0,0,0.2,1) infinite; }
+}
+
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@layer utilities {
+  .animate-fade-in { animation: fade-in-down 0.3s ease-out; }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+  border: 2px solid var(--bg-page);
+}
+::-webkit-scrollbar-track { background: transparent; }
