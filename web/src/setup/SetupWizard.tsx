@@ -118,13 +118,13 @@ export default function SetupWizard() {
     <div className="text-center py-8">
       <div
         className="text-[48px] font-[700] mb-2"
-        style={{ color: 'var(--heading)' }}
+        style={{ color: 'var(--text)' }}
       >
         DepSilo
       </div>
       <p
         className="text-[16px] mb-8 max-w-md mx-auto"
-        style={{ color: 'var(--body)' }}
+        style={{ color: 'var(--text-soft)' }}
       >
         {t('setup.welcome_description')}
       </p>
@@ -138,7 +138,7 @@ export default function SetupWizard() {
   // Step 2: Basic Settings
   const renderBasicSettings = () => (
     <div className="space-y-6">
-      <h2 className="text-[20px] font-[600]" style={{ color: 'var(--heading)' }}>
+      <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>
         {t('setup.basic_settings')}
       </h2>
       <InputV2
@@ -161,10 +161,10 @@ export default function SetupWizard() {
   // Step 3: Select Ecosystems
   const renderSelectEcosystems = () => (
     <div>
-      <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--heading)' }}>
+      <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--text)' }}>
         {t('setup.select_ecosystems')}
       </h2>
-      <p className="text-[14px] mb-4" style={{ color: 'var(--body)' }}>
+      <p className="text-[14px] mb-4" style={{ color: 'var(--text-soft)' }}>
         {t('setup.select_ecosystems_hint')}
       </p>
       <div className="grid grid-cols-4 gap-3">
@@ -176,9 +176,9 @@ export default function SetupWizard() {
               type="button"
               className="flex items-center gap-2 rounded-[4px] px-3 py-2.5 text-left cursor-pointer transition-all duration-150"
               style={{
-                border: `1px solid ${checked ? 'var(--stripe-purple)' : 'var(--border)'}`,
-                background: checked ? 'rgba(83,58,253,0.05)' : 'var(--surface)',
-                color: 'var(--heading)',
+                border: `1px solid ${checked ? 'var(--brand)' : 'var(--border)'}`,
+                background: checked ? 'rgba(83,58,253,0.05)' : 'var(--bg-card)',
+                color: 'var(--text)',
               }}
               onClick={() => toggleEcosystem(eco.key)}
             >
@@ -186,7 +186,7 @@ export default function SetupWizard() {
                 type="checkbox"
                 checked={checked}
                 readOnly
-                className="accent-[var(--stripe-purple)] pointer-events-none"
+                className="accent-[var(--brand)] pointer-events-none"
               />
               <EcosystemIcon type={eco.key as any} size={16} />
               <span className="text-[13px] font-[400] truncate">{eco.label}</span>
@@ -202,7 +202,7 @@ export default function SetupWizard() {
     const selected = ecosystemDefaults.filter((e) => selectedEcosystems.has(e.key))
     return (
       <div>
-        <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--heading)' }}>
+        <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--text)' }}>
           {t('setup.configure_upstreams')}
         </h2>
         <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
@@ -218,13 +218,13 @@ export default function SetupWizard() {
                 <button
                   type="button"
                   className="w-full flex items-center gap-2 px-4 py-3 cursor-pointer"
-                  style={{ background: 'var(--surface)', color: 'var(--heading)' }}
+                  style={{ background: 'var(--bg-card)', color: 'var(--text)' }}
                   onClick={() => setExpandedEcosystem(expanded ? null : eco.key)}
                 >
                   <Icon name={expanded ? 'expand_more' : 'chevron_right'} size="sm" />
                   <EcosystemIcon type={eco.key as any} size={16} />
                   <span className="text-[14px] font-[500] flex-1 text-left">{eco.label}</span>
-                  <span className="text-[12px]" style={{ color: 'var(--label)' }}>
+                  <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
                     {ecoUpstreams.length} {t('setup.upstreams_count')}
                   </span>
                 </button>
@@ -288,11 +288,11 @@ export default function SetupWizard() {
         <div className="text-center py-12">
           <div
             className="text-[20px] font-[600] mb-4"
-            style={{ color: 'var(--heading)' }}
+            style={{ color: 'var(--text)' }}
           >
             {t('setup.restarting')}
           </div>
-          <p className="text-[14px]" style={{ color: 'var(--body)' }}>
+          <p className="text-[14px]" style={{ color: 'var(--text-soft)' }}>
             {t('setup.restarting_hint')}
           </p>
         </div>
@@ -303,25 +303,25 @@ export default function SetupWizard() {
 
     return (
       <div>
-        <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--heading)' }}>
+        <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--text)' }}>
           {t('setup.complete')}
         </h2>
         <div className="space-y-3 mb-6">
-          <div className="flex justify-between text-[14px]" style={{ color: 'var(--body)' }}>
+          <div className="flex justify-between text-[14px]" style={{ color: 'var(--text-soft)' }}>
             <span>{t('setup.port')}</span>
-            <span className="font-mono" style={{ color: 'var(--heading)' }}>
+            <span className="font-mono" style={{ color: 'var(--text)' }}>
               {port}
             </span>
           </div>
-          <div className="flex justify-between text-[14px]" style={{ color: 'var(--body)' }}>
+          <div className="flex justify-between text-[14px]" style={{ color: 'var(--text-soft)' }}>
             <span>{t('setup.storage_path')}</span>
-            <span className="font-mono" style={{ color: 'var(--heading)' }}>
+            <span className="font-mono" style={{ color: 'var(--text)' }}>
               {storagePath}
             </span>
           </div>
           <div
             className="text-[14px] pt-2"
-            style={{ color: 'var(--body)', borderTop: '1px solid var(--border)' }}
+            style={{ color: 'var(--text-soft)', borderTop: '1px solid var(--border)' }}
           >
             <span>{t('setup.enabled_ecosystems')}</span>
           </div>
@@ -330,7 +330,7 @@ export default function SetupWizard() {
               <span
                 key={eco.key}
                 className="inline-flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
-                style={{ background: 'rgba(83,58,253,0.08)', color: 'var(--stripe-purple)' }}
+                style={{ background: 'rgba(83,58,253,0.08)', color: 'var(--brand)' }}
               >
                 <EcosystemIcon type={eco.key as any} size={14} />
                 {eco.label}
@@ -365,7 +365,7 @@ export default function SetupWizard() {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'var(--background)' }}
+      style={{ background: 'var(--bg-page)' }}
     >
       <div className="w-full max-w-[720px]">
         {/* Progress indicator */}
@@ -376,8 +376,8 @@ export default function SetupWizard() {
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-[500]"
                   style={{
-                    background: s <= step ? 'var(--stripe-purple)' : 'var(--surface-container)',
-                    color: s <= step ? 'var(--on-primary)' : 'var(--label)',
+                    background: s <= step ? 'var(--brand)' : 'var(--bg-soft)',
+                    color: s <= step ? 'white' : 'var(--text-muted)',
                     border: s <= step ? 'none' : '1px solid var(--border)',
                   }}
                 >
@@ -387,13 +387,13 @@ export default function SetupWizard() {
                   <div
                     className="w-8 h-[2px]"
                     style={{
-                      background: s < step ? 'var(--stripe-purple)' : 'var(--border)',
+                      background: s < step ? 'var(--brand)' : 'var(--border)',
                     }}
                   />
                 )}
               </div>
             ))}
-            <span className="ml-3 text-[13px]" style={{ color: 'var(--label)' }}>
+            <span className="ml-3 text-[13px]" style={{ color: 'var(--text-muted)' }}>
               {t('setup.step_of', { current: step, total: totalSteps })}
             </span>
           </div>
