@@ -9,12 +9,12 @@ interface BadgeV2Props {
 }
 
 const variantStyles: Record<BadgeV2Variant, { bg: string; color: string; border: string }> = {
-  default: { bg: 'var(--surface-container)', color: 'var(--body)', border: 'var(--border)' },
-  success: { bg: 'rgba(21,190,83,0.2)', color: 'var(--success-text, #108c3d)', border: 'rgba(21,190,83,0.4)' },
-  error: { bg: 'var(--error-container)', color: 'var(--error)', border: 'transparent' },
-  warning: { bg: 'rgba(155,104,41,0.15)', color: 'var(--lemon)', border: 'transparent' },
-  pro: { bg: 'linear-gradient(135deg, var(--stripe-purple), var(--magenta))', color: '#ffffff', border: 'transparent' },
-  ecosystem: { bg: 'var(--surface-low)', color: 'var(--heading)', border: 'var(--border)' },
+  default: { bg: 'var(--brand-soft)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
+  success: { bg: 'var(--ok-fill)', color: 'var(--ok-text)', border: 'var(--ok-border)' },
+  error: { bg: 'var(--danger-fill)', color: 'var(--danger-text)', border: 'var(--danger-border)' },
+  warning: { bg: 'var(--warn-fill)', color: 'var(--warn-text)', border: 'var(--warn-border)' },
+  pro: { bg: 'var(--grad-aurora)', color: 'transparent', border: 'var(--brand-border)' },
+  ecosystem: { bg: 'var(--brand-soft)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
 }
 
 export default function BadgeV2({
@@ -27,12 +27,20 @@ export default function BadgeV2({
 
   return (
     <span
-      className={`inline-flex items-center rounded-[4px] text-[10px] font-[300] px-1.5 py-[1px] ${className}`}
+      className={`inline-flex items-center px-[7px] py-[2px] ${className}`}
       style={{
-        background: isPro ? undefined : s.bg,
-        ...(isPro ? { backgroundImage: s.bg } : {}),
+        background: s.bg,
         color: s.color,
-        border: s.border !== 'transparent' ? `1px solid ${s.border}` : 'none',
+        border: `0.5px solid ${s.border}`,
+        borderRadius: 'var(--r-tag)',
+        fontSize: '11px',
+        fontWeight: 600,
+        lineHeight: '1.4',
+        ...(isPro ? {
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        } : {}),
       }}
     >
       {children}
