@@ -1,0 +1,368 @@
+/* ============================================================
+   Depsilo — design tokens (v2: warm paper, plum accent)
+   ------------------------------------------------------------
+   Aesthetic shift:
+   - Warm-paper neutrals (oklch ~0.98 with low warm chroma)
+     instead of cold #FAFAF9
+   - Layered surface hierarchy: page → panel → card → soft
+   - Plum-violet brand (oklch 0.55 0.16 295) — distinctive,
+     less generic than indigo, still tech-leaning
+   - Muted semantic colors so data viz reads as data, not alarms
+     (greens/ambers/reds with reduced chroma)
+   - Hairlines remain 0.5px but with a subtle warm cast that
+     dissolves into the paper instead of cutting through
+   ============================================================ */
+
+:root {
+  /* ---- Surfaces (pure white throughout, neutral) ---- */
+  --bg-page:   #FFFFFF;                  /* pure white */
+  --bg-panel:  #FFFFFF;                  /* pure white */
+  --bg-card:   #FFFFFF;                  /* pure white */
+  --bg-soft:   #F5F5F5;                  /* neutral recessed */
+  --bg-hover:  rgba(0, 0, 0, 0.035);
+
+  /* ---- Borders (neutral hairlines) ---- */
+  --border:        rgba(0, 0, 0, 0.09);
+  --border-soft:   rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.18);
+
+  /* ---- Text (neutral, higher contrast) ---- */
+  --text:        #0a0a0a;   /* near-black for body */
+  --text-muted:  #555555;   /* deeper muted for body emphasis */
+  --text-soft:   #767676;   /* descriptions / captions one tier lighter */
+  --text-subtle: #8a8a8a;   /* still readable on white */
+
+  /* ---- Brand: plum-violet ---- */
+  --brand:        oklch(0.55 0.16 295);
+  --brand-strong: oklch(0.48 0.17 295);
+  --brand-soft:   oklch(0.55 0.16 295 / 0.09);
+  --brand-border: oklch(0.55 0.16 295 / 0.30);
+  --brand-text:   oklch(0.40 0.14 295);
+
+  /* ---- Spectrum (for restrained iridescence) ---- */
+  --spec-1: oklch(0.62 0.18 305);  /* plum */
+  --spec-2: oklch(0.66 0.15 260);  /* indigo */
+  --spec-3: oklch(0.72 0.12 210);  /* cyan-teal */
+  --spec-4: oklch(0.78 0.13 75);   /* warm amber */
+
+  /* angled aurora gradient — used on text accents, dividers, glows */
+  --grad-aurora: linear-gradient(
+    115deg,
+    var(--spec-1) 0%,
+    var(--spec-2) 40%,
+    var(--spec-3) 75%,
+    var(--spec-4) 100%
+  );
+  /* tighter brand gradient — plum → indigo, for buttons and emphasized text */
+  --grad-brand: linear-gradient(
+    120deg,
+    oklch(0.50 0.18 305) 0%,
+    oklch(0.58 0.16 275) 100%
+  );
+  /* for thin 1px "light bands" on card tops */
+  --grad-rim: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(0.55 0.16 295 / 0.45) 25%,
+    oklch(0.66 0.15 230 / 0.45) 60%,
+    transparent 100%
+  );
+
+  /* ---- Semantics (muted) ---- */
+  --ok:          oklch(0.58 0.12 155);
+  --ok-fill:     oklch(0.58 0.12 155 / 0.10);
+  --ok-border:   oklch(0.58 0.12 155 / 0.28);
+  --ok-text:     oklch(0.40 0.10 155);
+
+  --warn:        oklch(0.70 0.14 65);
+  --warn-fill:   oklch(0.70 0.14 65 / 0.12);
+  --warn-border: oklch(0.70 0.14 65 / 0.30);
+  --warn-text:   oklch(0.45 0.12 55);
+
+  --danger:        oklch(0.60 0.17 25);
+  --danger-fill:   oklch(0.60 0.17 25 / 0.10);
+  --danger-border: oklch(0.60 0.17 25 / 0.30);
+  --danger-text:   oklch(0.42 0.15 25);
+
+  /* ---- Type ---- */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---- Spacing ---- */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-6: 24px; --s-8: 32px; --s-12: 48px;
+
+  /* ---- Radii ---- */
+  --r-pill: 4px;
+  --r-tag: 6px;
+  --r-card: 10px;
+  --r-shell: 14px;
+
+  /* ---- Elevation: NONE (paper aesthetic) ---- */
+  --shadow-card: none;
+  --shadow-pop: none;
+}
+
+html.dark {
+  /* ---- Surfaces (warm charcoal, not pure black) ---- */
+  --bg-page:   oklch(0.16 0.006 75);    /* warm charcoal */
+  --bg-panel:  oklch(0.18 0.006 75);
+  --bg-card:   oklch(0.21 0.007 75);    /* lifted card */
+  --bg-soft:   oklch(0.24 0.007 75);
+  --bg-hover:  oklch(0.30 0.008 75 / 0.40);
+
+  --border:        oklch(0.95 0.01 75 / 0.08);
+  --border-soft:   oklch(0.95 0.01 75 / 0.04);
+  --border-strong: oklch(0.95 0.01 75 / 0.18);
+
+  --text:        oklch(0.97 0.005 75);
+  --text-muted:  oklch(0.72 0.008 75);
+  --text-soft:   oklch(0.62 0.008 75);
+  --text-subtle: oklch(0.55 0.008 75);
+
+  --brand:        oklch(0.72 0.14 295);
+  --brand-strong: oklch(0.78 0.14 295);
+  --brand-soft:   oklch(0.72 0.14 295 / 0.14);
+  --brand-border: oklch(0.72 0.14 295 / 0.36);
+  --brand-text:   oklch(0.82 0.12 295);
+
+  --ok:          oklch(0.72 0.13 155);
+  --ok-fill:     oklch(0.72 0.13 155 / 0.14);
+  --ok-border:   oklch(0.72 0.13 155 / 0.32);
+  --ok-text:     oklch(0.82 0.11 155);
+
+  --warn:        oklch(0.78 0.13 65);
+  --warn-fill:   oklch(0.78 0.13 65 / 0.14);
+  --warn-border: oklch(0.78 0.13 65 / 0.32);
+  --warn-text:   oklch(0.86 0.11 65);
+
+  --danger:        oklch(0.72 0.16 25);
+  --danger-fill:   oklch(0.72 0.16 25 / 0.14);
+  --danger-border: oklch(0.72 0.16 25 / 0.32);
+  --danger-text:   oklch(0.82 0.13 25);
+
+  --shadow-card:
+    0 1px 0 oklch(0 0 0 / 0.30),
+    0 1px 2px oklch(0 0 0 / 0.20);
+  --shadow-pop:
+    0 1px 0 oklch(0 0 0 / 0.30),
+    0 6px 18px -4px oklch(0 0 0 / 0.40);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-page);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  transition: background 200ms ease, color 200ms ease;
+}
+
+/* ---- Type scale: stronger hierarchy ---- */
+h1, h2, h3, h4 {
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0;
+}
+h1 { font-size: 40px; letter-spacing: -0.035em; }
+h2 { font-size: 24px; letter-spacing: -0.025em; }
+h3 { font-size: 16px; letter-spacing: -0.01em; line-height: 1.25; }
+h4 { font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+
+/* a small all-caps eyebrow */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+body { min-height: 100vh; }
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+button:active { transform: scale(0.98); }
+
+input, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+::selection { background: var(--brand-soft); }
+
+/* ---- numeric / mono ---- */
+.num, .mono {
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- shared primitives ---- */
+.card {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+}
+
+.shell {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-shell);
+  box-shadow: var(--shadow-card);
+}
+
+.divider-h {
+  height: 0.5px;
+  background: var(--border);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; border: 2px solid var(--bg-page); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* hover-affordance */
+.row-hover { transition: background 140ms ease, border-color 140ms ease; }
+.row-hover:hover { background: var(--bg-hover); }
+
+/* skeleton pulse */
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+.skeleton {
+  background: var(--bg-soft);
+  border-radius: 4px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* fade-in for view switches */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 220ms ease both; }
+
+/* status pill dot pulse */
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50% { box-shadow: 0 0 0 4px transparent; }
+}
+.dot-live {
+  animation: dotPulse 1.6s ease-in-out infinite;
+}
+
+/* ---- Iridescent utilities (restrained — used as accents, never backgrounds) ---- */
+
+/* gradient text — for hero numbers / emphasized headings */
+.grad-text {
+  background: var(--grad-brand);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+          color: transparent;
+}
+.grad-text-aurora {
+  background: var(--grad-aurora);
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+          color: transparent;
+}
+
+/* aurora rim — 1px gradient line atop a card */
+.aurora-rim {
+  position: relative;
+}
+.aurora-rim::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 12px; right: 12px;
+  height: 1px;
+  background: var(--grad-rim);
+  opacity: 0.9;
+  pointer-events: none;
+  border-radius: 1px;
+}
+
+/* page-level aurora wash — extremely faint top-corner glow */
+.page-wash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(900px 360px at 12% -10%, oklch(0.62 0.18 305 / 0.05), transparent 60%),
+    radial-gradient(720px 320px at 88% -8%, oklch(0.72 0.12 210 / 0.045), transparent 60%);
+}
+
+/* gradient ring on logo / pills */
+.grad-ring {
+  position: relative;
+  background: var(--bg-card);
+  border-radius: inherit;
+}
+.grad-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--grad-aurora);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* subtle aurora glow under hero numbers */
+.aurora-glow {
+  position: relative;
+}
+.aurora-glow::after {
+  content: '';
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  top: 30%;
+  bottom: -20%;
+  background: radial-gradient(60% 80% at 50% 50%, oklch(0.62 0.18 305 / 0.10), transparent 70%);
+  filter: blur(24px);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* status dot soft halo */
+.dot-halo {
+  position: relative;
+}
+.dot-halo::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, currentColor 0%, transparent 70%);
+  opacity: 0.25;
+  pointer-events: none;
+}

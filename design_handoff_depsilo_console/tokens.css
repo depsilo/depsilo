@@ -1,0 +1,200 @@
+/* ============================================================
+   Depsilo — Design Tokens
+   ------------------------------------------------------------
+   Drop this into your Tailwind v4 app:
+
+     @import "tailwindcss";
+     @import "./tokens.css";    /* this file */
+     @import "./utilities.css"; /* aurora utilities */
+
+   Or paste the @theme block below into your global stylesheet.
+   The :root block keeps the same variables available outside
+   Tailwind contexts (e.g. inline styles in legacy components).
+   ============================================================ */
+
+/* ---------- Tailwind v4 @theme (preferred) ---------- */
+/* Tailwind 4 turns these into utility classes automatically:
+     text-text, text-text-soft, bg-bg-soft, border-border, font-mono, ...  */
+
+@theme {
+  /* Surfaces */
+  --color-bg-page:   #FFFFFF;
+  --color-bg-panel:  #FFFFFF;
+  --color-bg-card:   #FFFFFF;
+  --color-bg-soft:   #F5F5F5;
+  --color-bg-hover:  rgba(0, 0, 0, 0.035);
+
+  /* Borders */
+  --color-border:        rgba(0, 0, 0, 0.09);
+  --color-border-soft:   rgba(0, 0, 0, 0.05);
+  --color-border-strong: rgba(0, 0, 0, 0.18);
+
+  /* Text — four-tier neutral grayscale */
+  --color-text:        #0a0a0a;
+  --color-text-muted:  #555555;
+  --color-text-soft:   #767676;
+  --color-text-subtle: #8a8a8a;
+
+  /* Brand — plum-violet */
+  --color-brand:        oklch(0.55 0.16 295);
+  --color-brand-strong: oklch(0.48 0.17 295);
+  --color-brand-soft:   oklch(0.55 0.16 295 / 0.09);
+  --color-brand-border: oklch(0.55 0.16 295 / 0.30);
+  --color-brand-text:   oklch(0.40 0.14 295);
+
+  /* Spectrum (for restrained iridescence) */
+  --color-spec-1: oklch(0.62 0.18 305);
+  --color-spec-2: oklch(0.66 0.15 260);
+  --color-spec-3: oklch(0.72 0.12 210);
+  --color-spec-4: oklch(0.78 0.13 75);
+
+  /* Semantics — muted */
+  --color-ok:          oklch(0.58 0.12 155);
+  --color-ok-fill:     oklch(0.58 0.12 155 / 0.10);
+  --color-ok-border:   oklch(0.58 0.12 155 / 0.28);
+  --color-ok-text:     oklch(0.40 0.10 155);
+
+  --color-warn:        oklch(0.70 0.14 65);
+  --color-warn-fill:   oklch(0.70 0.14 65 / 0.12);
+  --color-warn-border: oklch(0.70 0.14 65 / 0.30);
+  --color-warn-text:   oklch(0.45 0.12 55);
+
+  --color-danger:        oklch(0.60 0.17 25);
+  --color-danger-fill:   oklch(0.60 0.17 25 / 0.10);
+  --color-danger-border: oklch(0.60 0.17 25 / 0.30);
+  --color-danger-text:   oklch(0.42 0.15 25);
+
+  /* Type */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Spacing scale */
+  --spacing-1:  4px;
+  --spacing-2:  8px;
+  --spacing-3:  12px;
+  --spacing-4:  16px;
+  --spacing-6:  24px;
+  --spacing-8:  32px;
+  --spacing-12: 48px;
+
+  /* Radii */
+  --radius-pill:  4px;
+  --radius-tag:   6px;
+  --radius-card:  10px;
+  --radius-shell: 14px;
+}
+
+/* ---------- :root mirror (works outside Tailwind utilities) ---------- */
+/* Keeps inline `style={{ color: 'var(--text)' }}` working without prefixes. */
+
+:root {
+  --bg-page:   #FFFFFF;
+  --bg-panel:  #FFFFFF;
+  --bg-card:   #FFFFFF;
+  --bg-soft:   #F5F5F5;
+  --bg-hover:  rgba(0, 0, 0, 0.035);
+
+  --border:        rgba(0, 0, 0, 0.09);
+  --border-soft:   rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.18);
+
+  --text:        #0a0a0a;
+  --text-muted:  #555555;
+  --text-soft:   #767676;
+  --text-subtle: #8a8a8a;
+
+  --brand:        oklch(0.55 0.16 295);
+  --brand-strong: oklch(0.48 0.17 295);
+  --brand-soft:   oklch(0.55 0.16 295 / 0.09);
+  --brand-border: oklch(0.55 0.16 295 / 0.30);
+  --brand-text:   oklch(0.40 0.14 295);
+
+  --spec-1: oklch(0.62 0.18 305);
+  --spec-2: oklch(0.66 0.15 260);
+  --spec-3: oklch(0.72 0.12 210);
+  --spec-4: oklch(0.78 0.13 75);
+
+  /* Gradients — keep as CSS vars (Tailwind v4 has no native gradient token) */
+  --grad-aurora: linear-gradient(
+    115deg,
+    var(--spec-1) 0%,
+    var(--spec-2) 40%,
+    var(--spec-3) 75%,
+    var(--spec-4) 100%
+  );
+  --grad-brand: linear-gradient(
+    120deg,
+    oklch(0.50 0.18 305) 0%,
+    oklch(0.58 0.16 275) 100%
+  );
+  --grad-rim: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(0.55 0.16 295 / 0.45) 25%,
+    oklch(0.66 0.15 230 / 0.45) 60%,
+    transparent 100%
+  );
+
+  --ok:          oklch(0.58 0.12 155);
+  --ok-fill:     oklch(0.58 0.12 155 / 0.10);
+  --ok-border:   oklch(0.58 0.12 155 / 0.28);
+  --ok-text:     oklch(0.40 0.10 155);
+
+  --warn:        oklch(0.70 0.14 65);
+  --warn-fill:   oklch(0.70 0.14 65 / 0.12);
+  --warn-border: oklch(0.70 0.14 65 / 0.30);
+  --warn-text:   oklch(0.45 0.12 55);
+
+  --danger:        oklch(0.60 0.17 25);
+  --danger-fill:   oklch(0.60 0.17 25 / 0.10);
+  --danger-border: oklch(0.60 0.17 25 / 0.30);
+  --danger-text:   oklch(0.42 0.15 25);
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-6: 24px; --s-8: 32px; --s-12: 48px;
+
+  --r-pill: 4px;
+  --r-tag: 6px;
+  --r-card: 10px;
+  --r-shell: 14px;
+
+  --shadow-card: none;
+  --shadow-pop: none;
+}
+
+/* ---------- Body defaults ---------- */
+html, body {
+  background: var(--bg-page);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+
+/* ---------- Type scale ---------- */
+h1, h2, h3, h4 {
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0;
+}
+h1 { font-size: 44px; letter-spacing: -0.04em;  line-height: 1.02; }
+h2 { font-size: 26px; letter-spacing: -0.03em;  }
+h3 { font-size: 17px; letter-spacing: -0.02em;  line-height: 1.2; }
+h4 { font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+
+::selection { background: var(--brand-soft); }
+
+/* Tabular numerics for any mono / numeric class */
+.num, .mono, [data-tabular] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
