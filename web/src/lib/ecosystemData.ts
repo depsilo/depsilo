@@ -45,6 +45,8 @@ export interface MirrorDef {
   p50: number
   hit: string
   status: MirrorStatus
+  // url is intentionally absent — the Monitor page sources upstream URLs from the
+  // live /api/v1/stats API response (Task 1), not from this static decorative data.
   series: number[]
 }
 
@@ -78,6 +80,10 @@ export const MIRROR_DEFS: MirrorDef[] = RAW_MIRRORS.map((m, idx) => {
 })
 
 // ── Language / manager data (QuickStart page) ─────────────────────
+
+// NOTE: These snippet paths use the actual Depsilo backend routes (/pypi/simple/, /rubygems/),
+// which differ from the design reference data.jsx that had incorrect paths (/pip/simple/, /gem/).
+// Do not "correct" these back to the reference — the backend adapter paths are authoritative.
 
 export interface ManagerPath {
   os: string
