@@ -51,18 +51,18 @@ export interface MirrorDef {
 }
 
 const RAW_MIRRORS: Omit<MirrorDef, 'series'>[] = [
-  { type: 'pip',      p50: 38,  hit: '96.1%', status: 'healthy'  },
+  { type: 'pypi',     p50: 38,  hit: '96.1%', status: 'healthy'  },
   { type: 'npm',      p50: 41,  hit: '94.7%', status: 'healthy'  },
   { type: 'maven',    p50: 62,  hit: '89.3%', status: 'healthy'  },
   { type: 'cargo',    p50: 35,  hit: '97.2%', status: 'healthy'  },
   { type: 'go',       p50: 51,  hit: '92.8%', status: 'healthy'  },
   { type: 'docker',   p50: 184, hit: '78.4%', status: 'degraded' },
   { type: 'helm',     p50: 47,  hit: '91.5%', status: 'healthy'  },
-  { type: 'gem',      p50: 44,  hit: '93.0%', status: 'healthy'  },
+  { type: 'rubygems', p50: 44,  hit: '93.0%', status: 'healthy'  },
   { type: 'nuget',    p50: 58,  hit: '88.2%', status: 'healthy'  },
   { type: 'apt',      p50: 72,  hit: '85.6%', status: 'healthy'  },
   { type: 'conda',    p50: 0,   hit: '—',     status: 'failed'   },
-  { type: 'pub',      p50: 53,  hit: '90.4%', status: 'healthy'  },
+  { type: 'cran',     p50: 53,  hit: '90.4%', status: 'healthy'  },
   { type: 'composer', p50: 49,  hit: '92.1%', status: 'healthy'  },
 ]
 

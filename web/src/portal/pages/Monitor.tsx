@@ -220,13 +220,7 @@ function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <StatusDot
-          status={
-            status === 'healthy' ? 'healthy'
-            : status === 'degraded' ? 'degraded'
-            : 'failed'
-          }
-        />
+        <StatusDot status={status} />
         <span
           style={{
             fontFamily: 'var(--font-mono)',
@@ -358,10 +352,10 @@ const TIME_RANGES = [
 
 export default function MonitorPage() {
   const [timeRange, setTimeRange] = useState('1h')
-  const [showBanner, setShowBanner] = useState(false)
+  const [showBanner, setShowBanner] = useState(false) // TODO: set to true when SSE disconnect is detected via LiveDetector
 
   const { data } = useQuery<StatsData>({
-    queryKey: ['stats-monitor'],
+    queryKey: ['stats-monitor', timeRange],
     queryFn: async () => {
       const res = await statsApi.getStats()
       return res.data
