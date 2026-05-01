@@ -105,12 +105,13 @@ export interface Language {
   id: string
   name: string
   glyph: string
+  iconAdapter: string
   managers: ManagerConfig[]
 }
 
 export const LANGUAGES: Language[] = [
   {
-    id: 'python', name: 'Python', glyph: 'PY',
+    id: 'python', name: 'Python', glyph: 'PY', iconAdapter: 'pypi',
     managers: [
       {
         id: 'pip', name: 'pip', hint: 'PyPA package installer',
@@ -203,7 +204,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'node', name: 'Node.js', glyph: 'JS',
+    id: 'node', name: 'Node.js', glyph: 'JS', iconAdapter: 'npm',
     managers: [
       {
         id: 'npm', name: 'npm', hint: 'Default Node registry client',
@@ -275,7 +276,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'java', name: 'Java', glyph: 'JV',
+    id: 'java', name: 'Java', glyph: 'JV', iconAdapter: 'maven',
     managers: [
       {
         id: 'maven', name: 'Maven', hint: 'Apache Maven',
@@ -326,7 +327,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'rust', name: 'Rust', glyph: 'RS',
+    id: 'rust', name: 'Rust', glyph: 'RS', iconAdapter: 'cargo',
     managers: [
       {
         id: 'cargo', name: 'Cargo', hint: 'Rust package manager',
@@ -347,7 +348,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'go', name: 'Go', glyph: 'GO',
+    id: 'go', name: 'Go', glyph: 'GO', iconAdapter: 'go',
     managers: [
       {
         id: 'goenv', name: 'go env', hint: 'Recommended (persisted)',
@@ -384,7 +385,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'container', name: 'Container', glyph: 'CT',
+    id: 'container', name: 'Container', glyph: 'CT', iconAdapter: 'docker',
     managers: [
       {
         id: 'docker', name: 'Docker', hint: 'Daemon registry mirror',
@@ -435,7 +436,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'kubernetes', name: 'Kubernetes', glyph: 'K8',
+    id: 'kubernetes', name: 'Kubernetes', glyph: 'K8', iconAdapter: 'helm',
     managers: [
       {
         id: 'helm', name: 'Helm', hint: 'Chart registry',
@@ -455,7 +456,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'ruby', name: 'Ruby', glyph: 'RB',
+    id: 'ruby', name: 'Ruby', glyph: 'RB', iconAdapter: 'rubygems',
     managers: [
       {
         id: 'gem', name: 'RubyGems', hint: 'gem CLI',
@@ -490,7 +491,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'dotnet', name: '.NET', glyph: 'NT',
+    id: 'dotnet', name: '.NET', glyph: 'NT', iconAdapter: 'nuget',
     managers: [
       {
         id: 'cli', name: 'dotnet CLI', hint: 'nuget add source',
@@ -526,7 +527,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'debian', name: 'Debian', glyph: 'DB',
+    id: 'debian', name: 'Debian', glyph: 'DB', iconAdapter: 'apt',
     managers: [
       {
         id: 'apt', name: 'apt', hint: 'Debian/Ubuntu packages',
@@ -546,27 +547,7 @@ export const LANGUAGES: Language[] = [
     ],
   },
   {
-    id: 'dart', name: 'Dart', glyph: 'DT',
-    managers: [
-      {
-        id: 'pub', name: 'pub', hint: 'Dart / Flutter packages',
-        quick:      { lang: 'sh', body: 'PUB_HOSTED_URL={URL}/pub/ dart pub get' },
-        persistent: { file: '~/.zshrc · ~/.bashrc', lang: 'sh',
-          body: 'export PUB_HOSTED_URL={URL}/pub/\nexport FLUTTER_STORAGE_BASE_URL={URL}/pub/storage' },
-        verify:     { lang: 'sh', body: 'dart pub get --verbose' },
-        paths: [
-          { os: 'zsh',  path: '~/.zshrc' },
-          { os: 'bash', path: '~/.bashrc' },
-        ],
-        tutorial: [
-          'Set both PUB_HOSTED_URL (packages) and FLUTTER_STORAGE_BASE_URL (Flutter SDK).',
-          'Reload with source ~/.zshrc.',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'php', name: 'PHP', glyph: 'PH',
+    id: 'php', name: 'PHP', glyph: 'PH', iconAdapter: 'composer',
     managers: [
       {
         id: 'composer', name: 'Composer', hint: 'PHP package manager',
@@ -581,6 +562,28 @@ export const LANGUAGES: Language[] = [
         tutorial: [
           'composer config writes to ~/.composer/config.json by default.',
           'Pass --no-plugins if your project uses plugins that block source switching.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'r', name: 'R', glyph: 'R', iconAdapter: 'cran',
+    managers: [
+      {
+        id: 'rscript', name: 'R', hint: 'Base R CRAN mirror',
+        quick:      { lang: 'r', body: 'install.packages("jsonlite", repos="{URL}/cran/")' },
+        persistent: { file: '~/.Rprofile', lang: 'r',
+          body: 'options(repos = c(CRAN = "{URL}/cran/"))' },
+        verify:     { lang: 'r', body: 'options(repos = c(CRAN = "{URL}/cran/"))\ninstall.packages("jsonlite")\nlibrary(jsonlite)' },
+        paths: [
+          { os: 'User',        path: '~/.Rprofile' },
+          { os: 'Per-project', path: './.Rprofile' },
+          { os: 'Global',      path: 'file.path(R.home("etc"), "Rprofile.site")' },
+        ],
+        tutorial: [
+          'Add options(repos = ...) to ~/.Rprofile to permanently configure the CRAN mirror.',
+          'Verify with getOption("repos") in an R console.',
+          'For renv-managed projects, set RENV_CONFIG_REPOS_OVERRIDE="{URL}/cran/" in .Renviron.',
         ],
       },
     ],

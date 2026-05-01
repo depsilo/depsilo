@@ -1,6 +1,7 @@
 // web/src/portal/components/ConfigurePane.tsx
 import { useState, useEffect, useCallback } from 'react'
 import CodeBlock from '@/portal/components/CodeBlock'
+import EcosystemIcon from '@/components/EcosystemIcon'
 import { LANGUAGES, buildPrompt, type ManagerConfig } from '@/lib/ecosystemData'
 
 interface Props {
@@ -344,13 +345,9 @@ export default function ConfigurePane({ languageId, endpoint }: Props) {
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              fontWeight: 500,
-              color: 'var(--brand)',
             }}
           >
-            {lang.glyph}
+            <EcosystemIcon type={lang.iconAdapter as any} size={14} useColor={true} />
           </span>
           <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>
             Configure {lang.name}

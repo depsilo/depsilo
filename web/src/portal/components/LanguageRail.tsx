@@ -1,5 +1,6 @@
 // web/src/portal/components/LanguageRail.tsx
 import { LANGUAGES } from '@/lib/ecosystemData'
+import EcosystemIcon from '@/components/EcosystemIcon'
 
 interface Props {
   selected: string
@@ -113,14 +114,15 @@ export default function LanguageRail({ selected, onSelect }: Props) {
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10,
-                  fontWeight: 500,
-                  color: active ? 'var(--brand)' : 'var(--text-subtle)',
                   flexShrink: 0,
+                  opacity: active ? 1 : 0.65,
                 }}
               >
-                {lang.glyph}
+                <EcosystemIcon
+                  type={lang.iconAdapter as any}
+                  size={15}
+                  useColor={true}
+                />
               </span>
               <span
                 style={{
