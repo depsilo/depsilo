@@ -4,20 +4,15 @@ interface Props {
   live?: boolean;
 }
 
-const colorMap: Record<string, string> = {
+const colorMap = {
   healthy:  'var(--ok)',
-  ok:       'var(--ok)',
   degraded: 'var(--warn)',
-  warning:  'var(--warn)',
-  warn:     'var(--warn)',
   failed:   'var(--danger)',
-  error:    'var(--danger)',
-  danger:   'var(--danger)',
   unknown:  'var(--text-subtle)',
-};
+} as const;
 
 export default function StatusDot({ status, size = 6, live = false }: Props) {
-  const color = colorMap[status] ?? 'var(--text-subtle)';
+  const color = colorMap[status];
   return (
     <span
       className={live ? 'dot-live' : undefined}
