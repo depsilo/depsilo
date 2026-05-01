@@ -399,7 +399,7 @@ export default function SetupWizard() {
           </div>
         )}
 
-        <CardV2 elevated>
+        <CardV2>
           {renderStep()}
 
           {/* Navigation buttons */}
