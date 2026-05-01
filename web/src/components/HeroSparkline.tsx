@@ -13,7 +13,7 @@ export default function HeroSparkline({ values }: Props) {
   const H = 110
   const padY = 6
 
-  if (!values?.length) return null
+  if (!values || values.length < 2) return null
 
   const min = Math.min(...values)
   const max = Math.max(...values)
@@ -37,6 +37,7 @@ export default function HeroSparkline({ values }: Props) {
     <svg
       viewBox={`0 0 ${W} ${H + 16}`}
       preserveAspectRatio="none"
+      aria-hidden="true"
       style={{ width: '100%', height: 110, overflow: 'visible' }}
     >
       <defs>

@@ -27,6 +27,7 @@ export default function Segmented({ options, value, onChange }: Props) {
         const active = opt.value === value
         return (
           <button
+            type="button"
             key={opt.value}
             onClick={() => onChange(opt.value)}
             style={{
