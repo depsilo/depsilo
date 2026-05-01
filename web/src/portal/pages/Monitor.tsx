@@ -1,215 +1,492 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
-import CardV2 from '@/components/Card'
-import BadgeV2 from '@/components/Badge'
-import EcosystemIcon from '@/components/EcosystemIcon'
-import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
+import StatusDot from '@/components/StatusDot'
+import Sparkline from '@/components/Sparkline'
+import Segmented from '@/components/Segmented'
+import HeroSparkline from '@/components/HeroSparkline'
+import { KPI_SERIES, MIRROR_DEFS, genSeries, type MirrorStatus } from '@/lib/ecosystemData'
 
-interface CacheEvent {
-  id: string
-  timestamp: string
-  hit: boolean
-  package_name: string
-  file_name: string
-  upstream?: string
-  adapter_type: string
+interface UpstreamInfo {
+  name: string
+  adapter: string
+  url: string
+  healthy: boolean
+  avg_latency_ms: number
+  success_rate: number
 }
 
 interface StatsData {
   service: { status: string }
   today: {
-    total_requests: number; hit_count: number; miss_count: number
-    hit_rate: number; bytes_served: number; bytes_saved: number
+    total_requests: number
+    hit_count: number
+    miss_count: number
+    hit_rate: number
+    bytes_served: number
+    bytes_saved: number
   }
   cache: { total_files: number; total_size_bytes: number }
-  upstreams: Array<{ name: string; adapter: string; healthy: boolean; avg_latency_ms: number; success_rate: number }>
-  top_packages: {
-    pypi: Array<{ name: string; hit_count: number }>
-    apt: Array<{ name: string; hit_count: number }>
-  }
+  upstreams: UpstreamInfo[]
 }
 
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+function formatBytes(bytes: number): { value: string; unit: string } {
+  if (bytes >= 1e12) return { value: (bytes / 1e12).toFixed(1), unit: 'TB' }
+  if (bytes >= 1e9)  return { value: (bytes / 1e9).toFixed(0),  unit: 'GB' }
+  if (bytes >= 1e6)  return { value: (bytes / 1e6).toFixed(0),  unit: 'MB' }
+  return { value: String(bytes), unit: 'B' }
 }
 
+function formatRequests(n: number): { value: string; unit: string } {
+  if (n >= 1e6) return { value: (n / 1e6).toFixed(2), unit: 'M' }
+  if (n >= 1e3) return { value: (n / 1e3).toFixed(1), unit: 'K' }
+  return { value: String(n), unit: '' }
+}
 
-// ── Main page ──────────────────────────────────────────────────────
+// ── HitRateHero ───────────────────────────────────────────────────
 
-export default function MonitorV2() {
-  const { t } = useTranslation()
-  const [events, setEvents] = useState<CacheEvent[]>([])
-  const [extraHits, setExtraHits] = useState(0)
-  const [extraMisses, setExtraMisses] = useState(0)
-  const [connected, setConnected] = useState(false)
+function HitRateHero({ hitRate }: { hitRate: number }) {
+  const displayRate = (hitRate * 100).toFixed(1)
 
-  // Stats from API
+  return (
+    <div
+      className="card aurora-rim"
+      style={{
+        padding: '28px 32px',
+        display: 'grid',
+        gridTemplateColumns: '320px 1fr',
+        alignItems: 'stretch',
+        gap: 32,
+        minHeight: 168,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div>
+          <div
+            className="eyebrow"
+            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            <StatusDot status="healthy" live />
+            <span>Cache hit rate · today</span>
+          </div>
+          <div
+            className="aurora-glow"
+            style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 14 }}
+          >
+            <span
+              className="grad-text-aurora"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 76,
+                fontWeight: 600,
+                letterSpacing: '-0.06em',
+                lineHeight: 1,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {displayRate}
+            </span>
+            <span style={{ fontSize: 22, color: 'var(--text-soft)' }}>%</span>
+          </div>
+        </div>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          position: 'relative',
+          borderLeft: '0.5px solid var(--border)',
+          paddingLeft: 32,
+        }}
+      >
+        <HeroSparkline values={KPI_SERIES.hitRate} />
+      </div>
+    </div>
+  )
+}
+
+// ── StatStrip ─────────────────────────────────────────────────────
+
+function StatStrip({ data }: { data: StatsData['today'] }) {
+  const reqFmt   = formatRequests(data.total_requests)
+  const savedFmt = formatBytes(data.bytes_saved)
+
+  const items = [
+    {
+      label: 'Total requests',
+      value: reqFmt.value,
+      unit: reqFmt.unit,
+      tone: 'brand' as const,
+      series: KPI_SERIES.requests,
+    },
+    {
+      label: 'Bandwidth saved',
+      value: savedFmt.value,
+      unit: savedFmt.unit,
+      tone: 'brand' as const,
+      series: KPI_SERIES.saved,
+    },
+    {
+      label: 'P50 latency',
+      value: '—',
+      unit: 'ms',
+      tone: 'neutral' as const,
+      series: KPI_SERIES.latency,
+    },
+  ]
+
+  return (
+    <div
+      className="card"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 0,
+        padding: 0,
+      }}
+    >
+      {items.map((it, i) => (
+        <div
+          key={it.label}
+          style={{
+            padding: '16px 20px',
+            borderRight: i < items.length - 1 ? '0.5px solid var(--border)' : 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{it.label}</span>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 32,
+                  fontWeight: 600,
+                  letterSpacing: '-0.04em',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {it.value}
+              </span>
+              <span style={{ fontSize: 13, color: 'var(--text-soft)' }}>{it.unit}</span>
+            </div>
+            <Sparkline data={it.series} width={120} height={26} tone={it.tone} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── MirrorTile ────────────────────────────────────────────────────
+
+function mirrorStatus(u: UpstreamInfo): MirrorStatus {
+  if (!u.healthy) return 'failed'
+  if (u.avg_latency_ms > 150) return 'degraded'
+  return 'healthy'
+}
+
+function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
+  const status = mirrorStatus(upstream)
+  const isFailed = status === 'failed'
+  const tone = status === 'healthy' ? 'ok' : status === 'degraded' ? 'warn' : 'danger'
+  const def = MIRROR_DEFS.find(m => m.type === upstream.adapter)
+  const series = def?.series ?? genSeries(40, 42, {})
+
+  return (
+    <div
+      className="row-hover"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '50px 1fr 96px',
+        alignItems: 'center',
+        gap: 12,
+        padding: '10px 14px',
+        borderBottom: '0.5px solid var(--border)',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <StatusDot
+          status={
+            status === 'healthy' ? 'healthy'
+            : status === 'degraded' ? 'degraded'
+            : 'failed'
+          }
+        />
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text)',
+          }}
+        >
+          {upstream.adapter}
+        </span>
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div
+          className="mono"
+          style={{
+            fontSize: 12,
+            color: isFailed ? 'var(--text-subtle)' : 'var(--text)',
+            textDecoration: isFailed ? 'line-through' : 'none',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {(upstream.url || upstream.name).replace(/^https?:\/\//, '')}
+        </div>
+        <div style={{ display: 'flex', gap: 14, marginTop: 2, fontSize: 11 }}>
+          <span style={{ color: 'var(--text-subtle)' }}>
+            P50{' '}
+            <span
+              className="num"
+              style={{
+                color: isFailed
+                  ? 'var(--text-subtle)'
+                  : upstream.avg_latency_ms > 100
+                  ? 'var(--warn-text)'
+                  : 'var(--text-muted)',
+              }}
+            >
+              {isFailed ? '—' : `${upstream.avg_latency_ms}ms`}
+            </span>
+          </span>
+          <span style={{ color: 'var(--text-subtle)' }}>
+            hit{' '}
+            <span
+              className="num"
+              style={{ color: isFailed ? 'var(--text-subtle)' : 'var(--text-muted)' }}
+            >
+              {isFailed ? '—' : `${(upstream.success_rate * 100).toFixed(1)}%`}
+            </span>
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Sparkline data={series} width={92} height={22} tone={tone} />
+      </div>
+    </div>
+  )
+}
+
+function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
+  const half = Math.ceil(upstreams.length / 2)
+  const left  = upstreams.slice(0, half)
+  const right = upstreams.slice(half)
+
+  return (
+    <div
+      className="card"
+      style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'hidden' }}
+    >
+      <div style={{ borderRight: '0.5px solid var(--border)' }}>
+        {left.map(u => (
+          <MirrorTile key={`${u.adapter}-${u.name}`} upstream={u} />
+        ))}
+      </div>
+      <div>
+        {right.map(u => (
+          <MirrorTile key={`${u.adapter}-${u.name}`} upstream={u} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Banner ────────────────────────────────────────────────────────
+
+function Banner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '8px 12px',
+        background: 'var(--warn-fill)',
+        border: '0.5px solid var(--warn-border)',
+        borderRadius: 8,
+        fontSize: 12,
+      }}
+    >
+      <StatusDot status="degraded" />
+      <span style={{ flex: 1, color: 'var(--text)' }}>
+        SSE stream disconnected — real-time updates paused.
+      </span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        style={{ color: 'var(--text-muted)', padding: 4, lineHeight: 0 }}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path
+            d="M2 2l6 6M8 2l-6 6"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────
+
+const TIME_RANGES = [
+  { value: '15m', label: '15m' },
+  { value: '1h',  label: '1h'  },
+  { value: '24h', label: '24h' },
+  { value: '7d',  label: '7d'  },
+]
+
+export default function MonitorPage() {
+  const [timeRange, setTimeRange] = useState('1h')
+  const [showBanner, setShowBanner] = useState(false)
+
   const { data } = useQuery<StatsData>({
     queryKey: ['stats-monitor'],
-    queryFn: async () => { const res = await statsApi.getStats(); return res.data },
+    queryFn: async () => {
+      const res = await statsApi.getStats()
+      return res.data
+    },
     refetchInterval: 30000,
   })
 
-  // SSE
-  const handleEvent = useCallback((e: MessageEvent) => {
-    try {
-      const event: CacheEvent = JSON.parse(e.data)
-      if (!event.id) event.id = `${event.timestamp}-${Math.random().toString(36).slice(2, 8)}`
-      setEvents((prev) => [event, ...prev].slice(0, 100))
-      if (event.hit) setExtraHits((h) => h + 1)
-      else setExtraMisses((m) => m + 1)
-    } catch { /* ignore */ }
-  }, [])
-
-  useEffect(() => {
-    const es = new EventSource('/api/v1/events/stream')
-    es.onopen = () => setConnected(true)
-    es.onerror = () => setConnected(false)
-    es.onmessage = handleEvent
-    return () => es.close()
-  }, [handleEvent])
-
-  const totalHits = (data?.today.hit_count ?? 0) + extraHits
-  const totalMisses = (data?.today.miss_count ?? 0) + extraMisses
-  const totalRequests = totalHits + totalMisses
-  const hitRate = totalRequests > 0 ? ((totalHits / totalRequests) * 100).toFixed(1) : '0.0'
-
   const upstreams = data?.upstreams ?? []
-  const topPypi = data?.top_packages?.pypi ?? []
-  const topApt = data?.top_packages?.apt ?? []
-  const maxPypi = Math.max(...topPypi.map(p => p.hit_count), 1)
-  const maxApt = Math.max(...topApt.map(p => p.hit_count), 1)
+  const hitRate   = data?.today.hit_rate ?? 0
+  const today     = data?.today ?? {
+    total_requests: 0,
+    hit_count: 0,
+    miss_count: 0,
+    hit_rate: 0,
+    bytes_served: 0,
+    bytes_saved: 0,
+  }
+
+  const healthyCounts = upstreams.reduce(
+    (acc, u) => {
+      const s = mirrorStatus(u)
+      acc[s] = (acc[s] ?? 0) + 1
+      return acc
+    },
+    {} as Record<MirrorStatus, number>
+  )
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--text)' }}>
-        {t('monitor.title')}
-      </h1>
-
-      {/* Metrics row — 4 cols in one bar */}
+    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Title row */}
       <div
-        className="grid grid-cols-4 gap-6 rounded-[6px] overflow-hidden px-5 py-4"
-        style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: 16,
+        }}
       >
-        {[
-          { label: t('monitor.hitRate'), value: `${hitRate}%`, accent: true },
-          { label: t('monitor.requests'), value: totalRequests.toLocaleString() },
-          { label: t('monitor.hits'), value: totalHits.toLocaleString() },
-          { label: t('monitor.misses'), value: totalMisses.toLocaleString() },
-        ].map((m) => (
-          <div key={m.label}>
-            <p className="text-[11px] font-[400] uppercase tracking-wider mb-1" style={{ color: 'var(--text-soft)' }}>{m.label}</p>
-            <p
-              className="text-[20px] font-[300] font-mono tabular-nums tracking-tight"
-              style={{ color: m.accent ? 'var(--brand)' : 'var(--text)' }}
+        <div>
+          <h1
+            className="grad-text"
+            style={{
+              margin: 0,
+              fontSize: 44,
+              fontWeight: 700,
+              letterSpacing: '-0.04em',
+              lineHeight: 1.02,
+            }}
+          >
+            Live monitoring
+          </h1>
+          <p
+            style={{
+              margin: '14px 0 0 0',
+              fontSize: 17,
+              lineHeight: 1.45,
+              color: 'var(--text)',
+              maxWidth: 620,
+              fontWeight: 400,
+              letterSpacing: '-0.005em',
+            }}
+          >
+            Real-time view of cache performance and upstream mirror health.
+          </p>
+        </div>
+        <Segmented options={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
+      </div>
+
+      {showBanner && <Banner onDismiss={() => setShowBanner(false)} />}
+
+      <HitRateHero hitRate={hitRate} />
+      <StatStrip data={today} />
+
+      {/* Mirrors section */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 26,
+                fontWeight: 700,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.1,
+              }}
             >
-              {m.value}
+              Upstream mirrors{' '}
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  letterSpacing: '-0.02em',
+                  color: 'var(--text-subtle)',
+                  marginLeft: 6,
+                }}
+              >
+                {upstreams.length}
+              </span>
+            </h2>
+            <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <StatusDot status="healthy" />
+                <span className="num">{healthyCounts.healthy ?? 0}</span> healthy
+              </span>
+              <span style={{ margin: '0 10px', color: 'var(--border-strong)' }}>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <StatusDot status="degraded" />
+                <span className="num">{healthyCounts.degraded ?? 0}</span> degraded
+              </span>
+              <span style={{ margin: '0 10px', color: 'var(--border-strong)' }}>·</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <StatusDot status="failed" />
+                <span className="num">{healthyCounts.failed ?? 0}</span> failed
+              </span>
             </p>
           </div>
-        ))}
-      </div>
-
-      {/* Event stream */}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="relative flex h-2 w-2">
-            {connected && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--ok)' }} />}
-            <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: connected ? 'var(--ok)' : 'var(--danger)' }} />
-          </span>
-          <span className="text-[12px]" style={{ color: connected ? 'var(--ok-text)' : 'var(--danger)' }}>
-            {connected ? 'Connected' : 'Disconnected'}
-          </span>
         </div>
-        <div className="rounded-[5px] overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          {events.length === 0 ? (
-            <p className="py-12 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
-              {t('monitor.noEvents')}
-            </p>
-          ) : (
-            <div>
-              {events.map((event, i) => (
-                <div
-                  key={event.id}
-                  className="flex items-center gap-3 px-3 py-1.5 animate-fade-in"
-                  style={{
-                    borderBottom: i < events.length - 1 ? '1px solid var(--border)' : 'none',
-                    borderLeft: `2px solid ${event.hit ? 'var(--ok)' : 'var(--text-muted)'}`,
-                  }}
-                >
-                  <span className="text-[11px] font-mono tabular-nums shrink-0 w-12" style={{ color: 'var(--text-soft)' }}>
-                    {formatTime(event.timestamp)}
-                  </span>
-                  <EcosystemIcon type={event.adapter_type as any} size={12} />
-                  <span className="font-mono text-[12px] truncate min-w-0 flex-1" style={{ color: 'var(--text)' }}>
-                    {event.package_name}
-                  </span>
-                  <BadgeV2 variant={event.hit ? 'success' : 'warning'} className="shrink-0">
-                    {event.hit ? 'HIT' : 'MISS'}
-                  </BadgeV2>
-                  {!event.hit && event.upstream && (
-                    <span className="text-[11px] shrink-0" style={{ color: 'var(--text-soft)' }}>→ {event.upstream}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Upstreams — grouped by ecosystem, with heartbeat bars */}
-      <UpstreamGroupedPanel upstreams={upstreams} />
-
-      {/* Top packages */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {topPypi.length > 0 && (
-          <CardV2>
-            <div className="flex items-center gap-1.5 mb-3">
-              <EcosystemIcon type="pypi" size={14} />
-              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>
-                {t('monitor.topPackages')} — PyPI
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {topPypi.slice(0, 8).map(pkg => (
-                <div key={pkg.name} className="flex items-center gap-2">
-                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--text)' }}>{pkg.name}</span>
-                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--text-soft)' }}>{pkg.hit_count.toLocaleString()}</span>
-                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxPypi) * 100}%`, background: 'var(--brand)' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardV2>
-        )}
-        {topApt.length > 0 && (
-          <CardV2>
-            <div className="flex items-center gap-1.5 mb-3">
-              <EcosystemIcon type="apt" size={14} />
-              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>
-                {t('monitor.topPackages')} — APT
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {topApt.slice(0, 8).map(pkg => (
-                <div key={pkg.name} className="flex items-center gap-2">
-                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--text)' }}>{pkg.name}</span>
-                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--text-soft)' }}>{pkg.hit_count.toLocaleString()}</span>
-                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxApt) * 100}%`, background: 'var(--ok)' }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardV2>
-        )}
-        {topPypi.length === 0 && topApt.length === 0 && (
-          <CardV2><p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p></CardV2>
-        )}
+        {upstreams.length > 0 && <MirrorMatrix upstreams={upstreams} />}
       </div>
     </div>
   )
