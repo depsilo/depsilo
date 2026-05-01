@@ -13,7 +13,7 @@ const variantStyles: Record<BadgeV2Variant, { bg: string; color: string; border:
   success: { bg: 'var(--ok-fill)', color: 'var(--ok-text)', border: 'var(--ok-border)' },
   error: { bg: 'var(--danger-fill)', color: 'var(--danger-text)', border: 'var(--danger-border)' },
   warning: { bg: 'var(--warn-fill)', color: 'var(--warn-text)', border: 'var(--warn-border)' },
-  pro: { bg: 'var(--grad-aurora)', color: 'transparent', border: 'var(--brand-border)' },
+  pro: { bg: 'var(--grad-aurora)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
   ecosystem: { bg: 'var(--brand-soft)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
 }
 
