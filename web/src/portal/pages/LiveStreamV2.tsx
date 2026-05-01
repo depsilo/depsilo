@@ -72,15 +72,15 @@ export default function LiveStreamV2() {
       {/* Header with connection status */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
+          <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--text)' }}>
             {t('live.title')}
           </h1>
           <div className="flex items-center gap-2 mt-1">
             <span className="relative flex h-2.5 w-2.5">
-              {connected && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--success)' }} />}
-              <span className={`relative inline-flex rounded-full h-2.5 w-2.5`} style={{ background: connected ? 'var(--success)' : 'var(--error)' }} />
+              {connected && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--ok)' }} />}
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5`} style={{ background: connected ? 'var(--ok)' : 'var(--danger)' }} />
             </span>
-            <span className="text-[13px]" style={{ color: connected ? 'var(--success-text)' : 'var(--error)' }}>
+            <span className="text-[13px]" style={{ color: connected ? 'var(--ok-text)' : 'var(--danger)' }}>
               {connected ? t('live.connected') || 'Connected' : t('live.disconnected') || 'Disconnected'}
             </span>
           </div>
@@ -97,10 +97,10 @@ export default function LiveStreamV2() {
 
       {/* Big hit rate display */}
       <div className="text-center py-4">
-        <p className="text-[56px] font-[300] tracking-[-1.4px] tabular-nums" style={{ color: 'var(--heading)' }}>
+        <p className="text-[56px] font-[300] tracking-[-1.4px] tabular-nums" style={{ color: 'var(--text)' }}>
           {hitRate}%
         </p>
-        <p className="text-[14px] font-[300]" style={{ color: 'var(--body)' }}>
+        <p className="text-[14px] font-[300]" style={{ color: 'var(--text-soft)' }}>
           {t('live.hitRate')}
         </p>
       </div>
@@ -113,9 +113,9 @@ export default function LiveStreamV2() {
       </div>
 
       {/* Event list */}
-      <div className="rounded-[5px] overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div className="rounded-[5px] overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
         {events.length === 0 ? (
-          <p className="py-16 text-center text-[14px]" style={{ color: 'var(--body)' }}>
+          <p className="py-16 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>
             {t('live.noEvents')}
           </p>
         ) : (
@@ -126,21 +126,21 @@ export default function LiveStreamV2() {
                 className="flex items-center gap-4 px-4 py-2.5 animate-fade-in"
                 style={{
                   borderBottom: i < events.length - 1 ? '1px solid var(--border)' : 'none',
-                  borderLeft: `3px solid ${event.hit ? 'var(--success)' : 'var(--lemon, #9b6829)'}`,
+                  borderLeft: `3px solid ${event.hit ? 'var(--ok)' : 'var(--lemon, #9b6829)'}`,
                 }}
               >
-                <span className="text-[12px] font-mono tabular-nums shrink-0 w-16" style={{ color: 'var(--body)' }}>
+                <span className="text-[12px] font-mono tabular-nums shrink-0 w-16" style={{ color: 'var(--text-soft)' }}>
                   {formatTime(event.timestamp)}
                 </span>
                 <EcosystemIcon type={event.adapter_type as any} size={14} />
-                <span className="font-mono text-[13px] truncate min-w-0 flex-1" style={{ color: 'var(--heading)' }}>
+                <span className="font-mono text-[13px] truncate min-w-0 flex-1" style={{ color: 'var(--text)' }}>
                   {event.package_name}
                 </span>
                 <BadgeV2 variant={event.hit ? 'success' : 'warning'} className="shrink-0">
                   {event.hit ? 'HIT' : 'MISS'}
                 </BadgeV2>
                 {!event.hit && event.upstream && (
-                  <span className="text-[12px] shrink-0" style={{ color: 'var(--body)' }}>
+                  <span className="text-[12px] shrink-0" style={{ color: 'var(--text-soft)' }}>
                     → {event.upstream}
                   </span>
                 )}

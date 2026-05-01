@@ -86,14 +86,14 @@ export default function MonitorV2() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
+      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--text)' }}>
         {t('monitor.title')}
       </h1>
 
       {/* Metrics row — 4 cols in one bar */}
       <div
         className="grid grid-cols-4 gap-6 rounded-[6px] overflow-hidden px-5 py-4"
-        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+        style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}
       >
         {[
           { label: t('monitor.hitRate'), value: `${hitRate}%`, accent: true },
@@ -102,10 +102,10 @@ export default function MonitorV2() {
           { label: t('monitor.misses'), value: totalMisses.toLocaleString() },
         ].map((m) => (
           <div key={m.label}>
-            <p className="text-[11px] font-[400] uppercase tracking-wider mb-1" style={{ color: 'var(--body)' }}>{m.label}</p>
+            <p className="text-[11px] font-[400] uppercase tracking-wider mb-1" style={{ color: 'var(--text-soft)' }}>{m.label}</p>
             <p
               className="text-[20px] font-[300] font-mono tabular-nums tracking-tight"
-              style={{ color: m.accent ? 'var(--stripe-purple)' : 'var(--heading)' }}
+              style={{ color: m.accent ? 'var(--brand)' : 'var(--text)' }}
             >
               {m.value}
             </p>
@@ -117,16 +117,16 @@ export default function MonitorV2() {
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className="relative flex h-2 w-2">
-            {connected && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--success)' }} />}
-            <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: connected ? 'var(--success)' : 'var(--error)' }} />
+            {connected && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--ok)' }} />}
+            <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: connected ? 'var(--ok)' : 'var(--danger)' }} />
           </span>
-          <span className="text-[12px]" style={{ color: connected ? 'var(--success-text)' : 'var(--error)' }}>
+          <span className="text-[12px]" style={{ color: connected ? 'var(--ok-text)' : 'var(--danger)' }}>
             {connected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
-        <div className="rounded-[5px] overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="rounded-[5px] overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
           {events.length === 0 ? (
-            <p className="py-12 text-center text-[13px]" style={{ color: 'var(--body)' }}>
+            <p className="py-12 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
               {t('monitor.noEvents')}
             </p>
           ) : (
@@ -137,21 +137,21 @@ export default function MonitorV2() {
                   className="flex items-center gap-3 px-3 py-1.5 animate-fade-in"
                   style={{
                     borderBottom: i < events.length - 1 ? '1px solid var(--border)' : 'none',
-                    borderLeft: `2px solid ${event.hit ? 'var(--success)' : 'var(--label)'}`,
+                    borderLeft: `2px solid ${event.hit ? 'var(--ok)' : 'var(--text-muted)'}`,
                   }}
                 >
-                  <span className="text-[11px] font-mono tabular-nums shrink-0 w-12" style={{ color: 'var(--body)' }}>
+                  <span className="text-[11px] font-mono tabular-nums shrink-0 w-12" style={{ color: 'var(--text-soft)' }}>
                     {formatTime(event.timestamp)}
                   </span>
                   <EcosystemIcon type={event.adapter_type as any} size={12} />
-                  <span className="font-mono text-[12px] truncate min-w-0 flex-1" style={{ color: 'var(--heading)' }}>
+                  <span className="font-mono text-[12px] truncate min-w-0 flex-1" style={{ color: 'var(--text)' }}>
                     {event.package_name}
                   </span>
                   <BadgeV2 variant={event.hit ? 'success' : 'warning'} className="shrink-0">
                     {event.hit ? 'HIT' : 'MISS'}
                   </BadgeV2>
                   {!event.hit && event.upstream && (
-                    <span className="text-[11px] shrink-0" style={{ color: 'var(--body)' }}>→ {event.upstream}</span>
+                    <span className="text-[11px] shrink-0" style={{ color: 'var(--text-soft)' }}>→ {event.upstream}</span>
                   )}
                 </div>
               ))}
@@ -169,17 +169,17 @@ export default function MonitorV2() {
           <CardV2>
             <div className="flex items-center gap-1.5 mb-3">
               <EcosystemIcon type="pypi" size={14} />
-              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--body)' }}>
+              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>
                 {t('monitor.topPackages')} — PyPI
               </span>
             </div>
             <div className="space-y-1.5">
               {topPypi.slice(0, 8).map(pkg => (
                 <div key={pkg.name} className="flex items-center gap-2">
-                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--heading)' }}>{pkg.name}</span>
-                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>{pkg.hit_count.toLocaleString()}</span>
-                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxPypi) * 100}%`, background: 'var(--stripe-purple)' }} />
+                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--text)' }}>{pkg.name}</span>
+                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--text-soft)' }}>{pkg.hit_count.toLocaleString()}</span>
+                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxPypi) * 100}%`, background: 'var(--brand)' }} />
                   </div>
                 </div>
               ))}
@@ -190,17 +190,17 @@ export default function MonitorV2() {
           <CardV2>
             <div className="flex items-center gap-1.5 mb-3">
               <EcosystemIcon type="apt" size={14} />
-              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--body)' }}>
+              <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>
                 {t('monitor.topPackages')} — APT
               </span>
             </div>
             <div className="space-y-1.5">
               {topApt.slice(0, 8).map(pkg => (
                 <div key={pkg.name} className="flex items-center gap-2">
-                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--heading)' }}>{pkg.name}</span>
-                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--body)' }}>{pkg.hit_count.toLocaleString()}</span>
-                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--surface-container)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxApt) * 100}%`, background: 'var(--success)' }} />
+                  <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--text)' }}>{pkg.name}</span>
+                  <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--text-soft)' }}>{pkg.hit_count.toLocaleString()}</span>
+                  <div className="w-16 h-1 rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
+                    <div className="h-full rounded-full" style={{ width: `${(pkg.hit_count / maxApt) * 100}%`, background: 'var(--ok)' }} />
                   </div>
                 </div>
               ))}
@@ -208,7 +208,7 @@ export default function MonitorV2() {
           </CardV2>
         )}
         {topPypi.length === 0 && topApt.length === 0 && (
-          <CardV2><p className="text-[13px]" style={{ color: 'var(--body)' }}>{t('noData')}</p></CardV2>
+          <CardV2><p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p></CardV2>
         )}
       </div>
     </div>

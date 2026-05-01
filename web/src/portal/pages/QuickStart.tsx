@@ -206,9 +206,8 @@ function StatusBar() {
     <div
       className="rounded-[6px] px-4 py-2.5 flex items-center gap-4 flex-wrap"
       style={{
-        background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
+        background: 'color-mix(in srgb, var(--bg-card) 85%, transparent)',
         border: '1px solid var(--border)',
-        boxShadow: 'var(--shadow-soft)',
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
       }}
@@ -216,14 +215,14 @@ function StatusBar() {
       {/* Service URL + copy */}
       <div className="flex items-center gap-2 min-w-0">
         <span className="relative flex h-2 w-2 shrink-0">
-          {isHealthy && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--success)' }} />}
-          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: data ? (isHealthy ? 'var(--success)' : 'var(--error)') : 'var(--body)' }} />
+          {isHealthy && <span className="animate-ping-health absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--ok)' }} />}
+          <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: data ? (isHealthy ? 'var(--ok)' : 'var(--danger)') : 'var(--text-soft)' }} />
         </span>
-        <code className="font-mono text-[13px] truncate" style={{ color: 'var(--stripe-purple)' }}>{url}</code>
+        <code className="font-mono text-[13px] truncate" style={{ color: 'var(--brand)' }}>{url}</code>
         <button
           onClick={handleCopy}
           className="bg-transparent p-0.5 rounded-[4px] cursor-pointer shrink-0"
-          style={{ color: copied ? 'var(--success)' : 'var(--body)' }}
+          style={{ color: copied ? 'var(--ok)' : 'var(--text-soft)' }}
         >
           <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
         </button>
@@ -234,7 +233,7 @@ function StatusBar() {
 
       {/* Stats */}
       {data && (
-        <div className="flex items-center gap-4 text-[12px] font-mono tabular-nums" style={{ color: 'var(--body)' }}>
+        <div className="flex items-center gap-4 text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>
           <span>{t('quickstart.statRequests', { count: data.today.total_requests.toLocaleString() })}</span>
           <span>{t('quickstart.statHitRate', { rate: (data.today.hit_rate * 100).toFixed(1) })}</span>
           <span>{t('quickstart.statSaved', { size: fmtBytes(data.today.bytes_saved) })}</span>
@@ -264,16 +263,16 @@ function AIInstructionsLink({ baseURL, host }: { baseURL: string; host: string }
       <button
         onClick={() => setOpen(!open)}
         className="inline-flex items-center gap-1.5 bg-transparent cursor-pointer text-[13px] font-[400] transition-colors duration-150 p-0"
-        style={{ color: 'var(--stripe-purple)', border: 'none' }}
+        style={{ color: 'var(--brand)', border: 'none' }}
       >
         <Icon name="auto_awesome" size="sm" />
         <span>{t('quickstart.aiTitle')}</span>
-        <span className="text-[12px]" style={{ color: 'var(--body)' }}>— {t('quickstart.aiSubtitle')}</span>
-        <Icon name={open ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--body)' }} />
+        <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>— {t('quickstart.aiSubtitle')}</span>
+        <Icon name={open ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--text-soft)' }} />
       </button>
 
       {open && (
-        <div className="mt-3 rounded-[5px] overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <div className="mt-3 rounded-[5px] overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
           {AI_TOOLS.map((tool) => {
             const isCopied = copiedId === tool.id
             return (
@@ -282,17 +281,17 @@ function AIInstructionsLink({ baseURL, host }: { baseURL: string; host: string }
                 className="flex items-center gap-3 px-4 py-1.5"
                 style={{ borderBottom: '1px solid var(--border)' }}
               >
-                <Icon name={tool.icon} size="sm" style={{ color: 'var(--body)', flexShrink: 0 }} />
-                <span className="text-[12px] font-[400] w-[90px] shrink-0" style={{ color: 'var(--heading)' }}>
+                <Icon name={tool.icon} size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+                <span className="text-[12px] font-[400] w-[90px] shrink-0" style={{ color: 'var(--text)' }}>
                   {t(`quickstart.ai_${tool.id}`)}
                 </span>
-                <code className="flex-1 text-[11px] font-mono truncate" style={{ color: 'var(--body)' }}>{tool.file}</code>
+                <code className="flex-1 text-[11px] font-mono truncate" style={{ color: 'var(--text-soft)' }}>{tool.file}</code>
                 <button
                   onClick={() => handleCopy(tool)}
                   className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-[400] rounded-[3px] cursor-pointer transition-all duration-150 shrink-0"
                   style={{
-                    background: isCopied ? 'rgba(21,190,83,0.1)' : 'var(--stripe-purple)',
-                    color: isCopied ? 'var(--success-text)' : 'var(--on-primary)',
+                    background: isCopied ? 'rgba(21,190,83,0.1)' : 'var(--brand)',
+                    color: isCopied ? 'var(--ok-text)' : 'white',
                     border: isCopied ? '1px solid rgba(21,190,83,0.3)' : '1px solid transparent',
                   }}
                 >
@@ -343,10 +342,10 @@ function TestButton({ ecosystem, baseURL }: { ecosystem: Tab; baseURL: string })
   }
 
   const colors = {
-    idle: { bg: 'transparent', color: 'var(--stripe-purple)', border: 'var(--border-purple)', shadow: '0 0 8px rgba(83,58,253,0.25)' },
-    testing: { bg: 'transparent', color: 'var(--body)', border: 'var(--border)', shadow: 'none' },
-    ok: { bg: 'rgba(21,190,83,0.1)', color: 'var(--success-text)', border: 'rgba(21,190,83,0.3)', shadow: 'none' },
-    fail: { bg: 'var(--error-container)', color: 'var(--error)', border: 'var(--error)', shadow: 'none' },
+    idle: { bg: 'transparent', color: 'var(--brand)', border: 'var(--border-purple)', shadow: '0 0 8px rgba(83,58,253,0.25)' },
+    testing: { bg: 'transparent', color: 'var(--text-soft)', border: 'var(--border)', shadow: 'none' },
+    ok: { bg: 'rgba(21,190,83,0.1)', color: 'var(--ok-text)', border: 'rgba(21,190,83,0.3)', shadow: 'none' },
+    fail: { bg: 'var(--danger-fill)', color: 'var(--danger)', border: 'var(--danger)', shadow: 'none' },
   }
   const c = colors[status]
   const labels = {
@@ -381,17 +380,17 @@ interface MethodProps {
 
 function Method({ icon, title, description, children }: MethodProps) {
   return (
-    <div className="rounded-[5px] overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--surface)', boxShadow: 'var(--shadow-soft)' }}>
+    <div className="rounded-[5px] overflow-hidden" style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
       <div className="px-5 py-4 flex items-start gap-3">
         <span
           className="flex items-center justify-center w-7 h-7 rounded-[4px] shrink-0 mt-0.5"
-          style={{ background: 'linear-gradient(135deg, var(--stripe-purple), var(--stripe-purple-mid))', color: 'var(--on-primary)' }}
+          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-soft))', color: 'white' }}
         >
           <Icon name={icon} size="sm" />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="font-[400] text-[13px]" style={{ color: 'var(--heading)' }}>{title}</p>
-          <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: 'var(--body)' }}>{description}</p>
+          <p className="font-[400] text-[13px]" style={{ color: 'var(--text)' }}>{title}</p>
+          <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-soft)' }}>{description}</p>
         </div>
       </div>
       <div className="px-5 pb-5 -mt-1 space-y-3">
@@ -422,10 +421,10 @@ export default function QuickStartV2() {
     <div className="space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
+        <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--text)' }}>
           {t('quickstart.title')}
         </h1>
-        <p className="text-[14px] mt-1" style={{ color: 'var(--body)' }}>
+        <p className="text-[14px] mt-1" style={{ color: 'var(--text-soft)' }}>
           {t('quickstart.subtitle')}
         </p>
       </div>
@@ -444,7 +443,7 @@ export default function QuickStartV2() {
               className="flex items-center gap-2 px-3 py-2 text-left cursor-pointer"
               style={{
                 border: 'none',
-                borderBottom: isActive ? '2px solid var(--stripe-purple)' : '2px solid transparent',
+                borderBottom: isActive ? '2px solid var(--brand)' : '2px solid transparent',
                 background: 'transparent',
                 transition: 'all 0.2s ease',
                 transform: 'translateY(0)',
@@ -457,9 +456,9 @@ export default function QuickStartV2() {
               }}
             >
               <EcosystemIcon type={tab.key} size={16} />
-              <span className="text-[13px] font-[400]" style={{ color: isActive ? 'var(--heading)' : 'var(--body)', transition: 'color 0.2s ease' }}
-                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--heading)' }}
-                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--body)' }}
+              <span className="text-[13px] font-[400]" style={{ color: isActive ? 'var(--text)' : 'var(--text-soft)', transition: 'color 0.2s ease' }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--text)' }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--text-soft)' }}
               >
                 {tab.label}
               </span>
@@ -471,7 +470,7 @@ export default function QuickStartV2() {
       {/* Test connection for active ecosystem */}
       <div className="flex items-center gap-3">
         <TestButton ecosystem={activeTab} baseURL={baseURL} />
-        <span className="text-[12px]" style={{ color: 'var(--body)' }}>
+        <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
           {t('quickstart.testHint')}
         </span>
       </div>
@@ -500,11 +499,11 @@ export default function QuickStartV2() {
               <Method icon="memory" title={t('quickstart.extraIndexes')} description={t('quickstart.extraIndexesDesc')}>
                 {extraIndexes.map((idx) => (
                   <div key={idx.name}>
-                    <p className="text-[13px] font-[500] mb-1.5" style={{ color: 'var(--heading)' }}>{idx.name}</p>
+                    <p className="text-[13px] font-[500] mb-1.5" style={{ color: 'var(--text)' }}>{idx.name}</p>
                     <CodeBlock language="bash" code={`pip3 install torch torchvision --index-url ${baseURL}/${idx.path}/simple/`} />
                   </div>
                 ))}
-                <p className="text-[13px] font-[500] mt-3 mb-1.5" style={{ color: 'var(--heading)' }}>Dockerfile</p>
+                <p className="text-[13px] font-[500] mt-3 mb-1.5" style={{ color: 'var(--text)' }}>Dockerfile</p>
                 <CodeBlock filename="Dockerfile" language="dockerfile" code={`ARG PIP_INDEX_URL=${baseURL}/pypi/simple/\nARG PIP_TRUSTED_HOST=${host}\n\n# Standard packages (via main index)\nRUN pip3 install --no-cache-dir transformers accelerate\n\n# CUDA packages (via extra index)\nRUN pip3 install --no-cache-dir torch torchvision \\\n    --index-url ${baseURL}/${extraIndexes[0]?.path}/simple/`} />
               </Method>
             )}
@@ -535,7 +534,7 @@ export default function QuickStartV2() {
             </Method>
             <Method icon="settings" title={t('quickstart.npmPermanentConfig')} description={t('quickstart.npmPermanentConfigDesc')}>
               <CodeBlock language="bash" code={`npm config set registry ${baseURL}/npm/`} />
-              <p className="text-[13px] mt-3 mb-2" style={{ color: 'var(--body)' }}>{t('quickstart.npmNpmrc')}</p>
+              <p className="text-[13px] mt-3 mb-2" style={{ color: 'var(--text-soft)' }}>{t('quickstart.npmNpmrc')}</p>
               <CodeBlock filename="~/.npmrc" code={`registry=${baseURL}/npm/`} />
             </Method>
             <Method icon="speed" title={t('quickstart.npmYarnPnpm')} description={t('quickstart.npmYarnPnpmDesc')}>
@@ -672,10 +671,10 @@ export default function QuickStartV2() {
         className="flex items-start gap-3 rounded-[5px] px-4 py-3"
         style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}
       >
-        <Icon name="lightbulb" size="sm" style={{ color: 'var(--stripe-purple)', marginTop: 2 }} />
+        <Icon name="lightbulb" size="sm" style={{ color: 'var(--brand)', marginTop: 2 }} />
         <div>
-          <p className="font-[400] text-[14px]" style={{ color: 'var(--heading)' }}>{t('quickstart.firstDownloadTitle')}</p>
-          <p className="text-[14px] font-[300] mt-0.5 leading-relaxed" style={{ color: 'var(--body)' }}>
+          <p className="font-[400] text-[14px]" style={{ color: 'var(--text)' }}>{t('quickstart.firstDownloadTitle')}</p>
+          <p className="text-[14px] font-[300] mt-0.5 leading-relaxed" style={{ color: 'var(--text-soft)' }}>
             {t('quickstart.firstDownloadDesc')}
           </p>
         </div>

@@ -81,7 +81,7 @@ export default function PackagesV2() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--heading)' }}>
+      <h1 className="text-[32px] font-[300] tracking-[-0.64px]" style={{ color: 'var(--text)' }}>
         {t('packages.title')}
       </h1>
 
@@ -121,7 +121,7 @@ export default function PackagesV2() {
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-[5px] animate-pulse" style={{ background: 'var(--surface-low)' }} />
+            <div key={i} className="h-16 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
           ))}
         </div>
       ) : !data || data.items.length === 0 ? (
@@ -132,24 +132,24 @@ export default function PackagesV2() {
             <div
               key={`${pkg.adapter_type}-${pkg.package_name}`}
               className="rounded-[5px] px-5 py-4 cursor-pointer transition-all duration-150"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
               onClick={() => navigate(`/packages/${pkg.adapter_type}/${pkg.package_name}`)}
-              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = 'var(--shadow-soft)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.transform = 'translateY(-1px)' }}
               onMouseLeave={(e) => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.transform = '' }}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <EcosystemIcon type={pkg.adapter_type as any} size={18} />
-                  <span className="text-[16px] font-[400] truncate" style={{ color: 'var(--heading)' }}>
+                  <span className="text-[16px] font-[400] truncate" style={{ color: 'var(--text)' }}>
                     {pkg.package_name}
                   </span>
                   <BadgeV2 variant="ecosystem">{pkg.adapter_type.toUpperCase()}</BadgeV2>
                 </div>
-                <span className="text-[12px] shrink-0 ml-4" style={{ color: 'var(--body)' }}>
+                <span className="text-[12px] shrink-0 ml-4" style={{ color: 'var(--text-soft)' }}>
                   {timeAgo(pkg.last_accessed)}
                 </span>
               </div>
-              <p className="text-[13px] mt-1 ml-[30px]" style={{ color: 'var(--body)' }}>
+              <p className="text-[13px] mt-1 ml-[30px]" style={{ color: 'var(--text-soft)' }}>
                 {pkg.version_count} {t('packages.versions')} · {formatBytes(pkg.total_size)} · {pkg.total_hits.toLocaleString()} {t('packages.hits')}
               </p>
             </div>
@@ -160,7 +160,7 @@ export default function PackagesV2() {
       {/* Pagination */}
       {data && data.total_pages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <span className="text-[13px]" style={{ color: 'var(--body)' }}>
+          <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
             {t('totalItems', { total: data.total, page: data.page, totalPages: data.total_pages })}
           </span>
           <div className="flex items-center gap-2">
