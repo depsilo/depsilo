@@ -1,16 +1,65 @@
-import { Routes, Route, NavLink, Link } from 'react-router-dom'
+import { Routes, Route, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
 import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
-import BadgeV2 from '@/components/Badge'
+import StatusDot from '@/components/StatusDot'
 import QuickStartV2 from '@/portal/pages/QuickStart'
 import MonitorV2 from '@/portal/pages/Monitor'
 
+const VERSION = 'v2.4.1'
+
+interface NavTabProps {
+  to: string
+  label: string
+  isActive: boolean
+}
+
+function NavTab({ to, label, isActive }: NavTabProps) {
+  return (
+    <Link
+      to={to}
+      style={{ textDecoration: 'none' }}
+    >
+      <button
+        style={{
+          position: 'relative',
+          padding: '6px 10px',
+          fontSize: 13,
+          fontWeight: isActive ? 600 : 500,
+          letterSpacing: isActive ? '-0.005em' : '0',
+          color: isActive ? 'var(--text)' : 'var(--text-soft)',
+          borderRadius: 6,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        {label}
+        {isActive && (
+          <span
+            style={{
+              position: 'absolute',
+              left: 10,
+              right: 10,
+              bottom: -15,
+              height: 1.5,
+              background: 'var(--grad-brand)',
+              borderRadius: 1,
+            }}
+          />
+        )}
+      </button>
+    </Link>
+  )
+}
+
 export default function PortalAppV2() {
   const { t } = useTranslation()
+  const location = useLocation()
+
   const { data } = useQuery<{ service: { status: string } }>({
     queryKey: ['stats-status'],
     queryFn: async () => {
@@ -20,73 +69,101 @@ export default function PortalAppV2() {
     refetchInterval: 30000,
   })
 
-  const isHealthy = data?.service?.status === 'healthy'
+  const serviceStatus = data?.service?.status ?? 'unknown'
+  const dotStatus = serviceStatus === 'healthy' ? 'healthy' : serviceStatus === 'degraded' ? 'degraded' : 'failed'
 
-  const navStyle = ({ isActive }: { isActive: boolean }) => ({
-    color: isActive ? 'var(--heading)' : 'var(--body)',
-    borderBottomColor: isActive ? 'var(--stripe-purple)' : 'transparent',
-  })
+  const isQuickStart = location.pathname === '/' || location.pathname === ''
+  const isMonitor = location.pathname.startsWith('/monitor')
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
       <header
-        className="fixed top-0 inset-x-0 z-50 h-14"
         style={{
-          background: 'color-mix(in srgb, var(--surface) 85%, transparent)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: '1px solid var(--border)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 30,
+          background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
+          backdropFilter: 'saturate(180%) blur(8px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(8px)',
+          borderBottom: '0.5px solid var(--border)',
         }}
       >
-        <div className="mx-auto relative h-full max-w-[1080px] px-6">
-          {/* Left: Logo */}
-          <Link to="/" className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-2.5 no-underline">
+        <div
+          style={{
+            height: 52,
+            maxWidth: 1240,
+            margin: '0 auto',
+            padding: '0 28px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+          }}
+        >
+          {/* Logo area */}
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
             <Logo size={28} />
-            <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--heading)' }}>Depsilo</span>
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 700,
+                letterSpacing: '-0.025em',
+                color: 'var(--text)',
+              }}
+            >
+              depsilo
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-subtle)',
+                padding: '1px 5px',
+                border: '0.5px solid var(--border)',
+                borderRadius: 4,
+                marginLeft: 2,
+              }}
+            >
+              {VERSION}
+            </span>
           </Link>
 
-          {/* Center: Nav — 2 items */}
-          <nav className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-1">
-            <NavLink
-              to="/" end
-              className="px-3 py-1.5 text-[14px] font-[400] transition-colors duration-150 border-b-2"
-              style={navStyle}
-            >
-              {t('portal.quickStart')}
-            </NavLink>
-            <NavLink
-              to="/monitor"
-              className="px-3 py-1.5 text-[14px] font-[400] transition-colors duration-150 border-b-2"
-              style={navStyle}
-            >
-              {t('portal.monitor')}
-            </NavLink>
+          {/* Nav tabs */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <NavTab to="/" label={t('portal.quickStart')} isActive={isQuickStart} />
+            <NavTab to="/monitor" label={t('portal.monitor')} isActive={isMonitor} />
           </nav>
 
-          {/* Right */}
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-3">
-            <LangToggle />
-            <ThemeToggle />
+          {/* Spacer */}
+          <div style={{ flex: 1 }} />
+
+          {/* Right side controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Status pill */}
             {data && (
-              <span className="inline-flex items-center justify-center min-w-[72px]">
-                <BadgeV2 variant={isHealthy ? 'success' : 'error'} className="whitespace-nowrap">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${isHealthy ? 'bg-success' : 'bg-error'}`} />
-                  {isHealthy ? t('portal.online') : t('portal.offline')}
-                </BadgeV2>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '3px 8px',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  color: 'var(--text-soft)',
+                  fontWeight: 500,
+                }}
+              >
+                <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
+                {dotStatus === 'healthy' ? t('portal.online') : t('portal.offline')}
               </span>
             )}
-            <Link
-              to="/admin"
-              className="inline-flex items-center justify-center min-w-[88px] text-[14px] font-[400] no-underline transition-colors duration-150 whitespace-nowrap"
-              style={{ color: 'var(--stripe-purple)' }}
-            >
-              {t('portal.adminPanel')}
-            </Link>
+            <LangToggle />
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
-      <main className="pt-14 max-w-[1080px] mx-auto px-6 py-8">
+      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '32px 28px' }}>
         <Routes>
           <Route index element={<QuickStartV2 />} />
           <Route path="monitor" element={<MonitorV2 />} />
