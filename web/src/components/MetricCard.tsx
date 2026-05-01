@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react'
+
 interface MetricCardV2Props {
   label: string
   value: string
-  icon?: React.ReactNode
+  icon?: ReactNode
   change?: number | null  // percentage change vs yesterday
-  sparkline?: React.ReactNode
+  sparkline?: ReactNode
 }
 
 export default function MetricCardV2({ label, value, icon, change, sparkline }: MetricCardV2Props) {
@@ -18,7 +20,7 @@ export default function MetricCardV2({ label, value, icon, change, sparkline }: 
       }}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className="eyebrow" style={{ color: 'var(--text-subtle)' }}>
+        <span className="eyebrow">
           {label}
         </span>
         {icon && <span style={{ color: 'var(--text-subtle)' }}>{icon}</span>}
