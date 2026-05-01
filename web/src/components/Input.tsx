@@ -10,13 +10,13 @@ export default function InputV2({ className = '', mono, label, ...rest }: InputV
     <input
       className={`w-full rounded-[4px] px-3 py-2 text-[16px] transition-colors duration-150 stripe-focus-ring ${mono ? 'font-mono' : ''} ${className}`}
       style={{
-        background: 'var(--surface)',
+        background: 'var(--bg-card)',
         border: '1px solid var(--border)',
-        color: 'var(--heading)',
+        color: 'var(--text)',
         outline: 'none',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'var(--stripe-purple)'
+        e.currentTarget.style.borderColor = 'var(--brand)'
         rest.onFocus?.(e)
       }}
       onBlur={(e) => {
@@ -30,7 +30,7 @@ export default function InputV2({ className = '', mono, label, ...rest }: InputV
   if (label) {
     return (
       <div>
-        <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--label)' }}>
+        <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>
           {label}
         </label>
         {input}

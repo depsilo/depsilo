@@ -36,10 +36,10 @@ export default function ButtonV2({
       className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
       disabled={disabled}
       style={{
-        ...(isPrimary ? { background: 'var(--stripe-purple)', color: 'var(--on-primary)' } : {}),
-        ...(isSecondary ? { border: '1px solid var(--border-purple)', color: 'var(--stripe-purple)' } : {}),
-        ...(isDanger ? { border: '1px solid var(--error)', color: 'var(--error)' } : {}),
-        ...(!isPrimary && !isSecondary && !isDanger ? { color: 'var(--stripe-purple)' } : {}),
+        ...(isPrimary ? { background: 'var(--brand)', color: 'white' } : {}),
+        ...(isSecondary ? { border: '1px solid var(--border-purple)', color: 'var(--brand)' } : {}),
+        ...(isDanger ? { border: '1px solid var(--danger)', color: 'var(--danger)' } : {}),
+        ...(!isPrimary && !isSecondary && !isDanger ? { color: 'var(--brand)' } : {}),
       }}
       {...rest}
     >

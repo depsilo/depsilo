@@ -26,22 +26,21 @@ export default function ModalV2({ open, onClose, title, children }: ModalV2Props
       <div
         className="relative mt-[20vh] w-full max-w-md rounded-[8px] p-6"
         style={{
-          background: 'var(--surface)',
+          background: 'var(--bg-card)',
           border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-deep)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
           onClick={onClose}
           className="absolute top-4 right-4 bg-transparent cursor-pointer transition-colors duration-150 p-1 rounded-[4px]"
-          style={{ color: 'var(--body)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--heading)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--body)' }}
+          style={{ color: 'var(--text-soft)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-soft)' }}
         >
           <Icon name="close" size="sm" />
         </button>
-        <h2 className="text-[18px] font-[300] mb-4" style={{ color: 'var(--heading)' }}>{title}</h2>
+        <h2 className="text-[18px] font-[300] mb-4" style={{ color: 'var(--text)' }}>{title}</h2>
         {children}
       </div>
     </div>

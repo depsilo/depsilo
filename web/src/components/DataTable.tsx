@@ -26,7 +26,7 @@ export default function DataTableV2<T extends Record<string, unknown>>({
               <th
                 key={col.key}
                 className="text-left text-[12px] font-[400] uppercase tracking-wider py-3 px-4"
-                style={{ color: 'var(--body)' }}
+                style={{ color: 'var(--text-soft)' }}
               >
                 {col.label}
               </th>
@@ -43,7 +43,7 @@ export default function DataTableV2<T extends Record<string, unknown>>({
                 borderBottom: '1px solid var(--border)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--surface-low)'
+                e.currentTarget.style.background = 'var(--bg-soft)'
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent'

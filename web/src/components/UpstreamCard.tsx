@@ -27,7 +27,7 @@ export interface UpstreamItem {
 const HEARTBEAT_SLOTS = 90
 
 function beatColor(latency: number | null): string {
-  if (latency === null) return 'var(--surface-container)'
+  if (latency === null) return 'var(--bg-soft)'
   if (latency < 0) return '#dc3545'
   if (latency < 80) return '#3bd671'
   if (latency < 200) return '#8cc152'
@@ -105,7 +105,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
       {hoveredIdx !== null && (
         <div
           className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[10px] font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--heading)', color: 'var(--bg)', left: `${(hoveredIdx / HEARTBEAT_SLOTS) * 100}%`, transform: 'translateX(-50%)' }}
+          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: `${(hoveredIdx / HEARTBEAT_SLOTS) * 100}%`, transform: 'translateX(-50%)' }}
         >
           {beatLabel(beats[hoveredIdx])}
         </div>
@@ -120,19 +120,19 @@ export function UpstreamRow({ upstream, actions }: { upstream: UpstreamItem; act
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[12px] font-[400]" style={{ color: 'var(--heading)' }}>{upstream.name}</span>
+        <span className="text-[12px] font-[400]" style={{ color: 'var(--text)' }}>{upstream.name}</span>
         <div className="flex items-center gap-2">
           <span
             className="font-mono text-[11px] tabular-nums"
             style={{
-              color: (upstream.avg_latency_ms || 0) <= 1 ? 'var(--body)'
+              color: (upstream.avg_latency_ms || 0) <= 1 ? 'var(--text-soft)'
                 : upstream.avg_latency_ms < 100 ? '#3bd671'
-                : upstream.avg_latency_ms < 500 ? 'var(--body)' : 'var(--error)',
+                : upstream.avg_latency_ms < 500 ? 'var(--text-soft)' : 'var(--danger)',
             }}
           >
             {(upstream.avg_latency_ms || 0) <= 1 ? '--' : `${upstream.avg_latency_ms}ms`}
           </span>
-          <span className="text-[10px]" style={{ color: upstream.healthy ? '#3bd671' : 'var(--error)' }}>●</span>
+          <span className="text-[10px]" style={{ color: upstream.healthy ? '#3bd671' : 'var(--danger)' }}>●</span>
           {actions}
         </div>
       </div>
@@ -162,7 +162,7 @@ export function UpstreamGroupedPanel({ upstreams, renderActions }: UpstreamGroup
   }, [upstreams])
 
   if (upstreams.length === 0) {
-    return <p className="text-[13px] py-4" style={{ color: 'var(--body)' }}>{t('monitor.noUpstreams')}</p>
+    return <p className="text-[13px] py-4" style={{ color: 'var(--text-soft)' }}>{t('monitor.noUpstreams')}</p>
   }
 
   return (
@@ -171,14 +171,14 @@ export function UpstreamGroupedPanel({ upstreams, renderActions }: UpstreamGroup
         <div
           key={adapter}
           className="rounded-[5px] p-4"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
         >
           <div className="flex items-center gap-2 mb-3">
             <EcosystemIcon type={adapter as any} size={14} />
-            <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--heading)' }}>
+            <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--text)' }}>
               {adapter}
             </span>
-            <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--body)' }}>
+            <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--text-soft)' }}>
               {items.filter(u => u.healthy).length}/{items.length}
             </span>
           </div>
