@@ -1,5 +1,6 @@
 // web/src/portal/components/ConfigurePane.tsx
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import { LANGUAGES, buildPrompt, type ManagerConfig } from '@/lib/ecosystemData'
@@ -11,14 +12,15 @@ interface Props {
 
 function relTime(ts: number): string {
   const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
-  if (s < 1) return 'now'
-  if (s < 60) return `${s}s ago`
-  return `${Math.floor(s / 60)}m ago`
+  if (s < 1) return '0s'
+  if (s < 60) return `${s}s`
+  return `${Math.floor(s / 60)}m`
 }
 
 // Footer: listens to SSE for requests matching the manager
 // managerId: reserved for future per-ecosystem filtering
 function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; managerId: string }) {
+  const { t } = useTranslation()
   const [hits, setHits] = useState<{ id: string; path: string; ms: number; t: number }[]>([])
   const [, setTick] = useState(0)
 
@@ -74,11 +76,11 @@ function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; m
       />
       {hits.length === 0 ? (
         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          Listening for requests on{' '}
+          {t('quickstart.listeningOn')}{' '}
           <span className="mono" style={{ color: 'var(--text-subtle)' }}>
             {endpoint}
           </span>
-          … run the verify command above.
+          {' '}{t('quickstart.verifyHint')}
         </span>
       ) : (
         <>
@@ -91,7 +93,7 @@ function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; m
               whiteSpace: 'nowrap',
             }}
           >
-            {hits.length} request{hits.length > 1 ? 's' : ''} detected
+            {t('quickstart.detectCount', { count: hits.length })}
           </span>
           <span style={{ color: 'var(--border-strong)' }}>·</span>
           <span
@@ -131,44 +133,6 @@ function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; m
   )
 }
 
-function ConfigSection({
-  step,
-  title,
-  subtitle,
-  children,
-}: {
-  step: number
-  title: string
-  subtitle?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '0 2px' }}>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text-subtle)',
-            letterSpacing: '0.04em',
-            flexShrink: 0,
-          }}
-        >
-          {String(step).padStart(2, '0')}
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.005em' }}>
-            {title}
-          </div>
-          {subtitle && (
-            <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 2 }}>{subtitle}</div>
-          )}
-        </div>
-      </div>
-      {children}
-    </div>
-  )
-}
 
 function ManagerTabs({
   managers,
@@ -179,8 +143,57 @@ function ManagerTabs({
   active: string
   onChange: (id: string) => void
 }) {
+  const { t } = useTranslation()
+  const isAI = active === 'ai'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      {/* AI option — always first */}
+      <button
+        type="button"
+        onClick={() => onChange('ai')}
+        style={{
+          display: 'inline-flex',
+          flexDirection: 'column',
+          padding: '6px 10px',
+          background: isAI ? 'var(--brand-soft)' : 'transparent',
+          border: `0.5px solid ${isAI ? 'var(--brand-border)' : 'var(--border)'}`,
+          borderRadius: 6,
+          textAlign: 'left',
+          cursor: 'pointer',
+          transition: 'all 120ms ease',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              color: isAI ? 'var(--brand)' : 'var(--text-subtle)',
+              background: isAI ? 'var(--brand-soft)' : 'var(--bg-soft)',
+              border: `0.5px solid ${isAI ? 'var(--brand-border)' : 'var(--border)'}`,
+              borderRadius: 3,
+              padding: '1px 4px',
+              letterSpacing: '0.04em',
+            }}
+          >
+            AI
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: isAI ? 'var(--brand)' : 'var(--text-muted)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('quickstart.aiTab')}
+          </span>
+        </span>
+        <span style={{ fontSize: 10, color: isAI ? 'var(--brand)' : 'var(--text-subtle)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+          {t('quickstart.aiTabHint')}
+        </span>
+      </button>
+
       {managers.map(m => {
         const isActive = m.id === active
         return (
@@ -221,6 +234,7 @@ function ManagerTabs({
 }
 
 function PromptCard({ prompt }: { prompt: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   function copy() {
     navigator.clipboard.writeText(prompt).then(() => {
@@ -263,7 +277,7 @@ function PromptCard({ prompt }: { prompt: string }) {
             AI
           </span>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Prompt for ChatGPT / Claude / Cursor
+            {t('quickstart.promptForTools')}
           </span>
         </div>
         <button
@@ -279,7 +293,7 @@ function PromptCard({ prompt }: { prompt: string }) {
             background: 'transparent',
           }}
         >
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('quickstart.copied') : t('quickstart.copy')}
         </button>
       </div>
       <div
@@ -299,14 +313,79 @@ function PromptCard({ prompt }: { prompt: string }) {
   )
 }
 
+function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  return (
+    <div
+      style={{
+        border: '0.5px solid var(--border)',
+        borderRadius: 6,
+        background: 'var(--bg-soft)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%',
+          padding: '6px 12px',
+          fontSize: 11,
+          color: 'var(--text-muted)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: 'transparent',
+          border: 'none',
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ color: 'var(--text-subtle)', transition: 'transform 150ms', transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block' }}>▸</span>
+        {t('quickstart.whereReadsFrom')}
+      </button>
+      {open && (
+        <div style={{ borderTop: '0.5px solid var(--border)', overflow: 'hidden' }}>
+          {paths.map((p, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '120px 1fr',
+                alignItems: 'center',
+                gap: 12,
+                padding: '6px 12px',
+                borderBottom: i < paths.length - 1 ? '0.5px solid var(--border)' : 'none',
+              }}
+            >
+              <span className="eyebrow" style={{ whiteSpace: 'nowrap' }}>{p.os}</span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11.5,
+                  color: 'var(--text)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {p.path}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ConfigurePane({ languageId, endpoint }: Props) {
+  const { t } = useTranslation()
   const lang = LANGUAGES.find(l => l.id === languageId)
   const [mgrId, setMgrId] = useState(lang?.managers[0]?.id ?? '')
-  const [showPrompt, setShowPrompt] = useState(false)
 
   useEffect(() => {
     setMgrId(lang?.managers[0]?.id ?? '')
-    setShowPrompt(false)
   }, [languageId])
 
   if (!lang) return null
@@ -320,7 +399,7 @@ export default function ConfigurePane({ languageId, endpoint }: Props) {
   return (
     <div
       className="card"
-      style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}
+      style={{ display: 'flex', flexDirection: 'column' }}
     >
       {/* Header */}
       <div
@@ -350,217 +429,76 @@ export default function ConfigurePane({ languageId, endpoint }: Props) {
             <EcosystemIcon type={lang.iconAdapter as any} size={14} useColor={true} />
           </span>
           <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>
-            Configure {lang.name}
+            {t('quickstart.configureTitle', { name: lang.name })}
           </span>
           <span style={{ fontSize: 10, color: 'var(--text-subtle)', marginLeft: 4 }}>
-            {lang.managers.length} {lang.managers.length === 1 ? 'manager' : 'managers'}
+            {t('quickstart.managerCount', { count: lang.managers.length })}
           </span>
         </div>
         <div style={{ flex: 1 }} />
-        <button
-          type="button"
-          onClick={() => setShowPrompt(p => !p)}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 10px',
-            fontSize: 11,
-            fontWeight: 500,
-            color: showPrompt ? 'var(--brand)' : 'var(--text-muted)',
-            background: showPrompt ? 'var(--brand-soft)' : 'transparent',
-            border: `0.5px solid ${showPrompt ? 'var(--brand-border)' : 'var(--border)'}`,
-            borderRadius: 6,
-            whiteSpace: 'nowrap',
-            cursor: 'pointer',
-          }}
-        >
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: showPrompt ? 'var(--brand)' : 'var(--text-subtle)',
-              letterSpacing: '0.04em',
-            }}
-          >
-            AI
-          </span>
-          prompt
-        </button>
       </div>
 
       {/* Body */}
       <div
         style={{
           padding: 16,
-          flex: 1,
-          overflow: 'auto',
-          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
         }}
       >
-        {showPrompt && <PromptCard prompt={prompt} />}
+        <ManagerTabs managers={lang.managers} active={mgrId} onChange={setMgrId} />
 
-        {lang.managers.length > 1 && (
-          <ManagerTabs managers={lang.managers} active={m.id} onChange={setMgrId} />
-        )}
-
-        {/* 01 Configure */}
-        <ConfigSection
-          step={1}
-          title="Configure"
-          subtitle={`Edit ${m.persistent.file} — applied to every install from now on`}
-        >
-          <CodeBlock
-            filename={m.persistent.file}
-            code={fill(m.persistent.body)}
-            language={m.persistent.lang}
-          />
-          <details
-            style={{
-              marginTop: 8,
-              border: '0.5px solid var(--border)',
-              borderRadius: 6,
-              background: 'var(--bg-soft)',
-            }}
-          >
-            <summary
-              style={{
-                padding: '6px 12px',
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                listStyle: 'none',
-              }}
-            >
-              <span style={{ color: 'var(--text-subtle)' }}>▸</span>
-              Where this manager reads config from
-            </summary>
-            <div style={{ borderTop: '0.5px solid var(--border)' }}>
-              {m.paths.map((p, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '120px 1fr',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '6px 12px',
-                    borderBottom:
-                      i < m.paths.length - 1 ? '0.5px solid var(--border)' : 'none',
-                  }}
-                >
-                  <span className="eyebrow" style={{ whiteSpace: 'nowrap' }}>
-                    {p.os}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11.5,
-                      color: 'var(--text)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {p.path}
-                  </span>
+        {mgrId === 'ai' ? (
+          <PromptCard prompt={prompt} />
+        ) : (
+          <>
+            {/* Quick methods (e.g. -i flag, env var) */}
+            {m.methods && m.methods.length > 0 && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {m.methods.map((method, i) => (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 10,
+                          color: 'var(--text-subtle)',
+                          letterSpacing: '0.04em',
+                          padding: '0 2px',
+                        }}
+                      >
+                        {t(method.label)}
+                      </span>
+                      <CodeBlock code={fill(method.body)} language={method.lang} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </details>
-        </ConfigSection>
 
-        {/* 02 Verify */}
-        <ConfigSection
-          step={2}
-          title="Verify"
-          subtitle="Run a test install — the request will appear in monitoring within ~2s"
-        >
-          <CodeBlock code={fill(m.verify.body)} language={m.verify.lang} />
-        </ConfigSection>
+                {/* separator → persistent config */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
+                    {t('quickstart.orSaveToConfig')}
+                  </span>
+                  <div style={{ flex: 1, height: '0.5px', background: 'var(--border)' }} />
+                </div>
+              </>
+            )}
 
-        {/* 03 Step-by-step */}
-        <ConfigSection
-          step={3}
-          title="Step-by-step"
-          subtitle="Walk through the configuration end-to-end"
-        >
-          <details>
-            <summary
-              style={{
-                padding: '8px 12px',
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                background: 'var(--bg-soft)',
-                border: '0.5px solid var(--border)',
-                borderRadius: 6,
-                cursor: 'pointer',
-                listStyle: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <span style={{ color: 'var(--text-subtle)' }}>▸</span>
-              Show {m.tutorial.length} steps
-            </summary>
-            <ol
-              style={{
-                margin: '8px 0 0 0',
-                paddingLeft: 0,
-                listStyle: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 6,
-              }}
-            >
-              {m.tutorial.map((step, i) => (
-                <li
-                  key={i}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '24px 1fr',
-                    alignItems: 'flex-start',
-                    gap: 10,
-                    padding: '8px 12px',
-                    background: 'var(--bg-soft)',
-                    border: '0.5px solid var(--border)',
-                    borderRadius: 6,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 4,
-                      background: 'var(--brand-soft)',
-                      color: 'var(--brand)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      fontWeight: 500,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginTop: 1,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text)' }}>
-                    {fill(step)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </details>
-        </ConfigSection>
+            {/* Config block */}
+            <CodeBlock
+              filename={m.persistent.file}
+              code={fill(m.persistent.body)}
+              language={m.persistent.lang}
+            />
+
+            {/* Where config lives */}
+            <PathsCollapsible paths={m.paths} />
+
+            {/* Verify block */}
+            <CodeBlock code={fill(m.verify.body)} language={m.verify.lang} />
+          </>
+        )}
       </div>
 
       <LiveDetector endpoint={endpoint} managerId={m.id} />

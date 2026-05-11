@@ -1,11 +1,13 @@
 // web/src/portal/pages/QuickStart.tsx
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import StatusDot from '@/components/StatusDot'
 import LanguageRail from '@/portal/components/LanguageRail'
 import ConfigurePane from '@/portal/components/ConfigurePane'
 import AllInOnePane from '@/portal/components/AllInOnePane'
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   function copy() {
     navigator.clipboard.writeText(text).then(() => {
@@ -28,7 +30,7 @@ function CopyButton({ text }: { text: string }) {
         background: 'transparent',
       }}
     >
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? t('quickstart.copied') : t('quickstart.copy')}
     </button>
   )
 }
@@ -65,6 +67,7 @@ function EndpointInline({ endpoint }: { endpoint: string }) {
 }
 
 export default function QuickStart() {
+  const { t } = useTranslation()
   const endpoint = window.location.origin
   const [language, setLanguage] = useState('python')
 
@@ -89,7 +92,7 @@ export default function QuickStart() {
               lineHeight: 1.02,
             }}
           >
-            Quick start
+            {t('quickstart.title')}
           </h1>
           <p
             style={{
@@ -100,11 +103,12 @@ export default function QuickStart() {
               maxWidth: 580,
               fontWeight: 400,
               letterSpacing: '-0.005em',
+              minHeight: '2.9em',
             }}
           >
-            Pick a language, choose a package manager, copy the snippet —{' '}
+            {t('quickstart.subtitle')}{' '}
             <span style={{ color: 'var(--text-soft)' }}>
-              or grab the AI prompt for your assistant.
+              {t('quickstart.subtitleAlt')}
             </span>
           </p>
         </div>
@@ -116,7 +120,6 @@ export default function QuickStart() {
           display: 'grid',
           gridTemplateColumns: '240px 1fr',
           gap: 16,
-          height: 720,
         }}
       >
         <LanguageRail selected={language} onSelect={setLanguage} />

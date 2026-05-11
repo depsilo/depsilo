@@ -34,7 +34,7 @@ run-pro: build                  ## 编译并前台运行（开启全部 Pro 功�
 dev: build stop                 ## 编译并后台运行（dev 模式）
 	@echo ">>> starting $(APP) on :$(PORT) ..."
 	@DEPSILO_CONFIG=$(CONFIG) ./$(BIN) > .dev.log 2>&1 & echo $$! > $(PID_FILE)
-	@sleep 2
+	@sleep 3
 	@if curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1; then \
 		echo ">>> $(APP) running  pid=$$(cat $(PID_FILE))  http://localhost:$(PORT)"; \
 	else \

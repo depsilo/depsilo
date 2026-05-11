@@ -1,4 +1,5 @@
 // web/src/portal/components/LanguageRail.tsx
+import { useTranslation } from 'react-i18next'
 import { LANGUAGES } from '@/lib/ecosystemData'
 import EcosystemIcon from '@/components/EcosystemIcon'
 
@@ -8,10 +9,11 @@ interface Props {
 }
 
 export default function LanguageRail({ selected, onSelect }: Props) {
+  const { t } = useTranslation()
   return (
     <div
       className="card"
-      style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}
+      style={{ display: 'flex', flexDirection: 'column', alignSelf: 'start' }}
     >
       {/* All-in-one row */}
       <button
@@ -62,10 +64,10 @@ export default function LanguageRail({ selected, onSelect }: Props) {
               whiteSpace: 'nowrap',
             }}
           >
-            All-in-one
+            {t('quickstart.allInOne')}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
-            Configure everything
+            {t('quickstart.allInOneSubtitle')}
           </div>
         </div>
       </button>
@@ -77,11 +79,11 @@ export default function LanguageRail({ selected, onSelect }: Props) {
           borderBottom: '0.5px solid var(--border)',
         }}
       >
-        <span className="eyebrow">Or by language</span>
+        <span className="eyebrow">{t('quickstart.orByLanguage')}</span>
       </div>
 
       {/* Language list */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         {LANGUAGES.map((lang, i) => {
           const active = lang.id === selected
           return (
@@ -90,11 +92,10 @@ export default function LanguageRail({ selected, onSelect }: Props) {
               type="button"
               onClick={() => onSelect(lang.id)}
               style={{
-                flex: 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
-                padding: '0 12px',
+                padding: '8px 12px',
                 textAlign: 'left',
                 background: active ? 'var(--brand-soft)' : 'transparent',
                 borderLeft: active ? '2px solid var(--brand)' : '2px solid transparent',
@@ -102,7 +103,6 @@ export default function LanguageRail({ selected, onSelect }: Props) {
                   i === LANGUAGES.length - 1 ? 'none' : '0.5px solid var(--border)',
                 transition: 'background 100ms ease',
                 cursor: 'pointer',
-                minHeight: 0,
                 width: '100%',
               }}
             >

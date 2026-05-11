@@ -1,17 +1,14 @@
 // web/src/portal/components/AllInOnePane.tsx
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
 import Segmented from '@/components/Segmented'
 import { buildAllScript, buildPrompt } from '@/lib/ecosystemData'
 
 interface Props { endpoint: string }
 
-const MODES = [
-  { value: 'script', label: 'Shell script' },
-  { value: 'prompt', label: 'AI prompt'   },
-]
-
 function PromptCard({ prompt }: { prompt: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   function copy() {
     navigator.clipboard.writeText(prompt).then(() => {
@@ -54,7 +51,7 @@ function PromptCard({ prompt }: { prompt: string }) {
             AI
           </span>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Prompt for any AI coding tool
+            {t('quickstart.promptForAnyAI')}
           </span>
         </div>
         <button
@@ -70,7 +67,7 @@ function PromptCard({ prompt }: { prompt: string }) {
             background: 'transparent',
           }}
         >
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('quickstart.copied') : t('quickstart.copy')}
         </button>
       </div>
       <div
@@ -91,14 +88,19 @@ function PromptCard({ prompt }: { prompt: string }) {
 }
 
 export default function AllInOnePane({ endpoint }: Props) {
+  const { t } = useTranslation()
   const [mode, setMode] = useState('script')
   const script = buildAllScript(endpoint)
   const prompt = buildPrompt(endpoint, 'all')
+  const MODES = [
+    { value: 'script', label: t('quickstart.shellScript') },
+    { value: 'prompt', label: t('quickstart.aiPromptMode') },
+  ]
 
   return (
     <div
       className="card"
-      style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}
+      style={{ display: 'flex', flexDirection: 'column' }}
     >
       <div
         style={{
@@ -121,7 +123,7 @@ export default function AllInOnePane({ endpoint }: Props) {
               lineHeight: 1.2,
             }}
           >
-            All-in-one setup
+            {t('quickstart.allInOneTitle')}
           </div>
           <div
             style={{
@@ -131,7 +133,7 @@ export default function AllInOnePane({ endpoint }: Props) {
               marginTop: 2,
             }}
           >
-            Configure every detected package manager in one go
+            {t('quickstart.allInOneSetupDesc')}
           </div>
         </div>
         <Segmented options={MODES} value={mode} onChange={setMode} />
@@ -148,9 +150,7 @@ export default function AllInOnePane({ endpoint }: Props) {
         }}
       >
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {mode === 'script'
-            ? 'Run this as root on your machine. It edits config for pip, npm, cargo, go, and docker — extend as needed.'
-            : 'Paste this into ChatGPT, Claude, Cursor, or any agentic coding tool. The AI will detect your stack and edit the right files.'}
+          {mode === 'script' ? t('quickstart.allInOneScriptNote') : t('quickstart.allInOneAINote')}
         </div>
         {mode === 'script' ? (
           <CodeBlock filename="depsilo-setup.sh" code={script} language="sh" />
