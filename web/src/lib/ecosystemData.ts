@@ -95,6 +95,7 @@ export interface ManagerConfig {
   name: string
   hint: string
   quick: { lang: string; body: string }
+  methods?: { label: string; lang: string; body: string }[]
   persistent: { file: string; lang: string; body: string }
   verify: { lang: string; body: string }
   paths: ManagerPath[]
@@ -115,7 +116,11 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'pip', name: 'pip', hint: 'PyPA package installer',
-        quick:      { lang: 'sh', body: 'PIP_INDEX_URL={URL}/pypi/simple/ pip install requests' },
+        quick:      { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'PIP_INDEX_URL={URL}/pypi/simple/ pip install requests' },
+        ],
         persistent: { file: '~/.config/pip/pip.conf', lang: 'ini',
           body: '[global]\nindex-url = {URL}/pypi/simple/\ntrusted-host = {HOST}' },
         verify:     { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ --dry-run six' },
@@ -135,6 +140,10 @@ export const LANGUAGES: Language[] = [
       {
         id: 'uv', name: 'uv', hint: 'astral.sh fast resolver',
         quick:      { lang: 'sh', body: 'UV_INDEX_URL={URL}/pypi/simple/ uv pip install requests' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'uv pip install --index-url {URL}/pypi/simple/ requests' },
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'UV_INDEX_URL={URL}/pypi/simple/ uv pip install requests' },
+        ],
         persistent: { file: 'pyproject.toml', lang: 'toml',
           body: '[[tool.uv.index]]\nname = "depsilo"\nurl = "{URL}/pypi/simple/"\ndefault = true' },
         verify:     { lang: 'sh', body: 'uv pip install --index-url {URL}/pypi/simple/ --dry-run six' },
@@ -153,6 +162,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'venv', name: 'venv', hint: 'Project-local virtualenv',
         quick:      { lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate && pip install -i {URL}/pypi/simple/ requests' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate\npip install -i {URL}/pypi/simple/ requests' },
+        ],
         persistent: { file: '.venv/pip.conf', lang: 'ini',
           body: '[global]\nindex-url = {URL}/pypi/simple/\ntrusted-host = {HOST}' },
         verify:     { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ -r requirements.txt' },
@@ -170,6 +182,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'poetry', name: 'Poetry', hint: 'Dependency manager',
         quick:      { lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
+        ],
         persistent: { file: 'pyproject.toml', lang: 'toml',
           body: '[[tool.poetry.source]]\nname = "depsilo"\nurl = "{URL}/pypi/simple/"\npriority = "primary"' },
         verify:     { lang: 'sh', body: 'poetry install --dry-run' },
@@ -185,8 +200,49 @@ export const LANGUAGES: Language[] = [
         ],
       },
       {
+        id: 'pipenv', name: 'Pipenv', hint: 'Pipfile + virtualenv',
+        quick:      { lang: 'sh', body: 'PIPENV_PYPI_MIRROR={URL}/pypi/simple/ pipenv install requests' },
+        methods: [
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'PIPENV_PYPI_MIRROR={URL}/pypi/simple/ pipenv install requests' },
+        ],
+        persistent: { file: 'Pipfile', lang: 'toml',
+          body: '[[source]]\nname = "depsilo"\nurl = "{URL}/pypi/simple/"\nverify_ssl = false\n\n[packages]\nrequests = "*"' },
+        verify:     { lang: 'sh', body: 'pipenv install --dev --dry-run' },
+        paths: [
+          { os: 'Per-project', path: './Pipfile' },
+          { os: 'Env (CI)',    path: 'PIPENV_PYPI_MIRROR' },
+        ],
+        tutorial: [
+          'Add the [[source]] block to your Pipfile to route all installs through Depsilo.',
+          'PIPENV_PYPI_MIRROR overrides all sources without editing Pipfile — useful in CI.',
+          'Run pipenv lock to regenerate Pipfile.lock with the new source.',
+        ],
+      },
+      {
+        id: 'pdm', name: 'PDM', hint: 'PEP 517 manager',
+        quick:      { lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
+        ],
+        persistent: { file: 'pyproject.toml', lang: 'toml',
+          body: '[[tool.pdm.source]]\nname = "depsilo"\nurl = "{URL}/pypi/simple/"\nverify_ssl = false' },
+        verify:     { lang: 'sh', body: 'pdm config pypi.url' },
+        paths: [
+          { os: 'Per-project', path: './pyproject.toml' },
+          { os: 'User config', path: '~/.config/pdm/config.toml' },
+        ],
+        tutorial: [
+          'pdm config pypi.url writes to user-level config, affecting all projects.',
+          'For per-project setup, add [[tool.pdm.source]] to pyproject.toml.',
+          'Run pdm lock to regenerate the lockfile with the new source.',
+        ],
+      },
+      {
         id: 'conda', name: 'Conda', hint: 'Anaconda channels',
         quick:      { lang: 'sh', body: 'conda install -c {URL}/conda/main numpy' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'conda install -c {URL}/conda/main numpy' },
+        ],
         persistent: { file: '~/.condarc', lang: 'yaml',
           body: 'channels:\n  - {URL}/conda/main\n  - {URL}/conda/conda-forge\ndefault_channels: []' },
         verify:     { lang: 'sh', body: 'conda config --show channels' },
@@ -209,6 +265,10 @@ export const LANGUAGES: Language[] = [
       {
         id: 'npm', name: 'npm', hint: 'Default Node registry client',
         quick:      { lang: 'sh', body: 'npm install --registry={URL}/npm/ lodash' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'npm install --registry={URL}/npm/ lodash' },
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ npm install lodash' },
+        ],
         persistent: { file: '~/.npmrc', lang: 'ini',
           body: 'registry={URL}/npm/\n# scoped registries:\n@your-org:registry={URL}/npm/' },
         verify:     { lang: 'sh', body: 'npm config get registry' },
@@ -228,6 +288,10 @@ export const LANGUAGES: Language[] = [
       {
         id: 'pnpm', name: 'pnpm', hint: 'Hard-linked store',
         quick:      { lang: 'sh', body: 'pnpm install --registry={URL}/npm/ lodash' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pnpm install --registry={URL}/npm/ lodash' },
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ pnpm install lodash' },
+        ],
         persistent: { file: '~/.npmrc', lang: 'ini',
           body: 'registry={URL}/npm/\nstore-dir=~/.pnpm-store' },
         verify:     { lang: 'sh', body: 'pnpm config get registry' },
@@ -244,6 +308,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'yarn', name: 'Yarn', hint: 'Berry & Classic',
         quick:      { lang: 'sh', body: 'yarn config set npmRegistryServer {URL}/npm/' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'yarn config set npmRegistryServer {URL}/npm/' },
+        ],
         persistent: { file: './.yarnrc.yml', lang: 'yaml',
           body: 'npmRegistryServer: "{URL}/npm/"\nunsafeHttpWhitelist:\n  - {HOST}' },
         verify:     { lang: 'sh', body: 'yarn config get npmRegistryServer' },
@@ -260,6 +327,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'bun', name: 'Bun', hint: 'JS runtime + manager',
         quick:      { lang: 'sh', body: 'bun install --registry={URL}/npm/ lodash' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'bun install --registry={URL}/npm/ lodash' },
+        ],
         persistent: { file: 'bunfig.toml', lang: 'toml',
           body: '[install]\nregistry = "{URL}/npm/"' },
         verify:     { lang: 'sh', body: 'bun pm cache rm && bun install' },
@@ -281,6 +351,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'maven', name: 'Maven', hint: 'Apache Maven',
         quick:      { lang: 'sh', body: 'mvn -Dmaven.repo.remote={URL}/maven/ install' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'mvn -Dmaven.repo.remote={URL}/maven/ install' },
+        ],
         persistent: { file: '~/.m2/settings.xml', lang: 'xml',
           body: '<settings>\n  <mirrors>\n    <mirror>\n      <id>depsilo</id>\n      <url>{URL}/maven/</url>\n      <mirrorOf>*</mirrorOf>\n    </mirror>\n  </mirrors>\n</settings>' },
         verify:     { lang: 'sh', body: 'mvn help:effective-settings | grep depsilo' },
@@ -297,6 +370,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'gradle', name: 'Gradle', hint: 'Build tool',
         quick:      { lang: 'sh', body: 'gradle build -Dorg.gradle.repositoryMirrorUrl={URL}/maven/' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'gradle build -Dorg.gradle.repositoryMirrorUrl={URL}/maven/' },
+        ],
         persistent: { file: '~/.gradle/init.gradle', lang: 'groovy',
           body: 'allprojects {\n  repositories {\n    maven { url "{URL}/maven/" }\n  }\n}' },
         verify:     { lang: 'sh', body: 'gradle dependencies --refresh-dependencies' },
@@ -313,6 +389,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'sbt', name: 'sbt', hint: 'Scala build tool',
         quick:      { lang: 'sh', body: 'sbt -Dsbt.override.build.repos=true compile' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'sbt -Dsbt.override.build.repos=true compile' },
+        ],
         persistent: { file: '~/.sbt/repositories', lang: 'ini',
           body: '[repositories]\n  depsilo: {URL}/maven/\n  local' },
         verify:     { lang: 'sh', body: "sbt 'show fullResolvers'" },
@@ -332,6 +411,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'cargo', name: 'Cargo', hint: 'Rust package manager',
         quick:      { lang: 'sh', body: 'cargo install --index {URL}/cargo/index ripgrep' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'cargo install --index {URL}/crates/ ripgrep' },
+        ],
         persistent: { file: '~/.cargo/config.toml', lang: 'toml',
           body: '[source.crates-io]\nreplace-with = "depsilo"\n\n[source.depsilo]\nregistry = "{URL}/cargo/index"' },
         verify:     { lang: 'sh', body: 'cargo fetch' },
@@ -353,6 +435,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'goenv', name: 'go env', hint: 'Recommended (persisted)',
         quick:      { lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
+        methods: [
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
+        ],
         persistent: { file: 'go env -w', lang: 'sh',
           body: 'go env -w GOPROXY={URL}/go/,direct\ngo env -w GOSUMDB=off' },
         verify:     { lang: 'sh', body: 'go env GOPROXY' },
@@ -369,6 +454,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'shell', name: 'GOPROXY env', hint: 'Shell-level',
         quick:      { lang: 'sh', body: 'GOPROXY={URL}/go/,direct go build ./...' },
+        methods: [
+          { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go build ./...' },
+        ],
         persistent: { file: '~/.zshrc · ~/.bashrc', lang: 'sh',
           body: 'export GOPROXY={URL}/go/,direct\nexport GOSUMDB=off' },
         verify:     { lang: 'sh', body: 'echo $GOPROXY' },
@@ -390,6 +478,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'docker', name: 'Docker', hint: 'Daemon registry mirror',
         quick:      { lang: 'sh', body: 'docker pull {HOST}/docker/library/alpine:3.19' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'docker pull {HOST}/docker/library/alpine:3.19' },
+        ],
         persistent: { file: '/etc/docker/daemon.json', lang: 'json',
           body: '{\n  "registry-mirrors": ["{URL}/docker/"]\n}' },
         verify:     { lang: 'sh', body: 'docker info | grep -A1 "Registry Mirrors"' },
@@ -406,6 +497,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'containerd', name: 'containerd', hint: 'CRI mirror',
         quick:      { lang: 'sh', body: 'crictl pull {HOST}/docker/library/alpine:3.19' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'crictl pull {HOST}/docker/library/alpine:3.19' },
+        ],
         persistent: { file: '/etc/containerd/config.toml', lang: 'toml',
           body: '[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]\n  endpoint = ["{URL}/docker/"]' },
         verify:     { lang: 'sh', body: 'ctr -n k8s.io image pull {HOST}/docker/library/alpine:3.19' },
@@ -421,6 +515,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'podman', name: 'Podman', hint: 'Daemonless containers',
         quick:      { lang: 'sh', body: 'podman pull {HOST}/docker/library/alpine:3.19' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'podman pull {HOST}/docker/library/alpine:3.19' },
+        ],
         persistent: { file: '/etc/containers/registries.conf', lang: 'toml',
           body: '[[registry]]\nlocation = "docker.io"\n[[registry.mirror]]\nlocation = "{HOST}/docker"' },
         verify:     { lang: 'sh', body: "podman info --format '{{.Registries}}'" },
@@ -441,6 +538,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'helm', name: 'Helm', hint: 'Chart registry',
         quick:      { lang: 'sh', body: 'helm install --repo {URL}/helm/bitnami nginx bitnami/nginx' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'helm repo add bitnami {URL}/helm/bitnami\nhelm repo update' },
+        ],
         persistent: { file: 'helm repo add', lang: 'sh',
           body: 'helm repo add bitnami {URL}/helm/bitnami\nhelm repo update' },
         verify:     { lang: 'sh', body: 'helm repo list' },
@@ -461,6 +561,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'gem', name: 'RubyGems', hint: 'gem CLI',
         quick:      { lang: 'sh', body: 'gem install --source {URL}/rubygems/ rails' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'gem install --source {URL}/rubygems/ rails' },
+        ],
         persistent: { file: '~/.gemrc', lang: 'yaml',
           body: '---\n:sources:\n  - {URL}/rubygems/\ngem: --no-document' },
         verify:     { lang: 'sh', body: 'gem sources' },
@@ -476,6 +579,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'bundler', name: 'Bundler', hint: 'bundle config',
         quick:      { lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
+        ],
         persistent: { file: '.bundle/config', lang: 'yaml',
           body: 'BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "{URL}/rubygems/"' },
         verify:     { lang: 'sh', body: 'bundle config get mirror.https://rubygems.org' },
@@ -496,6 +602,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'cli', name: 'dotnet CLI', hint: 'nuget add source',
         quick:      { lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
+        ],
         persistent: { file: 'dotnet nuget add source', lang: 'sh',
           body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo' },
         verify:     { lang: 'sh', body: 'dotnet nuget list source' },
@@ -512,6 +621,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'nuget', name: 'NuGet.Config', hint: 'Per-project',
         quick:      { lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo' },
+        ],
         persistent: { file: 'NuGet.Config', lang: 'xml',
           body: '<configuration>\n  <packageSources>\n    <add key="depsilo" value="{URL}/nuget/v3/index.json" />\n  </packageSources>\n</configuration>' },
         verify:     { lang: 'sh', body: 'dotnet restore --verbosity normal' },
@@ -532,6 +644,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'apt', name: 'apt', hint: 'Debian/Ubuntu packages',
         quick:      { lang: 'sh', body: 'sudo apt -o Acquire::http::Proxy="{URL}/apt/" update' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'sudo apt -o Acquire::http::Proxy="{URL}/apt/" update' },
+        ],
         persistent: { file: '/etc/apt/apt.conf.d/99-depsilo', lang: 'conf',
           body: 'Acquire::http::Proxy "{URL}/apt/";\nAcquire::https::Proxy "{URL}/apt/";' },
         verify:     { lang: 'sh', body: 'apt-config dump | grep Proxy' },
@@ -552,6 +667,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'composer', name: 'Composer', hint: 'PHP package manager',
         quick:      { lang: 'sh', body: 'composer config repositories.packagist composer {URL}/composer/' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'composer config -g repositories.packagist composer {URL}/composer/' },
+        ],
         persistent: { file: '~/.composer/config.json', lang: 'json',
           body: '{\n  "repositories": {\n    "packagist": {\n      "type": "composer",\n      "url": "{URL}/composer/"\n    }\n  }\n}' },
         verify:     { lang: 'sh', body: 'composer diagnose' },
@@ -572,6 +690,9 @@ export const LANGUAGES: Language[] = [
       {
         id: 'rscript', name: 'R', hint: 'Base R CRAN mirror',
         quick:      { lang: 'r', body: 'install.packages("jsonlite", repos="{URL}/cran/")' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'r', body: 'install.packages("jsonlite", repos="{URL}/cran/")' },
+        ],
         persistent: { file: '~/.Rprofile', lang: 'r',
           body: 'options(repos = c(CRAN = "{URL}/cran/"))' },
         verify:     { lang: 'r', body: 'options(repos = c(CRAN = "{URL}/cran/"))\ninstall.packages("jsonlite")\nlibrary(jsonlite)' },
