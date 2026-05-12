@@ -30,7 +30,7 @@ export default function StatusBar({ points }: Props) {
   if (!points || points.length === 0) return null
 
   return (
-    <div style={{ position: 'relative', display: 'flex', gap: 1.5, alignItems: 'center', height: 22 }}>
+    <div style={{ position: 'relative', display: 'flex', gap: 1.5, alignItems: 'center', height: 22, width: '100%' }}>
       {points.map((pt, i) => (
         <div
           key={i}
