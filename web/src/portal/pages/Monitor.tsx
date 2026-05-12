@@ -240,28 +240,30 @@ function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
     <div
       className="row-hover"
       style={{
-        display: 'grid',
-        gridTemplateColumns: '50px 1fr 120px',
-        alignItems: 'center',
-        gap: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
         padding: '10px 14px',
         borderBottom: '0.5px solid var(--border)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
         <StatusDot status={status} />
         <span
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--text)',
+            fontSize: 10,
+            color: 'var(--text-subtle)',
+            background: 'var(--bg-soft)',
+            padding: '1px 5px',
+            borderRadius: 3,
+            border: '0.5px solid var(--border)',
+            flexShrink: 0,
           }}
         >
           {upstream.adapter}
         </span>
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div
+        <span
           className="mono"
           style={{
             fontSize: 12,
@@ -270,13 +272,14 @@ function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            flex: 1,
+            minWidth: 0,
           }}
         >
           {(upstream.url || upstream.name).replace(/^https?:\/\//, '')}
-        </div>
-        <div style={{ display: 'flex', gap: 14, marginTop: 2, fontSize: 11 }}>
+        </span>
+        <span style={{ display: 'flex', gap: 12, flexShrink: 0, fontSize: 11 }}>
           <span style={{ color: 'var(--text-subtle)' }}>
-            P50{' '}
             <span
               className="num"
               style={{
@@ -290,44 +293,25 @@ function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
               {isFailed ? '—' : `${upstream.avg_latency_ms}ms`}
             </span>
           </span>
-          <span style={{ color: 'var(--text-subtle)' }}>
-            hit{' '}
-            <span
-              className="num"
-              style={{ color: isFailed ? 'var(--text-subtle)' : 'var(--text-muted)' }}
-            >
-              {isFailed ? '—' : `${(upstream.success_rate * 100).toFixed(1)}%`}
-            </span>
+          <span
+            className="num"
+            style={{ color: isFailed ? 'var(--text-subtle)' : 'var(--text-muted)' }}
+          >
+            {isFailed ? '—' : `${(upstream.success_rate * 100).toFixed(1)}%`}
           </span>
-        </div>
+        </span>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <StatusBar points={upstream.latency_series ?? []} />
-      </div>
+      <StatusBar points={upstream.latency_series ?? []} />
     </div>
   )
 }
 
 function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
-  const half = Math.ceil(upstreams.length / 2)
-  const left  = upstreams.slice(0, half)
-  const right = upstreams.slice(half)
-
   return (
-    <div
-      className="card"
-      style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'hidden' }}
-    >
-      <div style={{ borderRight: '0.5px solid var(--border)' }}>
-        {left.map(u => (
-          <MirrorTile key={`${u.adapter}-${u.name}`} upstream={u} />
-        ))}
-      </div>
-      <div>
-        {right.map(u => (
-          <MirrorTile key={`${u.adapter}-${u.name}`} upstream={u} />
-        ))}
-      </div>
+    <div className="card" style={{ overflow: 'hidden' }}>
+      {upstreams.map(u => (
+        <MirrorTile key={`${u.adapter}-${u.name}`} upstream={u} />
+      ))}
     </div>
   )
 }
