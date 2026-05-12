@@ -1,6 +1,8 @@
 package public
 
 import (
+	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -53,9 +55,134 @@ func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool
 	}
 }
 
+// kpiSeries returns 12 five-minute buckets covering the last hour,
+// aggregated from the access_logs table.
+func (h *StatsHandler) kpiSeries(oneHourAgo time.Time) []gin.H {
+	const buckets = 12
+	const intervalMin = 5
+
+	type bucketRow struct {
+		Bucket      int64
+		Requests    int64
+		Hits        int64
+		BytesSaved  int64
+		MissLatency float64
+		MissCount   int64
+	}
+
+	var rows []bucketRow
+	h.db.Model(&db.AccessLog{}).
+		Select(`(CAST(strftime('%s', created_at) AS INTEGER) / ?) * ? AS bucket,
+			COUNT(*) AS requests,
+			SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END) AS hits,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END), 0) AS bytes_saved,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN latency_ms ELSE 0 END), 0) AS miss_latency,
+			SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END) AS miss_count`,
+			intervalMin*60, intervalMin*60).
+		Where("created_at >= ?", oneHourAgo).
+		Group("bucket").
+		Order("bucket ASC").
+		Scan(&rows)
+
+	// Build a lookup map
+	lookup := make(map[int64]*bucketRow, len(rows))
+	for i := range rows {
+		lookup[rows[i].Bucket] = &rows[i]
+	}
+
+	// Compute the aligned start bucket
+	startBucket := (oneHourAgo.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
+
+	points := make([]gin.H, 0, buckets)
+	for i := 0; i < buckets; i++ {
+		ts := startBucket + int64(i*intervalMin*60)
+		p := gin.H{
+			"time_unix":      ts,
+			"requests":       int64(0),
+			"hits":           int64(0),
+			"hit_rate":       float64(0),
+			"bytes_saved":    int64(0),
+			"avg_latency_ms": float64(0),
+		}
+		if r, ok := lookup[ts]; ok {
+			var hitRate float64
+			if r.Requests > 0 {
+				hitRate = math.Round(float64(r.Hits)/float64(r.Requests)*1000) / 1000
+			}
+			var avgLat float64
+			if r.MissCount > 0 {
+				avgLat = math.Round(float64(r.MissLatency)/float64(r.MissCount)*10) / 10
+			}
+			p["requests"] = r.Requests
+			p["hits"] = r.Hits
+			p["hit_rate"] = hitRate
+			p["bytes_saved"] = r.BytesSaved
+			p["avg_latency_ms"] = avgLat
+		}
+		points = append(points, p)
+	}
+	return points
+}
+
+// upstreamLatencySeries returns 12 five-minute buckets of latency data
+// for a given upstream name, aggregated from the upstream_latency_logs table.
+func (h *StatsHandler) upstreamLatencySeries(upstreamName string, oneHourAgo time.Time) []gin.H {
+	const buckets = 12
+	const intervalMin = 5
+
+	type bucketRow struct {
+		Bucket   int64
+		AvgLat   float64
+		AvgHP    float64
+		Requests int64
+	}
+
+	var rows []bucketRow
+	h.db.Model(&db.UpstreamLatencyLog{}).
+		Select(fmt.Sprintf(`(CAST(strftime('%%s', created_at) AS INTEGER) / %d) * %d AS bucket,
+			AVG(latency_ms) AS avg_lat,
+			AVG(CASE WHEN healthy = 1 THEN 1.0 ELSE 0.0 END) AS avg_hp,
+			COUNT(*) AS requests`,
+			intervalMin*60, intervalMin*60)).
+		Where("name = ? AND created_at >= ?", upstreamName, oneHourAgo).
+		Group("bucket").
+		Order("bucket ASC").
+		Scan(&rows)
+
+	lookup := make(map[int64]*bucketRow, len(rows))
+	for i := range rows {
+		lookup[rows[i].Bucket] = &rows[i]
+	}
+
+	startBucket := (oneHourAgo.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
+
+	points := make([]gin.H, 0, buckets)
+	for i := 0; i < buckets; i++ {
+		ts := startBucket + int64(i*intervalMin*60)
+		t := time.Unix(ts, 0).UTC()
+		p := gin.H{
+			"time":       t.Format(time.RFC3339),
+			"latency_ms": int64(0),
+			"healthy":    true,
+			"requests":   int64(0),
+		}
+		if r, ok := lookup[ts]; ok {
+			p["latency_ms"] = int64(math.Round(r.AvgLat))
+			p["healthy"] = r.AvgHP > 0.5
+			p["requests"] = r.Requests
+		}
+		points = append(points, p)
+	}
+	return points
+}
+
 func (h *StatsHandler) GetStats(c *gin.Context) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	oneHourAgo := now.Add(-1 * time.Hour)
+
+	// KPI series (12 x 5-min buckets)
+	seriesPoints := h.kpiSeries(oneHourAgo)
 
 	// Today's stats from access logs
 	var totalRequests, hitCount, missCount int64
@@ -87,125 +214,29 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 
 	// Upstream status
 	upstreams := make([]gin.H, 0)
-	for _, u := range h.pypiPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "pypi",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
+	type poolEntry struct {
+		pool    *upstream.Pool
+		adapter string
 	}
-	for _, u := range h.aptPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "apt",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
+	pools := []poolEntry{
+		{h.pypiPool, "pypi"}, {h.aptPool, "apt"}, {h.npmPool, "npm"},
+		{h.goPool, "go"}, {h.cargoPool, "cargo"}, {h.mavenPool, "maven"},
+		{h.rubygemsPool, "rubygems"}, {h.composerPool, "composer"},
+		{h.nugetPool, "nuget"}, {h.condaPool, "conda"},
+		{h.cranPool, "cran"}, {h.helmPool, "helm"},
 	}
-	for _, u := range h.npmPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "npm",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.goPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "go",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.cargoPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "cargo",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.mavenPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "maven",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.rubygemsPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "rubygems",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.composerPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "composer",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.nugetPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "nuget",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.condaPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "conda",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.cranPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "cran",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.helmPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "helm",
-			"url":            u.URL,
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
+	for _, pe := range pools {
+		for _, u := range pe.pool.Upstreams() {
+			upstreams = append(upstreams, gin.H{
+				"name":           u.Name,
+				"adapter":        pe.adapter,
+				"url":            u.URL,
+				"healthy":        u.Healthy,
+				"avg_latency_ms": u.AvgLatency().Milliseconds(),
+				"success_rate":   u.SuccessRate(),
+				"latency_series": h.upstreamLatencySeries(u.Name, oneHourAgo),
+			})
+		}
 	}
 
 	// Top packages
@@ -254,6 +285,10 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 			"total_size_bytes": totalSizeBytes,
 			"pypi_files":       pypiFiles,
 			"apt_files":        aptFiles,
+		},
+		"series": gin.H{
+			"interval_minutes": 5,
+			"points":           seriesPoints,
 		},
 		"upstreams": upstreams,
 		"top_packages": gin.H{
