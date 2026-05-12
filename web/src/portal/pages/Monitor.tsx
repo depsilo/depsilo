@@ -232,41 +232,18 @@ function mirrorStatus(u: UpstreamInfo): MirrorStatus {
   return 'healthy'
 }
 
-function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
+function UpstreamRow({ upstream }: { upstream: UpstreamInfo }) {
   const status = mirrorStatus(upstream)
   const isFailed = status === 'failed'
 
   return (
-    <div
-      className="row-hover"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6,
-        padding: '10px 14px',
-        borderBottom: '0.5px solid var(--border)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         <StatusDot status={status} />
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--text-subtle)',
-            background: 'var(--bg-soft)',
-            padding: '1px 5px',
-            borderRadius: 3,
-            border: '0.5px solid var(--border)',
-            flexShrink: 0,
-          }}
-        >
-          {upstream.adapter}
-        </span>
         <span
           className="mono"
           style={{
-            fontSize: 12,
+            fontSize: 11.5,
             color: isFailed ? 'var(--text-subtle)' : 'var(--text)',
             textDecoration: isFailed ? 'line-through' : 'none',
             overflow: 'hidden',
@@ -276,29 +253,21 @@ function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
             minWidth: 0,
           }}
         >
-          {(upstream.url || upstream.name).replace(/^https?:\/\//, '')}
+          {upstream.name}
         </span>
-        <span style={{ display: 'flex', gap: 12, flexShrink: 0, fontSize: 11 }}>
-          <span style={{ color: 'var(--text-subtle)' }}>
-            <span
-              className="num"
-              style={{
-                color: isFailed
-                  ? 'var(--text-subtle)'
-                  : upstream.avg_latency_ms > 100
-                  ? 'var(--warn-text)'
-                  : 'var(--text-muted)',
-              }}
-            >
-              {isFailed ? '—' : `${upstream.avg_latency_ms}ms`}
-            </span>
-          </span>
-          <span
-            className="num"
-            style={{ color: isFailed ? 'var(--text-subtle)' : 'var(--text-muted)' }}
-          >
-            {isFailed ? '—' : `${(upstream.success_rate * 100).toFixed(1)}%`}
-          </span>
+        <span
+          className="num"
+          style={{
+            fontSize: 11,
+            flexShrink: 0,
+            color: isFailed
+              ? 'var(--text-subtle)'
+              : upstream.avg_latency_ms > 100
+              ? 'var(--warn-text)'
+              : 'var(--text-muted)',
+          }}
+        >
+          {isFailed ? '—' : `${upstream.avg_latency_ms}ms`}
         </span>
       </div>
       <StatusBar points={upstream.latency_series ?? []} />
@@ -306,11 +275,56 @@ function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
   )
 }
 
-function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
+function EcosystemCard({ adapter, upstreams }: { adapter: string; upstreams: UpstreamInfo[] }) {
+  const worstStatus = upstreams.some(u => !u.healthy)
+    ? 'failed'
+    : upstreams.some(u => u.avg_latency_ms > 150)
+    ? 'degraded'
+    : 'healthy'
+
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      {upstreams.map(u => (
-        <MirrorTile key={`${u.adapter}-${u.name}`} upstream={u} />
+    <div
+      className="card"
+      style={{
+        padding: '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        breakInside: 'avoid',
+        marginBottom: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <StatusDot status={worstStatus as MirrorStatus} />
+        <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>
+          {adapter}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>
+          {upstreams.length} {upstreams.length === 1 ? 'mirror' : 'mirrors'}
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {upstreams.map(u => (
+          <UpstreamRow key={u.name} upstream={u} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
+  // Group by adapter
+  const groups = new Map<string, UpstreamInfo[]>()
+  for (const u of upstreams) {
+    const list = groups.get(u.adapter) ?? []
+    list.push(u)
+    groups.set(u.adapter, list)
+  }
+
+  return (
+    <div style={{ columns: 3, columnGap: 12 }}>
+      {Array.from(groups.entries()).map(([adapter, list]) => (
+        <EcosystemCard key={adapter} adapter={adapter} upstreams={list} />
       ))}
     </div>
   )
