@@ -51,10 +51,10 @@ export default function StatusBar({ points }: Props) {
         <div
           style={{
             position: 'absolute',
-            bottom: '100%',
-            left: `${(hover / points.length) * 100}%`,
+            top: '100%',
+            left: `${((hover + 0.5) / points.length) * 100}%`,
             transform: 'translateX(-50%)',
-            marginBottom: 6,
+            marginTop: 6,
             padding: '5px 8px',
             background: 'var(--bg-card)',
             border: '0.5px solid var(--border)',
