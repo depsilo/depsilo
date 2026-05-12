@@ -1,11 +1,18 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
 import StatusDot from '@/components/StatusDot'
 import Sparkline from '@/components/Sparkline'
-import Segmented from '@/components/Segmented'
 import HeroSparkline from '@/components/HeroSparkline'
-import { KPI_SERIES, MIRROR_DEFS, genSeries, type MirrorStatus } from '@/lib/ecosystemData'
+import StatusBar from '@/components/StatusBar'
+import type { MirrorStatus } from '@/lib/ecosystemData'
+
+interface LatencyPoint {
+  time: string
+  latency_ms: number
+  healthy: boolean
+  requests: number
+}
 
 interface UpstreamInfo {
   name: string
@@ -14,6 +21,16 @@ interface UpstreamInfo {
   healthy: boolean
   avg_latency_ms: number
   success_rate: number
+  latency_series?: LatencyPoint[]
+}
+
+interface SeriesPoint {
+  time_unix: number
+  requests: number
+  hits: number
+  hit_rate: number
+  bytes_saved: number
+  avg_latency_ms: number
 }
 
 interface StatsData {
@@ -28,6 +45,10 @@ interface StatsData {
   }
   cache: { total_files: number; total_size_bytes: number }
   upstreams: UpstreamInfo[]
+  series?: {
+    interval_minutes: number
+    points: SeriesPoint[]
+  }
 }
 
 function formatBytes(bytes: number): { value: string; unit: string } {
@@ -45,8 +66,10 @@ function formatRequests(n: number): { value: string; unit: string } {
 
 // ── HitRateHero ───────────────────────────────────────────────────
 
-function HitRateHero({ hitRate }: { hitRate: number }) {
+function HitRateHero({ hitRate, series }: { hitRate: number; series: SeriesPoint[] }) {
+  const { t } = useTranslation()
   const displayRate = (hitRate * 100).toFixed(1)
+  const sparkValues = series.length > 0 ? series.map(p => p.hit_rate) : [0, 0]
 
   return (
     <div
@@ -69,7 +92,7 @@ function HitRateHero({ hitRate }: { hitRate: number }) {
             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
             <StatusDot status="healthy" live />
-            <span>Cache hit rate · today</span>
+            <span>{t('monitor.hitRateToday')}</span>
           </div>
           <div
             className="aurora-glow"
@@ -101,7 +124,7 @@ function HitRateHero({ hitRate }: { hitRate: number }) {
           paddingLeft: 32,
         }}
       >
-        <HeroSparkline values={KPI_SERIES.hitRate} />
+        <HeroSparkline values={sparkValues} />
       </div>
     </div>
   )
@@ -109,31 +132,41 @@ function HitRateHero({ hitRate }: { hitRate: number }) {
 
 // ── StatStrip ─────────────────────────────────────────────────────
 
-function StatStrip({ data }: { data: StatsData['today'] }) {
+function StatStrip({ data, upstreams, series }: { data: StatsData['today']; upstreams: UpstreamInfo[]; series: SeriesPoint[] }) {
+  const { t } = useTranslation()
   const reqFmt   = formatRequests(data.total_requests)
   const savedFmt = formatBytes(data.bytes_saved)
 
+  const healthyLatencies = upstreams.filter(u => u.healthy && u.avg_latency_ms > 0).map(u => u.avg_latency_ms)
+  const p50Ms = healthyLatencies.length > 0
+    ? Math.round(healthyLatencies.reduce((a, b) => a + b, 0) / healthyLatencies.length)
+    : null
+
+  const reqSeries     = series.length > 0 ? series.map(p => p.requests) : [0, 0]
+  const savedSeries   = series.length > 0 ? series.map(p => p.bytes_saved) : [0, 0]
+  const latencySeries = series.length > 0 ? series.map(p => p.avg_latency_ms) : [0, 0]
+
   const items = [
     {
-      label: 'Total requests',
+      label: t('monitor.requests'),
       value: reqFmt.value,
       unit: reqFmt.unit,
       tone: 'brand' as const,
-      series: KPI_SERIES.requests,
+      series: reqSeries,
     },
     {
-      label: 'Bandwidth saved',
+      label: t('monitor.bandwidthSaved'),
       value: savedFmt.value,
       unit: savedFmt.unit,
       tone: 'brand' as const,
-      series: KPI_SERIES.saved,
+      series: savedSeries,
     },
     {
-      label: 'P50 latency',
-      value: '—',
-      unit: 'ms',
+      label: t('monitor.avgLatency'),
+      value: p50Ms !== null ? String(p50Ms) : '—',
+      unit: p50Ms !== null ? 'ms' : '',
       tone: 'neutral' as const,
-      series: KPI_SERIES.latency,
+      series: latencySeries,
     },
   ]
 
@@ -202,21 +235,17 @@ function mirrorStatus(u: UpstreamInfo): MirrorStatus {
 function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
   const status = mirrorStatus(upstream)
   const isFailed = status === 'failed'
-  const tone = status === 'healthy' ? 'ok' : status === 'degraded' ? 'warn' : 'danger'
-  const def = MIRROR_DEFS.find(m => m.type === upstream.adapter)
-  const series = def?.series ?? genSeries(40, 42, {})
 
   return (
     <div
       className="row-hover"
       style={{
         display: 'grid',
-        gridTemplateColumns: '50px 1fr 96px',
+        gridTemplateColumns: '50px 1fr 120px',
         alignItems: 'center',
         gap: 12,
         padding: '10px 14px',
         borderBottom: '0.5px solid var(--border)',
-        cursor: 'pointer',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -273,7 +302,7 @@ function MirrorTile({ upstream }: { upstream: UpstreamInfo }) {
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Sparkline data={series} width={92} height={22} tone={tone} />
+        <StatusBar points={upstream.latency_series ?? []} />
       </div>
     </div>
   )
@@ -303,59 +332,13 @@ function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
   )
 }
 
-// ── Banner ────────────────────────────────────────────────────────
-
-function Banner({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '8px 12px',
-        background: 'var(--warn-fill)',
-        border: '0.5px solid var(--warn-border)',
-        borderRadius: 8,
-        fontSize: 12,
-      }}
-    >
-      <StatusDot status="degraded" />
-      <span style={{ flex: 1, color: 'var(--text)' }}>
-        SSE stream disconnected — real-time updates paused.
-      </span>
-      <button
-        type="button"
-        onClick={onDismiss}
-        style={{ color: 'var(--text-muted)', padding: 4, lineHeight: 0 }}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-          <path
-            d="M2 2l6 6M8 2l-6 6"
-            stroke="currentColor"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
-    </div>
-  )
-}
-
 // ── Page ──────────────────────────────────────────────────────────
 
-const TIME_RANGES = [
-  { value: '15m', label: '15m' },
-  { value: '1h',  label: '1h'  },
-  { value: '24h', label: '24h' },
-  { value: '7d',  label: '7d'  },
-]
 
 export default function MonitorPage() {
-  const [timeRange, setTimeRange] = useState('1h')
-  const [showBanner, setShowBanner] = useState(false) // TODO: set to true when SSE disconnect is detected via LiveDetector
-
+  const { t } = useTranslation()
   const { data } = useQuery<StatsData>({
-    queryKey: ['stats-monitor', timeRange],
+    queryKey: ['stats-monitor'],
     queryFn: async () => {
       const res = await statsApi.getStats()
       return res.data
@@ -365,6 +348,7 @@ export default function MonitorPage() {
 
   const upstreams = data?.upstreams ?? []
   const hitRate   = data?.today.hit_rate ?? 0
+  const series    = data?.series?.points ?? []
   const today     = data?.today ?? {
     total_requests: 0,
     hit_count: 0,
@@ -386,14 +370,7 @@ export default function MonitorPage() {
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Title row */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 16,
-        }}
-      >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         <div>
           <h1
             className="grad-text"
@@ -405,7 +382,7 @@ export default function MonitorPage() {
               lineHeight: 1.02,
             }}
           >
-            Live monitoring
+            {t('monitor.title')}
           </h1>
           <p
             style={{
@@ -418,16 +395,13 @@ export default function MonitorPage() {
               letterSpacing: '-0.005em',
             }}
           >
-            Real-time view of cache performance and upstream mirror health.
+            {t('monitor.subtitle')}
           </p>
         </div>
-        <Segmented options={TIME_RANGES} value={timeRange} onChange={setTimeRange} />
       </div>
 
-      {showBanner && <Banner onDismiss={() => setShowBanner(false)} />}
-
-      <HitRateHero hitRate={hitRate} />
-      <StatStrip data={today} />
+      <HitRateHero hitRate={hitRate} series={series} />
+      <StatStrip data={today} upstreams={upstreams} series={series} />
 
       {/* Mirrors section */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -448,7 +422,7 @@ export default function MonitorPage() {
                 lineHeight: 1.1,
               }}
             >
-              Upstream mirrors{' '}
+              {t('monitor.upstreams')}{' '}
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
@@ -465,17 +439,17 @@ export default function MonitorPage() {
             <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <StatusDot status="healthy" />
-                <span className="num">{healthyCounts.healthy ?? 0}</span> healthy
+                <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
               </span>
               <span style={{ margin: '0 10px', color: 'var(--border-strong)' }}>·</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <StatusDot status="degraded" />
-                <span className="num">{healthyCounts.degraded ?? 0}</span> degraded
+                <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
               </span>
               <span style={{ margin: '0 10px', color: 'var(--border-strong)' }}>·</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <StatusDot status="failed" />
-                <span className="num">{healthyCounts.failed ?? 0}</span> failed
+                <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
               </span>
             </p>
           </div>
