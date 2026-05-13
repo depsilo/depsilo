@@ -242,14 +242,12 @@ function latencySeriesToBeats(series?: LatencyPoint[]): (number | null)[] {
   })
 }
 
-function formatTimeLabel(iso: string): string {
-  return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-function UpstreamRow({ upstream, isLast }: { upstream: UpstreamInfo; isLast: boolean }) {
+function UpstreamRow({ upstream, isLast, locale }: { upstream: UpstreamInfo; isLast: boolean; locale: string }) {
   const isFailed = !upstream.healthy
   const beats = latencySeriesToBeats(upstream.latency_series)
-  const timeLabels = upstream.latency_series?.map(pt => formatTimeLabel(pt.time)) ?? []
+  const timeLabels = upstream.latency_series?.map(pt =>
+    new Date(pt.time).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  ) ?? []
   const upstreamItem: UpstreamItem = {
     name: upstream.name,
     adapter: upstream.adapter,
@@ -302,7 +300,7 @@ function UpstreamRow({ upstream, isLast }: { upstream: UpstreamInfo; isLast: boo
   )
 }
 
-function EcosystemCard({ adapter, upstreams }: { adapter: string; upstreams: UpstreamInfo[] }) {
+function EcosystemCard({ adapter, upstreams, locale }: { adapter: string; upstreams: UpstreamInfo[]; locale: string }) {
   const worstStatus = upstreams.some(u => !u.healthy)
     ? 'failed'
     : upstreams.some(u => u.avg_latency_ms > 150)
@@ -338,14 +336,14 @@ function EcosystemCard({ adapter, upstreams }: { adapter: string; upstreams: Ups
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {upstreams.map((u, i) => (
-          <UpstreamRow key={u.name} upstream={u} isLast={i === upstreams.length - 1} />
+          <UpstreamRow key={u.name} upstream={u} isLast={i === upstreams.length - 1} locale={locale} />
         ))}
       </div>
     </div>
   )
 }
 
-function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
+function MirrorMatrix({ upstreams, locale }: { upstreams: UpstreamInfo[]; locale: string }) {
   const groups = new Map<string, UpstreamInfo[]>()
   for (const u of upstreams) {
     const list = groups.get(u.adapter) ?? []
@@ -356,7 +354,7 @@ function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
   return (
     <div style={{ columns: 3, columnGap: 10 }}>
       {Array.from(groups.entries()).map(([adapter, list]) => (
-        <EcosystemCard key={adapter} adapter={adapter} upstreams={list} />
+        <EcosystemCard key={adapter} adapter={adapter} upstreams={list} locale={locale} />
       ))}
     </div>
   )
@@ -366,7 +364,8 @@ function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
 
 
 export default function MonitorPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
   const { data } = useQuery<StatsData>({
     queryKey: ['stats-monitor'],
     queryFn: async () => {
@@ -484,7 +483,7 @@ export default function MonitorPage() {
             </p>
           </div>
         </div>
-        {upstreams.length > 0 && <MirrorMatrix upstreams={upstreams} />}
+        {upstreams.length > 0 && <MirrorMatrix upstreams={upstreams} locale={locale} />}
       </div>
     </div>
   )

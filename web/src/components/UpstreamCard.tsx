@@ -42,7 +42,7 @@ function beatLabel(latency: number | null): string {
 }
 
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleString(document.documentElement.lang || undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function useBeats(upstream: UpstreamItem, enabled = true): { beats: (number | null)[]; labels: string[] } {
