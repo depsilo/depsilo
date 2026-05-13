@@ -242,9 +242,15 @@ function latencySeriesToBeats(series?: LatencyPoint[]): (number | null)[] {
   })
 }
 
+function formatTimeLabel(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 function UpstreamRow({ upstream, isLast }: { upstream: UpstreamInfo; isLast: boolean }) {
   const isFailed = !upstream.healthy
   const beats = latencySeriesToBeats(upstream.latency_series)
+  const timeLabels = upstream.latency_series?.map(pt => formatTimeLabel(pt.time)) ?? []
   const upstreamItem: UpstreamItem = {
     name: upstream.name,
     adapter: upstream.adapter,
@@ -292,7 +298,7 @@ function UpstreamRow({ upstream, isLast }: { upstream: UpstreamInfo; isLast: boo
         </span>
         <span style={{ fontSize: 10, color: upstream.healthy ? '#3bd671' : 'var(--danger)' }}>●</span>
       </div>
-      <HeartbeatBar upstream={upstreamItem} externalBeats={beats.length > 0 ? beats : undefined} />
+      <HeartbeatBar upstream={upstreamItem} externalBeats={beats.length > 0 ? beats : undefined} labels={timeLabels} />
     </div>
   )
 }

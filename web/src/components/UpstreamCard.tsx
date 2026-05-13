@@ -41,7 +41,11 @@ function beatLabel(latency: number | null): string {
   return `${latency}ms`
 }
 
-function useBeats(upstream: UpstreamItem, enabled = true) {
+function fmtTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function useBeats(upstream: UpstreamItem, enabled = true): { beats: (number | null)[]; labels: string[] } {
   const { data } = useQuery({
     queryKey: ['upstream-heartbeat', upstream.id ?? upstream.name],
     queryFn: () => upstream.id ? adminApi.getUpstreamLatency(upstream.id, '24h') : Promise.resolve(null),
@@ -49,36 +53,39 @@ function useBeats(upstream: UpstreamItem, enabled = true) {
     retry: false,
     enabled: enabled && !!upstream.id,
   })
-  const realPoints: Array<{ latency_ms: number }> = data?.data?.points || []
+  const realPoints: Array<{ latency_ms: number; time?: string }> = data?.data?.points || []
 
   return useMemo(() => {
     if (realPoints.length > 0) {
       if (realPoints.length <= HEARTBEAT_SLOTS) {
-        const padded: (number | null)[] = Array(HEARTBEAT_SLOTS - realPoints.length).fill(null)
-        return [...padded, ...realPoints.map(p => p.latency_ms)]
+        const padN = HEARTBEAT_SLOTS - realPoints.length
+        return {
+          beats: [...Array(padN).fill(null), ...realPoints.map(p => p.latency_ms)],
+          labels: [...Array(padN).fill(''), ...realPoints.map(p => p.time ? fmtTime(p.time) : '')],
+        }
       }
       const step = realPoints.length / HEARTBEAT_SLOTS
-      return Array.from({ length: HEARTBEAT_SLOTS }, (_, i) => {
+      const beats: (number | null)[] = []
+      const labels: string[] = []
+      for (let i = 0; i < HEARTBEAT_SLOTS; i++) {
         const idx = Math.min(Math.floor(i * step), realPoints.length - 1)
-        return realPoints[idx].latency_ms
-      })
+        beats.push(realPoints[idx].latency_ms)
+        labels.push(realPoints[idx].time ? fmtTime(realPoints[idx].time!) : '')
+      }
+      return { beats, labels }
     }
-    const base = upstream.avg_latency_ms || 0
-    if (base <= 1) return Array(HEARTBEAT_SLOTS).fill(null) as (number | null)[]
-    const failRate = 1 - upstream.success_rate
-    return Array.from({ length: HEARTBEAT_SLOTS }, (_, i) => {
-      if (i < HEARTBEAT_SLOTS * 0.3) return null
-      if (failRate > 0 && Math.random() < failRate) return -1
-      const variance = (Math.random() - 0.5) * base * 0.4
-      return Math.max(1, Math.round(base + variance))
-    }) as (number | null)[]
+    return {
+      beats: Array(HEARTBEAT_SLOTS).fill(null) as (number | null)[],
+      labels: [] as string[],
+    }
   }, [realPoints, upstream.avg_latency_ms, upstream.success_rate])
 }
 
-export function HeartbeatBar({ upstream, externalBeats }: { upstream: UpstreamItem; externalBeats?: (number | null)[] }) {
+export function HeartbeatBar({ upstream, externalBeats, labels }: { upstream: UpstreamItem; externalBeats?: (number | null)[]; labels?: string[] }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
-  const hookBeats = useBeats(upstream, !externalBeats)
-  const beats = externalBeats ?? hookBeats
+  const hook = useBeats(upstream, !externalBeats)
+  const beats = externalBeats ?? hook.beats
+  const resolvedLabels = labels ?? hook.labels
 
   return (
     <div className="relative" style={{ height: 22 }}>
@@ -108,7 +115,7 @@ export function HeartbeatBar({ upstream, externalBeats }: { upstream: UpstreamIt
           className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[10px] font-mono whitespace-nowrap pointer-events-none z-10"
           style={{ background: 'var(--text)', color: 'var(--bg-page)', left: `${(hoveredIdx / beats.length) * 100}%`, transform: 'translateX(-50%)' }}
         >
-          {beatLabel(beats[hoveredIdx])}
+          {resolvedLabels?.[hoveredIdx] ? `${resolvedLabels[hoveredIdx]} · ` : ''}{beatLabel(beats[hoveredIdx])}
         </div>
       )}
     </div>
