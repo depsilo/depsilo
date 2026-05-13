@@ -67,10 +67,18 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		Group("date, adapter_type").Order("date").
 		Scan(&dailyStats)
 
-	// Upstream status
+	// Upstream status — batch-load IDs from DB
+	var upstreamRecords []db.UpstreamRecord
+	h.db.Find(&upstreamRecords)
+	idByName := make(map[string]uint, len(upstreamRecords))
+	for _, r := range upstreamRecords {
+		idByName[r.Name] = r.ID
+	}
+
 	upstreams := make([]gin.H, 0)
 	for _, u := range h.pypiPool.Upstreams() {
 		upstreams = append(upstreams, gin.H{
+			"id":             idByName[u.Name],
 			"name":           u.Name,
 			"adapter":        "pypi",
 			"healthy":        u.Healthy,
@@ -78,104 +86,26 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 			"success_rate":   u.SuccessRate(),
 		})
 	}
-	for _, u := range h.aptPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "apt",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
+	type pe struct {
+		pool    *upstream.Pool
+		adapter string
 	}
-	for _, u := range h.npmPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "npm",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.goPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "go",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.cargoPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "cargo",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.mavenPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "maven",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.rubygemsPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "rubygems",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.composerPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "composer",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.nugetPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "nuget",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.condaPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "conda",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.cranPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "cran",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	for _, u := range h.helmPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"name":           u.Name,
-			"adapter":        "helm",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
+	for _, p := range []pe{
+		{h.aptPool, "apt"}, {h.npmPool, "npm"}, {h.goPool, "go"},
+		{h.cargoPool, "cargo"}, {h.mavenPool, "maven"}, {h.rubygemsPool, "rubygems"},
+		{h.composerPool, "composer"}, {h.nugetPool, "nuget"}, {h.condaPool, "conda"},
+		{h.cranPool, "cran"}, {h.helmPool, "helm"},
+	} {
+		for _, u := range p.pool.Upstreams() {
+			upstreams = append(upstreams, gin.H{
+				"id":             idByName[u.Name],
+				"name":           u.Name,
+				"adapter":        p.adapter,
+				"healthy":        u.Healthy,
+				"avg_latency_ms": u.AvgLatency().Milliseconds(),
+				"success_rate":   u.SuccessRate(),
+			})
+		}
 	}
 
 	// Top packages
