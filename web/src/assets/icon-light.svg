@@ -3,16 +3,18 @@
     <clipPath id="bolt">
       <polygon points="57.6,0 128,0 70.4,57.6 108.8,57.6 19.2,128 57.6,70.4 19.2,70.4"/>
     </clipPath>
+    <!-- Same aurora gradient, slightly brighter for dark-bg readability -->
+    <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#9B54D2"/>
+      <stop offset="40%"  stop-color="#7481E4"/>
+      <stop offset="75%"  stop-color="#5AB8E4"/>
+      <stop offset="100%" stop-color="#D8C050"/>
+    </linearGradient>
   </defs>
-  <!-- Background -->
-  <rect width="128" height="128" rx="24" fill="#ffffff"/>
-  <rect width="128" height="128" rx="24" fill="none" stroke="#c2c6d2" stroke-width="0.5" stroke-opacity="0.15"/>
-  <!-- Color bars -->
-  <rect x="12" y="37" width="104" height="14" rx="0" fill="#1D9E75"/>
-  <rect x="12" y="55" width="104" height="14" rx="0" fill="#378ADD" opacity="0.85"/>
-  <rect x="12" y="73" width="104" height="14" rx="0" fill="#85B7EB" opacity="0.60"/>
+  <!-- Background: aurora gradient -->
+  <rect width="128" height="128" rx="24" fill="url(#aurora)"/>
   <!-- Lightning bolt (white) -->
   <g clip-path="url(#bolt)">
-    <rect x="24" y="14" width="80" height="100" fill="#ffffff"/>
+    <rect width="128" height="128" fill="#ffffff" fill-opacity="0.92"/>
   </g>
 </svg>

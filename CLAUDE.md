@@ -18,20 +18,20 @@
 
 ### 已支持的生态
 
-| # | 协议 | 路径 | 语言/生态 | 代理类型 |
-|---|------|------|-----------|----------|
-| 1 | PyPI | `/pypi/` | Python (pip / uv / Poetry) | URL 重写（HTML） |
-| 2 | APT | `/apt/` | Debian / Ubuntu | Passthrough |
-| 3 | npm | `/npm/` | Node.js (npm / yarn / pnpm) | URL 重写（JSON） |
-| 4 | Go Modules | `/go/` | Go | Passthrough |
-| 5 | Cargo | `/crates/` | Rust | config.json 重写 |
-| 6 | Maven | `/maven/` | Java / Kotlin / Gradle | Passthrough |
-| 7 | RubyGems | `/rubygems/` | Ruby (bundler / gem) | Passthrough |
-| 8 | Composer | `/composer/` | PHP (Packagist) | metadata-url 重写 |
-| 9 | NuGet | `/nuget/` | .NET (dotnet) | service index 重写 |
-| 10 | Conda | `/conda/` | Python 数据科学 | Passthrough |
-| 11 | CRAN | `/cran/` | R | Passthrough |
-| 12 | Helm | `/helm/` | Kubernetes Charts | Passthrough |
+| #   | 协议       | 路径         | 语言/生态                   | 代理类型           |
+| --- | ---------- | ------------ | --------------------------- | ------------------ |
+| 1   | PyPI       | `/pypi/`     | Python (pip / uv / Poetry)  | URL 重写（HTML）   |
+| 2   | APT        | `/apt/`      | Debian / Ubuntu             | Passthrough        |
+| 3   | npm        | `/npm/`      | Node.js (npm / yarn / pnpm) | URL 重写（JSON）   |
+| 4   | Go Modules | `/go/`       | Go                          | Passthrough        |
+| 5   | Cargo      | `/crates/`   | Rust                        | config.json 重写   |
+| 6   | Maven      | `/maven/`    | Java / Kotlin / Gradle      | Passthrough        |
+| 7   | RubyGems   | `/rubygems/` | Ruby (bundler / gem)        | Passthrough        |
+| 8   | Composer   | `/composer/` | PHP (Packagist)             | metadata-url 重写  |
+| 9   | NuGet      | `/nuget/`    | .NET (dotnet)               | service index 重写 |
+| 10  | Conda      | `/conda/`    | Python 数据科学             | Passthrough        |
+| 11  | CRAN       | `/cran/`     | R                           | Passthrough        |
+| 12  | Helm       | `/helm/`     | Kubernetes Charts           | Passthrough        |
 
 ### 竞品定位
 比 Nexus Repository 更轻量，10 分钟内完成部署，无复杂企业概念。
@@ -40,22 +40,22 @@
 
 ## 二、技术栈（不得替换）
 
-| 组件 | 选型 | 说明 |
-|------|------|------|
-| 语言 | Go 1.21+ | 标准库优先 |
-| HTTP 框架 | **Gin** (`github.com/gin-gonic/gin`) | v1.9+ |
-| ORM | **GORM** (`gorm.io/gorm`) | 配套 SQLite/PostgreSQL driver |
-| DB 迁移 | GORM `AutoMigrate` | 启动时自动执行 |
-| S3 客户端 | `github.com/aws/aws-sdk-go-v2` | 兼容 MinIO |
-| 配置 | `github.com/spf13/viper` | 读取 TOML 配置文件 |
-| 日志 | `go.uber.org/zap` | 结构化日志 |
-| 单飞 | `golang.org/x/sync/singleflight` | 防并发回源 |
-| 限流 | `golang.org/x/time/rate` | 令牌桶，每上游独立限流 |
-| 熔断 | `github.com/sony/gobreaker` | 上游请求熔断 |
-| Metrics | `github.com/prometheus/client_golang` | 暴露 `/metrics` |
-| 前端 | React 18 + TypeScript + Vite | 见第五节 |
-| 前端组件库 | **shadcn/ui** + Tailwind CSS | 见第五节 |
-| 前端打包 | Go `embed` | 编译进二进制 |
+| 组件       | 选型                                  | 说明                          |
+| ---------- | ------------------------------------- | ----------------------------- |
+| 语言       | Go 1.21+                              | 标准库优先                    |
+| HTTP 框架  | **Gin** (`github.com/gin-gonic/gin`)  | v1.9+                         |
+| ORM        | **GORM** (`gorm.io/gorm`)             | 配套 SQLite/PostgreSQL driver |
+| DB 迁移    | GORM `AutoMigrate`                    | 启动时自动执行                |
+| S3 客户端  | `github.com/aws/aws-sdk-go-v2`        | 兼容 MinIO                    |
+| 配置       | `github.com/spf13/viper`              | 读取 TOML 配置文件            |
+| 日志       | `go.uber.org/zap`                     | 结构化日志                    |
+| 单飞       | `golang.org/x/sync/singleflight`      | 防并发回源                    |
+| 限流       | `golang.org/x/time/rate`              | 令牌桶，每上游独立限流        |
+| 熔断       | `github.com/sony/gobreaker`           | 上游请求熔断                  |
+| Metrics    | `github.com/prometheus/client_golang` | 暴露 `/metrics`               |
+| 前端       | React 18 + TypeScript + Vite          | 见第五节                      |
+| 前端组件库 | **shadcn/ui** + Tailwind CSS          | 见第五节                      |
+| 前端打包   | Go `embed`                            | 编译进二进制                  |
 
 ---
 
@@ -980,15 +980,15 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 以下是 AI 在 Depsilo 项目中**反复犯的错误**，必须特别注意：
 
-| 陷阱 | 正确做法 | 为什么 |
-| ---- | ------- | ------ |
-| 在 passthrough adapter（APT/Go/Maven/CRAN/Helm）中修改响应体 | **绝对不能修改**，原样透传 | 修改会破坏 GPG 签名，客户端拒绝安装 |
-| 把整个响应 body 读进内存再转发 | **必须流式传输** `io.Copy` / `io.TeeReader` | torch 包 2GB+，buffer 会 OOM |
-| 前端改了文字但只改了 zh.ts | **zh.ts 和 en.ts 必须同时更新** | 否则另一语言显示 key 而非文字 |
-| URL 重写时遗漏某些链接 | 用**正则/HTML parser 全量替换**，不要只替换"看到的那个" | 遗漏一个 href，pip/npm 就会绕过缓存 |
-| 在前端代码中硬编码 `localhost:8080` | 用 `window.location.origin` | 部署地址不是 localhost |
-| 忽略 Go error（`_ = xxx`） | **所有 error 必须处理或传递** | 静默吞错导致难以排查的线上问题 |
-| 新增文件放在错误的目录 | 严格按照第三节目录结构 | 项目约定不可随意创建顶层目录 |
+| 陷阱                                                         | 正确做法                                                | 为什么                              |
+| ------------------------------------------------------------ | ------------------------------------------------------- | ----------------------------------- |
+| 在 passthrough adapter（APT/Go/Maven/CRAN/Helm）中修改响应体 | **绝对不能修改**，原样透传                              | 修改会破坏 GPG 签名，客户端拒绝安装 |
+| 把整个响应 body 读进内存再转发                               | **必须流式传输** `io.Copy` / `io.TeeReader`             | torch 包 2GB+，buffer 会 OOM        |
+| 前端改了文字但只改了 zh.ts                                   | **zh.ts 和 en.ts 必须同时更新**                         | 否则另一语言显示 key 而非文字       |
+| URL 重写时遗漏某些链接                                       | 用**正则/HTML parser 全量替换**，不要只替换"看到的那个" | 遗漏一个 href，pip/npm 就会绕过缓存 |
+| 在前端代码中硬编码 `localhost:8080`                          | 用 `window.location.origin`                             | 部署地址不是 localhost              |
+| 忽略 Go error（`_ = xxx`）                                   | **所有 error 必须处理或传递**                           | 静默吞错导致难以排查的线上问题      |
+| 新增文件放在错误的目录                                       | 严格按照第三节目录结构                                  | 项目约定不可随意创建顶层目录        |
 
 ---
 
@@ -1078,32 +1078,32 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 ### 11.3 已修复的技术债（2026-04-19）
 
-| 问题 | 修复方式 | Commits |
-| ---- | -------- | ------- |
-| Cache Manager 大文件 OOM | `bytes.Buffer` → `countingReader` 流式直写 storage | c55b7ce, a5c76b2, 9264951, c6b5d13 |
-| `io.Copy` 错误被忽略 | 15 处 adapter 改为 `zap.L().Warn` 记录错误 | 5bdbba4 |
-| `server.go` 过长 (408 行) | 表驱动循环，-64 行 (→344 行) | 7b3a44a |
-| 前端工具函数重复 | 提取到 `web/src/lib/utils.ts`，11 文件清理 | 5380960 |
-| Docker Registry Cloudflare 403 | 所有上游请求加 `User-Agent: docker/27.0.0 depsilo` | b04314f |
+| 问题                           | 修复方式                                           | Commits                            |
+| ------------------------------ | -------------------------------------------------- | ---------------------------------- |
+| Cache Manager 大文件 OOM       | `bytes.Buffer` → `countingReader` 流式直写 storage | c55b7ce, a5c76b2, 9264951, c6b5d13 |
+| `io.Copy` 错误被忽略           | 15 处 adapter 改为 `zap.L().Warn` 记录错误         | 5bdbba4                            |
+| `server.go` 过长 (408 行)      | 表驱动循环，-64 行 (→344 行)                       | 7b3a44a                            |
+| 前端工具函数重复               | 提取到 `web/src/lib/utils.ts`，11 文件清理         | 5380960                            |
+| Docker Registry Cloudflare 403 | 所有上游请求加 `User-Agent: docker/27.0.0 depsilo` | b04314f                            |
 
 ### 11.4 剩余已知问题
 
-| 问题 | 严重度 | 说明 |
-| ---- | ------ | ---- |
-| i18n key 无编译时校验 | 低 | en.ts 与 zh.ts 目前同步（478 key），但缺少自动检查机制 |
-| `api.Deps` 仍有 12 个独立 Pool 字段 | 低 | 可改为 `Pools map[string]*Pool`，需联动改 dashboard.go / stats.go |
-| 部分 `formatTime` 变体未统一 | 低 | Projects/Rules/Security/LiveStream/Monitor 有不同逻辑的本地实现 |
-| Docker Registry 缺少 E2E 冒烟测试 | 低 | `docker pull` 已手动验证，但未加入 `make test-e2e`（需要 Docker-in-Docker） |
-| Docker token 缓存非持久化 | 低 | 重启后丢失，影响首次请求延迟（~1s），非功能性问题 |
+| 问题                                | 严重度 | 说明                                                                        |
+| ----------------------------------- | ------ | --------------------------------------------------------------------------- |
+| i18n key 无编译时校验               | 低     | en.ts 与 zh.ts 目前同步（478 key），但缺少自动检查机制                      |
+| `api.Deps` 仍有 12 个独立 Pool 字段 | 低     | 可改为 `Pools map[string]*Pool`，需联动改 dashboard.go / stats.go           |
+| 部分 `formatTime` 变体未统一        | 低     | Projects/Rules/Security/LiveStream/Monitor 有不同逻辑的本地实现             |
+| Docker Registry 缺少 E2E 冒烟测试   | 低     | `docker pull` 已手动验证，但未加入 `make test-e2e`（需要 Docker-in-Docker） |
+| Docker token 缓存非持久化           | 低     | 重启后丢失，影响首次请求延迟（~1s），非功能性问题                           |
 
 ### 11.5 竞品对比定位
 
-| &nbsp; | Nexus / Artifactory | Verdaccio | **Depsilo** |
-| ------ | ------------------- | --------- | ----------- |
-| 部署复杂度 | 高（JVM） | 低（仅 npm） | **极低（单二进制）** |
-| 生态覆盖 | 广 | 仅 npm | **13 种** |
-| 资源占用 | 重（GB 级内存） | 轻 | **轻（Go + SQLite）** |
-| 学习成本 | 高 | 低 | **低** |
+| &nbsp;     | Nexus / Artifactory | Verdaccio    | **Depsilo**           |
+| ---------- | ------------------- | ------------ | --------------------- |
+| 部署复杂度 | 高（JVM）           | 低（仅 npm） | **极低（单二进制）**  |
+| 生态覆盖   | 广                  | 仅 npm       | **13 种**             |
+| 资源占用   | 重（GB 级内存）     | 轻           | **轻（Go + SQLite）** |
+| 学习成本   | 高                  | 低           | **低**                |
 
 核心 slogan：**"10 分钟部署，13 种生态"**
 
@@ -1136,15 +1136,15 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 **推荐 Open Core 模式：**
 
-| 开源版（免费） | Pro 版（付费） |
-| -------------- | -------------- |
-| 所有 13 种生态代理 | 审计日志 |
-| 本地存储 + SQLite | SBOM 导出 |
-| 单用户管理 | 多项目/多团队 |
-| 基础统计 | 高级报表 + 趋势分析 |
-| | LDAP/OIDC 集成 |
-| | 包安全扫描 |
-| | 优先技术支持 |
+| 开源版（免费）     | Pro 版（付费）      |
+| ------------------ | ------------------- |
+| 所有 13 种生态代理 | 审计日志            |
+| 本地存储 + SQLite  | SBOM 导出           |
+| 单用户管理         | 多项目/多团队       |
+| 基础统计           | 高级报表 + 趋势分析 |
+|                    | LDAP/OIDC 集成      |
+|                    | 包安全扫描          |
+|                    | 优先技术支持        |
 
 **目标用户：**
 
@@ -1157,3 +1157,27 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 - README 需要 GIF/视频展示 "docker run → pip install 成功" 全流程（30 秒内）
 - 目标渠道：Awesome 列表、Hacker News、Reddit r/selfhosted
 - Docker Hub 一键部署：`docker run -p 8080:8080 depsilo/depsilo` 必须能直接跑
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues on `depsilo/depsilo`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+
+## gstack
+Use /browse from gstack for all web browsing.
+Available skills: /office-hours, /plan-ceo-review, /plan-eng-review,
+/plan-design-review, /design-consultation, /design-shotgun, /design-html,
+/review, /ship, /land-and-deploy, /qa, /cso, /autoplan, /investigate,
+/retro, /learn ...

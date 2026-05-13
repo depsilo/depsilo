@@ -57,7 +57,7 @@ func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool
 
 // kpiSeries returns 12 five-minute buckets covering the last hour,
 // aggregated from the access_logs table.
-func (h *StatsHandler) kpiSeries(oneHourAgo time.Time) []gin.H {
+func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
 	const buckets = 12
 	const intervalMin = 5
 
@@ -79,7 +79,7 @@ func (h *StatsHandler) kpiSeries(oneHourAgo time.Time) []gin.H {
 			COALESCE(SUM(CASE WHEN hit = 0 THEN latency_ms ELSE 0 END), 0) AS miss_latency,
 			SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END) AS miss_count`,
 			intervalMin*60, intervalMin*60).
-		Where("created_at >= ?", oneHourAgo).
+		Where("created_at >= ?", since).
 		Group("bucket").
 		Order("bucket ASC").
 		Scan(&rows)
@@ -91,7 +91,7 @@ func (h *StatsHandler) kpiSeries(oneHourAgo time.Time) []gin.H {
 	}
 
 	// Compute the aligned start bucket
-	startBucket := (oneHourAgo.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
+	startBucket := (since.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
 
 	points := make([]gin.H, 0, buckets)
 	for i := 0; i < buckets; i++ {
@@ -124,11 +124,11 @@ func (h *StatsHandler) kpiSeries(oneHourAgo time.Time) []gin.H {
 	return points
 }
 
-// upstreamLatencySeries returns 12 five-minute buckets of latency data
-// for a given upstream name, aggregated from the upstream_latency_logs table.
-func (h *StatsHandler) upstreamLatencySeries(upstreamName string, oneHourAgo time.Time) []gin.H {
-	const buckets = 12
-	const intervalMin = 5
+// upstreamLatencySeries returns 90 buckets of latency data (last 24 hours,
+// ~16-minute intervals) for a given upstream, aggregated from upstream_latency_logs.
+func (h *StatsHandler) upstreamLatencySeries(upstreamName string, since time.Time) []gin.H {
+	const buckets = 90
+	const intervalMin = 16
 
 	type bucketRow struct {
 		Bucket   int64
@@ -144,7 +144,7 @@ func (h *StatsHandler) upstreamLatencySeries(upstreamName string, oneHourAgo tim
 			AVG(CASE WHEN healthy = 1 THEN 1.0 ELSE 0.0 END) AS avg_hp,
 			COUNT(*) AS requests`,
 			intervalMin*60, intervalMin*60)).
-		Where("name = ? AND created_at >= ?", upstreamName, oneHourAgo).
+		Where("name = ? AND created_at >= ?", upstreamName, since).
 		Group("bucket").
 		Order("bucket ASC").
 		Scan(&rows)
@@ -154,7 +154,7 @@ func (h *StatsHandler) upstreamLatencySeries(upstreamName string, oneHourAgo tim
 		lookup[rows[i].Bucket] = &rows[i]
 	}
 
-	startBucket := (oneHourAgo.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
+	startBucket := (since.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
 
 	points := make([]gin.H, 0, buckets)
 	for i := 0; i < buckets; i++ {
@@ -179,10 +179,10 @@ func (h *StatsHandler) upstreamLatencySeries(upstreamName string, oneHourAgo tim
 func (h *StatsHandler) GetStats(c *gin.Context) {
 	now := time.Now()
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	oneHourAgo := now.Add(-1 * time.Hour)
+	since := now.Add(-1 * time.Hour)
 
 	// KPI series (12 x 5-min buckets)
-	seriesPoints := h.kpiSeries(oneHourAgo)
+	seriesPoints := h.kpiSeries(since)
 
 	// Today's stats from access logs
 	var totalRequests, hitCount, missCount int64
@@ -234,7 +234,7 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 				"healthy":        u.Healthy,
 				"avg_latency_ms": u.AvgLatency().Milliseconds(),
 				"success_rate":   u.SuccessRate(),
-				"latency_series": h.upstreamLatencySeries(u.Name, oneHourAgo),
+				"latency_series": h.upstreamLatencySeries(u.Name, now.Add(-24*time.Hour)),
 			})
 		}
 	}

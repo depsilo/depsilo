@@ -4,8 +4,8 @@ import { statsApi } from '@/lib/api'
 import StatusDot from '@/components/StatusDot'
 import Sparkline from '@/components/Sparkline'
 import HeroSparkline from '@/components/HeroSparkline'
-import StatusBar from '@/components/StatusBar'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import { HeartbeatBar, type UpstreamItem } from '@/components/UpstreamCard'
 import type { MirrorStatus } from '@/lib/ecosystemData'
 
 interface LatencyPoint {
@@ -233,30 +233,34 @@ function mirrorStatus(u: UpstreamInfo): MirrorStatus {
   return 'healthy'
 }
 
+function latencySeriesToBeats(series?: LatencyPoint[]): (number | null)[] {
+  if (!series || series.length === 0) return []
+  return series.map(pt => {
+    if (pt.requests === 0) return null
+    if (!pt.healthy) return -1
+    return pt.latency_ms
+  })
+}
+
 function UpstreamRow({ upstream, isLast }: { upstream: UpstreamInfo; isLast: boolean }) {
-  const status = mirrorStatus(upstream)
-  const isFailed = status === 'failed'
+  const isFailed = !upstream.healthy
+  const beats = latencySeriesToBeats(upstream.latency_series)
+  const upstreamItem: UpstreamItem = {
+    name: upstream.name,
+    adapter: upstream.adapter,
+    healthy: upstream.healthy,
+    avg_latency_ms: upstream.avg_latency_ms,
+    success_rate: upstream.success_rate,
+  }
 
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 5,
         paddingBottom: isLast ? 0 : 8,
         borderBottom: isLast ? 'none' : '0.5px solid var(--border)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <span
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: '50%',
-            background: status === 'healthy' ? 'oklch(0.68 0.14 155)' : status === 'degraded' ? 'oklch(0.75 0.12 70)' : 'oklch(0.65 0.15 25)',
-            flexShrink: 0,
-          }}
-        />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, marginBottom: 4 }}>
         <span
           className="mono"
           style={{
@@ -286,8 +290,9 @@ function UpstreamRow({ upstream, isLast }: { upstream: UpstreamInfo; isLast: boo
         >
           {isFailed ? '—' : `${upstream.avg_latency_ms}ms`}
         </span>
+        <span style={{ fontSize: 10, color: upstream.healthy ? '#3bd671' : 'var(--danger)' }}>●</span>
       </div>
-      <StatusBar points={upstream.latency_series ?? []} />
+      <HeartbeatBar upstream={upstreamItem} externalBeats={beats.length > 0 ? beats : undefined} />
     </div>
   )
 }

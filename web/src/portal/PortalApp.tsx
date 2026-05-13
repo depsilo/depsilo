@@ -77,6 +77,7 @@ export default function PortalAppV2() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
+      <div className="page-wash" />
       <header
         style={{
           position: 'sticky',
@@ -159,6 +160,28 @@ export default function PortalAppV2() {
             )}
             <LangToggle />
             <ThemeToggle />
+            <a
+              href="/admin"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 10px',
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--brand-text)',
+                background: 'var(--brand-soft)',
+                border: '0.5px solid var(--brand-border)',
+                borderRadius: 6,
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('portal.adminPanel')}
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </a>
           </div>
         </div>
       </header>

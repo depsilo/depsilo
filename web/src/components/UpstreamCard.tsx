@@ -41,13 +41,13 @@ function beatLabel(latency: number | null): string {
   return `${latency}ms`
 }
 
-function useBeats(upstream: UpstreamItem) {
+function useBeats(upstream: UpstreamItem, enabled = true) {
   const { data } = useQuery({
     queryKey: ['upstream-heartbeat', upstream.id ?? upstream.name],
     queryFn: () => upstream.id ? adminApi.getUpstreamLatency(upstream.id, '24h') : Promise.resolve(null),
     refetchInterval: 60000,
     retry: false,
-    enabled: !!upstream.id,
+    enabled: enabled && !!upstream.id,
   })
   const realPoints: Array<{ latency_ms: number }> = data?.data?.points || []
 
@@ -75,9 +75,10 @@ function useBeats(upstream: UpstreamItem) {
   }, [realPoints, upstream.avg_latency_ms, upstream.success_rate])
 }
 
-export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
+export function HeartbeatBar({ upstream, externalBeats }: { upstream: UpstreamItem; externalBeats?: (number | null)[] }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
-  const beats = useBeats(upstream)
+  const hookBeats = useBeats(upstream, !externalBeats)
+  const beats = externalBeats ?? hookBeats
 
   return (
     <div className="relative" style={{ height: 22 }}>
@@ -105,7 +106,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
       {hoveredIdx !== null && (
         <div
           className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[10px] font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: `${(hoveredIdx / HEARTBEAT_SLOTS) * 100}%`, transform: 'translateX(-50%)' }}
+          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: `${(hoveredIdx / beats.length) * 100}%`, transform: 'translateX(-50%)' }}
         >
           {beatLabel(beats[hoveredIdx])}
         </div>
