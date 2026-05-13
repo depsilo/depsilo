@@ -233,14 +233,30 @@ function mirrorStatus(u: UpstreamInfo): MirrorStatus {
   return 'healthy'
 }
 
-function UpstreamRow({ upstream }: { upstream: UpstreamInfo }) {
+function UpstreamRow({ upstream, isLast }: { upstream: UpstreamInfo; isLast: boolean }) {
   const status = mirrorStatus(upstream)
   const isFailed = status === 'failed'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 5,
+        paddingBottom: isLast ? 0 : 8,
+        borderBottom: isLast ? 'none' : '0.5px solid var(--border)',
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <StatusDot status={status} />
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            background: status === 'healthy' ? 'oklch(0.68 0.14 155)' : status === 'degraded' ? 'oklch(0.75 0.12 70)' : 'oklch(0.65 0.15 25)',
+            flexShrink: 0,
+          }}
+        />
         <span
           className="mono"
           style={{
@@ -259,12 +275,12 @@ function UpstreamRow({ upstream }: { upstream: UpstreamInfo }) {
         <span
           className="num"
           style={{
-            fontSize: 11,
+            fontSize: 10.5,
             flexShrink: 0,
             color: isFailed
               ? 'var(--text-subtle)'
               : upstream.avg_latency_ms > 100
-              ? 'var(--warn-text)'
+              ? 'oklch(0.65 0.12 50)'
               : 'var(--text-muted)',
           }}
         >
@@ -287,27 +303,32 @@ function EcosystemCard({ adapter, upstreams }: { adapter: string; upstreams: Ups
     <div
       className="card"
       style={{
-        padding: '12px 14px',
+        padding: '10px 12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 8,
         breakInside: 'avoid',
-        marginBottom: 12,
+        marginBottom: 10,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <EcosystemIcon type={adapter as any} size={16} useColor />
-        <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <EcosystemIcon type={adapter as any} size={14} useColor />
+        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-0.01em' }}>
           {adapter}
         </span>
-        <StatusDot status={worstStatus as MirrorStatus} />
-        <span style={{ fontSize: 10, color: 'var(--text-subtle)', marginLeft: 'auto' }}>
-          {upstreams.length} {upstreams.length === 1 ? 'mirror' : 'mirrors'}
-        </span>
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            background: worstStatus === 'healthy' ? 'oklch(0.68 0.14 155)' : worstStatus === 'degraded' ? 'oklch(0.75 0.12 70)' : 'oklch(0.65 0.15 25)',
+            flexShrink: 0,
+          }}
+        />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {upstreams.map(u => (
-          <UpstreamRow key={u.name} upstream={u} />
+        {upstreams.map((u, i) => (
+          <UpstreamRow key={u.name} upstream={u} isLast={i === upstreams.length - 1} />
         ))}
       </div>
     </div>
@@ -315,7 +336,6 @@ function EcosystemCard({ adapter, upstreams }: { adapter: string; upstreams: Ups
 }
 
 function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
-  // Group by adapter
   const groups = new Map<string, UpstreamInfo[]>()
   for (const u of upstreams) {
     const list = groups.get(u.adapter) ?? []
@@ -324,7 +344,7 @@ function MirrorMatrix({ upstreams }: { upstreams: UpstreamInfo[] }) {
   }
 
   return (
-    <div style={{ columns: 3, columnGap: 12 }}>
+    <div style={{ columns: 3, columnGap: 10 }}>
       {Array.from(groups.entries()).map(([adapter, list]) => (
         <EcosystemCard key={adapter} adapter={adapter} upstreams={list} />
       ))}
