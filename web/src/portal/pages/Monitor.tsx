@@ -375,7 +375,22 @@ export default function MonitorPage() {
     refetchInterval: 30000,
   })
 
-  const upstreams = data?.upstreams ?? []
+  // Latency series loaded separately (heavy query, ~160KB)
+  const { data: latencyMap } = useQuery<Record<string, LatencyPoint[]>>({
+    queryKey: ['latency-series'],
+    queryFn: async () => {
+      const res = await statsApi.getLatencySeries()
+      return res.data
+    },
+    refetchInterval: 60000,
+  })
+
+  // Merge latency_series into upstream objects
+  const rawUpstreams = data?.upstreams ?? []
+  const upstreams = rawUpstreams.map(u => ({
+    ...u,
+    latency_series: latencyMap?.[u.name],
+  }))
   const hitRate   = data?.today.hit_rate ?? 0
   const series    = data?.series?.points ?? []
   const today     = data?.today ?? {

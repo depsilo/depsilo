@@ -59,6 +59,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Public stats
 	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool, deps.MavenPool, deps.RubyGemsPool, deps.ComposerPool, deps.NuGetPool, deps.CondaPool, deps.CRANPool, deps.HelmPool, deps.Config.ExtraIndexes)
 	apiV1.GET("/stats", statsHandler.GetStats)
+	apiV1.GET("/latency-series", statsHandler.GetLatencySeries)
 
 	// Public packages
 	pkgHandler := public.NewPackagesHandler(deps.DB)

@@ -124,13 +124,14 @@ func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
 	return points
 }
 
-// upstreamLatencySeries returns 90 buckets of latency data (last 24 hours,
-// ~16-minute intervals) for a given upstream, aggregated from upstream_latency_logs.
-func (h *StatsHandler) upstreamLatencySeries(upstreamName string, since time.Time) []gin.H {
-	const buckets = 90
-	const intervalMin = 16
+const latencyBuckets = 90
+const latencyIntervalMin = 16
 
+// allUpstreamLatencySeries runs a single query for ALL upstreams and returns
+// a map of name → 90-point series. This replaces N per-upstream queries.
+func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) map[string][]gin.H {
 	type bucketRow struct {
+		Name     string
 		Bucket   int64
 		AvgLat   float64
 		AvgHP    float64
@@ -139,41 +140,56 @@ func (h *StatsHandler) upstreamLatencySeries(upstreamName string, since time.Tim
 
 	var rows []bucketRow
 	h.db.Model(&db.UpstreamLatencyLog{}).
-		Select(fmt.Sprintf(`(CAST(strftime('%%s', created_at) AS INTEGER) / %d) * %d AS bucket,
+		Select(fmt.Sprintf(`name,
+			(CAST(strftime('%%s', created_at) AS INTEGER) / %d) * %d AS bucket,
 			AVG(latency_ms) AS avg_lat,
 			AVG(CASE WHEN healthy = 1 THEN 1.0 ELSE 0.0 END) AS avg_hp,
 			COUNT(*) AS requests`,
-			intervalMin*60, intervalMin*60)).
-		Where("name = ? AND created_at >= ?", upstreamName, since).
-		Group("bucket").
-		Order("bucket ASC").
+			latencyIntervalMin*60, latencyIntervalMin*60)).
+		Where("created_at >= ?", since).
+		Group("name, bucket").
+		Order("name, bucket ASC").
 		Scan(&rows)
 
-	lookup := make(map[int64]*bucketRow, len(rows))
+	// Index by name+bucket
+	type key struct{ name string; bucket int64 }
+	lookup := make(map[key]*bucketRow, len(rows))
+	names := make(map[string]bool)
 	for i := range rows {
-		lookup[rows[i].Bucket] = &rows[i]
+		lookup[key{rows[i].Name, rows[i].Bucket}] = &rows[i]
+		names[rows[i].Name] = true
 	}
 
-	startBucket := (since.Unix() / int64(intervalMin*60)) * int64(intervalMin*60)
+	startBucket := (since.Unix() / int64(latencyIntervalMin*60)) * int64(latencyIntervalMin*60)
 
-	points := make([]gin.H, 0, buckets)
-	for i := 0; i < buckets; i++ {
-		ts := startBucket + int64(i*intervalMin*60)
-		t := time.Unix(ts, 0).UTC()
-		p := gin.H{
-			"time":       t.Format(time.RFC3339),
-			"latency_ms": int64(0),
-			"healthy":    true,
-			"requests":   int64(0),
+	result := make(map[string][]gin.H, len(names))
+	for name := range names {
+		points := make([]gin.H, 0, latencyBuckets)
+		for i := 0; i < latencyBuckets; i++ {
+			ts := startBucket + int64(i*latencyIntervalMin*60)
+			t := time.Unix(ts, 0).UTC()
+			p := gin.H{
+				"time":       t.Format(time.RFC3339),
+				"latency_ms": int64(0),
+				"healthy":    true,
+				"requests":   int64(0),
+			}
+			if r, ok := lookup[key{name, ts}]; ok {
+				p["latency_ms"] = int64(math.Round(r.AvgLat))
+				p["healthy"] = r.AvgHP > 0.5
+				p["requests"] = r.Requests
+			}
+			points = append(points, p)
 		}
-		if r, ok := lookup[ts]; ok {
-			p["latency_ms"] = int64(math.Round(r.AvgLat))
-			p["healthy"] = r.AvgHP > 0.5
-			p["requests"] = r.Requests
-		}
-		points = append(points, p)
+		result[name] = points
 	}
-	return points
+	return result
+}
+
+// GetLatencySeries returns all upstream latency series in one response (public, no auth).
+func (h *StatsHandler) GetLatencySeries(c *gin.Context) {
+	all := h.allUpstreamLatencySeries(time.Now().Add(-24 * time.Hour))
+	c.JSON(http.StatusOK, all)
 }
 
 func (h *StatsHandler) GetStats(c *gin.Context) {
@@ -234,7 +250,6 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 				"healthy":        u.Healthy,
 				"avg_latency_ms": u.AvgLatency().Milliseconds(),
 				"success_rate":   u.SuccessRate(),
-				"latency_series": h.upstreamLatencySeries(u.Name, now.Add(-24*time.Hour)),
 			})
 		}
 	}

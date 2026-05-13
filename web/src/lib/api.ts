@@ -25,6 +25,7 @@ api.interceptors.response.use(
 
 export const statsApi = {
   getStats: () => api.get('/stats'),
+  getLatencySeries: () => api.get('/latency-series'),
 }
 
 export const packagesApi = {
