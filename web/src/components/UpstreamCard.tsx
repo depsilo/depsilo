@@ -27,7 +27,7 @@ export interface UpstreamItem {
 const HEARTBEAT_SLOTS = 90
 
 function beatColor(latency: number | null): string {
-  if (latency === null) return 'var(--bg-soft)'
+  if (latency === null) return 'var(--border-strong)'
   if (latency < 0) return '#dc3545'
   if (latency < 80) return '#3bd671'
   if (latency < 200) return '#8cc152'
@@ -103,7 +103,7 @@ export function HeartbeatBar({ upstream, externalBeats, labels }: { upstream: Up
               minWidth: 2,
               borderRadius: 2,
               background: beatColor(lat),
-              opacity: lat === null ? 0.2 : (hoveredIdx !== null && hoveredIdx !== i ? 0.5 : 1),
+              opacity: lat === null ? 0.45 : (hoveredIdx !== null && hoveredIdx !== i ? 0.5 : 1),
               transition: 'height 75ms, opacity 75ms',
             }}
             onMouseEnter={() => setHoveredIdx(i)}
