@@ -5,6 +5,7 @@ import StatusDot from '@/components/StatusDot'
 import Sparkline from '@/components/Sparkline'
 import HeroSparkline from '@/components/HeroSparkline'
 import StatusBar from '@/components/StatusBar'
+import EcosystemIcon from '@/components/EcosystemIcon'
 import type { MirrorStatus } from '@/lib/ecosystemData'
 
 interface LatencyPoint {
@@ -295,11 +296,12 @@ function EcosystemCard({ adapter, upstreams }: { adapter: string; upstreams: Ups
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <StatusDot status={worstStatus as MirrorStatus} />
+        <EcosystemIcon type={adapter as any} size={16} useColor />
         <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em' }}>
           {adapter}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-subtle)' }}>
+        <StatusDot status={worstStatus as MirrorStatus} />
+        <span style={{ fontSize: 10, color: 'var(--text-subtle)', marginLeft: 'auto' }}>
           {upstreams.length} {upstreams.length === 1 ? 'mirror' : 'mirrors'}
         </span>
       </div>
