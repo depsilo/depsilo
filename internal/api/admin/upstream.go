@@ -25,11 +25,13 @@ func (h *UpstreamHandler) List(c *gin.Context) {
 }
 
 type upstreamRequest struct {
-	AdapterType string `json:"adapter_type" binding:"required"`
-	Name        string `json:"name" binding:"required"`
-	URL         string `json:"url" binding:"required"`
-	Proxy       string `json:"proxy"`
-	Priority    int    `json:"priority"`
+	AdapterType   string `json:"adapter_type" binding:"required"`
+	Name          string `json:"name" binding:"required"`
+	URL           string `json:"url" binding:"required"`
+	Proxy         string `json:"proxy"`
+	Priority      int    `json:"priority"`
+	ProbeMode     string `json:"probe_mode"`
+	ProbeInterval string `json:"probe_interval"`
 }
 
 func (h *UpstreamHandler) Create(c *gin.Context) {
@@ -39,14 +41,25 @@ func (h *UpstreamHandler) Create(c *gin.Context) {
 		return
 	}
 
+	probeMode := req.ProbeMode
+	if probeMode == "" {
+		probeMode = "active"
+	}
+	probeInterval := req.ProbeInterval
+	if probeInterval == "" {
+		probeInterval = "30s"
+	}
+
 	record := db.UpstreamRecord{
-		AdapterType: req.AdapterType,
-		Name:        req.Name,
-		URL:         req.URL,
-		Proxy:       req.Proxy,
-		Priority:    req.Priority,
-		Healthy:     true,
-		SuccessRate: 1.0,
+		AdapterType:   req.AdapterType,
+		Name:          req.Name,
+		URL:           req.URL,
+		Proxy:         req.Proxy,
+		Priority:      req.Priority,
+		ProbeMode:     probeMode,
+		ProbeInterval: probeInterval,
+		Healthy:       true,
+		SuccessRate:   1.0,
 	}
 
 	if err := h.db.Create(&record).Error; err != nil {
@@ -76,13 +89,21 @@ func (h *UpstreamHandler) Update(c *gin.Context) {
 		return
 	}
 
-	h.db.Model(&record).Updates(map[string]interface{}{
+	updates := map[string]interface{}{
 		"adapter_type": req.AdapterType,
 		"name":         req.Name,
 		"url":          req.URL,
 		"proxy":        req.Proxy,
 		"priority":     req.Priority,
-	})
+	}
+	if req.ProbeMode != "" {
+		updates["probe_mode"] = req.ProbeMode
+	}
+	if req.ProbeInterval != "" {
+		updates["probe_interval"] = req.ProbeInterval
+	}
+
+	h.db.Model(&record).Updates(updates)
 
 	h.db.First(&record, id)
 	c.JSON(http.StatusOK, record)
