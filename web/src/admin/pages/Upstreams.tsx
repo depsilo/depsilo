@@ -11,8 +11,8 @@ import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCa
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker'] as const
 
-interface UpstreamForm { name: string; url: string; priority: number; proxy: string; adapter_type: string }
-const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi' }
+interface UpstreamForm { name: string; url: string; priority: number; proxy: string; adapter_type: string; probe_mode: string; probe_interval: string }
+const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi', probe_mode: 'active', probe_interval: '30s' }
 
 export default function UpstreamsV2() {
   const { t } = useTranslation()
@@ -68,7 +68,7 @@ export default function UpstreamsV2() {
     const orig = allUpstreams.find((x: any) => x.id === u.id || x.name === u.name)
     if (!orig) return
     setEditId(orig.id)
-    setForm({ name: orig.name, url: orig.url, priority: orig.priority, proxy: orig.proxy || '', adapter_type: orig.adapter_type })
+    setForm({ name: orig.name, url: orig.url, priority: orig.priority, proxy: orig.proxy || '', adapter_type: orig.adapter_type, probe_mode: orig.probe_mode || 'active', probe_interval: orig.probe_interval || '30s' })
     setDialogOpen(true)
   }
   function handleSubmit(e: React.FormEvent) {
@@ -217,6 +217,27 @@ export default function UpstreamsV2() {
           </div>
           <InputV2 label={t('upstreams.priority')} type="number" min={1} value={form.priority} onChange={(e) => setForm({ ...form, priority: parseInt(e.target.value) || 1 })} />
           <InputV2 label={t('upstreams.httpProxy')} mono value={form.proxy} onChange={(e) => setForm({ ...form, proxy: e.target.value })} placeholder="http://127.0.0.1:7890" />
+          <SelectV2
+            label={t('upstreams.probeMode')}
+            value={form.probe_mode}
+            onChange={(e) => setForm({ ...form, probe_mode: e.target.value })}
+          >
+            <option value="active">{t('upstreams.probeModeActive')}</option>
+            <option value="passive">{t('upstreams.probeModePassive')}</option>
+          </SelectV2>
+          {form.probe_mode === 'active' && (
+            <SelectV2
+              label={t('upstreams.probeInterval')}
+              value={form.probe_interval}
+              onChange={(e) => setForm({ ...form, probe_interval: e.target.value })}
+            >
+              <option value="15s">15s</option>
+              <option value="30s">30s</option>
+              <option value="1m">1m</option>
+              <option value="5m">5m</option>
+              <option value="10m">10m</option>
+            </SelectV2>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <ButtonV2 type="button" variant="secondary" onClick={closeDialog}>{t('cancel')}</ButtonV2>
             <ButtonV2 type="submit" disabled={isSaving}>{isSaving ? t('saving') : t('save')}</ButtonV2>
