@@ -39,6 +39,8 @@ type UpstreamRecord struct {
 	URL           string    `gorm:"size:512" json:"url"`
 	Proxy         string    `gorm:"size:256" json:"proxy"`
 	Priority      int       `json:"priority"`
+	ProbeMode     string    `gorm:"size:16;default:'active'" json:"probe_mode"`
+	ProbeInterval string    `gorm:"size:16;default:'30s'" json:"probe_interval"`
 	Healthy       bool      `gorm:"default:true" json:"healthy"`
 	AvgLatencyMs  int64     `json:"avg_latency_ms"`
 	SuccessRate   float64   `json:"success_rate"`

@@ -77,10 +77,12 @@ type ExtraIndexConfig struct {
 }
 
 type UpstreamConfig struct {
-	Name     string `mapstructure:"name"`
-	URL      string `mapstructure:"url"`
-	Priority int    `mapstructure:"priority"`
-	Proxy    string `mapstructure:"proxy"`
+	Name          string `mapstructure:"name"`
+	URL           string `mapstructure:"url"`
+	Priority      int    `mapstructure:"priority"`
+	Proxy         string `mapstructure:"proxy"`
+	ProbeMode     string `mapstructure:"probe_mode"`
+	ProbeInterval string `mapstructure:"probe_interval"`
 }
 
 type DockerConfig struct {

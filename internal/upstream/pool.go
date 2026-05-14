@@ -19,8 +19,10 @@ type Upstream struct {
 	Name     string
 	URL      string
 	Proxy    string
-	Priority int
-	Healthy  bool
+	Priority      int
+	ProbeMode     string        // "active" or "passive"
+	ProbeInterval time.Duration // parsed from config string
+	Healthy       bool
 	client   *http.Client
 
 	mu          sync.RWMutex
@@ -51,20 +53,32 @@ func NewPool(cfgs []config.UpstreamConfig) (*Pool, error) {
 		if err != nil {
 			return nil, fmt.Errorf("build client for %s: %w", cfg.Name, err)
 		}
+		probeMode := cfg.ProbeMode
+		if probeMode == "" {
+			probeMode = "active"
+		}
+		probeInterval, err := time.ParseDuration(cfg.ProbeInterval)
+		if err != nil || probeInterval <= 0 {
+			probeInterval = 30 * time.Second
+		}
 		upstreams = append(upstreams, &Upstream{
-			Name:        cfg.Name,
-			URL:         cfg.URL,
-			Proxy:       cfg.Proxy,
-			Priority:    cfg.Priority,
-			Healthy:     true,
-			client:      client,
-			successRate: 1.0,
+			Name:          cfg.Name,
+			URL:           cfg.URL,
+			Proxy:         cfg.Proxy,
+			Priority:      cfg.Priority,
+			ProbeMode:     probeMode,
+			ProbeInterval: probeInterval,
+			Healthy:       true,
+			client:        client,
+			successRate:   1.0,
 		})
 		zap.L().Info("registered upstream",
 			zap.String("name", cfg.Name),
 			zap.String("url", cfg.URL),
 			zap.Int("priority", cfg.Priority),
 			zap.String("proxy", cfg.Proxy),
+			zap.String("probe_mode", probeMode),
+			zap.Duration("probe_interval", probeInterval),
 		)
 	}
 	return &Pool{upstreams: upstreams}, nil
