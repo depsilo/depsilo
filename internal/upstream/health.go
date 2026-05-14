@@ -48,8 +48,27 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 	}
 }
 
-// StartHealthCheck runs periodic health checks on all upstreams in the pool.
-func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, interval time.Duration) {
+// StartHealthCheck launches one goroutine per active-mode upstream in the pool.
+// Passive-mode upstreams are skipped — they rely on request-time Report() calls.
+func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, defaultInterval time.Duration) {
+	for _, u := range pool.Upstreams() {
+		if u.ProbeMode == "passive" {
+			zap.L().Info("upstream in passive probe mode, skipping health check",
+				zap.String("upstream", u.Name))
+			continue
+		}
+		interval := u.ProbeInterval
+		if interval <= 0 {
+			interval = defaultInterval
+		}
+		go runUpstreamHealthCheck(ctx, u, database, interval)
+	}
+}
+
+func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB, interval time.Duration) {
+	zap.L().Info("starting health check goroutine",
+		zap.String("upstream", u.Name),
+		zap.Duration("interval", interval))
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -58,9 +77,7 @@ func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, interv
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			for _, u := range pool.Upstreams() {
-				go checkUpstream(ctx, u, database)
-			}
+			checkUpstream(ctx, u, database)
 		}
 	}
 }
