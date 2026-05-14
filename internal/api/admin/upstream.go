@@ -1,8 +1,10 @@
 package admin
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -137,11 +139,51 @@ func (h *UpstreamHandler) Check(c *gin.Context) {
 		return
 	}
 
-	// TODO: perform actual health check request in Phase 6
+	// Perform actual HEAD request
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, record.URL, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "CHECK_FAILED", "message": err.Error()})
+		return
+	}
+	req.Header.Set("User-Agent", "depsilo/0.1")
+
+	start := time.Now()
+	resp, fetchErr := http.DefaultClient.Do(req)
+	latencyMs := time.Since(start).Milliseconds()
+
+	healthy := false
+	if fetchErr == nil {
+		resp.Body.Close()
+		healthy = resp.StatusCode < 500
+	}
+
+	// Update DB record
+	h.db.Model(&record).Updates(map[string]interface{}{
+		"healthy":        healthy,
+		"avg_latency_ms": latencyMs,
+		"last_checked_at": time.Now(),
+	})
+
+	// Log to latency history
+	h.db.Create(&db.UpstreamLatencyLog{
+		Name:      record.Name,
+		LatencyMs: latencyMs,
+		Healthy:   healthy,
+	})
+
+	errMsg := ""
+	if fetchErr != nil {
+		errMsg = fetchErr.Error()
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"id":      record.ID,
-		"name":    record.Name,
-		"healthy": record.Healthy,
-		"message": "health check queued",
+		"id":         record.ID,
+		"name":       record.Name,
+		"healthy":    healthy,
+		"latency_ms": latencyMs,
+		"error":      errMsg,
 	})
 }
