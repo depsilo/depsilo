@@ -349,32 +349,31 @@ body { margin: 0; }
           color: transparent;
 }
 
-.aurora-rim {
-  position: relative;
-}
-.aurora-rim::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 12px; right: 12px;
-  height: 1px;
-  background: var(--grad-rim);
-  opacity: 0.9;
-  pointer-events: none;
-  border-radius: 1px;
-}
-
-.aurora-rim-bottom {
-  position: relative;
-}
-.aurora-rim-bottom::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 16px; right: 16px;
-  height: 1px;
-  background: var(--grad-rim);
-  opacity: 0.55;
-  pointer-events: none;
-  border-radius: 1px;
+/* @layer utilities + :where() so Tailwind position utilities (fixed/absolute/sticky) win the cascade */
+@layer utilities {
+  :where(.aurora-rim, .aurora-rim-bottom) {
+    position: relative;
+  }
+  .aurora-rim::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 12px; right: 12px;
+    height: 1px;
+    background: var(--grad-rim);
+    opacity: 0.9;
+    pointer-events: none;
+    border-radius: 1px;
+  }
+  .aurora-rim-bottom::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 16px; right: 16px;
+    height: 1px;
+    background: var(--grad-rim);
+    opacity: 0.55;
+    pointer-events: none;
+    border-radius: 1px;
+  }
 }
 
 .page-wash {
