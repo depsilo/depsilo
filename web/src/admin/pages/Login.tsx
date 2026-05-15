@@ -89,7 +89,7 @@ export default function LoginV2() {
         {/* Back link */}
         <div className="mt-4 text-center">
           <Link to="/" className="text-[13px] no-underline transition-colors duration-150" style={{ color: 'var(--brand)' }}>
-            ← {t('login.backToPortal') || 'Back to Portal'}
+            ← {t('login.backToPortal')}
           </Link>
         </div>
       </div>

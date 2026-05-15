@@ -58,6 +58,7 @@ const zh = {
       submit: '登录',
       submitting: '登录中...',
       failed: '登录失败，请检查用户名和密码',
+      backToPortal: '返回门户',
     },
 
     // Dashboard

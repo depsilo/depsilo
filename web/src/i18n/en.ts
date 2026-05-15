@@ -58,6 +58,7 @@ const en = {
       submit: 'Sign In',
       submitting: 'Signing in...',
       failed: 'Login failed. Please check your credentials.',
+      backToPortal: 'Back to Portal',
     },
 
     // Dashboard
