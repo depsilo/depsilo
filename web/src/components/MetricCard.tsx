@@ -16,6 +16,7 @@ export default function MetricCardV2({ label, value, icon, change, sparkline }: 
         position: 'relative',
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       <div className="flex items-center justify-between mb-2">

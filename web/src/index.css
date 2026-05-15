@@ -138,8 +138,10 @@
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
   --s-6: 24px; --s-8: 32px; --s-12: 48px;
 
-  --shadow-card: none;
-  --shadow-pop:  none;
+  --shadow-card: rgba(50, 50, 93, 0.06) 0 6px 18px -6px,
+                 rgba(0, 0, 0, 0.04) 0 3px 9px -3px;
+  --shadow-pop:  rgba(50, 50, 93, 0.18) 0 30px 45px -30px,
+                 rgba(0, 0, 0, 0.10) 0 18px 36px -18px;
 }
 
 /* ── Dark mode tokens ── */
@@ -190,8 +192,10 @@ html.dark,
   --danger-border: oklch(0.74 0.17 25 / 0.36);
   --danger-text:   oklch(0.84 0.13 25);
 
-  --shadow-card: none;
-  --shadow-pop:  none;
+  --shadow-card: 0 0 0 1px oklch(0.55 0.16 295 / 0.04),
+                 rgba(0, 0, 0, 0.25) 0 6px 18px -6px;
+  --shadow-pop:  0 0 0 1px oklch(0.55 0.16 295 / 0.08),
+                 rgba(0, 0, 0, 0.45) 0 24px 48px -16px;
 }
 
 /* Auto-follow OS when user hasn't explicitly chosen */
@@ -242,8 +246,10 @@ html.dark,
     --danger-border: oklch(0.74 0.17 25 / 0.36);
     --danger-text:   oklch(0.84 0.13 25);
 
-    --shadow-card: none;
-    --shadow-pop:  none;
+    --shadow-card: 0 0 0 1px oklch(0.55 0.16 295 / 0.04),
+                   rgba(0, 0, 0, 0.25) 0 6px 18px -6px;
+    --shadow-pop:  0 0 0 1px oklch(0.55 0.16 295 / 0.08),
+                   rgba(0, 0, 0, 0.45) 0 24px 48px -16px;
   }
 }
 

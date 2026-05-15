@@ -18,6 +18,7 @@ export default function CardV2({
         background: 'var(--bg-card)',
         border: '0.5px solid var(--border)',
         borderRadius: 'var(--r-card)',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       {children}
