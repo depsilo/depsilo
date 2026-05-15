@@ -125,7 +125,7 @@ export default function DashboardV2() {
     { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: <Icon name="monitoring" size="sm" />, change: yesterday.total_requests ? ((today.total_requests - yesterday.total_requests) / yesterday.total_requests * 100) : null },
     { label: t('dashboard.hitRate'), value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: <Icon name="target" size="sm" />, change: yesterday.hit_rate ? ((today.hit_rate - yesterday.hit_rate) / yesterday.hit_rate * 100) : null },
     { label: t('dashboard.bytesServed'), value: formatBytes(today.bytes_served || 0), icon: <Icon name="hard_drive" size="sm" />, change: yesterday.bytes_served ? ((today.bytes_served - yesterday.bytes_served) / yesterday.bytes_served * 100) : null },
-    { label: t('dashboard.avgLatency'), value: (today.avg_latency_ms || 0) <= 1 ? '--' : `${Math.round(today.avg_latency_ms)} ms`, icon: <Icon name="timer" size="sm" />, change: yesterday.avg_latency_ms ? ((today.avg_latency_ms - yesterday.avg_latency_ms) / yesterday.avg_latency_ms * 100) : null },
+    { label: t('dashboard.avgLatency'), value: `${Math.round(today.avg_latency_ms || 0)} ms`, icon: <Icon name="timer" size="sm" />, change: yesterday.avg_latency_ms ? ((today.avg_latency_ms - yesterday.avg_latency_ms) / yesterday.avg_latency_ms * 100) : null },
   ]
 
   const ranges = [
