@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import Logo from '@/components/Logo'
@@ -157,6 +157,16 @@ export default function MainLayoutV2() {
       >
         <h1 className="text-[14px] font-[400]" style={{ color: 'var(--text-base)' }}>{pageTitle}</h1>
         <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            className="text-[12px] font-[500] no-underline transition-colors duration-150 inline-flex items-center gap-1"
+            style={{ color: 'var(--brand-text)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--brand-strong)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--brand-text)' }}
+            title={t('portal.backLink')}
+          >
+            {t('portal.backLink')}
+          </Link>
           <LangToggle />
           <ThemeToggle />
           <div className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: 'var(--text-soft)' }}>

@@ -364,6 +364,7 @@ const en = {
       quickStart: 'Quick Start',
       monitor: 'Monitor',
       adminPanel: 'Admin →',
+      backLink: '← Portal',
       online: 'Online',
       offline: 'Offline',
     },
