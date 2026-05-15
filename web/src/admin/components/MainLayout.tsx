@@ -147,13 +147,12 @@ export default function MainLayoutV2() {
 
       {/* Top bar — 48px */}
       <header
-        className="fixed top-0 left-[220px] right-0 z-40 flex items-center justify-between px-8"
+        className="aurora-rim-bottom fixed top-0 left-[220px] right-0 z-40 flex items-center justify-between px-8"
         style={{
           height: 48,
           background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
           backdropFilter: 'saturate(180%) blur(8px)',
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
-          borderBottom: '0.5px solid var(--border)',
         }}
       >
         <h1 className="text-[14px] font-[400]" style={{ color: 'var(--text-base)' }}>{pageTitle}</h1>
