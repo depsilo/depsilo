@@ -154,9 +154,9 @@ aurora 4 色渐变作为 1px 描边（用 mask-composite 镂空内容）。用�
 
 用 `::after` 伪元素 + 24px 模糊 + 紫色径向渐变制造卡片下方的"晕光"。Portal hero 区背景使用。
 
-### 3.4 `.aurora-rim` —— 顶部 1px 高光线
+### 3.4 `.aurora-rim` / `.aurora-rim-bottom` —— 1px 高光线
 
-`::before` 伪元素在元素顶部加一条 1px 横向渐变线（violet→cyan→透明）。用于划分页面区段，比 border 更轻盈。
+`::before` / `::after` 伪元素在元素顶部 / 底部加一条 1px 横向渐变线（violet→cyan→透明）。用于划分页面区段或替代裸 border。**这是 Effects 中唯一允许 Admin 使用的**：当前用于 Admin topbar 底部（`opacity 0.55`），给 chrome-light 风格补一点品牌温度。
 
 ### 3.5 `.page-wash` —— 全屏径向渐变背景
 
@@ -188,7 +188,7 @@ Portal 页面背景上的极淡左右两团光，是 Portal 区别于 Admin 的�
 - 边框 `0.5px solid var(--border)`
 - 圆角 `var(--r-card)`（10px）
 - 默认内距 `p-5`（20px）
-- **无阴影**（`--shadow-card: none`）—— 见 §6 关于阴影的设计决策
+- 阴影 `var(--shadow-card)` —— 见 §6
 
 适用：Admin 所有信息块、Portal 的内容容器。
 
@@ -300,25 +300,36 @@ Admin 在 <1024px 不保证可用（运维 admin 默认桌面）。Portal 必须
 
 ---
 
-## 6. Depth & Elevation —— 当前的设计选择
+## 6. Depth & Elevation
 
-`--shadow-card` 在浅/深主题中均设为 `none`。**Depsilo 当前是无阴影系统**。
+Depsilo 使用蓝调多层阴影系统，全部走 token，**不要写裸 box-shadow**。
 
-设计取舍：
-- ✅ 视觉极克制、平面化，符合"工具"气质
-- ✅ 暗色主题下不存在阴影对比度争议
-- ❌ 缺少 fintech 类产品的"悬浮感" / 视觉层级
-
-**升级路径（未启用）**：如果决定引入阴影，应使用蓝调多层（参考 Stripe）：
+### Light theme
 
 ```css
---shadow-card: rgba(50,50,93,0.08) 0px 8px 24px -8px,
-               rgba(0,0,0,0.06)    0px 4px 12px -4px;
---shadow-pop:  rgba(50,50,93,0.18) 0px 30px 45px -30px,
-               rgba(0,0,0,0.10)    0px 18px 36px -18px;
+--shadow-card: rgba(50, 50, 93, 0.06) 0 6px 18px -6px,
+               rgba(0, 0, 0, 0.04)    0 3px 9px -3px;
+--shadow-pop:  rgba(50, 50, 93, 0.18) 0 30px 45px -30px,
+               rgba(0, 0, 0, 0.10)    0 18px 36px -18px;
 ```
 
-启用前必须全 admin 页面 visual QA，避免暗色主题下的"浮岛"问题。
+### Dark theme（白色阴影在暗底失效，改用紫色 ring + 黑色 drop）
+
+```css
+--shadow-card: 0 0 0 1px oklch(0.55 0.16 295 / 0.04),
+               rgba(0, 0, 0, 0.25) 0 6px 18px -6px;
+--shadow-pop:  0 0 0 1px oklch(0.55 0.16 295 / 0.08),
+               rgba(0, 0, 0, 0.45) 0 24px 48px -16px;
+```
+
+### 使用规则
+
+| Token | 强度 | 用途 |
+|-------|------|------|
+| `--shadow-card` | 极轻（6px 模糊，6% 不透明） | CardV2、MetricCardV2 默认卡片 |
+| `--shadow-pop` | 中（30-45px 模糊） | 弹层、Popover、下拉、Modal |
+
+强度刻意低于 Stripe spec —— Depsilo 是工具类 UI，不需要"营销卡片"的强烈悬浮。
 
 ---
 
@@ -379,6 +390,7 @@ Admin 在 <1024px 不保证可用（运维 admin 默认桌面）。Portal 必须
 
 - 侧栏背景 `var(--bg-page)`，分组标题用 `.eyebrow` 类（监控 / 管理）
 - topbar 背景 `color-mix(in oklab, var(--bg-page) 88%, transparent)` + `backdrop-filter: blur(8px)`
+- topbar 底部走 `.aurora-rim-bottom` 类（不要用 `border-bottom`），让 chrome 和品牌发生一次轻接触
 - topbar 标题：`<h1 className="text-[14px] font-[400]">` —— **必须用 Tailwind 覆盖默认 h1 大小**
 
 ### 8.2 章节标签
@@ -486,8 +498,10 @@ Admin 在 <1024px 不保证可用（运维 admin 默认桌面）。Portal 必须
 | 放弃 sohne-var, 改用 Inter Variable | 项目早期 | sohne-var 付费且不可商用，Inter 在中文 fallback 下渲染稳定 |
 | 默认 heading 走 weight 700（非 Stripe 的 300） | 项目早期 | weight 300 的中文笔画过细在小屏掉字；Inter 700 中英混排稳定 |
 | h1/h2/h3/h4 wrap 在 `@layer base` | 2026-05-15 | Tailwind v4 的 @layer 机制下，未 wrap 会导致组件级 utility 失效，topbar h1 渲染成 44px 而非 14px |
-| `--shadow-card: none` | 项目早期 | 选择 flat 美学，避免暗色主题阴影争议；保留升级路径见 §6 |
 | 双层语言（Portal 高表达 / Admin 克制） | 项目早期 | 同时面向"想用一下"和"日常运维"两类人，单一风格无法两边讨好 |
+| 启用蓝调多层 `--shadow-card`，绑定 CardV2/MetricCardV2 | 2026-05-15 | flat 看起来"工具"但缺产品力；6% 不透明的极轻阴影既有"悬浮感"又不影响密集网格 |
+| `--text` 由 `#0a0a0a` 改为 `#061b31` 深海军（含整套 muted/soft/subtle 调成 slate 系列） | 2026-05-15 | 纯灰黑显冷漠；深海军是 fintech 标志色，文字层级整体调成 slate 家族后温度更统一 |
+| Admin topbar bottom 用 `.aurora-rim-bottom` 替代 `border-bottom` | 2026-05-15 | 裸 border 像静态 chrome；1px violet→cyan 渐变线（55% 不透明）让 admin 与 Portal 的品牌发生一次轻接触，不影响工具气质 |
 
 ---
 
