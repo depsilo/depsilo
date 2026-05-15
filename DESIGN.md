@@ -1,322 +1,503 @@
-# Design System Inspiration of Stripe
+# Depsilo Design System
 
-## 1. Visual Theme & Atmosphere
+> 这份文档描述 Depsilo **当前已实现**的设计语言，不是想要成为的样子。所有 token、字体、组件均可在 `web/src/index.css` 与 `web/src/components/` 找到对应实现。
 
-Stripe's website is the gold standard of fintech design -- a system that manages to feel simultaneously technical and luxurious, precise and warm. The page opens on a clean white canvas (`#ffffff`) with deep navy headings (`#061b31`) and a signature purple (`#533afd`) that functions as both brand anchor and interactive accent. This isn't the cold, clinical purple of enterprise software; it's a rich, saturated violet that reads as confident and premium. The overall impression is of a financial institution redesigned by a world-class type foundry.
+---
 
-The custom `sohne-var` variable font is the defining element of Stripe's visual identity. Every text element enables the OpenType `"ss01"` stylistic set, which modifies character shapes for a distinctly geometric, modern feel. At display sizes (48px-56px), sohne-var runs at weight 300 -- an extraordinarily light weight for headlines that creates an ethereal, almost whispered authority. This is the opposite of the "bold hero headline" convention; Stripe's headlines feel like they don't need to shout. The negative letter-spacing (-1.4px at 56px, -0.96px at 48px) tightens the text into dense, engineered blocks. At smaller sizes, the system also uses weight 300 with proportionally reduced tracking, and tabular numerals via `"tnum"` for financial data display.
+## 0. 设计哲学：双层语言
 
-What truly distinguishes Stripe is its shadow system. Rather than the flat or single-layer approach of most sites, Stripe uses multi-layer, blue-tinted shadows: the signature `rgba(50,50,93,0.25)` combined with `rgba(0,0,0,0.1)` creates shadows with a cool, almost atmospheric depth -- like elements are floating in a twilight sky. The blue-gray undertone of the primary shadow color (50,50,93) ties directly to the navy-purple brand palette, making even elevation feel on-brand.
+Depsilo 同时面向两类人，因此采用**统一 token、双层表达**的策略：
 
-**Key Characteristics:**
-- sohne-var with OpenType `"ss01"` on all text -- a custom stylistic set that defines the brand's letterforms
-- Weight 300 as the signature headline weight -- light, confident, anti-convention
-- Negative letter-spacing at display sizes (-1.4px at 56px, progressive relaxation downward)
-- Blue-tinted multi-layer shadows using `rgba(50,50,93,0.25)` -- elevation that feels brand-colored
-- Deep navy (`#061b31`) headings instead of black -- warm, premium, financial-grade
-- Conservative border-radius (4px-8px) -- nothing pill-shaped, nothing harsh
-- Ruby (`#ea2261`) and magenta (`#f96bee`) accents for gradient and decorative elements
-- `SourceCodePro` as the monospace companion for code and technical labels
+| 层 | 路径 | 用户 | 性格 | 视觉态度 |
+|----|------|------|------|----------|
+| **Portal** | `/`, `/status`, `/monitor` | 开发者来"看一眼怎么用" | 有性格、有 brand、有姿态 | 紫色渐变 hero、大胆排版、品牌锚定 |
+| **Admin** | `/admin/*` | 运维来"日常管理" | 克制、密集、工具属性 | chrome-light、小号 caps 标签、网格密集、零视觉噪音 |
 
-## 2. Color Palette & Roles
+两层共享：色彩 token、字体栈、阴影、状态色、网格、组件。差异**只在视觉强度**：Portal 把品牌色当资产用（gradient text、aurora glow、page wash），Admin 几乎只用品牌色作为 active 态。
 
-### Primary
-- **Stripe Purple** (`#533afd`): Primary brand color, CTA backgrounds, link text, interactive highlights. A saturated blue-violet that anchors the entire system.
-- **Deep Navy** (`#061b31`): `--hds-color-heading-solid`. Primary heading color. Not black, not gray -- a very dark blue that adds warmth and depth to text.
-- **Pure White** (`#ffffff`): Page background, card surfaces, button text on dark backgrounds.
+**类比**：Portal 像 Stripe 的 marketing site，Admin 像 Stripe 的 dashboard。同一套语言，不同的音量。
 
-### Brand & Dark
-- **Brand Dark** (`#1c1e54`): `--hds-color-util-brand-900`. Deep indigo for dark sections, footer backgrounds, and immersive brand moments.
-- **Dark Navy** (`#0d253d`): `--hds-color-core-neutral-975`. The darkest neutral -- almost-black with a blue undertone for maximum depth without harshness.
+---
 
-### Accent Colors
-- **Ruby** (`#ea2261`): `--hds-color-accentColorMode-ruby-icon-solid`. Warm red-pink for icons, alerts, and accent elements.
-- **Magenta** (`#f96bee`): `--hds-color-accentColorMode-magenta-icon-gradientMiddle`. Vivid pink-purple for gradients and decorative highlights.
-- **Magenta Light** (`#ffd7ef`): `--hds-color-util-accent-magenta-100`. Tinted surface for magenta-themed cards and badges.
+## 1. Color System
 
-### Interactive
-- **Primary Purple** (`#533afd`): Primary link color, active states, selected elements.
-- **Purple Hover** (`#4434d4`): Darker purple for hover states on primary elements.
-- **Purple Deep** (`#2e2b8c`): `--hds-color-button-ui-iconHover`. Dark purple for icon hover states.
-- **Purple Light** (`#b9b9f9`): `--hds-color-action-bg-subduedHover`. Soft lavender for subdued hover backgrounds.
-- **Purple Mid** (`#665efd`): `--hds-color-input-selector-text-range`. Range selector and input highlight color.
+所有颜色用 [`oklch`](https://oklch.com/) 表达 — 在浅/深主题间切换时仅改 lightness，色调与饱和度保持稳定。**禁止**新增 `#hex` 色值，必须走 token。
 
-### Neutral Scale
-- **Heading** (`#061b31`): Primary headings, nav text, strong labels.
-- **Label** (`#273951`): `--hds-color-input-text-label`. Form labels, secondary headings.
-- **Body** (`#64748d`): Secondary text, descriptions, captions.
-- **Success Green** (`#15be53`): Status badges, success indicators (with 0.2-0.4 alpha for backgrounds/borders).
-- **Success Text** (`#108c3d`): Success badge text color.
-- **Lemon** (`#9b6829`): `--hds-color-core-lemon-500`. Warning and highlight accent.
+### 1.1 中性 / 表面
 
-### Surface & Borders
-- **Border Default** (`#e5edf5`): Standard border color for cards, dividers, and containers.
-- **Border Purple** (`#b9b9f9`): Active/selected state borders on buttons and inputs.
-- **Border Soft Purple** (`#d6d9fc`): Subtle purple-tinted borders for secondary elements.
-- **Border Magenta** (`#ffd7ef`): Pink-tinted borders for magenta-themed elements.
-- **Border Dashed** (`#362baa`): Dashed borders for drop zones and placeholder elements.
+| Token | Light | Dark | 用途 |
+|-------|-------|------|------|
+| `--bg-page` | `#FFFFFF` | `oklch(0.18 0.012 250)` | 页面背景 |
+| `--bg-card` | `#FFFFFF` | `oklch(0.22 0.013 250)` | 卡片表面 |
+| `--bg-soft` | `#F5F5F5` | `oklch(0.25 0.014 250)` | 嵌套表面、skeleton、tag 底色 |
+| `--bg-hover` | `rgba(0,0,0,0.035)` | `oklch(0.32 ... / 0.45)` | 行/按钮 hover |
+| `--border` | `rgba(0,0,0,0.09)` | `oklch(0.92 0.01 250 / 0.10)` | 标准边框（卡片、输入） |
+| `--border-soft` | `rgba(0,0,0,0.05)` | `oklch(... / 0.05)` | 极弱分隔（侧栏分组） |
+| `--border-strong` | `rgba(0,0,0,0.18)` | `oklch(... / 0.22)` | 强调边框（focus ring） |
 
-### Shadow Colors
-- **Shadow Blue** (`rgba(50,50,93,0.25)`): The signature -- blue-tinted primary shadow color.
-- **Shadow Dark Blue** (`rgba(3,3,39,0.25)`): Deeper blue shadow for elevated elements.
-- **Shadow Black** (`rgba(0,0,0,0.1)`): Secondary shadow layer for depth reinforcement.
-- **Shadow Ambient** (`rgba(23,23,23,0.08)`): Soft ambient shadow for subtle elevation.
-- **Shadow Soft** (`rgba(23,23,23,0.06)`): Minimal ambient shadow for light lift.
+### 1.2 文本层级
 
-## 3. Typography Rules
+| Token | Light | 用途 |
+|-------|-------|------|
+| `--text` | `#0a0a0a` | 主体文本、heading、metric value |
+| `--text-muted` | `#555555` | 次级正文 |
+| `--text-soft` | `#767676` | 副标题、tooltip、章节标签 |
+| `--text-subtle` | `#8a8a8a` | eyebrow、最弱辅助文字 |
 
-### Font Family
-- **Primary**: `sohne-var`, with fallback: `SF Pro Display`
-- **Monospace**: `SourceCodePro`, with fallback: `SFMono-Regular`
-- **OpenType Features**: `"ss01"` enabled globally on all sohne-var text; `"tnum"` for tabular numbers on financial data and captions.
+### 1.3 品牌 / Aurora
 
-### Hierarchy
+| Token | 值 | 用途 |
+|-------|----|------|
+| `--brand` | `oklch(0.55 0.16 295)` | 主品牌紫色（CTA、active 态） |
+| `--brand-strong` | `oklch(0.48 0.17 295)` | hover 态深紫 |
+| `--brand-soft` | `oklch(0.55 0.16 295 / 0.09)` | active 背景填充 |
+| `--brand-border` | `oklch(0.55 0.16 295 / 0.30)` | 紫色描边（次级 CTA） |
+| `--brand-text` | `oklch(0.40 0.14 295)` | 紫色文字（active 态文字色） |
+| `--spec-1` | `oklch(0.62 0.18 305)` | aurora 渐变第一色（magenta-violet） |
+| `--spec-2` | `oklch(0.66 0.15 260)` | aurora 第二色（blue-violet） |
+| `--spec-3` | `oklch(0.72 0.12 210)` | aurora 第三色（sky-blue） |
+| `--spec-4` | `oklch(0.78 0.13 75)` | aurora 第四色（warm yellow） |
 
-| Role              | Font          | Size           | Weight  | Line Height    | Letter Spacing | Features  | Notes                                  |
-| ----------------- | ------------- | -------------- | ------- | -------------- | -------------- | --------- | -------------------------------------- |
-| Display Hero      | sohne-var     | 56px (3.50rem) | 300     | 1.03 (tight)   | -1.4px         | ss01      | Maximum size, whisper-weight authority |
-| Display Large     | sohne-var     | 48px (3.00rem) | 300     | 1.15 (tight)   | -0.96px        | ss01      | Secondary hero headlines               |
-| Section Heading   | sohne-var     | 32px (2.00rem) | 300     | 1.10 (tight)   | -0.64px        | ss01      | Feature section titles                 |
-| Sub-heading Large | sohne-var     | 26px (1.63rem) | 300     | 1.12 (tight)   | -0.26px        | ss01      | Card headings, sub-sections            |
-| Sub-heading       | sohne-var     | 22px (1.38rem) | 300     | 1.10 (tight)   | -0.22px        | ss01      | Smaller section heads                  |
-| Body Large        | sohne-var     | 18px (1.13rem) | 300     | 1.40           | normal         | ss01      | Feature descriptions, intro text       |
-| Body              | sohne-var     | 16px (1.00rem) | 300-400 | 1.40           | normal         | ss01      | Standard reading text                  |
-| Button            | sohne-var     | 16px (1.00rem) | 400     | 1.00 (tight)   | normal         | ss01      | Primary button text                    |
-| Button Small      | sohne-var     | 14px (0.88rem) | 400     | 1.00 (tight)   | normal         | ss01      | Secondary/compact buttons              |
-| Link              | sohne-var     | 14px (0.88rem) | 400     | 1.00 (tight)   | normal         | ss01      | Navigation links                       |
-| Caption           | sohne-var     | 13px (0.81rem) | 400     | normal         | normal         | ss01      | Small labels, metadata                 |
-| Caption Small     | sohne-var     | 12px (0.75rem) | 300-400 | 1.33-1.45      | normal         | ss01      | Fine print, timestamps                 |
-| Caption Tabular   | sohne-var     | 12px (0.75rem) | 300-400 | 1.33           | -0.36px        | tnum      | Financial data, numbers                |
-| Micro             | sohne-var     | 10px (0.63rem) | 300     | 1.15 (tight)   | 0.1px          | ss01      | Tiny labels, axis markers              |
-| Micro Tabular     | sohne-var     | 10px (0.63rem) | 300     | 1.15 (tight)   | -0.3px         | tnum      | Chart data, small numbers              |
-| Nano              | sohne-var     | 8px (0.50rem)  | 300     | 1.07 (tight)   | normal         | ss01      | Smallest labels                        |
-| Code Body         | SourceCodePro | 12px (0.75rem) | 500     | 2.00 (relaxed) | normal         | --        | Code blocks, syntax                    |
-| Code Bold         | SourceCodePro | 12px (0.75rem) | 700     | 2.00 (relaxed) | normal         | --        | Bold code, keywords                    |
-| Code Label        | SourceCodePro | 12px (0.75rem) | 500     | 2.00 (relaxed) | normal         | uppercase | Technical labels                       |
-| Code Micro        | SourceCodePro | 9px (0.56rem)  | 500     | 1.00 (tight)   | normal         | ss01      | Tiny code annotations                  |
+**核心 Aurora 思想**：4 色渐变（magenta → violet → blue → warm yellow）是 Depsilo 的视觉签名。它出现在三个地方：
+1. `--grad-aurora` 完整 4 色渐变（用于 page-wash、grad-ring）
+2. `--grad-brand` 仅前两色 violet→blue-violet 简化版（用于 hero gradient text）
+3. `--grad-rim` 横向 violet→cyan 透明渐变（用于卡片顶部 1px 高光线）
 
-### Principles
-- **Light weight as signature**: Weight 300 at display sizes is Stripe's most distinctive typographic choice. Where others use 600-700 to command attention, Stripe uses lightness as luxury -- the text is so confident it doesn't need weight to be authoritative.
-- **ss01 everywhere**: The `"ss01"` stylistic set is non-negotiable. It modifies specific glyphs (likely alternate `a`, `g`, `l` forms) to create a more geometric, contemporary feel across all sohne-var text.
-- **Two OpenType modes**: `"ss01"` for display/body text, `"tnum"` for tabular numerals in financial data. These never overlap -- a number in a paragraph uses ss01, a number in a data table uses tnum.
-- **Progressive tracking**: Letter-spacing tightens proportionally with size: -1.4px at 56px, -0.96px at 48px, -0.64px at 32px, -0.26px at 26px, normal at 16px and below.
-- **Two-weight simplicity**: Primarily 300 (body and headings) and 400 (UI/buttons). No bold (700) in the primary font -- SourceCodePro uses 500/700 for code contrast.
+### 1.4 状态色
 
-## 4. Component Stylings
+| Token | 值 | 配套 fill / border / text |
+|-------|----|---------------------------|
+| `--ok` | `oklch(0.58 0.12 155)` | `--ok-fill / --ok-border / --ok-text` |
+| `--warn` | `oklch(0.70 0.14 65)` | `--warn-fill / --warn-border / --warn-text` |
+| `--danger` | `oklch(0.60 0.17 25)` | `--danger-fill / --danger-border / --danger-text` |
 
-### Buttons
+**约定**：`-fill` 是低不透明度的背景填充（≈10%），`-border` 是中透明度描边（≈28-30%），`-text` 是可读性合规的暗色文字版本。永远三件套使用，不混用。
 
-**Primary Purple**
-- Background: `#533afd`
-- Text: `#ffffff`
-- Padding: 8px 16px
-- Radius: 4px
-- Font: 16px sohne-var weight 400, `"ss01"`
-- Hover: `#4434d4` background
-- Use: Primary CTA ("Start now", "Contact sales")
+---
 
-**Ghost / Outlined**
-- Background: transparent
-- Text: `#533afd`
-- Padding: 8px 16px
-- Radius: 4px
-- Border: `1px solid #b9b9f9`
-- Font: 16px sohne-var weight 400, `"ss01"`
-- Hover: background shifts to `rgba(83,58,253,0.05)`
-- Use: Secondary actions
+## 2. Typography
 
-**Transparent Info**
-- Background: transparent
-- Text: `#2874ad`
-- Padding: 8px 16px
-- Radius: 4px
-- Border: `1px solid rgba(43,145,223,0.2)`
-- Use: Tertiary/info-level actions
+### 2.1 字体栈
 
-**Neutral Ghost**
-- Background: transparent (`rgba(255,255,255,0)`)
-- Text: `rgba(16,16,16,0.3)`
-- Padding: 8px 16px
-- Radius: 4px
-- Outline: `1px solid rgb(212,222,233)`
-- Use: Disabled or muted actions
+| 角色 | 栈 | 来源 |
+|------|----|------|
+| Sans | `"Inter Variable", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif` | `@fontsource-variable/inter` + `@fontsource/noto-sans-sc` |
+| Mono | `"JetBrains Mono Variable", ui-monospace, monospace` | `@fontsource-variable/jetbrains-mono` |
+| Icon | `"Material Symbols Outlined"` | `material-symbols/outlined.css` |
 
-### Cards & Containers
-- Background: `#ffffff`
-- Border: `1px solid #e5edf5` (standard) or `1px solid #061b31` (dark accent)
-- Radius: 4px (tight), 5px (standard), 6px (comfortable), 8px (featured)
-- Shadow (standard): `rgba(50,50,93,0.25) 0px 30px 45px -30px, rgba(0,0,0,0.1) 0px 18px 36px -18px`
-- Shadow (ambient): `rgba(23,23,23,0.08) 0px 15px 35px 0px`
-- Hover: shadow intensifies, often adding the blue-tinted layer
+**OpenType features**：body 全局启用 `'cv11', 'ss01', 'ss03'`。数字栏目额外用 `font-variant-numeric: tabular-nums`（通过 `.tabular-nums` 或 `.num` 类）。
 
-### Badges / Tags / Pills
-**Neutral Pill**
-- Background: `#ffffff`
-- Text: `#000000`
-- Padding: 0px 6px
-- Radius: 4px
-- Border: `1px solid #f6f9fc`
-- Font: 11px weight 400
+**为什么不是 sohne-var**：sohne-var 是 Stripe 付费字体，不能在开源项目使用。Inter Variable 在中文 fallback Noto Sans SC 下渲染稳定，是当前最务实选择。
 
-**Success Badge**
-- Background: `rgba(21,190,83,0.2)`
-- Text: `#108c3d`
-- Padding: 1px 6px
-- Radius: 4px
-- Border: `1px solid rgba(21,190,83,0.4)`
-- Font: 10px weight 300
+### 2.2 标题层级（默认值）
 
-### Inputs & Forms
-- Border: `1px solid #e5edf5`
-- Radius: 4px
-- Focus: `1px solid #533afd` or purple ring
-- Label: `#273951`, 14px sohne-var
-- Text: `#061b31`
-- Placeholder: `#64748d`
+> 全部 wrap 在 `@layer base` 中，组件可用 Tailwind 任意覆盖。
 
-### Navigation
-- Clean horizontal nav on white, sticky with blur backdrop
-- Brand logotype left-aligned
-- Links: sohne-var 14px weight 400, `#061b31` text with `"ss01"`
-- Radius: 6px on nav container
-- CTA: purple button right-aligned ("Sign in", "Start now")
-- Mobile: hamburger toggle with 6px radius
+| 元素 | size | weight | letter-spacing | line-height |
+|------|------|--------|----------------|-------------|
+| `h1` | 44px | 700 | -0.04em | 1.02 |
+| `h2` | 26px | 700 | -0.03em | 1.1 |
+| `h3` | 17px | 700 | -0.02em | 1.2 |
+| `h4` | 13px | 600 | 0 | 1.3 |
+| body | 13px | 400 | normal | 1.5 |
 
-### Decorative Elements
-**Dashed Borders**
-- `1px dashed #362baa` (purple) for placeholder/drop zones
-- `1px dashed #ffd7ef` (magenta) for magenta-themed decorative borders
+**说明**：默认值是 Portal hero 那一刀的尺寸。Admin 章节标题应该用 `.eyebrow`（见下），而**不是**直接用 `<h2>` `<h3>` — 这是有意设计：默认 heading 偏大、偏粗，是为 Portal 的 brand-anchored 大标题服务的。
 
-**Gradient Accents**
-- Ruby-to-magenta gradients (`#ea2261` to `#f96bee`) for hero decorations
-- Brand dark sections use `#1c1e54` backgrounds with white text
+### 2.3 `.eyebrow` —— 章节标签的标准模式
 
-## 5. Layout Principles
+```css
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+```
 
-### Spacing System
-- Base unit: 8px
-- Scale: 1px, 2px, 4px, 6px, 8px, 10px, 11px, 12px, 14px, 16px, 18px, 20px
-- Notable: The scale is dense at the small end (every 2px from 4-12), reflecting Stripe's precision-oriented UI for financial data
+Admin 所有 section header / metric label 都应该走这个类（或用 Tailwind 实现等价 `text-[12px] uppercase tracking-wider font-[400] text-soft`）。这是项目唯一的"小号 caps 标签"模式，它定义了 Admin 的克制气质。
 
-### Grid & Container
-- Max content width: approximately 1080px
-- Hero: centered single-column with generous padding, lightweight headlines
-- Feature sections: 2-3 column grids for feature cards
-- Full-width dark sections with `#1c1e54` background for brand immersion
-- Code/dashboard previews as contained cards with blue-tinted shadows
+### 2.4 数字 / 数据展示
 
-### Whitespace Philosophy
-- **Precision spacing**: Unlike the vast emptiness of minimalist systems, Stripe uses measured, purposeful whitespace. Every gap is a deliberate typographic choice.
-- **Dense data, generous chrome**: Financial data displays (tables, charts) are tightly packed, but the UI chrome around them is generously spaced. This creates a sense of controlled density -- like a well-organized spreadsheet in a beautiful frame.
-- **Section rhythm**: White sections alternate with dark brand sections (`#1c1e54`), creating a dramatic light/dark cadence that prevents monotony without introducing arbitrary color.
+```css
+.num, .mono, [data-tabular] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+```
 
-### Border Radius Scale
-- Micro (1px): Fine-grained elements, subtle rounding
-- Standard (4px): Buttons, inputs, badges, cards -- the workhorse
-- Comfortable (5px): Standard card containers
-- Relaxed (6px): Navigation, larger interactive elements
-- Large (8px): Featured cards, hero elements
-- Compound: `0px 0px 6px 6px` for bottom-rounded containers (tab panels, dropdown footers)
+所有 metric value、延迟数字、字节数、版本号必须用 mono + tabular-nums。**关键**：tabular 让相邻 KPI 数字按位对齐，避免抖动。
 
-## 6. Depth & Elevation
+---
 
-| Level                | Treatment                                                                      | Use                                 |
-| -------------------- | ------------------------------------------------------------------------------ | ----------------------------------- |
-| Flat (Level 0)       | No shadow                                                                      | Page background, inline text        |
-| Ambient (Level 1)    | `rgba(23,23,23,0.06) 0px 3px 6px`                                              | Subtle card lift, hover hints       |
-| Standard (Level 2)   | `rgba(23,23,23,0.08) 0px 15px 35px`                                            | Standard cards, content panels      |
-| Elevated (Level 3)   | `rgba(50,50,93,0.25) 0px 30px 45px -30px, rgba(0,0,0,0.1) 0px 18px 36px -18px` | Featured cards, dropdowns, popovers |
-| Deep (Level 4)       | `rgba(3,3,39,0.25) 0px 14px 21px -14px, rgba(0,0,0,0.1) 0px 8px 17px -8px`     | Modals, floating panels             |
-| Ring (Accessibility) | `2px solid #533afd` outline                                                    | Keyboard focus ring                 |
+## 3. Effects Vocabulary
 
-**Shadow Philosophy**: Stripe's shadow system is built on a principle of chromatic depth. Where most design systems use neutral gray or black shadows, Stripe's primary shadow color (`rgba(50,50,93,0.25)`) is a deep blue-gray that echoes the brand's navy palette. This creates shadows that don't just add depth -- they add brand atmosphere. The multi-layer approach pairs this blue-tinted shadow with a pure black secondary layer (`rgba(0,0,0,0.1)`) at a different offset, creating a parallax-like depth where the branded shadow sits farther from the element and the neutral shadow sits closer. The negative spread values (-30px, -18px) ensure shadows don't extend beyond the element's footprint horizontally, keeping elevation vertical and controlled.
+这是 Portal 的「灵魂调色盘」。Admin **极少使用**，仅在 Dashboard hero 区域可酌情少量引入一处。
 
-### Decorative Depth
-- Dark brand sections (`#1c1e54`) create immersive depth through background color contrast
-- Gradient overlays with ruby-to-magenta transitions for hero decorations
-- Shadow color `rgba(0,55,112,0.08)` (`--hds-color-shadow-sm-top`) for top-edge shadows on sticky elements
+### 3.1 `.grad-text` —— 渐变文字（Portal hero 标志）
 
-## 7. Do's and Don'ts
+```html
+<h1 className="grad-text" style="font-size: 44px; font-weight: 700;">
+  快速开始
+</h1>
+```
+
+实现：用 `--grad-brand` 作为 background，`background-clip: text` + `color: transparent`。这是 Portal 所有页面 hero 标题的统一处理。
+
+### 3.2 `.grad-ring` —— 渐变 1px 描边
+
+aurora 4 色渐变作为 1px 描边（用 mask-composite 镂空内容）。用于"想强调但不想填实"的卡片，例如 Portal 的 "AI 自动配置" 区块。
+
+### 3.3 `.aurora-glow` —— 径向模糊光晕
+
+用 `::after` 伪元素 + 24px 模糊 + 紫色径向渐变制造卡片下方的"晕光"。Portal hero 区背景使用。
+
+### 3.4 `.aurora-rim` —— 顶部 1px 高光线
+
+`::before` 伪元素在元素顶部加一条 1px 横向渐变线（violet→cyan→透明）。用于划分页面区段，比 border 更轻盈。
+
+### 3.5 `.page-wash` —— 全屏径向渐变背景
+
+```css
+.page-wash {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(900px 360px at 12% -10%, oklch(0.62 0.18 305 / 0.05), transparent 60%),
+    radial-gradient(720px 320px at 88% -8%,  oklch(0.72 0.12 210 / 0.045), transparent 60%);
+}
+```
+
+Portal 页面背景上的极淡左右两团光，是 Portal 区别于 Admin 的关键 atmosphere 信号。Admin **不要**使用。
+
+---
+
+## 4. Components
+
+### 4.1 `CardV2`（共享）
+
+```tsx
+<CardV2 className="...">
+  <h3 className="eyebrow mb-3">章节标签</h3>
+  ...
+</CardV2>
+```
+
+- 背景 `var(--bg-card)`
+- 边框 `0.5px solid var(--border)`
+- 圆角 `var(--r-card)`（10px）
+- 默认内距 `p-5`（20px）
+- **无阴影**（`--shadow-card: none`）—— 见 §6 关于阴影的设计决策
+
+适用：Admin 所有信息块、Portal 的内容容器。
+
+### 4.2 `MetricCardV2`（共享）
+
+```tsx
+<MetricCardV2
+  label="今日请求"
+  value="12,840"
+  icon={<Icon name="monitoring" />}
+  change={+12.5}
+  sparkline={<...>}
+/>
+```
+
+- 容器：5px 圆角、1px 边框、白底
+- label：使用 `.eyebrow` 类（10px mono caps text-subtle）
+- value：mono 32px / weight 600 / letter-spacing -0.04em / `var(--text)`
+- change：mono 11px，正值 `--ok-text` 绿、负值 `--danger-text` 红
+- sparkline：可选，绝对定位右下角，opacity 0.7
+
+适用：Dashboard、Bandwidth、Monitor 顶部 KPI tile 行。
+
+### 4.3 按钮规范
+
+| 类型 | 背景 | 文字 | 边框 | 圆角 | padding | 字号/字重 |
+|------|------|------|------|------|---------|-----------|
+| Primary | `var(--brand)` | `#fff` | none | 4px | 8px 16px | 14px / 500 |
+| Brand-soft | `var(--brand-soft)` | `var(--brand-text)` | none | 4px | 8px 16px | 14px / 500 |
+| Ghost | transparent | `var(--brand-text)` | `1px solid var(--brand-border)` | 4px | 8px 16px | 14px / 500 |
+| Chrome | `var(--bg-soft)` | `var(--text-muted)` | none | 6px | 0 8px | 11px / 500 |
+
+Chrome 是 Admin 顶部 EN/Auto/版本切换 那种"工具栏小按钮"，刻意比 Primary 小一号。
+
+### 4.4 Pill / Badge / Tag
+
+Tag 圆角 `var(--r-tag)`（6px）。状态 badge 用三件套：
+
+```tsx
+<span style={{
+  background: 'var(--ok-fill)',
+  color: 'var(--ok-text)',
+  border: '1px solid var(--ok-border)',
+  padding: '1px 6px',
+  borderRadius: 4,
+  fontSize: 10,
+}}>健康</span>
+```
+
+### 4.5 输入
+
+| 项 | 值 |
+|----|----|
+| 边框 | `1px solid var(--border)` |
+| 圆角 | 4px |
+| Focus | `outline: 2px solid var(--brand)` 或 `border-color: var(--brand)` |
+| 字号 | 14px |
+| 内距 | 8px 12px |
+
+---
+
+## 5. Layout & Spacing
+
+### 5.1 间距 token
+
+```
+--spacing-1: 4px
+--spacing-2: 8px
+--spacing-3: 12px
+--spacing-4: 16px
+--spacing-5: 20px
+--spacing-6: 24px
+--spacing-8: 32px
+--spacing-12: 48px
+```
+
+实操中绝大多数使用 Tailwind 的 4px 倍数（`gap-2`/`gap-4`/`gap-6`/`p-5`/`p-8`）。**避免**写 7px / 13px / 22px 这种非倍数值。
+
+### 5.2 圆角 token
+
+```
+--r-pill:  4px   /* 按钮、徽章 */
+--r-tag:   6px   /* 标签、chrome 按钮 */
+--r-card:  10px  /* CardV2 标准卡片 */
+--r-shell: 14px  /* 外壳容器（Portal 大区块） */
+```
+
+**不用 12px+ 的圆角和 pill 形按钮**。Depsilo 的"高级感"建立在保守圆角上，不是 bubbly。
+
+### 5.3 网格
+
+| 用途 | 规则 |
+|------|------|
+| Portal 内容宽度 | 最大 1280px，居中 |
+| Admin 内容区 | `ml-[220px] p-8`（侧栏 220px + 主区 padding 32px） |
+| Admin topbar | 高度 48px，固定，背景 `color-mix(... 88%)` + `backdrop-filter: blur(8px)` |
+| 卡片网格 | `grid gap-4 grid-cols-{2,3,4}`，间距 16px |
+
+### 5.4 断点
+
+| 名 | 宽度 |
+|----|------|
+| Mobile | <640px |
+| Tablet | 640-1024px |
+| Desktop | 1024-1280px |
+| Wide | >1280px |
+
+Admin 在 <1024px 不保证可用（运维 admin 默认桌面）。Portal 必须 mobile-friendly。
+
+---
+
+## 6. Depth & Elevation —— 当前的设计选择
+
+`--shadow-card` 在浅/深主题中均设为 `none`。**Depsilo 当前是无阴影系统**。
+
+设计取舍：
+- ✅ 视觉极克制、平面化，符合"工具"气质
+- ✅ 暗色主题下不存在阴影对比度争议
+- ❌ 缺少 fintech 类产品的"悬浮感" / 视觉层级
+
+**升级路径（未启用）**：如果决定引入阴影，应使用蓝调多层（参考 Stripe）：
+
+```css
+--shadow-card: rgba(50,50,93,0.08) 0px 8px 24px -8px,
+               rgba(0,0,0,0.06)    0px 4px 12px -4px;
+--shadow-pop:  rgba(50,50,93,0.18) 0px 30px 45px -30px,
+               rgba(0,0,0,0.10)    0px 18px 36px -18px;
+```
+
+启用前必须全 admin 页面 visual QA，避免暗色主题下的"浮岛"问题。
+
+---
+
+## 7. Portal Patterns（仅 Portal 使用）
+
+### 7.1 Hero 模板
+
+```tsx
+<div className="relative">
+  <div className="page-wash" />          {/* 全屏极淡光晕 */}
+  <div className="aurora-glow">           {/* 紫色光晕背景 */}
+    <h1 className="grad-text"             {/* 渐变文字 */}
+        style={{ fontSize: 44, fontWeight: 700, letterSpacing: '-0.04em', lineHeight: 1.02 }}>
+      {title}
+    </h1>
+    <p style={{ fontSize: 17, fontWeight: 400, color: 'var(--text)', maxWidth: 580, marginTop: 14 }}>
+      {subtitle} <span style={{ color: 'var(--text-soft)' }}>{subtitleAlt}</span>
+    </p>
+  </div>
+</div>
+```
+
+### 7.2 服务地址栏 `<ServiceUrlBar>`
+
+水平 pill：左侧绿色 dot + 单行 mono 文字 + 右侧 "复制" 按钮。圆角 4px，soft 描边，monoplate 风。
+
+### 7.3 代码块 `<CodeBlock>`
+
+```
+- 容器：bg-soft 背景 + 4px radius + border-soft
+- 顶栏：可选文件名 / 语言 + 右上 "Copy" 按钮
+- 代码：JetBrains Mono 12-13px / line-height 1.6
+- 复制后按钮短暂显示"已复制"绿色
+```
+
+### 7.4 语言导轨 `<LanguageRail>`
+
+垂直堆叠的语言选择项：
+- 包管理器图标（28×28 SVG）+ 名称
+- active 态：`bg-brand-soft` + `text-brand`
+- hover：`bg-hover`
+
+---
+
+## 8. Admin Patterns（仅 Admin 使用）
+
+### 8.1 `MainLayout` 三段式
+
+```
+┌────────┬───────────────────────────────────┐
+│        │  topbar 48px (页面标题 + chrome)  │
+│ aside  ├───────────────────────────────────┤
+│ 220px  │                                   │
+│        │  main (p-8, scrollable)           │
+│        │                                   │
+└────────┴───────────────────────────────────┘
+```
+
+- 侧栏背景 `var(--bg-page)`，分组标题用 `.eyebrow` 类（监控 / 管理）
+- topbar 背景 `color-mix(in oklab, var(--bg-page) 88%, transparent)` + `backdrop-filter: blur(8px)`
+- topbar 标题：`<h1 className="text-[14px] font-[400]">` —— **必须用 Tailwind 覆盖默认 h1 大小**
+
+### 8.2 章节标签
+
+所有 CardV2 内的标题使用：
+
+```tsx
+<h3 className="text-[12px] uppercase tracking-wider font-[400]"
+    style={{ color: 'var(--text-soft)' }}>
+  章节名
+</h3>
+```
+
+或等价的 `.eyebrow` 类。**禁止**在 Admin 内部使用裸 `<h2>` `<h3>` 带默认 26px/17px 粗体样式。
+
+### 8.3 数据表
+
+- Header row：`.eyebrow` 类标签
+- Row：`text-[13px]`，hover 显示 `var(--bg-hover)` 背景
+- 操作图标：右对齐，`size-sm` 18px Material Symbols
+- 行间距：`py-2`（8px 上下）—— Admin 是密集表格
+
+### 8.4 Heartbeat bar
+
+90 个小方格代表 24 小时，颜色按延迟分桶：
+- `< 50ms` → `var(--ok)`
+- `50-200ms` → `var(--warn)`
+- `> 200ms` → `var(--danger)`
+- 无数据 → `var(--bg-soft)` 灰
+
+格子高度 6px，间距 0.5px。是 Depsilo 时间序列的标志性可视化。
+
+### 8.5 Pro 徽章
+
+```tsx
+<span className="text-[10px] px-1.5 py-0.5 rounded-[4px]"
+      style={{
+        background: 'var(--brand-soft)',
+        color: 'var(--brand-text)',
+        border: '1px solid var(--brand-border)',
+      }}>
+  Pro
+</span>
+```
+
+---
+
+## 9. Do's and Don'ts
 
 ### Do
-- Use sohne-var with `"ss01"` on every text element -- the stylistic set IS the brand
-- Use weight 300 for all headlines and body text -- lightness is the signature
-- Apply blue-tinted shadows (`rgba(50,50,93,0.25)`) for all elevated elements
-- Use `#061b31` (deep navy) for headings instead of `#000000` -- the warmth matters
-- Keep border-radius between 4px-8px -- conservative rounding is intentional
-- Use `"tnum"` for any tabular/financial number display
-- Layer shadows: blue-tinted far + neutral close for depth parallax
-- Use `#533afd` purple as the primary interactive/CTA color
+- 用 `var(--token)` 引用所有颜色 / 圆角 / 间距
+- Portal hero 一律用 `.grad-text` + 44px / 700
+- Admin 章节标签一律用 `.eyebrow` 或等价 Tailwind 组合
+- 数字栏一律 mono + `tabular-nums`
+- 状态色三件套（`-fill / -border / -text`）一起用
+- 圆角保持在 4-14px 范围
+- 暗色模式同时验证
 
 ### Don't
-- Don't use weight 600-700 for sohne-var headlines -- weight 300 is the brand voice
-- Don't use large border-radius (12px+, pill shapes) on cards or buttons -- Stripe is conservative
-- Don't use neutral gray shadows -- always tint with blue (`rgba(50,50,93,...)`)
-- Don't skip `"ss01"` on any sohne-var text -- the alternate glyphs define the personality
-- Don't use pure black (`#000000`) for headings -- always `#061b31` deep navy
-- Don't use warm accent colors (orange, yellow) for interactive elements -- purple is primary
-- Don't apply positive letter-spacing at display sizes -- Stripe tracks tight
-- Don't use the magenta/ruby accents for buttons or links -- they're decorative/gradient only
+- 不要把 Portal 的 `.grad-text` / `.aurora-glow` / `.page-wash` 用进 Admin —— 会破坏工具气质
+- 不要在 Admin 用裸 `<h2>` `<h3>`（默认样式过粗），用 `.eyebrow`
+- 不要写 `#hex` 或裸 `oklch()` —— 走 token
+- 不要用 12px+ 圆角或 pill 形 —— 项目刻意保守
+- 不要给 H1 用渐变文字以外的强调（不要描边、不要阴影、不要填实背景）
+- 不要把品牌紫色用在装饰性图形（仅用作 active 态、CTA、Pro 徽章、aurora 渐变）
+- 不要在数据表中给整行加品牌色（用 hover bg 即可）
+- 不要使用付费字体（不要试图加载 sohne-var、SF Pro 等）
 
-## 8. Responsive Behavior
+---
 
-### Breakpoints
-| Name          | Width       | Key Changes                                         |
-| ------------- | ----------- | --------------------------------------------------- |
-| Mobile        | <640px      | Single column, reduced heading sizes, stacked cards |
-| Tablet        | 640-1024px  | 2-column grids, moderate padding                    |
-| Desktop       | 1024-1280px | Full layout, 3-column feature grids                 |
-| Large Desktop | >1280px     | Centered content with generous margins              |
+## 10. Agent Prompt Guide
 
-### Touch Targets
-- Buttons use comfortable padding (8px-16px vertical)
-- Navigation links at 14px with adequate spacing
-- Badges have 6px horizontal padding minimum for tap targets
-- Mobile nav toggle with 6px radius button
+### 10.1 用 token 表达，不用值
 
-### Collapsing Strategy
-- Hero: 56px display -> 32px on mobile, weight 300 maintained
-- Navigation: horizontal links + CTAs -> hamburger toggle
-- Feature cards: 3-column -> 2-column -> single column stacked
-- Dark brand sections: maintain full-width treatment, reduce internal padding
-- Financial data tables: horizontal scroll on mobile
-- Section spacing: 64px+ -> 40px on mobile
-- Typography scale compresses: 56px -> 48px -> 32px hero sizes across breakpoints
+❌ "把这个标题改成 #7c5cf0"
+✅ "用 var(--brand) 作为标题色"
 
-### Image Behavior
-- Dashboard/product screenshots maintain blue-tinted shadow at all sizes
-- Hero gradient decorations simplify on mobile
-- Code blocks maintain `SourceCodePro` treatment, may horizontally scroll
-- Card images maintain consistent 4px-6px border-radius
+### 10.2 引用现有 pattern
 
-## 9. Agent Prompt Guide
+❌ "做一个紫色渐变标题"
+✅ "套用 Portal hero 模板（.grad-text + 44px/700）"
 
-### Quick Color Reference
-- Primary CTA: Stripe Purple (`#533afd`)
-- CTA Hover: Purple Dark (`#4434d4`)
-- Background: Pure White (`#ffffff`)
-- Heading text: Deep Navy (`#061b31`)
-- Body text: Slate (`#64748d`)
-- Label text: Dark Slate (`#273951`)
-- Border: Soft Blue (`#e5edf5`)
-- Link: Stripe Purple (`#533afd`)
-- Dark section: Brand Dark (`#1c1e54`)
-- Success: Green (`#15be53`)
-- Accent decorative: Ruby (`#ea2261`), Magenta (`#f96bee`)
+❌ "在 admin 加一个小标题"
+✅ "用 .eyebrow 类"
 
-### Example Component Prompts
-- "Create a hero section on white background. Headline at 48px sohne-var weight 300, line-height 1.15, letter-spacing -0.96px, color #061b31, font-feature-settings 'ss01'. Subtitle at 18px weight 300, line-height 1.40, color #64748d. Purple CTA button (#533afd, 4px radius, 8px 16px padding, white text) and ghost button (transparent, 1px solid #b9b9f9, #533afd text, 4px radius)."
-- "Design a card: white background, 1px solid #e5edf5 border, 6px radius. Shadow: rgba(50,50,93,0.25) 0px 30px 45px -30px, rgba(0,0,0,0.1) 0px 18px 36px -18px. Title at 22px sohne-var weight 300, letter-spacing -0.22px, color #061b31, 'ss01'. Body at 16px weight 300, #64748d."
-- "Build a success badge: rgba(21,190,83,0.2) background, #108c3d text, 4px radius, 1px 6px padding, 10px sohne-var weight 300, border 1px solid rgba(21,190,83,0.4)."
-- "Create navigation: white sticky header with backdrop-filter blur(12px). sohne-var 14px weight 400 for links, #061b31 text, 'ss01'. Purple CTA 'Start now' right-aligned (#533afd bg, white text, 4px radius). Nav container 6px radius."
-- "Design a dark brand section: #1c1e54 background, white text. Headline 32px sohne-var weight 300, letter-spacing -0.64px, 'ss01'. Body 16px weight 300, rgba(255,255,255,0.7). Cards inside use rgba(255,255,255,0.1) border with 6px radius."
+### 10.3 跨主题验证
 
-### Iteration Guide
-1. Always enable `font-feature-settings: "ss01"` on sohne-var text -- this is the brand's typographic DNA
-2. Weight 300 is the default; use 400 only for buttons/links/navigation
-3. Shadow formula: `rgba(50,50,93,0.25) 0px Y1 B1 -S1, rgba(0,0,0,0.1) 0px Y2 B2 -S2` where Y1/B1 are larger (far shadow) and Y2/B2 are smaller (near shadow)
-4. Heading color is `#061b31` (deep navy), body is `#64748d` (slate), labels are `#273951` (dark slate)
-5. Border-radius stays in the 4px-8px range -- never use pill shapes or large rounding
-6. Use `"tnum"` for any numbers in tables, charts, or financial displays
-7. Dark sections use `#1c1e54` -- not black, not gray, but a deep branded indigo
-8. SourceCodePro for code at 12px/500 with 2.00 line-height (very generous for readability)
+每次改色 / 改阴影 / 改透明度后，必须验证：
+- light 主题（默认）
+- dark 主题（`html.dark` 或 `data-theme="dark"`）
+
+### 10.4 Examples
+
+- "Portal hero：套用 §7.1 模板，title='系统状态', subtitle='实时性能指标 ...'"
+- "Admin 卡片：用 CardV2 + .eyebrow 标题 + MetricCardV2 三件套（label+value+change）"
+- "状态徽章：var(--ok-fill) bg + var(--ok-text) text + var(--ok-border) border, 4px radius"
+- "新按钮：Primary 规范（var(--brand) bg, white text, 4px radius, 14px/500）"
+
+---
+
+## 11. 设计决策日志
+
+| 决策 | 时间 | 理由 |
+|------|------|------|
+| 放弃 sohne-var, 改用 Inter Variable | 项目早期 | sohne-var 付费且不可商用，Inter 在中文 fallback 下渲染稳定 |
+| 默认 heading 走 weight 700（非 Stripe 的 300） | 项目早期 | weight 300 的中文笔画过细在小屏掉字；Inter 700 中英混排稳定 |
+| h1/h2/h3/h4 wrap 在 `@layer base` | 2026-05-15 | Tailwind v4 的 @layer 机制下，未 wrap 会导致组件级 utility 失效，topbar h1 渲染成 44px 而非 14px |
+| `--shadow-card: none` | 项目早期 | 选择 flat 美学，避免暗色主题阴影争议；保留升级路径见 §6 |
+| 双层语言（Portal 高表达 / Admin 克制） | 项目早期 | 同时面向"想用一下"和"日常运维"两类人，单一风格无法两边讨好 |
+
+---
+
+## 12. 文件位置
+
+| 内容 | 路径 |
+|------|------|
+| 全局 CSS / token 定义 | `web/src/index.css` |
+| Tailwind v4 主题 | `web/src/index.css` 顶部的 `@theme` 块 |
+| 共享组件 | `web/src/components/{Card,MetricCard,Icon,...}.tsx` |
+| Portal 组件 | `web/src/portal/components/` |
+| Admin 布局 | `web/src/admin/components/MainLayout.tsx` |
+| 字体加载 | `web/src/index.css:2-7`（Inter / JetBrains Mono / Noto Sans SC / Material Symbols） |
