@@ -11,18 +11,30 @@ PORT       := 23333
 TEST_DIR   := testground
 HOST_IP    := $(shell ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "172.17.0.1")
 
+# ─── 版本注入 ─────────────────────────────────
+# Match only semver-style tags (v0.2.3) to avoid descriptive tags like
+# "portal-redesign-complete" polluting the version pill. Strip leading "v"
+# so backend serves clean "0.2.3" — frontend formatVersion() re-prepends
+# "v", avoiding "vv0.2.3" double-v.
+VERSION    ?= $(shell git describe --tags --match 'v*' --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
+COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS    := -X depsilo/internal/version.Version=$(VERSION) \
+              -X depsilo/internal/version.Commit=$(COMMIT) \
+              -X depsilo/internal/version.BuildDate=$(BUILD_DATE)
+
 # ─── 构建 ─────────────────────────────────────
 frontend:                       ## 构建前端
 	cd web && npm run build
 
 build: frontend                 ## 构建前端 + 编译后端（统一 CLI+Server 二进制）
-	CGO_ENABLED=0 go build -o $(BIN) ./cmd/depsilo
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/depsilo
 
 build-server: frontend          ## 构建前端 + 编译后端（纯服务器模式，用于桌面版）
-	CGO_ENABLED=0 go build -o $(BIN)-server ./cmd/server
+	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BIN)-server ./cmd/server
 
 build-desktop: frontend         ## 构建前端 + 编译桌面版
-	go build -tags "desktop,production" -o bin/$(APP)-desktop ./cmd/server
+	go build -tags "desktop,production" -ldflags "$(LDFLAGS)" -o bin/$(APP)-desktop ./cmd/server
 
 # ─── 运行 ─────────────────────────────────────
 run: build                      ## 编译并前台运行

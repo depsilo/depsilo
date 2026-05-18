@@ -102,7 +102,7 @@ export default function MainLayoutV2() {
         <div className="px-5 py-5 flex items-center gap-2.5">
           <Logo size={26} />
           <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--text-base)' }}>Depsilo</span>
-          <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>{formatVersion(stats?.service?.version)}</span>
+          <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" title={stats?.service?.version} style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>{formatVersion(stats?.service?.version)}</span>
         </div>
 
         {/* Navigation */}

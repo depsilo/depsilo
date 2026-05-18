@@ -113,6 +113,7 @@ export default function PortalAppV2() {
               depsilo
             </span>
             <span
+              title={data?.service?.version}
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10,

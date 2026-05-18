@@ -31,13 +31,20 @@ export function formatTime(ts: string): string {
 }
 
 /**
- * Format a service version string for display.
- * Prepends "v" when the value looks like a semver ("0.2.3"); shows raw
- * for non-numeric tags like "dev" / "rc1"; returns "—" when missing.
+ * Format a service version string for compact pill display.
+ * Examples:
+ *   "0.2.3"                          → "v0.2.3"   (clean release)
+ *   "0.2.0-126-g43ca7fe-dirty"       → "v0.2.0+dev" (in-progress build)
+ *   "dev"                            → "dev"     (no ldflags injected)
+ *   undefined / null                 → "—"
+ * Pair with title={v} on the rendering element so the full string is
+ * still discoverable via hover.
  */
 export function formatVersion(v?: string | null): string {
   if (!v) return '—'
-  return /^\d/.test(v) ? `v${v}` : v
+  const semver = v.match(/^(\d+\.\d+\.\d+)/)
+  if (semver) return v === semver[1] ? `v${semver[1]}` : `v${semver[1]}+dev`
+  return v
 }
 
 /**
