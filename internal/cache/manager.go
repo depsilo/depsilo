@@ -384,14 +384,9 @@ func IsPackageFile(adapterType, key string) bool {
 	return false
 }
 
-// securityScanner is the optional security scanner, set via SetSecurityScanner.
-var securityScanner interface {
+// SecurityScanner is the optional contract for scanning new packages on miss.
+type SecurityScanner interface {
 	ScanPackage(ctx context.Context, ecosystem, packageName string) error
-}
-
-// SetSecurityScanner sets the security scanner used to check new packages.
-func SetSecurityScanner(s interface{ ScanPackage(ctx context.Context, ecosystem, packageName string) error }) {
-	securityScanner = s
 }
 
 // Manager handles cache lookup, singleflight dedup, and storage writes.
@@ -403,10 +398,16 @@ func SetSecurityScanner(s interface{ ScanPackage(ctx context.Context, ecosystem,
 //   - If cache miss: fetch from upstream, store, serve (MISS).
 //   - If upstream fails on miss but stale cache exists: serve stale (HIT).
 type Manager struct {
-	storage  Storage
-	db       *gorm.DB
-	group    singleflight.Group
-	eventBus *EventBus
+	storage         Storage
+	db              *gorm.DB
+	group           singleflight.Group
+	eventBus        *EventBus
+	securityScanner SecurityScanner
+}
+
+// SetSecurityScanner attaches an optional security scanner. Pass nil to detach.
+func (m *Manager) SetSecurityScanner(s SecurityScanner) {
+	m.securityScanner = s
 }
 
 // NewManager creates a new cache manager.
@@ -551,11 +552,11 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		m.publishEvent(key, adapterType, false, size)
 
 		// Trigger async security scan for new packages
-		if securityScanner != nil {
+		if m.securityScanner != nil {
 			pkgName := ExtractPackageName(adapterType, key)
 			if pkgName != "" {
 				go func() {
-					if err := securityScanner.ScanPackage(context.Background(), adapterType, pkgName); err != nil {
+					if err := m.securityScanner.ScanPackage(context.Background(), adapterType, pkgName); err != nil {
 						zap.L().Debug("security scan for new package failed", zap.Error(err))
 					}
 				}()

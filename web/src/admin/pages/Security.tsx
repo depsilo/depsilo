@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatTime } from '@/lib/utils'
 import CardV2 from '@/components/Card'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
@@ -43,16 +43,6 @@ const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'succ
   high: 'warning',
   medium: 'default',
   low: 'success',
-}
-
-function formatTime(t: string): string {
-  if (!t) return '-'
-  const d = new Date(t)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
-  if (diff === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  if (diff < 30) return `${diff}d ago`
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // ─── Overview Tab ────────────────────────────────────────────────────
@@ -124,7 +114,7 @@ function OverviewTab() {
               {t('security.scanStatus')}
             </h3>
             <p className="text-[12px] mt-1" style={{ color: 'var(--text-soft)' }}>
-              {t('security.lastScan')}: {dashboard.last_scan_at ? formatTime(dashboard.last_scan_at) : t('security.never')}
+              {t('security.lastScan')}: {dashboard.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
             </p>
           </div>
           <ButtonV2

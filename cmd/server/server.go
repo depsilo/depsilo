@@ -162,7 +162,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		)
 	}
 
-	cache.SetSecurityScanner(securityScanner)
+	cacheMgr.SetSecurityScanner(securityScanner)
 
 	if cfg.License.Key == "" {
 		zap.L().Info("running as Community edition")

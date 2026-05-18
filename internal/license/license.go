@@ -2,11 +2,13 @@ package license
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
 	"depsilo/internal/config"
@@ -159,4 +161,20 @@ func MaskKey(key string) string {
 		return key
 	}
 	return key[:8] + "-***"
+}
+
+// RequirePro returns a Gin middleware that blocks requests unless a valid Pro license is active.
+func RequirePro(mgr *Manager) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !mgr.IsPro() {
+			c.JSON(http.StatusPaymentRequired, gin.H{
+				"code":    "PRO_REQUIRED",
+				"message": "This feature requires Depsilo Pro.",
+				"upgrade": "https://depsilo.com/#pricing",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }

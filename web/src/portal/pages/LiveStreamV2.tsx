@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
+import { formatTime } from '@/lib/utils'
 import MetricCardV2 from '@/components/MetricCard'
 import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
@@ -20,11 +21,6 @@ interface CacheEvent {
 
 interface StatsData {
   today: { hit_count: number; miss_count: number; hit_rate: number }
-}
-
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 export default function LiveStreamV2() {
@@ -130,7 +126,7 @@ export default function LiveStreamV2() {
                 }}
               >
                 <span className="text-[12px] font-mono tabular-nums shrink-0 w-16" style={{ color: 'var(--text-soft)' }}>
-                  {formatTime(event.timestamp)}
+                  {formatTime(event.timestamp, 'time')}
                 </span>
                 <EcosystemIcon type={event.adapter_type as any} size={14} />
                 <span className="font-mono text-[13px] truncate min-w-0 flex-1" style={{ color: 'var(--text)' }}>

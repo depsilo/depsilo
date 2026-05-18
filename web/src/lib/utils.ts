@@ -16,14 +16,30 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`
 }
 
+export type FormatTimeMode = 'auto' | 'time' | 'relative'
+
 /**
- * Format ISO timestamp to locale-appropriate display.
- * Today: "HH:mm:ss", older: "MM-DD HH:mm".
+ * Format ISO timestamp for display. Three modes:
+ *   'auto'     (default) — today: "HH:mm:ss", older: "MM-DD HH:mm"
+ *   'time'              — always "HH:mm:ss" (for real-time streams)
+ *   'relative'          — today: "HH:mm", <30d: "Nd ago", older: "MM-DD"
  */
-export function formatTime(ts: string): string {
+export function formatTime(ts: string, mode: FormatTimeMode = 'auto'): string {
   if (!ts) return '-'
   const d = new Date(ts)
   const now = new Date()
+
+  if (mode === 'time') {
+    return d.toLocaleTimeString('zh-CN', { hour12: false })
+  }
+
+  if (mode === 'relative') {
+    const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
+    if (diff === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    if (diff < 30) return `${diff}d ago`
+    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   if (d.toDateString() === now.toDateString()) {
     return d.toLocaleTimeString('zh-CN', { hour12: false })
   }
