@@ -225,18 +225,17 @@ test-docker-docker: dev         ## E2E: docker pull alpine through proxy (dind, 
 
 # Twelve ecosystems by default. Docker registry is opt-in (requires dind) — run
 # `make test-docker-docker` separately when needed.
-TEST_DOCKER_ALL_ECOS := pypi apt npm go cargo maven rubygems composer nuget conda cran helm
+TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget conda cran helm
+TEST_DOCKER_ALL_TARGETS := $(addprefix test-docker-,$(TEST_DOCKER_ALL_ECOS))
 
-test-docker-all: dev            ## E2E: run all 12 non-docker ecosystems sequentially
-	@echo "=== Running test-docker-all (12 ecosystems) ==="
-	@failed=""; for eco in $(TEST_DOCKER_ALL_ECOS); do \
-		$(MAKE) --no-print-directory test-docker-$$eco || failed="$$failed $$eco"; \
-	done; \
-	if [ -n "$$failed" ]; then \
-		echo ""; echo ">>> FAILED:$$failed"; exit 1; \
-	else \
-		echo ""; echo ">>> ALL 12 ECOSYSTEMS PASSED"; \
-	fi
+# Listed as plain prerequisites (not a $(MAKE) loop) so that GNU Make's
+# "phony-target-runs-once-per-invocation" guarantee lets `dev` build the
+# server exactly once, even though every test-docker-<eco> declares dev
+# as its own prerequisite. Behaviour: fail-fast (first failure aborts);
+# add `-k` (`make -k test-docker-all`) to keep going through failures.
+test-docker-all: $(TEST_DOCKER_ALL_TARGETS)  ## E2E: all 12 non-docker ecosystems (fail-fast; -k to keep-going)
+	@echo ""
+	@echo ">>> ALL 12 ECOSYSTEMS PASSED"
 
 test-docker: test-docker-all    ## Alias for test-docker-all
 
