@@ -192,23 +192,19 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	r.Use(rules.Middleware(rulesEngine))
 	r.Use(middleware.ProjectTokenMiddleware(database))
 
+	// Build ordered ecosystem name list (defines UI iteration order)
+	ecosystemNames := make([]string, 0, len(ecosystems))
+	for _, eco := range ecosystems {
+		ecosystemNames = append(ecosystemNames, eco.name)
+	}
+
 	// Register all API routes
 	api.RegisterRoutes(r, api.Deps{
 		DB:               database,
 		Storage:          storage,
 		Config:           cfg,
-		PyPIPool:         pools["pypi"],
-		APTPool:          pools["apt"],
-		NPMPool:          pools["npm"],
-		GoPool:           pools["go"],
-		CargoPool:        pools["cargo"],
-		MavenPool:        pools["maven"],
-		RubyGemsPool:     pools["rubygems"],
-		ComposerPool:     pools["composer"],
-		NuGetPool:        pools["nuget"],
-		CondaPool:        pools["conda"],
-		CRANPool:         pools["cran"],
-		HelmPool:         pools["helm"],
+		Pools:            pools,
+		Ecosystems:       ecosystemNames,
 		CacheMgr:         cacheMgr,
 		EventBus:         eventBus,
 		LicenseManager:   licenseManager,

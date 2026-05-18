@@ -23,28 +23,22 @@ import (
 var startTime = time.Now()
 
 // Deps holds shared dependencies for route registration.
+//
+// Pools is keyed by ecosystem name ("pypi", "apt", ...); Ecosystems
+// is the ordered list used by UIs to render upstreams deterministically.
+// See docs/adr/0001-pools-map.md.
 type Deps struct {
-	DB       *gorm.DB
-	Storage  cache.Storage
-	Config   *config.Config
-	PyPIPool *upstream.Pool
-	APTPool  *upstream.Pool
-	NPMPool  *upstream.Pool
-	GoPool    *upstream.Pool
-	CargoPool    *upstream.Pool
-	MavenPool    *upstream.Pool
-	RubyGemsPool *upstream.Pool
-	ComposerPool *upstream.Pool
-	NuGetPool    *upstream.Pool
-	CondaPool    *upstream.Pool
-	CRANPool     *upstream.Pool
-	HelmPool       *upstream.Pool
-	CacheMgr       *cache.Manager
-	EventBus       *cache.EventBus
-	LicenseManager  *license.Manager
-	AuditLogger     *audit.Logger
-	RulesStore      *rules.Store
-	RulesEngine     *rules.Engine
+	DB         *gorm.DB
+	Storage    cache.Storage
+	Config     *config.Config
+	Pools      map[string]*upstream.Pool
+	Ecosystems []string
+	CacheMgr   *cache.Manager
+	EventBus   *cache.EventBus
+	LicenseManager   *license.Manager
+	AuditLogger      *audit.Logger
+	RulesStore       *rules.Store
+	RulesEngine      *rules.Engine
 	SecurityScanner  *security.Scanner
 	SecurityImporter *security.Importer
 }
@@ -57,7 +51,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1 := r.Group("/api/v1")
 
 	// Public stats
-	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool, deps.MavenPool, deps.RubyGemsPool, deps.ComposerPool, deps.NuGetPool, deps.CondaPool, deps.CRANPool, deps.HelmPool, deps.Config.ExtraIndexes)
+	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.ExtraIndexes)
 	apiV1.GET("/stats", statsHandler.GetStats)
 	apiV1.GET("/latency-series", statsHandler.GetLatencySeries)
 
@@ -91,7 +85,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.Use(middleware.AdminRequired())
 
 	// Dashboard
-	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.PyPIPool, deps.APTPool, deps.NPMPool, deps.GoPool, deps.CargoPool, deps.MavenPool, deps.RubyGemsPool, deps.ComposerPool, deps.NuGetPool, deps.CondaPool, deps.CRANPool, deps.HelmPool)
+	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems)
 	adminGroup.GET("/dashboard", dashHandler.GetDashboard)
 	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
 
@@ -107,14 +101,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.GET("/cache/distribution", cacheHandler.GetDistribution)
 
 	// Cache warmup
-	warmupPools := map[string]*upstream.Pool{
-		"pypi": deps.PyPIPool, "apt": deps.APTPool, "npm": deps.NPMPool,
-		"go": deps.GoPool, "cargo": deps.CargoPool, "maven": deps.MavenPool,
-		"rubygems": deps.RubyGemsPool, "composer": deps.ComposerPool,
-		"nuget": deps.NuGetPool, "conda": deps.CondaPool, "cran": deps.CRANPool,
-		"helm": deps.HelmPool,
-	}
-	warmupHandler := admin.NewWarmupHandler(deps.CacheMgr, warmupPools, deps.Config)
+	warmupHandler := admin.NewWarmupHandler(deps.CacheMgr, deps.Pools, deps.Config)
 	adminGroup.POST("/cache/warmup", warmupHandler.Warmup)
 
 	// Upstream management

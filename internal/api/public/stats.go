@@ -17,40 +17,20 @@ import (
 )
 
 type StatsHandler struct {
-	db        *gorm.DB
-	storage   cache.Storage
-	pypiPool  *upstream.Pool
-	aptPool   *upstream.Pool
-	npmPool   *upstream.Pool
-	goPool       *upstream.Pool
-	cargoPool    *upstream.Pool
-	mavenPool    *upstream.Pool
-	rubygemsPool *upstream.Pool
-	composerPool *upstream.Pool
-	nugetPool    *upstream.Pool
-	condaPool    *upstream.Pool
-	cranPool     *upstream.Pool
-	helmPool     *upstream.Pool
+	db           *gorm.DB
+	storage      cache.Storage
+	pools        map[string]*upstream.Pool
+	ecosystems   []string
 	startTime    time.Time
 	extraIndexes []config.ExtraIndexConfig
 }
 
-func NewStatsHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool, rubygemsPool, composerPool, nugetPool, condaPool, cranPool, helmPool *upstream.Pool, extraIndexes []config.ExtraIndexConfig) *StatsHandler {
+func NewStatsHandler(database *gorm.DB, storage cache.Storage, pools map[string]*upstream.Pool, ecosystems []string, extraIndexes []config.ExtraIndexConfig) *StatsHandler {
 	return &StatsHandler{
 		db:           database,
 		storage:      storage,
-		pypiPool:     pypiPool,
-		aptPool:      aptPool,
-		npmPool:      npmPool,
-		goPool:       goPool,
-		cargoPool:    cargoPool,
-		mavenPool:    mavenPool,
-		rubygemsPool: rubygemsPool,
-		composerPool: composerPool,
-		nugetPool:    nugetPool,
-		condaPool:    condaPool,
-		cranPool:     cranPool,
-		helmPool:     helmPool,
+		pools:        pools,
+		ecosystems:   ecosystems,
 		startTime:    time.Now(),
 		extraIndexes: extraIndexes,
 	}
@@ -231,22 +211,15 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 
 	// Upstream status
 	upstreams := make([]gin.H, 0)
-	type poolEntry struct {
-		pool    *upstream.Pool
-		adapter string
-	}
-	pools := []poolEntry{
-		{h.pypiPool, "pypi"}, {h.aptPool, "apt"}, {h.npmPool, "npm"},
-		{h.goPool, "go"}, {h.cargoPool, "cargo"}, {h.mavenPool, "maven"},
-		{h.rubygemsPool, "rubygems"}, {h.composerPool, "composer"},
-		{h.nugetPool, "nuget"}, {h.condaPool, "conda"},
-		{h.cranPool, "cran"}, {h.helmPool, "helm"},
-	}
-	for _, pe := range pools {
-		for _, u := range pe.pool.Upstreams() {
+	for _, name := range h.ecosystems {
+		pool := h.pools[name]
+		if pool == nil {
+			continue
+		}
+		for _, u := range pool.Upstreams() {
 			upstreams = append(upstreams, gin.H{
 				"name":           u.Name,
-				"adapter":        pe.adapter,
+				"adapter":        name,
 				"url":            u.URL,
 				"healthy":        u.Healthy,
 				"avg_latency_ms": u.AvgLatency().Milliseconds(),

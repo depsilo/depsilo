@@ -13,24 +13,14 @@ import (
 )
 
 type DashboardHandler struct {
-	db       *gorm.DB
-	storage  cache.Storage
-	pypiPool  *upstream.Pool
-	aptPool   *upstream.Pool
-	npmPool   *upstream.Pool
-	goPool       *upstream.Pool
-	cargoPool    *upstream.Pool
-	mavenPool    *upstream.Pool
-	rubygemsPool *upstream.Pool
-	composerPool *upstream.Pool
-	nugetPool    *upstream.Pool
-	condaPool    *upstream.Pool
-	cranPool     *upstream.Pool
-	helmPool     *upstream.Pool
+	db         *gorm.DB
+	storage    cache.Storage
+	pools      map[string]*upstream.Pool
+	ecosystems []string
 }
 
-func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pypiPool, aptPool, npmPool, goPool, cargoPool, mavenPool, rubygemsPool, composerPool, nugetPool, condaPool, cranPool, helmPool *upstream.Pool) *DashboardHandler {
-	return &DashboardHandler{db: database, storage: storage, pypiPool: pypiPool, aptPool: aptPool, npmPool: npmPool, goPool: goPool, cargoPool: cargoPool, mavenPool: mavenPool, rubygemsPool: rubygemsPool, composerPool: composerPool, nugetPool: nugetPool, condaPool: condaPool, cranPool: cranPool, helmPool: helmPool}
+func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pools map[string]*upstream.Pool, ecosystems []string) *DashboardHandler {
+	return &DashboardHandler{db: database, storage: storage, pools: pools, ecosystems: ecosystems}
 }
 
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
@@ -76,31 +66,16 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 
 	upstreams := make([]gin.H, 0)
-	for _, u := range h.pypiPool.Upstreams() {
-		upstreams = append(upstreams, gin.H{
-			"id":             idByName[u.Name],
-			"name":           u.Name,
-			"adapter":        "pypi",
-			"healthy":        u.Healthy,
-			"avg_latency_ms": u.AvgLatency().Milliseconds(),
-			"success_rate":   u.SuccessRate(),
-		})
-	}
-	type pe struct {
-		pool    *upstream.Pool
-		adapter string
-	}
-	for _, p := range []pe{
-		{h.aptPool, "apt"}, {h.npmPool, "npm"}, {h.goPool, "go"},
-		{h.cargoPool, "cargo"}, {h.mavenPool, "maven"}, {h.rubygemsPool, "rubygems"},
-		{h.composerPool, "composer"}, {h.nugetPool, "nuget"}, {h.condaPool, "conda"},
-		{h.cranPool, "cran"}, {h.helmPool, "helm"},
-	} {
-		for _, u := range p.pool.Upstreams() {
+	for _, name := range h.ecosystems {
+		pool := h.pools[name]
+		if pool == nil {
+			continue
+		}
+		for _, u := range pool.Upstreams() {
 			upstreams = append(upstreams, gin.H{
 				"id":             idByName[u.Name],
 				"name":           u.Name,
-				"adapter":        p.adapter,
+				"adapter":        name,
 				"healthy":        u.Healthy,
 				"avg_latency_ms": u.AvgLatency().Milliseconds(),
 				"success_rate":   u.SuccessRate(),
