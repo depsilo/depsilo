@@ -502,10 +502,64 @@ Depsilo 使用蓝调多层阴影系统，全部走 token，**不要写裸 box-sh
 | 启用蓝调多层 `--shadow-card`，绑定 CardV2/MetricCardV2 | 2026-05-15 | flat 看起来"工具"但缺产品力；6% 不透明的极轻阴影既有"悬浮感"又不影响密集网格 |
 | `--text` 由 `#0a0a0a` 改为 `#061b31` 深海军（含整套 muted/soft/subtle 调成 slate 系列） | 2026-05-15 | 纯灰黑显冷漠；深海军是 fintech 标志色，文字层级整体调成 slate 家族后温度更统一 |
 | Admin topbar bottom 用 `.aurora-rim-bottom` 替代 `border-bottom` | 2026-05-15 | 裸 border 像静态 chrome；1px violet→cyan 渐变线（55% 不透明）让 admin 与 Portal 的品牌发生一次轻接触，不影响工具气质 |
+| 所有设 `position` 的自定义类必须 `@layer utilities + :where()` | 2026-05-18 | 未分层的 `.aurora-rim-bottom { position: relative }` 静默覆盖 Tailwind 的 `.fixed`，admin topbar 退回 relative → 宽度 1060→1280 → 触发横向滚动。同型修复扩展到 `.grad-ring` / `.aurora-glow` / `.dot-halo`，见 §13 |
 
 ---
 
-## 12. 文件位置
+## 13. 已知陷阱：Tailwind v4 Cascade
+
+### 13.1 问题
+
+Tailwind v4 把所有 utilities 放在 `@layer utilities` 中。CSS cascade 规则规定：**未分层（unlayered）的规则总是胜过 `@layer` 内的规则，无论 specificity 如何**。
+
+后果：自定义 CSS 类如果未分层、且设置了 Tailwind utility 也会管的属性（`position` / `font-size` / `font-weight` / `color` / `background` ...），会**静默覆盖** Tailwind utility。
+
+```html
+<!-- 期望：position: fixed (Tailwind .fixed)
+     实际：position: relative (.aurora-rim-bottom 未分层胜出) -->
+<header class="aurora-rim-bottom fixed top-0 left-[220px] right-0">
+```
+
+### 13.2 已踩过的两次
+
+| 时间 | 类 | 被覆盖的 utility | 症状 |
+|------|----|------------------|------|
+| 2026-05-15 | `h1, h2, h3, h4 { font-size: 44px; font-weight: 700 }` | `text-[14px] font-[400]` | Admin topbar 标题渲染成 44px/700，把 48px 高的 header 撑爆 |
+| 2026-05-18 | `.aurora-rim-bottom { position: relative }` | `fixed` | Admin topbar 退回 relative → 宽度 1060px → 1280px → 横向滚动条 → 右侧图标被推出屏幕 |
+
+### 13.3 解药
+
+**任何**设置以下属性的自定义类必须放进 `@layer base` 或 `@layer utilities`：
+
+- `position` / `display` / `width` / `height`
+- `font-family` / `font-size` / `font-weight` / `letter-spacing` / `line-height`
+- `color` / `background` / `border` / `box-shadow`
+- 任何 Tailwind utility 也会管的属性
+
+**对于结构性辅助类**（仅给 `::before` / `::after` 提供定位上下文），用 `:where()` 把 specificity 降到 0，让任何 utility 都能干净覆盖：
+
+```css
+@layer utilities {
+  :where(.aurora-rim, .aurora-rim-bottom) { position: relative; }
+}
+.aurora-rim::before { /* ::after / ::before 不会冲突，照常写 */ }
+```
+
+**对于视觉效果类**（如 `.grad-text` 必须让 `color: transparent` 生效），不用 `:where()`，但仍然要 wrap 进 `@layer utilities`。这样它和 Tailwind utilities 走同一套 specificity 规则——Tailwind 的 `text-red-500` 也能正常覆盖。
+
+### 13.4 自检清单
+
+新增 CSS 类时问自己：
+
+1. 这个类有没有设置 `position`？→ 如果"是"，wrap 进 `@layer utilities` + `:where()`
+2. 这个类有没有设置字体 / 颜色 / 间距 / 边框？→ wrap 进 `@layer utilities`（不一定要 `:where()`，看是否希望被 override）
+3. 这个类有没有设置 default heading 样式？→ wrap 进 `@layer base`
+
+宁可分层多余，也不可漏掉——cascade bug 永远是静默的、跨页面的，最难排查。
+
+---
+
+## 14. 文件位置
 
 | 内容 | 路径 |
 |------|------|
