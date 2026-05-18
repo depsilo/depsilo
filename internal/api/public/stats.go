@@ -13,6 +13,7 @@ import (
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
+	"depsilo/internal/version"
 )
 
 type StatsHandler struct {
@@ -283,7 +284,7 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"service": gin.H{
-			"version":        "0.1.0",
+			"version":        version.Version,
 			"uptime_seconds": int64(time.Since(h.startTime).Seconds()),
 			"status":         "healthy",
 		},

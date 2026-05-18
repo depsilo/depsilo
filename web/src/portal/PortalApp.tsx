@@ -2,14 +2,13 @@ import { Routes, Route, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
+import { formatVersion } from '@/lib/utils'
 import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import StatusDot from '@/components/StatusDot'
 import QuickStart from '@/portal/pages/QuickStart'
 import MonitorV2 from '@/portal/pages/Monitor'
-
-const VERSION = 'v2.4.1'
 
 interface NavTabProps {
   to: string
@@ -60,7 +59,7 @@ export default function PortalAppV2() {
   const { t } = useTranslation()
   const location = useLocation()
 
-  const { data } = useQuery<{ service: { status: string } }>({
+  const { data } = useQuery<{ service: { status: string; version: string } }>({
     queryKey: ['stats-status'],
     queryFn: async () => {
       const res = await statsApi.getStats()
@@ -124,7 +123,7 @@ export default function PortalAppV2() {
                 marginLeft: 2,
               }}
             >
-              {VERSION}
+              {formatVersion(data?.service?.version)}
             </span>
           </Link>
 

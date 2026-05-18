@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import Logo from '@/components/Logo'
@@ -6,7 +7,8 @@ import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import BadgeV2 from '@/components/Badge'
 import StatusDot from '@/components/StatusDot'
-import { authApi } from '@/lib/api'
+import { authApi, statsApi } from '@/lib/api'
+import { formatVersion } from '@/lib/utils'
 
 interface NavItem {
   label: string
@@ -41,6 +43,13 @@ export default function MainLayoutV2() {
   const navigate = useNavigate()
   const location = useLocation()
   const user = JSON.parse(localStorage.getItem('user') || '{"username":"admin","role":"admin"}')
+
+  const { data: stats } = useQuery<{ service: { version: string } }>({
+    queryKey: ['stats-status'],
+    queryFn: async () => (await statsApi.getStats()).data,
+    refetchInterval: 30000,
+    staleTime: 30000,
+  })
 
   const monitorItems: NavItem[] = [
     { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
@@ -93,7 +102,7 @@ export default function MainLayoutV2() {
         <div className="px-5 py-5 flex items-center gap-2.5">
           <Logo size={26} />
           <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--text-base)' }}>Depsilo</span>
-          <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>v0.1</span>
+          <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>{formatVersion(stats?.service?.version)}</span>
         </div>
 
         {/* Navigation */}

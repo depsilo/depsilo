@@ -31,6 +31,16 @@ export function formatTime(ts: string): string {
 }
 
 /**
+ * Format a service version string for display.
+ * Prepends "v" when the value looks like a semver ("0.2.3"); shows raw
+ * for non-numeric tags like "dev" / "rc1"; returns "—" when missing.
+ */
+export function formatVersion(v?: string | null): string {
+  if (!v) return '—'
+  return /^\d/.test(v) ? `v${v}` : v
+}
+
+/**
  * Format ISO timestamp as YYYY-MM-DD date string.
  */
 export function formatDate(ts: string): string {
