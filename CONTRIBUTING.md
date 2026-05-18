@@ -46,6 +46,64 @@ cd web && npm run dev
 
 The frontend dev server runs on `http://localhost:5173` and proxies API requests to the backend on `:8080`.
 
+## Testing
+
+Depsilo has three test tiers, each runnable independently:
+
+### Unit tests (fast, no network)
+
+```bash
+make test-unit              # go test ./tests/unit/...
+go test ./internal/security # the one in-package suite
+```
+
+Cover URL rewriting, cache keys, counting reader, rules engine, docker resolver, package-name extraction. Run on every commit.
+
+### Integration tests (mock upstream, no network)
+
+```bash
+make test-integration       # boots a mock upstream + Depsilo in-process
+```
+
+Covers all 13 adapter routes against a mock server defined in `tests/mock/`. Fast (~1s total) and offline; this is the regression net for adapter-level changes.
+
+### End-to-end tests (real clients, real upstreams, Docker)
+
+Each ecosystem has its own tiny `testground/docker-<eco>/Dockerfile` whose `RUN` steps invoke the real client (pip / npm / mvn / dotnet / R / helm / cargo / ...) against a running Depsilo, talking through the host's `docker0` gateway.
+
+```bash
+make test-docker-pypi       # pip install requests through Depsilo
+make test-docker-npm        # npm install lodash
+make test-docker-go         # go get golang.org/x/text
+make test-docker-cargo      # cargo fetch serde
+make test-docker-maven      # mvn dependency:get guava
+make test-docker-rubygems   # gem install rake
+make test-docker-composer   # composer require monolog/monolog
+make test-docker-nuget      # dotnet add Newtonsoft.Json
+make test-docker-conda      # conda install requests
+make test-docker-cran       # R install.packages('jsonlite')
+make test-docker-helm       # helm repo add + index.yaml fetch
+make test-docker-apt        # apt install curl/wget/jq
+
+make test-docker-all        # all 12 above, sequential, summarises pass/fail
+make test-e2e               # alias for test-docker-all
+```
+
+The Docker Registry adapter has its own opt-in target because verifying `docker pull` needs Docker-in-Docker (`--privileged`), which isn't appropriate as a default for everyone's machine:
+
+```bash
+make test-docker-docker     # docker pull alpine via dind through Depsilo
+```
+
+Each target depends on `make dev` (starts a backgrounded Depsilo). When you're done:
+
+```bash
+make stop                   # kill the background Depsilo
+make test-clean             # remove all depsilo-test-* images
+```
+
+Adding a new ecosystem? One new `testground/docker-<eco>/Dockerfile` plus one `test-docker-<eco>:` target in the Makefile — that's the entire surface.
+
 ## Submitting a Pull Request
 
 1. **Fork** the repository

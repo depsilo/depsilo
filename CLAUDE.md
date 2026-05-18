@@ -1053,18 +1053,18 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 ---
 
-## 十一、项目现状快照（2026-04-19 更新）
+## 十一、项目现状快照（2026-05-18 更新）
 
-> 本节记录项目深度审查的结论，供后续开发决策参考。上次更新：2026-04-19。
+> 本节记录项目深度审查的结论，供后续开发决策参考。上次更新：2026-05-18。
 
 ### 11.1 规模统计
 
-- 208 个 commits，~13,500 行 Go 代码，117 个 Go 文件
+- ~13,500 行 Go 代码，~100 个 Go 文件
 - 前端 50 个 TSX/TS 文件，~7,000+ 行
-- 22 个测试文件（单元 + 集成）
+- 22 个 Go 测试文件（单元 7 + 集成 13 + mock 1 + main_test 1）
 - 13 个生态适配器已实现（含 Docker Registry，已验证 `docker pull` 可用）
-- 10 个设计 spec 文档
-- Docker 冒烟测试覆盖 pip / npm / go / apt（`make test-e2e`）
+- **每生态独立 Docker E2E**：`testground/docker-<eco>/Dockerfile` × 13，`make test-docker-<eco>` 单独跑，`make test-docker-all` 12 生态串跑（Docker Registry 因需 dind 单独 opt-in：`make test-docker-docker`）
+- 10+ 个设计 spec 文档 + 1 份 2026-05-18 代码与功能分层审查报告（`docs/reviews/`）+ 1 份术语表（`CONTEXT.md`）+ ADR-0001
 
 ### 11.2 架构优势
 
@@ -1076,25 +1076,32 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 - **表驱动初始化**：`server.go` 使用 `ecosystemDef` 表 + 循环注册 12 个生态
 - **前端完成度高**：React 19 + TanStack Query + i18n + 暗色主题 + Stripe 风格设计系统
 
-### 11.3 已修复的技术债（2026-04-19）
+### 11.3 已修复的技术债
 
-| 问题                           | 修复方式                                           | Commits                            |
-| ------------------------------ | -------------------------------------------------- | ---------------------------------- |
-| Cache Manager 大文件 OOM       | `bytes.Buffer` → `countingReader` 流式直写 storage | c55b7ce, a5c76b2, 9264951, c6b5d13 |
-| `io.Copy` 错误被忽略           | 15 处 adapter 改为 `zap.L().Warn` 记录错误         | 5bdbba4                            |
-| `server.go` 过长 (408 行)      | 表驱动循环，-64 行 (→344 行)                       | 7b3a44a                            |
-| 前端工具函数重复               | 提取到 `web/src/lib/utils.ts`，11 文件清理         | 5380960                            |
-| Docker Registry Cloudflare 403 | 所有上游请求加 `User-Agent: docker/27.0.0 depsilo` | b04314f                            |
+| 问题                                       | 修复方式                                                          | Commits                            |
+| ------------------------------------------ | ----------------------------------------------------------------- | ---------------------------------- |
+| Cache Manager 大文件 OOM                   | `bytes.Buffer` → `countingReader` 流式直写 storage                | c55b7ce, a5c76b2, 9264951, c6b5d13 |
+| `io.Copy` 错误被忽略                       | 15 处 adapter 改为 `zap.L().Warn` 记录错误                        | 5bdbba4                            |
+| `server.go` 过长 (408 行)                  | 表驱动循环，-64 行 (→344 行)                                      | 7b3a44a                            |
+| 前端工具函数重复                           | 提取到 `web/src/lib/utils.ts`，11 文件清理                        | 5380960                            |
+| Docker Registry Cloudflare 403             | 所有上游请求加 `User-Agent: docker/27.0.0 depsilo`                | b04314f                            |
+| 前端 `formatTime` 3 处重复                 | 扩展 `lib/utils.ts` 支持 auto/time/relative 模式                  | ecaa8ef                            |
+| `license/middleware.go` 23 行碎片          | 合并到 `license.go`                                               | ecaa8ef                            |
+| `cache` 包内 securityScanner 全局变量      | 改为 `Manager.securityScanner` 字段 + DI                          | ecaa8ef                            |
+| `internal/server/server.go` 未被 commit    | 入库 + 删 `cmd/server` 副本 + 收紧 `.gitignore`                   | a647104                            |
+| `cache/manager.go` 内混入 package-key 解析 | 剥离到 `internal/adapter/packagekey/`                             | a647104                            |
+| `api.Deps` 12 个独立 `*Pool` 字段          | 统一为 `map[string]*Pool` + `Ecosystems []string`（ADR-0001）     | 2b44d70                            |
+| E2E 测试是 monolithic shell 路线           | 13 个独立 `testground/docker-<eco>/Dockerfile` + Makefile 驱动    | 2718bdf                            |
 
 ### 11.4 剩余已知问题
 
-| 问题                                | 严重度 | 说明                                                                        |
-| ----------------------------------- | ------ | --------------------------------------------------------------------------- |
-| i18n key 无编译时校验               | 低     | en.ts 与 zh.ts 目前同步（478 key），但缺少自动检查机制                      |
-| `api.Deps` 仍有 12 个独立 Pool 字段 | 低     | 可改为 `Pools map[string]*Pool`，需联动改 dashboard.go / stats.go           |
-| 部分 `formatTime` 变体未统一        | 低     | Projects/Rules/Security/LiveStream/Monitor 有不同逻辑的本地实现             |
-| Docker Registry 缺少 E2E 冒烟测试   | 低     | `docker pull` 已手动验证，但未加入 `make test-e2e`（需要 Docker-in-Docker） |
-| Docker token 缓存非持久化           | 低     | 重启后丢失，影响首次请求延迟（~1s），非功能性问题                           |
+| 问题                              | 严重度 | 说明                                                                  |
+| --------------------------------- | ------ | --------------------------------------------------------------------- |
+| i18n key 无编译时校验             | 低     | en.ts 与 zh.ts 目前同步（478 key），但缺少自动检查机制                |
+| Docker Registry E2E 需手动 opt-in | 低     | `test-docker-docker` 需 dind/特权，默认不进 all       |
+| Docker token 缓存非持久化         | 低     | 重启后丢失，影响首次请求延迟（~1s），非功能性问题                     |
+| Security.tsx / Monitor.tsx 偏大   | 低     | 单文件 704 / 505 行，4 合 1 功能，可按 tab 拆但 ROI 低                |
+| 前端 Pro 路由无侧栏锁标识         | 低     | 免费用户点 Audit/Rules/Security/Projects 才看到 402，应该侧栏显示锁   |
 
 ### 11.5 竞品对比定位
 
@@ -1113,7 +1120,8 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 1. ~~修复 cache manager 大文件内存问题~~ ✅ 已完成（`countingReader` 流式写入）
 2. ~~Docker Registry 代理完善~~ ✅ 已完成（`docker pull` 验证通过，修复 Cloudflare UA 拦截）
-3. ~~端到端测试~~ ✅ 已完成（Docker 冒烟测试：pip/npm/go/apt 4/4 通过，`make test-e2e`）
+3. ~~端到端测试~~ ✅ 已完成（**12 生态 Makefile-driven Docker E2E**，`make test-docker-all` 一键串跑；Docker Registry 单独 `make test-docker-docker` opt-in）
+4. ~~修复 fresh clone 不可 build 的 P0 bug~~ ✅ 已完成（commit a647104，rescue `internal/server/server.go` + 删 dead copy + 修 .gitignore 过宽规则）
 
 **P1（应该做）：**
 
