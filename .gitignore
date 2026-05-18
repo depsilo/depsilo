@@ -1,6 +1,7 @@
 # Build
 bin/
 web/dist/
+/depsilo
 
 # Runtime data
 data/
