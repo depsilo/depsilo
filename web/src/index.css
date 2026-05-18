@@ -386,8 +386,10 @@ body { margin: 0; }
     radial-gradient(720px 320px at 88% -8%,  oklch(0.72 0.12 210 / 0.045), transparent 60%);
 }
 
+@layer utilities {
+  :where(.grad-ring) { position: relative; }
+}
 .grad-ring {
-  position: relative;
   background: var(--bg-card);
   border-radius: inherit;
 }
@@ -405,8 +407,8 @@ body { margin: 0; }
   pointer-events: none;
 }
 
-.aurora-glow {
-  position: relative;
+@layer utilities {
+  :where(.aurora-glow) { position: relative; }
 }
 .aurora-glow::after {
   content: '';
@@ -419,8 +421,8 @@ body { margin: 0; }
   pointer-events: none;
 }
 
-.dot-halo {
-  position: relative;
+@layer utilities {
+  :where(.dot-halo) { position: relative; }
 }
 .dot-halo::before {
   content: '';
