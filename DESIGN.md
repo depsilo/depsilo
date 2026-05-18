@@ -503,6 +503,7 @@ Depsilo 使用蓝调多层阴影系统，全部走 token，**不要写裸 box-sh
 | `--text` 由 `#0a0a0a` 改为 `#061b31` 深海军（含整套 muted/soft/subtle 调成 slate 系列） | 2026-05-15 | 纯灰黑显冷漠；深海军是 fintech 标志色，文字层级整体调成 slate 家族后温度更统一 |
 | Admin topbar bottom 用 `.aurora-rim-bottom` 替代 `border-bottom` | 2026-05-15 | 裸 border 像静态 chrome；1px violet→cyan 渐变线（55% 不透明）让 admin 与 Portal 的品牌发生一次轻接触，不影响工具气质 |
 | 所有设 `position` 的自定义类必须 `@layer utilities + :where()` | 2026-05-18 | 未分层的 `.aurora-rim-bottom { position: relative }` 静默覆盖 Tailwind 的 `.fixed`，admin topbar 退回 relative → 宽度 1060→1280 → 触发横向滚动。同型修复扩展到 `.grad-ring` / `.aurora-glow` / `.dot-halo`，见 §13 |
+| 三处版本号统一到 `version.Version`，pill compact 显示（v0.3.0+dev / hover 看完整） | 2026-05-18 | Portal `v2.4.1`、Admin `v0.1`、backend `0.1.0` 各写各的；改为后端 ldflags 注入 git describe，前后端共用 `/api/v1/stats` query。Release tag 必须用 `vX.Y.Z` 形式，详见 CONTRIBUTING.md「Releasing」 |
 
 ---
 

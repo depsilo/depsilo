@@ -97,6 +97,48 @@ Describe the problem you're trying to solve, not just the solution you want. Thi
 - Use functional components with hooks
 - API calls go through `src/lib/api.ts`, not directly in components
 
+## Releasing
+
+The version pill on Portal and Admin headers, the `depsilo version`
+subcommand, and `/api/v1/stats` all derive their value from
+`internal/version.Version`, populated at build time via `-ldflags`
+from `git describe`.
+
+**Release tags MUST use the `vX.Y.Z` semver form** (e.g. `v0.3.0`,
+`v1.2.3-rc1`). Two reasons:
+
+1. The Makefile runs `git describe --tags --match 'v*'` — any tag
+   without a leading `v` is invisible to the version pipeline. Pushing
+   a `0.3.0` or `release-0.3.0` or `portal-redesign-complete` tag
+   silently falls back to the previous semver tag, so the UI keeps
+   showing the old version until you re-tag.
+2. The frontend `formatVersion()` helper strips the leading `v` from
+   semver values and re-prepends it, normalizing the pill to `v0.3.0`.
+   Tags with non-numeric leading characters bypass this and render raw.
+
+### Cutting a release
+
+```bash
+# 1. Make sure you're on main with a clean tree.
+git checkout main && git pull && git status
+
+# 2. Tag with leading 'v'.
+git tag v0.3.0
+git push origin v0.3.0
+
+# 3. Build — VERSION is auto-derived from the tag.
+make build
+
+# 4. Verify.
+./bin/depsilo version
+# Depsilo 0.3.0 (commit: <hash>, built: <iso-date>)
+```
+
+Between releases, `git describe` outputs something like
+`v0.3.0-12-gabc1234-dirty` — the version pill displays this as
+`v0.3.0+dev` (hover for the full string). That is the intended
+"in-progress build" indicator.
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). By participating, you are expected to uphold this code.
