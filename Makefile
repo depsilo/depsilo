@@ -1,5 +1,8 @@
 .PHONY: build run run-pro dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-e2e test-clean clean lint frontend help \
-	test-docker-pip test-docker-apt test-docker \
+	test-docker-pypi test-docker-apt test-docker-npm test-docker-go test-docker-cargo \
+	test-docker-maven test-docker-rubygems test-docker-composer test-docker-nuget \
+	test-docker-conda test-docker-cran test-docker-helm test-docker-docker \
+	test-docker-all test-docker \
 	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test
 
 # ─── 变量 ─────────────────────────────────────
@@ -129,40 +132,121 @@ test-apt: dev                   ## 通过代理获取 APT 元数据（端到端�
 	@echo "=== APT cached files ==="
 	@find data/cache/apt -type f 2>/dev/null | head -5 || echo "(no cache yet)"
 
-test-docker-pip: dev            ## Docker 环境测试 pip 通过代理安装 opencv
-	@echo ""
-	@echo "=== Docker pip test (opencv via proxy) ==="
-	docker build \
-		--no-cache \
-		--build-arg PIP_INDEX_URL=http://$(HOST_IP):$(PORT)/pypi/simple/ \
+# ─── Per-ecosystem Docker E2E ─────────────────
+# Each target builds a tiny ecosystem-specific image whose RUN steps
+# exercise the real client (pip / npm / mvn / etc.) against the running
+# Depsilo. The Dockerfiles live under testground/docker-<eco>/.
+#
+# Layout note: each target depends on `dev` (background Depsilo).
+# HOST_IP is the docker0 gateway so containers can reach the host.
+
+DEPSILO_URL := http://$(HOST_IP):$(PORT)
+DOCKER_BUILD_ARGS := --no-cache --progress=plain
+
+test-docker-pypi: dev           ## E2E: pip install requests through proxy
+	@echo "=== [pypi] pip install requests ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg PIP_INDEX_URL=$(DEPSILO_URL)/pypi/simple/ \
 		--build-arg PIP_TRUSTED_HOST=$(HOST_IP) \
-		--progress=plain \
-		-t depsilo-test-pip \
-		$(TEST_DIR)/docker-pip
-	@echo ""
-	@echo ">>> PASS: opencv installed successfully via proxy"
+		-t depsilo-test-pypi $(TEST_DIR)/docker-pypi
 
-test-docker-apt: dev            ## Docker 环境测试 apt 通过代理安装包
-	@echo ""
-	@echo "=== Docker apt test (curl/wget/jq via proxy) ==="
-	docker build \
-		--no-cache \
-		--build-arg APT_MIRROR=http://$(HOST_IP):$(PORT)/apt \
-		--progress=plain \
-		-t depsilo-test-apt \
-		$(TEST_DIR)/docker-apt
-	@echo ""
-	@echo ">>> PASS: apt packages installed successfully via proxy"
+test-docker-apt: dev            ## E2E: apt install curl/wget/jq through proxy
+	@echo "=== [apt] apt install ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg APT_MIRROR=$(DEPSILO_URL)/apt \
+		-t depsilo-test-apt $(TEST_DIR)/docker-apt
 
-test-docker: test-docker-pip test-docker-apt  ## 运行全部 Docker 代理测试
+test-docker-npm: dev            ## E2E: npm install lodash through proxy
+	@echo "=== [npm] npm install lodash ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg NPM_REGISTRY=$(DEPSILO_URL)/npm/ \
+		-t depsilo-test-npm $(TEST_DIR)/docker-npm
 
-test-e2e:                       ## Docker 冒烟测试（pip/npm/go/apt 端到端）
-	docker compose -f tests/e2e/docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner
-	docker compose -f tests/e2e/docker-compose.e2e.yml down -v
+test-docker-go: dev             ## E2E: go get golang.org/x/text through proxy
+	@echo "=== [go] go get x/text ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg GOPROXY=$(DEPSILO_URL)/go \
+		-t depsilo-test-go $(TEST_DIR)/docker-go
 
-test-clean:                     ## 清理测试环境
+test-docker-cargo: dev          ## E2E: cargo fetch serde through proxy
+	@echo "=== [cargo] cargo fetch serde ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg CARGO_REGISTRY=$(DEPSILO_URL)/crates/ \
+		-t depsilo-test-cargo $(TEST_DIR)/docker-cargo
+
+test-docker-maven: dev          ## E2E: mvn fetch guava through proxy
+	@echo "=== [maven] mvn dependency:get guava ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg MAVEN_MIRROR=$(DEPSILO_URL)/maven \
+		-t depsilo-test-maven $(TEST_DIR)/docker-maven
+
+test-docker-rubygems: dev       ## E2E: gem install rake through proxy
+	@echo "=== [rubygems] gem install rake ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg RUBYGEMS_MIRROR=$(DEPSILO_URL)/rubygems \
+		-t depsilo-test-rubygems $(TEST_DIR)/docker-rubygems
+
+test-docker-composer: dev       ## E2E: composer require monolog through proxy
+	@echo "=== [composer] composer require monolog ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg COMPOSER_MIRROR=$(DEPSILO_URL)/composer \
+		-t depsilo-test-composer $(TEST_DIR)/docker-composer
+
+test-docker-nuget: dev          ## E2E: dotnet add Newtonsoft.Json through proxy
+	@echo "=== [nuget] dotnet add Newtonsoft.Json ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg NUGET_INDEX=$(DEPSILO_URL)/nuget/v3/index.json \
+		-t depsilo-test-nuget $(TEST_DIR)/docker-nuget
+
+test-docker-conda: dev          ## E2E: conda install requests through proxy
+	@echo "=== [conda] conda install requests ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg CONDA_CHANNEL=$(DEPSILO_URL)/conda \
+		-t depsilo-test-conda $(TEST_DIR)/docker-conda
+
+test-docker-cran: dev           ## E2E: R install.packages('jsonlite') through proxy
+	@echo "=== [cran] R install.packages('jsonlite') ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg CRAN_MIRROR=$(DEPSILO_URL)/cran \
+		-t depsilo-test-cran $(TEST_DIR)/docker-cran
+
+test-docker-helm: dev           ## E2E: helm repo add + index.yaml fetch through proxy
+	@echo "=== [helm] helm repo add + update ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg HELM_REPO_URL=$(DEPSILO_URL)/helm \
+		-t depsilo-test-helm $(TEST_DIR)/docker-helm
+
+test-docker-docker: dev         ## E2E: docker pull alpine through proxy (dind, opt-in)
+	@echo "=== [docker] docker pull alpine (dind) ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg DOCKER_REGISTRY_HOST=$(HOST_IP):$(PORT) \
+		-t depsilo-test-docker $(TEST_DIR)/docker-docker
+	docker run --rm --privileged depsilo-test-docker
+
+# Twelve ecosystems by default. Docker registry is opt-in (requires dind) — run
+# `make test-docker-docker` separately when needed.
+TEST_DOCKER_ALL_ECOS := pypi apt npm go cargo maven rubygems composer nuget conda cran helm
+
+test-docker-all: dev            ## E2E: run all 12 non-docker ecosystems sequentially
+	@echo "=== Running test-docker-all (12 ecosystems) ==="
+	@failed=""; for eco in $(TEST_DOCKER_ALL_ECOS); do \
+		$(MAKE) --no-print-directory test-docker-$$eco || failed="$$failed $$eco"; \
+	done; \
+	if [ -n "$$failed" ]; then \
+		echo ""; echo ">>> FAILED:$$failed"; exit 1; \
+	else \
+		echo ""; echo ">>> ALL 12 ECOSYSTEMS PASSED"; \
+	fi
+
+test-docker: test-docker-all    ## Alias for test-docker-all
+
+test-e2e: test-docker-all       ## Alias: end-to-end test all 12 non-docker ecosystems
+
+test-clean:                     ## 清理测试环境（venv + Docker e2e images）
 	rm -rf $(TEST_DIR)/.venv
-	-docker rmi depsilo-test-pip depsilo-test-apt 2>/dev/null
+	-for eco in $(TEST_DOCKER_ALL_ECOS) docker; do \
+		docker rmi depsilo-test-$$eco 2>/dev/null || true; \
+	done
 	@echo ">>> test env removed"
 
 # ─── Docker ───────────────────────────────────
