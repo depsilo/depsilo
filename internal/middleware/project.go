@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
 )
 
@@ -96,12 +96,12 @@ func recordProjectDownload(database *gorm.DB, projectID uint, c *gin.Context) {
 		return
 	}
 
-	if !cache.IsPackageFile(ecosystem, cacheKey) {
+	if !packagekey.IsPackageFile(ecosystem, cacheKey) {
 		return
 	}
 
-	name := cache.ExtractPackageName(ecosystem, cacheKey)
-	version := cache.ExtractPackageVersion(ecosystem, cacheKey)
+	name := packagekey.ExtractName(ecosystem, cacheKey)
+	version := packagekey.ExtractVersion(ecosystem, cacheKey)
 	if name == "" {
 		return
 	}

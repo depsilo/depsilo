@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/packagekey"
 )
 
 // Middleware returns a Gin middleware that checks package rules before proxying.
@@ -104,9 +104,9 @@ func extractPackageFromPath(ecosystem, path string) string {
 		// Hard to extract from path alone, skip for now
 		return ""
 	default:
-		// For others, use cache.ExtractPackageName with a synthetic key
+		// For others, use packagekey.ExtractName with a synthetic key
 		key := strings.TrimPrefix(path, "/")
-		return cache.ExtractPackageName(ecosystem, key)
+		return packagekey.ExtractName(ecosystem, key)
 	}
 	return ""
 }

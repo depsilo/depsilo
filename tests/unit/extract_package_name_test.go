@@ -3,7 +3,7 @@ package unit
 import (
 	"testing"
 
-	"depsilo/internal/cache"
+	"depsilo/internal/adapter/packagekey"
 )
 
 func TestExtractPackageName_PyPI(t *testing.T) {
@@ -16,7 +16,7 @@ func TestExtractPackageName_PyPI(t *testing.T) {
 		{"pypi/files/packages/ab/cd/Flask-2.0.0-py3-none-any.whl", "Flask"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("pypi", tt.key)
+		got := packagekey.ExtractName("pypi", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(pypi, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -34,7 +34,7 @@ func TestExtractPackageName_Npm(t *testing.T) {
 		{"npm/@babel/core/-/core-7.24.0.tgz", "@babel/core"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("npm", tt.key)
+		got := packagekey.ExtractName("npm", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(npm, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -51,7 +51,7 @@ func TestExtractPackageName_Go(t *testing.T) {
 		{"go/github.com/test/mod/@latest", "github.com/test/mod"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("go", tt.key)
+		got := packagekey.ExtractName("go", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(go, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -67,7 +67,7 @@ func TestExtractPackageName_Cargo(t *testing.T) {
 		{"cargo/index/se/rd/serde", "serde"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("cargo", tt.key)
+		got := packagekey.ExtractName("cargo", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(cargo, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -83,7 +83,7 @@ func TestExtractPackageName_APT(t *testing.T) {
 		{"apt/ubuntu/dists/jammy/InRelease", "ubuntu"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("apt", tt.key)
+		got := packagekey.ExtractName("apt", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(apt, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -92,7 +92,7 @@ func TestExtractPackageName_APT(t *testing.T) {
 
 func TestExtractPackageName_Maven(t *testing.T) {
 	key := "maven/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar"
-	got := cache.ExtractPackageName("maven", key)
+	got := packagekey.ExtractName("maven", key)
 	if got != "commons-lang3" {
 		t.Errorf("ExtractPackageName(maven, ...) = %q, want commons-lang3", got)
 	}
@@ -107,7 +107,7 @@ func TestExtractPackageName_RubyGems(t *testing.T) {
 		{"rubygems/info/rails", "rails"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("rubygems", tt.key)
+		got := packagekey.ExtractName("rubygems", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(rubygems, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -124,7 +124,7 @@ func TestExtractPackageName_Composer(t *testing.T) {
 		{"composer/dist/monolog/monolog/abc123.zip", "monolog/monolog"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("composer", tt.key)
+		got := packagekey.ExtractName("composer", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(composer, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -140,7 +140,7 @@ func TestExtractPackageName_NuGet(t *testing.T) {
 		{"nuget/v3/registration/newtonsoft.json/index.json", "newtonsoft.json"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("nuget", tt.key)
+		got := packagekey.ExtractName("nuget", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(nuget, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -149,7 +149,7 @@ func TestExtractPackageName_NuGet(t *testing.T) {
 
 func TestExtractPackageName_Conda(t *testing.T) {
 	key := "conda/pkgs/main/linux-64/numpy-1.24.0-py39h.tar.bz2"
-	got := cache.ExtractPackageName("conda", key)
+	got := packagekey.ExtractName("conda", key)
 	if got != "numpy" {
 		t.Errorf("ExtractPackageName(conda, ...) = %q, want numpy", got)
 	}
@@ -157,7 +157,7 @@ func TestExtractPackageName_Conda(t *testing.T) {
 
 func TestExtractPackageName_CRAN(t *testing.T) {
 	key := "cran/src/contrib/ggplot2_3.4.0.tar.gz"
-	got := cache.ExtractPackageName("cran", key)
+	got := packagekey.ExtractName("cran", key)
 	if got != "ggplot2" {
 		t.Errorf("ExtractPackageName(cran, ...) = %q, want ggplot2", got)
 	}
@@ -165,7 +165,7 @@ func TestExtractPackageName_CRAN(t *testing.T) {
 
 func TestExtractPackageName_Helm(t *testing.T) {
 	key := "helm/nginx-15.0.0.tgz"
-	got := cache.ExtractPackageName("helm", key)
+	got := packagekey.ExtractName("helm", key)
 	if got != "nginx" {
 		t.Errorf("ExtractPackageName(helm, ...) = %q, want nginx", got)
 	}
@@ -183,7 +183,7 @@ func TestExtractPackageName_Docker(t *testing.T) {
 		{"docker/dockerhub/tags/library/nginx/list", "library/nginx"},
 	}
 	for _, tt := range tests {
-		got := cache.ExtractPackageName("docker", tt.key)
+		got := packagekey.ExtractName("docker", tt.key)
 		if got != tt.expected {
 			t.Errorf("ExtractPackageName(docker, %q) = %q, want %q", tt.key, got, tt.expected)
 		}
@@ -191,7 +191,7 @@ func TestExtractPackageName_Docker(t *testing.T) {
 }
 
 func TestExtractPackageName_Unknown(t *testing.T) {
-	got := cache.ExtractPackageName("unknown", "some/key")
+	got := packagekey.ExtractName("unknown", "some/key")
 	if got != "" {
 		t.Errorf("ExtractPackageName(unknown, ...) = %q, want empty", got)
 	}

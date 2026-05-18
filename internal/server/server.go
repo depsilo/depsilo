@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"depsilo/internal/adapter/maven"
 	"depsilo/internal/adapter/npm"
 	"depsilo/internal/adapter/nuget"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/adapter/pypi"
 	"depsilo/internal/adapter/rubygems"
 	"depsilo/internal/api"
@@ -326,7 +327,7 @@ func backfillPackageNames(database *gorm.DB) {
 	}
 	zap.L().Info("backfilling package names", zap.Int("count", len(entries)))
 	for _, e := range entries {
-		name := cache.ExtractPackageName(e.AdapterType, e.Key)
+		name := packagekey.ExtractName(e.AdapterType, e.Key)
 		if name != "" {
 			database.Model(&e).Update("package_name", name)
 		}

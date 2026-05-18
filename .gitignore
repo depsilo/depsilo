@@ -32,6 +32,6 @@ testground/.venv/
 stitch/
 stitch_landingpage/
 logo/
-server
-depsilo-desktop
+/server
+/depsilo-desktop
 .gstack/
