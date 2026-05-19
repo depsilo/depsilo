@@ -2,11 +2,19 @@ FROM continuumio/miniconda3
 
 ARG CONDA_CHANNEL
 
-# Point all channels through Depsilo. Tsinghua-style layout: <root>/pkgs/main and <root>/cloud/conda-forge.
-RUN conda config --remove-key channels 2>/dev/null || true \
-    && conda config --add channels "${CONDA_CHANNEL}/pkgs/main" \
-    && conda config --set show_channel_urls yes \
+# Tuna-style upstream layout: <root>/pkgs/main/<subdir>/repodata.json
+#
+# Two tricky bits:
+#  1. conda defaults to fetching repodata.json.zst (zstd-compressed),
+#     which the upstream may not provide → 404. Disable.
+#  2. `conda config --add channels <URL>` has surprising path semantics
+#     (a `pkgs/main` suffix gets dropped in subdir composition for some
+#     conda versions). Use `-c <URL> --override-channels` on the install
+#     command instead — it bypasses .condarc entirely.
+RUN conda config --set repodata_use_zst false \
     && conda config --set ssl_verify false
 
-RUN conda install -y -n base requests=2.31 \
+RUN conda install -y --override-channels \
+    -c "${CONDA_CHANNEL}/pkgs/main" \
+    -n base requests \
     && python -c "import requests; print('conda: requests', requests.__version__, 'OK')"
