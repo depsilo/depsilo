@@ -247,3 +247,27 @@ func TestURLRewrite_NuGet_InvalidJSON(t *testing.T) {
 		t.Error("expected error for invalid JSON")
 	}
 }
+
+func TestURLRewrite_NuGet_DropsRepositorySignatures(t *testing.T) {
+	// RepositorySignatures resources must be dropped, not rewritten —
+	// NuGet's NU1301 enforces HTTPS on them and Depsilo serves plain HTTP.
+	input := `{"version":"3.0.0","resources":[
+		{"@id":"https://api.nuget.org/v3/search","@type":"SearchQueryService"},
+		{"@id":"https://api.nuget.org/v3-index/repository-signatures/4.7.0/index.json","@type":"RepositorySignatures/4.7.0"},
+		{"@id":"https://api.nuget.org/v3-index/repository-signatures/5.0.0/index.json","@type":"RepositorySignatures/5.0.0"}
+	]}`
+	result, err := nugetAdapter.RewriteServiceIndex([]byte(input), "http://localhost:8080")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(result), "RepositorySignatures") {
+		t.Errorf("RepositorySignatures resource should be filtered out: %s", result)
+	}
+	if strings.Contains(string(result), "repository-signatures") {
+		t.Errorf("repository-signatures URL should be gone: %s", result)
+	}
+	// Other resources must still rewrite normally.
+	if !strings.Contains(string(result), "http://localhost:8080/nuget/v3/search") {
+		t.Errorf("non-signature resources should still rewrite: %s", result)
+	}
+}
