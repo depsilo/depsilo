@@ -5,8 +5,11 @@ ARG COMPOSER_MIRROR
 ENV COMPOSER_ALLOW_SUPERUSER=1
 WORKDIR /test
 
-# Override the default entrypoint to allow RUN commands
-RUN composer config -g repo.packagist composer "${COMPOSER_MIRROR}" \
+# Override the default entrypoint to allow RUN commands.
+# secure-http must be disabled because Depsilo is served over plain HTTP
+# from the docker0 gateway; composer otherwise refuses non-https sources.
+RUN composer config -g secure-http false \
+    && composer config -g repo.packagist composer "${COMPOSER_MIRROR}" \
     && composer init --name "test/test" --no-interaction \
     && composer require --no-progress --no-interaction monolog/monolog:^3.0
 
