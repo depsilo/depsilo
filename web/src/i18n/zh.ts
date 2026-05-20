@@ -130,6 +130,7 @@ const zh = {
       warmupPlaceholder: 'numpy\nrequests>=2.0\ntorch\npandas',
       warmupStart: '开始预热',
       warmupLoading: '预热中...',
+      warmupStarted: '已启动预热 {{count}} 个包',
     },
 
     // Upstreams
@@ -280,6 +281,28 @@ const zh = {
       importDesc: '上传 OSV JSON 文件',
       importSuccess: '条漏洞已导入',
       importFormat: 'OSV JSON 格式',
+
+      // Suggestions tab
+      block: '阻止',
+      proposedVersion: '建议版本',
+      noSuggestions: '暂无建议',
+
+      // Vulnerabilities list
+      published: '公开日期',
+      packageSearch: '包名搜索',
+      searchPlaceholder: '搜索包名...',
+      showingResults: '显示 {{from}} - {{to}} / 共 {{total}}',
+
+      // Policies tab
+      ecosystemPolicies: '生态策略',
+      cvssThreshold: 'CVSS 阈值',
+
+      // Offline import section
+      offlineImport: '离线导入',
+      offlineImportDesc: '上传 OSV 数据文件，离线模式导入漏洞数据。',
+      dropOrClick: '拖放文件或点击上传',
+      importing: '导入中...',
+      importError: '导入失败',
 
       proRequired: '包安全功能需要 Depsilo Pro',
       proDesc: '监控缓存包的已知漏洞，自动拦截高危版本。',
@@ -506,6 +529,32 @@ const zh = {
       healthy: '健康',
       degraded: '性能下降',
       failed: '故障',
+    },
+
+    // Setup Wizard
+    setup: {
+      welcome_description: '几分钟内启动你的依赖代理。',
+      get_started: '开始',
+      basic_settings: '基础设置',
+      port: '端口',
+      storage_path: '存储路径',
+      select_ecosystems: '选择生态',
+      select_ecosystems_hint: '选择你要通过 Depsilo 代理的包管理生态。',
+      configure_upstreams: '配置上游源',
+      upstreams_count: '个上游',
+      upstream_name: '上游名称',
+      upstream_url: '上游 URL',
+      priority: '优先级',
+      add_upstream: '添加上游',
+      restarting: '正在重启服务',
+      restarting_hint: '页面将在几秒钟后自动刷新。',
+      complete: '完成',
+      enabled_ecosystems: '已启用的生态',
+      saving: '保存中...',
+      save_and_start: '保存并启动',
+      step_of: '第 {{current}} / {{total}} 步',
+      next: '下一步',
+      prev: '上一步',
     },
   },
 }

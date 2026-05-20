@@ -130,6 +130,7 @@ const en = {
       warmupPlaceholder: 'numpy\nrequests>=2.0\ntorch\npandas',
       warmupStart: 'Start Warmup',
       warmupLoading: 'Warming up...',
+      warmupStarted: 'Started warming up {{count}} packages',
     },
 
     // Upstreams
@@ -280,6 +281,28 @@ const en = {
       importDesc: 'Upload OSV JSON file',
       importSuccess: 'vulnerabilities imported',
       importFormat: 'OSV JSON format',
+
+      // Suggestions tab
+      block: 'Block',
+      proposedVersion: 'Proposed version',
+      noSuggestions: 'No suggestions',
+
+      // Vulnerabilities list
+      published: 'Published',
+      packageSearch: 'Package search',
+      searchPlaceholder: 'Search packages...',
+      showingResults: 'Showing {{from}}-{{to}} of {{total}}',
+
+      // Policies tab
+      ecosystemPolicies: 'Ecosystem policies',
+      cvssThreshold: 'CVSS threshold',
+
+      // Offline import section
+      offlineImport: 'Offline import',
+      offlineImportDesc: 'Upload an OSV data file to import vulnerabilities offline.',
+      dropOrClick: 'Drop file or click to upload',
+      importing: 'Importing...',
+      importError: 'Import failed',
 
       proRequired: 'Package Security requires Depsilo Pro',
       proDesc: 'Monitor cached packages for known CVEs, auto-block vulnerable versions.',
@@ -506,6 +529,32 @@ const en = {
       healthy: 'healthy',
       degraded: 'degraded',
       failed: 'failed',
+    },
+
+    // Setup Wizard
+    setup: {
+      welcome_description: 'Spin up your dependency proxy in minutes.',
+      get_started: 'Get started',
+      basic_settings: 'Basic settings',
+      port: 'Port',
+      storage_path: 'Storage path',
+      select_ecosystems: 'Select ecosystems',
+      select_ecosystems_hint: 'Choose which package ecosystems Depsilo should proxy.',
+      configure_upstreams: 'Configure upstreams',
+      upstreams_count: 'upstreams',
+      upstream_name: 'Upstream name',
+      upstream_url: 'Upstream URL',
+      priority: 'Priority',
+      add_upstream: 'Add upstream',
+      restarting: 'Restarting service',
+      restarting_hint: 'The page will reload automatically in a few seconds.',
+      complete: 'Complete',
+      enabled_ecosystems: 'Enabled ecosystems',
+      saving: 'Saving...',
+      save_and_start: 'Save and start',
+      step_of: 'Step {{current}} of {{total}}',
+      next: 'Next',
+      prev: 'Previous',
     },
   },
 }
