@@ -475,6 +475,7 @@ const zh = {
       ecosystemBreakdown: '生态分布',
       proRequired: '项目管理需要 Depsilo Pro',
       proDesc: '按项目追踪依赖使用，生成 SBOM 清单。',
+      upgrade: '升级到 Pro',
     },
 
     // SBOM

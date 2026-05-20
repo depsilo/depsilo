@@ -11,6 +11,7 @@ import ModalV2 from '@/components/Modal'
 import DataTableV2 from '@/components/DataTable'
 import SelectV2 from '@/components/Select'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 
 const ECOSYSTEM_OPTIONS = [
   { value: '', label: 'All' },
@@ -159,20 +160,12 @@ export default function ProjectsV2() {
   const axiosError = error as any
   if (axiosError?.response?.status === 402) {
     return (
-      <div className="space-y-6">
-        <div className="text-center py-12 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}>
-          <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center justify-center w-14 h-14 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.08)' }}>
-              <Icon name="folder_managed" size="lg" style={{ color: 'var(--brand)' }} />
-            </div>
-            <h3 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{t('projects.proRequired')}</h3>
-            <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>{t('projects.proDesc')}</p>
-            <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer">
-              <ButtonV2>{t('rules.upgrade')}</ButtonV2>
-            </a>
-          </div>
-        </div>
-      </div>
+      <ProRequiredCallout
+        icon="folder_managed"
+        title={t('projects.proRequired')}
+        description={t('projects.proDesc')}
+        upgradeLabel={t('projects.upgrade')}
+      />
     )
   }
 

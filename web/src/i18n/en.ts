@@ -475,6 +475,7 @@ const en = {
       ecosystemBreakdown: 'Ecosystem Breakdown',
       proRequired: 'Projects require Depsilo Pro',
       proDesc: 'Track dependencies per project and generate SBOM reports.',
+      upgrade: 'Upgrade to Pro',
     },
 
     // SBOM

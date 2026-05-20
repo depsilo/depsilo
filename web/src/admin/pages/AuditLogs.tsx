@@ -7,6 +7,7 @@ import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
+import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
 
@@ -89,18 +90,12 @@ export default function AuditLogsV2() {
   const axiosError = error as any
   if (axiosError?.response?.status === 402) {
     return (
-      <div className="text-center py-16 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}>
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center justify-center w-14 h-14 rounded-[8px]" style={{ background: 'rgba(83,58,253,0.08)' }}>
-            <Icon name="lock" size="lg" style={{ color: 'var(--brand)' }} />
-          </div>
-          <h3 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{t('audit.proRequired')}</h3>
-          <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>{t('audit.proDesc')}</p>
-          <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer">
-            <ButtonV2>{t('audit.upgrade')}</ButtonV2>
-          </a>
-        </div>
-      </div>
+      <ProRequiredCallout
+        icon="lock"
+        title={t('audit.proRequired')}
+        description={t('audit.proDesc')}
+        upgradeLabel={t('audit.upgrade')}
+      />
     )
   }
 
