@@ -54,10 +54,13 @@ func RunQuery(database *gorm.DB, q Query) (*QueryResult, error) {
 		query = query.Where("cache_result = ?", q.CacheResult)
 	}
 	if !q.StartTime.IsZero() {
-		query = query.Where("created_at >= ?", q.StartTime)
+		// Compare via datetime() so SQLite normalises both sides to UTC
+		// regardless of how they were originally stored (with offset, with Z,
+		// or naive). Plain string compare would mis-rank "...+08:00" vs "...Z".
+		query = query.Where("datetime(created_at) >= datetime(?)", q.StartTime.UTC())
 	}
 	if !q.EndTime.IsZero() {
-		query = query.Where("created_at <= ?", q.EndTime)
+		query = query.Where("datetime(created_at) <= datetime(?)", q.EndTime.UTC())
 	}
 
 	var total int64
@@ -93,10 +96,10 @@ func Export(database *gorm.DB, q Query) ([]byte, error) {
 		query = query.Where("cache_result = ?", q.CacheResult)
 	}
 	if !q.StartTime.IsZero() {
-		query = query.Where("created_at >= ?", q.StartTime)
+		query = query.Where("datetime(created_at) >= datetime(?)", q.StartTime.UTC())
 	}
 	if !q.EndTime.IsZero() {
-		query = query.Where("created_at <= ?", q.EndTime)
+		query = query.Where("datetime(created_at) <= datetime(?)", q.EndTime.UTC())
 	}
 
 	var items []db.AuditLog
