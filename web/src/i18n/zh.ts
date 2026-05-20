@@ -252,6 +252,9 @@ const zh = {
       scanStarted: '扫描已启动',
       scanConflict: '扫描正在进行中',
       neverScanned: '从未扫描',
+      scanStatus: '扫描状态',
+      never: '从未扫描',
+      severityDistribution: '严重性分布',
 
       osvId: 'OSV ID',
       cvssScore: 'CVSS',

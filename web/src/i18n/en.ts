@@ -252,6 +252,9 @@ const en = {
       scanStarted: 'Scan started',
       scanConflict: 'Scan already in progress',
       neverScanned: 'Never',
+      scanStatus: 'Scan Status',
+      never: 'Never',
+      severityDistribution: 'Severity Distribution',
 
       osvId: 'OSV ID',
       cvssScore: 'CVSS',
