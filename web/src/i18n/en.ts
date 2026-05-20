@@ -285,7 +285,6 @@ const en = {
       // Suggestions tab
       block: 'Block',
       proposedVersion: 'Proposed version',
-      noSuggestions: 'No suggestions',
 
       // Vulnerabilities list
       published: 'Published',

@@ -285,7 +285,6 @@ const zh = {
       // Suggestions tab
       block: '阻止',
       proposedVersion: '建议版本',
-      noSuggestions: '暂无建议',
 
       // Vulnerabilities list
       published: '公开日期',

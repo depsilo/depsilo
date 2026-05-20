@@ -27,34 +27,44 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 WEB_SRC = os.path.join(REPO_ROOT, "web", "src")
 
 
-def parse_locale(path: str) -> set[str]:
-    """Return the set of dot-keyed leaf paths defined in a TS object literal.
+def parse_locale(path: str) -> tuple[set[str], list[tuple[str, int]]]:
+    """Parse the locale TS file and return (defined_keys, duplicates).
 
-    The parser is intentionally naive: it tracks a stack of namespace
-    names by detecting `<word>: {` open lines and `},?` close lines.
-    Leaf entries are `<word>: '...'` (or `"..."`). This is enough for
-    the hand-written zh.ts / en.ts in this repo.
+    `duplicates` is a list of (key_path, line_number) for keys declared
+    more than once within the same namespace — TypeScript catches these
+    at build time (TS1117), but reporting them here turns the lint into
+    a single-stop pre-flight check.
     """
     keys: set[str] = set()
+    duplicates: list[tuple[str, int]] = []
+    # Track keys per parent namespace path to detect siblings with same name.
+    seen_per_ns: dict[tuple[str, ...], set[str]] = {}
     stack: list[str] = []
     with open(path, encoding="utf-8") as f:
-        for line in f:
+        for lineno, line in enumerate(f, start=1):
             stripped = line.rstrip()
-            # close brace pops a namespace
             if re.match(r"^\s*\},?\s*$", stripped):
                 if stack:
                     stack.pop()
                 continue
-            # `key: {`  ->  push namespace
             m = re.match(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*\{\s*$", stripped)
             if m:
-                stack.append(m.group(1))
+                ns = m.group(1)
+                parent = tuple(stack)
+                if ns in seen_per_ns.get(parent, set()):
+                    duplicates.append((".".join(stack + [ns]), lineno))
+                seen_per_ns.setdefault(parent, set()).add(ns)
+                stack.append(ns)
                 continue
-            # `key: '...'`  ->  leaf
             m = re.match(r"""^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*['"]""", stripped)
             if m:
-                keys.add(".".join(stack + [m.group(1)]))
-    return keys
+                k = m.group(1)
+                parent = tuple(stack)
+                if k in seen_per_ns.get(parent, set()):
+                    duplicates.append((".".join(stack + [k]), lineno))
+                seen_per_ns.setdefault(parent, set()).add(k)
+                keys.add(".".join(stack + [k]))
+    return keys, duplicates
 
 
 def strip_wrapper(keys: set[str]) -> set[str]:
@@ -99,8 +109,10 @@ def main() -> int:
         print(f"!! locale files not found under {WEB_SRC}/i18n/", file=sys.stderr)
         return 2
 
-    zh = strip_wrapper(parse_locale(zh_path))
-    en = strip_wrapper(parse_locale(en_path))
+    zh_raw, zh_dups = parse_locale(zh_path)
+    en_raw, en_dups = parse_locale(en_path)
+    zh = strip_wrapper(zh_raw)
+    en = strip_wrapper(en_raw)
     used = collect_used([WEB_SRC])
 
     missing = sorted(set(used.keys()) - zh - en)
@@ -114,6 +126,16 @@ def main() -> int:
     print(f"  used:    {len(used)} distinct dot-keys via t(...)")
     print()
 
+    if zh_dups:
+        print(f"DUPLICATE KEYS IN zh.ts  ({len(zh_dups)}):")
+        for k, ln in zh_dups:
+            print(f"  - {k}  (line {ln})")
+        print()
+    if en_dups:
+        print(f"DUPLICATE KEYS IN en.ts  ({len(en_dups)}):")
+        for k, ln in en_dups:
+            print(f"  - {k}  (line {ln})")
+        print()
     if missing:
         print(f"USED BUT UNDEFINED  ({len(missing)}):")
         for k in missing:
@@ -131,9 +153,9 @@ def main() -> int:
             print(f"  - {k}")
         print()
 
-    if missing or zh_only or en_only:
+    if missing or zh_only or en_only or zh_dups or en_dups:
         return 1
-    print("OK — all keys defined in both locales, all defined keys are used safely.")
+    print("OK — all keys defined in both locales, no duplicates, all defined keys are used safely.")
     return 0
 
 
