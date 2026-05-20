@@ -1,4 +1,4 @@
-.PHONY: build run run-pro dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-e2e test-clean clean lint frontend help \
+.PHONY: build run run-pro dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-e2e test-clean clean lint lint-i18n frontend help \
 	test-docker-pypi test-docker-apt test-docker-npm test-docker-go test-docker-cargo \
 	test-docker-maven test-docker-rubygems test-docker-composer test-docker-nuget \
 	test-docker-conda test-docker-cran test-docker-helm test-docker-docker \
@@ -344,8 +344,11 @@ clean: stop docker-stop         ## 清理所有构建产物、容器和缓存数
 	rm -rf bin/ data/ .dev.log $(PID_FILE)
 	@echo ">>> clean done"
 
-lint:                           ## 代码检查
+lint: lint-i18n                 ## 代码检查 (go vet + i18n audit)
 	go vet ./...
+
+lint-i18n:                      ## 检查 zh.ts/en.ts 与 t() 调用是否一致
+	@python3 scripts/i18n-audit.py
 
 # ─── 帮助 ─────────────────────────────────────
 help:                           ## 显示帮助
