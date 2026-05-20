@@ -26,7 +26,7 @@ func NewTokenHandler(database *gorm.DB) *TokenHandler {
 func (h *TokenHandler) List(c *gin.Context) {
 	var tokens []db.APIToken
 	h.db.Select("id, user_id, name, permissions, expires_at, last_used_at, created_at").
-		Order("created_at DESC").Find(&tokens)
+		Order("datetime(created_at) DESC").Find(&tokens)
 	c.JSON(http.StatusOK, tokens)
 }
 

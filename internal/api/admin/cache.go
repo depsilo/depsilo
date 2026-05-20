@@ -82,11 +82,11 @@ func (h *CacheHandler) Delete(c *gin.Context) {
 }
 
 func (h *CacheHandler) Cleanup(c *gin.Context) {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// Delete expired entries
 	var expired []db.CacheEntry
-	h.db.Where("expires_at < ?", now).Find(&expired)
+	h.db.Where("datetime(expires_at) < datetime(?)", now).Find(&expired)
 
 	deleted := 0
 	for _, entry := range expired {

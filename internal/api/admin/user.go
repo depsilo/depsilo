@@ -22,7 +22,7 @@ func NewUserHandler(database *gorm.DB) *UserHandler {
 func (h *UserHandler) List(c *gin.Context) {
 	var users []db.User
 	h.db.Select("id, username, role, enabled, last_login_at, created_at, updated_at").
-		Order("created_at").Find(&users)
+		Order("datetime(created_at)").Find(&users)
 	c.JSON(http.StatusOK, users)
 }
 

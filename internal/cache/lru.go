@@ -55,7 +55,7 @@ func runLRU(ctx context.Context, storage Storage, database *gorm.DB, maxBytes, t
 
 	// Also clean expired entries first
 	var expired []db.CacheEntry
-	database.Where("expires_at < ?", time.Now()).Find(&expired)
+	database.Where("datetime(expires_at) < datetime(?)", time.Now().UTC()).Find(&expired)
 	for _, entry := range expired {
 		if err := storage.Delete(ctx, entry.StoragePath); err != nil {
 			zap.L().Warn("LRU: failed to delete expired file", zap.String("key", entry.Key), zap.Error(err))

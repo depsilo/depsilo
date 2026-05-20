@@ -60,7 +60,7 @@ func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
 			COALESCE(SUM(CASE WHEN hit = 0 THEN latency_ms ELSE 0 END), 0) AS miss_latency,
 			SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END) AS miss_count`,
 			intervalMin*60, intervalMin*60).
-		Where("created_at >= ?", since).
+		Where("datetime(created_at) >= datetime(?)", since.UTC()).
 		Group("bucket").
 		Order("bucket ASC").
 		Scan(&rows)
@@ -127,7 +127,7 @@ func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) map[string][]gi
 			AVG(CASE WHEN healthy = 1 THEN 1.0 ELSE 0.0 END) AS avg_hp,
 			COUNT(*) AS requests`,
 			latencyIntervalMin*60, latencyIntervalMin*60)).
-		Where("created_at >= ?", since).
+		Where("datetime(created_at) >= datetime(?)", since.UTC()).
 		Group("name, bucket").
 		Order("name, bucket ASC").
 		Scan(&rows)
@@ -185,13 +185,14 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 	var totalRequests, hitCount, missCount int64
 	var bytesSent, bytesSaved int64
 
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ?", todayStart).Count(&totalRequests)
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ? AND hit = ?", todayStart, true).Count(&hitCount)
+	todayStartUTC := todayStart.UTC()
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStartUTC).Count(&totalRequests)
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStartUTC, true).Count(&hitCount)
 	missCount = totalRequests - hitCount
 
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ?", todayStart).
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStartUTC).
 		Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSent)
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ? AND hit = ?", todayStart, true).
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStartUTC, true).
 		Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSaved)
 
 	var hitRate float64

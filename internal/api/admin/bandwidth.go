@@ -51,6 +51,10 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 		end = now
 	}
 
+	// Normalise to UTC for SQL comparison via datetime() — see audit query fix.
+	start = start.UTC()
+	end = end.UTC()
+
 	// Summary: total/hit/miss bytes and counts
 	type summaryRow struct {
 		Hit        bool
@@ -61,7 +65,7 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 	var summaryRows []summaryRow
 	h.db.Model(&db.AccessLog{}).
 		Select("hit, COALESCE(SUM(bytes_sent), 0) as total_bytes, COUNT(*) as count, COALESCE(AVG(latency_ms), 0) as avg_latency").
-		Where("created_at >= ? AND created_at <= ?", start, end).
+		Where("datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)", start, end).
 		Group("hit").Scan(&summaryRows)
 
 	var totalBytes, hitBytes, missBytes, totalRequests, hitRequests, missRequests int64
@@ -95,7 +99,7 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 	var ecoLatencies []ecoLatency
 	h.db.Model(&db.AccessLog{}).
 		Select("adapter_type, hit, AVG(latency_ms) as avg_latency_ms, COUNT(*) as count").
-		Where("created_at >= ? AND created_at <= ?", start, end).
+		Where("datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)", start, end).
 		Group("adapter_type, hit").Scan(&ecoLatencies)
 
 	// Build per-ecosystem latency maps
@@ -139,7 +143,7 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 	var dailyRows []dailyRow
 	h.db.Model(&db.AccessLog{}).
 		Select("DATE(created_at) as date, hit, COALESCE(SUM(bytes_sent), 0) as bytes, COUNT(*) as count").
-		Where("created_at >= ? AND created_at <= ?", start, end).
+		Where("datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)", start, end).
 		Group("date, hit").Order("date").Scan(&dailyRows)
 
 	type dailyPoint struct {
@@ -181,7 +185,7 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 	var ecoRows []ecoRow
 	h.db.Model(&db.AccessLog{}).
 		Select("adapter_type, hit, COALESCE(SUM(bytes_sent), 0) as bytes, COUNT(*) as count, COALESCE(AVG(latency_ms), 0) as avg_latency").
-		Where("created_at >= ? AND created_at <= ?", start, end).
+		Where("datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?)", start, end).
 		Group("adapter_type, hit").Scan(&ecoRows)
 
 	type ecoPoint struct {
@@ -225,7 +229,7 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 	var topPackages []pkgRow
 	h.db.Model(&db.AccessLog{}).
 		Select("package_name, adapter_type as ecosystem, SUM(bytes_sent) as total_bytes, SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END) as hit_bytes, COUNT(*) as count").
-		Where("created_at >= ? AND created_at <= ? AND package_name != ''", start, end).
+		Where("datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?) AND package_name != ''", start, end).
 		Group("package_name, adapter_type").
 		Order("total_bytes DESC").Limit(10).Scan(&topPackages)
 
@@ -239,7 +243,7 @@ func (h *BandwidthHandler) GetReport(c *gin.Context) {
 	var byUpstream []upstreamRow
 	h.db.Model(&db.AccessLog{}).
 		Select("upstream, COALESCE(SUM(bytes_sent), 0) as miss_bytes, COUNT(*) as request_count, COALESCE(AVG(latency_ms), 0) as avg_latency_ms").
-		Where("created_at >= ? AND created_at <= ? AND hit = ? AND upstream != ''", start, end, false).
+		Where("datetime(created_at) >= datetime(?) AND datetime(created_at) <= datetime(?) AND hit = ? AND upstream != ''", start, end, false).
 		Group("upstream").Order("miss_bytes DESC").Scan(&byUpstream)
 
 	c.JSON(http.StatusOK, gin.H{

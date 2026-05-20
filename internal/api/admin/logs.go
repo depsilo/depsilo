@@ -50,7 +50,7 @@ func (h *AccessLogHandler) List(c *gin.Context) {
 	query.Count(&total)
 
 	var logs []db.AccessLog
-	query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&logs)
+	query.Order("datetime(created_at) DESC").Offset(offset).Limit(pageSize).Find(&logs)
 
 	c.JSON(http.StatusOK, gin.H{
 		"total":     total,

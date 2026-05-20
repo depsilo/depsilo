@@ -61,7 +61,7 @@ func (h *LatencyHandler) GetLatencyHistory(c *gin.Context) {
 	h.db.Model(&db.UpstreamLatencyLog{}).
 		Select("created_at as time, latency_ms, healthy").
 		Where("name = ? AND created_at >= ?", upstream.Name, since).
-		Order("created_at ASC").
+		Order("datetime(created_at) ASC").
 		Find(&points)
 
 	c.JSON(http.StatusOK, gin.H{

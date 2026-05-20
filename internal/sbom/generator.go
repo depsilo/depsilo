@@ -61,7 +61,7 @@ func (g *Generator) GenerateSPDX(project *db.Project, packages []db.ProjectPacka
 		DataLicense: "CC0-1.0",
 		SPDXID:      "SPDXRef-DOCUMENT",
 		Name:        project.Slug + "-sbom",
-		Namespace:   fmt.Sprintf("https://depsilo.com/spdx/%s/%s", project.Slug, time.Now().Format("2006-01-02")),
+		Namespace:   fmt.Sprintf("https://depsilo.com/spdx/%s/%s", project.Slug, time.Now().UTC().Format("2006-01-02")),
 		CreationInfo: map[string]interface{}{
 			"created":            now,
 			"creators":           []string{"Tool: Depsilo " + version.Version},
@@ -137,7 +137,7 @@ func (g *Generator) GenerateCycloneDX(project *db.Project, packages []db.Project
 			Component: map[string]interface{}{
 				"type":    "application",
 				"name":    project.Name,
-				"version": "snapshot-" + time.Now().Format("2006-01-02"),
+				"version": "snapshot-" + time.Now().UTC().Format("2006-01-02"),
 			},
 		},
 		Components: make([]cdxComponent, 0, len(packages)),

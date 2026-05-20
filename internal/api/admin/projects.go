@@ -48,7 +48,7 @@ rand.Read(b)
 // List returns all projects.
 func (h *ProjectsHandler) List(c *gin.Context) {
 	var projects []db.Project
-	h.db.Order("created_at DESC").Find(&projects)
+	h.db.Order("datetime(created_at) DESC").Find(&projects)
 
 	type projectItem struct {
 		db.Project

@@ -25,13 +25,13 @@ func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pools map[str
 
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	now := time.Now()
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).UTC()
 
 	var totalRequests, hitCount int64
 	var bytesSent int64
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ?", todayStart).Count(&totalRequests)
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ? AND hit = ?", todayStart, true).Count(&hitCount)
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ?", todayStart).
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStart).Count(&totalRequests)
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStart, true).Count(&hitCount)
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStart).
 		Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSent)
 
 	var hitRate float64
@@ -40,7 +40,7 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 
 	var avgLatency float64
-	h.db.Model(&db.AccessLog{}).Where("created_at >= ?", todayStart).
+	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStart).
 		Select("COALESCE(AVG(latency_ms), 0)").Scan(&avgLatency)
 
 	// Daily stats for the last 7 days
@@ -50,10 +50,10 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		Count       int64  `json:"count"`
 	}
 	var dailyStats []dailyStat
-	sevenDaysAgo := now.AddDate(0, 0, -7)
+	sevenDaysAgo := now.AddDate(0, 0, -7).UTC()
 	h.db.Model(&db.AccessLog{}).
 		Select("DATE(created_at) as date, adapter_type, COUNT(*) as count").
-		Where("created_at >= ?", sevenDaysAgo).
+		Where("datetime(created_at) >= datetime(?)", sevenDaysAgo).
 		Group("date, adapter_type").Order("date").
 		Scan(&dailyStats)
 
@@ -157,7 +157,7 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 			SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END) as misses,
 			COALESCE(SUM(bytes_sent), 0) as bytes_served
 		`).
-		Where("created_at >= ?", startDate).
+		Where("datetime(created_at) >= datetime(?)", startDate.UTC()).
 		Group("DATE(created_at)").
 		Order("date ASC").
 		Scan(&rawPoints)

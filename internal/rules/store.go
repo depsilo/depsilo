@@ -19,7 +19,7 @@ func NewStore(database *gorm.DB) *Store {
 // List returns all package rules ordered by creation time descending.
 func (s *Store) List() ([]db.PackageRule, error) {
 	var rules []db.PackageRule
-	err := s.db.Order("created_at DESC").Find(&rules).Error
+	err := s.db.Order("datetime(created_at) DESC").Find(&rules).Error
 	return rules, err
 }
 

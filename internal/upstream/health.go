@@ -21,7 +21,7 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 	for _, u := range pool.Upstreams() {
 		var logs []db.UpstreamLatencyLog
 		database.Where("name = ? AND healthy = ?", u.Name, true).
-			Order("created_at DESC").
+			Order("datetime(created_at) DESC").
 			Limit(10).
 			Find(&logs)
 
@@ -150,8 +150,8 @@ func StartLatencyLogCleanup(ctx context.Context, database *gorm.DB) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cutoff := time.Now().AddDate(0, 0, -7)
-			database.Where("created_at < ?", cutoff).Delete(&db.UpstreamLatencyLog{})
+			cutoff := time.Now().AddDate(0, 0, -7).UTC()
+			database.Where("datetime(created_at) < datetime(?)", cutoff).Delete(&db.UpstreamLatencyLog{})
 			zap.L().Info("cleaned up old latency logs", zap.Time("cutoff", cutoff))
 		}
 	}

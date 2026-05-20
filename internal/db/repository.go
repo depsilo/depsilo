@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
-	"go.uber.org/zap"
 	"github.com/glebarez/sqlite"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -27,8 +28,14 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("unsupported database driver: %s", driver)
 	}
 
+	// All timestamps go into the DB in UTC. The display layer (frontend
+	// formatTime) converts to local time on render. This avoids SQLite's
+	// lexicographic string comparison silently mis-ranking rows whose
+	// stored zone-suffix differs from the query parameter's zone — the
+	// root cause of the audit-log filter returning empty.
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger:  logger.Default.LogMode(logger.Warn),
+		NowFunc: func() time.Time { return time.Now().UTC() },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)

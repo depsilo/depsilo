@@ -36,7 +36,7 @@ type Manager struct {
 func NewManager(cfg config.LicenseConfig) *Manager {
 	m := &Manager{key: strings.TrimSpace(cfg.Key)}
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	if os.Getenv("DEPSILO_DEV_PRO") == "1" {
 		m.status = LicenseStatus{
@@ -96,7 +96,7 @@ func (m *Manager) doValidate() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.status.LastChecked = time.Now()
+	m.status.LastChecked = time.Now().UTC()
 
 	if err != nil {
 		// Network error: keep previous result, log warning
@@ -112,7 +112,7 @@ func (m *Manager) doValidate() {
 
 	if resp.Valid && resp.LicenseKey.Status == "active" {
 		m.status.IsPro = true
-		now := time.Now()
+		now := time.Now().UTC()
 		if m.status.ActivatedAt == nil {
 			m.status.ActivatedAt = &now
 		}

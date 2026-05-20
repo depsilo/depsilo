@@ -67,7 +67,10 @@ func RunQuery(database *gorm.DB, q Query) (*QueryResult, error) {
 	query.Count(&total)
 
 	var items []db.AuditLog
-	query.Order("created_at DESC").
+	// Order via datetime() too — otherwise rows whose stored zone-suffix
+	// differs (legacy CST vs new UTC-Z) get sorted lexicographically and
+	// "16:10+08:00" wrongly outranks "08:25Z" despite being earlier.
+	query.Order("datetime(created_at) DESC").
 		Offset((q.Page - 1) * q.PageSize).
 		Limit(q.PageSize).
 		Find(&items)
@@ -103,7 +106,7 @@ func Export(database *gorm.DB, q Query) ([]byte, error) {
 	}
 
 	var items []db.AuditLog
-	query.Order("created_at DESC").Limit(10000).Find(&items)
+	query.Order("datetime(created_at) DESC").Limit(10000).Find(&items)
 
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
