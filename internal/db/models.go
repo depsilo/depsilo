@@ -186,8 +186,8 @@ type TrialRecord struct {
 	ID            uint      `gorm:"primarykey" json:"id"`
 	ActivatedAt   time.Time `gorm:"not null" json:"activated_at"`
 	ExpiresAt     time.Time `gorm:"not null" json:"expires_at"`
-	ActivatedBy   uint      `gorm:"index" json:"activated_by"`
-	ActivatedFrom string    `gorm:"size:64" json:"activated_from"`
+	ActivatedBy   uint      `gorm:"index" json:"activated_by"` // FK to User.ID; admin who clicked
+	ActivatedFrom string    `gorm:"size:64" json:"activated_from"` // client IP, reserved for future abuse analysis
 	CreatedAt     time.Time `json:"created_at"`
 }
 
