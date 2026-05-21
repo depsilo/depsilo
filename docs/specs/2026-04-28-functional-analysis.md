@@ -100,7 +100,7 @@ Depsilo 经过 208 次 commits 的迭代，已经从一个初级的 pip/apt 缓�
 | 安全策略 | ✅ | 按生态配置自动更新策略 |
 | 安全建议 | ✅ | 可审批/忽略的修复建议 |
 | 项目管理 | ✅ | 多项目、项目级 Token、SBOM 导出 |
-| SBOM 生成 | ✅ | CycloneDX 格式 |
+| SBOM 生成 | ✅ | SPDX 2.3 + CycloneDX 1.5（双格式 JSON，按 `?format=` 切换） |
 
 **评价：** Pro 功能完整性出乎意料，OSV 集成、SBOM、项目管理都实现了。但有几点需要注意：
 - OSV 数据导入和展示的**端到端流程**未验证（CLAUDE.md 提到"需跑通展示"）

@@ -104,6 +104,17 @@ make test-clean             # remove all depsilo-test-* images
 
 Adding a new ecosystem? One new `testground/docker-<eco>/Dockerfile` plus one `test-docker-<eco>:` target in the Makefile — that's the entire surface.
 
+## Before pushing
+
+Always run the lint suite locally before `git push` — it's the same gate CI runs and it takes only a few seconds:
+
+```bash
+make lint        # go vet + i18n audit (missing keys, duplicates, placeholder drift)
+make test-unit   # fast unit tests, no network
+```
+
+`make lint-i18n` alone catches the most common contributor mistake: adding a `t('...')` call without updating both `web/src/i18n/zh.ts` and `web/src/i18n/en.ts`, or letting a `{{var}}` placeholder drift between the two locales. Failing this check means the UI will render raw `ns.key` strings or have a missing variable in one language — both regressions that are easy to miss in manual review.
+
 ## Submitting a Pull Request
 
 1. **Fork** the repository
