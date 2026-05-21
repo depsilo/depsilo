@@ -68,5 +68,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&DismissedVuln{},
 		&Project{},
 		&ProjectPackage{},
+		&TrialRecord{},
+		&LicenseStorage{},
 	)
 }
