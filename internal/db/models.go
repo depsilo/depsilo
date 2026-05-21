@@ -190,3 +190,14 @@ type TrialRecord struct {
 	ActivatedFrom string    `gorm:"size:64" json:"activated_from"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+
+// LicenseStorage persists a license key that was set via the admin UI.
+// Takes precedence over the config.toml-loaded key when both exist.
+// Singleton (ID = 1). License keys are identifiers, not credentials —
+// stored as plaintext; masked only for display.
+type LicenseStorage struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	Key       string    `gorm:"size:256" json:"key"`
+	UpdatedBy uint      `gorm:"index" json:"updated_by"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
