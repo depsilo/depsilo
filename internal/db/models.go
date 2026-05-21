@@ -178,3 +178,15 @@ type ProjectPackage struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
+
+// TrialRecord persists the local 14-day Pro trial state. Singleton (at most one
+// row, ID = 1). Uniqueness is enforced by the manager-layer mutex + count check,
+// not by a DB constraint, because Depsilo is single-instance today.
+type TrialRecord struct {
+	ID            uint      `gorm:"primarykey" json:"id"`
+	ActivatedAt   time.Time `gorm:"not null" json:"activated_at"`
+	ExpiresAt     time.Time `gorm:"not null" json:"expires_at"`
+	ActivatedBy   uint      `gorm:"index" json:"activated_by"`
+	ActivatedFrom string    `gorm:"size:64" json:"activated_from"`
+	CreatedAt     time.Time `json:"created_at"`
+}
