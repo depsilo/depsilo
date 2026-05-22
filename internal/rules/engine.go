@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"depsilo/internal/db"
-	"depsilo/internal/license"
+	"depsilo/internal/entitlement"
 )
 
 // Engine evaluates package rules with an in-memory cache.
 type Engine struct {
 	store    *Store
-	licMgr   *license.Manager
+	checker  *entitlement.Checker
 	mu       sync.RWMutex
 	cache    []db.PackageRule
 	lastLoad time.Time
@@ -21,10 +21,10 @@ type Engine struct {
 }
 
 // NewEngine creates a new rules Engine.
-func NewEngine(store *Store, licMgr *license.Manager) *Engine {
+func NewEngine(store *Store, checker *entitlement.Checker) *Engine {
 	return &Engine{
 		store:    store,
-		licMgr:   licMgr,
+		checker:  checker,
 		cacheTTL: 30 * time.Second,
 	}
 }
@@ -32,7 +32,7 @@ func NewEngine(store *Store, licMgr *license.Manager) *Engine {
 // Check returns (allowed, matchedRule, error).
 // Community edition always returns allowed=true.
 func (e *Engine) Check(ctx context.Context, ecosystem, packageName, version string) (bool, *db.PackageRule, error) {
-	if !e.licMgr.IsPro() {
+	if !e.checker.IsPro() {
 		return true, nil, nil
 	}
 

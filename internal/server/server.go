@@ -32,10 +32,12 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/entitlement"
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
+	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
 	web "depsilo/web"
 )
@@ -132,10 +134,19 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	licenseManager := license.NewManager(cfg.License, database)
 	go licenseManager.Start(ctx)
 
-	rulesStore := rules.NewStore(database)
-	rulesEngine := rules.NewEngine(rulesStore, licenseManager)
+	// Phase 5: construct trial + checker BEFORE audit and rules
+	// (these modules query IsPro to decide whether to record entries / enforce rules)
+	trialManager, err := trial.NewManager(database)
+	if err != nil {
+		zap.L().Warn("trial.NewManager failed, continuing with nil trial", zap.Error(err))
+		// trialManager is nil but NewChecker handles that
+	}
+	checker := entitlement.NewChecker(licenseManager, trialManager)
 
-	auditLogger := audit.NewLogger(database, licenseManager)
+	rulesStore := rules.NewStore(database)
+	rulesEngine := rules.NewEngine(rulesStore, checker)
+
+	auditLogger := audit.NewLogger(database, checker)
 	go auditLogger.Start(ctx)
 	adapter.SetAuditLogger(auditLogger)
 
