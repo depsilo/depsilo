@@ -130,4 +130,30 @@ export const setupApi = {
   complete: (data: any) => api.post('/setup/complete', data),
 }
 
+// License / entitlement types
+export type EntitlementSource = 'none' | 'trial' | 'paid'
+
+export interface EntitlementStatus {
+  is_pro: boolean
+  source: EntitlementSource
+  expires_at?: string
+  days_left: number
+  trial_used: boolean
+  trial_available: boolean
+  license_key_masked?: string
+  license_error?: string
+  last_checked: string
+  // Deprecated aliases — to be removed in 0.5.0 per backend spec §16.2.
+  key_masked?: string
+  activated_at?: string
+}
+
+export const licenseApi = {
+  status:        () => api.get<EntitlementStatus>('/admin/license/status'),
+  revalidate:    () => api.post('/admin/license/revalidate'),
+  activateTrial: () => api.post<EntitlementStatus>('/admin/license/trial/activate'),
+  setKey:        (key: string) => api.put<EntitlementStatus>('/admin/license/key', { key }),
+  clearKey:      () => api.delete<EntitlementStatus>('/admin/license/key'),
+}
+
 export default api
