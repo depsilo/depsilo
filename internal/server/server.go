@@ -129,7 +129,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	}
 
 	// Initialize license manager
-	licenseManager := license.NewManager(cfg.License)
+	licenseManager := license.NewManager(cfg.License, database)
 	go licenseManager.Start(ctx)
 
 	rulesStore := rules.NewStore(database)
