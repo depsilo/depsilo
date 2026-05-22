@@ -38,7 +38,7 @@ func setupRulesEngine(t *testing.T, rulesList []db.PackageRule) *rules.Engine {
 		database.Create(&rulesList[i])
 	}
 
-	licMgr := license.NewManager(config.LicenseConfig{})
+	licMgr := license.NewManager(config.LicenseConfig{}, nil)
 	store := rules.NewStore(database)
 	engine := rules.NewEngine(store, licMgr)
 	return engine
@@ -190,7 +190,7 @@ func TestRules_CommunityBypass(t *testing.T) {
 		Action:      "deny",
 	})
 
-	licMgr := license.NewManager(config.LicenseConfig{}) // no key, no dev mode
+	licMgr := license.NewManager(config.LicenseConfig{}, nil) // no key, no dev mode
 	store := rules.NewStore(database)
 	engine := rules.NewEngine(store, licMgr)
 

@@ -2,6 +2,7 @@ package license
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -10,8 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	"depsilo/internal/config"
+	"depsilo/internal/db"
 )
 
 // LicenseStatus represents the current state of the license.
@@ -26,15 +29,17 @@ type LicenseStatus struct {
 
 // Manager handles license validation and status tracking.
 type Manager struct {
-	key    string
-	mu     sync.RWMutex
-	status LicenseStatus
+	key      string
+	database *gorm.DB
+	mu       sync.RWMutex
+	status   LicenseStatus
 }
 
-// NewManager creates a new license Manager from the given config.
-// Set DEPSILO_DEV_PRO=1 to activate Pro without API validation (development only).
-func NewManager(cfg config.LicenseConfig) *Manager {
-	m := &Manager{key: strings.TrimSpace(cfg.Key)}
+// NewManager creates a new license Manager from config + DB.
+// Key precedence: DB-stored key (set via UI) > config.toml key > none.
+// DEPSILO_DEV_PRO=1 bypasses everything per dev mode.
+func NewManager(cfg config.LicenseConfig, database *gorm.DB) *Manager {
+	m := &Manager{database: database}
 
 	now := time.Now().UTC()
 
@@ -49,20 +54,30 @@ func NewManager(cfg config.LicenseConfig) *Manager {
 		return m
 	}
 
-	if m.key == "" {
-		m.status = LicenseStatus{
-			IsPro:       false,
-			KeyMasked:   "",
-			LastChecked: now,
-		}
-	} else {
-		m.status = LicenseStatus{
-			IsPro:       false,
-			KeyMasked:   MaskKey(m.key),
-			LastChecked: now,
+	// Load key: DB first, then config.
+	if database != nil {
+		var stored db.LicenseStorage
+		err := database.Order("id ASC").First(&stored).Error
+		switch {
+		case err == nil && stored.Key != "":
+			m.key = strings.TrimSpace(stored.Key)
+		case err == nil:
+			// row exists but key is empty — treat as no key, fall through to config
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			// no row yet — fine, fall through to config
+		default:
+			zap.L().Warn("failed to load stored license key from DB", zap.Error(err))
 		}
 	}
+	if m.key == "" {
+		m.key = strings.TrimSpace(cfg.Key)
+	}
 
+	if m.key == "" {
+		m.status = LicenseStatus{IsPro: false, LastChecked: now}
+	} else {
+		m.status = LicenseStatus{IsPro: false, KeyMasked: MaskKey(m.key), LastChecked: now}
+	}
 	return m
 }
 
