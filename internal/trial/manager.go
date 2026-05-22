@@ -2,6 +2,8 @@ package trial
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -24,14 +26,19 @@ type Manager struct {
 // NewManager loads the existing TrialRecord (if any) from the database.
 // At most one TrialRecord row is expected; if more are present, the lowest-ID
 // one wins (a no-op for a single-instance deploy that respects the contract).
-func NewManager(database *gorm.DB) *Manager {
+func NewManager(database *gorm.DB) (*Manager, error) {
 	m := &Manager{database: database}
 	var rec db.TrialRecord
 	err := database.Order("id ASC").First(&rec).Error
-	if err == nil {
+	switch {
+	case err == nil:
 		m.record = &rec
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		// no trial record yet — fine
+	default:
+		return nil, fmt.Errorf("trial: load record: %w", err)
 	}
-	return m
+	return m, nil
 }
 
 // IsActive reports whether a trial currently grants Pro access.

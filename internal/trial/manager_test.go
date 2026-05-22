@@ -18,7 +18,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open in-memory sqlite: %v", err)
 	}
-	if err := d.AutoMigrate(&db.TrialRecord{}, &db.User{}); err != nil {
+	if err := d.AutoMigrate(&db.TrialRecord{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return d
@@ -26,7 +26,10 @@ func newTestDB(t *testing.T) *gorm.DB {
 
 func TestNewManager_NoRecord_AvailableTrue(t *testing.T) {
 	d := newTestDB(t)
-	m := trial.NewManager(d)
+	m, err := trial.NewManager(d)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	if !m.Available() {
 		t.Error("Available() = false, want true")
 	}
@@ -49,7 +52,10 @@ func TestNewManager_LoadsExistingActiveRecord(t *testing.T) {
 		t.Fatalf("seed record: %v", err)
 	}
 
-	m := trial.NewManager(d)
+	m, err := trial.NewManager(d)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	if !m.IsActive() {
 		t.Error("IsActive() = false, want true")
 	}
@@ -72,7 +78,10 @@ func TestNewManager_LoadsExistingExpiredRecord(t *testing.T) {
 		t.Fatalf("seed record: %v", err)
 	}
 
-	m := trial.NewManager(d)
+	m, err := trial.NewManager(d)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 	if m.IsActive() {
 		t.Error("IsActive() = true, want false (record expired)")
 	}
@@ -86,7 +95,10 @@ func TestNewManager_LoadsExistingExpiredRecord(t *testing.T) {
 
 func TestActivate_FirstCallSucceeds(t *testing.T) {
 	d := newTestDB(t)
-	m := trial.NewManager(d)
+	m, err := trial.NewManager(d)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 
 	rec, err := m.Activate(context.Background(), 42, "127.0.0.1")
 	if err != nil {
@@ -112,13 +124,16 @@ func TestActivate_FirstCallSucceeds(t *testing.T) {
 
 func TestActivate_SecondCallReturnsErrTrialAlreadyUsed(t *testing.T) {
 	d := newTestDB(t)
-	m := trial.NewManager(d)
+	m, err := trial.NewManager(d)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 
 	if _, err := m.Activate(context.Background(), 1, ""); err != nil {
 		t.Fatalf("first Activate: %v", err)
 	}
 
-	_, err := m.Activate(context.Background(), 2, "")
+	_, err = m.Activate(context.Background(), 2, "")
 	if err != trial.ErrTrialAlreadyUsed {
 		t.Errorf("second Activate err = %v, want ErrTrialAlreadyUsed", err)
 	}
@@ -126,16 +141,22 @@ func TestActivate_SecondCallReturnsErrTrialAlreadyUsed(t *testing.T) {
 
 func TestActivate_ConcurrentOnlyOneSucceeds(t *testing.T) {
 	d := newTestDB(t)
-	m := trial.NewManager(d)
+	m, err := trial.NewManager(d)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
 
 	const N = 16
+	ready := make(chan struct{})
 	errs := make(chan error, N)
 	for i := 0; i < N; i++ {
 		go func() {
+			<-ready
 			_, err := m.Activate(context.Background(), 1, "")
 			errs <- err
 		}()
 	}
+	close(ready) // release all goroutines simultaneously
 
 	var successes, alreadyUsed int
 	for i := 0; i < N; i++ {
