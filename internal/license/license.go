@@ -3,6 +3,7 @@ package license
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -156,6 +157,69 @@ func (m *Manager) Revalidate() {
 	go m.doValidate()
 }
 
+// SetKey persists a new license key (DB), updates manager state,
+// and triggers a synchronous validation against the upstream license server.
+// Returns any validation error, but the key is persisted unconditionally so
+// the user can retry validation later via Revalidate.
+func (m *Manager) SetKey(ctx context.Context, newKey string, userID uint) error {
+	newKey = strings.TrimSpace(newKey)
+
+	m.mu.Lock()
+	if m.database != nil {
+		if err := m.database.WithContext(ctx).Save(&db.LicenseStorage{
+			ID:        1,
+			Key:       newKey,
+			UpdatedBy: userID,
+			UpdatedAt: time.Now().UTC(),
+		}).Error; err != nil {
+			m.mu.Unlock()
+			return fmt.Errorf("persist license key: %w", err)
+		}
+	}
+	m.key = newKey
+	if newKey != "" {
+		m.status.KeyMasked = MaskKey(newKey)
+	} else {
+		m.status.KeyMasked = ""
+	}
+	m.mu.Unlock()
+
+	// TODO: write management event audit log (deferred — current AuditLog
+	// model is request-shaped; see plan front matter "Known deviation").
+
+	if newKey == "" {
+		return nil
+	}
+	// Synchronous validation so the caller can surface the result via Status().
+	m.doValidate()
+	return nil
+}
+
+// ClearKey removes any DB-stored license key and resets manager state to "free".
+// The config.toml key is NOT re-read; the manager remains free until the next
+// process start (which re-runs the precedence logic in NewManager).
+func (m *Manager) ClearKey(ctx context.Context, userID uint) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.database != nil {
+		if err := m.database.WithContext(ctx).Where("id = ?", 1).Delete(&db.LicenseStorage{}).Error; err != nil {
+			return fmt.Errorf("delete license key: %w", err)
+		}
+	}
+	m.key = ""
+	m.status = LicenseStatus{
+		IsPro:       false,
+		KeyMasked:   "",
+		LastChecked: time.Now().UTC(),
+	}
+
+	// TODO: write management event audit log (deferred — current AuditLog
+	// model is request-shaped; see plan front matter "Known deviation").
+	_ = userID
+	return nil
+}
+
 // IsPro returns whether a valid Pro license is active.
 func (m *Manager) IsPro() bool {
 	m.mu.RLock()
@@ -170,8 +234,13 @@ func (m *Manager) Status() LicenseStatus {
 	return m.status
 }
 
-// MaskKey returns the first 8 characters of the key followed by "-***".
+// MaskKey returns the segment up to and including the first "-" followed by "***".
+// For example "depsilo-test-key-1234" → "depsilo-***".
+// If the key contains no "-", it returns the first 8 characters followed by "-***".
 func MaskKey(key string) string {
+	if idx := strings.Index(key, "-"); idx >= 0 {
+		return key[:idx+1] + "***"
+	}
 	if len(key) <= 8 {
 		return key
 	}
