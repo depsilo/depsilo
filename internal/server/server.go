@@ -219,6 +219,8 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		CacheMgr:         cacheMgr,
 		EventBus:         eventBus,
 		LicenseManager:   licenseManager,
+		TrialManager:     trialManager,
+		Entitlement:      checker,
 		AuditLogger:      auditLogger,
 		RulesStore:       rulesStore,
 		RulesEngine:      rulesEngine,
