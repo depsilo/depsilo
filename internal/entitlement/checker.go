@@ -61,6 +61,16 @@ func (c *Checker) IsPro() bool {
 	return false
 }
 
+// TrialAvailable reports whether the user can still start a trial.
+// False either because no trial manager is configured, or because a trial
+// record already exists (active or expired — one trial per install).
+func (c *Checker) TrialAvailable() bool {
+	if c.trial == nil {
+		return false
+	}
+	return !c.trial.IsUsed()
+}
+
 // Status assembles a unified view across the underlying sources.
 // Precedence when multiple sources are active: paid > trial > none.
 func (c *Checker) Status() Status {
@@ -68,7 +78,7 @@ func (c *Checker) Status() Status {
 	licPro := false
 	if c.lic != nil {
 		licStatus = c.lic.Status()
-		licPro = c.lic.IsPro()
+		licPro = licStatus.IsPro
 	}
 	trialUsed := c.trial != nil && c.trial.IsUsed()
 	trialActive := c.trial != nil && c.trial.IsActive()

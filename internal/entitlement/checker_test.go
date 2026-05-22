@@ -84,8 +84,8 @@ func TestChecker_TrialActiveSourceIsTrial(t *testing.T) {
 	if s.TrialAvailable {
 		t.Error("TrialAvailable = true, want false (just activated)")
 	}
-	if s.DaysLeft < 13 || s.DaysLeft > 14 {
-		t.Errorf("DaysLeft = %d, want 13 or 14", s.DaysLeft)
+	if s.DaysLeft != 14 {
+		t.Errorf("DaysLeft = %d, want 14", s.DaysLeft)
 	}
 }
 
