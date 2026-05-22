@@ -142,7 +142,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.GET("/settings", settingsHandler.Get)
 	adminGroup.PUT("/settings", settingsHandler.Update)
 
-	// License
+	// License — status, key mutation, trial activation (no Pro gate; free users need these)
 	licenseHandler := admin.NewLicenseHandler(deps.LicenseManager, deps.TrialManager, deps.Entitlement)
 	adminGroup.GET("/license/status", licenseHandler.GetStatus)
 	adminGroup.POST("/license/revalidate", licenseHandler.Revalidate)
