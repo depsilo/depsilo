@@ -32,6 +32,7 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 
 	t.Run("status starts as free with trial available", func(t *testing.T) {
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/license/status")
+		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusOK)
 		body := readBody(t, resp)
 		if !strings.Contains(body, `"source":"none"`) {
@@ -51,6 +52,7 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 	t.Run("paywall returns 402 with trial_available=true before activation", func(t *testing.T) {
 		// /admin/projects is behind entitlement.RequirePro (router.go line ~183).
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/projects")
+		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusPaymentRequired)
 		body := readBody(t, resp)
 		if !strings.Contains(body, `"code":"PRO_REQUIRED"`) {
@@ -63,6 +65,7 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 
 	t.Run("activating trial returns 200 with source=trial and is_pro=true", func(t *testing.T) {
 		resp := adminPost(t, depsiloURL+"/api/v1/admin/license/trial/activate", nil)
+		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusOK)
 		body := readBody(t, resp)
 		if !strings.Contains(body, `"source":"trial"`) {
@@ -78,6 +81,7 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 
 	t.Run("status endpoint confirms trial is active", func(t *testing.T) {
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/license/status")
+		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusOK)
 		body := readBody(t, resp)
 		if !strings.Contains(body, `"source":"trial"`) {
@@ -93,6 +97,7 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 
 	t.Run("pro endpoint no longer returns 402 after trial activation", func(t *testing.T) {
 		resp := adminGet(t, depsiloURL+"/api/v1/admin/projects")
+		defer resp.Body.Close()
 		// After activation IsPro == true, so RequirePro must pass.
 		// Response can be 200 (empty list) or any non-402.
 		if resp.StatusCode == http.StatusPaymentRequired {
@@ -103,6 +108,7 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 
 	t.Run("re-activating trial returns 409 TRIAL_ALREADY_USED", func(t *testing.T) {
 		resp := adminPost(t, depsiloURL+"/api/v1/admin/license/trial/activate", nil)
+		defer resp.Body.Close()
 		assertStatus(t, resp, http.StatusConflict)
 		body := readBody(t, resp)
 		if !strings.Contains(body, "TRIAL_ALREADY_USED") {
@@ -136,6 +142,7 @@ func TestLicenseKey_SetThenClear(t *testing.T) {
 	// status.is_pro to determine whether validation succeeded.
 	body := strings.NewReader(`{"key":"depsilo-integration-test-key-xxxx"}`)
 	resp := adminPut(t, depsiloURL+"/api/v1/admin/license/key", body)
+	defer resp.Body.Close()
 	assertStatus(t, resp, http.StatusOK)
 	rb := readBody(t, resp)
 
@@ -147,6 +154,7 @@ func TestLicenseKey_SetThenClear(t *testing.T) {
 
 	// Clear the key.
 	resp2 := adminDelete(t, depsiloURL+"/api/v1/admin/license/key")
+	defer resp2.Body.Close()
 	assertStatus(t, resp2, http.StatusOK)
 	rb2 := readBody(t, resp2)
 	// After clearing, license_key_masked must not contain the old prefix.
@@ -159,6 +167,7 @@ func TestLicenseKey_SetThenClear(t *testing.T) {
 func TestLicenseKey_RejectEmpty(t *testing.T) {
 	body := strings.NewReader(`{"key":""}`)
 	resp := adminPut(t, depsiloURL+"/api/v1/admin/license/key", body)
+	defer resp.Body.Close()
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -166,5 +175,6 @@ func TestLicenseKey_RejectEmpty(t *testing.T) {
 func TestLicenseKey_RejectMissing(t *testing.T) {
 	body := strings.NewReader(`{}`)
 	resp := adminPut(t, depsiloURL+"/api/v1/admin/license/key", body)
+	defer resp.Body.Close()
 	assertStatus(t, resp, http.StatusBadRequest)
 }
