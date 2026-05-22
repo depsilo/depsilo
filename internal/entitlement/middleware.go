@@ -15,10 +15,7 @@ func RequirePro(checker *Checker) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		trialAvailable := false
-		if checker.trial != nil {
-			trialAvailable = !checker.trial.IsUsed()
-		}
+		trialAvailable := checker.TrialAvailable()
 		c.JSON(http.StatusPaymentRequired, gin.H{
 			"code":            "PRO_REQUIRED",
 			"message":         "This feature requires Depsilo Pro.",
