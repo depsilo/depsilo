@@ -9,6 +9,7 @@ import (
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/entitlement"
 	"depsilo/internal/license"
 	"depsilo/internal/rules"
 )
@@ -39,8 +40,9 @@ func setupRulesEngine(t *testing.T, rulesList []db.PackageRule) *rules.Engine {
 	}
 
 	licMgr := license.NewManager(config.LicenseConfig{}, nil)
+	checker := entitlement.NewChecker(licMgr, nil)
 	store := rules.NewStore(database)
-	engine := rules.NewEngine(store, licMgr)
+	engine := rules.NewEngine(store, checker)
 	return engine
 }
 
@@ -191,8 +193,9 @@ func TestRules_CommunityBypass(t *testing.T) {
 	})
 
 	licMgr := license.NewManager(config.LicenseConfig{}, nil) // no key, no dev mode
+	checker := entitlement.NewChecker(licMgr, nil)
 	store := rules.NewStore(database)
-	engine := rules.NewEngine(store, licMgr)
+	engine := rules.NewEngine(store, checker)
 
 	allowed, _, err := engine.Check(context.Background(), "pypi", "log4j", "2.14.0")
 	if err != nil {

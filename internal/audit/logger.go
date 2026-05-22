@@ -8,22 +8,22 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
-	"depsilo/internal/license"
+	"depsilo/internal/entitlement"
 )
 
 // Logger batches and writes audit log entries asynchronously.
-// Entries are only recorded when a Pro license is active.
+// Entries are only recorded when a Pro entitlement is active.
 type Logger struct {
 	database *gorm.DB
-	licMgr   *license.Manager
+	checker  *entitlement.Checker
 	queue    chan db.AuditLog
 }
 
 // NewLogger creates a new audit Logger.
-func NewLogger(database *gorm.DB, licMgr *license.Manager) *Logger {
+func NewLogger(database *gorm.DB, checker *entitlement.Checker) *Logger {
 	return &Logger{
 		database: database,
-		licMgr:   licMgr,
+		checker:  checker,
 		queue:    make(chan db.AuditLog, 1000),
 	}
 }
@@ -65,7 +65,7 @@ func (l *Logger) flush(batch []db.AuditLog) {
 
 // Log enqueues an audit log entry. If Pro is not active, the entry is silently dropped.
 func (l *Logger) Log(entry db.AuditLog) {
-	if !l.licMgr.IsPro() {
+	if !l.checker.IsPro() {
 		return
 	}
 	select {
