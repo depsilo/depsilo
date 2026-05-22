@@ -555,6 +555,83 @@ const zh = {
       next: '下一步',
       prev: '上一步',
     },
+
+    // License & Pro
+    license: {
+      title: 'License 与 Pro',
+      subtitle: '管理您的 Pro 试用与许可证密钥',
+
+      status: {
+        free: 'Free',
+        trial: '试用中',
+        trial_expired: '试用已结束',
+        pro: 'Pro',
+      },
+
+      trial: {
+        start_button: '开始 14 天免费试用',
+        start_explainer: '解锁审计日志、SBOM 导出、多项目、安全扫描等全部 Pro 能力。无需信用卡，无需邮箱。',
+        days_left: '剩余 {{count}} 天',
+        expires_at: '将于 {{date}} 结束',
+        expired_message: '试用已于 {{date}} 结束。Free 功能继续保留。',
+      },
+
+      pro: {
+        activated: 'Pro 已激活',
+        key_label: '密钥',
+        expires_at: '到期：{{date}}',
+        last_checked: '上次校验：{{relative_time}}',
+      },
+
+      revalidate: '重新校验',
+      buy_pro: '购买 Pro',
+      view_pricing: '查看定价',
+
+      key: {
+        title: '许可证密钥',
+        placeholder: 'depsilo-xxxx-xxxx-xxxx-...',
+        activate_button: '激活',
+        change_button: '更换密钥',
+        remove_button: '移除密钥',
+        save_button: '保存',
+        remove_confirm_title: '移除许可证密钥？',
+        remove_confirm_body: 'Pro 功能将立即失效。此操作不影响已经存在的试用记录。',
+        success_toast: '密钥已激活',
+        saved_pending_message: '密钥已保存。Depsilo 暂时无法确认其为 Pro 状态 — 可能是密钥无效，也可能是网络问题。',
+        try_revalidate: '重试校验',
+      },
+
+      paywall: {
+        title: '此功能需要 Depsilo Pro',
+        body: 'Pro 提供审计日志、SBOM 导出、多项目工作区、安全扫描等高级能力。',
+        start_trial: '开始 14 天免费试用',
+        buy_pro: '购买 Pro',
+        learn_more: '了解更多',
+        view_status: '查看许可证状态',
+        dismiss: '稍后',
+        trial_activated_toast: '试用已激活 — 请重试您的操作',
+      },
+
+      features: {
+        heading: 'Pro 包含哪些能力？',
+        free: {
+          f1: '12 种生态代理',
+          f2: '缓存管理 + 流量统计',
+          f3: '基础上游源管理',
+          f4: '单用户访问',
+          f5: '本地或 S3 存储',
+          f6: '健康检查与延迟优选',
+        },
+        pro: {
+          f1: '多项目工作区',
+          f2: 'OSV 安全漏洞扫描',
+          f3: 'SBOM 导出（SPDX + CycloneDX）',
+          f4: '审计日志（可导出 CSV）',
+          f5: '包级别 Allow/Deny 规则',
+          f6: '优先技术支持',
+        },
+      },
+    },
   },
 }
 
