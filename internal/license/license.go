@@ -28,6 +28,11 @@ type LicenseStatus struct {
 	Error       string     `json:"error,omitempty"`
 }
 
+// licenseStorageSingletonID is the fixed ID used for the singleton LicenseStorage
+// row. The DB schema does not enforce singleton uniqueness — the manager layer
+// guarantees only this ID is ever read/written.
+const licenseStorageSingletonID uint = 1
+
 // Manager handles license validation and status tracking.
 type Manager struct {
 	key      string
@@ -107,7 +112,11 @@ func (m *Manager) Start(ctx context.Context) {
 }
 
 func (m *Manager) doValidate() {
-	resp, err := validate(m.key)
+	m.mu.RLock()
+	key := m.key
+	m.mu.RUnlock()
+
+	resp, err := validate(key)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -118,7 +127,7 @@ func (m *Manager) doValidate() {
 		// Network error: keep previous result, log warning
 		m.status.Error = err.Error()
 		zap.L().Warn("license validation failed, keeping previous state",
-			zap.String("key", MaskKey(m.key)),
+			zap.String("key", MaskKey(key)),
 			zap.Error(err),
 		)
 		return
@@ -138,13 +147,13 @@ func (m *Manager) doValidate() {
 			}
 		}
 		zap.L().Info("license validated successfully",
-			zap.String("key", MaskKey(m.key)),
+			zap.String("key", MaskKey(key)),
 			zap.String("status", resp.LicenseKey.Status),
 		)
 	} else {
 		m.status.IsPro = false
 		zap.L().Warn("license is not valid",
-			zap.String("key", MaskKey(m.key)),
+			zap.String("key", MaskKey(key)),
 		)
 	}
 }
@@ -167,7 +176,7 @@ func (m *Manager) SetKey(ctx context.Context, newKey string, userID uint) error 
 	m.mu.Lock()
 	if m.database != nil {
 		if err := m.database.WithContext(ctx).Save(&db.LicenseStorage{
-			ID:        1,
+			ID:        licenseStorageSingletonID,
 			Key:       newKey,
 			UpdatedBy: userID,
 			UpdatedAt: time.Now().UTC(),
@@ -203,7 +212,7 @@ func (m *Manager) ClearKey(ctx context.Context, userID uint) error {
 	defer m.mu.Unlock()
 
 	if m.database != nil {
-		if err := m.database.WithContext(ctx).Where("id = ?", 1).Delete(&db.LicenseStorage{}).Error; err != nil {
+		if err := m.database.WithContext(ctx).Where("id = ?", licenseStorageSingletonID).Delete(&db.LicenseStorage{}).Error; err != nil {
 			return fmt.Errorf("delete license key: %w", err)
 		}
 	}
