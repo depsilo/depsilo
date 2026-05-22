@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/api/admin"
@@ -12,10 +13,12 @@ import (
 	"depsilo/internal/audit"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/entitlement"
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
+	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
 	"depsilo/internal/version"
 )
@@ -143,9 +146,20 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.GET("/license", licenseHandler.GetStatus)
 	adminGroup.POST("/license/revalidate", licenseHandler.Revalidate)
 
-	// Pro features (require license)
+	// Phase 4 bridge: construct a checker from existing dependencies until
+	// Phase 6 wires Trial + Checker through Deps properly.
+	// TODO(phase-6): replace bridge with deps.Entitlement
+	bridgeTrial, err := trial.NewManager(deps.DB)
+	if err != nil {
+		// Trial is non-critical; log and continue with a nil trial — RequirePro
+		// will still gate paid access correctly.
+		zap.L().Warn("phase-4 bridge: trial.NewManager failed", zap.Error(err))
+	}
+	bridgeChecker := entitlement.NewChecker(deps.LicenseManager, bridgeTrial)
+
+	// Pro features (require entitlement)
 	proGroup := adminGroup.Group("")
-	proGroup.Use(license.RequirePro(deps.LicenseManager))
+	proGroup.Use(entitlement.RequirePro(bridgeChecker))
 
 	auditHandler := admin.NewAuditHandler(deps.DB)
 	proGroup.GET("/audit-logs", auditHandler.List)
