@@ -82,12 +82,12 @@ func TestClearKey_RemovesPersistenceAndResetsStatus(t *testing.T) {
 
 func TestNewManager_DBKeyOverridesConfigKey(t *testing.T) {
 	d := newTestDB(t)
-	if err := d.Create(&db.LicenseStorage{ID: 1, Key: "depsilo-from-db", UpdatedBy: 1}).Error; err != nil {
+	if err := d.Create(&db.LicenseStorage{ID: 1, Key: "fromdb-key-xxxx", UpdatedBy: 1}).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	m := license.NewManager(config.LicenseConfig{Key: "depsilo-from-config"}, d)
-	// The masked value reflects the DB key, not the config key.
-	if m.Status().KeyMasked != "depsilo-***" {
-		t.Errorf("KeyMasked = %q, want depsilo-*** (DB key should win)", m.Status().KeyMasked)
+	m := license.NewManager(config.LicenseConfig{Key: "cfgkey-yyyyyy"}, d)
+	// Masks differ by prefix: "fromdb-***" vs "cfgkey-***"
+	if got := m.Status().KeyMasked; got != "fromdb-***" {
+		t.Errorf("KeyMasked = %q, want %q (DB key should win over config key)", got, "fromdb-***")
 	}
 }
