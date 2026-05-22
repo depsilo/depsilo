@@ -555,6 +555,83 @@ const en = {
       next: 'Next',
       prev: 'Previous',
     },
+
+    // License & Pro
+    license: {
+      title: 'License & Pro',
+      subtitle: 'Manage your Pro trial and license key',
+
+      status: {
+        free: 'Free',
+        trial: 'Trial',
+        trial_expired: 'Trial ended',
+        pro: 'Pro',
+      },
+
+      trial: {
+        start_button: 'Start 14-day free trial',
+        start_explainer: 'Unlock audit logs, SBOM export, multi-project, security scanning, and the rest of Pro. No credit card. No email.',
+        days_left: '{{count}} days remaining',
+        expires_at: 'Expires {{date}}',
+        expired_message: 'Trial ended on {{date}}. Your Free tier features are unaffected.',
+      },
+
+      pro: {
+        activated: 'Pro activated',
+        key_label: 'Key',
+        expires_at: 'Expires {{date}}',
+        last_checked: 'Last checked {{relative_time}}',
+      },
+
+      revalidate: 'Revalidate',
+      buy_pro: 'Buy Pro',
+      view_pricing: 'View pricing',
+
+      key: {
+        title: 'License key',
+        placeholder: 'depsilo-xxxx-xxxx-xxxx-...',
+        activate_button: 'Activate',
+        change_button: 'Change key',
+        remove_button: 'Remove key',
+        save_button: 'Save',
+        remove_confirm_title: 'Remove this license key?',
+        remove_confirm_body: 'Pro features will lock immediately. Your existing trial record is unaffected.',
+        success_toast: 'Key activated',
+        saved_pending_message: "Key saved. Depsilo couldn't confirm it as Pro right now — this can mean an invalid key or a network issue.",
+        try_revalidate: 'Try revalidate',
+      },
+
+      paywall: {
+        title: 'This feature requires Depsilo Pro',
+        body: 'Pro adds audit logs, SBOM export, multi-project workspaces, security scanning, and more.',
+        start_trial: 'Start 14-day free trial',
+        buy_pro: 'Buy Pro',
+        learn_more: 'Learn more',
+        view_status: 'View license status',
+        dismiss: 'Maybe later',
+        trial_activated_toast: 'Trial activated — please try your action again',
+      },
+
+      features: {
+        heading: "What's in Pro?",
+        free: {
+          f1: 'Proxy for 12 ecosystems',
+          f2: 'Cache management + bandwidth analytics',
+          f3: 'Basic upstream source management',
+          f4: 'Single-user access',
+          f5: 'Local or S3 storage',
+          f6: 'Health checks + latency-based selection',
+        },
+        pro: {
+          f1: 'Multi-project workspaces',
+          f2: 'OSV security vulnerability scanning',
+          f3: 'SBOM export (SPDX + CycloneDX)',
+          f4: 'Audit logs (CSV export)',
+          f5: 'Package-level allow/deny rules',
+          f6: 'Priority support',
+        },
+      },
+    },
   },
 }
 
