@@ -3,6 +3,28 @@
 All notable changes to Depsilo will be documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] - 2026-05-21
+
+### Added
+- `/admin/license` page for self-serve 14-day Pro trial activation and runtime license-key management (set / change / remove)
+- API endpoints: `POST /api/v1/admin/license/trial/activate`, `PUT /api/v1/admin/license/key`, `DELETE /api/v1/admin/license/key`
+- New backend modules: `internal/trial` (local 14-day state machine) and `internal/entitlement` (façade combining license + trial)
+- Frontend: global `ProRequiredModal` triggered by 402 responses, with inline "Start trial" CTA when available
+- Landing-page `/pro-trial` page (closes the existing 404 from the Pricing CTA)
+
+### Changed
+- `GET /api/v1/admin/license/status` response body — new `source`, `days_left`, `trial_used`, `trial_available`, `license_key_masked` fields. Old `key_masked` and `activated_at` retained as deprecated aliases for one release; will be removed in 0.5.0
+- `402 PRO_REQUIRED` response now includes a `trial_available` boolean
+- `audit.Logger` and `rules.Engine` now depend on `entitlement.Checker` instead of `license.Manager` directly — trial users now get the same audit + rules behaviour as paid users
+- `license.NewManager` signature now accepts `*gorm.DB` for runtime key persistence; DB-stored key takes precedence over `config.toml`
+
+### Fixed
+- `license.Manager.doValidate` no longer reads `m.key` outside the lock — eliminates a data race introduced when `SetKey` was added
+
+### Deprecated
+- `EntitlementStatus.key_masked` field — use `license_key_masked` (alias removed in 0.5.0)
+- `EntitlementStatus.activated_at` field — derive from per-source state instead (alias removed in 0.5.0)
+
 ## [0.1.0] - 2025-03-30
 
 ### Added
