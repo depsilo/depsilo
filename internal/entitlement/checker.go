@@ -112,6 +112,16 @@ func (c *Checker) Status() Status {
 		}
 	default:
 		s.Source = SourceNone
+		// Even when the trial is expired (no longer granting Pro), expose the
+		// historical ExpiresAt + ActivatedAt so the UI can render
+		// "Trial ended on <date>". DaysLeft stays 0 (the helper returns 0 for
+		// non-positive deltas).
+		if trialUsed && c.trial != nil {
+			if rec := c.trial.Record(); rec != nil {
+				s.ExpiresAt = &rec.ExpiresAt
+				s.ActivatedAt = &rec.ActivatedAt
+			}
+		}
 	}
 
 	return s
