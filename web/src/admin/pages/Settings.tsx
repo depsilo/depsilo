@@ -7,70 +7,9 @@ import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
 import ButtonV2 from '@/components/Button'
 import Icon from '@/components/Icon'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 
-type TabKey = 'basic' | 'cache' | 'storage' | 'auth' | 'license'
-
-function LicenseTab() {
-  const { t } = useTranslation()
-  const queryClient = useQueryClient()
-  const { data } = useQuery({ queryKey: ['admin', 'license'], queryFn: () => adminApi.getLicense() })
-  const revalidateMutation = useMutation({ mutationFn: () => adminApi.revalidateLicense(), onSuccess: () => { setTimeout(() => queryClient.invalidateQueries({ queryKey: ['admin', 'license'] }), 2000) } })
-  const license = data?.data; const isPro = license?.is_pro
-
-  if (isPro) {
-    return (
-      <CardV2>
-        <div className="flex items-center gap-3 mb-6">
-          <span className="flex items-center justify-center w-10 h-10 rounded-[8px]" style={{ background: 'rgba(21,190,83,0.15)' }}><Icon name="verified" size="sm" className="text-success" /></span>
-          <div><p className="font-[400]" style={{ color: 'var(--text)' }}>{t('settings.licenseProActive')}</p><p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('settings.licenseProDesc')}</p></div>
-        </div>
-        <div className="space-y-3">
-          {[
-            { label: t('settings.licenseKey'), value: license.key_masked || '—' },
-            ...(license.activated_at ? [{ label: t('settings.licenseActivated'), value: new Date(license.activated_at).toLocaleDateString() }] : []),
-            { label: t('settings.licenseExpires'), value: license.expires_at ? new Date(license.expires_at).toLocaleDateString() : t('users.neverExpires') },
-            { label: t('settings.licenseLastChecked'), value: license.last_checked ? new Date(license.last_checked).toLocaleString() : '—' },
-          ].map(item => (
-            <div key={item.label} className="flex items-center justify-between py-2" style={{ borderBottom: '1px solid var(--border)' }}>
-              <span className="text-[14px]" style={{ color: 'var(--text-soft)' }}>{item.label}</span>
-              <span className="text-[14px] font-mono" style={{ color: 'var(--text)' }}>{item.value}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-6"><ButtonV2 variant="secondary" onClick={() => revalidateMutation.mutate()} disabled={revalidateMutation.isPending}><Icon name="refresh" size="sm" />{revalidateMutation.isPending ? t('settings.licenseRevalidating') : t('settings.licenseRevalidate')}</ButtonV2></div>
-      </CardV2>
-    )
-  }
-
-  return (
-    <CardV2>
-      <div className="text-center py-4">
-        <h3 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{t('settings.licenseCommunityTitle')}</h3>
-        <p className="text-[14px] mt-1 mb-6" style={{ color: 'var(--text-soft)' }}>{t('settings.licenseCommunityDesc')}</p>
-        <div className="text-left max-w-sm mx-auto mb-8 space-y-2">
-          {[
-            { ok: true, label: t('settings.licenseFeature12eco') },
-            { ok: true, label: t('settings.licenseFeatureWebUI') },
-            { ok: false, label: t('settings.licenseFeatureAudit') },
-            { ok: false, label: t('settings.licenseFeatureRules') },
-            { ok: false, label: t('settings.licenseFeatureS3') },
-            { ok: false, label: t('settings.licenseFeaturePG') },
-          ].map(f => (
-            <div key={f.label} className="flex items-center gap-2 text-[14px]">
-              <Icon name={f.ok ? 'check_circle' : 'cancel'} size="sm" style={{ color: f.ok ? 'var(--ok)' : 'var(--text-soft)' }} />
-              <span style={{ color: f.ok ? 'var(--text)' : 'var(--text-soft)' }}>{f.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer"><ButtonV2>{t('settings.licenseUpgrade')}</ButtonV2></a>
-          <a href="https://depsilo.com/#pricing" target="_blank" rel="noopener noreferrer"><ButtonV2 variant="ghost" size="sm">{t('settings.licenseYearly')}</ButtonV2></a>
-        </div>
-      </div>
-    </CardV2>
-  )
-}
+type TabKey = 'basic' | 'cache' | 'storage' | 'auth'
 
 export default function SettingsV2() {
   const { t } = useTranslation()
@@ -79,7 +18,6 @@ export default function SettingsV2() {
     { key: 'cache' as const, label: t('settings.cachePolicy'), icon: 'cached' },
     { key: 'storage' as const, label: t('settings.storageBackend'), icon: 'database' },
     { key: 'auth' as const, label: t('settings.authSecurity'), icon: 'shield' },
-    { key: 'license' as const, label: t('settings.license'), icon: 'license' },
   ]
   const [activeTab, setActiveTab] = useState<TabKey>('basic')
   const [settings, setSettings] = useState<Record<string, any>>({})
@@ -231,7 +169,6 @@ export default function SettingsV2() {
             </CardV2>
           )}
 
-          {activeTab === 'license' && <LicenseTab />}
         </div>
       </div>
     </div>
