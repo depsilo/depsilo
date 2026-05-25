@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import MainLayoutV2 from './components/MainLayout'
 import LoginV2 from './pages/Login'
+import ProRequiredModal from './components/ProRequiredModal'
 import DashboardV2 from './pages/Dashboard'
 import BandwidthReportV2 from './pages/BandwidthReport'
 import CacheManageV2 from './pages/CacheManage'
@@ -27,7 +28,9 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export default function AdminAppV2() {
   return (
-    <Routes>
+    <>
+      <ProRequiredModal />
+      <Routes>
       <Route path="login" element={<LoginV2 />} />
       <Route
         element={
@@ -50,5 +53,6 @@ export default function AdminAppV2() {
         <Route path="settings" element={<SettingsV2 />} />
       </Route>
     </Routes>
+    </>
   )
 }
