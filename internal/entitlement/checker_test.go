@@ -141,4 +141,10 @@ func TestChecker_TrialExpiredFallsToNone(t *testing.T) {
 	if s.TrialAvailable {
 		t.Error("TrialAvailable = true, want false (single-shot)")
 	}
+	if s.ExpiresAt == nil {
+		t.Error("ExpiresAt = nil, want set to historical expiry date")
+	}
+	if s.ExpiresAt != nil && !s.ExpiresAt.Equal(now.Add(-16 * 24 * time.Hour)) {
+		t.Errorf("ExpiresAt = %v, want %v", *s.ExpiresAt, now.Add(-16 * 24 * time.Hour))
+	}
 }
