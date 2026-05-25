@@ -11,13 +11,21 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Response interceptor: 401 → redirect to /admin/login
+// Response interceptor: 401 → redirect to /admin/login; 402 → dispatch pro-required event
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401 && window.location.pathname.startsWith('/admin')) {
       localStorage.removeItem('token')
       window.location.href = '/admin/login'
+    }
+    if (
+      err.response?.status === 402 &&
+      err.response?.data?.code === 'PRO_REQUIRED'
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('depsilo:pro-required', { detail: err.response.data }),
+      )
     }
     return Promise.reject(err)
   }
