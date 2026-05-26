@@ -99,6 +99,46 @@ Requires Go 1.21+ and Node.js 20+.
 
 </details>
 
+## Use with AI agents
+
+Paste the prompt below into Hermes, OpenClaw, Claude Code, Cursor, or any agentic coding tool. The agent will detect which package managers your project uses, reconfigure each one to route through your local Depsilo, and verify the cache is reachable — no plugin or skill install needed.
+
+> Replace `http://localhost:23333` with your Depsilo URL if you deployed it elsewhere. The Portal at `/` ships a "AI Agent" tab that renders this prompt with the right URL pre-filled.
+
+```text
+This workspace has a local dependency cache called Depsilo at http://localhost:23333.
+It caches packages from 12 ecosystems and serves them at LAN speed.
+
+Before running any package install in this workspace:
+
+1. Verify it's reachable: curl -sf http://localhost:23333/health
+
+2. Detect which package managers this project uses (requirements.txt,
+   package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
+   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, etc.).
+
+3. Configure ONLY the detected tools. Pick from:
+
+   pip:      pip config set global.index-url http://localhost:23333/pypi/simple/
+   npm:      npm config set registry http://localhost:23333/npm/
+   go:       go env -w GOPROXY=http://localhost:23333/go,direct
+   cargo:    visit http://localhost:23333/ and copy the Cargo block to ~/.cargo/config.toml
+   maven:    visit http://localhost:23333/ and copy the Maven mirror block to ~/.m2/settings.xml
+   gem:      bundle config mirror.https://rubygems.org http://localhost:23333/rubygems/
+   composer: composer config -g repo.packagist composer http://localhost:23333/composer/
+   nuget:    dotnet nuget add source http://localhost:23333/nuget/v3/index.json -n depsilo
+   conda:    add channel http://localhost:23333/conda/ to ~/.condarc
+   helm:     helm repo add depsilo http://localhost:23333/helm/
+   R/CRAN:   options(repos = c(CRAN = "http://localhost:23333/cran/")) in ~/.Rprofile
+
+4. Run install commands normally — they auto-route through Depsilo.
+
+If Depsilo is down, tools fall back to public registries — installs still
+work, just not cached. Don't waste effort on retry logic for Depsilo itself.
+```
+
+If Depsilo is unreachable from the agent's runtime, every package manager listed above falls back to its public registry automatically — installs succeed, they just miss the cache.
+
 ## Usage Examples
 
 ```bash

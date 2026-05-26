@@ -72,6 +72,64 @@ export default function LanguageRail({ selected, onSelect }: Props) {
         </div>
       </button>
 
+      {/* AI Agent row */}
+      <button
+        type="button"
+        onClick={() => onSelect('agent')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '10px 12px',
+          background: selected === 'agent' ? 'var(--brand-soft)' : 'transparent',
+          borderBottom: '0.5px solid var(--border)',
+          borderLeft: selected === 'agent' ? '2px solid var(--brand)' : '2px solid transparent',
+          textAlign: 'left',
+          cursor: 'pointer',
+          width: '100%',
+        }}
+      >
+        <div
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            background: selected === 'agent' ? 'var(--brand)' : 'var(--bg-soft)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: selected === 'agent' ? '#fff' : 'var(--brand)',
+            flexShrink: 0,
+            border: selected === 'agent' ? 'none' : '0.5px solid var(--border)',
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path
+              d="M7 1.5v2M3.5 3l1.4 1.4M10.5 3l-1.4 1.4M2.5 7h2M9.5 7h2M5 7a2 2 0 1 1 4 0v3H5V7zM5.5 11.5h3M6 12.8h2"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: selected === 'agent' ? 'var(--brand)' : 'var(--text)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('quickstart.aiAgent')}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
+            {t('quickstart.aiAgentSubtitle')}
+          </div>
+        </div>
+      </button>
+
       {/* Eyebrow */}
       <div
         style={{

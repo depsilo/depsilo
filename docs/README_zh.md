@@ -89,6 +89,46 @@ cp config.example.toml config.toml
 服务默认启动在 `http://localhost:23333`。
 默认管理员账号：`admin` / `admin` — 首次登录后请修改密码。
 
+## 🤖 与 AI Agent 一起使用
+
+把下面这段提示词粘进 Hermes、OpenClaw、Claude Code、Cursor 等任意 AI 编码 agent。Agent 会自动检测项目用了哪些包管理器，把对应的 install 流量都切到你本地的 Depsilo 缓存，无需安装任何 plugin / skill。
+
+> 如果 Depsilo 部署在其他地址，把 `http://localhost:23333` 替换成实际 URL。Portal 首页有 "AI Agent" tab，会自动用当前部署地址渲染这段提示词，一键复制。
+
+```text
+This workspace has a local dependency cache called Depsilo at http://localhost:23333.
+It caches packages from 12 ecosystems and serves them at LAN speed.
+
+Before running any package install in this workspace:
+
+1. Verify it's reachable: curl -sf http://localhost:23333/health
+
+2. Detect which package managers this project uses (requirements.txt,
+   package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
+   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, etc.).
+
+3. Configure ONLY the detected tools. Pick from:
+
+   pip:      pip config set global.index-url http://localhost:23333/pypi/simple/
+   npm:      npm config set registry http://localhost:23333/npm/
+   go:       go env -w GOPROXY=http://localhost:23333/go,direct
+   cargo:    visit http://localhost:23333/ and copy the Cargo block to ~/.cargo/config.toml
+   maven:    visit http://localhost:23333/ and copy the Maven mirror block to ~/.m2/settings.xml
+   gem:      bundle config mirror.https://rubygems.org http://localhost:23333/rubygems/
+   composer: composer config -g repo.packagist composer http://localhost:23333/composer/
+   nuget:    dotnet nuget add source http://localhost:23333/nuget/v3/index.json -n depsilo
+   conda:    add channel http://localhost:23333/conda/ to ~/.condarc
+   helm:     helm repo add depsilo http://localhost:23333/helm/
+   R/CRAN:   options(repos = c(CRAN = "http://localhost:23333/cran/")) in ~/.Rprofile
+
+4. Run install commands normally — they auto-route through Depsilo.
+
+If Depsilo is down, tools fall back to public registries — installs still
+work, just not cached. Don't waste effort on retry logic for Depsilo itself.
+```
+
+Depsilo 不可达时，所有包管理器都会自动回退到公网 registry —— 安装命令照样成功，只是不缓存而已。
+
 ## ⚙️ 配置
 
 将 `config.example.toml` 复制为 `config.toml` 并按需编辑：

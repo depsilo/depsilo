@@ -5,6 +5,7 @@ import StatusDot from '@/components/StatusDot'
 import LanguageRail from '@/portal/components/LanguageRail'
 import ConfigurePane from '@/portal/components/ConfigurePane'
 import AllInOnePane from '@/portal/components/AllInOnePane'
+import AgentPane from '@/portal/components/AgentPane'
 
 function CopyButton({ text }: { text: string }) {
   const { t } = useTranslation()
@@ -125,6 +126,8 @@ export default function QuickStart() {
         <LanguageRail selected={language} onSelect={setLanguage} />
         {language === 'all' ? (
           <AllInOnePane endpoint={endpoint} />
+        ) : language === 'agent' ? (
+          <AgentPane endpoint={endpoint} />
         ) : (
           <ConfigurePane languageId={language} endpoint={endpoint} />
         )}
