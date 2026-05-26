@@ -45,7 +45,11 @@ export default function License() {
     },
     onSuccess: (s) => {
       qc.invalidateQueries({ queryKey: ['license', 'status'] })
-      if (s.is_pro) {
+      // Clear input only when the key actually granted paid status. During a
+      // trial, is_pro can be true via trial even if the saved key is invalid —
+      // gate on `source === 'paid'` so the user keeps their input visible
+      // alongside the "saved-pending" warning.
+      if (s.source === 'paid') {
         setKeyInput('')
       }
     },
@@ -272,7 +276,7 @@ export default function License() {
                     {t('license.key.activate_button')}
                   </ButtonV2>
                 </div>
-                {setKey.data && !setKey.data.is_pro && (
+                {setKey.data && setKey.data.source !== 'paid' && (
                   <div className="space-y-1">
                     <p className="text-[13px]" style={{ color: 'var(--warning, #F59E0B)' }}>
                       {t('license.key.saved_pending_message')}
@@ -282,23 +286,30 @@ export default function License() {
                         {setKey.data.license_error}
                       </p>
                     )}
-                    <ButtonV2
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => revalidate.mutate()}
-                      disabled={revalidate.isPending}
-                    >
-                      {t('license.key.try_revalidate')}
-                    </ButtonV2>
+                    <div className="flex gap-2">
+                      <ButtonV2
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => revalidate.mutate()}
+                        disabled={revalidate.isPending}
+                      >
+                        {t('license.key.try_revalidate')}
+                      </ButtonV2>
+                    </div>
                   </div>
                 )}
               </>
             )}
-            {source === 'paid' && (
+            {/* Remove key button: surface whenever a key is persisted in DB,
+                regardless of paid/trial source — so a user who saved a bad key
+                during trial can still clear it. */}
+            {status.license_key_masked && (
               <div className="flex gap-2">
-                <ButtonV2 variant="secondary" onClick={() => setKeyExpanded(true)}>
-                  {t('license.key.change_button')}
-                </ButtonV2>
+                {source === 'paid' && (
+                  <ButtonV2 variant="secondary" onClick={() => setKeyExpanded(true)}>
+                    {t('license.key.change_button')}
+                  </ButtonV2>
+                )}
                 <ButtonV2
                   variant="danger"
                   onClick={() => setRemoveOpen(true)}
