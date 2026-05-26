@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	// CLI mode: if a recognized subcommand is provided, dispatch to CLI
+	// CLI mode: dispatch by subcommand.
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
 		switch cmd {
@@ -33,9 +33,15 @@ func main() {
 			cli.PrintHelp()
 			os.Exit(1)
 		}
+	} else {
+		// No arguments — show help instead of silently starting a server.
+		// Use `depsilo serve` (or `depsilo start --daemon`) to start the server.
+		// This change is safer for AI agents exploring the binary.
+		cli.PrintHelp()
+		os.Exit(0)
 	}
 
-	// Server mode (default for no args or "serve"/"server")
+	// Server mode (entered only via explicit "serve"/"server" subcommand)
 	logger, err := zap.NewProduction()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)

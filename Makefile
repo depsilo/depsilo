@@ -41,14 +41,14 @@ build-desktop: frontend         ## 构建前端 + 编译桌面版
 
 # ─── 运行 ─────────────────────────────────────
 run: build                      ## 编译并前台运行
-	DEPSILO_CONFIG=$(CONFIG) ./$(BIN)
+	DEPSILO_CONFIG=$(CONFIG) ./$(BIN) serve
 
 run-pro: build                  ## 编译并前台运行（开启全部 Pro 功能）
-	DEPSILO_DEV_PRO=1 DEPSILO_CONFIG=$(CONFIG) ./$(BIN)
+	DEPSILO_DEV_PRO=1 DEPSILO_CONFIG=$(CONFIG) ./$(BIN) serve
 
 dev: build stop                 ## 编译并后台运行（dev 模式）
 	@echo ">>> starting $(APP) on :$(PORT) ..."
-	@DEPSILO_CONFIG=$(CONFIG) ./$(BIN) > .dev.log 2>&1 & echo $$! > $(PID_FILE)
+	@DEPSILO_CONFIG=$(CONFIG) ./$(BIN) serve > .dev.log 2>&1 & echo $$! > $(PID_FILE)
 	@sleep 3
 	@if curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1; then \
 		echo ">>> $(APP) running  pid=$$(cat $(PID_FILE))  http://localhost:$(PORT)"; \

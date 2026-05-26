@@ -57,12 +57,22 @@ type cacheDistResponse struct {
 // ── runStatus ───────────────────────────────────────────────────
 
 func runStatus(args []string) int {
+	jsonMode, _ := stripJSONFlag(args)
 	baseURL := getServerURL()
 
 	// 1. Health check
 	var health healthResponse
 	status, err := getJSON(baseURL+"/health", &health)
 	if err != nil {
+		if jsonMode {
+			printJSON(map[string]any{
+				"ok":    false,
+				"error": "unreachable",
+				"url":   baseURL,
+				"hint":  err.Error(),
+			})
+			return 1
+		}
 		fmt.Fprintf(os.Stderr, "Error: cannot connect to Depsilo at %s\n", baseURL)
 		fmt.Fprintf(os.Stderr, "  %v\n", err)
 		fmt.Fprintln(os.Stderr)
@@ -73,18 +83,48 @@ func runStatus(args []string) int {
 		return 1
 	}
 	if status != 200 || health.Status != "healthy" {
+		if jsonMode {
+			printJSON(map[string]any{
+				"ok":          false,
+				"error":       "unhealthy",
+				"http_status": status,
+				"status":      health.Status,
+			})
+			return 1
+		}
 		fmt.Fprintf(os.Stderr, "Error: service not healthy (HTTP %d, status: %s)\n", status, health.Status)
 		return 1
+	}
+
+	// In JSON mode, collect every response into one object and emit at the end.
+	var stats statsResponse
+	statsStatus, statsErr := getJSON(baseURL+"/api/v1/stats", &stats)
+	var dist cacheDistResponse
+	distStatus, distErr := getJSON(baseURL+"/api/v1/admin/cache/distribution", &dist)
+
+	if jsonMode {
+		out := map[string]any{
+			"ok":      true,
+			"url":     baseURL,
+			"version": health.Version,
+			"status":  health.Status,
+			"uptime":  health.Uptime,
+		}
+		if statsErr == nil && statsStatus == 200 {
+			out["stats"] = stats
+		}
+		if distErr == nil && distStatus == 200 {
+			out["cache_distribution"] = dist
+		}
+		printJSON(out)
+		return 0
 	}
 
 	fmt.Printf("Depsilo %s\n", health.Version)
 	fmt.Printf("Status:  %s\n", health.Status)
 	fmt.Printf("Uptime:  %s\n\n", health.Uptime)
 
-	// 2. Stats
-	var stats statsResponse
-	status, err = getJSON(baseURL+"/api/v1/stats", &stats)
-	if err == nil && status == 200 {
+	if statsErr == nil && statsStatus == 200 {
 		hitPct := stats.Today.HitRate * 100
 		fmt.Printf("Today's Activity:\n")
 		fmt.Printf("  Requests:    %s total (%s hits, %s misses)\n",
@@ -97,10 +137,7 @@ func runStatus(args []string) int {
 		fmt.Println()
 	}
 
-	// 3. Cache distribution
-	var dist cacheDistResponse
-	status, err = getJSON(baseURL+"/api/v1/admin/cache/distribution", &dist)
-	if err == nil && status == 200 {
+	if distErr == nil && distStatus == 200 {
 		fmt.Printf("Cache: %s / %s (%.1f%%)\n",
 			formatBytes(dist.TotalSize),
 			formatBytes(dist.MaxSize),

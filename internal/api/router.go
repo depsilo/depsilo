@@ -54,6 +54,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 
 	apiV1 := r.Group("/api/v1")
 
+	// Self-describing endpoints for AI agents + automation (no auth)
+	discoverHandler := public.NewDiscoverHandler(deps.Ecosystems)
+	apiV1.GET("/discover", discoverHandler.Discover)
+	apiV1.GET("/agent-prompt", discoverHandler.AgentPrompt)
+
 	// Public stats
 	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.ExtraIndexes)
 	apiV1.GET("/stats", statsHandler.GetStats)
