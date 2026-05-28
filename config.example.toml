@@ -157,6 +157,18 @@ url      = "https://charts.bitnami.com/bitnami"
 priority = 2
 proxy    = "http://127.0.0.1:7890"
 
+# ─── Hugging Face Hub ─────────────────────────────────────
+[[huggingface.upstreams]]
+name     = "hf-mirror"
+url      = "https://hf-mirror.com"
+priority = 1
+
+[[huggingface.upstreams]]
+name     = "official"
+url      = "https://huggingface.co"
+priority = 2
+# proxy = "http://127.0.0.1:7890"   # optional per-upstream HTTP proxy
+
 [docker]
 default_registry = "docker.io"
 
