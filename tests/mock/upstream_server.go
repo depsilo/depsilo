@@ -220,6 +220,57 @@ func (m *MockUpstream) RegisterHelm() {
 	})
 }
 
+// RegisterHuggingFace adds HuggingFace Hub endpoints — model metadata,
+// tree listing, and the resolve flow with a 302 redirect to a tracked
+// "CDN" path served by the same mock server.
+func (m *MockUpstream) RegisterHuggingFace() {
+	// Model metadata endpoint
+	m.mux.HandleFunc("/api/models/bert-base-uncased", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		fmt.Fprint(w, `{"modelId":"bert-base-uncased","sha":"abc1234","siblings":[{"rfilename":"config.json"},{"rfilename":"pytorch_model.bin"}]}`)
+	})
+
+	// Tree listing
+	m.mux.HandleFunc("/api/models/bert-base-uncased/tree/main", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		fmt.Fprint(w, `[{"path":"config.json","type":"file","size":645},{"path":"pytorch_model.bin","type":"file","size":11}]`)
+	})
+
+	// Dataset metadata (proves the datasets branch works too)
+	m.mux.HandleFunc("/api/datasets/squad", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		fmt.Fprint(w, `{"id":"squad","sha":"def5678"}`)
+	})
+
+	// Direct 200 file (config.json — not LFS)
+	m.mux.HandleFunc("/bert-base-uncased/resolve/main/config.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Repo-Commit", "abc1234")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		fmt.Fprint(w, `{"hidden":false}`)
+	})
+
+	// LFS file (pytorch_model.bin) — 302 redirects to mock CDN path
+	m.mux.HandleFunc("/bert-base-uncased/resolve/main/pytorch_model.bin", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Linked-Etag", "deadbeefcafe")
+		w.Header().Set("X-Linked-Size", "11")
+		w.Header().Set("X-Repo-Commit", "abc1234")
+		w.Header().Set("Location", m.URL()+"/cdn-lfs/pytorch_model.bin?sig=mock-sig")
+		w.WriteHeader(302)
+	})
+
+	// "CDN" path serving the actual bytes
+	m.mux.HandleFunc("/cdn-lfs/pytorch_model.bin", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", "11")
+		w.WriteHeader(200)
+		w.Write([]byte("FAKE_WEIGHT"))
+	})
+}
+
 // RegisterDocker adds Docker Registry V2 endpoints with Bearer token auth.
 func (m *MockUpstream) RegisterDocker() {
 	const mockToken = "mock-docker-token-12345"
@@ -284,5 +335,6 @@ func (m *MockUpstream) RegisterAll() {
 	m.RegisterConda()
 	m.RegisterCRAN()
 	m.RegisterHelm()
+	m.RegisterHuggingFace()
 	m.RegisterDocker()
 }
