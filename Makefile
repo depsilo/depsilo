@@ -223,9 +223,9 @@ test-docker-docker: dev         ## E2E: docker pull alpine through proxy (dind, 
 		-t depsilo-test-docker $(TEST_DIR)/docker-docker
 	docker run --rm --privileged depsilo-test-docker
 
-# Twelve ecosystems by default. Docker registry is opt-in (requires dind) — run
+# Thirteen ecosystems by default. Docker registry is opt-in (requires dind) — run
 # `make test-docker-docker` separately when needed.
-TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget conda cran helm
+TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget conda cran helm huggingface
 TEST_DOCKER_ALL_TARGETS := $(addprefix test-docker-,$(TEST_DOCKER_ALL_ECOS))
 
 # Listed as plain prerequisites (not a $(MAKE) loop) so that GNU Make's
@@ -233,9 +233,9 @@ TEST_DOCKER_ALL_TARGETS := $(addprefix test-docker-,$(TEST_DOCKER_ALL_ECOS))
 # server exactly once, even though every test-docker-<eco> declares dev
 # as its own prerequisite. Behaviour: fail-fast (first failure aborts);
 # add `-k` (`make -k test-docker-all`) to keep going through failures.
-test-docker-all: $(TEST_DOCKER_ALL_TARGETS)  ## E2E: all 12 non-docker ecosystems (fail-fast; -k to keep-going)
+test-docker-all: $(TEST_DOCKER_ALL_TARGETS)  ## E2E: all 13 non-docker ecosystems (fail-fast; -k to keep-going)
 	@echo ""
-	@echo ">>> ALL 12 ECOSYSTEMS PASSED"
+	@echo ">>> ALL 13 ECOSYSTEMS PASSED"
 
 test-docker: test-docker-all    ## Alias for test-docker-all
 
@@ -246,7 +246,7 @@ test-clean:                     ## 清理测试环境（venv + Docker e2e images
 	-for eco in $(TEST_DOCKER_ALL_ECOS) docker; do \
 		docker rmi depsilo-test-$$eco 2>/dev/null || true; \
 	done
-	@echo ">>> test env removed"
+	@echo ">>> test env removed (13 ecos + docker registry)"
 
 # ─── Docker ───────────────────────────────────
 DOCKER_IMAGE := depsilo/depsilo
