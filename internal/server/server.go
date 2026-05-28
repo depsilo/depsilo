@@ -21,6 +21,7 @@ import (
 	dockeradapter "depsilo/internal/adapter/docker"
 	"depsilo/internal/adapter/goproxy"
 	"depsilo/internal/adapter/helm"
+	"depsilo/internal/adapter/huggingface"
 	"depsilo/internal/adapter/maven"
 	"depsilo/internal/adapter/npm"
 	"depsilo/internal/adapter/nuget"
@@ -117,6 +118,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		{"conda", "/conda", cfg.Conda.Upstreams},
 		{"cran", "/cran", cfg.CRAN.Upstreams},
 		{"helm", "/helm", cfg.Helm.Upstreams},
+		{"huggingface", "/huggingface", cfg.HuggingFace.Upstreams},
 	}
 
 	// Sync upstreams and create pools
@@ -243,7 +245,8 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		"nuget":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return nuget.New(cm, s, cc, db) },
 		"conda":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return conda.New(cm, s, cc, db) },
 		"cran":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return cran.New(cm, s, cc, db) },
-		"helm":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return helm.New(cm, s, cc, db) },
+		"helm":         func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return helm.New(cm, s, cc, db) },
+		"huggingface":  func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return huggingface.New(cm, s, cc, db) },
 	}
 
 	handlers := make(map[string]adapter.Adapter, len(ecosystems))
