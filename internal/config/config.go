@@ -21,8 +21,9 @@ type Config struct {
 	NuGet    AdapterConfig  `mapstructure:"nuget"`
 	Conda    AdapterConfig  `mapstructure:"conda"`
 	CRAN     AdapterConfig  `mapstructure:"cran"`
-	Helm     AdapterConfig  `mapstructure:"helm"`
-	Docker   DockerConfig   `mapstructure:"docker"`
+	Helm        AdapterConfig  `mapstructure:"helm"`
+	HuggingFace AdapterConfig  `mapstructure:"huggingface"`
+	Docker      DockerConfig   `mapstructure:"docker"`
 	License  LicenseConfig  `mapstructure:"license"`
 	Security     SecurityConfig   `mapstructure:"security"`
 	ExtraIndexes []ExtraIndexConfig `mapstructure:"extra_indexes"`
