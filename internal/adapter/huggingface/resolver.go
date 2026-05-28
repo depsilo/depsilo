@@ -80,7 +80,10 @@ func (r *Resolver) Handle(c *gin.Context, upstreamBase, requestPath string) {
 		// Non-LFS small file: pass body straight through.
 		c.Status(http.StatusOK)
 		if c.Request.Method != http.MethodHead {
-			_, _ = io.Copy(c.Writer, upResp.Body)
+			if _, err := io.Copy(c.Writer, upResp.Body); err != nil {
+				zap.L().Warn("huggingface stream to client interrupted",
+					zap.String("url", upURL), zap.Error(err))
+			}
 		}
 
 	case http.StatusFound, http.StatusMovedPermanently,
@@ -130,13 +133,19 @@ func (r *Resolver) Handle(c *gin.Context, upstreamBase, requestPath string) {
 			c.Header("Content-Type", ct)
 		}
 		c.Status(innerResp.StatusCode)
-		_, _ = io.Copy(c.Writer, innerResp.Body)
+		if _, err := io.Copy(c.Writer, innerResp.Body); err != nil {
+			zap.L().Warn("huggingface CDN stream to client interrupted",
+				zap.String("url", signed), zap.Error(err))
+		}
 
 	default:
 		// 4xx / 5xx — pass status and body through. Not cached.
 		c.Status(upResp.StatusCode)
 		if c.Request.Method != http.MethodHead {
-			_, _ = io.Copy(c.Writer, upResp.Body)
+			if _, err := io.Copy(c.Writer, upResp.Body); err != nil {
+				zap.L().Warn("huggingface error-body stream to client interrupted",
+					zap.String("url", upURL), zap.Error(err))
+			}
 		}
 	}
 }
