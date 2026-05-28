@@ -147,6 +147,11 @@ name = "mock"
 url = "%s"
 priority = 1
 
+[[huggingface.upstreams]]
+name = "mock"
+url = "%s"
+priority = 1
+
 [docker]
 default_registry = "mock"
 
@@ -157,7 +162,7 @@ url = "%s"
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
-		upstreamURL)
+		upstreamURL, upstreamURL)
 
 	os.WriteFile(dir+"/config.toml", []byte(cfg), 0644)
 }
