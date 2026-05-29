@@ -39,19 +39,20 @@ var ecosystemPurposes = map[string]struct {
 	Path    string
 	Purpose string
 }{
-	"pypi":     {"/pypi/", "Python — pip, uv, Poetry, PDM"},
-	"apt":      {"/apt/", "Debian / Ubuntu APT packages"},
-	"npm":      {"/npm/", "Node.js — npm, yarn, pnpm, bun"},
-	"go":       {"/go/", "Go modules (GOPROXY protocol)"},
-	"cargo":    {"/crates/", "Rust crates (sparse index)"},
-	"maven":    {"/maven/", "Java — Maven, Gradle, sbt"},
-	"rubygems": {"/rubygems/", "Ruby — gem, bundler"},
-	"composer": {"/composer/", "PHP — Composer"},
-	"nuget":    {"/nuget/", ".NET — NuGet v3 protocol"},
-	"conda":    {"/conda/", "Conda channels"},
-	"cran":     {"/cran/", "R — CRAN packages"},
-	"helm":     {"/helm/", "Kubernetes Helm charts"},
-	"docker":   {"/docker/", "OCI / Docker registry mirror"},
+	"pypi":        {"/pypi/", "Python — pip, uv, Poetry, PDM"},
+	"apt":         {"/apt/", "Debian / Ubuntu APT packages"},
+	"npm":         {"/npm/", "Node.js — npm, yarn, pnpm, bun"},
+	"go":          {"/go/", "Go modules (GOPROXY protocol)"},
+	"cargo":       {"/crates/", "Rust crates (sparse index)"},
+	"maven":       {"/maven/", "Java — Maven, Gradle, sbt"},
+	"rubygems":    {"/rubygems/", "Ruby — gem, bundler"},
+	"composer":    {"/composer/", "PHP — Composer"},
+	"nuget":       {"/nuget/", ".NET — NuGet v3 protocol"},
+	"conda":       {"/conda/", "Conda channels"},
+	"cran":        {"/cran/", "R — CRAN packages"},
+	"helm":        {"/helm/", "Kubernetes Helm charts"},
+	"huggingface": {"/huggingface/", "Hugging Face — models + datasets (huggingface-cli, transformers, datasets)"},
+	"docker":      {"/docker/", "OCI / Docker registry mirror"},
 }
 
 // Discover returns the catalog. Stable JSON shape consumed by AI agents.
@@ -80,7 +81,7 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 		"service":     "depsilo",
 		"version":     version.Version,
 		"commit":      version.Commit,
-		"description": "Local dependency cache proxy gateway for 12+ package ecosystems",
+		"description": "Local dependency cache proxy gateway for 13+ package ecosystems",
 		"homepage":    "https://depsilo.com",
 		"repository":  "https://github.com/depsilo/depsilo",
 		"ecosystems":  ecos,
@@ -122,7 +123,7 @@ func (h *DiscoverHandler) AgentPrompt(c *gin.Context) {
 	base := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
 
 	body := fmt.Sprintf(`This workspace has a local dependency cache called Depsilo at %s.
-It caches packages from 12 ecosystems and serves them at LAN speed.
+It caches packages from 13+ ecosystems and serves them at LAN speed.
 
 Before running any package install in this workspace:
 
@@ -130,21 +131,23 @@ Before running any package install in this workspace:
 
 2. Detect which package managers this project uses (requirements.txt,
    package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
-   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, etc.).
+   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, or import transformers /
+   import huggingface_hub in Python source, etc.).
 
 3. Configure ONLY the detected tools. Pick from:
 
-   pip:      pip config set global.index-url %s/pypi/simple/
-   npm:      npm config set registry %s/npm/
-   go:       go env -w GOPROXY=%s/go,direct
-   cargo:    visit %s/ and copy the Cargo block to ~/.cargo/config.toml
-   maven:    visit %s/ and copy the Maven mirror block to ~/.m2/settings.xml
-   gem:      bundle config mirror.https://rubygems.org %s/rubygems/
-   composer: composer config -g repo.packagist composer %s/composer/
-   nuget:    dotnet nuget add source %s/nuget/v3/index.json -n depsilo
-   conda:    add channel %s/conda/ to ~/.condarc
-   helm:     helm repo add depsilo %s/helm/
-   R/CRAN:   options(repos = c(CRAN = "%s/cran/")) in ~/.Rprofile
+   pip:          pip config set global.index-url %s/pypi/simple/
+   npm:          npm config set registry %s/npm/
+   go:           go env -w GOPROXY=%s/go,direct
+   cargo:        visit %s/ and copy the Cargo block to ~/.cargo/config.toml
+   maven:        visit %s/ and copy the Maven mirror block to ~/.m2/settings.xml
+   gem:          bundle config mirror.https://rubygems.org %s/rubygems/
+   composer:     composer config -g repo.packagist composer %s/composer/
+   nuget:        dotnet nuget add source %s/nuget/v3/index.json -n depsilo
+   conda:        add channel %s/conda/ to ~/.condarc
+   helm:         helm repo add depsilo %s/helm/
+   huggingface:  export HF_ENDPOINT=%s/huggingface
+   R/CRAN:       options(repos = c(CRAN = "%s/cran/")) in ~/.Rprofile
 
 4. Run install commands normally — they auto-route through Depsilo.
 
@@ -152,7 +155,7 @@ If Depsilo is down, tools fall back to public registries — installs still
 work, just not cached. Don't waste effort on retry logic for Depsilo itself.
 `,
 		base, base,
-		base, base, base, base, base, base, base, base, base, base, base,
+		base, base, base, base, base, base, base, base, base, base, base, base,
 	)
 
 	c.Header("Content-Type", "text/plain; charset=utf-8")
