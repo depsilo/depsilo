@@ -436,6 +436,7 @@ const zh = {
       method: {
         cmdline: '命令行方式',
         envvar: '环境变量方式',
+        inline: '内联方式',
       },
       orUseAI: '或使用 AI 配置',
       aiTab: 'AI 自动配置',
