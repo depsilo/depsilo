@@ -216,6 +216,12 @@ test-docker-helm: dev           ## E2E: helm repo add + index.yaml fetch through
 		--build-arg HELM_REPO_URL=$(DEPSILO_URL)/helm \
 		-t depsilo-test-helm $(TEST_DIR)/docker-helm
 
+test-docker-huggingface: dev    ## E2E: huggingface-cli download bert-tiny through proxy
+	@echo "=== [huggingface] huggingface-cli download prajjwal1/bert-tiny ==="
+	docker build $(DOCKER_BUILD_ARGS) \
+		--build-arg HF_ENDPOINT=$(DEPSILO_URL)/huggingface \
+		-t depsilo-test-huggingface $(TEST_DIR)/docker-huggingface
+
 test-docker-docker: dev         ## E2E: docker pull alpine through proxy (dind, opt-in)
 	@echo "=== [docker] docker pull alpine (dind) ==="
 	docker build $(DOCKER_BUILD_ARGS) \
