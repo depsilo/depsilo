@@ -436,6 +436,7 @@ const en = {
       method: {
         cmdline: 'Command line',
         envvar: 'Environment variable',
+        inline: 'Inline',
       },
       orUseAI: 'or configure with AI',
       aiTab: 'Auto-configure',
