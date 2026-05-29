@@ -709,6 +709,48 @@ export const LANGUAGES: Language[] = [
       },
     ],
   },
+  {
+    id: 'huggingface', name: 'Hugging Face', glyph: 'HF', iconAdapter: 'huggingface',
+    managers: [
+      {
+        id: 'huggingface-cli', name: 'huggingface-cli', hint: 'Official CLI',
+        quick:      { lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface\nhuggingface-cli download bert-base-uncased --local-dir ./bert' },
+        methods: [
+          { label: 'quickstart.method.envvar',  lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'HF_ENDPOINT={URL}/huggingface huggingface-cli download bert-base-uncased --local-dir ./bert' },
+        ],
+        persistent: { file: '~/.bashrc', lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface' },
+        verify:     { lang: 'sh', body: 'huggingface-cli download prajjwal1/bert-tiny --local-dir /tmp/bert-tiny && ls /tmp/bert-tiny' },
+        paths: [
+          { os: 'POSIX shells', path: '~/.bashrc, ~/.zshrc, ~/.profile' },
+          { os: 'fish',         path: 'set -Ux HF_ENDPOINT {URL}/huggingface' },
+        ],
+        tutorial: [
+          'huggingface-cli, transformers, datasets — every official tool respects HF_ENDPOINT.',
+          'Set it once in your shell rc and forget about it; every download routes through Depsilo automatically.',
+          'Gated models: pass your usual HF_TOKEN — Depsilo forwards it to upstream verbatim but does NOT cache the response.',
+        ],
+      },
+      {
+        id: 'transformers', name: 'transformers', hint: 'Python: AutoModel.from_pretrained()',
+        quick:      { lang: 'py', body: 'import os; os.environ["HF_ENDPOINT"] = "{URL}/huggingface"\nfrom transformers import AutoModel\nm = AutoModel.from_pretrained("bert-base-uncased")' },
+        methods: [
+          { label: 'quickstart.method.envvar',  lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface' },
+          { label: 'quickstart.method.inline',  lang: 'py', body: 'import os; os.environ["HF_ENDPOINT"] = "{URL}/huggingface"\nfrom transformers import AutoModel\nm = AutoModel.from_pretrained("bert-base-uncased")' },
+        ],
+        persistent: { file: '~/.bashrc', lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface' },
+        verify:     { lang: 'py', body: 'from transformers import AutoModel\nm = AutoModel.from_pretrained("prajjwal1/bert-tiny")\nprint(m.config.model_type)' },
+        paths: [
+          { os: 'POSIX shells', path: '~/.bashrc, ~/.zshrc, ~/.profile' },
+          { os: 'In-script',    path: 'os.environ before importing transformers' },
+        ],
+        tutorial: [
+          'Set HF_ENDPOINT before importing transformers (or any HF library). The env var must be set at import time, not later.',
+          'Works for transformers, datasets, evaluate, peft, accelerate — anything that uses huggingface_hub under the hood.',
+        ],
+      },
+    ],
+  },
 ]
 
 // ── AI prompt / shell script builders ─────────────────────────────
@@ -738,7 +780,8 @@ Before running any package install in this workspace:
 
 2. Detect which package managers this project uses (requirements.txt,
    package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
-   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, etc.).
+   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, or \`import transformers\` /
+   \`import huggingface_hub\` in Python source, etc.).
 
 3. Configure ONLY the detected tools. Pick from:
 
@@ -750,6 +793,7 @@ Before running any package install in this workspace:
    gem:      bundle config mirror.https://rubygems.org ${endpoint}/rubygems/
    composer: composer config -g repo.packagist composer ${endpoint}/composer/
    nuget:    dotnet nuget add source ${endpoint}/nuget/v3/index.json -n depsilo
+   huggingface: export HF_ENDPOINT=${endpoint}/huggingface
    conda:    add channel ${endpoint}/conda/ to ~/.condarc
    helm:     helm repo add depsilo ${endpoint}/helm/
    R/CRAN:   options(repos = c(CRAN = "${endpoint}/cran/")) in ~/.Rprofile
