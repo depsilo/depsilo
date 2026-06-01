@@ -4,7 +4,7 @@
 
 **One cache for all your dependencies.**
 
-Deploy in minutes. LAN-speed installs for 12 package managers.<br>
+Deploy in minutes. LAN-speed installs for 13 package managers.<br>
 Single binary, ~50 MB memory, zero complexity.
 
 [![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://go.dev)
@@ -30,7 +30,7 @@ Your team runs `pip install`, `npm install`, `go get`, `cargo build` hundreds of
 | Memory | 2+ GB | ~50 MB |
 | Binary | WAR/JAR + JVM | Single static binary |
 | Config | XML/YAML, web wizard, LDAP, roles... | One TOML file |
-| Ecosystems | Many (with per-ecosystem setup) | 12, unified config |
+| Ecosystems | Many (with per-ecosystem setup) | 13, unified config |
 
 > Depsilo is **not** a full artifact repository. It's a caching proxy — purpose-built to be fast, light, and invisible.
 
@@ -58,7 +58,7 @@ Your team runs `pip install`, `npm install`, `go get`, `cargo build` hundreds of
 docker run -d --name depsilo -p 23333:23333 -v depsilo-data:/app/data depsilo/depsilo:latest
 ```
 
-Open `http://localhost:23333` — the portal shows copy-paste config for all 12 ecosystems.
+Open `http://localhost:23333` — the portal shows copy-paste config for all 13 ecosystems.
 
 Default admin login: `admin` / `admin` at `/admin`.
 
@@ -115,7 +115,7 @@ Paste the prompt below into Hermes, OpenClaw, Claude Code, Cursor, or any agenti
 
 ```text
 This workspace has a local dependency cache called Depsilo at http://localhost:23333.
-It caches packages from 12 ecosystems and serves them at LAN speed.
+It caches packages from 13 ecosystems and serves them at LAN speed.
 
 Before running any package install in this workspace:
 
@@ -168,7 +168,7 @@ export GOPROXY=http://YOUR_HOST:23333/go,direct
 # registry = "sparse+http://YOUR_HOST:23333/crates/"
 ```
 
-See the built-in **Quick Start** page for all 12 ecosystems, including Maven, Composer, NuGet, Conda, CRAN, and Helm.
+See the built-in **Quick Start** page for all 13 ecosystems, including Maven, Composer, NuGet, Conda, CRAN, and Helm.
 
 ## Key Features
 

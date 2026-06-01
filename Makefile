@@ -245,7 +245,7 @@ test-docker-all: $(TEST_DOCKER_ALL_TARGETS)  ## E2E: all 13 non-docker ecosystem
 
 test-docker: test-docker-all    ## Alias for test-docker-all
 
-test-e2e: test-docker-all       ## Alias: end-to-end test all 12 non-docker ecosystems
+test-e2e: test-docker-all       ## Alias: end-to-end test all 13 non-docker ecosystems
 
 test-clean:                     ## 清理测试环境（venv + Docker e2e images）
 	rm -rf $(TEST_DIR)/.venv

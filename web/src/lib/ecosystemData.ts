@@ -772,7 +772,7 @@ export function buildPrompt(endpoint: string, languageId: string): string {
 // Depsilo automatically.
 export function buildAgentPrompt(endpoint: string): string {
   return `This workspace has a local dependency cache called Depsilo at ${endpoint}.
-It caches packages from 12 ecosystems and serves them at LAN speed.
+It caches packages from 13 ecosystems and serves them at LAN speed.
 
 Before running any package install in this workspace:
 

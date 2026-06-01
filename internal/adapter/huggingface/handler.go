@@ -5,7 +5,6 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
-	"depsilo/internal/adapter"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -63,15 +62,11 @@ func (h *Handler) handleRequest(c *gin.Context) {
 
 	// Note v1 caching scope: the resolver itself currently does NOT
 	// integrate with h.cacheMgr — passthrough mode. A follow-up PR will
-	// wire cache.Manager.Get/Put using the keyer outputs already
-	// available here. See plan front matter "Implementation note:
-	// deferred work".
-	//
-	// AuthBypass(c) is also wired here for future cache integration.
+	// wire cache.Manager.Get/Put using these keyer outputs.
+	// See plan front matter "Implementation note: deferred work".
 	_ = AuthBypass(c)
 	_ = CacheKey(parsed)
 	_ = TTLForRef(parsed.Ref)
-	_ = adapter.Adapter(h) // silence unused-import warning during scaffold
 
 	h.resolver.Handle(c, upBase, path)
 
