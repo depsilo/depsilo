@@ -103,7 +103,7 @@ Hugging Face 模型动辄几十 GB（单个权重文件可达 50 GB+）。
 
 ```text
 This workspace has a local dependency cache called Depsilo at http://localhost:23333.
-It caches packages from 12 ecosystems and serves them at LAN speed.
+It caches packages from 13 ecosystems and serves them at LAN speed.
 
 Before running any package install in this workspace:
 
