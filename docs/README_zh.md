@@ -20,7 +20,7 @@
 
 ## ✨ 特性
 
-- 🚀 **pip + apt 代理缓存** — npm / cargo / Go 即将支持
+- 🚀 **13 个生态代理缓存** — pip, apt, npm, Go, cargo, Maven, RubyGems, Composer, NuGet, Conda, CRAN, Helm, Hugging Face
 - ⚡ **Singleflight** — 100 个并发请求只触发 1 次回源
 - 🌐 **多上游源**，支持为每个源单独配置 HTTP 代理
 - 🔄 **自动健康检查**，基于延迟自动切换
@@ -89,6 +89,12 @@ cp config.example.toml config.toml
 服务默认启动在 `http://localhost:23333`。
 默认管理员账号：`admin` / `admin` — 首次登录后请修改密码。
 
+### AI 工作负载说明
+
+Hugging Face 模型动辄几十 GB（单个权重文件可达 50 GB+）。
+如果你主要用 Depsilo 缓存模型，建议把 `config.toml` 里的
+`[cache] max_size_gb` 从默认 20 GB 提到 200 GB 起步。
+
 ## 🤖 与 AI Agent 一起使用
 
 把下面这段提示词粘进 Hermes、OpenClaw、Claude Code、Cursor 等任意 AI 编码 agent。Agent 会自动检测项目用了哪些包管理器，把对应的 install 流量都切到你本地的 Depsilo 缓存，无需安装任何 plugin / skill。
@@ -120,6 +126,7 @@ Before running any package install in this workspace:
    conda:    add channel http://localhost:23333/conda/ to ~/.condarc
    helm:     helm repo add depsilo http://localhost:23333/helm/
    R/CRAN:   options(repos = c(CRAN = "http://localhost:23333/cran/")) in ~/.Rprofile
+   huggingface: export HF_ENDPOINT=http://localhost:23333/huggingface
 
 4. Run install commands normally — they auto-route through Depsilo.
 

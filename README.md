@@ -50,6 +50,7 @@ Your team runs `pip install`, `npm install`, `go get`, `cargo build` hundreds of
 | **conda** | Data science | Passthrough |
 | **Rscript** | R (CRAN) | Passthrough |
 | **helm** | Kubernetes | Passthrough |
+| **huggingface-cli** / transformers / datasets | Hugging Face Hub (models + datasets) | Server-side LFS follow |
 
 ## Quick Start
 
@@ -60,6 +61,13 @@ docker run -d --name depsilo -p 23333:23333 -v depsilo-data:/app/data depsilo/de
 Open `http://localhost:23333` — the portal shows copy-paste config for all 12 ecosystems.
 
 Default admin login: `admin` / `admin` at `/admin`.
+
+### Note for AI workloads
+
+Hugging Face models are large — a single weights file can be 30-50 GB.
+If you primarily use Depsilo as a model cache, raise the
+`[cache] max_size_gb` setting in `config.toml` from the default 20 GB.
+A practical starting point is 200 GB for teams using multiple LLMs.
 
 <details>
 <summary><b>docker-compose</b></summary>
@@ -130,6 +138,7 @@ Before running any package install in this workspace:
    conda:    add channel http://localhost:23333/conda/ to ~/.condarc
    helm:     helm repo add depsilo http://localhost:23333/helm/
    R/CRAN:   options(repos = c(CRAN = "http://localhost:23333/cran/")) in ~/.Rprofile
+   huggingface: export HF_ENDPOINT=http://localhost:23333/huggingface
 
 4. Run install commands normally — they auto-route through Depsilo.
 
