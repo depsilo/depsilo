@@ -345,6 +345,13 @@ proxy-env:                      ## 打印可用的代理配置（推荐使用 de
 	@echo "    --build-arg PIP_TRUSTED_HOST=$(HOST_IP) \\"
 	@echo "    -t myapp ."
 
+# ─── 发布 ─────────────────────────────────────
+release-dry-run: frontend        ## 本地模拟 goreleaser 发布（不推送）
+	goreleaser release --snapshot --clean --skip=publish
+
+release-check: frontend          ## 检查 goreleaser 配置是否正确
+	goreleaser check
+
 # ─── 清理 ─────────────────────────────────────
 clean: stop docker-stop         ## 清理所有构建产物、容器和缓存数据
 	rm -rf bin/ data/ .dev.log $(PID_FILE)

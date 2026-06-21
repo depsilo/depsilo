@@ -160,4 +160,26 @@ export const licenseApi = {
   clearKey:      () => api.delete<EntitlementStatus>('/admin/license/key'),
 }
 
+// Webhook notification types
+export interface WebhookConfig {
+  id: number
+  name: string
+  platform: 'slack' | 'dingtalk' | 'wecom' | 'feishu' | 'generic'
+  url: string
+  enabled: boolean
+  events: string
+  cooldown_minutes: number
+  last_sent_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export const webhookApi = {
+  list:   () => api.get<WebhookConfig[]>('/admin/webhooks'),
+  create: (data: Partial<WebhookConfig>) => api.post<WebhookConfig>('/admin/webhooks', data),
+  update: (id: number, data: Partial<WebhookConfig>) => api.put(`/admin/webhooks/${id}`, data),
+  delete: (id: number) => api.delete(`/admin/webhooks/${id}`),
+  test:   (id: number) => api.post(`/admin/webhooks/${id}/test`),
+}
+
 export default api

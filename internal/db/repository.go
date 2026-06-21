@@ -70,5 +70,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&ProjectPackage{},
 		&TrialRecord{},
 		&LicenseStorage{},
+		&WebhookConfig{},
 	)
 }

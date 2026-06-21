@@ -6,7 +6,7 @@ before:
 
 builds:
   - id: depsilo
-    main: ./cmd/server
+    main: ./cmd/depsilo
     binary: depsilo
     env:
       - CGO_ENABLED=0
@@ -22,6 +22,12 @@ builds:
       - -X depsilo/internal/version.Version={{.Version}}
       - -X depsilo/internal/version.Commit={{.Commit}}
       - -X depsilo/internal/version.BuildDate={{.Date}}
+    hooks:
+      post:
+        # Windows binary gets .exe extension naturally; on unix, ensure executable bit
+        - cmd: chmod +x {{ .Path }}
+          env:
+            - "{{ if ne .Os \"windows\" }}true{{ end }}"
 
 archives:
   - id: default
@@ -31,7 +37,10 @@ archives:
         format: zip
     files:
       - config.example.toml
-    name_template: "depsilo_{{ .Os }}_{{ .Arch }}"
+      - docker-compose.yml
+      - README.md
+      - LICENSE
+    name_template: "depsilo_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
@@ -51,3 +60,19 @@ release:
     name: depsilo
   prerelease: auto
   draft: false
+  extra_files:
+    - glob: ./install.sh
+
+# Homebrew tap formula generation
+brews:
+  - name: depsilo
+    repository:
+      owner: depsilo
+      name: homebrew-tap
+    homepage: "https://depsilo.com"
+    description: "Lightweight self-hosted dependency cache for 14 package managers"
+    license: "MIT"
+    install: |
+      bin.install "depsilo"
+    test: |
+      system "#{bin}/depsilo", "version"

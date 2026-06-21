@@ -8,8 +8,9 @@ import SelectV2 from '@/components/Select'
 import ButtonV2 from '@/components/Button'
 import Icon from '@/components/Icon'
 import { useQueryClient } from '@tanstack/react-query'
+import WebhookTab from '@/admin/components/WebhookTab'
 
-type TabKey = 'basic' | 'cache' | 'storage' | 'auth'
+type TabKey = 'basic' | 'cache' | 'storage' | 'auth' | 'webhooks'
 
 export default function SettingsV2() {
   const { t } = useTranslation()
@@ -18,6 +19,7 @@ export default function SettingsV2() {
     { key: 'cache' as const, label: t('settings.cachePolicy'), icon: 'cached' },
     { key: 'storage' as const, label: t('settings.storageBackend'), icon: 'database' },
     { key: 'auth' as const, label: t('settings.authSecurity'), icon: 'shield' },
+    { key: 'webhooks' as const, label: t('settings.webhooks'), icon: '🔔' },
   ]
   const [activeTab, setActiveTab] = useState<TabKey>('basic')
   const [settings, setSettings] = useState<Record<string, any>>({})
@@ -168,6 +170,8 @@ export default function SettingsV2() {
               </div>
             </CardV2>
           )}
+
+          {activeTab === 'webhooks' && <WebhookTab />}
 
         </div>
       </div>

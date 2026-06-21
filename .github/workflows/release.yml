@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  # Job 1: Server binaries (6 platforms) via GoReleaser
+  # Job 1: Cross-platform CLI binaries via GoReleaser (6 platforms)
+  # Also generates Homebrew formula + checksums + changelog
   release:
     runs-on: ubuntu-latest
     steps:
@@ -40,8 +41,17 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # For Homebrew tap push
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
-  # Job 2: Desktop — macOS (universal binary)
+      - name: Upload install.sh to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: install.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 2: Desktop — macOS (universal binary .app)
   desktop-macos:
     runs-on: macos-latest
     steps:
@@ -81,7 +91,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Job 3: Desktop — Windows (amd64)
+  # Job 3: Desktop — Windows (amd64, NSIS installer)
   desktop-windows:
     runs-on: windows-latest
     steps:
@@ -112,7 +122,6 @@ jobs:
           if ($installer) {
             Copy-Item $installer.FullName "build/bin/depsilo-desktop-windows-amd64-installer.exe"
           } else {
-            # Fallback: zip the exe
             Compress-Archive -Path "build/bin/depsilo-desktop.exe" -DestinationPath "build/bin/depsilo-desktop-windows-amd64.zip"
           }
 
@@ -126,7 +135,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Job 4: Desktop — Linux (amd64)
+  # Job 4: Desktop — Linux (amd64, AppImage)
   desktop-linux:
     runs-on: ubuntu-latest
     steps:

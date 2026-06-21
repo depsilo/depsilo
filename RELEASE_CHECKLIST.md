@@ -1,52 +1,49 @@
-# Release Checklist — v0.1.0
+# Release Checklist
 
-## Code Quality
+## Pre-release
 
-- [ ] `go vet ./...` passes with no errors
+### Code Quality
+- [ ] `go vet ./...` passes
 - [ ] `go test ./...` all tests pass
-- [ ] Frontend TypeScript has no type errors (`npm run type-check`)
-- [ ] Frontend builds successfully (`npm run build`)
-- [ ] No unresolved TODO/FIXME/HACK comments in critical paths
+- [ ] `make test-unit` + `make test-integration` pass
+- [ ] `cd web && npm run build` succeeds
+- [ ] i18n audit passes: `python3 scripts/i18n-audit.py`
 
-## Security
+### Binary
+- [ ] `make build` produces `bin/depsilo` successfully
+- [ ] `./bin/depsilo version` shows correct version
+- [ ] `./bin/depsilo serve` starts without errors
+- [ ] `./bin/depsilo backup --out /tmp/test.tar.gz` works
 
-- [ ] No hardcoded private IP addresses / real secrets in committed code
-- [ ] `.gitignore` covers: `config.toml`, `.env`, `*.db`, `*.sqlite`, `data/`, `bin/`, `web/dist/`, `*.log`
-- [ ] `config.example.toml` contains only placeholder values
-- [ ] JWT secret has forced-change warning at startup and in config comments
-- [ ] Default admin password (`admin:admin`) has change warning at startup
-- [ ] Git history clean of sensitive files (`config.toml` removed via filter-branch)
-- [ ] `SECURITY.md` exists with vulnerability reporting instructions
-
-## Documentation
-
-- [ ] `README.md` complete — Quick Start commands can be copy-pasted and run
-- [ ] `config.example.toml` has comments explaining every field
-- [ ] `docker-compose.yml` works out of the box with minimal setup
-- [ ] `.env.example` documents all environment variables
-- [ ] `CONTRIBUTING.md` exists with dev setup and PR guidelines
-- [ ] `CHANGELOG.md` exists with v0.1.0 entry
-- [ ] `LICENSE` file present (MIT)
-
-## GitHub Repository Settings
-
-- [ ] Repository description filled (e.g., "Lightweight pip/apt caching proxy gateway written in Go")
-- [ ] Topics added: `go`, `docker`, `pip`, `apt`, `cache`, `proxy`, `self-hosted`, `mirror`
-- [ ] License set to MIT
-- [ ] About section: website URL pointing to landing page
-- [ ] GitHub Actions CI workflow (`.github/workflows/ci.yml`) passing on main
-- [ ] Branch protection on `main`: require PR reviews, require CI pass
-- [ ] Issue templates configured (bug report + feature request)
-- [ ] PR template configured
-- [ ] Disable unused features (Projects / Wiki — optional)
+### Release Artifacts
+- [ ] `install.sh` is executable and bash-syntax valid
+- [ ] `config.example.toml` has no real secrets
+- [ ] `CHANGELOG.md` updated with new version entry
+- [ ] `goreleaser check` passes: `make release-check`
 
 ## Release
 
-- [ ] Version string in code matches release tag (v0.1.0)
-- [ ] Git tag created: `git tag -a v0.1.0 -m "Initial release"`
-- [ ] GitHub Release created with release notes
-- [ ] Docker image built and pushed to Docker Hub
-- [ ] Docker image tags: `latest` + `v0.1.0`
-- [ ] Landing page URL accessible
-- [ ] Landing page GitHub link points to correct repository
-- [ ] Quick Start instructions tested on a clean machine
+### Tag & Push
+```bash
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+### Automated (GitHub Actions)
+- [ ] GoReleaser builds CLI binaries for 6 platforms
+- [ ] CLI archives uploaded (linux/darwin/windows × amd64/arm64)
+- [ ] Checksums uploaded
+- [ ] `install.sh` uploaded to release
+- [ ] Homebrew formula auto-updated in `depsilo/homebrew-tap`
+- [ ] Desktop builds: macOS (.app), Windows (NSIS installer), Linux (.tar.gz)
+
+### Docker
+- [ ] Docker image pushed to Docker Hub (`depsilo/depsilo`)
+- [ ] Docker image pushed to GHCR (`ghcr.io/depsilo/depsilo`)
+- [ ] Tags: `latest`, `X.Y.Z`, `X.Y`, `X`
+
+### Post-release
+- [ ] `curl -fsSL https://depsilo.com/install.sh | bash` works on clean machine
+- [ ] `brew install depsilo/tap/depsilo` works on macOS
+- [ ] `docker run depsilo/depsilo:latest` starts successfully
+- [ ] Release notes published on GitHub Releases

@@ -15,6 +15,7 @@ import (
 	"depsilo/internal/entitlement"
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
+	"depsilo/internal/notify"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
 	"depsilo/internal/trial"
@@ -45,6 +46,7 @@ type Deps struct {
 	RulesEngine      *rules.Engine
 	SecurityScanner  *security.Scanner
 	SecurityImporter *security.Importer
+	WebhookNotifier  *notify.Notifier
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -146,6 +148,14 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	settingsHandler := admin.NewSettingsHandler(deps.Config)
 	adminGroup.GET("/settings", settingsHandler.Get)
 	adminGroup.PUT("/settings", settingsHandler.Update)
+
+	// Webhook notifications
+	webhookHandler := admin.NewWebhookHandler(deps.DB, deps.WebhookNotifier)
+	adminGroup.GET("/webhooks", webhookHandler.List)
+	adminGroup.POST("/webhooks", webhookHandler.Create)
+	adminGroup.PUT("/webhooks/:id", webhookHandler.Update)
+	adminGroup.DELETE("/webhooks/:id", webhookHandler.Delete)
+	adminGroup.POST("/webhooks/:id/test", webhookHandler.Test)
 
 	// License — status, key mutation, trial activation (no Pro gate; free users need these)
 	licenseHandler := admin.NewLicenseHandler(deps.LicenseManager, deps.TrialManager, deps.Entitlement)

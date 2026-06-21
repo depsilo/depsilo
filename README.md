@@ -54,11 +54,31 @@ Your team runs `pip install`, `npm install`, `go get`, `cargo build` hundreds of
 
 ## Quick Start
 
+### One-liner install (Linux / macOS)
+
+```bash
+curl -fsSL https://depsilo.com/install.sh | bash
+```
+
+This downloads the latest binary for your OS/arch, verifies the checksum, and installs to `/usr/local/bin/depsilo`.
+
+### Manual download
+
+Grab the binary for your platform from [GitHub Releases](https://github.com/depsilo/depsilo/releases). Each archive includes `depsilo`, `config.example.toml`, and `docker-compose.yml`.
+
+```bash
+tar xzf depsilo_*_linux_amd64.tar.gz
+cp config.example.toml config.toml
+./depsilo serve
+```
+
+### Docker
+
 ```bash
 docker run -d --name depsilo -p 23333:23333 -v depsilo-data:/app/data depsilo/depsilo:latest
 ```
 
-Open `http://localhost:23333` — the portal shows copy-paste config for all 13 ecosystems.
+Open `http://localhost:23333` — the portal shows copy-paste config for all 14 ecosystems.
 
 Default admin login: `admin` / `admin` at `/admin`.
 

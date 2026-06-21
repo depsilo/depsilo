@@ -201,6 +201,13 @@ func (u *Upstream) SuccessRate() float64 {
 	return u.successRate
 }
 
+// IsHealthy returns the current health status (thread-safe).
+func (u *Upstream) IsHealthy() bool {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	return u.Healthy
+}
+
 func buildClient(proxy string) (*http.Client, error) {
 	transport := &http.Transport{
 		MaxIdleConnsPerHost:   10,

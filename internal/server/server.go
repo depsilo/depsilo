@@ -36,6 +36,7 @@ import (
 	"depsilo/internal/entitlement"
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
+	"depsilo/internal/notify"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
 	"depsilo/internal/trial"
@@ -132,6 +133,9 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		pools[eco.name] = pool
 	}
 
+	// Sync webhook configs from config.toml to DB
+	syncWebhookConfigs(database, cfg.Webhooks)
+
 	// Initialize license manager
 	licenseManager := license.NewManager(cfg.License, database)
 	go licenseManager.Start(ctx)
@@ -151,6 +155,16 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	auditLogger := audit.NewLogger(database, checker)
 	go auditLogger.Start(ctx)
 	adapter.SetAuditLogger(auditLogger)
+
+	// Webhook notification engine
+	webhookNotifier := notify.New(database)
+	if err := webhookNotifier.LoadConfigs(); err != nil {
+		zap.L().Warn("failed to load webhook configs", zap.Error(err))
+	}
+	go notify.StartScheduler(ctx, webhookNotifier, notify.SchedulerConfig{
+		Pools:   pools,
+		Checker: checker,
+	})
 
 	// Security scanner
 	secCfg := cfg.Security
@@ -228,6 +242,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		RulesEngine:      rulesEngine,
 		SecurityScanner:  securityScanner,
 		SecurityImporter: securityImporter,
+		WebhookNotifier:  webhookNotifier,
 	})
 
 	// Register adapter handlers
@@ -345,6 +360,24 @@ func backfillPackageNames(database *gorm.DB) {
 		}
 	}
 	zap.L().Info("package name backfill complete")
+}
+
+// syncWebhookConfigs ensures configured webhooks from config.toml exist in the database.
+func syncWebhookConfigs(database *gorm.DB, webhooks []config.WebhookConfig) {
+	for _, w := range webhooks {
+		var record db.WebhookConfig
+		result := database.Where("url = ? AND platform = ?", w.URL, w.Platform).First(&record)
+		if result.Error == gorm.ErrRecordNotFound {
+			database.Create(&db.WebhookConfig{
+				Name:     w.Name,
+				Platform: w.Platform,
+				URL:      w.URL,
+				Events:   w.Events,
+				Enabled:  w.Enabled,
+			})
+			zap.L().Info("synced webhook config from config.toml", zap.String("name", w.Name))
+		}
+	}
 }
 
 // syncUpstreams ensures configured upstreams exist in the database.

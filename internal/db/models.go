@@ -201,3 +201,20 @@ type LicenseStorage struct {
 	UpdatedBy uint      `gorm:"index" json:"updated_by"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// WebhookConfig stores a webhook endpoint configuration.
+// Each webhook subscribes to one or more event types and formats
+// payloads for a specific platform (Slack, DingTalk, WeCom, Feishu, or generic).
+type WebhookConfig struct {
+	ID              uint       `gorm:"primarykey" json:"id"`
+	Name            string     `gorm:"size:128" json:"name"`              // human label, e.g. "Ops DingTalk"
+	Platform        string     `gorm:"size:16" json:"platform"`           // slack | dingtalk | wecom | feishu | generic
+	URL             string     `gorm:"size:512" json:"url"`               // incoming webhook URL
+	Secret          string     `gorm:"size:256" json:"-"`                 // optional HMAC secret (reserved)
+	Enabled         bool       `gorm:"default:true" json:"enabled"`
+	Events          string     `gorm:"size:256;default:'*'" json:"events"` // comma-separated or '*'
+	CooldownMinutes int        `gorm:"default:30" json:"cooldown_minutes"`
+	LastSentAt      *time.Time `json:"last_sent_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}

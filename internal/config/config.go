@@ -27,6 +27,15 @@ type Config struct {
 	License  LicenseConfig  `mapstructure:"license"`
 	Security     SecurityConfig   `mapstructure:"security"`
 	ExtraIndexes []ExtraIndexConfig `mapstructure:"extra_indexes"`
+	Webhooks     []WebhookConfig    `mapstructure:"webhooks"`
+}
+
+type WebhookConfig struct {
+	Name     string `mapstructure:"name"`
+	Platform string `mapstructure:"platform"`
+	URL      string `mapstructure:"url"`
+	Events   string `mapstructure:"events"`
+	Enabled  bool   `mapstructure:"enabled"`
 }
 
 type LicenseConfig struct {
