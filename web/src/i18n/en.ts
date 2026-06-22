@@ -51,6 +51,13 @@ const en = {
     // Login
     login: {
       title: 'Admin Panel',
+      subtitle: 'Sign in to manage cache, upstreams, and users',
+      tagline: 'Cache every dependency, locally',
+      taglineSub: '13 ecosystems. Configure once, accelerate forever.',
+      statHitRate: 'Hit rate',
+      statRequests: 'Today',
+      statMirrors: 'Mirrors up',
+      ecosystemEyebrow: 'Supports',
       username: 'Username',
       password: 'Password',
       usernamePlaceholder: 'Enter username',
@@ -579,6 +586,8 @@ const en = {
         view_status: 'View license status',
         dismiss: 'Maybe later',
         trial_activated_toast: 'Trial activated. Please try your action again.',
+        trial_error: "Couldn't activate trial. Try again or open the license page.",
+        features_preview_title: 'Pro includes',
       },
 
       features: {

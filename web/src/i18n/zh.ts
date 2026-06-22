@@ -51,6 +51,13 @@ const zh = {
     // Login
     login: {
       title: '管理后台',
+      subtitle: '登录以管理缓存、上游与用户',
+      tagline: '本地缓存所有依赖包',
+      taglineSub: '13 种生态 · 一次配置，永久加速',
+      statHitRate: '命中率',
+      statRequests: '今日请求',
+      statMirrors: '可用镜像',
+      ecosystemEyebrow: '已支持',
       username: '用户名',
       password: '密码',
       usernamePlaceholder: '请输入用户名',
@@ -579,6 +586,8 @@ const zh = {
         view_status: '查看许可证状态',
         dismiss: '稍后',
         trial_activated_toast: '试用已激活，请重试您的操作',
+        trial_error: '试用激活失败，请稍后重试或前往许可证页面',
+        features_preview_title: 'Pro 包含',
       },
 
       features: {
