@@ -61,7 +61,7 @@ const RAW_MIRRORS: Omit<MirrorDef, 'series'>[] = [
   { type: 'rubygems', p50: 44,  hit: '93.0%', status: 'healthy'  },
   { type: 'nuget',    p50: 58,  hit: '88.2%', status: 'healthy'  },
   { type: 'apt',      p50: 72,  hit: '85.6%', status: 'healthy'  },
-  { type: 'conda',    p50: 0,   hit: '—',     status: 'failed'   },
+  { type: 'conda',    p50: 0,   hit: '-',     status: 'failed'   },
   { type: 'cran',     p50: 53,  hit: '90.4%', status: 'healthy'  },
   { type: 'composer', p50: 49,  hit: '92.1%', status: 'healthy'  },
 ]
@@ -765,49 +765,10 @@ export function buildPrompt(endpoint: string, languageId: string): string {
   return `Configure my ${langName} project to use the local Depsilo cache proxy at ${endpoint}.\n\nDetect which package manager this project uses (${mgrList}) and edit its config file so installs route through ${endpoint}. Make the change persistent (not a one-shot env var). After editing, run a small test install to verify the cache is hit.`
 }
 
-// buildAgentPrompt returns the MEDIUM-granularity prompt designed to be
-// copy-pasted into an AI coding agent (Hermes, OpenClaw, Claude Code, etc.).
-// The agent reads it, detects which package managers this project uses, runs
-// the matching shell commands, and from then on every install routes through
-// Depsilo automatically.
-export function buildAgentPrompt(endpoint: string): string {
-  return `This workspace has a local dependency cache called Depsilo at ${endpoint}.
-It caches packages from 13 ecosystems and serves them at LAN speed.
-
-Before running any package install in this workspace:
-
-1. Verify it's reachable: curl -sf ${endpoint}/health
-
-2. Detect which package managers this project uses (requirements.txt,
-   package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
-   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, or \`import transformers\` /
-   \`import huggingface_hub\` in Python source, etc.).
-
-3. Configure ONLY the detected tools. Pick from:
-
-   pip:      pip config set global.index-url ${endpoint}/pypi/simple/
-   npm:      npm config set registry ${endpoint}/npm/
-   go:       go env -w GOPROXY=${endpoint}/go,direct
-   cargo:    visit ${endpoint}/ and copy the Cargo block to ~/.cargo/config.toml
-   maven:    visit ${endpoint}/ and copy the Maven mirror block to ~/.m2/settings.xml
-   gem:      bundle config mirror.https://rubygems.org ${endpoint}/rubygems/
-   composer: composer config -g repo.packagist composer ${endpoint}/composer/
-   nuget:    dotnet nuget add source ${endpoint}/nuget/v3/index.json -n depsilo
-   huggingface: export HF_ENDPOINT=${endpoint}/huggingface
-   conda:    add channel ${endpoint}/conda/ to ~/.condarc
-   helm:     helm repo add depsilo ${endpoint}/helm/
-   R/CRAN:   options(repos = c(CRAN = "${endpoint}/cran/")) in ~/.Rprofile
-
-4. Run install commands normally — they auto-route through Depsilo.
-
-If Depsilo is down, tools fall back to public registries — installs still
-work, just not cached. Don't waste effort on retry logic for Depsilo itself.`
-}
-
 export function buildAllScript(endpoint: string): string {
   const host = endpoint.replace(/^https?:\/\//, '')
   return `#!/usr/bin/env bash
-# Depsilo — configure every package manager on this machine
+# Depsilo: configure every package manager on this machine
 set -euo pipefail
 DEPSILO="${endpoint}"
 

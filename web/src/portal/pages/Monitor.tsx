@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { statsApi } from '@/lib/api'
 import StatusDot from '@/components/StatusDot'
 import Sparkline from '@/components/Sparkline'
@@ -164,7 +165,7 @@ function StatStrip({ data, upstreams, series }: { data: StatsData['today']; upst
     },
     {
       label: t('monitor.avgLatency'),
-      value: p50Ms !== null ? String(p50Ms) : '—',
+      value: p50Ms !== null ? String(p50Ms) : '-',
       unit: p50Ms !== null ? 'ms' : '',
       tone: 'neutral' as const,
       series: latencySeries,
@@ -291,7 +292,7 @@ function UpstreamRow({ upstream, isLast, locale }: { upstream: UpstreamInfo; isL
               : 'var(--text-muted)',
           }}
         >
-          {isFailed ? '—' : `${upstream.avg_latency_ms}ms`}
+          {isFailed ? '-' : `${upstream.avg_latency_ms}ms`}
         </span>
         <span style={{ fontSize: 10, color: upstream.healthy ? '#3bd671' : 'var(--danger)' }}>●</span>
       </div>
@@ -360,6 +361,71 @@ function MirrorMatrix({ upstreams, locale }: { upstreams: UpstreamInfo[]; locale
   )
 }
 
+// ── EmptyTraffic ──────────────────────────────────────────────────
+
+function EmptyTraffic() {
+  const { t } = useTranslation()
+  return (
+    <div
+      className="card"
+      style={{
+        padding: '48px 32px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        textAlign: 'center',
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: 'var(--brand-soft)',
+          border: '0.5px solid var(--brand-border)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--brand)',
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 12h4l3 8 4-16 3 8h4" />
+        </svg>
+      </div>
+      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text)' }}>
+        {t('monitor.emptyTitle')}
+      </h2>
+      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--text-muted)', maxWidth: 460 }}>
+        {t('monitor.emptyDesc')}
+      </p>
+      <Link
+        to="/"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '6px 12px',
+          fontSize: 13,
+          fontWeight: 500,
+          color: 'var(--brand-text)',
+          background: 'var(--brand-soft)',
+          border: '0.5px solid var(--brand-border)',
+          borderRadius: 6,
+          textDecoration: 'none',
+          marginTop: 4,
+        }}
+      >
+        {t('monitor.emptyCta')}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+          <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </Link>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────
 
 
@@ -417,13 +483,13 @@ export default function MonitorPage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         <div>
           <h1
-            className="grad-text"
             style={{
               margin: 0,
               fontSize: 44,
               fontWeight: 700,
               letterSpacing: '-0.04em',
               lineHeight: 1.02,
+              color: 'var(--text)',
             }}
           >
             {t('monitor.title')}
@@ -444,8 +510,14 @@ export default function MonitorPage() {
         </div>
       </div>
 
-      <HitRateHero hitRate={hitRate} series={series} />
-      <StatStrip data={today} upstreams={upstreams} series={series} />
+      {today.total_requests === 0 ? (
+        <EmptyTraffic />
+      ) : (
+        <>
+          <HitRateHero hitRate={hitRate} series={series} />
+          <StatStrip data={today} upstreams={upstreams} series={series} />
+        </>
+      )}
 
       {/* Mirrors section */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

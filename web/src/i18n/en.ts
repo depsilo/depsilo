@@ -76,7 +76,7 @@ const en = {
       hitRate2: 'Hit Rate',
       upstreamStatus: 'Upstream Status',
       topPackages: 'Top 10 Packages',
-      storageWarning: 'Cache usage at {{percent}}% — consider cleanup or expanding storage',
+      storageWarning: 'Cache usage at {{percent}}%. Consider cleanup or expanding storage.',
     },
 
     // Bandwidth Report
@@ -381,8 +381,8 @@ const en = {
       licenseFeatureRules: 'Package allow/deny rules (Pro)',
       licenseFeatureS3: 'S3 storage backend (Pro)',
       licenseFeaturePG: 'PostgreSQL database (Pro)',
-      licenseUpgrade: 'Upgrade to Pro — $9/month',
-      licenseYearly: '$89/year — save 17%',
+      licenseUpgrade: 'Upgrade to Pro · $9/month',
+      licenseYearly: '$89/year · save 17%',
     },
 
     // Portal
@@ -398,22 +398,15 @@ const en = {
     // QuickStart
     quickstart: {
       title: 'Quick start',
-      subtitle: 'Pick a language, copy the snippet —',
-      subtitleAlt: 'or let AI handle it.',
+      subtitle: 'Local cache for every dependency. 13 ecosystems. Configure once, accelerate forever.',
       allInOne: 'All-in-one',
       allInOneSubtitle: 'Configure everything',
-      aiAgent: 'AI Agent',
-      aiAgentSubtitle: 'Copy a prompt for AI',
-      aiAgentTitle: 'Let an AI agent set it up',
-      aiAgentDesc: 'Paste the prompt below into Hermes, OpenClaw, Claude Code, or any agentic coding tool. The agent will detect which package managers your project uses and reconfigure each one to route through this local Depsilo cache. Future installs land in milliseconds.',
-      aiAgentPromptLabel: 'Prompt for your AI agent',
-      aiAgentHint: '✓ No plugin / skill install needed  ✓ Works with any LLM-based agent  ✓ Falls back to upstream automatically if Depsilo is unreachable',
       orByLanguage: 'Or by language',
       shellScript: 'Shell script',
       aiPromptMode: 'AI prompt',
       allInOneTitle: 'All-in-one setup',
       allInOneSetupDesc: 'Configure every detected package manager in one go',
-      allInOneScriptNote: 'Run this as root on your machine. It edits config for pip, npm, cargo, go, and docker — extend as needed.',
+      allInOneScriptNote: 'Run this as root on your machine. It edits config for pip, npm, cargo, go, and docker. Extend as needed.',
       allInOneAINote: 'Paste this into ChatGPT, Claude, Cursor, or any agentic coding tool. The AI will detect your stack and edit the right files.',
       promptForAnyAI: 'Prompt for any AI coding tool',
       promptForTools: 'Prompt for ChatGPT / Claude / Cursor',
@@ -425,10 +418,11 @@ const en = {
       configureTitle: 'Configure {{name}}',
       managerCount: '{{count}} managers',
       configStep: 'Configure',
-      configStepSubtitle: 'Edit {{file}} — applied to every install from now on',
+      configStepSubtitle: 'Edit {{file}}: applied to every install from now on',
       whereReadsFrom: 'Where this manager reads config from',
       verifyStep: 'Verify',
-      verifyStepSubtitle: 'Run a test install — the request will appear in monitoring within ~2s',
+      verifyStepSubtitle: 'Run a test install: the request will appear in monitoring within ~2s',
+      listeningTimeout: 'No requests in 30s. Verify the endpoint is reachable and that the config above was saved.',
       showNSteps: 'Show {{count}} steps',
       stepByStep: 'Step-by-step',
       stepByStepSubtitle: 'Walk through the configuration end-to-end',
@@ -442,42 +436,6 @@ const en = {
       orUseAI: 'or configure with AI',
       aiTab: 'Auto-configure',
       aiTabHint: 'Let AI detect & set up',
-    },
-
-    // Packages
-    packages: {
-      title: 'Package Browse',
-      searchPlaceholder: 'Search packages...',
-      sortHits: 'Most Hits',
-      sortRecent: 'Recently Accessed',
-      sortSize: 'Largest',
-      sortName: 'Name',
-      versions: 'versions',
-      hits: 'hits',
-      noPackages: 'No cached packages found',
-      backToList: 'Package Browse',
-      totalHits: 'Total Hits',
-      totalSize: 'Total Size',
-      fileName: 'File Name',
-      size: 'Size',
-      hitCount: 'Hits',
-      cachedAt: 'Cached At',
-      lastAccessed: 'Last Accessed',
-      notFound: 'Package not found',
-    },
-
-    // Live Stream
-    live: {
-      title: 'Live Stream',
-      todayHits: 'Today Hits',
-      todayMisses: 'Today Misses',
-      totalRequests: 'Total Requests',
-      hitRate: 'Hit Rate',
-      pause: 'Pause',
-      resume: 'Resume',
-      noEvents: 'Waiting for events...',
-      connected: 'Connected',
-      disconnected: 'Disconnected',
     },
 
     // Projects
@@ -536,6 +494,9 @@ const en = {
       healthy: 'healthy',
       degraded: 'degraded',
       failed: 'failed',
+      emptyTitle: 'No traffic through Depsilo yet',
+      emptyDesc: 'Configure any client to route through Depsilo. Traffic appears here within 2 seconds.',
+      emptyCta: 'Back to Quick start',
     },
 
     // Setup Wizard
@@ -605,7 +566,7 @@ const en = {
         remove_confirm_title: 'Remove this license key?',
         remove_confirm_body: 'Pro features will lock immediately. Your existing trial record is unaffected.',
         success_toast: 'Key activated',
-        saved_pending_message: "Key saved. Depsilo couldn't confirm it as Pro right now — this can mean an invalid key or a network issue.",
+        saved_pending_message: "Key saved. Depsilo couldn't confirm it as Pro right now. This can mean an invalid key or a network issue.",
         try_revalidate: 'Try revalidate',
       },
 
@@ -617,7 +578,7 @@ const en = {
         learn_more: 'Learn more',
         view_status: 'View license status',
         dismiss: 'Maybe later',
-        trial_activated_toast: 'Trial activated — please try your action again',
+        trial_activated_toast: 'Trial activated. Please try your action again.',
       },
 
       features: {

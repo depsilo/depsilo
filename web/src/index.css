@@ -8,10 +8,10 @@
 
 /* ── Tailwind v4 @theme — turns CSS vars into utility classes ── */
 @theme {
-  --color-bg-page:   #FFFFFF;
-  --color-bg-panel:  #FFFFFF;
-  --color-bg-card:   #FFFFFF;
-  --color-bg-soft:   #F5F5F5;
+  --color-bg-page:   oklch(0.995 0.003 250);
+  --color-bg-panel:  oklch(0.995 0.003 250);
+  --color-bg-card:   oklch(0.995 0.003 250);
+  --color-bg-soft:   oklch(0.965 0.004 250);
   --color-bg-hover:  rgba(0, 0, 0, 0.035);
 
   --color-border:        rgba(0, 0, 0, 0.09);
@@ -69,10 +69,10 @@
 
 /* ── :root mirror — keeps var(--text) etc. working in inline styles ── */
 :root {
-  --bg-page:   #FFFFFF;
-  --bg-panel:  #FFFFFF;
-  --bg-card:   #FFFFFF;
-  --bg-soft:   #F5F5F5;
+  --bg-page:   oklch(0.995 0.003 250);
+  --bg-panel:  oklch(0.995 0.003 250);
+  --bg-card:   oklch(0.995 0.003 250);
+  --bg-soft:   oklch(0.965 0.004 250);
   --bg-hover:  rgba(0, 0, 0, 0.035);
 
   --border:        rgba(0, 0, 0, 0.09);
@@ -514,3 +514,43 @@ html.dark .logo-icon-light,
   border: 2px solid var(--bg-page);
 }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Accessibility: keyboard focus + reduced motion ── */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .dot-live { animation: none; }
+  .fade-up { animation: none; }
+}
+
+/* ── Reusable chip / pill ── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-tag);
+  font-size: 12px;
+  color: var(--text-soft);
+  background: transparent;
+}
+.chip-brand {
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  border-color: var(--brand-border);
+}

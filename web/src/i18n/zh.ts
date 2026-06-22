@@ -381,8 +381,8 @@ const zh = {
       licenseFeatureRules: '包 allow/deny 规则（Pro）',
       licenseFeatureS3: 'S3 存储后端（Pro）',
       licenseFeaturePG: 'PostgreSQL 数据库（Pro）',
-      licenseUpgrade: '升级到 Pro — $9/月',
-      licenseYearly: '$89/年 — 省 17%',
+      licenseUpgrade: '升级到 Pro · $9/月',
+      licenseYearly: '$89/年 · 省 17%',
     },
 
     // Portal
@@ -398,22 +398,15 @@ const zh = {
     // QuickStart
     quickstart: {
       title: '快速开始',
-      subtitle: '选语言，复制配置——',
-      subtitleAlt: '或让 AI 一键搞定。',
+      subtitle: '本地缓存所有依赖包 · 13 种生态 · 一次配置，永久加速。',
       allInOne: '一键配置',
       allInOneSubtitle: '全部配置',
-      aiAgent: 'AI Agent',
-      aiAgentSubtitle: '复制提示词给 AI',
-      aiAgentTitle: '让 AI Agent 接管配置',
-      aiAgentDesc: '把下面这段提示词粘进 Hermes、OpenClaw、Claude Code 等任意 AI 编码工具。Agent 会自动检测项目用了哪些包管理器，并把对应的 install 流量都切到本地 Depsilo 缓存，之后所有 install 命令秒级完成。',
-      aiAgentPromptLabel: 'AI Agent 提示词',
-      aiAgentHint: '✓ 不需要安装任何 plugin / skill ✓ 中英文 agent 通用 ✓ 失败自动回退到公网，不会 break 安装',
       orByLanguage: '或按语言选择',
       shellScript: 'Shell 脚本',
       aiPromptMode: 'AI 提示词',
       allInOneTitle: '一键配置',
       allInOneSetupDesc: '一次性配置所有检测到的包管理器',
-      allInOneScriptNote: '以 root 身份运行，将配置 pip、npm、cargo、go 和 docker — 按需扩展。',
+      allInOneScriptNote: '以 root 身份运行，将配置 pip、npm、cargo、go 和 docker。按需扩展。',
       allInOneAINote: '粘贴到 ChatGPT、Claude、Cursor 或任何 AI 编码工具，AI 将自动检测技术栈并配置对应文件。',
       promptForAnyAI: '适用于任意 AI 编码工具的提示词',
       promptForTools: '适用于 ChatGPT / Claude / Cursor 的提示词',
@@ -425,10 +418,11 @@ const zh = {
       configureTitle: '配置 {{name}}',
       managerCount: '{{count}} 个管理器',
       configStep: '配置',
-      configStepSubtitle: '编辑 {{file}} — 之后所有安装将自动走代理',
+      configStepSubtitle: '编辑 {{file}}：之后所有安装将自动走代理',
       whereReadsFrom: '配置文件路径',
       verifyStep: '验证',
-      verifyStepSubtitle: '运行测试安装 — 约 2 秒后将在监控中可见',
+      verifyStepSubtitle: '运行测试安装：约 2 秒后将在监控中可见',
+      listeningTimeout: '30 秒内未收到请求。确认 endpoint 可达，或检查上一步的配置文件是否生效。',
       showNSteps: '显示 {{count}} 个步骤',
       stepByStep: '分步指引',
       stepByStepSubtitle: '端到端配置全流程',
@@ -442,42 +436,6 @@ const zh = {
       orUseAI: '或使用 AI 配置',
       aiTab: 'AI 自动配置',
       aiTabHint: '让 AI 检测并配置',
-    },
-
-    // Packages
-    packages: {
-      title: '包浏览',
-      searchPlaceholder: '搜索包名...',
-      sortHits: '命中最多',
-      sortRecent: '最近访问',
-      sortSize: '最大',
-      sortName: '名称',
-      versions: '个版本',
-      hits: '次命中',
-      noPackages: '暂无缓存包',
-      backToList: '包浏览',
-      totalHits: '总命中',
-      totalSize: '总大小',
-      fileName: '文件名',
-      size: '大小',
-      hitCount: '命中次数',
-      cachedAt: '缓存时间',
-      lastAccessed: '最后访问',
-      notFound: '未找到该包',
-    },
-
-    // Live Stream
-    live: {
-      title: '实时动态',
-      todayHits: '今日命中',
-      todayMisses: '今日未命中',
-      totalRequests: '总请求数',
-      hitRate: '命中率',
-      pause: '暂停',
-      resume: '恢复',
-      noEvents: '等待事件...',
-      connected: '已连接',
-      disconnected: '已断开',
     },
 
     // Projects
@@ -536,6 +494,9 @@ const zh = {
       healthy: '健康',
       degraded: '性能下降',
       failed: '故障',
+      emptyTitle: '还没有请求经过 Depsilo',
+      emptyDesc: '配置任一客户端走 Depsilo，2 秒内即可在这里看到流量。',
+      emptyCta: '回到快速开始',
     },
 
     // Setup Wizard
@@ -605,7 +566,7 @@ const zh = {
         remove_confirm_title: '移除许可证密钥？',
         remove_confirm_body: 'Pro 功能将立即失效。此操作不影响已经存在的试用记录。',
         success_toast: '密钥已激活',
-        saved_pending_message: '密钥已保存。Depsilo 暂时无法确认其为 Pro 状态 — 可能是密钥无效，也可能是网络问题。',
+        saved_pending_message: '密钥已保存。Depsilo 暂时无法确认其为 Pro 状态：可能是密钥无效，也可能是网络问题。',
         try_revalidate: '重试校验',
       },
 
@@ -617,7 +578,7 @@ const zh = {
         learn_more: '了解更多',
         view_status: '查看许可证状态',
         dismiss: '稍后',
-        trial_activated_toast: '试用已激活 — 请重试您的操作',
+        trial_activated_toast: '试用已激活，请重试您的操作',
       },
 
       features: {

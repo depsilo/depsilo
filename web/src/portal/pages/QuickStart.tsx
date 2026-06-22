@@ -5,36 +5,7 @@ import StatusDot from '@/components/StatusDot'
 import LanguageRail from '@/portal/components/LanguageRail'
 import ConfigurePane from '@/portal/components/ConfigurePane'
 import AllInOnePane from '@/portal/components/AllInOnePane'
-import AgentPane from '@/portal/components/AgentPane'
-
-function CopyButton({ text }: { text: string }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  function copy() {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {})
-  }
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      style={{
-        fontSize: 11,
-        color: copied ? 'var(--ok-text)' : 'var(--text-muted)',
-        padding: '3px 8px',
-        border: '0.5px solid var(--border)',
-        borderRadius: 4,
-        cursor: 'pointer',
-        flexShrink: 0,
-        background: 'transparent',
-      }}
-    >
-      {copied ? t('quickstart.copied') : t('quickstart.copy')}
-    </button>
-  )
-}
+import CopyButton from '@/portal/components/CopyButton'
 
 function EndpointInline({ endpoint }: { endpoint: string }) {
   return (
@@ -84,13 +55,13 @@ export default function QuickStart() {
       >
         <div>
           <h1
-            className="grad-text"
             style={{
               margin: 0,
               fontSize: 44,
               fontWeight: 700,
               letterSpacing: '-0.04em',
               lineHeight: 1.02,
+              color: 'var(--text)',
             }}
           >
             {t('quickstart.title')}
@@ -100,17 +71,13 @@ export default function QuickStart() {
               margin: '14px 0 0 0',
               fontSize: 17,
               lineHeight: 1.45,
-              color: 'var(--text)',
-              maxWidth: 580,
+              color: 'var(--text-muted)',
+              maxWidth: 620,
               fontWeight: 400,
               letterSpacing: '-0.005em',
-              minHeight: '2.9em',
             }}
           >
-            {t('quickstart.subtitle')}{' '}
-            <span style={{ color: 'var(--text-soft)' }}>
-              {t('quickstart.subtitleAlt')}
-            </span>
+            {t('quickstart.subtitle')}
           </p>
         </div>
         <EndpointInline endpoint={endpoint} />
@@ -126,8 +93,6 @@ export default function QuickStart() {
         <LanguageRail selected={language} onSelect={setLanguage} />
         {language === 'all' ? (
           <AllInOnePane endpoint={endpoint} />
-        ) : language === 'agent' ? (
-          <AgentPane endpoint={endpoint} />
         ) : (
           <ConfigurePane languageId={language} endpoint={endpoint} />
         )}

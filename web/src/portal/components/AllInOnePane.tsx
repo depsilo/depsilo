@@ -2,90 +2,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
+import PromptCard from '@/portal/components/PromptCard'
 import Segmented from '@/components/Segmented'
 import { buildAllScript, buildPrompt } from '@/lib/ecosystemData'
 
 interface Props { endpoint: string }
-
-function PromptCard({ prompt }: { prompt: string }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  function copy() {
-    navigator.clipboard.writeText(prompt).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {})
-  }
-  return (
-    <div
-      style={{
-        background: 'var(--bg-soft)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 8,
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          height: 32,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 8px 0 12px',
-          borderBottom: '0.5px solid var(--border)',
-          background: 'var(--bg-card)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: 'var(--brand)',
-              padding: '1px 6px',
-              background: 'var(--brand-soft)',
-              borderRadius: 3,
-              letterSpacing: '0.04em',
-            }}
-          >
-            AI
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {t('quickstart.promptForAnyAI')}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={copy}
-          style={{
-            fontSize: 11,
-            color: copied ? 'var(--ok-text)' : 'var(--text-muted)',
-            padding: '3px 8px',
-            border: '0.5px solid var(--border)',
-            borderRadius: 4,
-            cursor: 'pointer',
-            background: 'transparent',
-          }}
-        >
-          {copied ? t('quickstart.copied') : t('quickstart.copy')}
-        </button>
-      </div>
-      <div
-        style={{
-          padding: '12px 14px',
-          fontSize: 12,
-          lineHeight: 1.6,
-          color: 'var(--text)',
-          whiteSpace: 'pre-wrap',
-          maxHeight: 180,
-          overflowY: 'auto',
-        }}
-      >
-        {prompt}
-      </div>
-    </div>
-  )
-}
 
 export default function AllInOnePane({ endpoint }: Props) {
   const { t } = useTranslation()
@@ -155,7 +76,7 @@ export default function AllInOnePane({ endpoint }: Props) {
         {mode === 'script' ? (
           <CodeBlock filename="depsilo-setup.sh" code={script} language="sh" />
         ) : (
-          <PromptCard prompt={prompt} />
+          <PromptCard prompt={prompt} label={t('quickstart.promptForAnyAI')} />
         )}
       </div>
     </div>

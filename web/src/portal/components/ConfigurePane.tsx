@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
+import PromptCard from '@/portal/components/PromptCard'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import { LANGUAGES, buildPrompt, type ManagerConfig } from '@/lib/ecosystemData'
 
@@ -23,15 +24,17 @@ function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; m
   const { t } = useTranslation()
   const [hits, setHits] = useState<{ id: string; path: string; ms: number; t: number }[]>([])
   const [, setTick] = useState(0)
+  const [timedOut, setTimedOut] = useState(false)
 
   const handleEvent = useCallback((e: MessageEvent) => {
     try {
       const ev = JSON.parse(e.data)
       if (!ev.adapter_type) return
-      const path = ev.file_name || ev.package_name || '—'
+      const path = ev.file_name || ev.package_name || '-'
       const ms = ev.latency_ms ?? 0
       const id = ev.id || `${ev.timestamp}-${Math.random().toString(36).slice(2, 6)}`
       setHits(prev => [{ id, path, ms, t: Date.now() }, ...prev].slice(0, 3))
+      setTimedOut(false)
     } catch { /* ignore */ }
   }, [])
 
@@ -46,6 +49,13 @@ function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; m
     const id = setInterval(() => setTick(t => t + 1), 1000)
     return () => clearInterval(id)
   }, [])
+
+  // 30s timeout to nudge the user when nothing arrives
+  useEffect(() => {
+    if (hits.length > 0) return
+    const id = setTimeout(() => setTimedOut(true), 30000)
+    return () => clearTimeout(id)
+  }, [hits.length])
 
   const latest = hits[0]
   const fresh = latest && Date.now() - latest.t < 4000
@@ -75,13 +85,19 @@ function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; m
         }}
       />
       {hits.length === 0 ? (
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          {t('quickstart.listeningOn')}{' '}
-          <span className="mono" style={{ color: 'var(--text-subtle)' }}>
-            {endpoint}
+        timedOut ? (
+          <span style={{ fontSize: 11, color: 'var(--warn-text)' }}>
+            {t('quickstart.listeningTimeout')}
           </span>
-          {' '}{t('quickstart.verifyHint')}
-        </span>
+        ) : (
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {t('quickstart.listeningOn')}{' '}
+            <span className="mono" style={{ color: 'var(--text-subtle)' }}>
+              {endpoint}
+            </span>
+            {' '}{t('quickstart.verifyHint')}
+          </span>
+        )
       ) : (
         <>
           <span
@@ -147,7 +163,7 @@ function ManagerTabs({
   const isAI = active === 'ai'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-      {/* AI option — always first */}
+      {/* AI option: always first */}
       <button
         type="button"
         onClick={() => onChange('ai')}
@@ -229,86 +245,6 @@ function ManagerTabs({
           </button>
         )
       })}
-    </div>
-  )
-}
-
-function PromptCard({ prompt }: { prompt: string }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  function copy() {
-    navigator.clipboard.writeText(prompt).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {})
-  }
-  return (
-    <div
-      style={{
-        background: 'var(--bg-soft)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 8,
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          height: 32,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 8px 0 12px',
-          borderBottom: '0.5px solid var(--border)',
-          background: 'var(--bg-card)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              color: 'var(--brand)',
-              padding: '1px 6px',
-              background: 'var(--brand-soft)',
-              borderRadius: 3,
-              letterSpacing: '0.04em',
-            }}
-          >
-            AI
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {t('quickstart.promptForTools')}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={copy}
-          style={{
-            fontSize: 11,
-            color: copied ? 'var(--ok-text)' : 'var(--text-muted)',
-            padding: '3px 8px',
-            border: '0.5px solid var(--border)',
-            borderRadius: 4,
-            cursor: 'pointer',
-            background: 'transparent',
-          }}
-        >
-          {copied ? t('quickstart.copied') : t('quickstart.copy')}
-        </button>
-      </div>
-      <div
-        style={{
-          padding: '12px 14px',
-          fontSize: 12,
-          lineHeight: 1.6,
-          color: 'var(--text)',
-          whiteSpace: 'pre-wrap',
-          maxHeight: 180,
-          overflowY: 'auto',
-        }}
-      >
-        {prompt}
-      </div>
     </div>
   )
 }
@@ -450,7 +386,7 @@ export default function ConfigurePane({ languageId, endpoint }: Props) {
         <ManagerTabs managers={lang.managers} active={mgrId} onChange={setMgrId} />
 
         {mgrId === 'ai' ? (
-          <PromptCard prompt={prompt} />
+          <PromptCard prompt={prompt} label={t('quickstart.promptForTools')} />
         ) : (
           <>
             {/* Quick methods (e.g. -i flag, env var) */}
