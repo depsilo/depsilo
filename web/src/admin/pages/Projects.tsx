@@ -400,10 +400,10 @@ export default function ProjectsV2() {
       <ModalV2 open={tokenData !== null} onClose={() => setTokenData(null)} title={t('projects.token')}>
         {tokenData && (
           <div className="space-y-4">
-            <div className="rounded-[4px] p-3" style={{ background: 'rgba(155,104,41,0.1)', border: '1px solid rgba(155,104,41,0.3)' }}>
+            <div className="rounded-[6px] p-3" style={{ background: 'var(--warn-fill)', border: '0.5px solid var(--warn-border)' }}>
               <div className="flex items-center gap-2 mb-1">
-                <Icon name="warning" size="sm" style={{ color: 'var(--lemon)' }} />
-                <span className="text-[13px] font-[400]" style={{ color: 'var(--lemon)' }}>{t('projects.tokenWarning')}</span>
+                <Icon name="warning" size="sm" style={{ color: 'var(--warn-text)' }} />
+                <span className="text-[13px] font-[400]" style={{ color: 'var(--warn-text)' }}>{t('projects.tokenWarning')}</span>
               </div>
             </div>
             <div>

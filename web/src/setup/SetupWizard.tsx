@@ -177,7 +177,7 @@ export default function SetupWizard() {
               className="flex items-center gap-2 rounded-[4px] px-3 py-2.5 text-left cursor-pointer transition-all duration-150"
               style={{
                 border: `1px solid ${checked ? 'var(--brand)' : 'var(--border)'}`,
-                background: checked ? 'rgba(83,58,253,0.05)' : 'var(--bg-card)',
+                background: checked ? 'var(--brand-soft)' : 'var(--bg-card)',
                 color: 'var(--text)',
               }}
               onClick={() => toggleEcosystem(eco.key)}
@@ -330,7 +330,7 @@ export default function SetupWizard() {
               <span
                 key={eco.key}
                 className="inline-flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
-                style={{ background: 'rgba(83,58,253,0.08)', color: 'var(--brand)' }}
+                style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
               >
                 <EcosystemIcon type={eco.key as any} size={14} />
                 {eco.label}

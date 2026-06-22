@@ -146,9 +146,9 @@ export default function DashboardV2() {
         <div
           className="flex items-center gap-2 rounded-[5px] px-4 py-2.5 text-[13px]"
           style={{
-            background: dashboard.cache_usage_percent > 95 ? 'var(--danger-fill)' : 'rgba(245,166,35,0.1)',
-            color: dashboard.cache_usage_percent > 95 ? 'var(--danger)' : 'var(--lemon, #9b6829)',
-            border: `1px solid ${dashboard.cache_usage_percent > 95 ? 'var(--danger)' : 'rgba(245,166,35,0.3)'}`,
+            background: dashboard.cache_usage_percent > 95 ? 'var(--danger-fill)' : 'var(--warn-fill)',
+            color: dashboard.cache_usage_percent > 95 ? 'var(--danger-text)' : 'var(--warn-text)',
+            border: `0.5px solid ${dashboard.cache_usage_percent > 95 ? 'var(--danger-border)' : 'var(--warn-border)'}`,
           }}
         >
           <Icon name="warning" size="sm" />

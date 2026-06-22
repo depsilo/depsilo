@@ -140,9 +140,9 @@ function OverviewTab() {
               const variant = SEVERITY_BADGE_MAP[item.severity] || 'default'
               const barColors: Record<string, string> = {
                 critical: 'var(--danger)',
-                high: 'var(--lemon)',
+                high: 'var(--warn)',
                 medium: 'var(--text-soft)',
-                low: '#10b981',
+                low: 'var(--ok)',
               }
               return (
                 <div key={item.severity} className="flex items-center gap-3">

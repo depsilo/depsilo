@@ -22,7 +22,7 @@ export default function ButtonV2({
 
   const variants: Record<string, string> = {
     primary: 'text-white hover:brightness-95 active:scale-[0.98]',
-    secondary: 'bg-transparent hover:bg-[rgba(83,58,253,0.05)] active:scale-[0.98]',
+    secondary: 'bg-transparent hover:bg-[var(--brand-soft)] active:scale-[0.98]',
     ghost: 'bg-transparent border-none hover:bg-surface-container active:scale-[0.98]',
     danger: 'bg-transparent hover:bg-error-container active:scale-[0.98]',
   }
@@ -37,7 +37,7 @@ export default function ButtonV2({
       disabled={disabled}
       style={{
         ...(isPrimary ? { background: 'var(--brand)', color: 'white' } : {}),
-        ...(isSecondary ? { border: '1px solid var(--border-purple)', color: 'var(--brand)' } : {}),
+        ...(isSecondary ? { border: '0.5px solid var(--brand-border)', color: 'var(--brand)' } : {}),
         ...(isDanger ? { border: '1px solid var(--danger)', color: 'var(--danger)' } : {}),
         ...(!isPrimary && !isSecondary && !isDanger ? { color: 'var(--brand)' } : {}),
       }}

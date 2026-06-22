@@ -19,7 +19,7 @@ export default function SettingsV2() {
     { key: 'cache' as const, label: t('settings.cachePolicy'), icon: 'cached' },
     { key: 'storage' as const, label: t('settings.storageBackend'), icon: 'database' },
     { key: 'auth' as const, label: t('settings.authSecurity'), icon: 'shield' },
-    { key: 'webhooks' as const, label: t('settings.webhooks'), icon: '🔔' },
+    { key: 'webhooks' as const, label: t('settings.webhooks'), icon: 'notifications' },
   ]
   const [activeTab, setActiveTab] = useState<TabKey>('basic')
   const [settings, setSettings] = useState<Record<string, any>>({})
@@ -86,7 +86,7 @@ export default function SettingsV2() {
           {tabs.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className="flex items-center gap-2 w-full px-3 py-2 text-[14px] font-[400] rounded-[4px] transition-colors duration-150 cursor-pointer bg-transparent text-left"
-              style={{ color: activeTab === tab.key ? 'var(--text)' : 'var(--text-soft)', background: activeTab === tab.key ? 'rgba(83,58,253,0.06)' : 'transparent', borderLeft: activeTab === tab.key ? '2px solid var(--brand)' : '2px solid transparent' }}
+              style={{ color: activeTab === tab.key ? 'var(--text)' : 'var(--text-soft)', background: activeTab === tab.key ? 'var(--brand-soft)' : 'transparent', borderLeft: activeTab === tab.key ? '2px solid var(--brand)' : '2px solid transparent' }}
             ><Icon name={tab.icon} size="sm" />{tab.label}</button>
           ))}
         </div>

@@ -42,14 +42,28 @@ export default function MainLayoutV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const user = JSON.parse(localStorage.getItem('user') || '{"username":"admin","role":"admin"}')
 
-  const { data: stats } = useQuery<{ service: { version: string } }>({
+  // Resilient localStorage parse: a corrupted "user" entry should not white-screen admin.
+  const user: { username: string; role: string } = (() => {
+    try {
+      const raw = localStorage.getItem('user')
+      if (raw) return JSON.parse(raw)
+    } catch {
+      // fall through to default
+    }
+    return { username: 'admin', role: 'admin' }
+  })()
+
+  const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
     queryKey: ['stats-status'],
     queryFn: async () => (await statsApi.getStats()).data,
     refetchInterval: 30000,
     staleTime: 30000,
   })
+
+  const serviceStatus = stats?.service?.status ?? 'unknown'
+  const dotStatus: 'healthy' | 'degraded' | 'failed' =
+    serviceStatus === 'healthy' ? 'healthy' : serviceStatus === 'degraded' ? 'degraded' : 'failed'
 
   const monitorItems: NavItem[] = [
     { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
@@ -103,7 +117,7 @@ export default function MainLayoutV2() {
         {/* Logo */}
         <div className="px-5 py-5 flex items-center gap-2.5">
           <Logo size={26} />
-          <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--text-base)' }}>Depsilo</span>
+          <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--text)' }}>Depsilo</span>
           <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" title={stats?.service?.version} style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>{formatVersion(stats?.service?.version)}</span>
         </div>
 
@@ -137,7 +151,7 @@ export default function MainLayoutV2() {
               {user.username?.[0]?.toUpperCase() || 'A'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-[400] truncate leading-tight" style={{ color: 'var(--text-base)' }}>{user.username}</p>
+              <p className="text-[13px] font-[400] truncate leading-tight" style={{ color: 'var(--text)' }}>{user.username}</p>
               <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-soft)' }}>
                 {user.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
               </p>
@@ -147,7 +161,7 @@ export default function MainLayoutV2() {
               className="bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all duration-150 p-1 rounded-[4px]"
               style={{ color: 'var(--text-soft)' }}
               title={t('nav.logout')}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-base)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
               onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-soft)' }}
             >
               <Icon name="logout" size="sm" />
@@ -166,7 +180,7 @@ export default function MainLayoutV2() {
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
         }}
       >
-        <h1 className="text-[14px] font-[400]" style={{ color: 'var(--text-base)' }}>{pageTitle}</h1>
+        <h1 className="text-[14px] font-[400]" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
         <div className="flex items-center gap-3">
           <Link
             to="/"
@@ -181,8 +195,8 @@ export default function MainLayoutV2() {
           <LangToggle />
           <ThemeToggle />
           <div className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: 'var(--text-soft)' }}>
-            <StatusDot status="healthy" size={6} />
-            Healthy
+            <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
+            {dotStatus === 'healthy' ? t('portal.online') : t('portal.offline')}
           </div>
         </div>
       </header>

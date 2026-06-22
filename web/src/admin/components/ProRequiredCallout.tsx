@@ -28,17 +28,17 @@ export default function ProRequiredCallout({
 }: ProRequiredCalloutProps) {
   return (
     <div
-      className="text-center py-12 rounded-[8px]"
-      style={{ background: 'rgba(83,58,253,0.04)', border: '1px solid var(--border-purple)' }}
+      className="text-center py-12 rounded-[10px]"
+      style={{ background: 'var(--brand-soft)', border: '0.5px solid var(--brand-border)' }}
     >
       <div className="flex flex-col items-center gap-4">
         <div
           className="flex items-center justify-center w-14 h-14 rounded-[8px]"
-          style={{ background: 'rgba(83,58,253,0.08)' }}
+          style={{ background: 'var(--brand-soft)', border: '0.5px solid var(--brand-border)' }}
         >
           <Icon name={icon} size="lg" style={{ color: 'var(--brand)' }} />
         </div>
-        <h3 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>
+        <h3 className="text-[18px] font-[600]" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>
           {title}
         </h3>
         <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>
