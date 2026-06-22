@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Depsilo
+GenericName=Dependency Cache Proxy
+Comment=Local cache for pip, npm, docker, and 10 more ecosystems
+Exec=__EXEC__
+Icon=depsilo-tray
+Terminal=false
+Categories=Development;Utility;Network;
+StartupNotify=false
+Keywords=cache;proxy;dependency;pip;npm;docker;mirror;

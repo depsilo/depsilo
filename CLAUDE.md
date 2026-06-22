@@ -1129,6 +1129,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 2. 高可用部署文档（PostgreSQL + S3 + 多实例）
 3. ~~CLI 工具（`depsilo status` / `depsilo cache warmup` / `depsilo doctor`）~~ ✅ 已完成（`internal/cli/` 9 命令 + `doctor` 端到端自检带颜色 + JSON + 退出码）
 4. ~~macOS menu-bar app~~ ✅ 已完成（`cmd/depsilo-tray/` + `internal/tray/` + `fyne.io/systray`；`make app-macos` 打 .app；LSUIElement 让 app 只在状态栏，无 Dock 图标；菜单含实时状态轮询、Open Admin / Portal、Run Doctor → osascript 通知、Quit）
+5. ~~Linux tray 桌面集成~~ ✅ 已完成（`make install-linux` 装到 `~/.local/bin` + `.desktop` 应用菜单 + 自动渲染 icon；`make autostart-linux` 开机自启 symlink；同一 tray 二进制跨平台。GNOME on Wayland 需装 [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/)）
 
 **P2（可以做）：**
 
@@ -1136,7 +1137,8 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 2. 访问控制 allow/deny 规则
 3. Webhook 通知（缓存未命中、上游异常 → Slack/DingTalk）
 4. macOS app 代码签名 + notarization（v1 是 unsigned，Gatekeeper 会拦）
-5. Linux AppIndicator / Windows 系统托盘打包（systray 库已跨平台，只缺 .deb / installer 脚本）
+5. Linux `.deb` / `.rpm` / AppImage 正式包（`make install-linux` 已覆盖手动安装；正式 release 时用 `nfpm` 一键打包）
+6. Windows 系统托盘 installer（systray 库已跨平台支持 Windows，只缺 `.msi` / `.exe` 打包脚本）
 
 **建议推迟：**
 

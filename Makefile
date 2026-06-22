@@ -4,7 +4,7 @@
 	test-docker-conda test-docker-cran test-docker-helm test-docker-docker \
 	test-docker-all test-docker \
 	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test \
-	tray app-macos
+	tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
 
 # ─── 变量 ─────────────────────────────────────
 APP        := depsilo
@@ -45,6 +45,18 @@ tray: frontend                  ## 构建 menu-bar 应用二进制（macOS / Lin
 
 app-macos: tray                 ## 打 macOS .app bundle（必须在 macOS 上跑）
 	@bash scripts/build-macos-app.sh "$(VERSION)"
+
+install-linux: tray             ## Linux：安装 tray 二进制 + .desktop 到 ~/.local
+	@bash scripts/install-linux.sh install
+
+uninstall-linux:                ## Linux：卸载 tray
+	@bash scripts/install-linux.sh uninstall
+
+autostart-linux:                ## Linux：开启开机自启
+	@bash scripts/install-linux.sh autostart-enable
+
+unautostart-linux:              ## Linux：关闭开机自启
+	@bash scripts/install-linux.sh autostart-disable
 
 # ─── 运行 ─────────────────────────────────────
 run: build                      ## 编译并前台运行
