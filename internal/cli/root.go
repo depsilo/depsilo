@@ -33,6 +33,8 @@ func Run(cmd string, args []string) int {
 		return runRestore(args)
 	case "version":
 		return runVersion(args)
+	case "doctor":
+		return runDoctor(args)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		return 1
@@ -50,6 +52,7 @@ Commands:
     start [--daemon]            Start the server (daemon mode with --daemon)
     stop                        Stop the running daemon
     status [--json]             Show server health, cache stats, upstreams
+    doctor [--json]             Run end-to-end health diagnosis with hints
     version [--json]            Print version
     activate [--shell|--eco]    Print shell environment configuration
     warmup <eco> <pkg> [pkg...] Pre-fetch packages into cache
@@ -64,6 +67,7 @@ Global flags:
 Examples:
     depsilo status
     depsilo status --json
+    depsilo doctor
     depsilo activate
     eval "$(depsilo activate)"
     depsilo start --daemon
