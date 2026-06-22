@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Depsilo</string>
+    <key>CFBundleDisplayName</key>
+    <string>Depsilo</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.depsilo.tray</string>
+    <key>CFBundleVersion</key>
+    <string>__VERSION__</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+    <key>CFBundleExecutable</key>
+    <string>depsilo-tray</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <!-- LSUIElement=true makes Depsilo a menu-bar-only app:
+         no Dock icon, no app switcher entry, no main window.
+         The user interacts exclusively through the status-bar menu. -->
+    <key>LSUIElement</key>
+    <true/>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Depsilo, MIT License</string>
+</dict>
+</plist>

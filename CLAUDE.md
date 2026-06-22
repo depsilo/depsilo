@@ -1127,17 +1127,20 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 1. ~~带宽/流量统计仪表盘~~ ✅ 已完成（后端聚合 API + 前端 5 图表 + Dashboard 摘要，审查时发现已实现）
 2. 高可用部署文档（PostgreSQL + S3 + 多实例）
-3. CLI 工具（`depsilo status` / `depsilo cache warmup`）
+3. ~~CLI 工具（`depsilo status` / `depsilo cache warmup` / `depsilo doctor`）~~ ✅ 已完成（`internal/cli/` 9 命令 + `doctor` 端到端自检带颜色 + JSON + 退出码）
+4. ~~macOS menu-bar app~~ ✅ 已完成（`cmd/depsilo-tray/` + `internal/tray/` + `fyne.io/systray`；`make app-macos` 打 .app；LSUIElement 让 app 只在状态栏，无 Dock 图标；菜单含实时状态轮询、Open Admin / Portal、Run Doctor → osascript 通知、Quit）
 
 **P2（可以做）：**
 
 1. 包安全扫描完整流程（OSV 已集成，需跑通展示）
 2. 访问控制 allow/deny 规则
 3. Webhook 通知（缓存未命中、上游异常 → Slack/DingTalk）
+4. macOS app 代码签名 + notarization（v1 是 unsigned，Gatekeeper 会拦）
+5. Linux AppIndicator / Windows 系统托盘打包（systray 库已跨平台，只缺 .deb / installer 脚本）
 
 **建议推迟：**
 
-- Wails 桌面版：投入产出比低，维护成本高
+- Wails 桌面版：投入产出比低，维护成本高（已被 menu-bar app 路线覆盖，更轻量）
 - License Key 系统：除非确定走商业化 Pro 版
 
 ### 11.7 商业化方向

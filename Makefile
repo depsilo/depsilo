@@ -3,7 +3,8 @@
 	test-docker-maven test-docker-rubygems test-docker-composer test-docker-nuget \
 	test-docker-conda test-docker-cran test-docker-helm test-docker-docker \
 	test-docker-all test-docker \
-	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test
+	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test \
+	tray app-macos
 
 # ─── 变量 ─────────────────────────────────────
 APP        := depsilo
@@ -38,6 +39,12 @@ build-server: frontend          ## 构建前端 + 编译后端（纯服务器模
 
 build-desktop: frontend         ## 构建前端 + 编译桌面版
 	go build -tags "desktop,production" -ldflags "$(LDFLAGS)" -o bin/$(APP)-desktop ./cmd/server
+
+tray: frontend                  ## 构建 menu-bar 应用二进制（macOS / Linux / Windows）
+	go build -ldflags "$(LDFLAGS)" -o bin/$(APP)-tray ./cmd/depsilo-tray
+
+app-macos: tray                 ## 打 macOS .app bundle（必须在 macOS 上跑）
+	@bash scripts/build-macos-app.sh "$(VERSION)"
 
 # ─── 运行 ─────────────────────────────────────
 run: build                      ## 编译并前台运行
