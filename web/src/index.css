@@ -1,6 +1,6 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 @import "@fontsource/noto-sans-sc/400.css";
 @import "@fontsource/noto-sans-sc/500.css";
 @import "@fontsource/noto-sans-sc/700.css";
@@ -23,16 +23,16 @@
   --color-text-soft:   #64748d;
   --color-text-subtle: #8a96aa;
 
-  --color-brand:        oklch(0.55 0.16 295);
-  --color-brand-strong: oklch(0.48 0.17 295);
-  --color-brand-soft:   oklch(0.55 0.16 295 / 0.09);
-  --color-brand-border: oklch(0.55 0.16 295 / 0.30);
-  --color-brand-text:   oklch(0.40 0.14 295);
+  --color-brand:        oklch(0.55 0.13 200);
+  --color-brand-strong: oklch(0.48 0.14 200);
+  --color-brand-soft:   oklch(0.55 0.13 200 / 0.09);
+  --color-brand-border: oklch(0.55 0.13 200 / 0.30);
+  --color-brand-text:   oklch(0.40 0.12 200);
 
-  --color-spec-1: oklch(0.62 0.18 305);
-  --color-spec-2: oklch(0.66 0.15 260);
-  --color-spec-3: oklch(0.72 0.12 210);
-  --color-spec-4: oklch(0.78 0.13 75);
+  --color-spec-1: oklch(0.55 0.14 200);
+  --color-spec-2: oklch(0.65 0.13 190);
+  --color-spec-3: oklch(0.72 0.11 180);
+  --color-spec-4: oklch(0.80 0.10 165);
 
   --color-ok:          oklch(0.58 0.12 155);
   --color-ok-fill:     oklch(0.58 0.12 155 / 0.10);
@@ -49,9 +49,9 @@
   --color-danger-border: oklch(0.60 0.17 25 / 0.30);
   --color-danger-text:   oklch(0.42 0.15 25);
 
-  /* Keep Chinese fallbacks for i18n support */
-  --font-sans: 'Inter Variable', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  /* Geist for Latin / numerals; Noto Sans SC for CJK fallback. */
+  --font-sans: 'Geist Variable', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
 
   --spacing-1:  4px;
   --spacing-2:  8px;
@@ -84,16 +84,16 @@
   --text-soft:   #64748d;
   --text-subtle: #8a96aa;
 
-  --brand:        oklch(0.55 0.16 295);
-  --brand-strong: oklch(0.48 0.17 295);
-  --brand-soft:   oklch(0.55 0.16 295 / 0.09);
-  --brand-border: oklch(0.55 0.16 295 / 0.30);
-  --brand-text:   oklch(0.40 0.14 295);
+  --brand:        oklch(0.55 0.13 200);
+  --brand-strong: oklch(0.48 0.14 200);
+  --brand-soft:   oklch(0.55 0.13 200 / 0.09);
+  --brand-border: oklch(0.55 0.13 200 / 0.30);
+  --brand-text:   oklch(0.40 0.12 200);
 
-  --spec-1: oklch(0.62 0.18 305);
-  --spec-2: oklch(0.66 0.15 260);
-  --spec-3: oklch(0.72 0.12 210);
-  --spec-4: oklch(0.78 0.13 75);
+  --spec-1: oklch(0.55 0.14 200);
+  --spec-2: oklch(0.65 0.13 190);
+  --spec-3: oklch(0.72 0.11 180);
+  --spec-4: oklch(0.80 0.10 165);
 
   --grad-aurora: linear-gradient(
     115deg,
@@ -104,14 +104,14 @@
   );
   --grad-brand: linear-gradient(
     120deg,
-    oklch(0.50 0.18 305) 0%,
-    oklch(0.58 0.16 275) 100%
+    oklch(0.50 0.14 210) 0%,
+    oklch(0.58 0.12 190) 100%
   );
   --grad-rim: linear-gradient(
     90deg,
     transparent 0%,
-    oklch(0.55 0.16 295 / 0.45) 25%,
-    oklch(0.66 0.15 230 / 0.45) 60%,
+    oklch(0.55 0.13 200 / 0.45) 25%,
+    oklch(0.66 0.12 185 / 0.45) 60%,
     transparent 100%
   );
 
@@ -162,20 +162,20 @@ html.dark,
   --text-soft:   oklch(0.62 0.012 250);
   --text-subtle: oklch(0.52 0.012 250);
 
-  --brand:        oklch(0.74 0.16 295);
-  --brand-strong: oklch(0.80 0.15 295);
-  --brand-soft:   oklch(0.74 0.16 295 / 0.16);
-  --brand-border: oklch(0.74 0.16 295 / 0.40);
-  --brand-text:   oklch(0.84 0.13 295);
+  --brand:        oklch(0.74 0.13 200);
+  --brand-strong: oklch(0.80 0.13 200);
+  --brand-soft:   oklch(0.74 0.13 200 / 0.16);
+  --brand-border: oklch(0.74 0.13 200 / 0.40);
+  --brand-text:   oklch(0.84 0.12 200);
 
-  --spec-1: oklch(0.74 0.20 305);
-  --spec-2: oklch(0.78 0.16 260);
-  --spec-3: oklch(0.84 0.13 210);
-  --spec-4: oklch(0.86 0.14 75);
+  --spec-1: oklch(0.74 0.14 200);
+  --spec-2: oklch(0.78 0.13 190);
+  --spec-3: oklch(0.84 0.11 180);
+  --spec-4: oklch(0.86 0.10 165);
 
   --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-  --grad-brand:  linear-gradient(120deg, oklch(0.72 0.20 305) 0%, oklch(0.78 0.16 275) 100%);
-  --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.20 305 / 0.65) 25%, oklch(0.84 0.13 220 / 0.65) 60%, transparent 100%);
+  --grad-brand:  linear-gradient(120deg, oklch(0.72 0.14 210) 0%, oklch(0.78 0.12 190) 100%);
+  --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.14 200 / 0.65) 25%, oklch(0.84 0.11 185 / 0.65) 60%, transparent 100%);
 
   --ok:          oklch(0.74 0.14 155);
   --ok-fill:     oklch(0.74 0.14 155 / 0.16);
@@ -192,9 +192,9 @@ html.dark,
   --danger-border: oklch(0.74 0.17 25 / 0.36);
   --danger-text:   oklch(0.84 0.13 25);
 
-  --shadow-card: 0 0 0 1px oklch(0.55 0.16 295 / 0.04),
+  --shadow-card: 0 0 0 1px oklch(0.55 0.13 200 / 0.04),
                  rgba(0, 0, 0, 0.25) 0 6px 18px -6px;
-  --shadow-pop:  0 0 0 1px oklch(0.55 0.16 295 / 0.08),
+  --shadow-pop:  0 0 0 1px oklch(0.55 0.13 200 / 0.08),
                  rgba(0, 0, 0, 0.45) 0 24px 48px -16px;
 }
 
@@ -216,20 +216,20 @@ html.dark,
     --text-soft:   oklch(0.62 0.012 250);
     --text-subtle: oklch(0.52 0.012 250);
 
-    --brand:        oklch(0.74 0.16 295);
-    --brand-strong: oklch(0.80 0.15 295);
-    --brand-soft:   oklch(0.74 0.16 295 / 0.16);
-    --brand-border: oklch(0.74 0.16 295 / 0.40);
-    --brand-text:   oklch(0.84 0.13 295);
+    --brand:        oklch(0.74 0.13 200);
+    --brand-strong: oklch(0.80 0.13 200);
+    --brand-soft:   oklch(0.74 0.13 200 / 0.16);
+    --brand-border: oklch(0.74 0.13 200 / 0.40);
+    --brand-text:   oklch(0.84 0.12 200);
 
-    --spec-1: oklch(0.74 0.20 305);
-    --spec-2: oklch(0.78 0.16 260);
-    --spec-3: oklch(0.84 0.13 210);
-    --spec-4: oklch(0.86 0.14 75);
+    --spec-1: oklch(0.74 0.14 200);
+    --spec-2: oklch(0.78 0.13 190);
+    --spec-3: oklch(0.84 0.11 180);
+    --spec-4: oklch(0.86 0.10 165);
 
     --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-    --grad-brand:  linear-gradient(120deg, oklch(0.72 0.20 305) 0%, oklch(0.78 0.16 275) 100%);
-    --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.20 305 / 0.65) 25%, oklch(0.84 0.13 220 / 0.65) 60%, transparent 100%);
+    --grad-brand:  linear-gradient(120deg, oklch(0.72 0.14 210) 0%, oklch(0.78 0.12 190) 100%);
+    --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.14 200 / 0.65) 25%, oklch(0.84 0.11 185 / 0.65) 60%, transparent 100%);
 
     --ok:          oklch(0.74 0.14 155);
     --ok-fill:     oklch(0.74 0.14 155 / 0.16);
@@ -246,9 +246,9 @@ html.dark,
     --danger-border: oklch(0.74 0.17 25 / 0.36);
     --danger-text:   oklch(0.84 0.13 25);
 
-    --shadow-card: 0 0 0 1px oklch(0.55 0.16 295 / 0.04),
+    --shadow-card: 0 0 0 1px oklch(0.55 0.13 200 / 0.04),
                    rgba(0, 0, 0, 0.25) 0 6px 18px -6px;
-    --shadow-pop:  0 0 0 1px oklch(0.55 0.16 295 / 0.08),
+    --shadow-pop:  0 0 0 1px oklch(0.55 0.13 200 / 0.08),
                    rgba(0, 0, 0, 0.45) 0 24px 48px -16px;
   }
 }
@@ -257,13 +257,13 @@ html.dark,
 html.dark .page-wash,
 [data-theme="dark"] .page-wash {
   background:
-    radial-gradient(900px 420px at 12% -10%, oklch(0.74 0.20 305 / 0.10), transparent 60%),
-    radial-gradient(820px 380px at 88% -8%,  oklch(0.84 0.13 210 / 0.08),  transparent 60%);
+    radial-gradient(900px 420px at 12% -10%, oklch(0.74 0.14 200 / 0.10), transparent 60%),
+    radial-gradient(820px 380px at 88% -8%,  oklch(0.84 0.11 185 / 0.08),  transparent 60%);
 }
 
 html.dark .aurora-glow::after,
 [data-theme="dark"] .aurora-glow::after {
-  background: radial-gradient(60% 80% at 50% 50%, oklch(0.74 0.20 305 / 0.28), transparent 70%);
+  background: radial-gradient(60% 80% at 50% 50%, oklch(0.74 0.14 200 / 0.28), transparent 70%);
   filter: blur(28px);
 }
 
@@ -276,7 +276,6 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: 'cv11', 'ss01', 'ss03';
 }
 body { margin: 0; }
 * { box-sizing: border-box; }
@@ -382,8 +381,8 @@ body { margin: 0; }
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(900px 360px at 12% -10%, oklch(0.62 0.18 305 / 0.05), transparent 60%),
-    radial-gradient(720px 320px at 88% -8%,  oklch(0.72 0.12 210 / 0.045), transparent 60%);
+    radial-gradient(900px 360px at 12% -10%, oklch(0.62 0.14 200 / 0.05), transparent 60%),
+    radial-gradient(720px 320px at 88% -8%,  oklch(0.72 0.11 185 / 0.045), transparent 60%);
 }
 
 @layer utilities {
@@ -415,7 +414,7 @@ body { margin: 0; }
   position: absolute;
   left: -8%; right: -8%;
   top: 30%; bottom: -20%;
-  background: radial-gradient(60% 80% at 50% 50%, oklch(0.62 0.18 305 / 0.10), transparent 70%);
+  background: radial-gradient(60% 80% at 50% 50%, oklch(0.62 0.14 200 / 0.10), transparent 70%);
   filter: blur(24px);
   z-index: -1;
   pointer-events: none;

@@ -1,9 +1,51 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, type ReactNode } from 'react'
 
 interface CodeBlockProps {
   filename?: string
   code: string
   language?: string
+}
+
+// Lightweight syntax highlight: comments + URLs.
+// Comments (lines starting with # or ;) render in text-subtle.
+// URLs (http://… or https://…) render in brand color, so the user's eye
+// lands on the part of the snippet they actually need to verify.
+const URL_RE = /(https?:\/\/[^\s'"`<>]+)/g
+
+function highlightLine(line: string, lineIdx: number): ReactNode {
+  const trimmed = line.trimStart()
+  if (trimmed.startsWith('#') || trimmed.startsWith(';')) {
+    return (
+      <span key={lineIdx} style={{ color: 'var(--text-subtle)' }}>
+        {line}
+      </span>
+    )
+  }
+  const parts: ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  URL_RE.lastIndex = 0
+  while ((m = URL_RE.exec(line)) !== null) {
+    if (m.index > last) parts.push(line.slice(last, m.index))
+    parts.push(
+      <span key={`u${m.index}`} style={{ color: 'var(--brand)', fontWeight: 500 }}>
+        {m[0]}
+      </span>
+    )
+    last = m.index + m[0].length
+  }
+  if (last < line.length) parts.push(line.slice(last))
+  return <span key={lineIdx}>{parts}</span>
+}
+
+function highlight(code: string): ReactNode {
+  const lines = code.split('\n')
+  return lines.map((line, i) => (
+    <span key={i}>
+      {highlightLine(line, i)}
+      {i < lines.length - 1 && '\n'}
+    </span>
+  ))
 }
 
 export default function CodeBlock({ filename, code }: CodeBlockProps) {
@@ -90,7 +132,7 @@ export default function CodeBlock({ filename, code }: CodeBlockProps) {
           background: 'transparent',
         }}
       >
-        <code>{code}</code>
+        <code>{highlight(code)}</code>
       </pre>
     </div>
   )

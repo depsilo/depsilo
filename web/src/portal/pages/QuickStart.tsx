@@ -6,6 +6,7 @@ import LanguageRail from '@/portal/components/LanguageRail'
 import ConfigurePane from '@/portal/components/ConfigurePane'
 import AllInOnePane from '@/portal/components/AllInOnePane'
 import CopyButton from '@/portal/components/CopyButton'
+import EcosystemLogoWall from '@/portal/components/EcosystemLogoWall'
 
 function EndpointInline({ endpoint }: { endpoint: string }) {
   return (
@@ -82,6 +83,8 @@ export default function QuickStart() {
         </div>
         <EndpointInline endpoint={endpoint} />
       </div>
+
+      <EcosystemLogoWall selected={language} onSelect={setLanguage} />
 
       <div
         style={{
