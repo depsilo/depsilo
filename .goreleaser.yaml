@@ -63,9 +63,15 @@ release:
   extra_files:
     - glob: ./install.sh
 
-# Homebrew tap formula generation
+# Homebrew tap formula generation.
+#
+# `skip_upload: true` because depsilo/homebrew-tap doesn't exist yet — goreleaser
+# still writes the formula to dist/homebrew/ as a build artifact, but won't try
+# to push it. Remove this flag (and ensure HOMEBREW_TAP_GITHUB_TOKEN is set)
+# once the tap repository is created.
 brews:
   - name: depsilo
+    skip_upload: true
     repository:
       owner: depsilo
       name: homebrew-tap
