@@ -37,9 +37,6 @@ build: frontend                 ## 构建前端 + 编译后端（统一 CLI+Serv
 build-server: frontend          ## 构建前端 + 编译后端（纯服务器模式，用于桌面版）
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BIN)-server ./cmd/server
 
-build-desktop: frontend         ## 构建前端 + 编译桌面版
-	go build -tags "desktop,production" -ldflags "$(LDFLAGS)" -o bin/$(APP)-desktop ./cmd/server
-
 tray: frontend                  ## 构建 menu-bar 应用二进制（macOS / Linux / Windows）
 	go build -ldflags "$(LDFLAGS)" -o bin/$(APP)-tray ./cmd/depsilo-tray
 

@@ -51,8 +51,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Job 2: Desktop — macOS (universal binary .app)
-  desktop-macos:
+  # Job 2: macOS menu-bar app (.app bundle, unsigned)
+  # Built on macOS via `make app-macos` which wraps `cmd/depsilo-tray` in
+  # a proper bundle with Info.plist + .icns. Unsigned — users must
+  # right-click → Open on first launch (Gatekeeper).
+  tray-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,82 +72,42 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Install rsvg-convert (SVG -> PNG for icon)
+        run: brew install librsvg
 
-      - name: Build desktop app
-        run: wails build -platform darwin/universal -o depsilo-desktop
-
-      - name: Package .app into zip
+      - name: Build .app bundle
         run: |
-          cd build/bin
-          if [ -d "depsilo-desktop.app" ]; then
-            zip -r depsilo-desktop-macos-universal.zip depsilo-desktop.app
-          else
-            zip depsilo-desktop-macos-universal.zip depsilo-desktop
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          make app-macos VERSION="${VERSION}"
+
+      - name: Zip Depsilo.app
+        run: |
+          cd bin
+          zip -r "depsilo-tray-macos.zip" Depsilo.app
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/bin/depsilo-desktop-macos-universal.zip
+          files: bin/depsilo-tray-macos.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Job 3: Desktop — Windows (amd64, NSIS installer)
-  desktop-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      - name: Build desktop app with NSIS installer
-        run: wails build -nsis -o depsilo-desktop
-
-      - name: Find and rename installer
-        shell: pwsh
-        run: |
-          $installer = Get-ChildItem -Path build/bin -Filter "*-amd64-installer.exe" -Recurse | Select-Object -First 1
-          if ($installer) {
-            Copy-Item $installer.FullName "build/bin/depsilo-desktop-windows-amd64-installer.exe"
-          } else {
-            Compress-Archive -Path "build/bin/depsilo-desktop.exe" -DestinationPath "build/bin/depsilo-desktop-windows-amd64.zip"
-          }
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            build/bin/depsilo-desktop-windows-amd64-installer.exe
-            build/bin/depsilo-desktop-windows-amd64.zip
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Job 4: Desktop — Linux (amd64, AppImage)
-  desktop-linux:
+  # Job 3: Linux menu-bar app (tar.gz with tray binary + .desktop launcher)
+  # Built on Ubuntu LTS. Users untar + `bash install-linux.sh install`
+  # to drop the binary into ~/.local/bin and register the .desktop file.
+  # Needs GTK + AppIndicator headers at build time for fyne/systray.
+  tray-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux dependencies
+      - name: Install Linux tray build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt-get install -y \
+            gcc \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -158,32 +121,21 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - name: Build tray binary
+        run: make tray
 
-      - name: Build desktop app
-        run: wails build -o depsilo-desktop
-
-      - name: Create .desktop file
+      - name: Package tar.gz
         run: |
-          cat > build/bin/depsilo-desktop.desktop << 'DESKTOP'
-          [Desktop Entry]
-          Name=Depsilo
-          Comment=Lightweight dependency cache
-          Exec=depsilo-desktop
-          Icon=depsilo
-          Type=Application
-          Categories=Development;
-          DESKTOP
-
-      - name: Package into tar.gz
-        run: |
-          cd build/bin
-          tar czf depsilo-desktop-linux-amd64.tar.gz depsilo-desktop depsilo-desktop.desktop
+          mkdir -p stage
+          cp bin/depsilo-tray stage/
+          cp assets/linux/depsilo-tray.desktop stage/
+          cp scripts/install-linux.sh stage/
+          chmod +x stage/install-linux.sh
+          tar czf depsilo-tray-linux-amd64.tar.gz -C stage .
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/bin/depsilo-desktop-linux-amd64.tar.gz
+          files: depsilo-tray-linux-amd64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
