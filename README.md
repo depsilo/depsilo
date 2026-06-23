@@ -129,9 +129,51 @@ Requires Go 1.21+ and Node.js 20+.
 
 ## Use with AI agents
 
-Paste the prompt below into Hermes, OpenClaw, Claude Code, Cursor, or any agentic coding tool. The agent will detect which package managers your project uses, reconfigure each one to route through your local Depsilo, and verify the cache is reachable — no plugin or skill install needed.
+Three increasingly automated ways to give an AI coding agent control of Depsilo, pick whichever fits your stack:
 
-> Replace `http://localhost:23333` with your Depsilo URL if you deployed it elsewhere. The Portal at `/` ships a "AI Agent" tab that renders this prompt with the right URL pre-filled.
+### 1. Bootstrap a project (one command, zero clicks)
+
+```bash
+cd my-project/
+depsilo init-agent
+```
+
+Writes `CLAUDE.md` / `AGENTS.md` / `.cursorrules` (auto-detects which ones based on your project) with a marker-bracketed Depsilo section. From this point on, any AI coding agent you open the project with reads its own instruction file at startup and knows that **this project uses Depsilo at `http://localhost:23333`** — no copy-paste, no "did you read the docs" round-trips.
+
+Re-running is idempotent: in-place update inside the markers, your own content above and below is preserved untouched.
+
+Flags: `--format=auto|all|claudemd|agentsmd|cursorrules`, `--endpoint=URL`, `--dry-run`, `--json`.
+
+### 2. Native MCP for Claude Code, Cursor, and other MCP-aware clients
+
+Depsilo ships a built-in Model Context Protocol server at `POST /mcp` (JSON-RPC 2.0 over Streamable HTTP). MCP clients connect once and get **structured tool calls** instead of parsing free-form prompts.
+
+Point your client at `http://localhost:23333/mcp`. After `initialize`, call `tools/list` to enumerate. Available tools:
+
+| Tool | Effect |
+| --- | --- |
+| `depsilo_status` | Service health, 24h request totals, cache hit rate, configured ecosystems |
+| `depsilo_doctor` | End-to-end diagnosis (service / status / upstream health / hit rate) with hints |
+| `depsilo_configure(ecosystem)` | Returns shell / env / config / verify snippets for a given ecosystem |
+| `depsilo_search(query, ecosystem?, limit?)` | LIKE query against cached packages, ranked by hit count |
+| `depsilo_recent(limit?, only_miss?)` | Tail of cache events — useful for debugging why an install isn't hitting |
+| `depsilo_warmup(ecosystem, packages[])` | Pre-fetch packages (requires `Authorization: Bearer <admin-token>`) |
+
+Resources: `depsilo://discover` (service catalog) and `depsilo://stats` (live metrics). Prompt: `setup` (returns the same text as `/api/v1/agent-prompt`).
+
+Quick smoke test:
+
+```bash
+curl -s http://localhost:23333/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+### 3. Copy-paste prompt (any agent, no setup)
+
+For non-MCP agents (Hermes, OpenClaw, generic LLM chat), paste the prompt below — the agent will detect which package managers your project uses, reconfigure each one, and verify the cache is reachable. No plugin or skill install needed.
+
+> Replace `http://localhost:23333` with your Depsilo URL if you deployed it elsewhere. The Portal at `/` ships an "AI" tab in each language pane that renders this prompt with the right URL pre-filled. Or `curl -sf http://localhost:23333/api/v1/agent-prompt` to fetch the live, host-substituted version.
 
 ```text
 This workspace has a local dependency cache called Depsilo at http://localhost:23333.

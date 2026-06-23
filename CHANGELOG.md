@@ -3,6 +3,55 @@
 All notable changes to Depsilo will be documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] - 2026-06-23
+
+### Added
+- **macOS menu-bar app** (`cmd/depsilo-tray/` + `internal/tray/`): live status icon shows healthy / degraded / failed with hit rate. Menu: Open Admin / Open Portal / Run Doctor / Quit. `make app-macos` packages a `Depsilo.app` bundle with `LSUIElement=true` (status-bar only, no Dock entry).
+- **Linux desktop integration**: `make install-linux` writes the binary to `~/.local/bin` and a freedesktop launcher; `make autostart-linux` enables login start. GNOME on Wayland users need the AppIndicator GNOME extension.
+- **`depsilo doctor`** CLI: end-to-end self-diagnosis (service / status / version / storage / upstream health / hit rate) with coloured TTY output (honours `NO_COLOR`), `--json`, and exit-code 1 on FAIL. Designed to surface "which signal is bad" with actionable hints instead of dumping stats.
+- **`depsilo init-agent`** CLI: writes `CLAUDE.md` / `AGENTS.md` / `.cursorrules` with a marker-bracketed Depsilo block so AI coding agents auto-detect this project's proxy. Idempotent — preserves user content outside the markers.
+- **MCP server** at `POST /mcp`: JSON-RPC 2.0 over Streamable HTTP. 6 tools (`depsilo_status`, `depsilo_doctor`, `depsilo_configure`, `depsilo_search`, `depsilo_recent`, `depsilo_warmup`) + 2 resources (`depsilo://discover`, `depsilo://stats`) + 1 prompt (`setup`). Claude Code / Cursor / any MCP-aware client can drive Depsilo via structured tool calls instead of parsing free-form prompts.
+
+### Changed
+- Brand palette switched from purple (oklch hue 295) to deep teal (oklch hue 200) across brand / aurora / page-wash / grad-rim / shadow tokens, light and dark.
+- Default sans font changed from Inter Variable to Geist Variable; mono from JetBrains Mono Variable to Geist Mono Variable. Noto Sans SC retained as the CJK fallback so Chinese glyphs do not shift.
+- Admin login rebuilt as a split-card: brand panel (13-ecosystem logo wall + 3 live stats from `/api/v1/stats`) on one side, form on the other. Card adds aurora-rim top accent + shadow-card + radius 14.
+- Pro paywall modal redesigned: workspace_premium brand icon badge + 4-bullet Pro feature preview + footer reorganised with primary action anchored right.
+- `ModalV2` lifted across all 20+ admin call sites: ESC closes, `role="dialog"` + `aria-modal` + `aria-labelledby`, viewport-centred (was `mt-[20vh]`), 160ms scale + fade entry with `prefers-reduced-motion` fallback, tokenised backdrop, larger `--shadow-pop` elevation.
+- Portal hero gained a 13-ecosystem logo wall under the subtitle (clickable shortcuts). Portal `CodeBlock` now highlights URLs in brand teal and dim-renders comment lines.
+- BandwidthReport's 12-colour rainbow chart palette replaced by a single shared `web/src/lib/ecosystemColors.ts` mapping ecosystems to their real-world brand colours (npm red, go cyan, cargo orange, …). CacheManage uses the same map.
+- `README.md` "Use with AI agents" section restructured into three tiers (`init-agent`, MCP, copy-paste prompt) with examples.
+
+### Fixed
+- Five dead CSS tokens silently falling back to browser defaults: `var(--text-base)` (5 sites in MainLayout), `var(--border-purple)` (Button secondary + ProRequiredCallout), `var(--lemon)` (Security severity bars, Projects token warning, Dashboard cache-usage banner). All replaced with real tokens.
+- Admin top-bar service status indicator was hardcoded `<StatusDot status="healthy" />` with a bare English "Healthy". Now reads `stats.service.status` and renders three-tier health (healthy / degraded / failed) via i18n.
+- `Settings.tsx` webhook tab passed `icon: '🔔'` (an emoji) as a Material Symbol name, rendering as a fallback glyph. Changed to `'notifications'`.
+- Six leftover `rgba(83,58,253,...)` hardcoded purple residues from before the brand switch — Button secondary hover, ProRequiredCallout backgrounds, Settings tab active state, SetupWizard ecosystem checkboxes.
+- `MainLayout` `JSON.parse(localStorage.getItem('user') ...)` no longer white-screens admin on corrupt data; wrapped in try/catch with a typed fallback.
+- 13 hardcoded green hex (`#10b981` / `#3bd671`) replaced with `var(--ok)` across Dashboard, BandwidthReport, AuditLogs, AccessLogs, UpstreamCard, Portal Monitor. UpstreamCard `beatColor` 4-tier palette collapsed to a 3-tier ok / warn / danger semantic.
+- 12 inline `onMouseEnter` / `onMouseLeave` handlers doing hover via JS (which silently broke `:focus-visible`) converted to Tailwind `hover:` utilities across MainLayout, AccessLogs, AuditLogs, CacheManage.
+
+### Removed
+- Three orphan Portal pages (`PackagesV2.tsx`, `PackageDetailV2.tsx`, `LiveStreamV2.tsx`) and their i18n namespaces — none were wired to a route.
+- `AgentPane` component (the Portal `LanguageRail` dedup made it unreachable; the per-language AI tab already covers the same workflow).
+- 21 em-dashes across i18n, UI text and CLI tool output, in line with the taste-skill audit's hard ban.
+
+## [0.6.0] - 2026-06-21
+
+### Added
+- Webhook notification system: Slack / DingTalk / WeCom / Feishu / Generic transports. Configurable per-event in Settings → Webhooks.
+- Background scheduler: periodic upstream health checks and license-expiry warnings.
+- `depsilo backup --out file.tar.gz` and `depsilo restore <archive>` CLI for config + database snapshots.
+- One-liner installer script (`install.sh`) and Homebrew formula template.
+- Goreleaser release pipeline producing per-platform binaries.
+
+### Changed
+- README documents four installation methods (binary download, install.sh, Homebrew, Docker).
+- `Upstream.IsHealthy()` is now thread-safe.
+
+### Fixed
+- Goreleaser entry point was `cmd/server` instead of `cmd/depsilo`; automated release binaries now include the CLI subcommands.
+
 ## [0.5.0] - 2026-05-28
 
 ### Added
