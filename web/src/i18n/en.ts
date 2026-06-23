@@ -106,7 +106,7 @@ const en = {
       latencyComparison: 'Latency Comparison',
       avgHitLatency: 'Hit Avg',
       avgMissLatency: 'Miss Avg',
-      viewFullReport: 'View Full Report →',
+      viewFullReport: 'View Full Report',
       last7d: '7 Days',
       last30d: '30 Days',
       last90d: '90 Days',

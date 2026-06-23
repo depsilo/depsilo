@@ -106,7 +106,7 @@ const zh = {
       latencyComparison: '延迟对比',
       avgHitLatency: '命中平均',
       avgMissLatency: '未命中平均',
-      viewFullReport: '查看完整报告 →',
+      viewFullReport: '查看完整报告',
       last7d: '7 天',
       last30d: '30 天',
       last90d: '90 天',
