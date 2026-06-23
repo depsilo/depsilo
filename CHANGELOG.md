@@ -3,6 +3,17 @@
 All notable changes to Depsilo will be documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.1] - 2026-06-23
+
+### Fixed
+- Release pipeline (`.github/workflows/release.yml`) was inherited from the deprecated Wails desktop spec and started failing on every tag push: Ubuntu 24.04 (`ubuntu-latest`) dropped `libwebkit2gtk-4.0-dev`. Replaced the three Wails jobs (`desktop-macos`, `desktop-windows`, `desktop-linux`) with tray packaging that matches v0.7.0's actual deliverables.
+
+### Added
+- Release pipeline now publishes `depsilo-tray-macos.zip` (`.app` bundle, unsigned) and `depsilo-tray-linux-amd64.tar.gz` (tray binary + `.desktop` launcher + `install-linux.sh`) on every `v*.*.*` tag. Linux build pulls `libgtk-3-dev` + `libayatana-appindicator3-dev` (not webkit).
+
+### Removed
+- `cmd/server/main_desktop.go` (Wails entry, no frontend bindings), `wails.json`, the `build-desktop` Makefile target, and the `//go:build !desktop` tags on `cmd/depsilo/main.go` + `cmd/server/main_server.go`. `go mod tidy` dropped `wails/v2` and 20 transitive deps; `fyne.io/systray` is now a direct dependency.
+
 ## [0.7.0] - 2026-06-23
 
 ### Added
