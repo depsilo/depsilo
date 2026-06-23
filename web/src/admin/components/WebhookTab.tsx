@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { webhookApi, type WebhookConfig } from '@/lib/api'
-import CardV2 from '@/components/Card'
 import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
 import ModalV2 from '@/components/Modal'
+import EmptyState from '@/components/EmptyState'
 
 const PLATFORM_OPTIONS = [
   { value: 'slack', labelKey: 'webhook.platforms.slack' },
@@ -152,12 +152,20 @@ export default function WebhookTab() {
       {isLoading ? (
         <p>{t('loading')}</p>
       ) : !webhooks || webhooks.length === 0 ? (
-        <CardV2><p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 32 }}>{t('webhook.noWebhooks')}</p></CardV2>
+        <EmptyState icon="notifications_off" title={t('webhook.noWebhooks')} minHeight={180} />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {webhooks.map((w: WebhookConfig) => (
-            <CardV2 key={w.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          {webhooks.map((w: WebhookConfig, idx: number) => (
+            <div
+              key={w.id}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                padding: '14px 0',
+                borderBottom: idx < webhooks.length - 1 ? '1px solid var(--border)' : 'none',
+              }}
+            >
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <strong>{w.name}</strong>
@@ -191,8 +199,7 @@ export default function WebhookTab() {
                   <button className="btn btn-sm" onClick={() => openEdit(w)}>Edit</button>
                   <button className="btn btn-sm btn-danger" onClick={() => setDeleteId(w.id)}>Delete</button>
                 </div>
-              </div>
-            </CardV2>
+            </div>
           ))}
         </div>
       )}

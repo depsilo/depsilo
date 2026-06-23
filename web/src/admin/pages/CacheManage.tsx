@@ -10,6 +10,8 @@ import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import SectionHeader from '@/components/SectionHeader'
+import EmptyState from '@/components/EmptyState'
 import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
@@ -64,24 +66,16 @@ export default function CacheManageV2() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Storage overview + Treemap side by side */}
+    <div className="space-y-12">
+      {/* ── Storage overview + Treemap (no card wrappers) ─────────── */}
       {distribution && (
-        <div className="grid grid-cols-3 gap-4">
-          {/* Left: usage bar + ecosystem breakdown */}
-          <div
-            className="col-span-1 rounded-[5px] p-4"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-          >
-            {/* Total usage */}
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--text-soft)' }}>
-                {t('cache.storageOverview')}
-              </span>
-            </div>
-            <p className="text-[22px] font-[600] font-mono tabular-nums mb-1 tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
+        <div className="grid grid-cols-3 gap-x-10 gap-y-12">
+          {/* Left: usage + ecosystem breakdown */}
+          <section className="col-span-1">
+            <SectionHeader title={t('cache.storageOverview')} />
+            <p className="font-mono tabular-nums mb-2" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>
               {formatBytes(distribution.total_size)}
-              <span className="text-[12px] font-[400] ml-1" style={{ color: 'var(--text-soft)' }}>
+              <span className="text-[12px] font-[400] ml-2" style={{ color: 'var(--text-soft)' }}>
                 / {formatBytes(distribution.max_size)}
               </span>
             </p>
@@ -99,9 +93,8 @@ export default function CacheManageV2() {
                 )
               })}
             </div>
-
-            {/* Ecosystem breakdown list */}
-            <div className="space-y-2">
+            {/* Ecosystem breakdown */}
+            <div className="space-y-1.5">
               {distribution.by_type.map((bt: any) => {
                 const pct = distribution.total_size > 0 ? ((bt.size / distribution.total_size) * 100).toFixed(1) : '0'
                 return (
@@ -110,27 +103,22 @@ export default function CacheManageV2() {
                     <EcosystemIcon type={bt.type} size={12} />
                     <span className="text-[11px] uppercase flex-1" style={{ color: 'var(--text)' }}>{bt.type}</span>
                     <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(bt.size)}</span>
-                    <span className="text-[10px] font-mono tabular-nums w-10 text-right" style={{ color: 'var(--text-soft)' }}>{pct}%</span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-soft)' }}>{bt.file_count}f</span>
+                    <span className="text-[10px] font-mono tabular-nums w-10 text-right" style={{ color: 'var(--text-subtle)' }}>{pct}%</span>
+                    <span className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>{bt.file_count}f</span>
                   </div>
                 )
               })}
             </div>
-          </div>
+          </section>
 
-          {/* Right: Treemap (compact) */}
-          <div
-            className="col-span-2 rounded-[5px] p-4"
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-          >
-            <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-2" style={{ color: 'var(--text-soft)' }}>
-              {t('cache.storageDistribution')}
-            </h3>
+          {/* Right: Treemap */}
+          <section className="col-span-2">
+            <SectionHeader title={t('cache.storageDistribution')} />
             {distribution.top_packages && distribution.top_packages.length > 0 ? (
-              <ResponsiveContainer width="100%" height={160}>
+              <ResponsiveContainer width="100%" height={200}>
                 <Treemap
                   data={distribution.top_packages.map((p: any) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
-                  dataKey="size" aspectRatio={4 / 3} stroke="var(--bg-card)" isAnimationActive={false}
+                  dataKey="size" aspectRatio={4 / 3} stroke="var(--bg)" isAnimationActive={false}
                   content={({ x, y, width, height, name, size }: any) => {
                     if (width < 4 || height < 4) return <g />
                     const showLabel = width > 60 && height > 30 && name
@@ -140,12 +128,12 @@ export default function CacheManageV2() {
                         <rect x={x} y={y} width={width} height={height}
                           fill={ECO_COLORS[type] || 'var(--brand)'}
                           fillOpacity={0.25 + Math.min(0.5, ((size || 0) / (distribution.top_packages[0]?.size || 1)) * 0.5)}
-                          stroke="var(--bg-card)" strokeWidth={1.5} rx={3}
+                          stroke="var(--bg)" strokeWidth={1.5} rx={3}
                         />
                         {showLabel && (
                           <foreignObject x={x} y={y} width={width} height={height}>
                             <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 3, boxSizing: 'border-box', overflow: 'hidden' }}>
-                              <span style={{ color: '#fff', fontSize: 11, fontWeight: 400, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
+                              <span style={{ color: '#fff', fontSize: 11, fontWeight: 500, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
                               <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>{formatBytes(size)}</span>
                             </div>
                           </foreignObject>
@@ -159,7 +147,7 @@ export default function CacheManageV2() {
                     const item = payload[0]?.payload
                     return (
                       <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                        <p className="font-[400]" style={{ color: 'var(--text)' }}>{item.name}</p>
+                        <p className="font-[500]" style={{ color: 'var(--text)' }}>{item.name}</p>
                         <p style={{ color: 'var(--text-soft)' }}>{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
                       </div>
                     )
@@ -167,18 +155,15 @@ export default function CacheManageV2() {
                 </Treemap>
               </ResponsiveContainer>
             ) : (
-              <p className="text-[13px] py-8 text-center" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p>
+              <EmptyState icon="grid_view" title={t('noData')} minHeight={200} />
             )}
-          </div>
+          </section>
         </div>
       )}
 
-      {/* Filter bar — single row */}
-      <div
-        className="flex items-center gap-2 rounded-[5px] px-3 py-2"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-      >
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+      {/* ── Filter row + actions ─────────────────────────────────── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-1 min-w-[240px] rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
@@ -188,7 +173,6 @@ export default function CacheManageV2() {
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           />
         </div>
-        <div className="h-5 w-px shrink-0" style={{ background: 'var(--border)' }} />
         <select value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
           {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
@@ -203,21 +187,18 @@ export default function CacheManageV2() {
         </ButtonV2>
       </div>
 
-      {/* Table */}
-      <div
-        className="rounded-[5px] overflow-hidden"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-      >
+      {/* ── Cache entries table (bare) ───────────────────────────── */}
+      <div>
         {isLoading ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+          <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('cache.noCache')}</div>
+          <EmptyState icon="inbox" title={t('cache.noCache')} minHeight={200} />
         ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Key', t('type'), t('cache.size'), t('cache.hitCount'), t('cache.lastAccessed'), t('actions')].map(h => (
-                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--text-soft)' }}>{h}</th>
+                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase tracking-[0.08em] py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -226,9 +207,9 @@ export default function CacheManageV2() {
                 <tr
                   key={i}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
-                  style={{ borderBottom: '1px solid var(--border)' }}
+                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
-                  <td className="py-2 px-3 pl-4 max-w-[260px]">
+                  <td className="py-2 px-3 pl-0 max-w-[260px]">
                     <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.key}</span>
                   </td>
                   <td className="py-2 px-3">
@@ -317,7 +298,7 @@ export default function CacheManageV2() {
             />
           </div>
           {warmupResult && (
-            <div className="rounded-[4px] px-3 py-2 text-[13px]" style={{ background: 'rgba(21,190,83,0.1)', color: 'var(--ok-text)', border: '1px solid rgba(21,190,83,0.3)' }}>
+            <div className="rounded-[4px] px-3 py-2 text-[13px]" style={{ background: 'var(--ok-fill)', color: 'var(--ok-text)', border: '1px solid var(--ok-border)' }}>
               {warmupResult}
             </div>
           )}

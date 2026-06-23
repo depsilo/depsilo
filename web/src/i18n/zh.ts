@@ -84,6 +84,10 @@ const zh = {
       upstreamStatus: '上游源状态',
       topPackages: '热门包 TOP 10',
       storageWarning: '缓存使用率已达 {{percent}}%，建议清理或扩容',
+      emptyTrendTitle: '还没有请求经过 Depsilo',
+      emptyTrendHint: '当客户端开始走代理后，命中 / 未命中趋势会在这里出现。',
+      emptyTopPackagesTitle: '暂无包活动',
+      emptyTopPackagesHint: '一旦有包被请求和缓存，最热门的会出现在这里。',
     },
 
     // Bandwidth Report
@@ -112,6 +116,8 @@ const zh = {
       minutes: '分',
       seconds: '秒',
       totalBandwidth: '总量',
+      emptyTitle: '所选区间内没有流量记录',
+      emptyHint: '换个时间范围，或等客户端开始走代理后再来看。',
     },
 
     // Cache
@@ -317,6 +323,7 @@ const zh = {
 
     // Users
     users: {
+      title: '用户',
       addUser: '添加用户',
       editUser: '编辑用户',
       user: '用户',
@@ -460,6 +467,8 @@ const zh = {
       packageCount: '包数量',
       lastActivity: '最后活跃',
       noProjects: '暂无项目',
+      noProjectsHint: '创建项目后，可绑定独立 Token 并按项目导出 SBOM。',
+      overview: '项目信息',
       regenerateToken: '重新生成 Token',
       confirmDelete: '删除项目？',
       deleteWarning: '所有包记录将被永久删除。',

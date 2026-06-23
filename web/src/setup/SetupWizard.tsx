@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import CardV2 from '../components/Card'
 import ButtonV2 from '../components/Button'
 import InputV2 from '../components/Input'
 import Icon from '../components/Icon'
@@ -399,7 +398,15 @@ export default function SetupWizard() {
           </div>
         )}
 
-        <CardV2>
+        <div
+          className="p-5"
+          style={{
+            background: 'var(--bg-card)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 'var(--r-card)',
+            boxShadow: 'var(--shadow-card)',
+          }}
+        >
           {renderStep()}
 
           {/* Navigation buttons */}
@@ -423,7 +430,7 @@ export default function SetupWizard() {
               </ButtonV2>
             </div>
           )}
-        </CardV2>
+        </div>
       </div>
     </div>
   )

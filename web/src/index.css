@@ -1,9 +1,7 @@
 @import "tailwindcss";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist-mono";
-@import "@fontsource/noto-sans-sc/400.css";
-@import "@fontsource/noto-sans-sc/500.css";
-@import "@fontsource/noto-sans-sc/700.css";
+@import "@fontsource-variable/noto-sans-sc";
 @import "material-symbols/outlined.css";
 
 /* ── Tailwind v4 @theme — turns CSS vars into utility classes ── */
@@ -34,10 +32,10 @@
   --color-spec-3: oklch(0.72 0.11 180);
   --color-spec-4: oklch(0.80 0.10 165);
 
-  --color-ok:          oklch(0.58 0.12 155);
-  --color-ok-fill:     oklch(0.58 0.12 155 / 0.10);
-  --color-ok-border:   oklch(0.58 0.12 155 / 0.28);
-  --color-ok-text:     oklch(0.40 0.10 155);
+  --color-ok:          oklch(0.50 0.14 155);
+  --color-ok-fill:     oklch(0.50 0.14 155 / 0.10);
+  --color-ok-border:   oklch(0.50 0.14 155 / 0.28);
+  --color-ok-text:     oklch(0.36 0.12 155);
 
   --color-warn:        oklch(0.70 0.14 65);
   --color-warn-fill:   oklch(0.70 0.14 65 / 0.12);
@@ -49,8 +47,11 @@
   --color-danger-border: oklch(0.60 0.17 25 / 0.30);
   --color-danger-text:   oklch(0.42 0.15 25);
 
-  /* Geist for Latin / numerals; Noto Sans SC for CJK fallback. */
-  --font-sans: 'Geist Variable', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /* Inter Variable for Latin (Linear / Vercel-style UI font); Noto Sans SC Variable
+   * for CJK. PingFang SC kept as Apple-side fallback for higher fidelity on macOS.
+   * Mono stays Geist Mono — its tabular numerals are tuned for variable weights
+   * and the metric values across admin / portal lean on it. */
+  --font-sans: 'Inter Variable', 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
 
   --spacing-1:  4px;
@@ -115,10 +116,11 @@
     transparent 100%
   );
 
-  --ok:          oklch(0.58 0.12 155);
-  --ok-fill:     oklch(0.58 0.12 155 / 0.10);
-  --ok-border:   oklch(0.58 0.12 155 / 0.28);
-  --ok-text:     oklch(0.40 0.10 155);
+  /* Forest green — distinct from emerald-500 toB-default; harmonises with deep teal brand */
+  --ok:          oklch(0.50 0.14 155);
+  --ok-fill:     oklch(0.50 0.14 155 / 0.10);
+  --ok-border:   oklch(0.50 0.14 155 / 0.28);
+  --ok-text:     oklch(0.36 0.12 155);
 
   --warn:        oklch(0.70 0.14 65);
   --warn-fill:   oklch(0.70 0.14 65 / 0.12);
@@ -177,10 +179,11 @@ html.dark,
   --grad-brand:  linear-gradient(120deg, oklch(0.72 0.14 210) 0%, oklch(0.78 0.12 190) 100%);
   --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.14 200 / 0.65) 25%, oklch(0.84 0.11 185 / 0.65) 60%, transparent 100%);
 
-  --ok:          oklch(0.74 0.14 155);
-  --ok-fill:     oklch(0.74 0.14 155 / 0.16);
-  --ok-border:   oklch(0.74 0.14 155 / 0.36);
-  --ok-text:     oklch(0.84 0.12 155);
+  /* Forest green — dark mode: brighter to maintain contrast against dark bg */
+  --ok:          oklch(0.70 0.16 150);
+  --ok-fill:     oklch(0.70 0.16 150 / 0.16);
+  --ok-border:   oklch(0.70 0.16 150 / 0.36);
+  --ok-text:     oklch(0.82 0.13 150);
 
   --warn:        oklch(0.80 0.14 65);
   --warn-fill:   oklch(0.80 0.14 65 / 0.16);
@@ -231,10 +234,10 @@ html.dark,
     --grad-brand:  linear-gradient(120deg, oklch(0.72 0.14 210) 0%, oklch(0.78 0.12 190) 100%);
     --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.14 200 / 0.65) 25%, oklch(0.84 0.11 185 / 0.65) 60%, transparent 100%);
 
-    --ok:          oklch(0.74 0.14 155);
-    --ok-fill:     oklch(0.74 0.14 155 / 0.16);
-    --ok-border:   oklch(0.74 0.14 155 / 0.36);
-    --ok-text:     oklch(0.84 0.12 155);
+    --ok:          oklch(0.70 0.16 150);
+    --ok-fill:     oklch(0.70 0.16 150 / 0.16);
+    --ok-border:   oklch(0.70 0.16 150 / 0.36);
+    --ok-text:     oklch(0.82 0.13 150);
 
     --warn:        oklch(0.80 0.14 65);
     --warn-fill:   oklch(0.80 0.14 65 / 0.16);

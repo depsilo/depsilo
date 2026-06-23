@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatDate, formatTime } from '@/lib/utils'
-import CardV2 from '@/components/Card'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import BadgeV2 from '@/components/Badge'
-import MetricCardV2 from '@/components/MetricCard'
+import Metric from '@/components/Metric'
+import SectionHeader from '@/components/SectionHeader'
+import EmptyState from '@/components/EmptyState'
 import DataTableV2 from '@/components/DataTable'
 import TabsV2 from '@/components/Tabs'
 import EcosystemIcon from '@/components/EcosystemIcon'
@@ -71,10 +72,13 @@ function OverviewTab() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid gap-4 grid-cols-4">
+      <div className="space-y-12">
+        <div className="grid gap-8 grid-cols-4 py-2">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-24 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+            <div key={i} className="flex flex-col items-center gap-3">
+              <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+              <div className="h-11 w-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+            </div>
           ))}
         </div>
       </div>
@@ -82,58 +86,38 @@ function OverviewTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Metrics */}
-      <div className="grid gap-4 grid-cols-4">
-        <MetricCardV2
-          label={t('security.totalVulnerabilities')}
-          value={String(dashboard.total_vulnerabilities || 0)}
-          icon={<Icon name="bug_report" size="sm" />}
-        />
-        <MetricCardV2
-          label={t('security.affectedPackages')}
-          value={String(dashboard.affected_packages || 0)}
-          icon={<Icon name="inventory_2" size="sm" />}
-        />
-        <MetricCardV2
-          label={t('security.criticalCount')}
-          value={String(dashboard.critical_count || 0)}
-          icon={<Icon name="error" size="sm" />}
-        />
-        <MetricCardV2
-          label={t('security.autoBlocked')}
-          value={String(dashboard.auto_blocked_count || 0)}
-          icon={<Icon name="block" size="sm" />}
-        />
+    <div className="space-y-12">
+      {/* ── Metrics row ───────────────────────────── */}
+      <div className="grid gap-8 grid-cols-4 py-2">
+        <Metric label={t('security.totalVulnerabilities')} value={String(dashboard.total_vulnerabilities || 0)} />
+        <Metric label={t('security.affectedPackages')} value={String(dashboard.affected_packages || 0)} />
+        <Metric label={t('security.criticalCount')} value={String(dashboard.critical_count || 0)} />
+        <Metric label={t('security.autoBlocked')} value={String(dashboard.auto_blocked_count || 0)} />
       </div>
 
-      {/* Scan action + last scan */}
-      <CardV2>
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-[14px] font-[400]" style={{ color: 'var(--text)' }}>
-              {t('security.scanStatus')}
-            </h3>
-            <p className="text-[12px] mt-1" style={{ color: 'var(--text-soft)' }}>
-              {t('security.lastScan')}: {dashboard.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
-            </p>
-          </div>
-          <ButtonV2
-            onClick={() => scanMutation.mutate()}
-            disabled={scanMutation.isPending}
-            size="sm"
-          >
-            <Icon name="radar" size="sm" />
-            {scanMutation.isPending ? t('security.scanning') : t('security.scanNow')}
-          </ButtonV2>
-        </div>
-      </CardV2>
+      {/* ── Scan status + action ───────────────────── */}
+      <section>
+        <SectionHeader
+          title={t('security.scanStatus')}
+          action={
+            <ButtonV2
+              onClick={() => scanMutation.mutate()}
+              disabled={scanMutation.isPending}
+              size="sm"
+            >
+              <Icon name="radar" size="sm" />
+              {scanMutation.isPending ? t('security.scanning') : t('security.scanNow')}
+            </ButtonV2>
+          }
+        />
+        <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
+          {t('security.lastScan')}: {dashboard.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
+        </p>
+      </section>
 
-      {/* Severity distribution */}
-      <CardV2>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--text-soft)' }}>
-          {t('security.severityDistribution')}
-        </h3>
+      {/* ── Severity distribution ──────────────────── */}
+      <section>
+        <SectionHeader title={t('security.severityDistribution')} />
         {severityDist.length > 0 ? (
           <div className="space-y-3">
             {severityDist.map((item) => {
@@ -167,9 +151,9 @@ function OverviewTab() {
             })}
           </div>
         ) : (
-          <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('security.noVulnerabilities')}</p>
+          <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={140} />
         )}
-      </CardV2>
+      </section>
     </div>
   )
 }
@@ -285,16 +269,14 @@ function VulnerabilitiesTab() {
         </ButtonV2>
       </div>
 
-      {/* Table */}
-      <CardV2 noPad>
-        {isLoading ? (
-          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
-        ) : items.length === 0 ? (
-          <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('security.noVulnerabilities')}</div>
-        ) : (
-          <DataTableV2 columns={columns} data={items} />
-        )}
-      </CardV2>
+      {/* Table — bare (no Card wrap) */}
+      {isLoading ? (
+        <div className="py-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+      ) : items.length === 0 ? (
+        <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={200} />
+      ) : (
+        <DataTableV2 columns={columns} data={items} />
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -351,34 +333,33 @@ function SuggestionsTab() {
     return (
       <div className="space-y-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-28 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+          <div key={i} className="h-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
         ))}
       </div>
     )
   }
 
   if (items.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <Icon name="verified" size="lg" style={{ color: 'var(--ok)' }} />
-        <p className="text-[14px] mt-3" style={{ color: 'var(--text-soft)' }}>{t('security.noSuggestions')}</p>
-      </div>
-    )
+    return <EmptyState icon="verified" title={t('security.noSuggestions')} minHeight={240} />
   }
 
   return (
-    <div className="space-y-4">
-      {items.map((item: any) => {
-        const severityVariant = SEVERITY_BADGE_MAP[item.severity] || 'default'
-        const isActing = (approveMutation.isPending && approveMutation.variables === item.id) ||
-          (dismissMutation.isPending && dismissMutation.variables === item.id)
+    <div>
+      <div>
+        {items.map((item: any, idx: number) => {
+          const severityVariant = SEVERITY_BADGE_MAP[item.severity] || 'default'
+          const isActing = (approveMutation.isPending && approveMutation.variables === item.id) ||
+            (dismissMutation.isPending && dismissMutation.variables === item.id)
 
-        return (
-          <CardV2 key={item.id}>
-            <div className="flex items-start justify-between gap-4">
+          return (
+            <div
+              key={item.id}
+              className="flex items-start justify-between gap-4 py-4"
+              style={{ borderBottom: idx < items.length - 1 ? '1px solid var(--border)' : 'none' }}
+            >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-[13px] font-[400]" style={{ color: 'var(--text)' }}>
+                  <span className="font-mono text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
                     {item.osv_id}
                   </span>
                   <BadgeV2 variant={severityVariant}>{item.severity?.toUpperCase()}</BadgeV2>
@@ -421,12 +402,12 @@ function SuggestionsTab() {
                 </ButtonV2>
               </div>
             </div>
-          </CardV2>
-        )
-      })}
+          )
+        })}
+      </div>
 
       {/* Simple page nav */}
-      <div className="flex justify-center gap-2">
+      <div className="flex justify-center gap-2 mt-6">
         <ButtonV2 variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
           <Icon name="chevron_left" size="sm" />
         </ButtonV2>
@@ -512,34 +493,32 @@ function PoliciesTab() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-2">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-16 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+          <div key={i} className="h-12 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
         ))}
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Per-ecosystem policies */}
-      <CardV2>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-4" style={{ color: 'var(--text-soft)' }}>
-          {t('security.ecosystemPolicies')}
-        </h3>
-        <div className="space-y-3">
-          {ecosystems.map((eco) => {
+    <div className="space-y-12">
+      {/* ── Per-ecosystem policies ───────────────────── */}
+      <section>
+        <SectionHeader title={t('security.ecosystemPolicies')} />
+        <div>
+          {ecosystems.map((eco, idx) => {
             const policy = getPolicy(eco)
             const isSaving = savingEco === eco && updateMutation.isPending
             return (
               <div
                 key={eco}
-                className="flex items-center gap-4 py-3 px-4 rounded-[4px]"
-                style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}
+                className="flex items-center gap-4 py-3"
+                style={{ borderBottom: idx < ecosystems.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
                 <div className="flex items-center gap-2 w-32 shrink-0">
                   <EcosystemIcon type={eco as any} size={16} />
-                  <span className="text-[13px] font-[400]" style={{ color: 'var(--text)' }}>
+                  <span className="text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
                     {eco.toUpperCase()}
                   </span>
                 </div>
@@ -590,16 +569,11 @@ function PoliciesTab() {
             )
           })}
         </div>
-      </CardV2>
+      </section>
 
-      {/* Offline import */}
-      <CardV2>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
-          {t('security.offlineImport')}
-        </h3>
-        <p className="text-[13px] mb-4" style={{ color: 'var(--text-soft)' }}>
-          {t('security.offlineImportDesc')}
-        </p>
+      {/* ── Offline import ────────────────────────── */}
+      <section>
+        <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
         <div
           className="rounded-[4px] p-6 text-center cursor-pointer transition-colors duration-150"
           style={{
@@ -632,12 +606,12 @@ function PoliciesTab() {
           />
         </div>
         {importMutation.isSuccess && (
-          <p className="text-[12px] mt-2" style={{ color: 'var(--ok)' }}>{t('security.importSuccess')}</p>
+          <p className="text-[12px] mt-2" style={{ color: 'var(--ok-text)' }}>{t('security.importSuccess')}</p>
         )}
         {importMutation.isError && (
-          <p className="text-[12px] mt-2" style={{ color: 'var(--danger)' }}>{t('security.importError')}</p>
+          <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('security.importError')}</p>
         )}
-      </CardV2>
+      </section>
     </div>
   )
 }

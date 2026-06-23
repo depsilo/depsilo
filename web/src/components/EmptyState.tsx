@@ -1,30 +1,40 @@
+import { type ReactNode } from 'react'
 import Icon from './Icon'
 
-interface EmptyStateV2Props {
+// Friendly empty state used inline on the page (no Card wrapper).
+// Icon + title + optional hint; optional CTA underneath.
+
+interface EmptyStateProps {
   icon?: string
   title: string
-  description?: string
-  action?: React.ReactNode
+  hint?: string
+  action?: ReactNode
+  /** Minimum vertical box so the section doesn't collapse to nothing. */
+  minHeight?: number
 }
 
-export default function EmptyStateV2({ icon = 'inbox', title, description, action }: EmptyStateV2Props) {
+export default function EmptyState({
+  icon = 'monitoring',
+  title,
+  hint,
+  action,
+  minHeight = 160,
+}: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 px-8">
-      <div
-        className="flex items-center justify-center w-12 h-12 rounded-[8px] mb-4"
-        style={{ background: 'var(--bg-soft)', color: 'var(--text-soft)' }}
-      >
-        <Icon name={icon} size="lg" />
-      </div>
-      <h3 className="text-[16px] font-[400] mb-1" style={{ color: 'var(--text)' }}>
+    <div
+      className="flex flex-col items-center justify-center text-center py-8"
+      style={{ minHeight, color: 'var(--text-soft)' }}
+    >
+      <Icon name={icon} size="lg" />
+      <p className="text-[13px] font-[500] mt-3" style={{ color: 'var(--text-muted)' }}>
         {title}
-      </h3>
-      {description && (
-        <p className="text-[14px] text-center max-w-sm" style={{ color: 'var(--text-soft)' }}>
-          {description}
+      </p>
+      {hint && (
+        <p className="text-[12px] mt-1 max-w-[36ch]" style={{ color: 'var(--text-soft)' }}>
+          {hint}
         </p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-3">{action}</div>}
     </div>
   )
 }

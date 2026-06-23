@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
-import CardV2 from '@/components/Card'
 import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import InputV2 from '@/components/Input'
@@ -11,6 +10,8 @@ import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import DataTableV2 from '@/components/DataTable'
 import ModalV2 from '@/components/Modal'
+import SectionHeader from '@/components/SectionHeader'
+import EmptyState from '@/components/EmptyState'
 
 export default function UsersV2() {
   const { t } = useTranslation()
@@ -45,7 +46,7 @@ export default function UsersV2() {
   const isUserSaving = createUserMutation.isPending || updateUserMutation.isPending
 
   const userColumns = [
-    { key: 'username', label: t('users.user'), render: (_v: unknown, row: any) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[400] shrink-0" style={{ background: 'var(--brand)', color: 'white' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[400]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
+    { key: 'username', label: t('users.user'), render: (_v: unknown, row: any) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[500] shrink-0" style={{ background: 'var(--brand)', color: 'white' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
     { key: 'role', label: t('users.role'), render: (v: unknown) => <BadgeV2 variant={(v as string) === 'admin' ? 'ecosystem' : 'default'}>{v as string}</BadgeV2> },
     { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'error'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
@@ -54,7 +55,7 @@ export default function UsersV2() {
   ]
 
   const tokenColumns = [
-    { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-[400]" style={{ color: 'var(--text)' }}>{v as string}</span> },
+    { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-[500]" style={{ color: 'var(--text)' }}>{v as string}</span> },
     { key: 'permissions', label: t('users.permissions'), render: (v: unknown) => <BadgeV2>{v as string}</BadgeV2> },
     { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'expires_at', label: t('users.expiresAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverExpires')}</span> },
@@ -62,19 +63,36 @@ export default function UsersV2() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end"><ButtonV2 onClick={openCreateUser}><Icon name="person_add" size="sm" />{t('users.addUser')}</ButtonV2></div>
-      <CardV2 noPad>{usersLoading ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : users.length === 0 ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('users.noUsers')}</div> : <DataTableV2 columns={userColumns} data={users} />}</CardV2>
+    <div className="space-y-12">
+      {/* ── Users ─────────────────────────────────────── */}
+      <section>
+        <SectionHeader
+          title={t('users.title')}
+          action={<ButtonV2 onClick={openCreateUser} size="sm"><Icon name="person_add" size="sm" />{t('users.addUser')}</ButtonV2>}
+        />
+        {usersLoading ? (
+          <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+        ) : users.length === 0 ? (
+          <EmptyState icon="group" title={t('users.noUsers')} minHeight={180} />
+        ) : (
+          <DataTableV2 columns={userColumns} data={users} />
+        )}
+      </section>
 
-      <CardV2>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--text-soft)' }}>API TOKENS</h3>
-          <ButtonV2 variant="secondary" size="sm" onClick={() => setTokenDialogOpen(true)}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2>
-        </div>
-        <div className="-mx-5 -mb-5 overflow-hidden rounded-b-[5px]">
-          {tokensLoading ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : tokens.length === 0 ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('users.noTokens')}</div> : <DataTableV2 columns={tokenColumns} data={tokens} />}
-        </div>
-      </CardV2>
+      {/* ── API Tokens ───────────────────────────────── */}
+      <section>
+        <SectionHeader
+          title="API Tokens"
+          action={<ButtonV2 variant="secondary" size="sm" onClick={() => setTokenDialogOpen(true)}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2>}
+        />
+        {tokensLoading ? (
+          <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+        ) : tokens.length === 0 ? (
+          <EmptyState icon="key" title={t('users.noTokens')} minHeight={180} />
+        ) : (
+          <DataTableV2 columns={tokenColumns} data={tokens} />
+        )}
+      </section>
 
       <ModalV2 open={userDialogOpen} onClose={closeUserDialog} title={editUserId ? t('users.editUser') : t('users.addUser')}>
         <form onSubmit={handleUserSubmit} className="space-y-4">
@@ -100,7 +118,7 @@ export default function UsersV2() {
           <code className="flex-1 font-mono text-[13px] break-all" style={{ color: 'var(--text)' }}>{createdToken}</code>
           <button onClick={copyToken} className="bg-transparent cursor-pointer p-1.5 shrink-0 rounded-[4px]" style={{ color: 'var(--text-soft)' }}><Icon name={copied ? 'check' : 'content_copy'} size="sm" /></button>
         </div>
-        <p className="text-[12px] mt-2" style={{ color: 'var(--danger)' }}>{t('users.tokenSaveWarning')}</p>
+        <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('users.tokenSaveWarning')}</p>
         <div className="flex justify-end mt-4"><ButtonV2 onClick={() => setTokenResultOpen(false)}>{t('confirm')}</ButtonV2></div>
       </ModalV2>
     </div>

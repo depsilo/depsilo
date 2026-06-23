@@ -173,19 +173,18 @@ export function UpstreamGroupedPanel({ upstreams, renderActions }: UpstreamGroup
   }
 
   return (
-    <div style={{ columns: 2, columnGap: 12 }}>
+    <div className="grid grid-cols-2 gap-x-10 gap-y-6">
       {groups.map(([adapter, items]) => (
-        <div
-          key={adapter}
-          className="rounded-[5px] p-4"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', breakInside: 'avoid', marginBottom: 12 }}
-        >
-          <div className="flex items-center gap-2 mb-3">
+        <div key={adapter}>
+          <div
+            className="flex items-center gap-2 pb-2 mb-3"
+            style={{ borderBottom: '1px solid var(--border)' }}
+          >
             <EcosystemIcon type={adapter as any} size={14} />
-            <span className="text-[12px] font-[400] uppercase tracking-wider" style={{ color: 'var(--text)' }}>
+            <span className="text-[11px] font-mono font-[600] uppercase tracking-[0.1em]" style={{ color: 'var(--text)' }}>
               {adapter}
             </span>
-            <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--text-soft)' }}>
+            <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--text-subtle)' }}>
               {items.filter(u => u.healthy).length}/{items.length}
             </span>
           </div>

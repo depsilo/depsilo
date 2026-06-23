@@ -3,11 +3,53 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { licenseApi } from '@/lib/api'
 import type { EntitlementStatus } from '@/lib/api'
-import CardV2 from '@/components/Card'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
+import SectionHeader from '@/components/SectionHeader'
+
+// State panel — soft tinted background, no border / shadow.
+// Used to surface license/trial status with an icon + headline + body.
+function StatePanel({
+  tone,
+  icon,
+  title,
+  description,
+  children,
+}: {
+  tone: 'brand' | 'ok' | 'danger'
+  icon: string
+  title: React.ReactNode
+  description?: React.ReactNode
+  children?: React.ReactNode
+}) {
+  const tones = {
+    brand: { bg: 'var(--brand-soft)', iconBg: 'var(--brand-soft)', iconColor: 'var(--brand-text)' },
+    ok:    { bg: 'var(--ok-fill)',    iconBg: 'var(--ok-fill)',    iconColor: 'var(--ok-text)' },
+    danger:{ bg: 'var(--danger-fill)',iconBg: 'var(--danger-fill)',iconColor: 'var(--danger-text)' },
+  } as const
+  const t = tones[tone]
+  return (
+    <div className="rounded-[6px] p-5" style={{ background: t.bg }}>
+      <div className="flex items-center gap-3 mb-4">
+        <span
+          className="flex items-center justify-center w-10 h-10 rounded-[8px]"
+          style={{ background: t.iconBg, color: t.iconColor }}
+        >
+          <Icon name={icon} size="sm" />
+        </span>
+        <div>
+          <p className="font-[500] text-[14px]" style={{ color: 'var(--text)' }}>{title}</p>
+          {description && (
+            <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-soft)' }}>{description}</p>
+          )}
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
 
 export default function License() {
   const { t, i18n } = useTranslation()
@@ -33,9 +75,6 @@ export default function License() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['license', 'status'] })
     },
-    onError: () => {
-      // no-op, error visible via UI state
-    },
   })
 
   const setKey = useMutation({
@@ -45,10 +84,6 @@ export default function License() {
     },
     onSuccess: (s) => {
       qc.invalidateQueries({ queryKey: ['license', 'status'] })
-      // Clear input only when the key actually granted paid status. During a
-      // trial, is_pro can be true via trial even if the saved key is invalid —
-      // gate on `source === 'paid'` so the user keeps their input visible
-      // alongside the "saved-pending" warning.
       if (s.source === 'paid') {
         setKeyInput('')
       }
@@ -76,7 +111,7 @@ export default function License() {
 
   if (isLoading || !status) {
     return (
-      <div className="p-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
+      <div className="py-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
         {t('loading')}
       </div>
     )
@@ -86,151 +121,88 @@ export default function License() {
   const trialUsed = status.trial_used
 
   const formatDate = (iso?: string) =>
-    iso
-      ? new Date(iso).toLocaleDateString(i18n.language === 'zh' ? 'zh-CN' : 'en-US')
-      : ''
+    iso ? new Date(iso).toLocaleDateString(i18n.language === 'zh' ? 'zh-CN' : 'en-US') : ''
 
   const formatRelative = (iso?: string) =>
-    iso
-      ? new Date(iso).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US')
-      : ''
+    iso ? new Date(iso).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US') : ''
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-10 max-w-3xl">
+      {/* ── Page heading ───────────────────────────── */}
       <div>
-        <h2 className="text-[19px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
+        <h2 className="text-[20px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
           {t('license.title')}
         </h2>
-        <p className="text-[13px] mt-0.5" style={{ color: 'var(--text-soft)' }}>
+        <p className="text-[13px] mt-1" style={{ color: 'var(--text-soft)' }}>
           {t('license.subtitle')}
         </p>
       </div>
 
-      {/* --- State card: no trial, trial not used --- */}
+      {/* ── State panel ────────────────────────────── */}
       {source === 'none' && !trialUsed && (
-        <CardV2>
-          <div className="flex items-center gap-3 mb-4">
-            <span
-              className="flex items-center justify-center w-10 h-10 rounded-[8px]"
-              style={{ background: 'rgba(99,102,241,0.12)' }}
-            >
-              <Icon name="workspace_premium" size="sm" style={{ color: 'var(--brand)' }} />
-            </span>
-            <div>
-              <p className="font-[400]" style={{ color: 'var(--text)' }}>
-                {t('license.trial.start_button')}
-              </p>
-              <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-                {t('license.trial.start_explainer')}
-              </p>
-            </div>
-          </div>
+        <StatePanel
+          tone="brand"
+          icon="workspace_premium"
+          title={t('license.trial.start_button')}
+          description={t('license.trial.start_explainer')}
+        >
           <div className="flex gap-2">
-            <ButtonV2
-              onClick={() => activateTrial.mutate()}
-              disabled={activateTrial.isPending}
-            >
+            <ButtonV2 onClick={() => activateTrial.mutate()} disabled={activateTrial.isPending}>
               {t('license.trial.start_button')}
             </ButtonV2>
-            <ButtonV2
-              variant="secondary"
-              onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}
-            >
+            <ButtonV2 variant="secondary" onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}>
               {t('license.view_pricing')}
             </ButtonV2>
           </div>
-        </CardV2>
+        </StatePanel>
       )}
 
-      {/* --- State card: trial active --- */}
       {source === 'trial' && (
-        <CardV2>
-          <div className="flex items-center gap-3 mb-4">
-            <span
-              className="flex items-center justify-center w-10 h-10 rounded-[8px]"
-              style={{ background: 'rgba(21,190,83,0.15)' }}
-            >
-              <Icon name="verified" size="sm" style={{ color: 'var(--success, #15BE53)' }} />
-            </span>
-            <div>
-              <p className="font-[400]" style={{ color: 'var(--text)' }}>
-                {t('license.status.pro')} · {t('license.status.trial')}
-              </p>
-              <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-                {t('license.trial.days_left', { count: status.days_left })}
-                {' · '}
-                {t('license.trial.expires_at', { date: formatDate(status.expires_at) })}
-              </p>
-            </div>
-          </div>
-          <ButtonV2
-            variant="secondary"
-            onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}
-          >
+        <StatePanel
+          tone="ok"
+          icon="verified"
+          title={`${t('license.status.pro')} · ${t('license.status.trial')}`}
+          description={`${t('license.trial.days_left', { count: status.days_left })} · ${t('license.trial.expires_at', { date: formatDate(status.expires_at) })}`}
+        >
+          <ButtonV2 variant="secondary" onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}>
             {t('license.buy_pro')}
           </ButtonV2>
-        </CardV2>
+        </StatePanel>
       )}
 
-      {/* --- State card: trial expired --- */}
       {source === 'none' && trialUsed && (
-        <CardV2>
-          <div className="flex items-center gap-3 mb-4">
-            <span
-              className="flex items-center justify-center w-10 h-10 rounded-[8px]"
-              style={{ background: 'rgba(239,68,68,0.12)' }}
-            >
-              <Icon name="warning" size="sm" style={{ color: 'var(--danger, #EF4444)' }} />
-            </span>
-            <div>
-              <p className="font-[400]" style={{ color: 'var(--text)' }}>
-                {t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
-              </p>
-            </div>
-          </div>
-          <ButtonV2
-            onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}
-          >
+        <StatePanel
+          tone="danger"
+          icon="warning"
+          title={t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
+        >
+          <ButtonV2 onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}>
             {t('license.buy_pro')}
           </ButtonV2>
-        </CardV2>
+        </StatePanel>
       )}
 
-      {/* --- State card: paid pro active --- */}
       {source === 'paid' && (
-        <CardV2>
-          <div className="flex items-center gap-3 mb-4">
-            <span
-              className="flex items-center justify-center w-10 h-10 rounded-[8px]"
-              style={{ background: 'rgba(21,190,83,0.15)' }}
-            >
-              <Icon name="verified" size="sm" style={{ color: 'var(--success, #15BE53)' }} />
-            </span>
-            <div>
-              <p className="font-[400]" style={{ color: 'var(--text)' }}>
-                {t('license.pro.activated')}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-2 mb-4">
+        <StatePanel
+          tone="ok"
+          icon="verified"
+          title={t('license.pro.activated')}
+        >
+          <div className="space-y-0">
             {[
               { label: t('license.pro.key_label'), value: <code className="font-mono text-[13px]">{status.license_key_masked}</code> },
               ...(status.expires_at
                 ? [{ label: t('license.pro.expires_at', { date: '' }).replace('：', ':').split(':')[0], value: formatDate(status.expires_at) }]
                 : []),
               { label: t('license.pro.last_checked', { relative_time: '' }).replace(/：.*$/, '').replace(/:.+$/, ''), value: formatRelative(status.last_checked) },
-            ].map((item, i) => (
+            ].map((item, i, arr) => (
               <div
                 key={i}
                 className="flex items-center justify-between py-2"
-                style={{ borderBottom: '1px solid var(--border)' }}
+                style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
-                <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
-                  {item.label}
-                </span>
-                <span className="text-[13px]" style={{ color: 'var(--text)' }}>
-                  {item.value}
-                </span>
+                <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{item.label}</span>
+                <span className="text-[13px]" style={{ color: 'var(--text)' }}>{item.value}</span>
               </div>
             ))}
           </div>
@@ -238,20 +210,22 @@ export default function License() {
             variant="secondary"
             onClick={() => revalidate.mutate()}
             disabled={revalidate.isPending}
+            className="mt-4"
           >
             <Icon name="refresh" size="sm" />
             {t('license.revalidate')}
           </ButtonV2>
-        </CardV2>
+        </StatePanel>
       )}
 
-      {/* --- License key entry section --- */}
-      <CardV2>
+      {/* ── License key entry (collapsible) ────────── */}
+      <section>
         <button
-          className="w-full flex items-center justify-between bg-transparent cursor-pointer"
+          className="w-full flex items-center justify-between bg-transparent cursor-pointer pb-2"
+          style={{ borderBottom: '1px solid var(--border)' }}
           onClick={() => setKeyExpanded(!keyExpanded)}
         >
-          <span className="text-[14px] font-[500]" style={{ color: 'var(--text)' }}>
+          <span className="text-[13px] font-[600] tracking-[-0.005em]" style={{ color: 'var(--text)' }}>
             {t('license.key.title')}
           </span>
           <Icon name={keyExpanded ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--text-soft)' }} />
@@ -278,7 +252,7 @@ export default function License() {
                 </div>
                 {setKey.data && setKey.data.source !== 'paid' && (
                   <div className="space-y-1">
-                    <p className="text-[13px]" style={{ color: 'var(--warning, #F59E0B)' }}>
+                    <p className="text-[13px]" style={{ color: 'var(--warn-text)' }}>
                       {t('license.key.saved_pending_message')}
                     </p>
                     {setKey.data.license_error && (
@@ -300,9 +274,6 @@ export default function License() {
                 )}
               </>
             )}
-            {/* Remove key button: surface whenever a key is persisted in DB,
-                regardless of paid/trial source — so a user who saved a bad key
-                during trial can still clear it. */}
             {status.license_key_masked && (
               <div className="flex gap-2">
                 {source === 'paid' && (
@@ -310,51 +281,37 @@ export default function License() {
                     {t('license.key.change_button')}
                   </ButtonV2>
                 )}
-                <ButtonV2
-                  variant="danger"
-                  onClick={() => setRemoveOpen(true)}
-                >
+                <ButtonV2 variant="danger" onClick={() => setRemoveOpen(true)}>
                   {t('license.key.remove_button')}
                 </ButtonV2>
               </div>
             )}
           </div>
         )}
-      </CardV2>
+      </section>
 
-      {/* --- Feature comparison --- */}
-      <CardV2>
-        <p
-          className="text-[12px] uppercase tracking-wider font-[400] mb-4"
-          style={{ color: 'var(--text-subtle, var(--text-soft))' }}
-        >
-          {t('license.features.heading')}
-        </p>
-        <div className="grid grid-cols-2 gap-6">
+      {/* ── Feature comparison ─────────────────────── */}
+      <section>
+        <SectionHeader title={t('license.features.heading')} />
+        <div className="grid grid-cols-2 gap-8">
           <div>
-            <p
-              className="text-[13px] font-[500] mb-2"
-              style={{ color: 'var(--text)' }}
-            >
+            <p className="text-[13px] font-[600] mb-3" style={{ color: 'var(--text)' }}>
               {t('license.status.free')}
             </p>
-            <ul className="space-y-1.5">
+            <ul className="space-y-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-soft)' }}>
-                  <Icon name="check_circle" size="sm" style={{ color: 'var(--text-subtle, var(--text-soft))' }} />
+                  <Icon name="check_circle" size="sm" style={{ color: 'var(--text-subtle)' }} />
                   {t(`license.features.free.f${i}`)}
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <p
-              className="text-[13px] font-[500] mb-2"
-              style={{ color: 'var(--text)' }}
-            >
+            <p className="text-[13px] font-[600] mb-3" style={{ color: 'var(--text)' }}>
               {t('license.status.pro')}
             </p>
-            <ul className="space-y-1.5">
+            <ul className="space-y-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-soft)' }}>
                   <Icon name="star" size="sm" style={{ color: 'var(--brand)' }} />
@@ -364,14 +321,10 @@ export default function License() {
             </ul>
           </div>
         </div>
-      </CardV2>
+      </section>
 
-      {/* --- Remove key confirmation modal --- */}
-      <ModalV2
-        open={removeOpen}
-        onClose={() => setRemoveOpen(false)}
-        title={t('license.key.remove_confirm_title')}
-      >
+      {/* Remove key confirmation modal */}
+      <ModalV2 open={removeOpen} onClose={() => setRemoveOpen(false)} title={t('license.key.remove_confirm_title')}>
         <p className="text-[14px] mb-5" style={{ color: 'var(--text-soft)' }}>
           {t('license.key.remove_confirm_body')}
         </p>

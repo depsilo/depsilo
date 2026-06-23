@@ -23,11 +23,10 @@ function SidebarNavItem({ item }: { item: NavItem }) {
     <NavLink
       to={item.to}
       end={item.end}
-      className="flex items-center gap-3 px-5 py-2 text-[14px] transition-colors duration-150 no-underline relative"
+      className="flex items-center gap-2.5 mx-2 px-3 py-2 text-[13px] rounded-[6px] transition-colors duration-150 no-underline"
       style={({ isActive }) => ({
         color: isActive ? 'var(--brand-text)' : 'var(--text-soft)',
         background: isActive ? 'var(--brand-soft)' : 'transparent',
-        borderLeft: isActive ? '2px solid var(--brand)' : '2px solid transparent',
         fontWeight: isActive ? 600 : 500,
       })}
     >
@@ -123,14 +122,20 @@ export default function MainLayoutV2() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-2">
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-subtle)', padding: '8px 16px 4px' }}>
+          <p
+            className="font-mono uppercase mt-2 mb-1.5 px-5"
+            style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+          >
             {t('nav.monitor')}
           </p>
           {monitorItems.map((item) => (
             <SidebarNavItem key={item.to} item={item} />
           ))}
 
-          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-subtle)', padding: '24px 16px 4px' }}>
+          <p
+            className="font-mono uppercase mt-6 mb-1.5 px-5"
+            style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+          >
             {t('nav.manage')}
           </p>
           {manageItems.map((item) => (
@@ -142,14 +147,14 @@ export default function MainLayoutV2() {
         <div style={{ borderTop: '0.5px solid var(--border)' }} className="px-3 py-3">
           <div className="flex items-center gap-2.5 rounded-[6px] px-2 py-2 group transition-colors duration-150 cursor-default hover:bg-[var(--bg-hover)]">
             <div
-              className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[400] shrink-0"
+              className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[600] shrink-0"
               style={{ background: 'var(--brand)', color: 'white' }}
             >
               {user.username?.[0]?.toUpperCase() || 'A'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-[400] truncate leading-tight" style={{ color: 'var(--text)' }}>{user.username}</p>
-              <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-soft)' }}>
+              <p className="text-[13px] font-[500] truncate leading-tight" style={{ color: 'var(--text)' }}>{user.username}</p>
+              <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-subtle)' }}>
                 {user.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
               </p>
             </div>
@@ -174,18 +179,35 @@ export default function MainLayoutV2() {
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
         }}
       >
-        <h1 className="text-[15px] font-[600] tracking-[-0.01em]" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
-        <div className="flex items-center gap-3">
+        <h1 className="text-[17px] font-[600] tracking-[-0.015em]" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
+        <div className="flex items-center gap-2.5">
           <Link
             to="/"
-            className="text-[12px] font-[500] no-underline transition-colors duration-150 inline-flex items-center gap-1 text-[var(--brand-text)] hover:text-[var(--brand-strong)]"
+            className="text-[12px] font-[500] no-underline transition-colors duration-150 inline-flex items-center gap-1 text-[var(--text-soft)] hover:text-[var(--text)]"
             title={t('portal.backLink')}
           >
             {t('portal.backLink')}
           </Link>
           <LangToggle />
           <ThemeToggle />
-          <div className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: 'var(--text-soft)' }}>
+          {/* Status chip — pill with tinted bg matching service health */}
+          <div
+            className="flex items-center gap-1.5 text-[11px] font-mono rounded-[6px] px-2 py-1"
+            style={{
+              background:
+                dotStatus === 'healthy'
+                  ? 'var(--ok-fill)'
+                  : dotStatus === 'degraded'
+                    ? 'var(--warn-fill)'
+                    : 'var(--danger-fill)',
+              color:
+                dotStatus === 'healthy'
+                  ? 'var(--ok-text)'
+                  : dotStatus === 'degraded'
+                    ? 'var(--warn-text)'
+                    : 'var(--danger-text)',
+            }}
+          >
             <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
             {dotStatus === 'healthy' ? t('portal.online') : t('portal.offline')}
           </div>
@@ -193,7 +215,7 @@ export default function MainLayoutV2() {
       </header>
 
       {/* Main content */}
-      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 48, background: 'var(--bg-page)' }}>
+      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 80, background: 'var(--bg-page)' }}>
         <Outlet />
       </main>
     </div>

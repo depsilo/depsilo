@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
-import CardV2 from '@/components/Card'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
 import Icon from '@/components/Icon'
@@ -12,6 +11,7 @@ import ModalV2 from '@/components/Modal'
 import DataTableV2 from '@/components/DataTable'
 import SelectV2 from '@/components/Select'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import EmptyState from '@/components/EmptyState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 
 const ECOSYSTEM_OPTIONS = [{ value: '*', label: 'All (*)' }, { value: 'pypi', label: 'PyPI' }, { value: 'apt', label: 'APT' }, { value: 'npm', label: 'npm' }, { value: 'go', label: 'Go' }, { value: 'cargo', label: 'Cargo' }, { value: 'maven', label: 'Maven' }, { value: 'rubygems', label: 'RubyGems' }, { value: 'composer', label: 'Composer' }, { value: 'nuget', label: 'NuGet' }, { value: 'conda', label: 'Conda' }, { value: 'cran', label: 'CRAN' }, { value: 'helm', label: 'Helm' }]
@@ -70,7 +70,13 @@ export default function RulesV2() {
           <ButtonV2 onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</ButtonV2>
         </div>
       </div>
-      <CardV2 noPad>{isLoading ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : items.length === 0 ? <div className="p-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('rules.noRules')}</div> : <DataTableV2 columns={columns} data={items} />}</CardV2>
+      {isLoading ? (
+        <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+      ) : items.length === 0 ? (
+        <EmptyState icon="rule" title={t('rules.noRules')} minHeight={200} />
+      ) : (
+        <DataTableV2 columns={columns} data={items} />
+      )}
 
       <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('rules.editRule') : t('rules.addRule')}>
         <form onSubmit={handleSubmit} className="space-y-4">

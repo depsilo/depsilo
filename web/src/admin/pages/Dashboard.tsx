@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { adminApi } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import CardV2 from '@/components/Card'
-import MetricCardV2 from '@/components/MetricCard'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
+import Metric from '@/components/Metric'
+import SectionHeader from '@/components/SectionHeader'
+import EmptyState from '@/components/EmptyState'
 import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 import {
   ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -28,16 +29,29 @@ function TopPackagesList({ topPackages }: { topPackages: { pypi?: any[]; apt?: a
   }, [topPackages])
 
   if (merged.length === 0) {
-    return <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('noData')}</p>
+    return (
+      <EmptyState
+        icon="inventory_2"
+        title={t('dashboard.emptyTopPackagesTitle')}
+        hint={t('dashboard.emptyTopPackagesHint')}
+      />
+    )
   }
 
   const max = merged[0].hit_count || 1
 
   return (
-    <div className="space-y-2">
+    <div>
       {merged.map((p, i) => (
-        <div key={`${p.ecosystem}-${p.name}`} className="flex items-center gap-2">
-          <span className="text-[11px] font-mono tabular-nums w-5 shrink-0 text-right" style={{ color: 'var(--text-soft)' }}>
+        <div
+          key={`${p.ecosystem}-${p.name}`}
+          className="flex items-center gap-3 py-1.5"
+          style={{ borderBottom: i < merged.length - 1 ? '1px solid var(--border-soft, var(--border))' : 'none' }}
+        >
+          <span
+            className="text-[11px] font-mono tabular-nums w-4 shrink-0 text-right"
+            style={{ color: 'var(--text-subtle)' }}
+          >
             {i + 1}
           </span>
           <EcosystemIcon type={p.ecosystem as any} size={12} />
@@ -47,7 +61,7 @@ function TopPackagesList({ topPackages }: { topPackages: { pypi?: any[]; apt?: a
           <span className="font-mono text-[11px] tabular-nums shrink-0" style={{ color: 'var(--text-soft)' }}>
             {p.hit_count.toLocaleString()}
           </span>
-          <div className="w-20 h-1 rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
+          <div className="w-16 h-[3px] rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
             <div
               className="h-full rounded-full"
               style={{ width: `${(p.hit_count / max) * 100}%`, background: 'var(--brand)' }}
@@ -64,7 +78,10 @@ function TopPackagesList({ topPackages }: { topPackages: { pypi?: any[]; apt?: a
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)',  }}>
+    <div
+      className="rounded-[4px] px-3 py-2 text-[12px]"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+    >
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
       {payload.map((entry: any) => (
         <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -103,11 +120,16 @@ export default function DashboardV2() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid gap-4 grid-cols-4">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />)}
+      <div className="space-y-12">
+        <div className="grid gap-8 grid-cols-4 py-2">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex flex-col items-center gap-3">
+              <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+              <div className="h-11 w-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+            </div>
+          ))}
         </div>
-        <div className="h-80 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+        <div className="h-72 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
       </div>
     )
   }
@@ -122,10 +144,34 @@ export default function DashboardV2() {
   }))
 
   const metrics = [
-    { label: t('dashboard.todayRequests'), value: today.total_requests?.toLocaleString() || '0', icon: <Icon name="monitoring" size="sm" />, change: yesterday.total_requests ? ((today.total_requests - yesterday.total_requests) / yesterday.total_requests * 100) : null },
-    { label: t('dashboard.hitRate'), value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%', icon: <Icon name="target" size="sm" />, change: yesterday.hit_rate ? ((today.hit_rate - yesterday.hit_rate) / yesterday.hit_rate * 100) : null },
-    { label: t('dashboard.bytesServed'), value: formatBytes(today.bytes_served || 0), icon: <Icon name="hard_drive" size="sm" />, change: yesterday.bytes_served ? ((today.bytes_served - yesterday.bytes_served) / yesterday.bytes_served * 100) : null },
-    { label: t('dashboard.avgLatency'), value: `${Math.round(today.avg_latency_ms || 0)} ms`, icon: <Icon name="timer" size="sm" />, change: yesterday.avg_latency_ms ? ((today.avg_latency_ms - yesterday.avg_latency_ms) / yesterday.avg_latency_ms * 100) : null },
+    {
+      label: t('dashboard.todayRequests'),
+      value: today.total_requests?.toLocaleString() || '0',
+      change: yesterday.total_requests
+        ? ((today.total_requests - yesterday.total_requests) / yesterday.total_requests * 100)
+        : null,
+    },
+    {
+      label: t('dashboard.hitRate'),
+      value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%',
+      change: yesterday.hit_rate
+        ? ((today.hit_rate - yesterday.hit_rate) / yesterday.hit_rate * 100)
+        : null,
+    },
+    {
+      label: t('dashboard.bytesServed'),
+      value: formatBytes(today.bytes_served || 0),
+      change: yesterday.bytes_served
+        ? ((today.bytes_served - yesterday.bytes_served) / yesterday.bytes_served * 100)
+        : null,
+    },
+    {
+      label: t('dashboard.avgLatency'),
+      value: `${Math.round(today.avg_latency_ms || 0)} ms`,
+      change: yesterday.avg_latency_ms
+        ? ((today.avg_latency_ms - yesterday.avg_latency_ms) / yesterday.avg_latency_ms * 100)
+        : null,
+    },
   ]
 
   const ranges = [
@@ -135,13 +181,17 @@ export default function DashboardV2() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Metrics */}
-      <div className="grid gap-4 grid-cols-4">
-        {metrics.map((m) => <MetricCardV2 key={m.label} label={m.label} value={m.value} icon={m.icon} change={m.change} />)}
-      </div>
+    <div className="space-y-12">
+      {/* ── Today metrics row ───────────────────────── */}
+      <section>
+        <div className="grid grid-cols-4 gap-8 py-2">
+          {metrics.map((m) => (
+            <Metric key={m.label} label={m.label} value={m.value} change={m.change} />
+          ))}
+        </div>
+      </section>
 
-      {/* Storage alert */}
+      {/* ── Storage alert (kept colored for emphasis) ── */}
       {dashboard?.cache_usage_percent > 80 && (
         <div
           className="flex items-center gap-2 rounded-[5px] px-4 py-2.5 text-[13px]"
@@ -156,66 +206,73 @@ export default function DashboardV2() {
         </div>
       )}
 
-      {/* Chart + Top Packages side by side */}
-      <div className="grid gap-4 grid-cols-3">
-        {/* Chart — 2/3 width */}
-        <CardV2 className="col-span-2">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--text-soft)' }}>
-              {t('dashboard.hitMissTrend')}
-            </h3>
+      {/* ── Hit / miss trend (full width, no card) ───── */}
+      <section>
+        <SectionHeader
+          title={t('dashboard.hitMissTrend')}
+          action={
             <div className="flex items-center gap-1">
-              {ranges.map(r => (
-                <button
-                  key={r.value}
-                  onClick={() => setRange(r.value)}
-                  className="px-2 py-0.5 text-[11px] font-[400] rounded-[4px] cursor-pointer transition-colors duration-150"
-                  style={{
-                    background: range === r.value ? 'var(--brand)' : 'transparent',
-                    color: range === r.value ? 'white' : 'var(--text-soft)',
-                    border: range === r.value ? 'none' : '1px solid var(--border)',
-                  }}
-                >
-                  {r.label}
-                </button>
-              ))}
+              {ranges.map(r => {
+                const active = range === r.value
+                return (
+                  <button
+                    key={r.value}
+                    onClick={() => setRange(r.value)}
+                    className="px-2 py-0.5 text-[11px] font-[500] rounded-[4px] cursor-pointer transition-colors duration-150"
+                    style={{
+                      background: active ? 'var(--brand)' : 'transparent',
+                      color: active ? 'white' : 'var(--text-soft)',
+                      border: active ? 'none' : '1px solid transparent',
+                    }}
+                  >
+                    {r.label}
+                  </button>
+                )
+              })}
             </div>
-          </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <ComposedChart data={trendPoints}>
-              <defs>
-                <linearGradient id="gradHits" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.02} />
-                </linearGradient>
-                <linearGradient id="gradMisses" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--danger)" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="var(--danger)" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="count" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={30} />
-              <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={35} />
-              <Tooltip content={<ChartTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Area yAxisId="count" type="monotone" dataKey="hits" stroke="var(--brand)" strokeWidth={1.5} fill="url(#gradHits)" name={t('dashboard.hits')} />
-              <Area yAxisId="count" type="monotone" dataKey="misses" stroke="var(--danger)" strokeWidth={1.5} fill="url(#gradMisses)" name={t('dashboard.misses')} />
-              <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--ok)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </CardV2>
+          }
+        />
+        {trendPoints.length === 0 || trendPoints.every((p: any) => !p.hits && !p.misses) ? (
+          <EmptyState
+            icon="show_chart"
+            title={t('dashboard.emptyTrendTitle')}
+            hint={t('dashboard.emptyTrendHint')}
+            minHeight={220}
+          />
+        ) : (
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={trendPoints} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="gradHits" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="gradMisses" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--danger)" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="var(--danger)" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="count" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
+            <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={36} />
+            <Tooltip content={<ChartTooltip />} />
+            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+            <Area yAxisId="count" type="monotone" dataKey="hits" stroke="var(--brand)" strokeWidth={1.5} fill="url(#gradHits)" name={t('dashboard.hits')} />
+            <Area yAxisId="count" type="monotone" dataKey="misses" stroke="var(--danger)" strokeWidth={1.5} fill="url(#gradMisses)" name={t('dashboard.misses')} />
+            <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--ok)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        )}
+      </section>
 
-        {/* Top Packages — 1/3 width */}
-        <CardV2>
-          <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
-            {t('dashboard.topPackages')}
-          </h3>
-          <TopPackagesList topPackages={topPackages} />
-        </CardV2>
-      </div>
+      {/* ── Top packages — bare list ─────────────────── */}
+      <section>
+        <SectionHeader title={t('dashboard.topPackages')} />
+        <TopPackagesList topPackages={topPackages} />
+      </section>
 
-      {/* Bandwidth savings summary */}
+      {/* ── Bandwidth savings (no card) ──────────────── */}
       {bwData?.data?.summary && (() => {
         const bw = bwData.data.summary
         const bwDaily = bwData.data.daily || []
@@ -227,42 +284,41 @@ export default function DashboardV2() {
           return `${s}${t('bandwidth.seconds')}`
         }
         return (
-          <CardV2>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[12px] uppercase tracking-wider font-[400]" style={{ color: 'var(--text-soft)' }}>
-                {t('bandwidth.bandwidthSummary')}
-              </h3>
-              <Link
-                to="/admin/bandwidth"
-                className="text-[11px] font-[400] no-underline transition-colors duration-150"
-                style={{ color: 'var(--brand)' }}
-              >
-                {t('bandwidth.viewFullReport')}
-              </Link>
-            </div>
-            <div className="grid grid-cols-4 gap-4 mb-4">
-              <div>
-                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.totalTraffic')}</p>
-                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: 'var(--text)' }}>{formatBytes(bw.total_bytes || 0)}</p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.trafficSaved')}</p>
-                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: 'var(--ok)' }}>{formatBytes(bw.hit_bytes || 0)}</p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.savingsRate')}</p>
-                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: bw.savings_rate > 0.5 ? 'var(--ok)' : 'var(--text)' }}>
-                  {bw.savings_rate != null ? `${(bw.savings_rate * 100).toFixed(1)}%` : '0%'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.timeSaved')}</p>
-                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: 'var(--ok)' }}>{fmtTime(bw.time_saved_ms || 0)}</p>
-              </div>
+          <section>
+            <SectionHeader
+              title={t('bandwidth.bandwidthSummary')}
+              action={
+                <Link
+                  to="/admin/bandwidth"
+                  className="text-[11px] font-[500] no-underline inline-flex items-center gap-1 transition-colors duration-150"
+                  style={{ color: 'var(--brand-text)' }}
+                >
+                  {t('bandwidth.viewFullReport')}
+                  <span aria-hidden>→</span>
+                </Link>
+              }
+            />
+            <div className="grid grid-cols-4 gap-x-10 gap-y-3 mb-6">
+              <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(bw.total_bytes || 0)} />
+              <Metric
+                label={t('bandwidth.trafficSaved')}
+                value={formatBytes(bw.hit_bytes || 0)}
+                valueTone="ok"
+              />
+              <Metric
+                label={t('bandwidth.savingsRate')}
+                value={bw.savings_rate != null ? `${(bw.savings_rate * 100).toFixed(1)}%` : '0%'}
+                valueTone={bw.savings_rate > 0.5 ? 'ok' : 'default'}
+              />
+              <Metric
+                label={t('bandwidth.timeSaved')}
+                value={fmtTime(bw.time_saved_ms || 0)}
+                valueTone="ok"
+              />
             </div>
             {bwDaily.length > 0 && (
-              <ResponsiveContainer width="100%" height={100}>
-                <AreaChart data={bwDaily}>
+              <ResponsiveContainer width="100%" height={84}>
+                <AreaChart data={bwDaily} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="gradBwHit" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="var(--ok)" stopOpacity={0.3} />
@@ -275,17 +331,15 @@ export default function DashboardV2() {
                 </AreaChart>
               </ResponsiveContainer>
             )}
-          </CardV2>
+          </section>
         )
       })()}
 
-      {/* Upstreams — full width */}
-      <div>
-        <h3 className="text-[12px] uppercase tracking-wider font-[400] mb-3" style={{ color: 'var(--text-soft)' }}>
-          {t('dashboard.upstreamStatus')}
-        </h3>
+      {/* ── Upstream status (component still uses internal cards) ── */}
+      <section>
+        <SectionHeader title={t('dashboard.upstreamStatus')} />
         <UpstreamGroupedPanel upstreams={upstreams} />
-      </div>
+      </section>
     </div>
   )
 }

@@ -7,6 +7,7 @@ import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
+import EmptyState from '@/components/EmptyState'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
 
@@ -54,14 +55,10 @@ export default function AccessLogsV2() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Single-row filter bar */}
-      <div
-        className="flex items-center gap-2 rounded-[5px] px-3 py-2"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-      >
-        {/* Search input */}
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+    <div className="space-y-6">
+      {/* Filter bar — bare row, only the search input gets a border */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-1 min-w-[240px] rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
@@ -72,9 +69,6 @@ export default function AccessLogsV2() {
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
-
-        {/* Divider */}
-        <div className="h-5 w-px shrink-0" style={{ background: 'var(--border)' }} />
 
         {/* Ecosystem filter */}
         <select value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
@@ -110,21 +104,18 @@ export default function AccessLogsV2() {
         </ButtonV2>
       </div>
 
-      {/* Table */}
-      <div
-        className="rounded-[5px] overflow-hidden"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-      >
+      {/* Table — bare */}
+      <div>
         {isLoading ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+          <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('logs.noLogs')}</div>
+          <EmptyState icon="receipt_long" title={t('logs.noLogs')} minHeight={200} />
         ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp')].map(h => (
-                  <th key={h} className="text-left text-[11px] font-[400] uppercase tracking-wider py-2.5 px-3 first:pl-4" style={{ color: 'var(--text-soft)' }}>
+                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase tracking-[0.08em] py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </th>
                 ))}
@@ -135,10 +126,10 @@ export default function AccessLogsV2() {
                 <tr
                   key={i}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
-                  style={{ borderBottom: '1px solid var(--border)' }}
+                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
                   {/* Time */}
-                  <td className="py-2 px-3 pl-4 whitespace-nowrap">
+                  <td className="py-2 px-3 pl-0 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
                   </td>
 

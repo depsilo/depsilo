@@ -111,12 +111,9 @@ export default function UpstreamsV2() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header: health check settings + add button */}
-      <div
-        className="flex items-center gap-3 rounded-[5px] px-4 py-2.5"
-        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-      >
+    <div className="space-y-6">
+      {/* Toolbar: health check settings + add button (no box) */}
+      <div className="flex items-center gap-3 flex-wrap">
         {/* Auto probe toggle */}
         <label className="flex items-center gap-2 cursor-pointer shrink-0">
           <input
@@ -165,7 +162,7 @@ export default function UpstreamsV2() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 rounded-[5px] animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+            <div key={i} className="h-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
           ))}
         </div>
       ) : (

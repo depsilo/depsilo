@@ -84,6 +84,10 @@ const en = {
       upstreamStatus: 'Upstream Status',
       topPackages: 'Top 10 Packages',
       storageWarning: 'Cache usage at {{percent}}%. Consider cleanup or expanding storage.',
+      emptyTrendTitle: 'No requests yet',
+      emptyTrendHint: 'Hit / miss trends will appear here once clients start routing through Depsilo.',
+      emptyTopPackagesTitle: 'No package activity yet',
+      emptyTopPackagesHint: 'Once packages get requested and cached, the most popular ones will surface here.',
     },
 
     // Bandwidth Report
@@ -112,6 +116,8 @@ const en = {
       minutes: 'min',
       seconds: 's',
       totalBandwidth: 'Total',
+      emptyTitle: 'No traffic in this range',
+      emptyHint: 'Try a different range, or wait until clients start routing through Depsilo.',
     },
 
     // Cache
@@ -317,6 +323,7 @@ const en = {
 
     // Users
     users: {
+      title: 'Users',
       addUser: 'Add User',
       editUser: 'Edit User',
       user: 'User',
@@ -460,6 +467,8 @@ const en = {
       packageCount: 'Packages',
       lastActivity: 'Last Activity',
       noProjects: 'No projects yet',
+      noProjectsHint: 'Create a project to bind a scoped token and export an SBOM per project.',
+      overview: 'Project Info',
       regenerateToken: 'Regenerate Token',
       confirmDelete: 'Delete Project?',
       deleteWarning: 'All package records will be permanently deleted.',
