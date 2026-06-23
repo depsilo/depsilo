@@ -243,21 +243,21 @@ export default function DashboardV2() {
             <div className="grid grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.totalTraffic')}</p>
-                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: 'var(--text)' }}>{formatBytes(bw.total_bytes || 0)}</p>
+                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: 'var(--text)' }}>{formatBytes(bw.total_bytes || 0)}</p>
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.trafficSaved')}</p>
-                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: '#10b981' }}>{formatBytes(bw.hit_bytes || 0)}</p>
+                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: 'var(--ok)' }}>{formatBytes(bw.hit_bytes || 0)}</p>
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.savingsRate')}</p>
-                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: bw.savings_rate > 0.5 ? '#10b981' : 'var(--text)' }}>
+                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: bw.savings_rate > 0.5 ? 'var(--ok)' : 'var(--text)' }}>
                   {bw.savings_rate != null ? `${(bw.savings_rate * 100).toFixed(1)}%` : '0%'}
                 </p>
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-soft)' }}>{t('bandwidth.timeSaved')}</p>
-                <p className="text-[20px] font-[300] font-mono tabular-nums mt-1" style={{ color: '#10b981' }}>{fmtTime(bw.time_saved_ms || 0)}</p>
+                <p className="text-[22px] font-[600] font-mono tabular-nums tracking-[-0.02em] mt-1" style={{ color: 'var(--ok)' }}>{fmtTime(bw.time_saved_ms || 0)}</p>
               </div>
             </div>
             {bwDaily.length > 0 && (
@@ -265,13 +265,13 @@ export default function DashboardV2() {
                 <AreaChart data={bwDaily}>
                   <defs>
                     <linearGradient id="gradBwHit" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="var(--ok)" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="var(--ok)" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 9 }} axisLine={false} tickLine={false} />
                   <YAxis hide />
-                  <Area type="monotone" dataKey="hit_bytes" stroke="#10b981" strokeWidth={1.5} fill="url(#gradBwHit)" />
+                  <Area type="monotone" dataKey="hit_bytes" stroke="var(--ok)" strokeWidth={1.5} fill="url(#gradBwHit)" />
                 </AreaChart>
               </ResponsiveContainer>
             )}

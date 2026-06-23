@@ -294,7 +294,7 @@ function UpstreamRow({ upstream, isLast, locale }: { upstream: UpstreamInfo; isL
         >
           {isFailed ? '-' : `${upstream.avg_latency_ms}ms`}
         </span>
-        <span style={{ fontSize: 10, color: upstream.healthy ? '#3bd671' : 'var(--danger)' }}>●</span>
+        <span style={{ fontSize: 10, color: upstream.healthy ? 'var(--ok)' : 'var(--danger)' }}>●</span>
       </div>
       <HeartbeatBar upstream={upstreamItem} externalBeats={beats.length > 0 ? beats : undefined} labels={timeLabels} />
     </div>

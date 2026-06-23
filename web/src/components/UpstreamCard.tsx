@@ -28,11 +28,10 @@ const HEARTBEAT_SLOTS = 90
 
 function beatColor(latency: number | null): string {
   if (latency === null) return 'var(--border-strong)'
-  if (latency < 0) return '#dc3545'
-  if (latency < 80) return '#3bd671'
-  if (latency < 200) return '#8cc152'
-  if (latency < 500) return '#f5a623'
-  return '#dc3545'
+  if (latency < 0) return 'var(--danger)'
+  if (latency < 200) return 'var(--ok)'
+  if (latency < 500) return 'var(--warn)'
+  return 'var(--danger)'
 }
 
 function beatLabel(latency: number | null): string {
@@ -134,13 +133,13 @@ export function UpstreamRow({ upstream, actions }: { upstream: UpstreamItem; act
             className="font-mono text-[11px] tabular-nums"
             style={{
               color: (upstream.avg_latency_ms || 0) <= 1 ? 'var(--text-soft)'
-                : upstream.avg_latency_ms < 100 ? '#3bd671'
+                : upstream.avg_latency_ms < 100 ? 'var(--ok)'
                 : upstream.avg_latency_ms < 500 ? 'var(--text-soft)' : 'var(--danger)',
             }}
           >
             {(upstream.avg_latency_ms || 0) <= 1 ? '--' : `${upstream.avg_latency_ms}ms`}
           </span>
-          <span className="text-[10px]" style={{ color: upstream.healthy ? '#3bd671' : 'var(--danger)' }}>●</span>
+          <span className="text-[10px]" style={{ color: upstream.healthy ? 'var(--ok)' : 'var(--danger)' }}>●</span>
           {actions}
         </div>
       </div>

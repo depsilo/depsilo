@@ -223,7 +223,7 @@ export default function ProjectsV2() {
           >
             <Icon name="arrow_back" size="sm" />
           </button>
-          <h2 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
+          <h2 className="text-[19px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
         </div>
 
         {/* Project info card */}

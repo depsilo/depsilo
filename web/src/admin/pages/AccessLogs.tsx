@@ -11,7 +11,7 @@ import Icon from '@/components/Icon'
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
 
 function latencyColor(ms: number): string {
-  if (ms < 100) return '#3bd671'
+  if (ms < 100) return 'var(--ok)'
   if (ms < 500) return 'var(--text-soft)'
   return 'var(--danger)'
 }
@@ -134,10 +134,8 @@ export default function AccessLogsV2() {
               {items.map((row: any, i: number) => (
                 <tr
                   key={i}
-                  className="transition-colors duration-75"
+                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-soft)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
                 >
                   {/* Time */}
                   <td className="py-2 px-3 pl-4 whitespace-nowrap">

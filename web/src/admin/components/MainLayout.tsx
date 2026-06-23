@@ -117,7 +117,7 @@ export default function MainLayoutV2() {
         {/* Logo */}
         <div className="px-5 py-5 flex items-center gap-2.5">
           <Logo size={26} />
-          <span className="text-[18px] font-[300] tracking-tight" style={{ color: 'var(--text)' }}>Depsilo</span>
+          <span className="text-[16px] font-[600] tracking-[-0.025em]" style={{ color: 'var(--text)' }}>Depsilo</span>
           <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" title={stats?.service?.version} style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>{formatVersion(stats?.service?.version)}</span>
         </div>
 
@@ -140,10 +140,7 @@ export default function MainLayoutV2() {
 
         {/* User info */}
         <div style={{ borderTop: '0.5px solid var(--border)' }} className="px-3 py-3">
-          <div className="flex items-center gap-2.5 rounded-[6px] px-2 py-2 group transition-colors duration-150 cursor-default"
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
-          >
+          <div className="flex items-center gap-2.5 rounded-[6px] px-2 py-2 group transition-colors duration-150 cursor-default hover:bg-[var(--bg-hover)]">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[400] shrink-0"
               style={{ background: 'var(--brand)', color: 'white' }}
@@ -158,11 +155,8 @@ export default function MainLayoutV2() {
             </div>
             <button
               onClick={handleLogout}
-              className="bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all duration-150 p-1 rounded-[4px]"
-              style={{ color: 'var(--text-soft)' }}
+              className="bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all duration-150 p-1 rounded-[4px] text-[var(--text-soft)] hover:text-[var(--text)]"
               title={t('nav.logout')}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-soft)' }}
             >
               <Icon name="logout" size="sm" />
             </button>
@@ -180,14 +174,11 @@ export default function MainLayoutV2() {
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
         }}
       >
-        <h1 className="text-[14px] font-[400]" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
+        <h1 className="text-[15px] font-[600] tracking-[-0.01em]" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
         <div className="flex items-center gap-3">
           <Link
             to="/"
-            className="text-[12px] font-[500] no-underline transition-colors duration-150 inline-flex items-center gap-1"
-            style={{ color: 'var(--brand-text)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--brand-strong)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--brand-text)' }}
+            className="text-[12px] font-[500] no-underline transition-colors duration-150 inline-flex items-center gap-1 text-[var(--brand-text)] hover:text-[var(--brand-strong)]"
             title={t('portal.backLink')}
           >
             {t('portal.backLink')}

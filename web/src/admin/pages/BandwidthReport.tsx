@@ -22,11 +22,7 @@ function formatTimeSaved(ms: number, t: (key: string) => string): string {
   return `${seconds}${t('bandwidth.seconds')}`
 }
 
-const ECO_COLORS = [
-  'var(--brand)', '#3b82f6', '#10b981', '#f59e0b',
-  '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4',
-  '#84cc16', '#f97316', '#6366f1', '#14b8a6',
-]
+import { getEcosystemColor } from '@/lib/ecosystemColors'
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
@@ -141,7 +137,7 @@ export default function BandwidthReport() {
               className="px-2 py-1 text-[12px] rounded-[4px] font-mono"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
             />
-            <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>—</span>
+            <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>-</span>
             <input
               type="date"
               value={customEnd}
@@ -186,8 +182,8 @@ export default function BandwidthReport() {
           <AreaChart data={daily}>
             <defs>
               <linearGradient id="gradHitBytes" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="var(--ok)" stopOpacity={0.3} />
+                <stop offset="100%" stopColor="var(--ok)" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="gradMissBytes" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="var(--danger)" stopOpacity={0.2} />
@@ -199,7 +195,7 @@ export default function BandwidthReport() {
             <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => formatBytes(v)} />
             <Tooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Area type="monotone" dataKey="hit_bytes" stackId="1" stroke="#10b981" strokeWidth={1.5} fill="url(#gradHitBytes)" name={t('bandwidth.hitBytes')} />
+            <Area type="monotone" dataKey="hit_bytes" stackId="1" stroke="var(--ok)" strokeWidth={1.5} fill="url(#gradHitBytes)" name={t('bandwidth.hitBytes')} />
             <Area type="monotone" dataKey="miss_bytes" stackId="1" stroke="var(--danger)" strokeWidth={1.5} fill="url(#gradMissBytes)" name={t('bandwidth.missBytes')} />
           </AreaChart>
         </ResponsiveContainer>
@@ -217,8 +213,8 @@ export default function BandwidthReport() {
               <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
                   <Pie data={ecoDonutData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={2}>
-                    {ecoDonutData.map((_: any, i: number) => (
-                      <Cell key={i} fill={ECO_COLORS[i % ECO_COLORS.length]} />
+                    {ecoDonutData.map((d: { name: string }, i: number) => (
+                      <Cell key={d.name} fill={getEcosystemColor(d.name, i)} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(value) => formatBytes(Number(value))} />
@@ -227,7 +223,7 @@ export default function BandwidthReport() {
               <div className="space-y-1.5 mt-2">
                 {ecoDonutData.slice(0, 6).map((e: any, i: number) => (
                   <div key={e.name} className="flex items-center gap-2 text-[11px]">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[i % ECO_COLORS.length] }} />
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: getEcosystemColor(e.name, i) }} />
                     <EcosystemIcon type={e.name} size={12} />
                     <span className="font-mono" style={{ color: 'var(--text)' }}>{e.name}</span>
                     <span className="ml-auto font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(e.value)}</span>
@@ -306,7 +302,7 @@ export default function BandwidthReport() {
               <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}ms`} />
               <Tooltip content={<LatencyTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="hit" fill="#10b981" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgHitLatency')} />
+              <Bar dataKey="hit" fill="var(--ok)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgHitLatency')} />
               <Bar dataKey="miss" fill="var(--danger)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgMissLatency')} />
             </BarChart>
           </ResponsiveContainer>

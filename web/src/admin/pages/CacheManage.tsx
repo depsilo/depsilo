@@ -10,15 +10,9 @@ import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
-
-// Assign distinct colors per ecosystem
-const ECO_COLORS: Record<string, string> = {
-  pypi: 'var(--brand)', apt: '#3bd671', npm: '#cb3837', go: '#00add8',
-  cargo: '#dea584', maven: '#c71a36', rubygems: '#e9573f', composer: '#885630',
-  nuget: '#004880', conda: '#44a833', cran: '#2266b8', helm: '#0f1689',
-}
 
 export default function CacheManageV2() {
   const { t } = useTranslation()
@@ -85,7 +79,7 @@ export default function CacheManageV2() {
                 {t('cache.storageOverview')}
               </span>
             </div>
-            <p className="text-[20px] font-[300] font-mono tabular-nums mb-1" style={{ color: 'var(--text)' }}>
+            <p className="text-[22px] font-[600] font-mono tabular-nums mb-1 tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
               {formatBytes(distribution.total_size)}
               <span className="text-[12px] font-[400] ml-1" style={{ color: 'var(--text-soft)' }}>
                 / {formatBytes(distribution.max_size)}
@@ -231,10 +225,8 @@ export default function CacheManageV2() {
               {items.map((row: any, i: number) => (
                 <tr
                   key={i}
-                  className="transition-colors duration-75"
+                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-soft)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
                 >
                   <td className="py-2 px-3 pl-4 max-w-[260px]">
                     <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.key}</span>

@@ -98,7 +98,7 @@ export default function License() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h2 className="text-[18px] font-[300]" style={{ color: 'var(--text)' }}>
+        <h2 className="text-[19px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
           {t('license.title')}
         </h2>
         <p className="text-[13px] mt-0.5" style={{ color: 'var(--text-soft)' }}>

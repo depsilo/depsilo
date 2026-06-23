@@ -12,7 +12,7 @@ import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
 
 function latencyColor(ms: number): string {
-  if (ms < 100) return '#3bd671'
+  if (ms < 100) return 'var(--ok)'
   if (ms < 500) return 'var(--text-soft)'
   return 'var(--danger)'
 }
@@ -196,10 +196,8 @@ export default function AuditLogsV2() {
               {items.map((row: any, i: number) => (
                 <tr
                   key={i}
-                  className="transition-colors duration-75"
+                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-soft)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
                 >
                   <td className="py-2 px-3 pl-4 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
@@ -211,10 +209,10 @@ export default function AuditLogsV2() {
                     </div>
                   </td>
                   <td className="py-2 px-3 max-w-[220px]">
-                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '—'}</span>
+                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.version || '—'}</span>
+                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.version || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
                     {resultBadge(row.result || (row.cache_result === 'hit' ? 'hit' : row.cache_result === 'error' ? 'error' : 'miss'), t)}
