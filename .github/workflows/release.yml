@@ -75,6 +75,10 @@ jobs:
       - name: Install rsvg-convert (SVG -> PNG for icon)
         run: brew install librsvg
 
+      - name: Install frontend deps
+        working-directory: web
+        run: npm ci
+
       - name: Build .app bundle
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -120,6 +124,10 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Install frontend deps
+        working-directory: web
+        run: npm ci
 
       - name: Build tray binary
         run: make tray

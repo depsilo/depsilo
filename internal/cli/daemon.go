@@ -76,7 +76,7 @@ func runStart(args []string) int {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = daemonSysProcAttr()
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error starting daemon: %v\n", err)
@@ -176,14 +176,3 @@ func readPID(path string) (int, error) {
 	return pid, nil
 }
 
-func processExists(pid int) bool {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	// On Unix, FindProcess always succeeds. Signal 0 checks existence.
-	if err := process.Signal(syscall.Signal(0)); err != nil {
-		return false
-	}
-	return true
-}
