@@ -139,7 +139,7 @@ export default function PortalAppV2() {
 
           {/* Right side controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Status pill */}
+            {/* Status pill — tinted chip matching service health */}
             {data && (
               <span
                 style={{
@@ -147,11 +147,22 @@ export default function PortalAppV2() {
                   alignItems: 'center',
                   gap: 6,
                   padding: '3px 8px',
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 20,
-                  fontSize: 12,
-                  color: 'var(--text-soft)',
+                  borderRadius: 6,
+                  fontSize: 11,
                   fontWeight: 500,
+                  fontFamily: 'var(--font-mono)',
+                  background:
+                    dotStatus === 'healthy'
+                      ? 'var(--ok-fill)'
+                      : dotStatus === 'degraded'
+                        ? 'var(--warn-fill)'
+                        : 'var(--danger-fill)',
+                  color:
+                    dotStatus === 'healthy'
+                      ? 'var(--ok-text)'
+                      : dotStatus === 'degraded'
+                        ? 'var(--warn-text)'
+                        : 'var(--danger-text)',
                 }}
               >
                 <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />

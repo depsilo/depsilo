@@ -12,6 +12,9 @@ interface DataTableV2Props<T> {
   onRowClick?: (row: T, index: number) => void
 }
 
+// Bare table: no card wrapper, no outer border. Headers are eyebrow-style
+// (10px mono caps), rows are separated by a soft 1px border and lift on
+// hover. Matches the in-page tables used by AccessLogs / CacheManage etc.
 export default function DataTableV2<T extends Record<string, unknown>>({
   columns,
   data,
@@ -19,14 +22,14 @@ export default function DataTableV2<T extends Record<string, unknown>>({
 }: DataTableV2Props<T>) {
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full text-[14px]">
+      <table className="w-full text-[12px]">
         <thead>
           <tr style={{ borderBottom: '1px solid var(--border)' }}>
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="text-left text-[12px] font-[400] uppercase tracking-wider py-3 px-4"
-                style={{ color: 'var(--text-soft)' }}
+                className="text-left text-[10px] font-mono font-[600] uppercase tracking-[0.08em] py-2 px-3 first:pl-0"
+                style={{ color: 'var(--text-subtle)' }}
               >
                 {col.label}
               </th>
@@ -38,19 +41,11 @@ export default function DataTableV2<T extends Record<string, unknown>>({
             <tr
               key={rowIndex}
               onClick={() => onRowClick?.(row, rowIndex)}
-              className={`transition-colors duration-100 ${onRowClick ? 'cursor-pointer' : ''}`}
-              style={{
-                borderBottom: '1px solid var(--border)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--bg-soft)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-              }}
+              className={`transition-colors duration-100 hover:bg-[var(--bg-soft)] ${onRowClick ? 'cursor-pointer' : ''}`}
+              style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
             >
               {columns.map((col) => (
-                <td key={col.key} className="py-3 px-4">
+                <td key={col.key} className="py-2 px-3 first:pl-0">
                   {col.render
                     ? col.render(row[col.key], row, rowIndex)
                     : (row[col.key] as ReactNode)}

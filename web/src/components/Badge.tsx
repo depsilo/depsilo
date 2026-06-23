@@ -8,13 +8,16 @@ interface BadgeV2Props {
   className?: string
 }
 
-const variantStyles: Record<BadgeV2Variant, { bg: string; color: string; border: string }> = {
-  default: { bg: 'var(--brand-soft)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
-  success: { bg: 'var(--ok-fill)', color: 'var(--ok-text)', border: 'var(--ok-border)' },
-  error: { bg: 'var(--danger-fill)', color: 'var(--danger-text)', border: 'var(--danger-border)' },
-  warning: { bg: 'var(--warn-fill)', color: 'var(--warn-text)', border: 'var(--warn-border)' },
-  pro: { bg: 'var(--grad-aurora)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
-  ecosystem: { bg: 'var(--brand-soft)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
+// Borderless tinted chip. Modern Linear / Vercel style: bg + fg, no outline.
+// `pro` is the only variant with a touch of decoration — an aurora-gradient
+// background (very low alpha so the brand-text stays readable on top).
+const variantStyles: Record<BadgeV2Variant, { bg: string; color: string }> = {
+  default:   { bg: 'var(--brand-soft)',  color: 'var(--brand-text)' },
+  success:   { bg: 'var(--ok-fill)',     color: 'var(--ok-text)' },
+  error:     { bg: 'var(--danger-fill)', color: 'var(--danger-text)' },
+  warning:   { bg: 'var(--warn-fill)',   color: 'var(--warn-text)' },
+  pro:       { bg: 'var(--grad-aurora)', color: 'var(--brand-text)' },
+  ecosystem: { bg: 'var(--brand-soft)',  color: 'var(--brand-text)' },
 }
 
 export default function BadgeV2({
@@ -23,7 +26,6 @@ export default function BadgeV2({
   className = '',
 }: BadgeV2Props) {
   const s = variantStyles[variant]
-  const isPro = variant === 'pro'
 
   return (
     <span
@@ -31,16 +33,11 @@ export default function BadgeV2({
       style={{
         background: s.bg,
         color: s.color,
-        border: `0.5px solid ${s.border}`,
         borderRadius: 'var(--r-tag)',
         fontSize: '11px',
         fontWeight: 600,
         lineHeight: '1.4',
-        ...(isPro ? {
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-        } : {}),
+        letterSpacing: '0.005em',
       }}
     >
       {children}

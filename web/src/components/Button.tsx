@@ -5,6 +5,15 @@ interface ButtonV2Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md'
 }
 
+// Compact admin-grade button.
+// - primary: filled brand
+// - secondary: bordered (paired with brand text on default, or any tone via parent style override)
+// - ghost: bare, hover lift
+// - danger: outlined danger
+//
+// Active state uses a 98% scale for tactile feedback. Hover backgrounds map to
+// real CSS vars (previous version referenced undefined `surface-container` /
+// `error-container` classes that silently no-op'd).
 export default function ButtonV2({
   variant = 'primary',
   size = 'md',
@@ -13,18 +22,19 @@ export default function ButtonV2({
   disabled,
   ...rest
 }: ButtonV2Props) {
-  const base = 'inline-flex items-center justify-center gap-2 font-[400] cursor-pointer transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none stripe-focus-ring'
+  const base =
+    'inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] stripe-focus-ring'
 
   const sizes = {
-    sm: 'text-[14px] px-3 py-1.5 rounded-[4px]',
-    md: 'text-[16px] px-4 py-2 rounded-[4px]',
+    sm: 'text-[12px] px-2.5 py-1 rounded-[5px]',
+    md: 'text-[13px] px-3 py-1.5 rounded-[5px]',
   }
 
   const variants: Record<string, string> = {
-    primary: 'text-white hover:brightness-95 active:scale-[0.98]',
-    secondary: 'bg-transparent hover:bg-[var(--brand-soft)] active:scale-[0.98]',
-    ghost: 'bg-transparent border-none hover:bg-surface-container active:scale-[0.98]',
-    danger: 'bg-transparent hover:bg-error-container active:scale-[0.98]',
+    primary: 'text-white hover:brightness-110',
+    secondary: 'hover:bg-[var(--brand-soft)]',
+    ghost: 'bg-transparent hover:bg-[var(--bg-hover)]',
+    danger: 'hover:bg-[var(--danger-fill)]',
   }
 
   const isPrimary = variant === 'primary'
@@ -37,9 +47,15 @@ export default function ButtonV2({
       disabled={disabled}
       style={{
         ...(isPrimary ? { background: 'var(--brand)', color: 'white' } : {}),
-        ...(isSecondary ? { border: '0.5px solid var(--brand-border)', color: 'var(--brand)' } : {}),
-        ...(isDanger ? { border: '1px solid var(--danger)', color: 'var(--danger)' } : {}),
-        ...(!isPrimary && !isSecondary && !isDanger ? { color: 'var(--brand)' } : {}),
+        ...(isSecondary
+          ? { border: '0.5px solid var(--brand-border)', color: 'var(--brand-text)', background: 'transparent' }
+          : {}),
+        ...(isDanger
+          ? { border: '0.5px solid var(--danger-border)', color: 'var(--danger-text)', background: 'transparent' }
+          : {}),
+        ...(!isPrimary && !isSecondary && !isDanger
+          ? { color: 'var(--text-soft)' }
+          : {}),
       }}
       {...rest}
     >
