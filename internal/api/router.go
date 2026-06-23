@@ -61,6 +61,12 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1.GET("/discover", discoverHandler.Discover)
 	apiV1.GET("/agent-prompt", discoverHandler.AgentPrompt)
 
+	// Model Context Protocol endpoint — JSON-RPC 2.0 over Streamable HTTP.
+	// AI clients (Claude Code, Cursor, etc.) POST initialize / tools/list /
+	// tools/call / resources/read / prompts/get here.
+	mcpHandler := public.NewMCPHandler(deps.DB, deps.Ecosystems)
+	r.POST("/mcp", mcpHandler.Handle)
+
 	// Public stats
 	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.ExtraIndexes)
 	apiV1.GET("/stats", statsHandler.GetStats)

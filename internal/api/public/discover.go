@@ -90,6 +90,7 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 			"metrics":             "/metrics",
 			"discover":            "/api/v1/discover",
 			"agent_prompt":        "/api/v1/agent-prompt",
+			"mcp":                 "/mcp",
 			"public_stats":        "/api/v1/stats",
 			"public_packages":     "/api/v1/packages",
 			"events_stream":       "/api/v1/events/stream",
@@ -97,6 +98,12 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 			"admin_dashboard":     "/api/v1/admin/dashboard",
 			"admin_license":       "/api/v1/admin/license/status",
 			"admin_trial":         "/api/v1/admin/license/trial/activate",
+		},
+		"mcp": gin.H{
+			"url":       base + "/mcp",
+			"protocol":  "Model Context Protocol (JSON-RPC 2.0 over HTTP)",
+			"transport": "streamable-http",
+			"summary":   "POST initialize, then tools/list to discover what you can call. depsilo_status is a good first call.",
 		},
 		"agent_setup": gin.H{
 			"prompt_url":    base + "/api/v1/agent-prompt",
@@ -153,9 +160,15 @@ Before running any package install in this workspace:
 
 If Depsilo is down, tools fall back to public registries — installs still
 work, just not cached. Don't waste effort on retry logic for Depsilo itself.
+
+Native MCP integration (preferred for MCP-aware agents like Claude Code,
+Cursor): point your client at %s/mcp. Available tools include
+depsilo_status, depsilo_doctor, depsilo_configure, depsilo_search,
+depsilo_recent. POST initialize to begin, then tools/list to enumerate.
 `,
 		base, base,
 		base, base, base, base, base, base, base, base, base, base, base, base,
+		base,
 	)
 
 	c.Header("Content-Type", "text/plain; charset=utf-8")

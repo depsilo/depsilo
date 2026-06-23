@@ -35,6 +35,8 @@ func Run(cmd string, args []string) int {
 		return runVersion(args)
 	case "doctor":
 		return runDoctor(args)
+	case "init-agent":
+		return runInitAgent(args)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		return 1
@@ -53,6 +55,8 @@ Commands:
     stop                        Stop the running daemon
     status [--json]             Show server health, cache stats, upstreams
     doctor [--json]             Run end-to-end health diagnosis with hints
+    init-agent [--format ...]   Write CLAUDE.md / AGENTS.md / .cursorrules so
+                                AI coding agents auto-detect Depsilo
     version [--json]            Print version
     activate [--shell|--eco]    Print shell environment configuration
     warmup <eco> <pkg> [pkg...] Pre-fetch packages into cache
