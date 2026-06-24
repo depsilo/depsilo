@@ -72,14 +72,19 @@ func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus) *Manager
 }
 
 // FetchFunc is called on cache miss to fetch data from upstream.
-type FetchFunc func(ctx context.Context) (body io.ReadCloser, contentType string, size int64, err error)
+// Implementations should return the chosen upstream's display name as
+// `upstreamName` so the access log records which upstream served the miss
+// (used by the Admin Access Logs page UPSTREAM column).
+type FetchFunc func(ctx context.Context) (body io.ReadCloser, contentType string, size int64, upstreamName string, err error)
 
 // GetResult holds the result of a cache get operation.
+// Upstream is populated on miss only — hits do not contact any upstream.
 type GetResult struct {
 	Reader      io.ReadCloser
 	ContentType string
 	Size        int64
 	Hit         bool
+	Upstream    string
 }
 
 // Get implements stale-while-revalidate caching:
@@ -167,15 +172,16 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 // fetchAndStore fetches from upstream via singleflight, stores to cache, returns result.
 func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) (*GetResult, error) {
 	type sfResult struct {
-		contentType string
-		size        int64
+		contentType  string
+		size         int64
+		upstreamName string
 	}
 
 	val, err, _ := m.group.Do(key, func() (interface{}, error) {
 		fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer fetchCancel()
 
-		body, contentType, size, err := fetchFn(fetchCtx)
+		body, contentType, size, upstreamName, err := fetchFn(fetchCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -229,7 +235,7 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 			}
 		}
 
-		return &sfResult{contentType: contentType, size: size}, nil
+		return &sfResult{contentType: contentType, size: size, upstreamName: upstreamName}, nil
 	})
 
 	if err != nil {
@@ -249,6 +255,7 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		ContentType: sfRes.contentType,
 		Size:        size,
 		Hit:         false,
+		Upstream:    sfRes.upstreamName,
 	}, nil
 }
 
@@ -259,7 +266,7 @@ func (m *Manager) backgroundRefresh(key string, adapterType string, ttl time.Dur
 	defer cancel()
 
 	_, err, _ := m.group.Do("bg:"+key, func() (interface{}, error) {
-		body, contentType, size, err := fetchFn(ctx)
+		body, contentType, size, _, err := fetchFn(ctx)
 		if err != nil {
 			return nil, err
 		}

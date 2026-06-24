@@ -60,10 +60,10 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		ttl = h.cfg.TTLIndex
 	}
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "apt", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "apt", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching from apt upstream",
@@ -73,15 +73,15 @@ func (h *Handler) handleRequest(c *gin.Context) {
 
 		fetchResult, err := ups.Fetch(ctx, upstreamPath)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		if fetchResult.StatusCode == http.StatusNotFound {
 			fetchResult.Body.Close()
-			return nil, "", 0, fmt.Errorf("not found: %s", upstreamPath)
+			return nil, "", 0, ups.Name, fmt.Errorf("not found: %s", upstreamPath)
 		}
 
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 
 	if err != nil {
@@ -108,7 +108,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "apt", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "apt", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func detectContentType(path string) string {

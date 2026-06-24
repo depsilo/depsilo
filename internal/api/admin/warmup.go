@@ -87,10 +87,10 @@ func (h *WarmupHandler) doWarmup(ecosystem string, packages []string, pool *upst
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		_, err := h.cacheMgr.Get(ctx, cacheKey, ecosystem, ttl, func(fetchCtx context.Context) (io.ReadCloser, string, int64, error) {
+		_, err := h.cacheMgr.Get(ctx, cacheKey, ecosystem, ttl, func(fetchCtx context.Context) (io.ReadCloser, string, int64, string, error) {
 			ups, err := selector.Select(fetchCtx)
 			if err != nil {
-				return nil, "", 0, err
+				return nil, "", 0, "", err
 			}
 			var path string
 			switch ecosystem {
@@ -103,9 +103,9 @@ func (h *WarmupHandler) doWarmup(ecosystem string, packages []string, pool *upst
 			}
 			result, err := ups.Fetch(fetchCtx, path)
 			if err != nil {
-				return nil, "", 0, err
+				return nil, "", 0, ups.Name, err
 			}
-			return result.Body, result.ContentType, result.Size, nil
+			return result.Body, result.ContentType, result.Size, ups.Name, nil
 		})
 		cancel()
 

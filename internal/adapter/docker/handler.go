@@ -95,8 +95,9 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 		return
 	}
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
-		return h.fetchFromUpstream(ctx, reg, imageName, "manifests/"+reference, scope, true)
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "manifests/"+reference, scope, true)
+		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
 		zap.L().Error("docker manifest fetch failed", zap.String("image", imageName), zap.String("ref", reference), zap.Error(err))
@@ -114,8 +115,9 @@ func (h *Handler) handleBlob(c *gin.Context, reg *Registry, imageName, endpoint 
 	cacheKey := BlobCacheKey(reg.Name, digest)
 	scope := fmt.Sprintf("repository:%s:pull", imageName)
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", h.cacheCfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
-		return h.fetchFromUpstream(ctx, reg, imageName, "blobs/"+digest, scope, false)
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", h.cacheCfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "blobs/"+digest, scope, false)
+		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
 		zap.L().Error("docker blob fetch failed", zap.String("digest", digest), zap.Error(err))
@@ -133,8 +135,9 @@ func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName string,
 	cacheKey := TagListCacheKey(reg.Name, imageName)
 	scope := fmt.Sprintf("repository:%s:pull", imageName)
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", h.cacheCfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
-		return h.fetchFromUpstream(ctx, reg, imageName, "tags/list", scope, false)
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", h.cacheCfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "tags/list", scope, false)
+		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
 		zap.L().Error("docker tags list failed", zap.String("image", imageName), zap.Error(err))
@@ -260,5 +263,5 @@ func (h *Handler) streamResponse(c *gin.Context, result *cache.GetResult, cacheK
 	api.M.RequestsTotal.WithLabelValues("docker", hitStr).Inc()
 	api.M.RequestDuration.WithLabelValues("docker").Observe(time.Since(start).Seconds())
 
-	adapter.LogAccess(h.db, "docker", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "docker", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }

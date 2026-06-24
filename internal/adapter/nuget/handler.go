@@ -56,30 +56,30 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 	baseURL := getBaseURL(c)
 	cacheKey := CacheKey("v3/index.json")
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "nuget", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "nuget", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 		zap.L().Info("fetching nuget service index from upstream", zap.String("upstream", ups.Name))
 
 		fetchResult, err := ups.Fetch(ctx, "/v3/index.json")
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 		body, err := io.ReadAll(fetchResult.Body)
 		fetchResult.Body.Close()
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		// Store with placeholder for runtime base URL replacement
 		rewritten, err := RewriteServiceIndex(body, "__BASE_URL__")
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
-		return io.NopCloser(strings.NewReader(string(rewritten))), "application/json", int64(len(rewritten)), nil
+		return io.NopCloser(strings.NewReader(string(rewritten))), "application/json", int64(len(rewritten)), ups.Name, nil
 	})
 
 	if err != nil {
@@ -101,7 +101,7 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "nuget", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(h.db, "nuget", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 // handlePassthrough proxies all other NuGet requests (registration, package download, search).
@@ -115,17 +115,17 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 		ttl = h.cfg.TTLBlob
 	}
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "nuget", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "nuget", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 		zap.L().Info("fetching from nuget upstream", zap.String("path", path), zap.String("upstream", ups.Name))
 		fetchResult, err := ups.Fetch(ctx, "/"+path)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 
 	if err != nil {
@@ -149,7 +149,7 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "nuget", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "nuget", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {

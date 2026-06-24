@@ -99,10 +99,10 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 
 	baseURL := getBaseURL(c)
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching package index from upstream",
@@ -112,21 +112,21 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 
 		fetchResult, err := ups.Fetch(ctx, "/simple/"+pkg+"/")
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		// Read the HTML to rewrite URLs
 		body, err := io.ReadAll(fetchResult.Body)
 		fetchResult.Body.Close()
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		html := string(body)
 		// Rewrite all download URLs to point through our proxy (stored with empty base)
 		html = RewriteURLs(html, "", h.pathPrefix)
 
-		return io.NopCloser(strings.NewReader(html)), fetchResult.ContentType, int64(len(html)), nil
+		return io.NopCloser(strings.NewReader(html)), fetchResult.ContentType, int64(len(html)), ups.Name, nil
 	})
 
 	if err != nil {
@@ -161,7 +161,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	c.Header("Content-Type", ct)
 	c.String(http.StatusOK, html)
 
-	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
+	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
 }
 
 // handleFileDownload proxies and caches package file downloads.
@@ -170,10 +170,10 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 	cacheKey := FileCacheKey(h.adapterID, filepath)
 	start := time.Now()
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching file from upstream",
@@ -183,10 +183,10 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 
 		fetchResult, err := ups.Fetch(ctx, filepath)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 
 	if err != nil {
@@ -216,7 +216,7 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 // getBaseURL extracts the base URL from the request (scheme + host).

@@ -56,10 +56,10 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 	baseURL := getBaseURL(c)
 	cacheKey := PackagesCacheKey()
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "composer", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "composer", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching composer packages.json from upstream",
@@ -68,13 +68,13 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 
 		fetchResult, err := ups.Fetch(ctx, "/packages.json")
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		body, err := io.ReadAll(fetchResult.Body)
 		fetchResult.Body.Close()
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		// Rewrite metadata-url with placeholder (runtime base applied later)
@@ -84,7 +84,7 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 			rewritten = body
 		}
 
-		return io.NopCloser(strings.NewReader(string(rewritten))), "application/json", int64(len(rewritten)), nil
+		return io.NopCloser(strings.NewReader(string(rewritten))), "application/json", int64(len(rewritten)), ups.Name, nil
 	})
 
 	if err != nil {
@@ -106,7 +106,7 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 // proxyPassthrough proxies a request to the upstream with caching, no content modification.
@@ -114,10 +114,10 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 	start := time.Now()
 	cacheKey := "composer/" + path
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "composer", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "composer", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching from composer upstream",
@@ -127,10 +127,10 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 
 		fetchResult, err := ups.Fetch(ctx, "/"+path)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 
 	if err != nil {
@@ -154,7 +154,7 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {

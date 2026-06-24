@@ -56,17 +56,17 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	}
 	// Everything else (versions, info/*, specs.4.8.gz, etc.) uses short TTL
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "rubygems", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "rubygems", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 		zap.L().Info("fetching from rubygems upstream", zap.String("path", path), zap.String("upstream", ups.Name))
 		fetchResult, err := ups.Fetch(ctx, "/"+path)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 
 	if err != nil {
@@ -90,5 +90,5 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "rubygems", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "rubygems", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }

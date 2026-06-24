@@ -64,10 +64,10 @@ func (h *Handler) handleConfig(c *gin.Context) {
 	start := time.Now()
 	baseURL := getBaseURL(c)
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), ConfigCacheKey(), "cargo", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), ConfigCacheKey(), "cargo", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching cargo config.json from upstream",
@@ -76,26 +76,26 @@ func (h *Handler) handleConfig(c *gin.Context) {
 
 		fetchResult, err := ups.Fetch(ctx, "/config.json")
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 		body, err := io.ReadAll(fetchResult.Body)
 		fetchResult.Body.Close()
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		// Parse and rewrite dl field to use a placeholder (runtime base applied later)
 		var cfg map[string]interface{}
 		if err := json.Unmarshal(body, &cfg); err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 		cfg["dl"] = "__BASE_URL__/crates/api/v1/crates"
 		rewritten, err := json.Marshal(cfg)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
-		return io.NopCloser(strings.NewReader(string(rewritten))), "application/json", int64(len(rewritten)), nil
+		return io.NopCloser(strings.NewReader(string(rewritten))), "application/json", int64(len(rewritten)), ups.Name, nil
 	})
 
 	if err != nil {
@@ -117,7 +117,7 @@ func (h *Handler) handleConfig(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "cargo", c.Request.Method, ConfigCacheKey(), result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(h.db, "cargo", c.Request.Method, ConfigCacheKey(), result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 // handleIndex proxies crate index metadata (NDJSON).
@@ -143,10 +143,10 @@ func (h *Handler) handleIndex(c *gin.Context) {
 	prefix := strings.Join(parts[:len(parts)-1], "/")
 	cacheKey := IndexCacheKey(prefix, crateName)
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "cargo", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "cargo", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching crate index from upstream",
@@ -156,10 +156,10 @@ func (h *Handler) handleIndex(c *gin.Context) {
 
 		fetchResult, err := ups.Fetch(ctx, "/"+path)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 
 	if err != nil {
@@ -183,7 +183,7 @@ func (h *Handler) handleIndex(c *gin.Context) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "cargo", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "cargo", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 // handleDownload proxies crate file downloads (.crate files).
@@ -193,10 +193,10 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	cacheKey := CrateCacheKey(crateName, version)
 	start := time.Now()
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "cargo", h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, error) {
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "cargo", h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
 		zap.L().Info("fetching crate from upstream",
@@ -208,10 +208,10 @@ func (h *Handler) handleDownload(c *gin.Context) {
 		downloadPath := "/api/v1/crates/" + crateName + "/" + version + "/download"
 		fetchResult, err := ups.Fetch(ctx, downloadPath)
 		if err != nil {
-			return nil, "", 0, err
+			return nil, "", 0, "", err
 		}
 
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, nil
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
 	})
 
 	if err != nil {
@@ -235,7 +235,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "cargo", c.Request.Method, cacheKey, result.Hit, "", time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(h.db, "cargo", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {
