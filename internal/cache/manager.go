@@ -104,11 +104,25 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 			// Serve from cache (both fresh and stale)
 			reader, size, readErr := m.storage.Get(ctx, key)
 			if readErr == nil {
-				// Update hit count
-				m.db.Model(&entry).Updates(map[string]interface{}{
-					"hit_count":     gorm.Expr("hit_count + 1"),
-					"last_accessed": time.Now(),
-				})
+				// Fire-and-forget hit-count update. The synchronous version put a
+				// SQLite UPDATE on every cache-hit critical path; under fanout
+				// (e.g. `pip install` resolving 10+ deps in parallel) the writes
+				// serialized on the WAL and added 100-800ms tail latency to a
+				// path that should be < 10ms. A handful of dropped counter ticks
+				// on shutdown is acceptable — the cache content itself is safe
+				// in storage and re-derived on next access.
+				entryID := entry.ID
+				now := time.Now()
+				go func() {
+					if err := m.db.Model(&db.CacheEntry{}).
+						Where("id = ?", entryID).
+						Updates(map[string]interface{}{
+							"hit_count":     gorm.Expr("hit_count + 1"),
+							"last_accessed": now,
+						}).Error; err != nil {
+						zap.L().Debug("cache hit-count update failed", zap.Error(err))
+					}
+				}()
 
 				zap.L().Debug("cache hit",
 					zap.String("key", key),

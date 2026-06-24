@@ -41,10 +41,28 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	// Enable WAL mode for SQLite to avoid write lock contention
+	// SQLite tuning for write throughput.
+	//
+	//   journal_mode=WAL  → readers don't block writers; writers don't block readers
+	//   synchronous=NORMAL → don't fsync on every commit (the WAL itself is durable
+	//                        across crashes; only os-level crash within ~1s can lose
+	//                        the most recent transactions). The default FULL adds a
+	//                        5-50ms fsync to every UPDATE and shows up as massive
+	//                        latency under concurrent cache-hit fanout (e.g. pip
+	//                        installing a tree of 10+ packages in parallel hitting
+	//                        the cache_entries hit_count UPDATE).
+	//   busy_timeout=5000 → if a write still locks, wait up to 5s before failing
+	//                        rather than instant ERR_BUSY (matters when AccessLog
+	//                        goroutines and admin queries compete for the writer).
 	if driver == "sqlite" {
 		if err := db.Exec("PRAGMA journal_mode=WAL").Error; err != nil {
 			return nil, fmt.Errorf("set WAL mode: %w", err)
+		}
+		if err := db.Exec("PRAGMA synchronous=NORMAL").Error; err != nil {
+			return nil, fmt.Errorf("set synchronous mode: %w", err)
+		}
+		if err := db.Exec("PRAGMA busy_timeout=5000").Error; err != nil {
+			return nil, fmt.Errorf("set busy_timeout: %w", err)
 		}
 	}
 
