@@ -53,9 +53,18 @@ type lastActivity struct {
 }
 
 type rateBlock struct {
-	RequestsPerMin int64   `json:"requests_per_min"` // last 60s
-	HitRate        float64 `json:"hit_rate"`         // last 5 min
-	AvgLatencyMs   float64 `json:"avg_latency_ms"`   // last 5 min
+	// All rates derived from the same rolling 60-second window so the
+	// strip never shows internally inconsistent numbers (e.g. "X req/min
+	// but 0 bytes/s"). Egress is bytes_sent to clients (hit + miss).
+	// Ingress is bytes_sent on the miss path only — we stream upstream
+	// through to the client so bytes-from-upstream ≈ bytes-to-client for
+	// misses. Clients gauge "cache savings" as egress / (egress + ingress).
+	RequestsPerMin int64   `json:"requests_per_min"`
+	EgressBps      float64 `json:"egress_bps"`
+	IngressBps     float64 `json:"ingress_bps"`
+	// HasData is false when the window observed zero requests; the
+	// frontend uses it to render "—" instead of misleading "0"s.
+	HasData bool `json:"has_data"`
 }
 
 type upstreamRollup struct {
@@ -133,38 +142,30 @@ func (h *NowHandler) lastActivity(now time.Time) *lastActivity {
 	}
 }
 
-// rate computes req/min over the last 60s and hit_rate + avg_latency over the
-// last 5 minutes. Two queries: 60s scan and 5min scan. Both are bounded by
-// retention; even on a busy server "last 5 minutes of access_logs" is
-// thousands of rows max.
+// rate computes req/min + egress + ingress over the last 60s. One scan over
+// raw access_logs (bounded — 60s of traffic even on a busy server caps at
+// thousands of rows). bytes_sent on miss rows doubles as a proxy for
+// upstream-ingress because the cache streams upstream → client.
 func (h *NowHandler) rate(now time.Time) rateBlock {
-	var rate rateBlock
-
-	since60s := now.Add(-60 * time.Second)
-	var count60s int64
-	h.db.Model(&db.AccessLog{}).
-		Where("created_at >= ?", since60s).
-		Count(&count60s)
-	rate.RequestsPerMin = count60s
-
-	since5m := now.Add(-5 * time.Minute)
+	since := now.Add(-60 * time.Second)
 	var agg struct {
-		Total      int64
-		Hits       int64
-		SumLatency int64
+		Requests  int64
+		Egress    int64
+		Ingress   int64
 	}
 	h.db.Model(&db.AccessLog{}).
-		Select(`COUNT(*) AS total,
-			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
-			COALESCE(SUM(latency_ms), 0) AS sum_latency`).
-		Where("created_at >= ?", since5m).
+		Select(`COUNT(*) AS requests,
+			COALESCE(SUM(bytes_sent), 0) AS egress,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS ingress`).
+		Where("created_at >= ?", since).
 		Scan(&agg)
 
-	if agg.Total > 0 {
-		rate.HitRate = float64(agg.Hits) / float64(agg.Total)
-		rate.AvgLatencyMs = float64(agg.SumLatency) / float64(agg.Total)
+	return rateBlock{
+		RequestsPerMin: agg.Requests,
+		EgressBps:      float64(agg.Egress) / 60.0,
+		IngressBps:     float64(agg.Ingress) / 60.0,
+		HasData:        agg.Requests > 0,
 	}
-	return rate
 }
 
 // sparkline returns 30 one-minute buckets ending at the current minute.

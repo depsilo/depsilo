@@ -135,8 +135,8 @@ export default function DashboardV2() {
     )
   }
 
-  const today = dashboard?.today || {} as any
-  const yesterday = dashboard?.yesterday || {} as any
+  const last24h = dashboard?.last_24h || {} as any
+  const prev24h = dashboard?.prev_24h || {} as any
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
   const trendPoints = (trendsData?.data?.points || []).map((p: any) => ({
@@ -146,31 +146,31 @@ export default function DashboardV2() {
 
   const metrics = [
     {
-      label: t('dashboard.todayRequests'),
-      value: today.total_requests?.toLocaleString() || '0',
-      change: yesterday.total_requests
-        ? ((today.total_requests - yesterday.total_requests) / yesterday.total_requests * 100)
+      label: t('dashboard.last24hRequests'),
+      value: last24h.total_requests?.toLocaleString() || '0',
+      change: prev24h.total_requests
+        ? ((last24h.total_requests - prev24h.total_requests) / prev24h.total_requests * 100)
         : null,
     },
     {
       label: t('dashboard.hitRate'),
-      value: today.hit_rate != null ? `${(today.hit_rate * 100).toFixed(1)}%` : '0%',
-      change: yesterday.hit_rate
-        ? ((today.hit_rate - yesterday.hit_rate) / yesterday.hit_rate * 100)
+      value: last24h.hit_rate != null ? `${(last24h.hit_rate * 100).toFixed(1)}%` : '0%',
+      change: prev24h.hit_rate
+        ? ((last24h.hit_rate - prev24h.hit_rate) / prev24h.hit_rate * 100)
         : null,
     },
     {
       label: t('dashboard.bytesServed'),
-      value: formatBytes(today.bytes_served || 0),
-      change: yesterday.bytes_served
-        ? ((today.bytes_served - yesterday.bytes_served) / yesterday.bytes_served * 100)
+      value: formatBytes(last24h.bytes_served || 0),
+      change: prev24h.bytes_served
+        ? ((last24h.bytes_served - prev24h.bytes_served) / prev24h.bytes_served * 100)
         : null,
     },
     {
       label: t('dashboard.avgLatency'),
-      value: `${Math.round(today.avg_latency_ms || 0)} ms`,
-      change: yesterday.avg_latency_ms
-        ? ((today.avg_latency_ms - yesterday.avg_latency_ms) / yesterday.avg_latency_ms * 100)
+      value: `${Math.round(last24h.avg_latency_ms || 0)} ms`,
+      change: prev24h.avg_latency_ms
+        ? ((last24h.avg_latency_ms - prev24h.avg_latency_ms) / prev24h.avg_latency_ms * 100)
         : null,
     },
   ]

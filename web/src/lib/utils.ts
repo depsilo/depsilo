@@ -16,6 +16,15 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`
 }
 
+/**
+ * Format a byte-rate as e.g. "1.2 MB/s". Used by the Now strip's
+ * ingress / egress display.
+ */
+export function formatBps(bytesPerSecond: number): string {
+  if (!bytesPerSecond || bytesPerSecond <= 0) return '0 B/s'
+  return `${formatBytes(bytesPerSecond)}/s`
+}
+
 export type FormatTimeMode = 'auto' | 'time' | 'relative'
 
 /**

@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { statsApi } from '@/lib/api'
+import { formatBps } from '@/lib/utils'
 
 interface SparklinePoint {
   t: number
@@ -32,8 +33,9 @@ interface NowData {
   last_activity?: LastActivity
   rate: {
     requests_per_min: number
-    hit_rate: number
-    avg_latency_ms: number
+    egress_bps: number
+    ingress_bps: number
+    has_data: boolean
   }
   upstreams: {
     total: number
@@ -188,20 +190,22 @@ export default function NowStrip() {
         <>
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
-            <span style={valueStyle}>{data.rate.requests_per_min}</span>
+            <span style={valueStyle}>{data.rate.has_data ? data.rate.requests_per_min : '—'}</span>
             {t('now.reqPerMin')}
           </span>
 
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
-            {t('now.hitRate')}
-            <span style={valueStyle}>{Math.round(data.rate.hit_rate * 100)}%</span>
+            <span style={{ ...valueStyle, color: 'var(--ok-text)' }} aria-hidden>↑</span>
+            <span style={valueStyle}>{data.rate.has_data ? formatBps(data.rate.egress_bps) : '—'}</span>
+            {t('now.egress')}
           </span>
 
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
-            <span style={valueStyle}>{Math.round(data.rate.avg_latency_ms)}ms</span>
-            {t('now.avgLatency')}
+            <span style={{ ...valueStyle, color: 'var(--text-muted)' }} aria-hidden>↓</span>
+            <span style={valueStyle}>{data.rate.has_data ? formatBps(data.rate.ingress_bps) : '—'}</span>
+            {t('now.ingress')}
           </span>
 
           <span style={sepStyle}>·</span>

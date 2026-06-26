@@ -26,45 +26,28 @@ func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pools map[str
 
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	now := time.Now().UTC()
-	todayDate := now.Format("2006-01-02")
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
-	var totalRequests, hitCount int64
-	var bytesSent int64
+	// Rolling windows replace the calendar-day "today" concept. The headline
+	// cards report the last 24 hours; the change indicators below them
+	// compare against the preceding 24 hours (i.e. now-48h..now-24h).
+	last24h := h.aggWindow(now.Add(-24*time.Hour), now)
+	prev24h := h.aggWindow(now.Add(-48*time.Hour), now.Add(-24*time.Hour))
+
+	totalRequests := last24h.Total
+	hitCount := last24h.Hits
+	bytesSent := last24h.Bytes
 	var avgLatency float64
-
-	if h.useRollup {
-		// access_log_hourly's PK is (date, hour, adapter_type, hit, upstream).
-		// "today" = all rows with date == today_utc; aggregating gives the
-		// same numbers as the raw COUNT/SUM but without scanning 100k rows.
-		var totals struct {
-			Total      int64
-			Hits       int64
-			Bytes      int64
-			SumLatency int64
-		}
-		h.db.Table("access_log_hourly").
-			Select("COALESCE(SUM(request_count),0) AS total, COALESCE(SUM(CASE WHEN hit=1 THEN request_count ELSE 0 END),0) AS hits, COALESCE(SUM(total_bytes),0) AS bytes, COALESCE(SUM(sum_latency_ms),0) AS sum_latency").
-			Where("date = ?", todayDate).
-			Scan(&totals)
-		totalRequests = totals.Total
-		hitCount = totals.Hits
-		bytesSent = totals.Bytes
-		if totals.Total > 0 {
-			avgLatency = float64(totals.SumLatency) / float64(totals.Total)
-		}
-	} else {
-		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStart).Count(&totalRequests)
-		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStart, true).Count(&hitCount)
-		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStart).
-			Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSent)
-		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStart).
-			Select("COALESCE(AVG(latency_ms), 0)").Scan(&avgLatency)
+	if last24h.Total > 0 {
+		avgLatency = float64(last24h.SumLatency) / float64(last24h.Total)
 	}
-
 	var hitRate float64
 	if totalRequests > 0 {
 		hitRate = float64(hitCount) / float64(totalRequests)
+	}
+	var prevAvgLatency, prevHitRate float64
+	if prev24h.Total > 0 {
+		prevAvgLatency = float64(prev24h.SumLatency) / float64(prev24h.Total)
+		prevHitRate = float64(prev24h.Hits) / float64(prev24h.Total)
 	}
 
 	// Daily stats for the last 7 days
@@ -146,12 +129,18 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"today": gin.H{
+		"last_24h": gin.H{
 			"total_requests": totalRequests,
 			"hit_count":      hitCount,
 			"hit_rate":       hitRate,
 			"bytes_served":   bytesSent,
 			"avg_latency_ms": avgLatency,
+		},
+		"prev_24h": gin.H{
+			"total_requests": prev24h.Total,
+			"hit_rate":       prevHitRate,
+			"bytes_served":   prev24h.Bytes,
+			"avg_latency_ms": prevAvgLatency,
 		},
 		"daily_stats": dailyStats,
 		"upstreams":   upstreams,
@@ -160,6 +149,33 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 			"apt":  aptTop,
 		},
 	})
+}
+
+// aggSnapshot is the cross-cutting count/SUM tuple every rolling-window
+// query inside GetDashboard wants. Defined as a struct (not gin.H) so the
+// SQL Scan can land in fixed fields without reflection.
+type aggSnapshot struct {
+	Total      int64
+	Hits       int64
+	Bytes      int64
+	SumLatency int64
+}
+
+// aggWindow runs one SUM over access_logs for [from, to). Raw rather than
+// rollup because rolling windows aren't hour-aligned — access_log_hourly's
+// granularity would force snap-to-hour which silently dropped the partial
+// most-recent hour. 24h of raw rows scans cheaply (~thousands of rows on a
+// busy server) and the same query also covers the prev-24h comparison.
+func (h *DashboardHandler) aggWindow(from, to time.Time) aggSnapshot {
+	var out aggSnapshot
+	h.db.Model(&db.AccessLog{}).
+		Select(`COUNT(*) AS total,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
+			COALESCE(SUM(bytes_sent), 0) AS bytes,
+			COALESCE(SUM(latency_ms), 0) AS sum_latency`).
+		Where("created_at >= ? AND created_at < ?", from, to).
+		Scan(&out)
+	return out
 }
 
 // GetTrends powers the dashboard's hit/miss chart. Four ranges, each backed

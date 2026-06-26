@@ -71,6 +71,7 @@ const en = {
     // Dashboard
     dashboard: {
       todayRequests: 'Requests Today',
+      last24hRequests: 'Requests (24h)',
       hitRate: 'Hit Rate',
       bytesServed: 'Traffic Served',
       avgLatency: 'Avg Latency',
@@ -99,6 +100,8 @@ const en = {
       statusDegraded: 'Degraded',
       statusDown: 'Down',
       reqPerMin: 'req/min',
+      egress: 'egress',
+      ingress: 'ingress',
       hitRate: 'hit',
       avgLatency: 'avg',
       upstreams: 'upstreams up',

@@ -71,6 +71,7 @@ const zh = {
     // Dashboard
     dashboard: {
       todayRequests: '今日请求',
+      last24hRequests: '近 24 小时请求',
       hitRate: '命中率',
       bytesServed: '已服务流量',
       avgLatency: '平均延迟',
@@ -99,6 +100,8 @@ const zh = {
       statusDegraded: '部分降级',
       statusDown: '故障',
       reqPerMin: '请求/分钟',
+      egress: '出口',
+      ingress: '入口',
       hitRate: '命中',
       avgLatency: '平均',
       upstreams: '上游健康',
