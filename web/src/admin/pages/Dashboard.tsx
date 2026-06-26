@@ -9,11 +9,11 @@ import Icon from '@/components/Icon'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
 import NowStrip from '@/admin/components/NowStrip'
+import TrendsCard, { type TrendsRange } from '@/admin/components/TrendsCard'
 import EmptyState from '@/components/EmptyState'
 import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 import {
-  ComposedChart, AreaChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
 } from 'recharts'
 
 // ── Top packages (merged, sorted by hits) ──────────────────────────
@@ -74,30 +74,11 @@ function TopPackagesList({ topPackages }: { topPackages: { pypi?: any[]; apt?: a
   )
 }
 
-// ── Custom tooltip ─────────────────────────────────────────────────
-
-function ChartTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null
-  return (
-    <div
-      className="rounded-[4px] px-3 py-2 text-[12px]"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-    >
-      <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
-      {payload.map((entry: any) => (
-        <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
-          {entry.name}: {entry.dataKey === 'hit_rate_pct' ? `${Number(entry.value).toFixed(1)}%` : entry.value?.toLocaleString()}
-        </p>
-      ))}
-    </div>
-  )
-}
-
 // ── Main Dashboard ─────────────────────────────────────────────────
 
 export default function DashboardV2() {
   const { t } = useTranslation()
-  const [range, setRange] = useState('1h')
+  const [range, setRange] = useState<TrendsRange>('1h')
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'dashboard'],
@@ -139,10 +120,7 @@ export default function DashboardV2() {
   const prev24h = dashboard?.prev_24h || {} as any
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
-  const trendPoints = (trendsData?.data?.points || []).map((p: any) => ({
-    ...p,
-    hit_rate_pct: (p.hit_rate || 0) * 100,
-  }))
+  const rawTrendPoints = (trendsData?.data?.points || []) as any[]
 
   const metrics = [
     {
@@ -175,13 +153,6 @@ export default function DashboardV2() {
     },
   ]
 
-  const ranges = [
-    { value: '1h', label: t('dashboard.range1h') },
-    { value: '24h', label: t('dashboard.range24h') },
-    { value: '7d', label: t('dashboard.range7d') },
-    { value: '30d', label: t('dashboard.range30d') },
-  ]
-
   return (
     <div className="space-y-12">
       {/* ── Now strip — live liveness signal, polled every 5s ────── */}
@@ -211,65 +182,9 @@ export default function DashboardV2() {
         </div>
       )}
 
-      {/* ── Hit / miss trend (full width, no card) ───── */}
-      <section>
-        <SectionHeader
-          title={t('dashboard.hitMissTrend')}
-          action={
-            <div className="flex items-center gap-1">
-              {ranges.map(r => {
-                const active = range === r.value
-                return (
-                  <button
-                    key={r.value}
-                    onClick={() => setRange(r.value)}
-                    className="px-2 py-0.5 text-[11px] font-[500] rounded-[4px] cursor-pointer transition-colors duration-150"
-                    style={{
-                      background: active ? 'var(--brand)' : 'transparent',
-                      color: active ? 'white' : 'var(--text-soft)',
-                      border: active ? 'none' : '1px solid transparent',
-                    }}
-                  >
-                    {r.label}
-                  </button>
-                )
-              })}
-            </div>
-          }
-        />
-        {trendPoints.length === 0 || trendPoints.every((p: any) => !p.hits && !p.misses) ? (
-          <EmptyState
-            icon="show_chart"
-            title={t('dashboard.emptyTrendTitle')}
-            hint={t('dashboard.emptyTrendHint')}
-            minHeight={220}
-          />
-        ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <ComposedChart data={trendPoints} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id="gradHits" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="gradMisses" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--danger)" stopOpacity={0.25} />
-                <stop offset="100%" stopColor="var(--danger)" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="count" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
-            <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} width={36} />
-            <Tooltip content={<ChartTooltip />} />
-            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
-            <Area yAxisId="count" type="monotone" dataKey="hits" stroke="var(--brand)" strokeWidth={1.5} fill="url(#gradHits)" name={t('dashboard.hits')} />
-            <Area yAxisId="count" type="monotone" dataKey="misses" stroke="var(--danger)" strokeWidth={1.5} fill="url(#gradMisses)" name={t('dashboard.misses')} />
-            <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--ok)" name={t('dashboard.hitRate2')} strokeWidth={2} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-        )}
-      </section>
+      {/* ── Trends — 4 tabs × 4 ranges, browser-tz X axis ───── */}
+      <TrendsCard raw={rawTrendPoints} range={range} onRangeChange={setRange} />
+
 
       {/* ── Top packages — bare list ─────────────────── */}
       <section>

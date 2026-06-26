@@ -183,14 +183,14 @@ func (h *DashboardHandler) aggWindow(from, to time.Time) aggSnapshot {
 //
 //	1h   — 12 × 5-minute buckets, raw access_logs (sub-hour, can't use rollup)
 //	24h  — 24 × 1-hour buckets, access_log_hourly (live, includes "now" hour)
-//	7d   — 7  × 1-day buckets,  access_log_hourly GROUP BY date
-//	30d  — 30 × 1-day buckets,  same
+//	7d   — 168 × 1-hour buckets, access_log_hourly (frontend re-buckets to days in browser TZ)
+//	30d  — 720 × 1-hour buckets, same
 //
-// The 7d/30d paths intentionally read access_log_hourly rather than
-// access_log_daily so today shows up in the chart — access_log_daily is
-// populated by the nightly compactor and would be empty for today's date.
-// Hourly has up to 24 rows per day × 13 adapters × 2 hits, but the GROUP BY
-// collapses to one row per date so the chart payload size is identical.
+// The 7d/30d paths return hourly granularity rather than collapsing GROUP BY
+// date so the frontend can re-aggregate by the user's local-timezone day
+// boundaries. The response carries every dimension a tab could want
+// (hits / misses / bytes_hit / bytes_miss / sum_latency / errors) so tab
+// switching on the frontend is instant — no refetch.
 func (h *DashboardHandler) GetTrends(c *gin.Context) {
 	rangeParam := c.DefaultQuery("range", "1h")
 
@@ -200,24 +200,67 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 	case "1h":
 		points = h.trends1h()
 	case "24h":
-		points = h.trends24h()
+		points = h.trendsHourly(24)
 	case "30d":
-		points = h.trendsByDay(30)
+		points = h.trendsHourly(24 * 30)
 	default: // "7d"
-		points = h.trendsByDay(7)
+		points = h.trendsHourly(24 * 7)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"points": points})
 }
 
+// trendPoint is one row in the trends response. Carries every dimension the
+// frontend tabs need (requests / bandwidth / latency / errors) so a tab
+// switch is a pure render — no refetch. Bucket is unix seconds at the
+// bucket's UTC start; the frontend formats it in the browser's timezone.
 type trendPoint struct {
-	Bucket      int64   `json:"bucket"`
-	Date        string  `json:"date"`
-	Requests    int64   `json:"requests"`
-	Hits        int64   `json:"hits"`
-	Misses      int64   `json:"misses"`
-	HitRate     float64 `json:"hit_rate"`
-	BytesServed int64   `json:"bytes_served"`
+	Bucket       int64   `json:"bucket"`
+	Date         string  `json:"date"` // legacy display label (UTC); prefer formatting Bucket client-side
+	Requests     int64   `json:"requests"`
+	Hits         int64   `json:"hits"`
+	Misses       int64   `json:"misses"`
+	HitRate      float64 `json:"hit_rate"`
+	BytesServed  int64   `json:"bytes_served"`
+	BytesHit     int64   `json:"bytes_hit"`
+	BytesMiss    int64   `json:"bytes_miss"`
+	SumLatencyMs int64   `json:"sum_latency_ms"`
+	AvgLatencyMs float64 `json:"avg_latency_ms"`
+	Errors       int64   `json:"errors"`
+}
+
+// trendsHourBucket is the union row both 1h-resolution (5-min) and
+// hour-resolution paths Scan into. SQL projects every dimension the chart
+// tabs can render so tab switching is a frontend-only operation.
+type trendHourBucket struct {
+	Bucket       int64
+	Requests     int64
+	Hits         int64
+	Misses       int64
+	BytesHit     int64
+	BytesMiss    int64
+	SumLatencyMs int64
+	Errors       int64
+}
+
+func (b trendHourBucket) toPoint(bucketStart time.Time) trendPoint {
+	p := trendPoint{
+		Bucket:       bucketStart.Unix(),
+		Date:         bucketStart.Format("2006-01-02 15:04"),
+		Requests:     b.Requests,
+		Hits:         b.Hits,
+		Misses:       b.Misses,
+		BytesHit:     b.BytesHit,
+		BytesMiss:    b.BytesMiss,
+		BytesServed:  b.BytesHit + b.BytesMiss,
+		SumLatencyMs: b.SumLatencyMs,
+		Errors:       b.Errors,
+	}
+	if b.Requests > 0 {
+		p.HitRate = float64(b.Hits) / float64(b.Requests)
+		p.AvgLatencyMs = float64(b.SumLatencyMs) / float64(b.Requests)
+	}
+	return p
 }
 
 // trends1h returns 12 five-minute buckets ending at the current minute,
@@ -226,32 +269,25 @@ type trendPoint struct {
 // query is fast even on busy servers.
 func (h *DashboardHandler) trends1h() []trendPoint {
 	const buckets = 12
-	const intervalSec = 300 // 5 min
-
-	type bucketRow struct {
-		Bucket      int64
-		Requests    int64
-		Hits        int64
-		Misses      int64
-		BytesServed int64
-	}
+	const intervalSec = 300
 	now := time.Now().UTC()
 	since := now.Add(-buckets * 5 * time.Minute)
 
-	var rows []bucketRow
+	var rows []trendHourBucket
 	h.db.Model(&db.AccessLog{}).
 		Select(`(CAST(strftime('%s', created_at) AS INTEGER) / ?) * ? AS bucket,
 			COUNT(*) AS requests,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
-			COALESCE(SUM(bytes_sent), 0) AS bytes_served`,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END), 0) AS bytes_hit,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS bytes_miss,
+			COALESCE(SUM(latency_ms), 0) AS sum_latency_ms,
+			COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`,
 			intervalSec, intervalSec).
 		Where("created_at >= ?", since).
-		Group("bucket").
-		Order("bucket ASC").
-		Scan(&rows)
+		Group("bucket").Order("bucket ASC").Scan(&rows)
 
-	lookup := make(map[int64]bucketRow, len(rows))
+	lookup := make(map[int64]trendHourBucket, len(rows))
 	for _, r := range rows {
 		lookup[r.Bucket] = r
 	}
@@ -259,37 +295,36 @@ func (h *DashboardHandler) trends1h() []trendPoint {
 	out := make([]trendPoint, 0, buckets)
 	for i := 0; i < buckets; i++ {
 		ts := startBucket + int64(i*intervalSec)
-		p := trendPoint{Bucket: ts, Date: time.Unix(ts, 0).UTC().Format("2006-01-02 15:04")}
-		if r, ok := lookup[ts]; ok {
-			p.Requests = r.Requests
-			p.Hits = r.Hits
-			p.Misses = r.Misses
-			p.BytesServed = r.BytesServed
-			if p.Requests > 0 {
-				p.HitRate = float64(p.Hits) / float64(p.Requests)
-			}
-		}
-		out = append(out, p)
+		bucket := time.Unix(ts, 0).UTC()
+		row := lookup[ts] // zero-value is fine for empty bucket
+		out = append(out, row.toPoint(bucket))
 	}
 	return out
 }
 
-// trends24h returns 24 one-hour buckets ending at the current hour, scanned
-// from access_log_hourly when rollup is enabled (with a raw fallback).
-func (h *DashboardHandler) trends24h() []trendPoint {
-	const buckets = 24
+// trendsHourly returns N consecutive one-hour buckets ending at the current
+// hour. Same shape regardless of whether N is 24, 168 (7d), or 720 (30d) —
+// the frontend re-aggregates 7d/30d into local-timezone days for display.
+//
+// Rollup-mode reads from access_log_hourly (live; updated by the recorder
+// every flush); raw mode falls back to a strftime-bucketed access_logs
+// scan, which only matters for operators who disabled rollup_enabled.
+func (h *DashboardHandler) trendsHourly(buckets int) []trendPoint {
 	now := time.Now().UTC()
-	since := now.Truncate(time.Hour).Add(-(buckets - 1) * time.Hour)
+	since := now.Truncate(time.Hour).Add(-time.Duration(buckets-1) * time.Hour)
 
-	type bucketRow struct {
-		Date        string
-		Hour        int
-		Requests    int64
-		Hits        int64
-		Misses      int64
-		BytesServed int64
+	type rawRow struct {
+		Date         string
+		Hour         int
+		Requests     int64
+		Hits         int64
+		Misses       int64
+		BytesHit     int64
+		BytesMiss    int64
+		SumLatencyMs int64
+		Errors       int64
 	}
-	var rows []bucketRow
+	var rows []rawRow
 
 	if h.useRollup {
 		startDate := since.Format("2006-01-02")
@@ -298,11 +333,12 @@ func (h *DashboardHandler) trends24h() []trendPoint {
 				COALESCE(SUM(request_count), 0) AS requests,
 				COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
 				COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
-				COALESCE(SUM(total_bytes), 0) AS bytes_served`).
+				COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
+				COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
+				COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
+				COALESCE(SUM(error_count), 0) AS errors`).
 			Where("date >= ?", startDate).
-			Group("date, hour").
-			Order("date ASC, hour ASC").
-			Scan(&rows)
+			Group("date, hour").Order("date ASC, hour ASC").Scan(&rows)
 	} else {
 		h.db.Model(&db.AccessLog{}).
 			Select(`strftime('%Y-%m-%d', created_at) AS date,
@@ -310,104 +346,36 @@ func (h *DashboardHandler) trends24h() []trendPoint {
 				COUNT(*) AS requests,
 				COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
 				COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
-				COALESCE(SUM(bytes_sent), 0) AS bytes_served`).
+				COALESCE(SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END), 0) AS bytes_hit,
+				COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS bytes_miss,
+				COALESCE(SUM(latency_ms), 0) AS sum_latency_ms,
+				COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`).
 			Where("created_at >= ?", since).
-			Group("date, hour").
-			Order("date ASC, hour ASC").
-			Scan(&rows)
+			Group("date, hour").Order("date ASC, hour ASC").Scan(&rows)
 	}
 
 	type key struct {
 		date string
 		hour int
 	}
-	lookup := make(map[key]bucketRow, len(rows))
+	lookup := make(map[key]trendHourBucket, len(rows))
 	for _, r := range rows {
-		lookup[key{r.Date, r.Hour}] = r
+		lookup[key{r.Date, r.Hour}] = trendHourBucket{
+			Requests:     r.Requests,
+			Hits:         r.Hits,
+			Misses:       r.Misses,
+			BytesHit:     r.BytesHit,
+			BytesMiss:    r.BytesMiss,
+			SumLatencyMs: r.SumLatencyMs,
+			Errors:       r.Errors,
+		}
 	}
 
 	out := make([]trendPoint, 0, buckets)
 	for i := 0; i < buckets; i++ {
-		bucketStart := since.Add(time.Duration(i) * time.Hour)
-		k := key{bucketStart.Format("2006-01-02"), bucketStart.Hour()}
-		p := trendPoint{
-			Bucket: bucketStart.Unix(),
-			Date:   bucketStart.Format("2006-01-02 15:04"),
-		}
-		if r, ok := lookup[k]; ok {
-			p.Requests = r.Requests
-			p.Hits = r.Hits
-			p.Misses = r.Misses
-			p.BytesServed = r.BytesServed
-			if p.Requests > 0 {
-				p.HitRate = float64(p.Hits) / float64(p.Requests)
-			}
-		}
-		out = append(out, p)
-	}
-	return out
-}
-
-// trendsByDay returns N daily buckets. Both rollup and raw paths group by
-// date string so today's partial-hour data is included — access_log_hourly
-// is live (updated by the recorder), unlike access_log_daily which lags one
-// compactor cycle.
-func (h *DashboardHandler) trendsByDay(days int) []trendPoint {
-	now := time.Now().UTC()
-	startDate := now.AddDate(0, 0, -(days - 1)).Truncate(24 * time.Hour)
-
-	type bucketRow struct {
-		Date        string
-		Requests    int64
-		Hits        int64
-		Misses      int64
-		BytesServed int64
-	}
-	var rows []bucketRow
-
-	if h.useRollup {
-		h.db.Table("access_log_hourly").
-			Select(`date,
-				COALESCE(SUM(request_count), 0) AS requests,
-				COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
-				COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
-				COALESCE(SUM(total_bytes), 0) AS bytes_served`).
-			Where("date >= ?", startDate.Format("2006-01-02")).
-			Group("date").
-			Order("date ASC").
-			Scan(&rows)
-	} else {
-		h.db.Model(&db.AccessLog{}).
-			Select(`DATE(created_at) AS date,
-				COUNT(*) AS requests,
-				COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
-				COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
-				COALESCE(SUM(bytes_sent), 0) AS bytes_served`).
-			Where("datetime(created_at) >= datetime(?)", startDate).
-			Group("DATE(created_at)").
-			Order("date ASC").
-			Scan(&rows)
-	}
-
-	lookup := make(map[string]bucketRow, len(rows))
-	for _, r := range rows {
-		lookup[r.Date] = r
-	}
-	out := make([]trendPoint, 0, days)
-	for i := 0; i < days; i++ {
-		d := startDate.AddDate(0, 0, i)
-		ds := d.Format("2006-01-02")
-		p := trendPoint{Bucket: d.Unix(), Date: ds}
-		if r, ok := lookup[ds]; ok {
-			p.Requests = r.Requests
-			p.Hits = r.Hits
-			p.Misses = r.Misses
-			p.BytesServed = r.BytesServed
-			if p.Requests > 0 {
-				p.HitRate = float64(p.Hits) / float64(p.Requests)
-			}
-		}
-		out = append(out, p)
+		bucket := since.Add(time.Duration(i) * time.Hour)
+		row := lookup[key{bucket.Format("2006-01-02"), bucket.Hour()}]
+		out = append(out, row.toPoint(bucket))
 	}
 	return out
 }
