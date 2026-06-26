@@ -305,6 +305,17 @@ body { margin: 0; }
   letter-spacing: -0.02em;
 }
 
+/* Code blocks must NOT ligate. Geist Mono's default ligatures fuse `--`
+   into an em-dash, which visually eats the space before the next token
+   (e.g. `pip install --no-cache` looks like `pip install—no-cache`).
+   Also reset letter-spacing so inherited negative tracking doesn't shrink
+   inter-character gaps inside snippets. */
+pre, code, .code-mono {
+  font-feature-settings: "liga" 0, "calt" 0;
+  font-variant-ligatures: none;
+  letter-spacing: 0;
+}
+
 /* ── Material Symbols (unchanged) ── */
 .icon {
   font-family: 'Material Symbols Outlined';
