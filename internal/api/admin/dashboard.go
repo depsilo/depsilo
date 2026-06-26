@@ -75,8 +75,11 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 	var dailyStats []dailyStat
 	if h.useRollup {
+		// Read from access_log_hourly (not access_log_daily) so today's
+		// partial-hour data is included — daily lags until the nightly
+		// compactor runs and would render today as 0.
 		sevenDaysAgoDate := now.AddDate(0, 0, -7).Format("2006-01-02")
-		h.db.Table("access_log_daily").
+		h.db.Table("access_log_hourly").
 			Select("date, adapter_type, COALESCE(SUM(request_count),0) AS count").
 			Where("date >= ?", sevenDaysAgoDate).
 			Group("date, adapter_type").Order("date").
@@ -159,44 +162,195 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	})
 }
 
+// GetTrends powers the dashboard's hit/miss chart. Four ranges, each backed
+// by the source that best fits its granularity:
+//
+//	1h   — 12 × 5-minute buckets, raw access_logs (sub-hour, can't use rollup)
+//	24h  — 24 × 1-hour buckets, access_log_hourly (live, includes "now" hour)
+//	7d   — 7  × 1-day buckets,  access_log_hourly GROUP BY date
+//	30d  — 30 × 1-day buckets,  same
+//
+// The 7d/30d paths intentionally read access_log_hourly rather than
+// access_log_daily so today shows up in the chart — access_log_daily is
+// populated by the nightly compactor and would be empty for today's date.
+// Hourly has up to 24 rows per day × 13 adapters × 2 hits, but the GROUP BY
+// collapses to one row per date so the chart payload size is identical.
 func (h *DashboardHandler) GetTrends(c *gin.Context) {
-	rangeParam := c.DefaultQuery("range", "7d")
+	rangeParam := c.DefaultQuery("range", "1h")
 
-	var days int
+	var points []trendPoint
+
 	switch rangeParam {
-	case "today":
-		days = 1
-	case "7d":
-		days = 7
+	case "1h":
+		points = h.trends1h()
+	case "24h":
+		points = h.trends24h()
 	case "30d":
-		days = 30
-	default:
-		days = 7
+		points = h.trendsByDay(30)
+	default: // "7d"
+		points = h.trendsByDay(7)
 	}
 
-	startDate := time.Now().UTC().AddDate(0, 0, -days).Truncate(24 * time.Hour)
+	c.JSON(http.StatusOK, gin.H{"points": points})
+}
 
-	type TrendPoint struct {
-		Date        string  `json:"date"`
-		Requests    int64   `json:"requests"`
-		Hits        int64   `json:"hits"`
-		Misses      int64   `json:"misses"`
-		HitRate     float64 `json:"hit_rate"`
-		BytesServed int64   `json:"bytes_served"`
+type trendPoint struct {
+	Bucket      int64   `json:"bucket"`
+	Date        string  `json:"date"`
+	Requests    int64   `json:"requests"`
+	Hits        int64   `json:"hits"`
+	Misses      int64   `json:"misses"`
+	HitRate     float64 `json:"hit_rate"`
+	BytesServed int64   `json:"bytes_served"`
+}
+
+// trends1h returns 12 five-minute buckets ending at the current minute,
+// scanned from raw access_logs. The rollup tables key at hour granularity
+// so they can't power this view; raw access_logs at ~5 minutes of data per
+// query is fast even on busy servers.
+func (h *DashboardHandler) trends1h() []trendPoint {
+	const buckets = 12
+	const intervalSec = 300 // 5 min
+
+	type bucketRow struct {
+		Bucket      int64
+		Requests    int64
+		Hits        int64
+		Misses      int64
+		BytesServed int64
+	}
+	now := time.Now().UTC()
+	since := now.Add(-buckets * 5 * time.Minute)
+
+	var rows []bucketRow
+	h.db.Model(&db.AccessLog{}).
+		Select(`(CAST(strftime('%s', created_at) AS INTEGER) / ?) * ? AS bucket,
+			COUNT(*) AS requests,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
+			COALESCE(SUM(bytes_sent), 0) AS bytes_served`,
+			intervalSec, intervalSec).
+		Where("created_at >= ?", since).
+		Group("bucket").
+		Order("bucket ASC").
+		Scan(&rows)
+
+	lookup := make(map[int64]bucketRow, len(rows))
+	for _, r := range rows {
+		lookup[r.Bucket] = r
+	}
+	startBucket := (since.Unix() / int64(intervalSec)) * int64(intervalSec)
+	out := make([]trendPoint, 0, buckets)
+	for i := 0; i < buckets; i++ {
+		ts := startBucket + int64(i*intervalSec)
+		p := trendPoint{Bucket: ts, Date: time.Unix(ts, 0).UTC().Format("2006-01-02 15:04")}
+		if r, ok := lookup[ts]; ok {
+			p.Requests = r.Requests
+			p.Hits = r.Hits
+			p.Misses = r.Misses
+			p.BytesServed = r.BytesServed
+			if p.Requests > 0 {
+				p.HitRate = float64(p.Hits) / float64(p.Requests)
+			}
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// trends24h returns 24 one-hour buckets ending at the current hour, scanned
+// from access_log_hourly when rollup is enabled (with a raw fallback).
+func (h *DashboardHandler) trends24h() []trendPoint {
+	const buckets = 24
+	now := time.Now().UTC()
+	since := now.Truncate(time.Hour).Add(-(buckets - 1) * time.Hour)
+
+	type bucketRow struct {
+		Date        string
+		Hour        int
+		Requests    int64
+		Hits        int64
+		Misses      int64
+		BytesServed int64
+	}
+	var rows []bucketRow
+
+	if h.useRollup {
+		startDate := since.Format("2006-01-02")
+		h.db.Table("access_log_hourly").
+			Select(`date, hour,
+				COALESCE(SUM(request_count), 0) AS requests,
+				COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
+				COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
+				COALESCE(SUM(total_bytes), 0) AS bytes_served`).
+			Where("date >= ?", startDate).
+			Group("date, hour").
+			Order("date ASC, hour ASC").
+			Scan(&rows)
+	} else {
+		h.db.Model(&db.AccessLog{}).
+			Select(`strftime('%Y-%m-%d', created_at) AS date,
+				CAST(strftime('%H', created_at) AS INTEGER) AS hour,
+				COUNT(*) AS requests,
+				COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
+				COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
+				COALESCE(SUM(bytes_sent), 0) AS bytes_served`).
+			Where("created_at >= ?", since).
+			Group("date, hour").
+			Order("date ASC, hour ASC").
+			Scan(&rows)
 	}
 
-	var rawPoints []struct {
+	type key struct {
+		date string
+		hour int
+	}
+	lookup := make(map[key]bucketRow, len(rows))
+	for _, r := range rows {
+		lookup[key{r.Date, r.Hour}] = r
+	}
+
+	out := make([]trendPoint, 0, buckets)
+	for i := 0; i < buckets; i++ {
+		bucketStart := since.Add(time.Duration(i) * time.Hour)
+		k := key{bucketStart.Format("2006-01-02"), bucketStart.Hour()}
+		p := trendPoint{
+			Bucket: bucketStart.Unix(),
+			Date:   bucketStart.Format("2006-01-02 15:04"),
+		}
+		if r, ok := lookup[k]; ok {
+			p.Requests = r.Requests
+			p.Hits = r.Hits
+			p.Misses = r.Misses
+			p.BytesServed = r.BytesServed
+			if p.Requests > 0 {
+				p.HitRate = float64(p.Hits) / float64(p.Requests)
+			}
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// trendsByDay returns N daily buckets. Both rollup and raw paths group by
+// date string so today's partial-hour data is included — access_log_hourly
+// is live (updated by the recorder), unlike access_log_daily which lags one
+// compactor cycle.
+func (h *DashboardHandler) trendsByDay(days int) []trendPoint {
+	now := time.Now().UTC()
+	startDate := now.AddDate(0, 0, -(days - 1)).Truncate(24 * time.Hour)
+
+	type bucketRow struct {
 		Date        string
 		Requests    int64
 		Hits        int64
 		Misses      int64
 		BytesServed int64
 	}
+	var rows []bucketRow
 
 	if h.useRollup {
-		// access_log_daily stores date as a string, so the range filter is a
-		// string comparison (works because dates are ISO YYYY-MM-DD).
-		h.db.Table("access_log_daily").
+		h.db.Table("access_log_hourly").
 			Select(`date,
 				COALESCE(SUM(request_count), 0) AS requests,
 				COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
@@ -205,36 +359,39 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 			Where("date >= ?", startDate.Format("2006-01-02")).
 			Group("date").
 			Order("date ASC").
-			Scan(&rawPoints)
+			Scan(&rows)
 	} else {
 		h.db.Model(&db.AccessLog{}).
-			Select(`
-				DATE(created_at) as date,
-				COUNT(*) as requests,
-				SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END) as hits,
-				SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END) as misses,
-				COALESCE(SUM(bytes_sent), 0) as bytes_served
-			`).
+			Select(`DATE(created_at) AS date,
+				COUNT(*) AS requests,
+				COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
+				COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
+				COALESCE(SUM(bytes_sent), 0) AS bytes_served`).
 			Where("datetime(created_at) >= datetime(?)", startDate).
 			Group("DATE(created_at)").
 			Order("date ASC").
-			Scan(&rawPoints)
+			Scan(&rows)
 	}
 
-	points := make([]TrendPoint, 0, len(rawPoints))
-	for _, r := range rawPoints {
-		p := TrendPoint{
-			Date:        r.Date,
-			Requests:    r.Requests,
-			Hits:        r.Hits,
-			Misses:      r.Misses,
-			BytesServed: r.BytesServed,
-		}
-		if p.Requests > 0 {
-			p.HitRate = float64(p.Hits) / float64(p.Requests)
-		}
-		points = append(points, p)
+	lookup := make(map[string]bucketRow, len(rows))
+	for _, r := range rows {
+		lookup[r.Date] = r
 	}
-
-	c.JSON(http.StatusOK, gin.H{"points": points})
+	out := make([]trendPoint, 0, days)
+	for i := 0; i < days; i++ {
+		d := startDate.AddDate(0, 0, i)
+		ds := d.Format("2006-01-02")
+		p := trendPoint{Bucket: d.Unix(), Date: ds}
+		if r, ok := lookup[ds]; ok {
+			p.Requests = r.Requests
+			p.Hits = r.Hits
+			p.Misses = r.Misses
+			p.BytesServed = r.BytesServed
+			if p.Requests > 0 {
+				p.HitRate = float64(p.Hits) / float64(p.Requests)
+			}
+		}
+		out = append(out, p)
+	}
+	return out
 }
