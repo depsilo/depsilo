@@ -8,6 +8,7 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
+import NowStrip from '@/admin/components/NowStrip'
 import EmptyState from '@/components/EmptyState'
 import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 import {
@@ -96,7 +97,7 @@ function ChartTooltip({ active, payload, label }: any) {
 
 export default function DashboardV2() {
   const { t } = useTranslation()
-  const [range, setRange] = useState('7d')
+  const [range, setRange] = useState('1h')
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'dashboard'],
@@ -175,13 +176,17 @@ export default function DashboardV2() {
   ]
 
   const ranges = [
-    { value: 'today', label: t('dashboard.rangeToday') },
+    { value: '1h', label: t('dashboard.range1h') },
+    { value: '24h', label: t('dashboard.range24h') },
     { value: '7d', label: t('dashboard.range7d') },
     { value: '30d', label: t('dashboard.range30d') },
   ]
 
   return (
     <div className="space-y-12">
+      {/* ── Now strip — live liveness signal, polled every 5s ────── */}
+      <NowStrip />
+
       {/* ── Today metrics row ───────────────────────── */}
       <section>
         <div className="grid grid-cols-4 gap-8 py-2">

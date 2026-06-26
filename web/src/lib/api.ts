@@ -33,6 +33,7 @@ api.interceptors.response.use(
 
 export const statsApi = {
   getStats: () => api.get('/stats'),
+  getNow: () => api.get('/now'),
   getLatencySeries: () => api.get('/latency-series'),
 }
 
