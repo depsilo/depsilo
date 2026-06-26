@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { copyText } from '@/lib/clipboard'
 
 interface Props {
   text: string
@@ -9,11 +10,11 @@ export default function CopyButton({ text }: Props) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
-  function copy() {
-    navigator.clipboard.writeText(text).then(() => {
+  async function copy() {
+    if (await copyText(text)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    }).catch(() => {})
+    }
   }
 
   return (

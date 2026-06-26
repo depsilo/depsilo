@@ -1,15 +1,16 @@
 import { useState, useCallback } from 'react'
 import Icon from '@/components/Icon'
+import { copyText } from '@/lib/clipboard'
 
 export default function ServiceUrlBarV2() {
   const [copied, setCopied] = useState(false)
   const url = window.location.origin
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(url).then(() => {
+  const handleCopy = useCallback(async () => {
+    if (await copyText(url)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    })
+    }
   }, [url])
 
   return (

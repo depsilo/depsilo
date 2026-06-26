@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
+import { copyText } from '@/lib/clipboard'
 import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import InputV2 from '@/components/Input'
@@ -41,7 +42,13 @@ export default function UsersV2() {
   function openEditUser(u: any) { setEditUserId(u.id); setUserForm({ username: u.username, password: '', role: u.role }); setUserDialogOpen(true) }
   function handleUserSubmit(e: React.FormEvent) { e.preventDefault(); if (editUserId) { const p: any = { role: userForm.role }; if (userForm.password) p.password = userForm.password; updateUserMutation.mutate({ id: editUserId, data: p }) } else createUserMutation.mutate(userForm) }
   function handleTokenSubmit(e: React.FormEvent) { e.preventDefault(); createTokenMutation.mutate(tokenForm) }
-  function copyToken() { if (createdToken) { navigator.clipboard.writeText(createdToken); setCopied(true); setTimeout(() => setCopied(false), 2000) } }
+  async function copyToken() {
+    if (!createdToken) return
+    if (await copyText(createdToken)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
 
   const isUserSaving = createUserMutation.isPending || updateUserMutation.isPending
 

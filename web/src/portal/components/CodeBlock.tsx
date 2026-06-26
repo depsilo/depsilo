@@ -1,4 +1,5 @@
 import { useState, useCallback, type ReactNode } from 'react'
+import { copyText } from '@/lib/clipboard'
 
 interface CodeBlockProps {
   filename?: string
@@ -51,15 +52,11 @@ function highlight(code: string): ReactNode {
 export default function CodeBlock({ filename, code }: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(code)
-      .then(() => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      })
-      .catch(() => {
-        // clipboard write failed (e.g., no Secure Context or focus)
-      })
+  const handleCopy = useCallback(async () => {
+    if (await copyText(code)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }, [code])
 
   return (

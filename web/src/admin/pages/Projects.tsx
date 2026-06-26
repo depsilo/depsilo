@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
+import { copyText } from '@/lib/clipboard'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
 import Icon from '@/components/Icon'
@@ -43,9 +44,15 @@ function formatTime(t: string): string {
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  async function handleClick() {
+    if (await copyText(text)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
   return (
     <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      onClick={handleClick}
       className="bg-transparent cursor-pointer p-1 rounded-[4px] transition-colors duration-150"
       style={{ color: copied ? 'var(--ok-text)' : 'var(--text-soft)' }}
       title="Copy"
