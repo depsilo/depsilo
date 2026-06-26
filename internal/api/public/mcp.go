@@ -36,10 +36,11 @@ import (
 type MCPHandler struct {
 	DB         *gorm.DB
 	Ecosystems []string
+	UseRollup  bool
 }
 
-func NewMCPHandler(db *gorm.DB, ecosystems []string) *MCPHandler {
-	return &MCPHandler{DB: db, Ecosystems: ecosystems}
+func NewMCPHandler(db *gorm.DB, ecosystems []string, useRollup bool) *MCPHandler {
+	return &MCPHandler{DB: db, Ecosystems: ecosystems, UseRollup: useRollup}
 }
 
 // ── JSON-RPC framing ──────────────────────────────────────────────────
@@ -339,10 +340,26 @@ func (h *MCPHandler) toolStatus(c *gin.Context) (any, error) {
 
 	var hits, misses, totalFiles int64
 	var totalSize int64
-	now := time.Now()
+	now := time.Now().UTC()
 	start := now.AddDate(0, 0, -1)
-	h.DB.Model(&db.AccessLog{}).Where("hit = ? AND created_at >= ?", true, start).Count(&hits)
-	h.DB.Model(&db.AccessLog{}).Where("hit = ? AND created_at >= ?", false, start).Count(&misses)
+	if h.UseRollup {
+		// "Last 24h" rolls neatly onto access_log_hourly because the
+		// window is hour-aligned by design (the rollup tables themselves
+		// granulate to hours). Compare on date string to match the
+		// rollup PK; include partial-hour rows by including today.
+		startDate := start.Format("2006-01-02")
+		var t struct{ Hits, Misses int64 }
+		h.DB.Table("access_log_hourly").
+			Select(`COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
+				COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses`).
+			Where("date >= ?", startDate).
+			Scan(&t)
+		hits = t.Hits
+		misses = t.Misses
+	} else {
+		h.DB.Model(&db.AccessLog{}).Where("hit = ? AND created_at >= ?", true, start).Count(&hits)
+		h.DB.Model(&db.AccessLog{}).Where("hit = ? AND created_at >= ?", false, start).Count(&misses)
+	}
 	h.DB.Model(&db.CacheEntry{}).Count(&totalFiles)
 	h.DB.Model(&db.CacheEntry{}).Select("COALESCE(SUM(size), 0)").Row().Scan(&totalSize)
 

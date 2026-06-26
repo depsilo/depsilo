@@ -23,9 +23,10 @@ type StatsHandler struct {
 	ecosystems   []string
 	startTime    time.Time
 	extraIndexes []config.ExtraIndexConfig
+	useRollup    bool
 }
 
-func NewStatsHandler(database *gorm.DB, storage cache.Storage, pools map[string]*upstream.Pool, ecosystems []string, extraIndexes []config.ExtraIndexConfig) *StatsHandler {
+func NewStatsHandler(database *gorm.DB, storage cache.Storage, pools map[string]*upstream.Pool, ecosystems []string, extraIndexes []config.ExtraIndexConfig, useRollup bool) *StatsHandler {
 	return &StatsHandler{
 		db:           database,
 		storage:      storage,
@@ -33,6 +34,7 @@ func NewStatsHandler(database *gorm.DB, storage cache.Storage, pools map[string]
 		ecosystems:   ecosystems,
 		startTime:    time.Now(),
 		extraIndexes: extraIndexes,
+		useRollup:    useRollup,
 	}
 }
 
@@ -181,19 +183,41 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 	// KPI series (12 x 5-min buckets)
 	seriesPoints := h.kpiSeries(since)
 
-	// Today's stats from access logs
+	// Today's stats. Rollup path reads from access_log_hourly (one query
+	// covers all four KPIs); raw path keeps the original four-COUNT/SUM
+	// shape so the fallback diff stays small.
 	var totalRequests, hitCount, missCount int64
 	var bytesSent, bytesSaved int64
 
 	todayStartUTC := todayStart.UTC()
-	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStartUTC).Count(&totalRequests)
-	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStartUTC, true).Count(&hitCount)
+	if h.useRollup {
+		todayDate := todayStartUTC.Format("2006-01-02")
+		var t struct {
+			Total      int64
+			Hits       int64
+			Bytes      int64
+			BytesSaved int64
+		}
+		h.db.Table("access_log_hourly").
+			Select(`COALESCE(SUM(request_count),0) AS total,
+				COALESCE(SUM(CASE WHEN hit=1 THEN request_count ELSE 0 END),0) AS hits,
+				COALESCE(SUM(total_bytes),0) AS bytes,
+				COALESCE(SUM(CASE WHEN hit=1 THEN total_bytes ELSE 0 END),0) AS bytes_saved`).
+			Where("date = ?", todayDate).
+			Scan(&t)
+		totalRequests = t.Total
+		hitCount = t.Hits
+		bytesSent = t.Bytes
+		bytesSaved = t.BytesSaved
+	} else {
+		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStartUTC).Count(&totalRequests)
+		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStartUTC, true).Count(&hitCount)
+		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStartUTC).
+			Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSent)
+		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStartUTC, true).
+			Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSaved)
+	}
 	missCount = totalRequests - hitCount
-
-	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", todayStartUTC).
-		Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSent)
-	h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", todayStartUTC, true).
-		Select("COALESCE(SUM(bytes_sent), 0)").Scan(&bytesSaved)
 
 	var hitRate float64
 	if totalRequests > 0 {
@@ -236,16 +260,29 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 	}
 
 	var pypiTop, aptTop []topPkg
-	h.db.Model(&db.AccessLog{}).
-		Select("package_name, COUNT(*) as hit_count").
-		Where("adapter_type = ? AND package_name != ''", "pypi").
-		Group("package_name").Order("hit_count DESC").Limit(10).
-		Scan(&pypiTop)
-	h.db.Model(&db.AccessLog{}).
-		Select("package_name, COUNT(*) as hit_count").
-		Where("adapter_type = ? AND package_name != ''", "apt").
-		Group("package_name").Order("hit_count DESC").Limit(10).
-		Scan(&aptTop)
+	if h.useRollup {
+		h.db.Table("access_log_package_daily").
+			Select("package_name, COALESCE(SUM(request_count),0) AS hit_count").
+			Where("adapter_type = ? AND package_name != ''", "pypi").
+			Group("package_name").Order("hit_count DESC").Limit(10).
+			Scan(&pypiTop)
+		h.db.Table("access_log_package_daily").
+			Select("package_name, COALESCE(SUM(request_count),0) AS hit_count").
+			Where("adapter_type = ? AND package_name != ''", "apt").
+			Group("package_name").Order("hit_count DESC").Limit(10).
+			Scan(&aptTop)
+	} else {
+		h.db.Model(&db.AccessLog{}).
+			Select("package_name, COUNT(*) as hit_count").
+			Where("adapter_type = ? AND package_name != ''", "pypi").
+			Group("package_name").Order("hit_count DESC").Limit(10).
+			Scan(&pypiTop)
+		h.db.Model(&db.AccessLog{}).
+			Select("package_name, COUNT(*) as hit_count").
+			Where("adapter_type = ? AND package_name != ''", "apt").
+			Group("package_name").Order("hit_count DESC").Limit(10).
+			Scan(&aptTop)
+	}
 
 	// Extra indexes
 	extraIdxs := make([]gin.H, 0, len(h.extraIndexes))

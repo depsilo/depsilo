@@ -71,11 +71,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Model Context Protocol endpoint — JSON-RPC 2.0 over Streamable HTTP.
 	// AI clients (Claude Code, Cursor, etc.) POST initialize / tools/list /
 	// tools/call / resources/read / prompts/get here.
-	mcpHandler := public.NewMCPHandler(deps.DB, deps.Ecosystems)
+	mcpHandler := public.NewMCPHandler(deps.DB, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled)
 	r.POST("/mcp", mcpHandler.Handle)
 
 	// Public stats
-	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.ExtraIndexes)
+	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.ExtraIndexes, deps.Config.AccessLog.RollupEnabled)
 	apiV1.GET("/stats", statsHandler.GetStats)
 	apiV1.GET("/latency-series", statsHandler.GetLatencySeries)
 
