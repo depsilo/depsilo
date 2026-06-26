@@ -79,6 +79,13 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1.GET("/stats", statsHandler.GetStats)
 	apiV1.GET("/latency-series", statsHandler.GetLatencySeries)
 
+	// Live "Now" strip — polled every 5s by the dashboard. Small JSON,
+	// focused on liveness signal (rate / hit_rate / upstream health /
+	// last activity / 30-min sparkline). Reuses the StatsHandler's
+	// startTime so uptime values agree across endpoints.
+	nowHandler := public.NewNowHandler(deps.DB, deps.Pools, statsHandler.StartTime())
+	apiV1.GET("/now", nowHandler.Get)
+
 	// Public packages
 	pkgHandler := public.NewPackagesHandler(deps.DB)
 	apiV1.GET("/packages", pkgHandler.List)

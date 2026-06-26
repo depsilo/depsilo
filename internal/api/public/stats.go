@@ -38,6 +38,11 @@ func NewStatsHandler(database *gorm.DB, storage cache.Storage, pools map[string]
 	}
 }
 
+// StartTime exposes the process start instant captured at handler
+// construction. Used by NewNowHandler so /api/v1/now's uptime agrees
+// with /api/v1/stats.
+func (h *StatsHandler) StartTime() time.Time { return h.startTime }
+
 // kpiSeries returns 12 five-minute buckets covering the last hour,
 // aggregated from the access_logs table.
 func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
