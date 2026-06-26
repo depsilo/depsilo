@@ -74,6 +74,9 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&CacheEntry{},
 		&AccessLog{},
+		&AccessLogHourly{},
+		&AccessLogDaily{},
+		&AccessLogPackageDaily{},
 		&UpstreamRecord{},
 		&User{},
 		&APIToken{},

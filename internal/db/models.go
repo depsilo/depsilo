@@ -32,6 +32,60 @@ type AccessLog struct {
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 }
 
+// AccessLogHourly is the hourly rollup that powers today/recent dashboards.
+// (date, hour, adapter_type, hit, upstream) is the composite PK so UPSERT
+// can accumulate counters. PackageName is intentionally absent: combined
+// with the other dimensions it would grow this table by 4-5 orders of
+// magnitude. Package grain lives in AccessLogPackageDaily.
+// All times are UTC, matching db.Open's NowFunc.
+type AccessLogHourly struct {
+	Date         string    `gorm:"size:10;primaryKey" json:"date"`
+	Hour         int       `gorm:"primaryKey" json:"hour"`
+	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	Hit          bool      `gorm:"primaryKey" json:"hit"`
+	Upstream     string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
+	RequestCount int64     `json:"request_count"`
+	TotalBytes   int64     `json:"total_bytes"`
+	SumLatencyMs int64     `json:"sum_latency_ms"`
+	ErrorCount   int64     `json:"error_count"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// AccessLogDaily is rolled up by the nightly compactor from
+// AccessLogHourly. It powers 7d/30d/90d dashboards without scanning the
+// hourly table's 24x rows per day.
+type AccessLogDaily struct {
+	Date         string    `gorm:"size:10;primaryKey" json:"date"`
+	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	Hit          bool      `gorm:"primaryKey" json:"hit"`
+	Upstream     string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
+	RequestCount int64     `json:"request_count"`
+	TotalBytes   int64     `json:"total_bytes"`
+	SumLatencyMs int64     `json:"sum_latency_ms"`
+	ErrorCount   int64     `json:"error_count"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// AccessLogPackageDaily is the package-grain daily rollup, kept separate
+// to bound row count when distinct package_name is large. Powers
+// top_packages views.
+type AccessLogPackageDaily struct {
+	Date         string    `gorm:"size:10;primaryKey" json:"date"`
+	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	PackageName  string    `gorm:"size:256;primaryKey" json:"package_name"`
+	Hit          bool      `gorm:"primaryKey" json:"hit"`
+	RequestCount int64     `json:"request_count"`
+	TotalBytes   int64     `json:"total_bytes"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// TableName overrides — GORM pluralizes by default and would turn these
+// into access_log_hourlies / access_log_dailies / access_log_package_dailies,
+// which break the raw SQL written against the singular form.
+func (AccessLogHourly) TableName() string       { return "access_log_hourly" }
+func (AccessLogDaily) TableName() string        { return "access_log_daily" }
+func (AccessLogPackageDaily) TableName() string { return "access_log_package_daily" }
+
 type UpstreamRecord struct {
 	ID            uint      `gorm:"primarykey" json:"id"`
 	AdapterType   string    `gorm:"size:16;index;uniqueIndex:idx_upstream_name_type" json:"adapter_type"`
