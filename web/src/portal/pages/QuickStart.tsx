@@ -7,6 +7,7 @@ import ConfigurePane from '@/portal/components/ConfigurePane'
 import AllInOnePane from '@/portal/components/AllInOnePane'
 import CopyButton from '@/portal/components/CopyButton'
 import EcosystemLogoWall from '@/portal/components/EcosystemLogoWall'
+import IntegrationPromptButton from '@/portal/components/IntegrationPromptButton'
 
 function EndpointInline({ endpoint }: { endpoint: string }) {
   return (
@@ -81,7 +82,10 @@ export default function QuickStart() {
             {t('quickstart.subtitle')}
           </p>
         </div>
-        <EndpointInline endpoint={endpoint} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <IntegrationPromptButton />
+          <EndpointInline endpoint={endpoint} />
+        </div>
       </div>
 
       <EcosystemLogoWall selected={language} onSelect={setLanguage} />

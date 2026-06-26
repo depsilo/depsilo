@@ -61,6 +61,13 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1.GET("/discover", discoverHandler.Discover)
 	apiV1.GET("/agent-prompt", discoverHandler.AgentPrompt)
 
+	// Brand-neutral project-integration prompt: users paste this into their
+	// coding LLM and the LLM edits Dockerfile/CI/build scripts to route
+	// installs through this mirror. Different audience from agent-prompt
+	// (which configures a developer's local machine).
+	integrationPromptHandler := public.NewIntegrationPromptHandler()
+	apiV1.GET("/integration-prompt", integrationPromptHandler.Get)
+
 	// Model Context Protocol endpoint — JSON-RPC 2.0 over Streamable HTTP.
 	// AI clients (Claude Code, Cursor, etc.) POST initialize / tools/list /
 	// tools/call / resources/read / prompts/get here.

@@ -37,6 +37,8 @@ func Run(cmd string, args []string) int {
 		return runDoctor(args)
 	case "init-agent":
 		return runInitAgent(args)
+	case "prompt":
+		return runPrompt(args)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		return 1
@@ -57,6 +59,9 @@ Commands:
     doctor [--json]             Run end-to-end health diagnosis with hints
     init-agent [--format ...]   Write CLAUDE.md / AGENTS.md / .cursorrules so
                                 AI coding agents auto-detect Depsilo
+    prompt [--url ...]          Print the brand-neutral project-integration
+                                prompt for an AI coding agent (Dockerfile/CI/
+                                build-script rewrite). Pipe into your agent.
     version [--json]            Print version
     activate [--shell|--eco]    Print shell environment configuration
     warmup <eco> <pkg> [pkg...] Pre-fetch packages into cache

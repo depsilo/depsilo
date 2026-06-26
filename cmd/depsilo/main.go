@@ -20,7 +20,7 @@ func main() {
 		switch cmd {
 		case "serve", "server":
 			// Fall through to server mode
-		case "status", "doctor", "init-agent", "activate", "start", "stop", "warmup", "flush", "backup", "restore", "version":
+		case "status", "doctor", "init-agent", "prompt", "activate", "start", "stop", "warmup", "flush", "backup", "restore", "version":
 			os.Exit(cli.Run(cmd, os.Args[2:]))
 		case "help", "--help", "-h":
 			cli.PrintHelp()
