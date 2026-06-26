@@ -49,8 +49,13 @@ export default function IntegrationPromptButton() {
         {t('quickstart.aiIntegrationButton')}
       </button>
 
-      <ModalV2 open={open} onClose={() => setOpen(false)} title={t('quickstart.aiIntegrationTitle')}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 560, maxWidth: 760 }}>
+      <ModalV2
+        open={open}
+        onClose={() => setOpen(false)}
+        title={t('quickstart.aiIntegrationTitle')}
+        width={720}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.55 }}>
             {t('quickstart.aiIntegrationDesc')}
           </p>
@@ -67,10 +72,10 @@ export default function IntegrationPromptButton() {
               borderRadius: 6,
             }}
           >
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1, minWidth: 0 }}>
               {t('quickstart.aiIntegrationHowto')}
             </span>
-            {prompt ? <CopyButton text={prompt} /> : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+            {prompt && <CopyButton text={prompt} />}
           </div>
 
           <pre
@@ -84,15 +89,15 @@ export default function IntegrationPromptButton() {
               background: 'var(--bg-soft)',
               border: '0.5px solid var(--border)',
               borderRadius: 6,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
+              whiteSpace: 'pre',
               maxHeight: '60vh',
               overflow: 'auto',
+              minHeight: 120,
             }}
           >
-            {isLoading && t('quickstart.loading')}
-            {error && t('quickstart.aiIntegrationError')}
-            {prompt}
+            {isLoading && <span style={{ color: 'var(--text-muted)' }}>{t('quickstart.loading')}</span>}
+            {error && <span style={{ color: 'var(--danger-text)' }}>{t('quickstart.aiIntegrationError')}</span>}
+            {prompt && <code style={{ display: 'block' }}>{prompt}</code>}
           </pre>
         </div>
       </ModalV2>

@@ -6,9 +6,14 @@ interface ModalV2Props {
   onClose: () => void
   title: string
   children: ReactNode
+  /**
+   * Max width of the dialog in px. Default 440 (narrow forms). Pass a larger
+   * value (e.g. 720) for long-form content like prompts or code blocks.
+   */
+  width?: number
 }
 
-export default function ModalV2({ open, onClose, title, children }: ModalV2Props) {
+export default function ModalV2({ open, onClose, title, children, width = 440 }: ModalV2Props) {
   const titleId = useId()
 
   useEffect(() => {
@@ -50,7 +55,7 @@ export default function ModalV2({ open, onClose, title, children }: ModalV2Props
         aria-labelledby={titleId}
         className="modal-card relative w-full"
         style={{
-          maxWidth: 440,
+          maxWidth: width,
           background: 'var(--bg-card)',
           border: '0.5px solid var(--border)',
           borderRadius: 14,
