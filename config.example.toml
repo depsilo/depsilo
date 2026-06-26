@@ -23,6 +23,16 @@ ttl_index    = "1h"         # 索引元数据刷新间隔（过期后后台静�
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
+[access_log]
+# Async rollup pipeline for the access_logs table. See
+# docs/specs/2026-06-26-access-log-rollup.md.
+rollup_enabled        = true   # write hourly + package_daily rollups
+batch_size            = 100    # flush after this many rows
+batch_interval        = "5s"   # ...or this much time, whichever first
+backfill_on_start     = true   # one-shot fill rollups from existing rows on boot
+retention_days        = 0      # 0 = keep raw access_logs forever (recommended: 7)
+rollup_retention_days = 0      # 0 = keep rollup tables forever (recommended: 365)
+
 [auth]
 enabled    = true
 jwt_secret = "change-me-in-production"   # ⚠ MUST change before production deployment!

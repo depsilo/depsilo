@@ -28,6 +28,16 @@ func Load() (*Config, error) {
 	v.SetDefault("auth.enabled", true)
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")
+	// Access log rollup. Retention defaults are intentionally 0 (off) until
+	// the rollout has soaked — a later commit raises them to the spec's
+	// recommended 7d/365d. Rollup writes are on by default; flip to false
+	// to fall back to raw-table-only writes if the recorder misbehaves.
+	v.SetDefault("access_log.retention_days", 0)
+	v.SetDefault("access_log.batch_size", 100)
+	v.SetDefault("access_log.batch_interval", "5s")
+	v.SetDefault("access_log.rollup_enabled", true)
+	v.SetDefault("access_log.rollup_retention_days", 0)
+	v.SetDefault("access_log.backfill_on_start", true)
 
 	// Config file path resolution
 	configPath := os.Getenv("DEPSILO_CONFIG")
@@ -99,6 +109,13 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("parse auth.token_ttl: %w", err)
 		}
 		cfg.Auth.TokenTTL = d
+	}
+	if raw := v.GetString("access_log.batch_interval"); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse access_log.batch_interval: %w", err)
+		}
+		cfg.AccessLog.BatchInterval = d
 	}
 
 	// License key from env (overrides config file)

@@ -9,6 +9,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Storage  StorageConfig  `mapstructure:"storage"`
 	Cache    CacheConfig    `mapstructure:"cache"`
+	AccessLog AccessLogConfig `mapstructure:"access_log"`
 	Auth     AuthConfig     `mapstructure:"auth"`
 	PyPI     AdapterConfig  `mapstructure:"pypi"`
 	APT      AdapterConfig  `mapstructure:"apt"`
@@ -75,6 +76,33 @@ type AuthConfig struct {
 	Enabled   bool          `mapstructure:"enabled"`
 	JWTSecret string        `mapstructure:"jwt_secret"`
 	TokenTTL  time.Duration `mapstructure:"token_ttl"`
+}
+
+// AccessLogConfig tunes the access-log rollup pipeline.
+//
+// Behavior summary:
+//   - When RollupEnabled is true, every proxy request is buffered through a
+//     channel and aggregated in memory before being upserted into the
+//     access_log_hourly + access_log_package_daily tables in batches. Raw
+//     rows continue to be written to access_logs so the admin detail page
+//     keeps working.
+//   - RetentionDays and RollupRetentionDays drive a background sweeper that
+//     deletes rows older than the configured horizon. Both default to 0,
+//     which DISABLES the sweep so an operator who upgrades and immediately
+//     panics doesn't lose history. A later commit raises the defaults to
+//     the spec-recommended 7d/365d once the rollout has soaked.
+//   - BatchSize / BatchInterval gate when the recorder flushes its buffer.
+//     Flush triggers on whichever happens first.
+//   - BackfillOnStart drives a one-shot INSERT...SELECT from access_logs
+//     into the rollup tables when they look empty, so the first dashboard
+//     after rollup is enabled isn't blank.
+type AccessLogConfig struct {
+	RetentionDays       int           `mapstructure:"retention_days"`
+	BatchSize           int           `mapstructure:"batch_size"`
+	BatchInterval       time.Duration `mapstructure:"batch_interval"`
+	RollupEnabled       bool          `mapstructure:"rollup_enabled"`
+	RollupRetentionDays int           `mapstructure:"rollup_retention_days"`
+	BackfillOnStart     bool          `mapstructure:"backfill_on_start"`
 }
 
 type AdapterConfig struct {
