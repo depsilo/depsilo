@@ -109,7 +109,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.Use(middleware.AdminRequired())
 
 	// Dashboard
-	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems)
+	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled)
 	adminGroup.GET("/dashboard", dashHandler.GetDashboard)
 	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
 
