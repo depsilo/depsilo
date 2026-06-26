@@ -11,9 +11,10 @@ interface ButtonV2Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 // - ghost: bare, hover lift
 // - danger: outlined danger
 //
-// Active state uses a 98% scale for tactile feedback. Hover backgrounds map to
-// real CSS vars (previous version referenced undefined `surface-container` /
-// `error-container` classes that silently no-op'd).
+// Active state uses scale(0.96) — the canonical "feels right" press value.
+// Transitions list the exact properties we touch (background / color /
+// border-color / transform) rather than `transition-all` which silently
+// animates any future property change too.
 export default function ButtonV2({
   variant = 'primary',
   size = 'md',
@@ -23,7 +24,7 @@ export default function ButtonV2({
   ...rest
 }: ButtonV2Props) {
   const base =
-    'inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] stripe-focus-ring'
+    'inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-[background,color,border-color,filter,transform] duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] stripe-focus-ring'
 
   const sizes = {
     sm: 'text-[12px] px-2.5 py-1 rounded-[5px]',

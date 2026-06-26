@@ -156,7 +156,7 @@ export default function MainLayoutV2() {
             </div>
             <button
               onClick={handleLogout}
-              className="bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-all duration-150 p-1 rounded-[4px] text-[var(--text-soft)] hover:text-[var(--text)]"
+              className="bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-[opacity,color,transform] duration-150 active:scale-[0.96] p-1.5 rounded-[4px] text-[var(--text-soft)] hover:text-[var(--text)]"
               title={t('nav.logout')}
             >
               <Icon name="logout" size="sm" />

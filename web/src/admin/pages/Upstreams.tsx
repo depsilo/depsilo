@@ -136,7 +136,7 @@ export default function UpstreamsV2() {
               {u.id && (
                 <button
                   onClick={() => checkOne(u.id!)}
-                  className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                  className="bg-transparent cursor-pointer p-1.5 rounded-[3px] transition-[opacity,transform] duration-100 opacity-40 hover:opacity-100 active:scale-[0.96]"
                   style={{ color: 'var(--text-soft)' }}
                   title={t('upstreams.checkOne')}
                 >
@@ -145,7 +145,7 @@ export default function UpstreamsV2() {
               )}
               <button
                 onClick={() => openEdit(u as any)}
-                className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                className="bg-transparent cursor-pointer p-1.5 rounded-[3px] transition-[opacity,transform] duration-100 opacity-40 hover:opacity-100 active:scale-[0.96]"
                 style={{ color: 'var(--text-soft)' }}
               >
                 <Icon name="edit" size="sm" />
@@ -153,7 +153,7 @@ export default function UpstreamsV2() {
               {u.id && (
                 <button
                   onClick={() => setDeleteTarget(u.id!)}
-                  className="bg-transparent cursor-pointer p-1 rounded-[3px] transition-opacity duration-100 opacity-40 hover:opacity-100"
+                  className="bg-transparent cursor-pointer p-1.5 rounded-[3px] transition-[opacity,transform] duration-100 opacity-40 hover:opacity-100 active:scale-[0.96]"
                   style={{ color: 'var(--text-soft)' }}
                 >
                   <Icon name="delete" size="sm" />

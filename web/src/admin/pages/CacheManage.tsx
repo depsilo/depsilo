@@ -230,7 +230,7 @@ export default function CacheManageV2() {
                   <td className="py-2 px-3">
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }}
-                      className="bg-transparent cursor-pointer p-1 rounded-[3px] opacity-40 hover:opacity-100 transition-opacity"
+                      className="bg-transparent cursor-pointer p-1.5 rounded-[3px] opacity-40 hover:opacity-100 transition-[opacity,transform] active:scale-[0.96]"
                       style={{ color: 'var(--danger)' }}
                     >
                       <Icon name="delete" size="sm" />

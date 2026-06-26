@@ -136,7 +136,7 @@ function OverviewTab() {
                   </div>
                   <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--bg-soft)' }}>
                     <div
-                      className="h-full rounded-full transition-all duration-300"
+                      className="h-full rounded-full transition-[width] duration-300 ease-out"
                       style={{
                         width: `${(item.count / maxCount) * 100}%`,
                         background: barColors[item.severity] || 'var(--brand)',

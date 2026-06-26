@@ -30,6 +30,7 @@ export default function Segmented({ options, value, onChange }: Props) {
             type="button"
             key={opt.value}
             onClick={() => onChange(opt.value)}
+            className="active:scale-[0.96]"
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
@@ -38,10 +39,14 @@ export default function Segmented({ options, value, onChange }: Props) {
               color: active ? 'var(--text)' : 'var(--text-soft)',
               background: active ? 'var(--bg-card)' : 'transparent',
               border: active ? '0.5px solid var(--border-strong)' : '0.5px solid transparent',
+              // Outer container: borderRadius 8, padding 3.  Inner = 8 - 3 = 5.
+              // Concentric — keep these in sync if the container ever changes.
               borderRadius: 5,
               padding: '4px 10px',
               cursor: 'pointer',
-              transition: 'all 120ms ease',
+              // `transition: all` here used to animate font-weight changes
+              // too, producing a half-pixel jitter as glyph metrics shifted.
+              transition: 'background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
             }}
           >
             {opt.label}

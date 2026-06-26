@@ -37,8 +37,9 @@ function ManagerTabs({
           borderRadius: 6,
           textAlign: 'left',
           cursor: 'pointer',
-          transition: 'all 120ms ease',
+          transition: 'background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
         }}
+        className="active:scale-[0.96]"
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span

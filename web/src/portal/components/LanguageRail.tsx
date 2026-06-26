@@ -19,6 +19,7 @@ export default function LanguageRail({ selected, onSelect }: Props) {
       <button
         type="button"
         onClick={() => onSelect('all')}
+        className="active:scale-[0.96]"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -30,6 +31,7 @@ export default function LanguageRail({ selected, onSelect }: Props) {
           textAlign: 'left',
           cursor: 'pointer',
           width: '100%',
+          transition: 'background 100ms ease, border-color 100ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
         }}
       >
         <div
@@ -91,6 +93,7 @@ export default function LanguageRail({ selected, onSelect }: Props) {
               key={lang.id}
               type="button"
               onClick={() => onSelect(lang.id)}
+              className="active:scale-[0.96]"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -101,7 +104,7 @@ export default function LanguageRail({ selected, onSelect }: Props) {
                 borderLeft: active ? '2px solid var(--brand)' : '2px solid transparent',
                 borderBottom:
                   i === LANGUAGES.length - 1 ? 'none' : '0.5px solid var(--border)',
-                transition: 'background 100ms ease',
+                transition: 'background 100ms ease, border-color 100ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
                 cursor: 'pointer',
                 width: '100%',
               }}

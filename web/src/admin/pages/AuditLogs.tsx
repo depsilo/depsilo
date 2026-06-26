@@ -141,7 +141,7 @@ export default function AuditLogsV2() {
             <button
               key={r}
               onClick={() => setTimeRange(r)}
-              className="px-2.5 py-1 text-[11px] rounded-[4px] transition-colors duration-150 cursor-pointer"
+              className="px-2.5 py-1 text-[11px] rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
               style={{
                 background: timeRange === r ? 'var(--brand)' : 'transparent',
                 color: timeRange === r ? 'white' : 'var(--text-soft)',

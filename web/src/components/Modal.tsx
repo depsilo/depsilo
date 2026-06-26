@@ -108,9 +108,8 @@ export default function ModalV2({ open, onClose, title, children, width = 440 }:
             letterSpacing: '-0.02em',
             lineHeight: 1.25,
             color: 'var(--text)',
-            // Balanced wrapping prevents an orphaned single word on the
-            // second line — common in modal titles like "Edit upstream".
-            textWrap: 'balance',
+            // Balanced wrapping comes from the root rule in index.css
+            // (`@layer base { h1, h2, h3, h4 { text-wrap: balance } }`).
           }}
         >
           {title}

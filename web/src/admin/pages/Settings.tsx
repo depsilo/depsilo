@@ -89,7 +89,7 @@ export default function SettingsV2() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-2 w-full px-3 py-2 text-[13px] font-[500] rounded-[4px] transition-colors duration-150 cursor-pointer bg-transparent text-left"
+              className="flex items-center gap-2 w-full px-3 py-2 text-[13px] font-[500] rounded-[4px] transition-[background,color,transform] duration-150 active:scale-[0.96] cursor-pointer bg-transparent text-left"
               style={{
                 color: active ? 'var(--text)' : 'var(--text-soft)',
                 background: active ? 'var(--brand-soft)' : 'transparent',
