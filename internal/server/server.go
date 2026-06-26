@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/accesslog"
 	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/apt"
 	"depsilo/internal/adapter/cargo"
@@ -73,6 +74,28 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 
 	// Backfill PackageName for existing cache entries
 	backfillPackageNames(database)
+
+	// Access log rollup pipeline: one-shot backfill from access_logs into
+	// the rollup tables (no-op if already populated), then start the
+	// async batched recorder so future requests stream through it. The
+	// adapter's LogAccess switches to recorder.Record once SetRecorder
+	// runs; until then it writes raw rows synchronously.
+	if cfg.AccessLog.BackfillOnStart {
+		if err := accesslog.BackfillIfEmpty(ctx, database); err != nil {
+			zap.L().Warn("access log rollup backfill failed", zap.Error(err))
+		}
+	}
+	accessRecorder := accesslog.NewRecorder(database, accesslog.Config{
+		Enabled:       cfg.AccessLog.RollupEnabled,
+		BatchSize:     cfg.AccessLog.BatchSize,
+		BatchInterval: cfg.AccessLog.BatchInterval,
+	})
+	adapter.SetRecorder(accessRecorder)
+	go accesslog.StartCompactor(ctx, database)
+	go accesslog.StartRetention(ctx, database, accesslog.RetentionConfig{
+		RawDays:    cfg.AccessLog.RetentionDays,
+		RollupDays: cfg.AccessLog.RollupRetentionDays,
+	})
 
 	// Initialize storage
 	var storage cache.Storage
@@ -337,6 +360,19 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		Addr:    addr,
 		Handler: r,
 	}
+
+	// Flush the access-log recorder during graceful shutdown so the last
+	// in-memory batch lands in SQLite instead of being lost. RegisterOnShutdown
+	// callbacks run inside Server.Shutdown() before it returns, exactly the
+	// hook we want. A 5s cap keeps a stuck flush from blocking shutdown
+	// indefinitely.
+	srv.RegisterOnShutdown(func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := accessRecorder.Close(flushCtx); err != nil {
+			zap.L().Warn("access log recorder close failed", zap.Error(err))
+		}
+	})
 
 	go func() {
 		zap.L().Info("starting server", zap.String("addr", addr))
