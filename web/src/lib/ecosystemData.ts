@@ -147,7 +147,7 @@ export const LANGUAGES: Language[] = [
         ],
         persistent: { file: 'pyproject.toml', lang: 'toml',
           body: '[[tool.uv.index]]\nname = "depsilo"\nurl = "{URL}/pypi/simple/"\ndefault = true' },
-        verify:     { lang: 'sh', body: 'uv pip install --index-url {URL}/pypi/simple/ --dry-run six' },
+        verify:     { lang: 'sh', body: 'uv pip compile --index-url {URL}/pypi/simple/ - <<< "six"' },
         paths: [
           { os: 'Per-project', path: './pyproject.toml' },
           { os: 'User config', path: '~/.config/uv/uv.toml' },
@@ -226,13 +226,14 @@ export const LANGUAGES: Language[] = [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
         ],
         persistent: { file: 'pyproject.toml', lang: 'toml',
-          body: '[[tool.pdm.source]]\nname = "depsilo"\nurl = "{URL}/pypi/simple/"\nverify_ssl = false' },
+          body: '[[tool.pdm.source]]\nname = "pypi"\nurl = "{URL}/pypi/simple/"\nverify_ssl = false' },
         verify:     { lang: 'sh', body: 'pdm config pypi.url' },
         paths: [
           { os: 'Per-project', path: './pyproject.toml' },
           { os: 'User config', path: '~/.config/pdm/config.toml' },
         ],
         tutorial: [
+          'Using name = "pypi" overrides the built-in default PyPI source; any other name only appends an extra source and PDM may still resolve from pypi.org.',
           'pdm config pypi.url writes to user-level config, affecting all projects.',
           'For per-project setup, add [[tool.pdm.source]] to pyproject.toml.',
           'Run pdm lock to regenerate the lockfile with the new source.',
@@ -240,22 +241,24 @@ export const LANGUAGES: Language[] = [
       },
       {
         id: 'conda', name: 'Conda', hint: 'Anaconda channels',
-        quick:      { lang: 'sh', body: 'conda install -c {URL}/conda/main numpy' },
+        quick:      { lang: 'sh', body: 'conda config --set repodata_use_zst false\nconda install --override-channels -c {URL}/conda/pkgs/main numpy' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'conda install -c {URL}/conda/main numpy' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'conda config --set repodata_use_zst false\nconda install --override-channels -c {URL}/conda/pkgs/main numpy' },
         ],
         persistent: { file: '~/.condarc', lang: 'yaml',
-          body: 'channels:\n  - {URL}/conda/main\n  - {URL}/conda/conda-forge\ndefault_channels: []' },
-        verify:     { lang: 'sh', body: 'conda config --show channels' },
+          body: 'channels:\n  - {URL}/conda/pkgs/main\n  - {URL}/conda/pkgs/r\ndefault_channels: []\nrepodata_use_zst: false' },
+        verify:     { lang: 'sh', body: 'conda config --show channels && conda config --show repodata_use_zst' },
         paths: [
           { os: 'macOS / Linux', path: '~/.condarc' },
           { os: 'Windows',       path: '%USERPROFILE%\\.condarc' },
           { os: 'Per-env',       path: '$CONDA_PREFIX/.condarc' },
         ],
         tutorial: [
-          'Replace the default_channels list to fully route through Depsilo.',
-          'Use conda config --add channels to merge instead of replace.',
-          'Run conda info to confirm the active channel order.',
+          'Anaconda upstreams expose channels under /pkgs/<name>/ (e.g. /pkgs/main, /pkgs/r); Depsilo passes the path through verbatim, so the channel URL must include pkgs/.',
+          'repodata_use_zst = false disables the zstd-compressed repodata fetch — many mirrors do not publish the .zst variant and conda will otherwise hit 404.',
+          'For conda-forge, configure a separate conda upstream pointing at https://conda.anaconda.org and use channel URL {URL}/conda/conda-forge.',
+          'Replace the default_channels list (set to []) to fully route through Depsilo and prevent fallback to repo.anaconda.com.',
+          '--override-channels in the install command bypasses .condarc entirely — useful for one-off tests.',
         ],
       },
     ],
@@ -351,10 +354,8 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'maven', name: 'Maven', hint: 'Apache Maven',
-        quick:      { lang: 'sh', body: 'mvn -Dmaven.repo.remote={URL}/maven/ install' },
-        methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'mvn -Dmaven.repo.remote={URL}/maven/ install' },
-        ],
+        quick:      { lang: 'sh', body: 'mvn -B dependency:get -Dartifact=com.google.guava:guava:32.1.3-jre' },
+        methods: [],
         persistent: { file: '~/.m2/settings.xml', lang: 'xml',
           body: '<settings>\n  <mirrors>\n    <mirror>\n      <id>depsilo</id>\n      <url>{URL}/maven/</url>\n      <mirrorOf>*</mirrorOf>\n    </mirror>\n  </mirrors>\n</settings>' },
         verify:     { lang: 'sh', body: 'mvn help:effective-settings | grep depsilo' },
@@ -363,6 +364,7 @@ export const LANGUAGES: Language[] = [
           { os: 'Global', path: '$M2_HOME/conf/settings.xml' },
         ],
         tutorial: [
+          'Maven has no built-in command-line flag to override the remote repository — mirrors must be configured in settings.xml.',
           'mirrorOf="*" makes Depsilo the mirror for every declared repository.',
           'Use !central in mirrorOf to exclude specific repos.',
           'Verify with mvn help:effective-settings.',
@@ -370,10 +372,8 @@ export const LANGUAGES: Language[] = [
       },
       {
         id: 'gradle', name: 'Gradle', hint: 'Build tool',
-        quick:      { lang: 'sh', body: 'gradle build -Dorg.gradle.repositoryMirrorUrl={URL}/maven/' },
-        methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'gradle build -Dorg.gradle.repositoryMirrorUrl={URL}/maven/' },
-        ],
+        quick:      { lang: 'sh', body: 'gradle build --refresh-dependencies' },
+        methods: [],
         persistent: { file: '~/.gradle/init.gradle', lang: 'groovy',
           body: 'allprojects {\n  repositories {\n    maven { url "{URL}/maven/" }\n  }\n}' },
         verify:     { lang: 'sh', body: 'gradle dependencies --refresh-dependencies' },
@@ -382,8 +382,9 @@ export const LANGUAGES: Language[] = [
           { os: 'Per-project', path: 'build.gradle.kts (repositories block)' },
         ],
         tutorial: [
+          'Gradle has no built-in CLI flag to override repository URLs — use an init.gradle script instead.',
           'init.gradle is applied to every project on this machine.',
-          'For per-project setup, add maven(url = "{URL}/maven/") to repositories.',
+          'For per-project setup, add maven { url "{URL}/maven/" } to the repositories block in build.gradle(.kts).',
           'Use --refresh-dependencies to bypass the local cache for verification.',
         ],
       },
@@ -411,12 +412,12 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'cargo', name: 'Cargo', hint: 'Rust package manager',
-        quick:      { lang: 'sh', body: 'cargo install --index {URL}/cargo/index ripgrep' },
+        quick:      { lang: 'sh', body: 'cargo install --index sparse+{URL}/crates/ ripgrep' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'cargo install --index {URL}/crates/ ripgrep' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'cargo install --index sparse+{URL}/crates/ ripgrep' },
         ],
         persistent: { file: '~/.cargo/config.toml', lang: 'toml',
-          body: '[source.crates-io]\nreplace-with = "depsilo"\n\n[source.depsilo]\nregistry = "{URL}/cargo/index"' },
+          body: '[source.crates-io]\nreplace-with = "depsilo"\n\n[source.depsilo]\nregistry = "sparse+{URL}/crates/"' },
         verify:     { lang: 'sh', body: 'cargo fetch' },
         paths: [
           { os: 'User',        path: '~/.cargo/config.toml' },
@@ -424,7 +425,8 @@ export const LANGUAGES: Language[] = [
         ],
         tutorial: [
           'replace-with = "depsilo" overrides crates.io for every fetch.',
-          'Cargo expects a sparse index by default; the URL above already points to the sparse format.',
+          'The sparse+ prefix tells Cargo to use the HTTP sparse protocol (Cargo 1.68+ default); without it Cargo falls back to git and the proxy will not work.',
+          'Depsilo serves the sparse index at /crates/ (not /cargo/).',
           'Run cargo fetch to populate the local cache without building.',
         ],
       },
@@ -478,56 +480,60 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'docker', name: 'Docker', hint: 'Daemon registry mirror',
-        quick:      { lang: 'sh', body: 'docker pull {HOST}/docker/library/alpine:3.19' },
+        quick:      { lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'docker pull {HOST}/docker/library/alpine:3.19' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
         ],
         persistent: { file: '/etc/docker/daemon.json', lang: 'json',
-          body: '{\n  "registry-mirrors": ["{URL}/docker/"]\n}' },
+          body: '{\n  "registry-mirrors": ["{URL}"],\n  "insecure-registries": ["{HOST}"]\n}' },
         verify:     { lang: 'sh', body: 'docker info | grep -A1 "Registry Mirrors"' },
         paths: [
           { os: 'Linux',          path: '/etc/docker/daemon.json' },
           { os: 'Docker Desktop', path: '~/.docker/daemon.json (via Settings → Docker Engine)' },
         ],
         tutorial: [
+          'Depsilo exposes the OCI Distribution v2 API at the service root (/v2/), so the mirror URL is just {URL} — no /docker/ suffix.',
+          'insecure-registries is required when Depsilo is served over plain HTTP (typical for LAN deployments).',
           'After editing daemon.json, restart Docker: sudo systemctl restart docker.',
           'On Docker Desktop, paste the JSON into Settings → Docker Engine and click Apply & Restart.',
-          'Mirrors only apply to docker.io — explicit pulls from {HOST}/docker/… work without daemon changes.',
+          'Mirrors only apply to docker.io — explicit pulls from {HOST}/… work without daemon changes.',
         ],
       },
       {
         id: 'containerd', name: 'containerd', hint: 'CRI mirror',
-        quick:      { lang: 'sh', body: 'crictl pull {HOST}/docker/library/alpine:3.19' },
+        quick:      { lang: 'sh', body: 'crictl pull {HOST}/library/alpine:3.19' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'crictl pull {HOST}/docker/library/alpine:3.19' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'crictl pull {HOST}/library/alpine:3.19' },
         ],
         persistent: { file: '/etc/containerd/config.toml', lang: 'toml',
-          body: '[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]\n  endpoint = ["{URL}/docker/"]' },
-        verify:     { lang: 'sh', body: 'ctr -n k8s.io image pull {HOST}/docker/library/alpine:3.19' },
+          body: '[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]\n  endpoint = ["{URL}"]' },
+        verify:     { lang: 'sh', body: 'ctr -n k8s.io image pull {HOST}/library/alpine:3.19' },
         paths: [
           { os: 'containerd', path: '/etc/containerd/config.toml' },
           { os: 'k3s',        path: '/etc/rancher/k3s/registries.yaml' },
         ],
         tutorial: [
+          'endpoint is the Depsilo service root ({URL}) — containerd appends /v2/ automatically.',
           'Restart containerd after editing: systemctl restart containerd.',
           'For k3s, write registries.yaml instead — k3s consumes that on start.',
         ],
       },
       {
         id: 'podman', name: 'Podman', hint: 'Daemonless containers',
-        quick:      { lang: 'sh', body: 'podman pull {HOST}/docker/library/alpine:3.19' },
+        quick:      { lang: 'sh', body: 'podman pull {HOST}/library/alpine:3.19' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'podman pull {HOST}/docker/library/alpine:3.19' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'podman pull {HOST}/library/alpine:3.19' },
         ],
         persistent: { file: '/etc/containers/registries.conf', lang: 'toml',
-          body: '[[registry]]\nlocation = "docker.io"\n[[registry.mirror]]\nlocation = "{HOST}/docker"' },
+          body: '[[registry]]\nlocation = "docker.io"\n[[registry.mirror]]\nlocation = "{HOST}"\ninsecure = true' },
         verify:     { lang: 'sh', body: "podman info --format '{{.Registries}}'" },
         paths: [
           { os: 'System', path: '/etc/containers/registries.conf' },
           { os: 'User',   path: '~/.config/containers/registries.conf' },
         ],
         tutorial: [
-          'Podman supports the same TOML format system-wide and per-user.',
+          'Mirror location is the host:port only (no path) — Podman talks the v2 API at the root.',
+          'insecure = true is required when Depsilo is served over plain HTTP.',
           'Mirrors are tried in order, then the original location is used as fallback.',
         ],
       },
@@ -538,19 +544,20 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'helm', name: 'Helm', hint: 'Chart registry',
-        quick:      { lang: 'sh', body: 'helm install --repo {URL}/helm/bitnami nginx bitnami/nginx' },
+        quick:      { lang: 'sh', body: 'helm repo add depsilo {URL}/helm/\nhelm repo update\nhelm search repo depsilo | head' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'helm repo add bitnami {URL}/helm/bitnami\nhelm repo update' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'helm repo add depsilo {URL}/helm/\nhelm repo update' },
         ],
         persistent: { file: 'helm repo add', lang: 'sh',
-          body: 'helm repo add bitnami {URL}/helm/bitnami\nhelm repo update' },
-        verify:     { lang: 'sh', body: 'helm repo list' },
+          body: 'helm repo add depsilo {URL}/helm/\nhelm repo update' },
+        verify:     { lang: 'sh', body: 'helm repo update && helm search repo depsilo | head' },
         paths: [
           { os: 'macOS / Linux', path: '~/.config/helm/repositories.yaml' },
           { os: 'Windows',       path: '%APPDATA%\\helm\\repositories.yaml' },
         ],
         tutorial: [
-          'helm repo add writes to repositories.yaml.',
+          'The repo URL is the Depsilo /helm/ root — Depsilo proxies to the single helm upstream configured on the server (e.g. https://charts.bitnami.com/bitnami).',
+          'Configure one Depsilo helm upstream per chart repository (Bitnami, Jetstack, Prometheus Community, …) — the chart repo URL is determined by the upstream config, not by a path suffix.',
           'Always run helm repo update after adding a new repo.',
         ],
       },
@@ -644,20 +651,23 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'apt', name: 'apt', hint: 'Debian/Ubuntu packages',
-        quick:      { lang: 'sh', body: 'sudo apt -o Acquire::http::Proxy="{URL}/apt/" update' },
+        quick:      { lang: 'sh', body: "sudo sed -i 's|http://archive.ubuntu.com|{URL}/apt/tuna|g; s|http://security.ubuntu.com|{URL}/apt/tuna|g' /etc/apt/sources.list && sudo apt update" },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'sudo apt -o Acquire::http::Proxy="{URL}/apt/" update' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: "sudo sed -i 's|http://archive.ubuntu.com|{URL}/apt/tuna|g; s|http://security.ubuntu.com|{URL}/apt/tuna|g' /etc/apt/sources.list" },
         ],
-        persistent: { file: '/etc/apt/apt.conf.d/99-depsilo', lang: 'conf',
-          body: 'Acquire::http::Proxy "{URL}/apt/";\nAcquire::https::Proxy "{URL}/apt/";' },
-        verify:     { lang: 'sh', body: 'apt-config dump | grep Proxy' },
+        persistent: { file: '/etc/apt/sources.list', lang: 'conf',
+          body: 'deb {URL}/apt/tuna/ubuntu jammy main restricted universe multiverse\ndeb {URL}/apt/tuna/ubuntu jammy-updates main restricted universe multiverse\ndeb {URL}/apt/tuna/ubuntu jammy-security main restricted universe multiverse' },
+        verify:     { lang: 'sh', body: 'sudo apt update && apt-cache policy | head' },
         paths: [
-          { os: 'System',          path: '/etc/apt/apt.conf.d/99-depsilo' },
-          { os: 'Per-user (rare)', path: '~/.aptconfig' },
+          { os: 'Debian/Ubuntu', path: '/etc/apt/sources.list' },
+          { os: 'Modern Ubuntu', path: '/etc/apt/sources.list.d/ubuntu.sources' },
         ],
         tutorial: [
-          'Files in apt.conf.d are merged in lexical order — 99- ensures yours wins.',
-          'After editing, run sudo apt update to verify the proxy is consulted.',
+          'Depsilo proxies APT as a reverse proxy — you must replace the host in sources.list, not set Acquire::http::Proxy (which is for forward proxies).',
+          'The path segment after /apt/ (tuna in this example) is the upstream name configured on the Depsilo server. Run depsilo config show or check the admin UI to see your upstream names.',
+          'After /apt/<upstream-name>/, the path mirrors the upstream layout (so /ubuntu/dists/... for an upstream pointed at https://mirrors.tuna.tsinghua.edu.cn).',
+          'Depsilo passes the response body through untouched so GPG signature verification keeps working.',
+          'Replace jammy with your release codename (focal, bookworm, etc) — check with lsb_release -cs.',
         ],
       },
     ],
@@ -692,18 +702,19 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'composer', name: 'Composer', hint: 'PHP package manager',
-        quick:      { lang: 'sh', body: 'composer config repositories.packagist composer {URL}/composer/' },
+        quick:      { lang: 'sh', body: 'composer config -g secure-http false\ncomposer config -g repo.packagist composer {URL}/composer/' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'composer config -g repositories.packagist composer {URL}/composer/' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'composer config -g secure-http false\ncomposer config -g repo.packagist composer {URL}/composer/' },
         ],
         persistent: { file: '~/.composer/config.json', lang: 'json',
-          body: '{\n  "repositories": {\n    "packagist": {\n      "type": "composer",\n      "url": "{URL}/composer/"\n    }\n  }\n}' },
+          body: '{\n  "config": {\n    "secure-http": false\n  },\n  "repositories": {\n    "packagist": {\n      "type": "composer",\n      "url": "{URL}/composer/"\n    }\n  }\n}' },
         verify:     { lang: 'sh', body: 'composer diagnose' },
         paths: [
           { os: 'User',        path: '~/.composer/config.json' },
           { os: 'Per-project', path: './composer.json (repositories block)' },
         ],
         tutorial: [
+          'secure-http: false is required when Depsilo is served over plain HTTP (typical for LAN deployments) — Composer refuses non-https sources by default.',
           'composer config writes to ~/.composer/config.json by default.',
           'Pass --no-plugins if your project uses plugins that block source switching.',
         ],
@@ -809,20 +820,22 @@ EOF
 # npm / pnpm / yarn
 echo "registry=$DEPSILO/npm/" >> ~/.npmrc
 
-# cargo
+# cargo (sparse+ prefix is required so Cargo uses the HTTP sparse protocol)
 mkdir -p ~/.cargo
 cat >> ~/.cargo/config.toml <<EOF
 [source.crates-io]
 replace-with = "depsilo"
 [source.depsilo]
-registry = "$DEPSILO/cargo/index"
+registry = "sparse+$DEPSILO/crates/"
 EOF
 
 # go
 go env -w GOPROXY="$DEPSILO/go/,direct" GOSUMDB=off
 
-# docker (requires sudo + restart)
-echo '{ "registry-mirrors": ["'"$DEPSILO"'/docker/"] }' | sudo tee /etc/docker/daemon.json
+# docker — registry-mirrors points at the service root; Depsilo serves the
+# OCI v2 API at /v2/, so do NOT append /docker/.
+# insecure-registries is required for plain-HTTP LAN deployments.
+echo "{ \"registry-mirrors\": [\"$DEPSILO\"], \"insecure-registries\": [\"${host}\"] }" | sudo tee /etc/docker/daemon.json
 
 echo "✓ All managers routed through $DEPSILO"`
 }
