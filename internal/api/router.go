@@ -114,7 +114,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
 
 	// Bandwidth report
-	bandwidthHandler := admin.NewBandwidthHandler(deps.DB)
+	bandwidthHandler := admin.NewBandwidthHandler(deps.DB, deps.Config.AccessLog.RollupEnabled)
 	adminGroup.GET("/bandwidth", bandwidthHandler.GetReport)
 
 	// Cache management
