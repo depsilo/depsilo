@@ -131,13 +131,15 @@ const sepStyle: React.CSSProperties = {
 interface NowStripProps {
   /**
    * 'card' (default) — original full-page-card chrome with border + radius.
-   * 'header'         — flat layout for the persistent strip in MainLayout,
-   *                    no border / no card background (its container draws those).
+   * 'topbar'         — single-row, no chrome, no second-row context. Sized
+   *                    to fit inside the 48px MainLayout topbar between the
+   *                    page title and the language/theme controls.
    */
-  variant?: 'card' | 'header'
+  variant?: 'card' | 'topbar'
 }
 
 export default function NowStrip({ variant = 'card' }: NowStripProps) {
+  const isTopbar = variant === 'topbar'
   const { t } = useTranslation()
   const { data } = useQuery<NowData>({
     queryKey: ['admin', 'now'],
@@ -158,16 +160,20 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
     : status === 'degraded' ? t('now.statusDegraded')
     : t('now.statusDown')
 
-  const containerStyle: React.CSSProperties = variant === 'header'
+  const containerStyle: React.CSSProperties = isTopbar
     ? {
         display: 'flex',
         alignItems: 'center',
-        gap: 14,
+        gap: 10,
         padding: 0,
         background: 'transparent',
         border: 'none',
         borderRadius: 0,
-        flexWrap: 'wrap',
+        flexWrap: 'nowrap',
+        // The topbar is 48px; line-height has to fit cleanly.
+        height: 26,
+        minWidth: 0,
+        overflow: 'hidden',
       }
     : {
         display: 'flex',
@@ -244,7 +250,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
         <span style={{ height: 28, flex: 1 }} aria-hidden />
       )}
 
-      {!isEmpty && data?.last_activity && (
+      {!isTopbar && !isEmpty && data?.last_activity && (
         <div
           style={{
             width: '100%',

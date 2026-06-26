@@ -175,8 +175,17 @@ export default function MainLayoutV2() {
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
         }}
       >
-        <h1 className="text-[17px] font-[600] tracking-[-0.015em]" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
-        <div className="flex items-center gap-2.5">
+        <h1 className="text-[17px] font-[600] tracking-[-0.015em] flex-shrink-0" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
+
+        {/* Now strip rides between the page title and the right-side controls.
+            Single-row layout sized to fit the 48px topbar; carries the live
+            status + bandwidth signal on every admin page so the operator
+            never has to navigate just to check liveness. */}
+        <div className="flex-1 min-w-0 mx-6">
+          <NowStrip variant="topbar" />
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-shrink-0">
           <Link
             to="/"
             className="text-[12px] font-[500] no-underline transition-colors duration-150 inline-flex items-center gap-1 text-[var(--text-soft)] hover:text-[var(--text)]"
@@ -189,24 +198,8 @@ export default function MainLayoutV2() {
         </div>
       </header>
 
-      {/* Persistent Now strip — sits below the topbar on every admin page.
-          Status pulse + rolling req/min + bandwidth + upstream rollup live
-          here permanently so the operator never has to navigate to the
-          dashboard just to check liveness. */}
-      <div
-        className="fixed left-[220px] right-0 z-30"
-        style={{
-          top: 48,
-          background: 'var(--bg-page)',
-          borderBottom: '0.5px solid var(--border)',
-          padding: '8px 32px',
-        }}
-      >
-        <NowStrip variant="header" />
-      </div>
-
-      {/* Main content. Padding-top = topbar (48) + Now strip (~56) + breathing */}
-      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 132, background: 'var(--bg-page)' }}>
+      {/* Main content */}
+      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 80, background: 'var(--bg-page)' }}>
         <Outlet />
       </main>
     </div>
