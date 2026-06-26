@@ -100,6 +100,14 @@ export const ecosystemDefaults: EcosystemDefault[] = [
     ],
   },
   {
+    key: 'alpine',
+    label: 'Alpine Linux (apk)',
+    upstreams: [
+      { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn/alpine', priority: 1 },
+      { name: 'official', url: 'https://dl-cdn.alpinelinux.org/alpine', priority: 2 },
+    ],
+  },
+  {
     key: 'helm',
     label: 'Helm (Kubernetes)',
     upstreams: [

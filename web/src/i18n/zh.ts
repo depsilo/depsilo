@@ -53,7 +53,7 @@ const zh = {
       title: '管理后台',
       subtitle: '登录以管理缓存、上游与用户',
       tagline: '本地缓存所有依赖包',
-      taglineSub: '13 种生态 · 一次配置，永久加速',
+      taglineSub: '14 种生态 · 一次配置，永久加速',
       statHitRate: '命中率',
       statRequests: '今日请求',
       statMirrors: '可用镜像',
@@ -412,7 +412,7 @@ const zh = {
     // QuickStart
     quickstart: {
       title: '快速开始',
-      subtitle: '本地缓存所有依赖包 · 13 种生态 · 一次配置，永久加速。',
+      subtitle: '本地缓存所有依赖包 · 14 种生态 · 一次配置，永久加速。',
       allInOne: '一键配置',
       allInOneSubtitle: '全部配置',
       orByLanguage: '或按语言选择',

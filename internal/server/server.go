@@ -22,6 +22,7 @@ import (
 	"depsilo/internal/adapter/goproxy"
 	"depsilo/internal/adapter/helm"
 	"depsilo/internal/adapter/huggingface"
+	"depsilo/internal/adapter/alpine"
 	"depsilo/internal/adapter/maven"
 	"depsilo/internal/adapter/npm"
 	"depsilo/internal/adapter/nuget"
@@ -118,6 +119,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		{"nuget", "/nuget", cfg.NuGet.Upstreams},
 		{"conda", "/conda", cfg.Conda.Upstreams},
 		{"cran", "/cran", cfg.CRAN.Upstreams},
+		{"alpine", "/alpine", cfg.Alpine.Upstreams},
 		{"helm", "/helm", cfg.Helm.Upstreams},
 		{"huggingface", "/huggingface", cfg.HuggingFace.Upstreams},
 	}
@@ -207,7 +209,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		upstream.RestoreFromDB(pool, database)
 	}
 	for _, pool := range allPools {
-		go upstream.StartHealthCheck(ctx, pool, database, 30*time.Second)
+		go upstream.StartHealthCheck(ctx, pool, database, upstream.DefaultProbeInterval)
 	}
 	go upstream.StartLatencyLogCleanup(ctx, database)
 	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
@@ -260,6 +262,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		"nuget":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return nuget.New(cm, s, cc, db) },
 		"conda":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return conda.New(cm, s, cc, db) },
 		"cran":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return cran.New(cm, s, cc, db) },
+		"alpine":   func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return alpine.New(cm, s, cc, db) },
 		"helm":         func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return helm.New(cm, s, cc, db) },
 		"huggingface":  func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return huggingface.New(cm, s, cc, db) },
 	}
@@ -298,7 +301,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		}
 		syncUpstreams(database, "extra:"+idx.Name, idx.Upstreams)
 		upstream.RestoreFromDB(idxPool, database)
-		go upstream.StartHealthCheck(ctx, idxPool, database, 30*time.Second)
+		go upstream.StartHealthCheck(ctx, idxPool, database, upstream.DefaultProbeInterval)
 
 		idxHandler := pypi.NewWithPrefix(cacheMgr, upstream.NewPrioritySelector(idxPool), cfg.Cache, database, "/"+idx.Path, "extra:"+idx.Name)
 		idxHandler.Register(r.Group("/" + idx.Path))

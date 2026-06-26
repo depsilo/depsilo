@@ -32,6 +32,7 @@
 | 10  | Conda      | `/conda/`    | Python 数据科学             | Passthrough        |
 | 11  | CRAN       | `/cran/`     | R                           | Passthrough        |
 | 12  | Helm       | `/helm/`     | Kubernetes Charts           | Passthrough        |
+| 13  | Alpine     | `/alpine/`   | Alpine Linux (apk)          | Passthrough        |
 
 ### 竞品定位
 比 Nexus Repository 更轻量，10 分钟内完成部署，无复杂企业概念。
@@ -401,6 +402,15 @@ type Selector interface {
 - `index.yaml`：短 TTL
 - `.tgz` chart 包：长 TTL（不可变）
 - 客户端配置：`helm repo add depsilo http://HOST:PORT/helm/`
+
+### 4.15a Alpine 适配器要点（internal/adapter/alpine/）
+
+- Passthrough 代理，**不修改任何响应内容**（`APKINDEX.tar.gz` 有签名，改动会破坏 apk 校验）
+- `APKINDEX.tar.gz`、`*.txt`：短 TTL（同 ttl_index）
+- `*.apk` 包文件：长 TTL（不可变，同 ttl_blob）
+- 路由格式：`GET /alpine/*path`，路径直接镜像上游布局（如 `v3.19/main/x86_64/...`）
+- Cache key 规范：`alpine/{完整路径}`
+- 客户端配置：编辑 `/etc/apk/repositories` 指向 `http://HOST:PORT/alpine/v3.19/main`
 
 ### 4.16 GORM 数据模型（internal/db/models.go）
 

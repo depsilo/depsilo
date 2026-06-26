@@ -49,7 +49,7 @@ func (h *UpstreamHandler) Create(c *gin.Context) {
 	}
 	probeInterval := req.ProbeInterval
 	if probeInterval == "" {
-		probeInterval = "30s"
+		probeInterval = "30m"
 	}
 
 	record := db.UpstreamRecord{

@@ -53,7 +53,7 @@ const en = {
       title: 'Admin Panel',
       subtitle: 'Sign in to manage cache, upstreams, and users',
       tagline: 'Cache every dependency, locally',
-      taglineSub: '13 ecosystems. Configure once, accelerate forever.',
+      taglineSub: '14 ecosystems. Configure once, accelerate forever.',
       statHitRate: 'Hit rate',
       statRequests: 'Today',
       statMirrors: 'Mirrors up',
@@ -412,7 +412,7 @@ const en = {
     // QuickStart
     quickstart: {
       title: 'Quick start',
-      subtitle: 'Local cache for every dependency. 13 ecosystems. Configure once, accelerate forever.',
+      subtitle: 'Local cache for every dependency. 14 ecosystems. Configure once, accelerate forever.',
       allInOne: 'All-in-one',
       allInOneSubtitle: 'Configure everything',
       orByLanguage: 'Or by language',

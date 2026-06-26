@@ -146,6 +146,17 @@ url      = "https://cloud.r-project.org"
 priority = 2
 proxy    = "http://127.0.0.1:7890"
 
+[[alpine.upstreams]]
+name     = "tuna"
+url      = "https://mirrors.tuna.tsinghua.edu.cn/alpine"
+priority = 1
+
+[[alpine.upstreams]]
+name     = "official"
+url      = "https://dl-cdn.alpinelinux.org/alpine"
+priority = 2
+proxy    = "http://127.0.0.1:7890"
+
 [[helm.upstreams]]
 name     = "azure-cn"
 url      = "https://mirror.azure.cn/kubernetes/charts"

@@ -9,10 +9,10 @@ import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker'] as const
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker'] as const
 
 interface UpstreamForm { name: string; url: string; priority: number; proxy: string; adapter_type: string; probe_mode: string; probe_interval: string }
-const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi', probe_mode: 'active', probe_interval: '30s' }
+const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi', probe_mode: 'active', probe_interval: '30m' }
 
 export default function UpstreamsV2() {
   const { t } = useTranslation()
@@ -25,9 +25,7 @@ export default function UpstreamsV2() {
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [urlError, setUrlError] = useState('')
 
-  // Health check settings (UI state)
-  const [autoProbe, setAutoProbe] = useState(true)
-  const [probeInterval, setProbeInterval] = useState('30s')
+  // Manual check state
   const [checking, setChecking] = useState(false)
 
   const { data, isLoading } = useQuery({
@@ -98,46 +96,11 @@ export default function UpstreamsV2() {
 
   const isSaving = createMutation.isPending || updateMutation.isPending
 
-  // Inline select style
-  const selStyle: React.CSSProperties = {
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    color: 'var(--text)',
-    borderRadius: 4,
-    padding: '4px 8px',
-    fontSize: 12,
-    outline: 'none',
-    cursor: 'pointer',
-  }
-
   return (
     <div className="space-y-6">
-      {/* Toolbar: health check settings + add button (no box) */}
+      {/* Toolbar: manual check + add button. Periodic probing is configured
+          per-upstream in the edit dialog (default: every 30m). */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Auto probe toggle */}
-        <label className="flex items-center gap-2 cursor-pointer shrink-0">
-          <input
-            type="checkbox"
-            checked={autoProbe}
-            onChange={(e) => setAutoProbe(e.target.checked)}
-            className="h-3.5 w-3.5 rounded"
-            style={{ accentColor: 'var(--brand)' }}
-          />
-          <span className="text-[12px] font-[400]" style={{ color: 'var(--text)' }}>
-            {t('upstreams.autoProbe')}
-          </span>
-        </label>
-
-        {/* Interval selector */}
-        {autoProbe && (
-          <select value={probeInterval} onChange={(e) => setProbeInterval(e.target.value)} style={selStyle}>
-            <option value="15s">15s</option>
-            <option value="30s">30s</option>
-            <option value="1m">1m</option>
-            <option value="5m">5m</option>
-          </select>
-        )}
-
         {/* Manual check */}
         <ButtonV2
           variant="secondary"
@@ -233,6 +196,8 @@ export default function UpstreamsV2() {
               <option value="1m">1m</option>
               <option value="5m">5m</option>
               <option value="10m">10m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
             </SelectV2>
           )}
           <div className="flex justify-end gap-3 pt-2">

@@ -29,6 +29,7 @@ const ECOSYSTEM_OPTIONS = [
   { value: 'nuget', label: 'NuGet' },
   { value: 'conda', label: 'Conda' },
   { value: 'cran', label: 'CRAN' },
+  { value: 'alpine', label: 'Alpine' },
   { value: 'helm', label: 'Helm' },
 ]
 
@@ -489,7 +490,7 @@ function PoliciesTab() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const ecosystems = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm']
+  const ecosystems = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm']
 
   if (isLoading) {
     return (

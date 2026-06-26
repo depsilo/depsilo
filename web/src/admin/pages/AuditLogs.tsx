@@ -10,7 +10,7 @@ import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
 function latencyColor(ms: number): string {
   if (ms < 100) return 'var(--ok)'

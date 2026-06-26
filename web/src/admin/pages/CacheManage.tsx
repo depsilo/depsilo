@@ -14,7 +14,7 @@ import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
 import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'helm', 'docker']
+const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
 export default function CacheManageV2() {
   const { t } = useTranslation()

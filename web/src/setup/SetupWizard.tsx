@@ -73,16 +73,19 @@ export default function SetupWizard() {
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
-      const selectedUpstreams: Record<string, UpstreamDefault[]> = {}
-      for (const key of selectedEcosystems) {
-        selectedUpstreams[key] = upstreams[key] || []
+      const ecosystems: Record<string, { enabled: boolean; upstreams: UpstreamDefault[] }> = {}
+      for (const eco of ecosystemDefaults) {
+        const enabled = selectedEcosystems.has(eco.key)
+        ecosystems[eco.key] = {
+          enabled,
+          upstreams: enabled ? upstreams[eco.key] || [] : [],
+        }
       }
 
       await setupApi.complete({
-        port,
-        storage_path: storagePath,
-        ecosystems: Array.from(selectedEcosystems),
-        upstreams: selectedUpstreams,
+        server: { port },
+        storage: { path: storagePath },
+        ecosystems,
       })
 
       setSubmitting(false)

@@ -21,6 +21,7 @@ type Config struct {
 	NuGet    AdapterConfig  `mapstructure:"nuget"`
 	Conda    AdapterConfig  `mapstructure:"conda"`
 	CRAN     AdapterConfig  `mapstructure:"cran"`
+	Alpine   AdapterConfig  `mapstructure:"alpine"`
 	Helm        AdapterConfig  `mapstructure:"helm"`
 	HuggingFace AdapterConfig  `mapstructure:"huggingface"`
 	Docker      DockerConfig   `mapstructure:"docker"`

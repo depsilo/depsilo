@@ -64,6 +64,7 @@ const RAW_MIRRORS: Omit<MirrorDef, 'series'>[] = [
   { type: 'conda',    p50: 0,   hit: '-',     status: 'failed'   },
   { type: 'cran',     p50: 53,  hit: '90.4%', status: 'healthy'  },
   { type: 'composer', p50: 49,  hit: '92.1%', status: 'healthy'  },
+  { type: 'alpine',   p50: 40,  hit: '94.0%', status: 'healthy'  },
 ]
 
 export const MIRROR_DEFS: MirrorDef[] = RAW_MIRRORS.map((m, idx) => {
@@ -657,6 +658,31 @@ export const LANGUAGES: Language[] = [
         tutorial: [
           'Files in apt.conf.d are merged in lexical order — 99- ensures yours wins.',
           'After editing, run sudo apt update to verify the proxy is consulted.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'alpine', name: 'Alpine', glyph: 'AL', iconAdapter: 'alpine',
+    managers: [
+      {
+        id: 'apk', name: 'apk', hint: 'Alpine Linux package manager',
+        quick:      { lang: 'sh', body: 'apk add --repository {URL}/alpine/v3.19/main curl' },
+        methods: [
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'apk add --repository {URL}/alpine/v3.19/main curl' },
+        ],
+        persistent: { file: '/etc/apk/repositories', lang: 'conf',
+          body: '{URL}/alpine/v3.19/main\n{URL}/alpine/v3.19/community' },
+        verify:     { lang: 'sh', body: 'apk update' },
+        paths: [
+          { os: 'System',    path: '/etc/apk/repositories' },
+          { os: 'Per-call',  path: 'apk add --repository {URL}/alpine/v3.19/main …' },
+        ],
+        tutorial: [
+          'Replace the lines in /etc/apk/repositories with the Depsilo URLs above (keep main + community).',
+          'Match the Alpine version in the path (v3.19, v3.20, edge…) to your release — check /etc/alpine-release.',
+          'APKINDEX.tar.gz is signed; Depsilo passes it through untouched so signature verification still works.',
+          'Run apk update to refresh the index, then apk add <pkg> to install through the cache.',
         ],
       },
     ],

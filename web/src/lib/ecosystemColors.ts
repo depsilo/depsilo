@@ -22,6 +22,7 @@ export const ECOSYSTEM_COLORS: Record<string, string> = {
   nuget:    '#004880',  // NuGet navy
   conda:    '#44a833',  // Anaconda green
   cran:     '#2266b8',  // CRAN blue
+  alpine:   '#0d597f',  // Alpine Linux blue
   helm:     '#0f1689',  // Helm deep blue
   docker:   '#2496ed',  // Docker blue
   huggingface: '#ffd21e', // HF yellow

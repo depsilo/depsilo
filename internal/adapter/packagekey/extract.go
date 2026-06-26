@@ -128,6 +128,21 @@ func ExtractName(adapterType, key string) string {
 			return fname[:idx]
 		}
 		return strings.TrimSuffix(fname, ".tar.gz")
+	case "alpine":
+		// e.g. alpine/v3.19/main/x86_64/py3-foo-1.2.3-r0.apk -> py3-foo
+		if !strings.HasSuffix(key, ".apk") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := strings.TrimSuffix(parts[len(parts)-1], ".apk")
+		// name may contain dashes; the version segment starts at the first
+		// '-' that is followed by a digit.
+		for i := 0; i < len(fname)-1; i++ {
+			if fname[i] == '-' && fname[i+1] >= '0' && fname[i+1] <= '9' {
+				return fname[:i]
+			}
+		}
+		return fname
 	case "nuget":
 		trimmed := strings.TrimPrefix(key, "nuget/")
 		if strings.HasPrefix(trimmed, "v3/package/") {
@@ -248,6 +263,18 @@ func ExtractVersion(adapterType, key string) string {
 		fname = strings.TrimSuffix(fname, ".gem")
 		if idx := strings.LastIndex(fname, "-"); idx > 0 {
 			return fname[idx+1:]
+		}
+	case "alpine":
+		// e.g. alpine/v3.19/main/x86_64/bash-5.2.21-r0.apk -> 5.2.21-r0
+		if !strings.HasSuffix(key, ".apk") {
+			return ""
+		}
+		parts := strings.Split(key, "/")
+		fname := strings.TrimSuffix(parts[len(parts)-1], ".apk")
+		for i := 0; i < len(fname)-1; i++ {
+			if fname[i] == '-' && fname[i+1] >= '0' && fname[i+1] <= '9' {
+				return fname[i+1:]
+			}
 		}
 	case "nuget":
 		parts := strings.Split(strings.TrimPrefix(key, "nuget/"), "/")

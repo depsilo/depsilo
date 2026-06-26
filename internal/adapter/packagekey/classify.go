@@ -29,6 +29,8 @@ func IsPackageFile(adapterType, key string) bool {
 		return strings.HasSuffix(key, ".tar.bz2") || strings.HasSuffix(key, ".conda")
 	case "cran":
 		return strings.HasSuffix(key, ".tar.gz") || strings.HasSuffix(key, ".zip") || strings.HasSuffix(key, ".tgz")
+	case "alpine":
+		return strings.HasSuffix(key, ".apk")
 	case "helm":
 		return strings.HasSuffix(key, ".tgz")
 	case "docker":

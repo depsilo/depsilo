@@ -14,6 +14,13 @@ import (
 	"depsilo/internal/config"
 )
 
+// DefaultProbeInterval is the fallback periodic health-check interval used when
+// an upstream does not specify its own probe_interval. Kept intentionally long
+// so the proxy does not hammer mirrors with frequent probes — latency data also
+// comes from real traffic and on-demand manual checks. Change this single
+// constant to adjust the global default frequency.
+const DefaultProbeInterval = 30 * time.Minute
+
 // Upstream represents a single upstream source with its HTTP client.
 type Upstream struct {
 	Name     string
@@ -59,7 +66,7 @@ func NewPool(cfgs []config.UpstreamConfig) (*Pool, error) {
 		}
 		probeInterval, err := time.ParseDuration(cfg.ProbeInterval)
 		if err != nil || probeInterval <= 0 {
-			probeInterval = 30 * time.Second
+			probeInterval = DefaultProbeInterval
 		}
 		upstreams = append(upstreams, &Upstream{
 			Name:          cfg.Name,

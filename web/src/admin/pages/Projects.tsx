@@ -27,6 +27,7 @@ const ECOSYSTEM_OPTIONS = [
   { value: 'nuget', label: 'NuGet' },
   { value: 'conda', label: 'Conda' },
   { value: 'cran', label: 'CRAN' },
+  { value: 'alpine', label: 'Alpine' },
   { value: 'helm', label: 'Helm' },
 ]
 
