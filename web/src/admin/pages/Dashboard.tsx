@@ -8,7 +8,6 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
-import NowStrip from '@/admin/components/NowStrip'
 import TrendsCard, { type TrendsRange } from '@/admin/components/TrendsCard'
 import EmptyState from '@/components/EmptyState'
 import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
@@ -155,10 +154,7 @@ export default function DashboardV2() {
 
   return (
     <div className="space-y-12">
-      {/* ── Now strip — live liveness signal, polled every 5s ────── */}
-      <NowStrip />
-
-      {/* ── Today metrics row ───────────────────────── */}
+      {/* ── 24h metrics row ─────────────────────────── */}
       <section>
         <div className="grid grid-cols-4 gap-8 py-2">
           {metrics.map((m) => (

@@ -6,7 +6,7 @@ import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import BadgeV2 from '@/components/Badge'
-import StatusDot from '@/components/StatusDot'
+import NowStrip from '@/admin/components/NowStrip'
 import { authApi, statsApi } from '@/lib/api'
 import { formatVersion } from '@/lib/utils'
 
@@ -59,10 +59,6 @@ export default function MainLayoutV2() {
     refetchInterval: 30000,
     staleTime: 30000,
   })
-
-  const serviceStatus = stats?.service?.status ?? 'unknown'
-  const dotStatus: 'healthy' | 'degraded' | 'failed' =
-    serviceStatus === 'healthy' ? 'healthy' : serviceStatus === 'degraded' ? 'degraded' : 'failed'
 
   const monitorItems: NavItem[] = [
     { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
@@ -190,32 +186,27 @@ export default function MainLayoutV2() {
           </Link>
           <LangToggle />
           <ThemeToggle />
-          {/* Status chip — pill with tinted bg matching service health */}
-          <div
-            className="flex items-center gap-1.5 text-[11px] font-mono rounded-[6px] px-2 py-1"
-            style={{
-              background:
-                dotStatus === 'healthy'
-                  ? 'var(--ok-fill)'
-                  : dotStatus === 'degraded'
-                    ? 'var(--warn-fill)'
-                    : 'var(--danger-fill)',
-              color:
-                dotStatus === 'healthy'
-                  ? 'var(--ok-text)'
-                  : dotStatus === 'degraded'
-                    ? 'var(--warn-text)'
-                    : 'var(--danger-text)',
-            }}
-          >
-            <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
-            {dotStatus === 'healthy' ? t('portal.online') : t('portal.offline')}
-          </div>
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 80, background: 'var(--bg-page)' }}>
+      {/* Persistent Now strip — sits below the topbar on every admin page.
+          Status pulse + rolling req/min + bandwidth + upstream rollup live
+          here permanently so the operator never has to navigate to the
+          dashboard just to check liveness. */}
+      <div
+        className="fixed left-[220px] right-0 z-30"
+        style={{
+          top: 48,
+          background: 'var(--bg-page)',
+          borderBottom: '0.5px solid var(--border)',
+          padding: '8px 32px',
+        }}
+      >
+        <NowStrip variant="header" />
+      </div>
+
+      {/* Main content. Padding-top = topbar (48) + Now strip (~56) + breathing */}
+      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 132, background: 'var(--bg-page)' }}>
         <Outlet />
       </main>
     </div>

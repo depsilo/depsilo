@@ -128,7 +128,16 @@ const sepStyle: React.CSSProperties = {
   flexShrink: 0,
 }
 
-export default function NowStrip() {
+interface NowStripProps {
+  /**
+   * 'card' (default) — original full-page-card chrome with border + radius.
+   * 'header'         — flat layout for the persistent strip in MainLayout,
+   *                    no border / no card background (its container draws those).
+   */
+  variant?: 'card' | 'header'
+}
+
+export default function NowStrip({ variant = 'card' }: NowStripProps) {
   const { t } = useTranslation()
   const { data } = useQuery<NowData>({
     queryKey: ['admin', 'now'],
@@ -149,9 +158,18 @@ export default function NowStrip() {
     : status === 'degraded' ? t('now.statusDegraded')
     : t('now.statusDown')
 
-  return (
-    <div
-      style={{
+  const containerStyle: React.CSSProperties = variant === 'header'
+    ? {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        padding: 0,
+        background: 'transparent',
+        border: 'none',
+        borderRadius: 0,
+        flexWrap: 'wrap',
+      }
+    : {
         display: 'flex',
         alignItems: 'center',
         gap: 14,
@@ -160,8 +178,10 @@ export default function NowStrip() {
         border: '0.5px solid var(--border)',
         borderRadius: 'var(--r-card)',
         flexWrap: 'wrap',
-      }}
-    >
+      }
+
+  return (
+    <div style={containerStyle}>
       <style>{breathing}</style>
 
       {/* Status dot + label — always visible */}
