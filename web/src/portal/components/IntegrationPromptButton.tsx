@@ -31,11 +31,12 @@ export default function IntegrationPromptButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        className="active:scale-[0.96]"
         style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
-          padding: '4px 10px',
+          padding: '6px 12px',
           background: 'var(--bg-soft)',
           border: '0.5px solid var(--border)',
           borderRadius: 6,
@@ -43,6 +44,7 @@ export default function IntegrationPromptButton() {
           color: 'var(--text)',
           cursor: 'pointer',
           flexShrink: 0,
+          transition: 'transform 120ms cubic-bezier(0.2, 0, 0, 1), background 120ms ease',
         }}
       >
         <span aria-hidden style={{ fontSize: 13 }}>✦</span>

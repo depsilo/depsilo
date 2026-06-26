@@ -121,6 +121,17 @@ const valueStyle: React.CSSProperties = {
   fontWeight: 600,
   color: 'var(--text)',
   letterSpacing: '-0.01em',
+  // Tabular numerals so the 5-second poll doesn't shift req/min, MB/s,
+  // and upstream-count cells horizontally as their digit widths change.
+  fontVariantNumeric: 'tabular-nums',
+}
+// Small visual nudge for the inline ↑/↓ arrows: pure baseline alignment
+// makes the glyphs sit too low against the digit caps next to them.
+const arrowStyle: React.CSSProperties = {
+  ...valueStyle,
+  display: 'inline-block',
+  transform: 'translateY(-1px)',
+  fontWeight: 700,
 }
 const sepStyle: React.CSSProperties = {
   color: 'var(--border-strong)',
@@ -222,14 +233,14 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
 
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
-            <span style={{ ...valueStyle, color: 'var(--ok-text)' }} aria-hidden>↑</span>
+            <span style={{ ...arrowStyle, color: 'var(--ok-text)' }} aria-hidden>↑</span>
             <span style={valueStyle}>{data.rate.has_data ? formatBps(data.rate.egress_bps) : '—'}</span>
             {t('now.egress')}
           </span>
 
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
-            <span style={{ ...valueStyle, color: 'var(--text-muted)' }} aria-hidden>↓</span>
+            <span style={{ ...arrowStyle, color: 'var(--text-muted)' }} aria-hidden>↓</span>
             <span style={valueStyle}>{data.rate.has_data ? formatBps(data.rate.ingress_bps) : '—'}</span>
             {t('now.ingress')}
           </span>

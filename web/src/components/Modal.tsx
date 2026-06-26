@@ -67,21 +67,25 @@ export default function ModalV2({ open, onClose, title, children, width = 440 }:
         <button
           onClick={onClose}
           aria-label="Close"
+          className="active:scale-[0.96]"
           style={{
             position: 'absolute',
-            top: 14,
-            right: 14,
+            top: 10,
+            right: 10,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 26,
-            height: 26,
+            // Bumped from 26×26 — the previous size left a sub-40px tap target
+            // that mobile/trackpad users routinely missed. Hit area is now
+            // comfortable without crowding the title.
+            width: 34,
+            height: 34,
             background: 'transparent',
             color: 'var(--text-muted)',
             border: 'none',
-            borderRadius: 6,
+            borderRadius: 8,
             cursor: 'pointer',
-            transition: 'background 120ms ease, color 120ms ease',
+            transition: 'background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'var(--bg-hover)'
@@ -98,12 +102,15 @@ export default function ModalV2({ open, onClose, title, children, width = 440 }:
         <h2
           id={titleId}
           style={{
-            margin: '0 36px 14px 0',
+            margin: '0 40px 14px 0',
             fontSize: 17,
             fontWeight: 600,
             letterSpacing: '-0.02em',
             lineHeight: 1.25,
             color: 'var(--text)',
+            // Balanced wrapping prevents an orphaned single word on the
+            // second line — common in modal titles like "Edit upstream".
+            textWrap: 'balance',
           }}
         >
           {title}

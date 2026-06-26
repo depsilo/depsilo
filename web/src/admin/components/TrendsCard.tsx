@@ -216,7 +216,7 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
                   <button
                     key={tb.value}
                     onClick={() => setTab(tb.value)}
-                    className="px-2 py-0.5 text-[11px] font-[500] rounded-[4px] cursor-pointer transition-colors duration-150"
+                    className="px-2.5 py-1 text-[11px] font-[500] rounded-[4px] cursor-pointer active:scale-[0.96] transition-[background,color,border-color,transform] duration-150"
                     style={{
                       background: active ? 'var(--bg-soft)' : 'transparent',
                       color: active ? 'var(--text)' : 'var(--text-soft)',
@@ -237,7 +237,7 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
                   <button
                     key={r.value}
                     onClick={() => onRangeChange(r.value)}
-                    className="px-2 py-0.5 text-[11px] font-[500] rounded-[4px] cursor-pointer transition-colors duration-150"
+                    className="px-2.5 py-1 text-[11px] font-[500] rounded-[4px] cursor-pointer active:scale-[0.96] transition-[background,color,border-color,transform] duration-150"
                     style={{
                       background: active ? 'var(--brand)' : 'transparent',
                       color: active ? 'white' : 'var(--text-soft)',
