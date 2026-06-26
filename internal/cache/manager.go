@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -47,14 +48,29 @@ type SecurityScanner interface {
 //   - If cache exists and is fresh (< TTL): serve immediately (HIT).
 //   - If cache exists but is stale (>= TTL): serve immediately (HIT),
 //     then trigger a background refresh from upstream.
-//   - If cache miss: fetch from upstream, store, serve (MISS).
-//   - If upstream fails on miss but stale cache exists: serve stale (HIT).
+//   - If cache miss: open upstream, stream bytes to the client AND to storage
+//     in parallel (proxy-like first-byte latency). If the client disconnects
+//     mid-stream the upstream→storage pump keeps running so the cache still
+//     fills. DB entry is committed only after storage write succeeds.
+//   - If upstream open fails on miss but stale cache exists: serve stale (HIT).
 type Manager struct {
 	storage         Storage
 	db              *gorm.DB
-	group           singleflight.Group
+	group           singleflight.Group // used by backgroundRefresh only
 	eventBus        *EventBus
 	securityScanner SecurityScanner
+
+	inflightMu sync.Mutex
+	inflight   map[string]*inflightFetch
+}
+
+// inflightFetch tracks a miss-path fetch that is currently streaming. Followers
+// (concurrent requests for the same key) block on done until the storage write
+// commits, then read from cache. Same semantics as a singleflight that releases
+// when storage is durable — not when the leader's client finishes reading.
+type inflightFetch struct {
+	done chan struct{}
+	err  error
 }
 
 // SetSecurityScanner attaches an optional security scanner. Pass nil to detach.
@@ -68,6 +84,7 @@ func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus) *Manager
 		storage:  storage,
 		db:       database,
 		eventBus: eventBus,
+		inflight: make(map[string]*inflightFetch),
 	}
 }
 
@@ -169,94 +186,198 @@ func (m *Manager) Get(ctx context.Context, key string, adapterType string, ttl t
 	return result, nil
 }
 
-// fetchAndStore fetches from upstream via singleflight, stores to cache, returns result.
+// fetchAndStore opens the upstream and returns a reader that streams bytes to
+// the client AS they arrive (proxy-like first-byte latency), while a background
+// goroutine simultaneously drains the same stream into storage and commits the
+// DB entry on success.
+//
+// Concurrency model — a custom inflight tracker (not singleflight.Group) is
+// used because singleflight.Do blocks until its callback returns, which is
+// incompatible with returning the live reader to the leader before the
+// upstream→storage pump is finished. Semantics match the original spec:
+//
+//   - Leader (first request for the key) gets the live stream.
+//   - Followers (concurrent requests for the same key) wait on done, then read
+//     from cache. The done channel is closed only after storage.Put commits and
+//     the DB entry is written — not when the leader's client finishes reading.
+//   - Client disconnect on the leader does NOT abort the pump. The cache still
+//     fills and the DB entry is committed.
+//   - Upstream open failure: synchronous error to leader. Followers, if any,
+//     wake up with the same error and propagate.
+//   - Upstream mid-stream failure: leader's client read surfaces the error;
+//     storage.Put returns error; no DB entry is committed (LocalStorage's
+//     tmp+rename pattern also leaves no orphan file). On the next request the
+//     key is treated as a miss again.
 func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) (*GetResult, error) {
-	type sfResult struct {
-		contentType  string
-		size         int64
-		upstreamName string
+	m.inflightMu.Lock()
+	if flight, ok := m.inflight[key]; ok {
+		m.inflightMu.Unlock()
+		return m.followInflight(ctx, key, flight)
 	}
+	flight := &inflightFetch{done: make(chan struct{})}
+	m.inflight[key] = flight
+	m.inflightMu.Unlock()
 
-	val, err, _ := m.group.Do(key, func() (interface{}, error) {
-		fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer fetchCancel()
-
-		body, contentType, size, upstreamName, err := fetchFn(fetchCtx)
-		if err != nil {
-			return nil, err
-		}
-		defer body.Close()
-
-		cr := NewCountingReader(body)
-
-		// Write to storage (streams directly from upstream)
-		if putErr := m.storage.Put(fetchCtx, key, cr, size, contentType); putErr != nil {
-			zap.L().Warn("cache put failed", zap.String("key", key), zap.Error(putErr))
-		} else {
-			if size <= 0 {
-				size = cr.BytesRead()
-			}
-			// Upsert DB entry (never delete, just update expiry)
-			now := time.Now()
-			entry := db.CacheEntry{
-				Key:          key,
-				AdapterType:  adapterType,
-				StoragePath:  key,
-				Size:         size,
-				HitCount:     0,
-				ContentType:  contentType,
-				PackageName:  packagekey.ExtractName(adapterType, key),
-				ExpiresAt:    now.Add(ttl),
-				LastAccessed: now,
-			}
-			if createErr := m.db.Create(&entry).Error; createErr != nil {
-				// Already exists — update instead
-				m.db.Where("key = ?", key).Updates(map[string]interface{}{
-					"size":          size,
-					"content_type":  contentType,
-					"package_name":  packagekey.ExtractName(adapterType, key),
-					"expires_at":    now.Add(ttl),
-					"last_accessed": now,
-				})
-			}
-		}
-
-		m.publishEvent(key, adapterType, false, size)
-
-		// Trigger async security scan for new packages
-		if m.securityScanner != nil {
-			pkgName := packagekey.ExtractName(adapterType, key)
-			if pkgName != "" {
-				go func() {
-					if err := m.securityScanner.ScanPackage(context.Background(), adapterType, pkgName); err != nil {
-						zap.L().Debug("security scan for new package failed", zap.Error(err))
-					}
-				}()
-			}
-		}
-
-		return &sfResult{contentType: contentType, size: size, upstreamName: upstreamName}, nil
-	})
-
+	// Open upstream synchronously so connect/auth errors surface to the caller
+	// before we hand back a reader. A 10-minute ceiling matches the previous
+	// behavior; the context is detached from ctx because the pump must outlive
+	// the leader's request when the client disconnects early.
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	body, contentType, size, upstreamName, err := fetchFn(fetchCtx)
 	if err != nil {
+		fetchCancel()
+		m.releaseInflight(key, flight, err)
 		return nil, err
 	}
 
-	sfRes := val.(*sfResult)
+	// Two pipes fan out from a single source: the client gets one (best-effort
+	// write — disconnect is silently absorbed) and storage gets the other
+	// (must-succeed write — Put consumes it). io.Pipe is unbuffered, so writes
+	// block until the reader consumes; that gives natural back-pressure
+	// upstream when either consumer is slow.
+	clientR, clientW := io.Pipe()
+	storageR, storageW := io.Pipe()
 
-	// Read back from cache
-	reader, size, err := m.storage.Get(ctx, key)
-	if err != nil {
-		return nil, fmt.Errorf("read from cache after store: %w", err)
-	}
+	// Pump: upstream → (storage, client). Drives the whole stream. Lives until
+	// upstream EOF or read error. Client disconnect does NOT terminate it.
+	go m.pumpUpstream(body, fetchCancel, storageW, clientW)
+
+	// Storage writer: drains storageR into storage.Put and commits the DB
+	// entry on success. Owns inflight release.
+	go m.storeAndCommit(key, adapterType, ttl, contentType, size, storageR, flight)
 
 	return &GetResult{
-		Reader:      reader,
-		ContentType: sfRes.contentType,
+		Reader:      clientR,
+		ContentType: contentType,
 		Size:        size,
 		Hit:         false,
-		Upstream:    sfRes.upstreamName,
+		Upstream:    upstreamName,
 	}, nil
+}
+
+// followInflight waits for the leader to commit storage, then serves from cache.
+func (m *Manager) followInflight(ctx context.Context, key string, flight *inflightFetch) (*GetResult, error) {
+	select {
+	case <-flight.done:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if flight.err != nil {
+		return nil, flight.err
+	}
+	reader, size, gerr := m.storage.Get(ctx, key)
+	if gerr != nil {
+		return nil, fmt.Errorf("read from cache after leader commit: %w", gerr)
+	}
+	var entry db.CacheEntry
+	_ = m.db.Where("key = ?", key).First(&entry).Error
+	return &GetResult{
+		Reader:      reader,
+		ContentType: entry.ContentType,
+		Size:        size,
+		Hit:         false,
+	}, nil
+}
+
+// pumpUpstream copies upstream → storagePipe and (best-effort) upstream →
+// clientPipe. Storage write errors abort the pump (cache is no longer valid);
+// client write errors are ignored (client disconnect must not break the cache).
+func (m *Manager) pumpUpstream(body io.ReadCloser, fetchCancel context.CancelFunc, storageW, clientW *io.PipeWriter) {
+	defer body.Close()
+	defer fetchCancel()
+
+	buf := make([]byte, 32*1024)
+	for {
+		n, rerr := body.Read(buf)
+		if n > 0 {
+			if _, werr := storageW.Write(buf[:n]); werr != nil {
+				// Storage consumer gave up — surface that to the client and stop.
+				_ = clientW.CloseWithError(werr)
+				return
+			}
+			// Best-effort: ignore client disconnect (ErrClosedPipe).
+			_, _ = clientW.Write(buf[:n])
+		}
+		if rerr != nil {
+			if rerr == io.EOF {
+				_ = storageW.Close()
+				_ = clientW.Close()
+			} else {
+				_ = storageW.CloseWithError(rerr)
+				_ = clientW.CloseWithError(rerr)
+			}
+			return
+		}
+	}
+}
+
+// storeAndCommit drains the storage pipe into storage.Put and, on success,
+// upserts the CacheEntry row and publishes the cache event. Releases the
+// inflight slot when done so followers can read from cache.
+func (m *Manager) storeAndCommit(key, adapterType string, ttl time.Duration, contentType string, declaredSize int64, storageR *io.PipeReader, flight *inflightFetch) {
+	cr := NewCountingReader(storageR)
+	putErr := m.storage.Put(context.Background(), key, cr, declaredSize, contentType)
+	if putErr != nil {
+		// Drain anything the pump still tries to write so it doesn't deadlock.
+		_, _ = io.Copy(io.Discard, storageR)
+		zap.L().Warn("cache put failed", zap.String("key", key), zap.Error(putErr))
+		m.releaseInflight(key, flight, putErr)
+		return
+	}
+
+	size := declaredSize
+	if size <= 0 {
+		size = cr.BytesRead()
+	}
+	now := time.Now()
+	entry := db.CacheEntry{
+		Key:          key,
+		AdapterType:  adapterType,
+		StoragePath:  key,
+		Size:         size,
+		HitCount:     0,
+		ContentType:  contentType,
+		PackageName:  packagekey.ExtractName(adapterType, key),
+		ExpiresAt:    now.Add(ttl),
+		LastAccessed: now,
+	}
+	if createErr := m.db.Create(&entry).Error; createErr != nil {
+		// Already exists — update instead.
+		m.db.Where("key = ?", key).Updates(map[string]interface{}{
+			"size":          size,
+			"content_type":  contentType,
+			"package_name":  packagekey.ExtractName(adapterType, key),
+			"expires_at":    now.Add(ttl),
+			"last_accessed": now,
+		})
+	}
+
+	m.publishEvent(key, adapterType, false, size)
+
+	if m.securityScanner != nil {
+		pkgName := packagekey.ExtractName(adapterType, key)
+		if pkgName != "" {
+			go func() {
+				if err := m.securityScanner.ScanPackage(context.Background(), adapterType, pkgName); err != nil {
+					zap.L().Debug("security scan for new package failed", zap.Error(err))
+				}
+			}()
+		}
+	}
+
+	m.releaseInflight(key, flight, nil)
+}
+
+// releaseInflight removes the in-flight entry and closes done so followers can
+// proceed. err is recorded on the flight before done closes.
+func (m *Manager) releaseInflight(key string, flight *inflightFetch, err error) {
+	flight.err = err
+	m.inflightMu.Lock()
+	if cur, ok := m.inflight[key]; ok && cur == flight {
+		delete(m.inflight, key)
+	}
+	m.inflightMu.Unlock()
+	close(flight.done)
 }
 
 // backgroundRefresh refreshes a stale cache entry in the background.
