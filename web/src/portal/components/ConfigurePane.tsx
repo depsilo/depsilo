@@ -1,5 +1,5 @@
 // web/src/portal/components/ConfigurePane.tsx
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
 import PromptCard from '@/portal/components/PromptCard'
@@ -10,145 +10,6 @@ interface Props {
   languageId: string
   endpoint: string
 }
-
-function relTime(ts: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
-  if (s < 1) return '0s'
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m`
-}
-
-// Footer: listens to SSE for requests matching the manager
-// managerId: reserved for future per-ecosystem filtering
-function LiveDetector({ endpoint, managerId: _managerId }: { endpoint: string; managerId: string }) {
-  const { t } = useTranslation()
-  const [hits, setHits] = useState<{ id: string; path: string; ms: number; t: number }[]>([])
-  const [, setTick] = useState(0)
-  const [timedOut, setTimedOut] = useState(false)
-
-  const handleEvent = useCallback((e: MessageEvent) => {
-    try {
-      const ev = JSON.parse(e.data)
-      if (!ev.adapter_type) return
-      const path = ev.file_name || ev.package_name || '-'
-      const ms = ev.latency_ms ?? 0
-      const id = ev.id || `${ev.timestamp}-${Math.random().toString(36).slice(2, 6)}`
-      setHits(prev => [{ id, path, ms, t: Date.now() }, ...prev].slice(0, 3))
-      setTimedOut(false)
-    } catch { /* ignore */ }
-  }, [])
-
-  useEffect(() => {
-    const es = new EventSource('/api/v1/events/stream')
-    es.onmessage = handleEvent
-    return () => es.close()
-  }, [handleEvent])
-
-  // tick for relative timestamps
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1000)
-    return () => clearInterval(id)
-  }, [])
-
-  // 30s timeout to nudge the user when nothing arrives
-  useEffect(() => {
-    if (hits.length > 0) return
-    const id = setTimeout(() => setTimedOut(true), 30000)
-    return () => clearTimeout(id)
-  }, [hits.length])
-
-  const latest = hits[0]
-  const fresh = latest && Date.now() - latest.t < 4000
-
-  return (
-    <div
-      style={{
-        borderTop: '0.5px solid var(--border)',
-        padding: '8px 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        background: 'var(--bg-card)',
-        flexShrink: 0,
-        minHeight: 36,
-      }}
-    >
-      <span
-        className="dot-live"
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: hits.length ? 'var(--ok)' : 'var(--text-subtle)',
-          color: hits.length ? 'var(--ok)' : 'var(--text-subtle)',
-          flexShrink: 0,
-        }}
-      />
-      {hits.length === 0 ? (
-        timedOut ? (
-          <span style={{ fontSize: 11, color: 'var(--warn-text)' }}>
-            {t('quickstart.listeningTimeout')}
-          </span>
-        ) : (
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {t('quickstart.listeningOn')}{' '}
-            <span className="mono" style={{ color: 'var(--text-subtle)' }}>
-              {endpoint}
-            </span>
-            {' '}{t('quickstart.verifyHint')}
-          </span>
-        )
-      ) : (
-        <>
-          <span
-            style={{
-              fontSize: 11,
-              color: fresh ? 'var(--ok-text)' : 'var(--text-muted)',
-              fontWeight: fresh ? 500 : 400,
-              transition: 'color 300ms',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {t('quickstart.detectCount', { count: hits.length })}
-          </span>
-          <span style={{ color: 'var(--border-strong)' }}>·</span>
-          <span
-            className="mono"
-            style={{
-              fontSize: 11,
-              color: 'var(--text)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              flex: 1,
-              minWidth: 0,
-            }}
-          >
-            {latest.path}
-          </span>
-          <span
-            className="mono"
-            style={{
-              fontSize: 10,
-              color: 'var(--text-subtle)',
-              padding: '2px 6px',
-              background: 'var(--bg-soft)',
-              border: '0.5px solid var(--border)',
-              borderRadius: 4,
-              flexShrink: 0,
-            }}
-          >
-            {latest.ms}ms
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--text-subtle)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-            {relTime(latest.t)}
-          </span>
-        </>
-      )}
-    </div>
-  )
-}
-
 
 function ManagerTabs({
   managers,
@@ -437,7 +298,6 @@ export default function ConfigurePane({ languageId, endpoint }: Props) {
         )}
       </div>
 
-      <LiveDetector endpoint={endpoint} managerId={m.id} />
     </div>
   )
 }
