@@ -26,12 +26,16 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 [access_log]
 # Async rollup pipeline for the access_logs table. See
 # docs/specs/2026-06-26-access-log-rollup.md.
+#
+# DELETION WARNING: retention_days and rollup_retention_days physically
+# DELETE rows older than the configured horizon. Set either to 0 to keep
+# data forever (no sweep).
 rollup_enabled        = true   # write hourly + package_daily rollups
 batch_size            = 100    # flush after this many rows
 batch_interval        = "5s"   # ...or this much time, whichever first
 backfill_on_start     = true   # one-shot fill rollups from existing rows on boot
-retention_days        = 0      # 0 = keep raw access_logs forever (recommended: 7)
-rollup_retention_days = 0      # 0 = keep rollup tables forever (recommended: 365)
+retention_days        = 7      # raw access_logs sweep horizon (0 = never sweep)
+rollup_retention_days = 365    # rollup tables sweep horizon (0 = never sweep)
 
 [auth]
 enabled    = true

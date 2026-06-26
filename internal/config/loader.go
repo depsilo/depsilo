@@ -28,15 +28,17 @@ func Load() (*Config, error) {
 	v.SetDefault("auth.enabled", true)
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")
-	// Access log rollup. Retention defaults are intentionally 0 (off) until
-	// the rollout has soaked — a later commit raises them to the spec's
-	// recommended 7d/365d. Rollup writes are on by default; flip to false
-	// to fall back to raw-table-only writes if the recorder misbehaves.
-	v.SetDefault("access_log.retention_days", 0)
+	// Access log rollup. retention_days bounds the raw access_logs table
+	// at 7 days of detail (the admin "recent logs" page); rollup retention
+	// keeps a year of aggregated dashboards. Operators who upgrade and
+	// want to keep the historical raw rows can override both to 0 in
+	// config.toml to disable sweeping entirely. Rollup writes themselves
+	// are on by default — flip to false to fall back to raw-only writes.
+	v.SetDefault("access_log.retention_days", 7)
 	v.SetDefault("access_log.batch_size", 100)
 	v.SetDefault("access_log.batch_interval", "5s")
 	v.SetDefault("access_log.rollup_enabled", true)
-	v.SetDefault("access_log.rollup_retention_days", 0)
+	v.SetDefault("access_log.rollup_retention_days", 365)
 	v.SetDefault("access_log.backfill_on_start", true)
 
 	// Config file path resolution
