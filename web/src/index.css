@@ -85,24 +85,22 @@
   --text-soft:   #64748d;
   --text-subtle: #8a96aa;
 
-  /* Brand: warm copper (Anthropic-adjacent hue 50). Used as an
-     ACCENT only — links, button halos, eyebrow text, status pulse.
-     For "tinted fills" (selection backgrounds, hover surfaces) we
-     deliberately drop chroma so they read as neutral warm-gray
-     instead of pink-salmon. Premium products use color sparingly. */
-  --brand:        oklch(0.55 0.13 50);
-  --brand-strong: oklch(0.48 0.14 50);
-  /* `--brand-soft` was the worst offender — at 9% chroma 0.13 it
-     turned every selection background salmon-pink. Switched to a
-     near-zero chroma so the tint reads as a quiet warm gray. */
-  --brand-soft:   oklch(0.55 0.02 50 / 0.10);
-  --brand-border: oklch(0.55 0.13 50 / 0.30);
-  --brand-text:   oklch(0.42 0.12 50);
+  /* Brand: Royal Purple (hue 310). Replaces the previous copper at
+     hue 50 which read as orange in practice. Same role across the
+     product — links, button halos, eyebrow text, status pulse — only
+     the hue moved. As before, "tinted fills" (selection backgrounds,
+     hover surfaces) drop chroma to neutral so they don't repaint the
+     page in lavender. */
+  --brand:        oklch(0.48 0.18 310);
+  --brand-strong: oklch(0.42 0.20 310);
+  --brand-soft:   oklch(0.48 0.02 310 / 0.10);
+  --brand-border: oklch(0.48 0.18 310 / 0.30);
+  --brand-text:   oklch(0.40 0.16 310);
 
-  --spec-1: oklch(0.55 0.14 50);
-  --spec-2: oklch(0.62 0.13 40);
-  --spec-3: oklch(0.70 0.11 30);
-  --spec-4: oklch(0.78 0.10 20);
+  --spec-1: oklch(0.48 0.18 310);
+  --spec-2: oklch(0.56 0.17 305);
+  --spec-3: oklch(0.62 0.14 295);
+  --spec-4: oklch(0.70 0.12 280);
 
   --grad-aurora: linear-gradient(
     115deg,
@@ -113,14 +111,14 @@
   );
   --grad-brand: linear-gradient(
     120deg,
-    oklch(0.52 0.14 55) 0%,
-    oklch(0.58 0.12 35) 100%
+    oklch(0.46 0.20 312) 0%,
+    oklch(0.54 0.17 290) 100%
   );
   --grad-rim: linear-gradient(
     90deg,
     transparent 0%,
-    oklch(0.55 0.13 50 / 0.45) 25%,
-    oklch(0.66 0.12 35 / 0.45) 60%,
+    oklch(0.48 0.18 310 / 0.45) 25%,
+    oklch(0.58 0.16 295 / 0.45) 60%,
     transparent 100%
   );
 
@@ -172,32 +170,32 @@ html.dark,
   --text-soft:   oklch(0.62 0.012 250);
   --text-subtle: oklch(0.52 0.012 250);
 
-  /* Dark mode brand — copper brightened so it stays legible against
-     the dark page background. Same hue (50), higher lightness. */
-  --brand:        oklch(0.72 0.13 50);
-  --brand-strong: oklch(0.78 0.13 50);
+  /* Dark mode brand — Royal Purple brightened so it stays legible
+     against the dark page background. Same hue (310), higher
+     lightness + slightly higher chroma to survive the lift. */
+  --brand:        oklch(0.66 0.18 310);
+  --brand-strong: oklch(0.72 0.18 310);
   /* Same "kill the chroma in soft fills" rule as light mode — keeps
      selection backgrounds reading as elevated panels rather than
-     pink-orange splotches against the dark page. */
-  --brand-soft:   oklch(0.72 0.02 50 / 0.14);
-  --brand-border: oklch(0.72 0.13 50 / 0.40);
-  --brand-text:   oklch(0.84 0.12 50);
+     lavender splotches against the dark page. */
+  --brand-soft:   oklch(0.66 0.02 310 / 0.14);
+  --brand-border: oklch(0.66 0.18 310 / 0.40);
+  --brand-text:   oklch(0.82 0.14 310);
 
-  /* Ink-button inversion in dark mode: light cream pill on dark page.
-     ButtonV2's primary reads these to flip without per-component
-     hardcoding. Halo is still the copper brand glow, just dimmer
-     because the lighter pill itself carries more visual weight. */
-  --btn-primary-bg: oklch(0.94 0.012 60);
+  /* Ink-button inversion in dark mode: light cool-tinted pill on
+     dark page. Tint follows the brand hue family (290 lavender) so
+     the white surface and the purple halo speak the same color. */
+  --btn-primary-bg: oklch(0.94 0.012 290);
   --btn-primary-fg: oklch(0.18 0.02 250);
 
-  --spec-1: oklch(0.74 0.14 50);
-  --spec-2: oklch(0.78 0.13 40);
-  --spec-3: oklch(0.82 0.11 30);
-  --spec-4: oklch(0.84 0.10 20);
+  --spec-1: oklch(0.68 0.18 310);
+  --spec-2: oklch(0.74 0.16 300);
+  --spec-3: oklch(0.80 0.13 290);
+  --spec-4: oklch(0.84 0.10 275);
 
   --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-  --grad-brand:  linear-gradient(120deg, oklch(0.72 0.14 55) 0%, oklch(0.78 0.12 35) 100%);
-  --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.14 50 / 0.65) 25%, oklch(0.84 0.11 35 / 0.65) 60%, transparent 100%);
+  --grad-brand:  linear-gradient(120deg, oklch(0.66 0.19 312) 0%, oklch(0.74 0.16 290) 100%);
+  --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.68 0.18 310 / 0.65) 25%, oklch(0.78 0.15 295 / 0.65) 60%, transparent 100%);
 
   /* Forest green — dark mode: brighter to maintain contrast against dark bg */
   --ok:          oklch(0.70 0.16 150);
@@ -239,19 +237,19 @@ html.dark,
     --text-soft:   oklch(0.62 0.012 250);
     --text-subtle: oklch(0.52 0.012 250);
 
-    --brand:        oklch(0.72 0.13 50);
-    --brand-strong: oklch(0.78 0.13 50);
-    --brand-soft:   oklch(0.72 0.02 50 / 0.14);
-    --brand-border: oklch(0.72 0.13 50 / 0.40);
-    --brand-text:   oklch(0.84 0.12 50);
+    --brand:        oklch(0.66 0.18 310);
+    --brand-strong: oklch(0.72 0.18 310);
+    --brand-soft:   oklch(0.66 0.02 310 / 0.14);
+    --brand-border: oklch(0.66 0.18 310 / 0.40);
+    --brand-text:   oklch(0.82 0.14 310);
 
-    --btn-primary-bg: oklch(0.94 0.012 60);
+    --btn-primary-bg: oklch(0.94 0.012 290);
     --btn-primary-fg: oklch(0.18 0.02 250);
 
-    --spec-1: oklch(0.74 0.14 50);
-    --spec-2: oklch(0.78 0.13 40);
-    --spec-3: oklch(0.82 0.11 30);
-    --spec-4: oklch(0.84 0.10 20);
+    --spec-1: oklch(0.68 0.18 310);
+    --spec-2: oklch(0.74 0.16 300);
+    --spec-3: oklch(0.80 0.13 290);
+    --spec-4: oklch(0.84 0.10 275);
 
     --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
     --grad-brand:  linear-gradient(120deg, oklch(0.72 0.14 210) 0%, oklch(0.78 0.12 190) 100%);
@@ -283,10 +281,10 @@ html.dark,
 html.dark .page-wash,
 [data-theme="dark"] .page-wash {
   background:
-    radial-gradient(1400px 700px at 8% -10%, oklch(0.72 0.14 50 / 0.10), transparent 55%),
-    radial-gradient(1100px 600px at 95% 8%,  oklch(0.78 0.11 35 / 0.07), transparent 55%),
-    radial-gradient(900px 600px at 28% 75%,  oklch(0.66 0.12 220 / 0.08), transparent 60%),
-    radial-gradient(800px 500px at 92% 88%,  oklch(0.78 0.10 20 / 0.05), transparent 60%);
+    radial-gradient(1400px 700px at 8% -10%, oklch(0.68 0.18 310 / 0.10), transparent 55%),
+    radial-gradient(1100px 600px at 95% 8%,  oklch(0.74 0.16 290 / 0.07), transparent 55%),
+    radial-gradient(900px 600px at 28% 75%,  oklch(0.66 0.10 260 / 0.07), transparent 60%),
+    radial-gradient(800px 500px at 92% 88%,  oklch(0.78 0.08 80  / 0.05), transparent 60%);
 }
 
 html.dark .aurora-glow::after,
@@ -422,23 +420,22 @@ pre, code, .code-mono {
   }
 }
 
-/* Page-wide ambient gradient — barely-there warm wash anchored to
-   the viewport. Alphas pulled back from the previous 4.5-9% to 1.5-3.5%
-   so the surface reads as "very slightly warmer than #fff" rather than
-   "tinted cream". A single cool blob in the lower-left adds the
-   temperature contrast that makes the page feel like a designed
-   surface rather than a uniform wash — without it, every neutral
-   element on top picks up the warm cast and looks pinkish. */
+/* Page-wide ambient gradient — barely-there cool wash anchored to
+   the viewport. Alphas stay at 1.5-3.5% so the surface reads as
+   "very slightly tinted from #fff" rather than "lavender cream".
+   One soft amber accent (hue 80) in the lower-right gives the mesh
+   the temperature contrast it needs — without a warm counterpoint
+   the page goes uniformly cool and starts to feel clinical. */
 .page-wash {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(1400px 700px at 8% -10%, oklch(0.62 0.14 50 / 0.035), transparent 55%),
-    radial-gradient(1100px 600px at 95% 8%,  oklch(0.70 0.11 35 / 0.025), transparent 55%),
-    radial-gradient(900px 600px at 28% 75%,  oklch(0.62 0.10 220 / 0.030), transparent 60%),
-    radial-gradient(800px 500px at 92% 88%,  oklch(0.74 0.10 20 / 0.015), transparent 60%);
+    radial-gradient(1400px 700px at 8% -10%, oklch(0.55 0.18 310 / 0.035), transparent 55%),
+    radial-gradient(1100px 600px at 95% 8%,  oklch(0.60 0.16 290 / 0.025), transparent 55%),
+    radial-gradient(900px 600px at 28% 75%,  oklch(0.62 0.10 260 / 0.030), transparent 60%),
+    radial-gradient(800px 500px at 92% 88%,  oklch(0.74 0.08 80  / 0.020), transparent 60%);
 }
 
 /* Faint paper noise — adds the imperceptible "grain" premium SaaS pages
