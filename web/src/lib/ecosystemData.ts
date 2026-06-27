@@ -103,17 +103,34 @@ export interface ManagerConfig {
   tutorial: string[]
 }
 
+/**
+ * Catalog grouping for the QuickStart ecosystem picker.
+ *  os    — system-level package managers (apt, alpine)
+ *  lang  — language runtime + library package managers
+ *  data  — data-science and AI artifact registries
+ *  infra — container images, orchestration charts
+ *
+ * Group section headers + per-language subtitles read from i18n
+ * (`quickstart.group.*`, `quickstart.subtitle.*`) so the labels stay in
+ * sync with the user's UI language.
+ */
+export type LanguageGroup = 'os' | 'lang' | 'data' | 'infra'
+
 export interface Language {
   id: string
   name: string
   glyph: string
   iconAdapter: string
+  group: LanguageGroup
+  /** i18n key under `quickstart.subtitle` — short, direct ("Ruby 包" / "Ruby packages"). */
+  subtitleKey: string
   managers: ManagerConfig[]
 }
 
 export const LANGUAGES: Language[] = [
   {
     id: 'python', name: 'Python', glyph: 'PY', iconAdapter: 'pypi',
+    group: 'lang', subtitleKey: 'python',
     managers: [
       {
         id: 'pip', name: 'pip', hint: 'PyPA package installer',
@@ -265,6 +282,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'node', name: 'Node.js', glyph: 'JS', iconAdapter: 'npm',
+    group: 'lang', subtitleKey: 'node',
     managers: [
       {
         id: 'npm', name: 'npm', hint: 'Default Node registry client',
@@ -351,6 +369,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'java', name: 'Java', glyph: 'JV', iconAdapter: 'maven',
+    group: 'lang', subtitleKey: 'java',
     managers: [
       {
         id: 'maven', name: 'Maven', hint: 'Apache Maven',
@@ -409,6 +428,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'rust', name: 'Rust', glyph: 'RS', iconAdapter: 'cargo',
+    group: 'lang', subtitleKey: 'rust',
     managers: [
       {
         id: 'cargo', name: 'Cargo', hint: 'Rust package manager',
@@ -434,6 +454,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'go', name: 'Go', glyph: 'GO', iconAdapter: 'go',
+    group: 'lang', subtitleKey: 'go',
     managers: [
       {
         id: 'goenv', name: 'go env', hint: 'Recommended (persisted)',
@@ -477,6 +498,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'container', name: 'Container', glyph: 'CT', iconAdapter: 'docker',
+    group: 'infra', subtitleKey: 'container',
     managers: [
       {
         id: 'docker', name: 'Docker', hint: 'Daemon registry mirror',
@@ -541,6 +563,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'kubernetes', name: 'Kubernetes', glyph: 'K8', iconAdapter: 'helm',
+    group: 'infra', subtitleKey: 'kubernetes',
     managers: [
       {
         id: 'helm', name: 'Helm', hint: 'Chart registry',
@@ -565,6 +588,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'ruby', name: 'Ruby', glyph: 'RB', iconAdapter: 'rubygems',
+    group: 'lang', subtitleKey: 'ruby',
     managers: [
       {
         id: 'gem', name: 'RubyGems', hint: 'gem CLI',
@@ -606,6 +630,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'dotnet', name: '.NET', glyph: 'NT', iconAdapter: 'nuget',
+    group: 'lang', subtitleKey: 'dotnet',
     managers: [
       {
         id: 'cli', name: 'dotnet CLI', hint: 'nuget add source',
@@ -648,6 +673,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'debian', name: 'Debian', glyph: 'DB', iconAdapter: 'apt',
+    group: 'os', subtitleKey: 'debian',
     managers: [
       {
         id: 'apt', name: 'apt', hint: 'Debian/Ubuntu packages',
@@ -674,6 +700,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'alpine', name: 'Alpine', glyph: 'AL', iconAdapter: 'alpine',
+    group: 'os', subtitleKey: 'alpine',
     managers: [
       {
         id: 'apk', name: 'apk', hint: 'Alpine Linux package manager',
@@ -699,6 +726,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'php', name: 'PHP', glyph: 'PH', iconAdapter: 'composer',
+    group: 'lang', subtitleKey: 'php',
     managers: [
       {
         id: 'composer', name: 'Composer', hint: 'PHP package manager',
@@ -723,6 +751,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'r', name: 'R', glyph: 'R', iconAdapter: 'cran',
+    group: 'data', subtitleKey: 'r',
     managers: [
       {
         id: 'rscript', name: 'R', hint: 'Base R CRAN mirror',
@@ -748,6 +777,7 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'huggingface', name: 'Hugging Face', glyph: 'HF', iconAdapter: 'huggingface',
+    group: 'data', subtitleKey: 'huggingface',
     managers: [
       {
         id: 'huggingface-cli', name: 'huggingface-cli', hint: 'Official CLI',

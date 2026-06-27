@@ -547,6 +547,12 @@ a:focus:not(:focus-visible) {
   outline: none;
 }
 
+/* Portal topbar — hide the endpoint pill on narrow viewports so the
+   nav + status + lang/theme controls don't wrap into the logo row. */
+@media (max-width: 720px) {
+  .portal-endpoint-pill { display: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

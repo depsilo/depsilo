@@ -180,10 +180,14 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
 export default function ConfigurePane({ languageId, endpoint }: Props) {
   const { t } = useTranslation()
   const lang = LANGUAGES.find(l => l.id === languageId)
-  const [mgrId, setMgrId] = useState(lang?.managers[0]?.id ?? '')
+  // Default to the AI-prompt tab: the QuickStart redesign foregrounds the
+  // AI workflow so the first thing a user lands on inside each ecosystem
+  // is "here's the prompt you paste into your coding agent". Explicit
+  // manager tabs (pip / uv / Poetry / etc.) remain a click away.
+  const [mgrId, setMgrId] = useState<string>('ai')
 
   useEffect(() => {
-    setMgrId(lang?.managers[0]?.id ?? '')
+    setMgrId('ai')
   }, [languageId])
 
   if (!lang) return null

@@ -1,109 +1,41 @@
-// web/src/portal/pages/QuickStart.tsx
+// QuickStart — depsilo's portal landing page.
+//
+// Layout (top → bottom):
+//   1. Hero AI CTA          — project-level integration prompt, the loudest
+//                              workflow on the page
+//   2. Ecosystem catalog    — all 14 supported ecosystems grouped into
+//                              four sections (OS / Languages / Data & AI /
+//                              Infrastructure), every tile always visible
+//   3. Active configuration  — the selected ecosystem's snippet pane,
+//                              defaulting to the AI-prompt tab so the
+//                              language-level AI workflow is always one
+//                              click away
+//
+// The endpoint URL lives in the global header (PortalApp.tsx) as a small
+// monospace pill so it stays copyable without occupying hero real estate.
+// "Default selection" is Python because pypi is depsilo's most-mirrored
+// ecosystem; switching populates immediately — no empty states between
+// clicks.
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import StatusDot from '@/components/StatusDot'
-import LanguageRail from '@/portal/components/LanguageRail'
 import ConfigurePane from '@/portal/components/ConfigurePane'
-import AllInOnePane from '@/portal/components/AllInOnePane'
-import CopyButton from '@/portal/components/CopyButton'
-import EcosystemLogoWall from '@/portal/components/EcosystemLogoWall'
-import IntegrationPromptButton from '@/portal/components/IntegrationPromptButton'
-
-function EndpointInline({ endpoint }: { endpoint: string }) {
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '4px 6px 4px 10px',
-        background: 'var(--bg-soft)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 6,
-        flexShrink: 0,
-      }}
-    >
-      <StatusDot status="healthy" live />
-      <span
-        className="mono"
-        style={{
-          fontSize: 12,
-          color: 'var(--text)',
-          letterSpacing: '-0.02em',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {endpoint}
-      </span>
-      <CopyButton text={endpoint} />
-    </div>
-  )
-}
+import EcosystemCatalog from '@/portal/components/EcosystemCatalog'
+import HeroAICTA from '@/portal/components/HeroAICTA'
 
 export default function QuickStart() {
-  const { t } = useTranslation()
   const endpoint = window.location.origin
   const [language, setLanguage] = useState('python')
 
   return (
-    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 16,
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 44,
-              fontWeight: 700,
-              letterSpacing: '-0.04em',
-              lineHeight: 1.02,
-              color: 'var(--text)',
-            }}
-          >
-            {t('quickstart.title')}
-          </h1>
-          <p
-            style={{
-              margin: '14px 0 0 0',
-              fontSize: 17,
-              lineHeight: 1.45,
-              color: 'var(--text-muted)',
-              maxWidth: 620,
-              fontWeight: 400,
-              letterSpacing: '-0.005em',
-            }}
-          >
-            {t('quickstart.subtitle')}
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <IntegrationPromptButton />
-          <EndpointInline endpoint={endpoint} />
-        </div>
-      </div>
+    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+      {/* Hero — project-level AI integration prompt. */}
+      <HeroAICTA />
 
-      <EcosystemLogoWall selected={language} onSelect={setLanguage} />
+      {/* Full catalog — 4 groups, all 14 tiles always visible. */}
+      <EcosystemCatalog selected={language} onSelect={setLanguage} />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '240px 1fr',
-          gap: 16,
-        }}
-      >
-        <LanguageRail selected={language} onSelect={setLanguage} />
-        {language === 'all' ? (
-          <AllInOnePane endpoint={endpoint} />
-        ) : (
-          <ConfigurePane languageId={language} endpoint={endpoint} />
-        )}
-      </div>
+      {/* Active configuration pane — defaults to AI prompt tab inside
+          ConfigurePane (set via the ecosystem-data redesign). */}
+      <ConfigurePane languageId={language} endpoint={endpoint} />
     </div>
   )
 }

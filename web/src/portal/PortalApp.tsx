@@ -1,7 +1,9 @@
 import { Routes, Route, useLocation, Link } from 'react-router-dom'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
+import { copyText } from '@/lib/clipboard'
 import { formatVersion } from '@/lib/utils'
 import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
@@ -9,6 +11,60 @@ import ThemeToggle from '@/components/ThemeToggle'
 import StatusDot from '@/components/StatusDot'
 import QuickStart from '@/portal/pages/QuickStart'
 import MonitorV2 from '@/portal/pages/Monitor'
+
+// EndpointPill — small monospace pill in the header so operators can
+// copy the URL for sharing without exposing it as a giant hero element.
+// Hidden on viewports under 720px to keep the topbar from wrapping.
+function EndpointPill() {
+  const [copied, setCopied] = useState(false)
+  const url = window.location.origin
+  // Drop the protocol for visual density — the click-to-copy still
+  // copies the full URL with scheme.
+  const compact = url.replace(/^https?:\/\//, '')
+
+  async function handleCopy() {
+    if (await copyText(url)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="active:scale-[0.96] portal-endpoint-pill"
+      title={url}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '3px 8px 3px 10px',
+        background: 'var(--bg-soft)',
+        border: '0.5px solid var(--border)',
+        borderRadius: 6,
+        fontSize: 11.5,
+        fontFamily: 'var(--font-mono)',
+        color: 'var(--text-muted)',
+        cursor: 'pointer',
+        transition: 'background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = 'var(--bg-hover)'
+        e.currentTarget.style.color = 'var(--text)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'var(--bg-soft)'
+        e.currentTarget.style.color = 'var(--text-muted)'
+      }}
+    >
+      <span style={{ letterSpacing: '-0.01em' }}>{compact}</span>
+      <span style={{ fontSize: 10, color: copied ? 'var(--ok-text)' : 'var(--text-subtle)' }}>
+        {copied ? '✓' : '⧉'}
+      </span>
+    </button>
+  )
+}
 
 interface NavTabProps {
   to: string
@@ -91,7 +147,7 @@ export default function PortalAppV2() {
         <div
           style={{
             height: 52,
-            maxWidth: 1240,
+            maxWidth: 1440,
             margin: '0 auto',
             padding: '0 28px',
             display: 'flex',
@@ -138,7 +194,9 @@ export default function PortalAppV2() {
           <div style={{ flex: 1 }} />
 
           {/* Right side controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Endpoint pill — copy-able URL, hidden on narrow viewports. */}
+            <EndpointPill />
             {/* Status pill — tinted chip matching service health */}
             {data && (
               <span
@@ -197,7 +255,7 @@ export default function PortalAppV2() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '32px 28px' }}>
+      <main style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 28px' }}>
         <Routes>
           <Route index element={<QuickStart />} />
           <Route path="monitor" element={<MonitorV2 />} />
