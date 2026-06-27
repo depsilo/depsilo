@@ -66,14 +66,20 @@ export default function HeroAICTA() {
           padding: '20px 22px 20px 26px',
         }}
       >
-        {/* Brand-aurora wash, scoped to the strip. */}
+        {/* Brand-aurora wash — pulled back from "salmon cream wash" to
+            a single soft warm glow rising from the lower-left corner.
+            7% peak alpha drops to transparent before crossing the
+            midline so the right half (where the preview card lives)
+            stays neutral. The previous 14%-from-left-to-42% covered
+            the entire strip and made the eye see "pinkish hero"; this
+            reads as "warm light leaking up from one corner". */}
         <div
           aria-hidden
           style={{
             position: 'absolute',
             inset: 0,
             background:
-              'linear-gradient(120deg, color-mix(in oklab, var(--brand) 14%, transparent) 0%, color-mix(in oklab, var(--brand) 3%, transparent) 42%, transparent 70%)',
+              'radial-gradient(540px 320px at 0% 110%, color-mix(in oklab, var(--brand) 9%, transparent) 0%, color-mix(in oklab, var(--brand) 3%, transparent) 50%, transparent 75%)',
             pointerEvents: 'none',
             zIndex: -1,
           }}
