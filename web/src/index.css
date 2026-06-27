@@ -566,6 +566,11 @@ a:focus:not(:focus-visible) {
     border-bottom: 0.5px solid var(--border) !important;
     max-height: 280px;
   }
+  /* Hero strip — text + preview stack into one column rather than
+     squeeze side by side. */
+  .quickstart-hero {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
