@@ -553,6 +553,21 @@ a:focus:not(:focus-visible) {
   .portal-endpoint-pill { display: none !important; }
 }
 
+/* QuickStart console — IDE-style 2-column layout on desktop. Below
+   860px the rail moves above the config pane so neither cell gets
+   crushed under 200px and content stays readable on tablet / phone. */
+@media (max-width: 860px) {
+  .quickstart-console {
+    grid-template-columns: 1fr !important;
+    min-height: 0 !important;
+  }
+  .quickstart-console > nav {
+    border-right: none !important;
+    border-bottom: 0.5px solid var(--border) !important;
+    max-height: 280px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

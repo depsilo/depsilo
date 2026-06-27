@@ -465,6 +465,8 @@ const en = {
       heroEyebrow: 'One-prompt AI integration',
       heroTitle: 'Let your AI agent wire this project into the mirror',
       heroDesc: 'Copy a single prompt, paste it into Claude Code / Cursor / Copilot Chat. The agent reads your project and edits its Dockerfile, CI config, and build scripts so every package install routes through this mirror — brand-neutral, build-time only, no lockfile or signature changes.',
+      heroDescShort: 'Paste one prompt into Claude / Cursor / Copilot — the agent edits your Dockerfile / CI / build scripts',
+      pickEcosystem: 'Choose ecosystem',
       heroCta: 'Generate the project-level prompt',
       heroCtaHint: '~5 KB · works with Claude / Cursor / Copilot',
       groupOs: 'Operating System',

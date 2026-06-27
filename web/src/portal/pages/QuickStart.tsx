@@ -1,21 +1,12 @@
 // QuickStart — depsilo's portal landing page.
 //
-// Layout (top → bottom):
-//   1. Hero AI CTA          — project-level integration prompt, the loudest
-//                              workflow on the page
-//   2. Ecosystem catalog    — all 14 supported ecosystems grouped into
-//                              four sections (OS / Languages / Data & AI /
-//                              Infrastructure), every tile always visible
-//   3. Active configuration  — the selected ecosystem's snippet pane,
-//                              defaulting to the AI-prompt tab so the
-//                              language-level AI workflow is always one
-//                              click away
+// Layout: compact AI hero strip on top, then a single "console" card
+// that combines the left ecosystem rail with the active configuration
+// pane. The console fills the viewport so the user never has to scroll
+// to reach the config snippet — the picker and the result sit side by
+// side, IDE-style.
 //
-// The endpoint URL lives in the global header (PortalApp.tsx) as a small
-// monospace pill so it stays copyable without occupying hero real estate.
-// "Default selection" is Python because pypi is depsilo's most-mirrored
-// ecosystem; switching populates immediately — no empty states between
-// clicks.
+// Endpoint URL lives in the global header (PortalApp.tsx).
 import { useState } from 'react'
 import ConfigurePane from '@/portal/components/ConfigurePane'
 import EcosystemCatalog from '@/portal/components/EcosystemCatalog'
@@ -26,16 +17,29 @@ export default function QuickStart() {
   const [language, setLanguage] = useState('python')
 
   return (
-    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-      {/* Hero — project-level AI integration prompt. */}
+    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Hero — compact horizontal strip carrying the project-level AI
+          integration CTA. */}
       <HeroAICTA />
 
-      {/* Full catalog — 4 groups, all 14 tiles always visible. */}
-      <EcosystemCatalog selected={language} onSelect={setLanguage} />
-
-      {/* Active configuration pane — defaults to AI prompt tab inside
-          ConfigurePane (set via the ecosystem-data redesign). */}
-      <ConfigurePane languageId={language} endpoint={endpoint} />
+      {/* Console — single card with the ecosystem rail on the left and
+          the active configuration pane on the right. The two share one
+          border / radius so they read as a single designed surface. */}
+      <section
+        className="quickstart-console"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '260px 1fr',
+          background: 'var(--bg-card)',
+          border: '0.5px solid var(--border)',
+          borderRadius: 14,
+          overflow: 'hidden',
+          minHeight: 'min(72vh, 720px)',
+        }}
+      >
+        <EcosystemCatalog selected={language} onSelect={setLanguage} />
+        <ConfigurePane languageId={language} endpoint={endpoint} flush />
+      </section>
     </div>
   )
 }

@@ -465,6 +465,8 @@ const zh = {
       heroEyebrow: 'AI 一键集成',
       heroTitle: '让 AI 助手把整个项目接入镜像',
       heroDesc: '复制一段提示词，粘贴到 Claude Code / Cursor / Copilot Chat 中。AI 会读懂你的项目，自动改动 Dockerfile、CI 配置和 build 脚本，让所有依赖安装走这台镜像 —— 不带任何品牌字样，不动 lockfile，不关签名校验。',
+      heroDescShort: '复制提示词到 Claude / Cursor / Copilot，AI 自动改 Dockerfile / CI / build 脚本走镜像',
+      pickEcosystem: '选择生态',
       heroCta: '生成项目级集成提示词',
       heroCtaHint: '约 5 KB · 适配 Claude / Cursor / Copilot',
       groupOs: '操作系统',

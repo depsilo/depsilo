@@ -9,6 +9,13 @@ import { LANGUAGES, buildPrompt, type ManagerConfig } from '@/lib/ecosystemData'
 interface Props {
   languageId: string
   endpoint: string
+  /**
+   * When true, suppress the component's own `.card` border + radius and
+   * let the parent container provide the chrome. Used by QuickStart's
+   * console layout where ConfigurePane sits inside a shared card next to
+   * the ecosystem rail.
+   */
+  flush?: boolean
 }
 
 function ManagerTabs({
@@ -177,7 +184,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
   )
 }
 
-export default function ConfigurePane({ languageId, endpoint }: Props) {
+export default function ConfigurePane({ languageId, endpoint, flush = false }: Props) {
   const { t } = useTranslation()
   const lang = LANGUAGES.find(l => l.id === languageId)
   // Default to the AI-prompt tab: the QuickStart redesign foregrounds the
@@ -200,8 +207,8 @@ export default function ConfigurePane({ languageId, endpoint }: Props) {
 
   return (
     <div
-      className="card"
-      style={{ display: 'flex', flexDirection: 'column' }}
+      className={flush ? '' : 'card'}
+      style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}
     >
       {/* Header */}
       <div
