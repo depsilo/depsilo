@@ -104,6 +104,9 @@ export default function MainLayoutV2() {
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
+      {/* Page-wide ambient gradient — same mesh used in Portal so the
+          two halves of the product feel cohesive. */}
+      <div className="page-wash" />
       {/* Sidebar — 220px */}
       <aside
         className="fixed left-0 top-0 z-30 h-screen w-[220px] flex flex-col"
