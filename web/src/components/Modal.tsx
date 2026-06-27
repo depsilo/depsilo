@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useId } from 'react'
+import { createPortal } from 'react-dom'
 import Icon from './Icon'
 
 interface ModalV2Props {
@@ -31,13 +32,25 @@ export default function ModalV2({ open, onClose, title, children, width = 440 }:
 
   if (!open) return null
 
-  return (
+  // Render through a portal anchored at document.body so the modal escapes
+  // any ancestor that has `transform` / `filter` / `perspective` applied
+  // (e.g. .fade-up's residual translateY from its enter animation, which
+  // creates a containing block for `position: fixed` descendants and was
+  // clipping the backdrop blur to the QuickStart main-content rectangle
+  // — leaving the page header and right margin un-dimmed).
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      // Outer wrapper scrolls when the modal is taller than the viewport,
+      // so trackpad / wheel users can reach content past the fold. The
+      // dialog is centered via flex; padding gives it breathing room from
+      // the viewport edges.
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto"
       onClick={onClose}
       style={{ padding: '24px' }}
     >
-      {/* Backdrop */}
+      {/* Backdrop — `position: fixed` from inside a body-level portal is
+          guaranteed to be relative to the viewport, so the blur covers
+          the entire page regardless of which component opened the modal. */}
       <div
         aria-hidden="true"
         className="fixed inset-0"
@@ -48,7 +61,9 @@ export default function ModalV2({ open, onClose, title, children, width = 440 }:
         }}
       />
 
-      {/* Dialog */}
+      {/* Dialog. Vertical margin (auto top/bottom) keeps it visually centered
+          when content fits the viewport but lets it sit at the top with the
+          outer wrapper handling scroll when it doesn't. */}
       <div
         role="dialog"
         aria-modal="true"
@@ -56,6 +71,7 @@ export default function ModalV2({ open, onClose, title, children, width = 440 }:
         className="modal-card relative w-full"
         style={{
           maxWidth: width,
+          margin: 'auto',
           background: 'var(--bg-card)',
           border: '0.5px solid var(--border)',
           borderRadius: 14,
@@ -128,6 +144,7 @@ export default function ModalV2({ open, onClose, title, children, width = 440 }:
           .modal-card { animation: none; }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   )
 }
