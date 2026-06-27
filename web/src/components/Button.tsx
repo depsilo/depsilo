@@ -42,12 +42,28 @@ export default function ButtonV2({
   const isSecondary = variant === 'secondary'
   const isDanger = variant === 'danger'
 
+  // Primary buttons follow the Ink + Copper-Halo treatment: the button
+  // itself is a near-black inkwell, white text, with a copper-tinted
+  // box-shadow that reads as ambient glow rather than chrome. This keeps
+  // the brand color "alive" on the page without painting buttons with
+  // it — and lets every primary button feel like premium glass instead
+  // of solid plastic. Tokens use the brand CSS variable's hue so a
+  // future re-palette propagates automatically.
+  const primaryStyle: React.CSSProperties = isPrimary
+    ? {
+        background: 'var(--btn-primary-bg, oklch(0.18 0.02 250))',
+        color: 'var(--btn-primary-fg, white)',
+        boxShadow:
+          'inset 0 1px 0 color-mix(in oklab, white 13%, transparent), 0 1px 0 oklch(0 0 0 / 0.4), 0 10px 28px color-mix(in oklab, var(--brand) 32%, transparent)',
+      }
+    : {}
+
   return (
     <button
       className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
       disabled={disabled}
       style={{
-        ...(isPrimary ? { background: 'var(--brand)', color: 'white' } : {}),
+        ...primaryStyle,
         ...(isSecondary
           ? { border: '0.5px solid var(--brand-border)', color: 'var(--brand-text)', background: 'transparent' }
           : {}),
