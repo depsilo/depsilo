@@ -278,14 +278,8 @@ html.dark,
 }
 
 /* ── Page-level dark effects ── */
-html.dark .page-wash,
-[data-theme="dark"] .page-wash {
-  background:
-    radial-gradient(1400px 700px at 8% -10%, oklch(0.68 0.18 310 / 0.10), transparent 55%),
-    radial-gradient(1100px 600px at 95% 8%,  oklch(0.74 0.16 290 / 0.07), transparent 55%),
-    radial-gradient(900px 600px at 28% 75%,  oklch(0.66 0.10 260 / 0.07), transparent 60%),
-    radial-gradient(800px 500px at 92% 88%,  oklch(0.78 0.08 80  / 0.05), transparent 60%);
-}
+/* (.page-wash intentionally produces no background in dark mode
+    either — see the empty light-mode rule below.) */
 
 html.dark .aurora-glow::after,
 [data-theme="dark"] .aurora-glow::after {
@@ -420,42 +414,19 @@ pre, code, .code-mono {
   }
 }
 
-/* Page-wide ambient gradient — barely-there cool wash anchored to
-   the viewport. Alphas stay at 1.5-3.5% so the surface reads as
-   "very slightly tinted from #fff" rather than "lavender cream".
-   One soft amber accent (hue 80) in the lower-right gives the mesh
-   the temperature contrast it needs — without a warm counterpoint
-   the page goes uniformly cool and starts to feel clinical. */
+/* Page-wide ambient surface — intentionally empty. The previous
+   four-blob mesh + noise grain made the page feel tinted (warm
+   copper era) or clinical-cool (purple era) depending on the brand
+   hue. Per user direction we ship the page on its plain --bg-page
+   instead. The .page-wash element is kept in the DOM (PortalApp /
+   MainLayout / App / Login all still mount it) so adding ambient
+   back later is a one-CSS-rule revert rather than a multi-file
+   refactor. */
 .page-wash {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background:
-    radial-gradient(1400px 700px at 8% -10%, oklch(0.55 0.18 310 / 0.035), transparent 55%),
-    radial-gradient(1100px 600px at 95% 8%,  oklch(0.60 0.16 290 / 0.025), transparent 55%),
-    radial-gradient(900px 600px at 28% 75%,  oklch(0.62 0.10 260 / 0.030), transparent 60%),
-    radial-gradient(800px 500px at 92% 88%,  oklch(0.74 0.08 80  / 0.020), transparent 60%);
-}
-
-/* Faint paper noise — adds the imperceptible "grain" premium SaaS pages
-   use to keep flat surfaces from looking like flat surfaces. Drawn via
-   an SVG turbulence filter, alpha ~2.5% so it lives just under the
-   threshold of consciousness. */
-.page-wash::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.025;
-  mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  background-size: 240px 240px;
-}
-html.dark .page-wash::after,
-[data-theme="dark"] .page-wash::after {
-  opacity: 0.04;
-  mix-blend-mode: screen;
 }
 
 @layer utilities {
