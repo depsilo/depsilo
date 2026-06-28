@@ -30,26 +30,32 @@ one contact-priced support contract.
 **Open Source** (MIT, free, self-hosted):
 The fully open-source single-binary deployment. No license check, all 14
 ecosystem adapters available. Includes everything an Operator needs to
-run Depsilo in production: cache + dashboard, upstream management, OSV
-vulnerability scanning, **SBOM export (CycloneDX + SPDX)**, webhook
-alerts, Prometheus metrics, single/multi-user access, **SSO / RBAC**,
-and the T1 supply-chain wedge features (minimum release age, malicious
+run Depsilo in production: cache + dashboard, upstream management,
+**audit logs**, **package allow/deny rules engine + UI**, **security
+intelligence dashboard** (OSV / CVE cross-package view + decision
+workflow), **SBOM export (CycloneDX + SPDX)**, webhook alerts,
+Prometheus metrics, single/multi-user access, **SSO / RBAC**, and the
+T1 supply-chain wedge features (minimum release age, malicious
 blocklist, freeze/snapshot, tamper detection) as those land. Goal:
 zero-friction adoption by Operators. **No self-hosted necessity ever
-gets paywalled** — especially not SSO/RBAC; the "SSO tax" pattern damages
-trust badly and competitors give it free, so we do too.
+gets paywalled** — especially not governance primitives (audit, rules,
+security) and not SSO/RBAC; the "SSO tax" pattern damages trust badly
+and competitors give it free, so we do too.
 
 **Pro** (Enterprise support contract, single tier, contact-priced):
 A paid relationship gated by `entitlement.RequirePro` middleware,
-unlocked by an Enterprise contract key. Currently encodes four
-Buyer-facing capabilities: long-retention audit logs, the package
-allow/deny rules engine + UI, the security intelligence dashboard
-(cross-package vulnerability view + decision workflow), and multi-
-project workspaces (team isolation). What the contract actually buys
-is: support, SLA, compliance assistance (CRA / SBOM workflows), and
-those four UI surfaces — **not** more storage, not more ecosystems,
-not the wedge features (which stay open-source). No public price; the
-trigger is a conversation with sales, not a credit-card form.
+unlocked by an Enterprise contract key. Encodes exactly **one**
+Buyer-facing UI capability: **multi-project workspaces** — per-project
+isolation of audit logs, rules, SBOM, and cache, plus per-project RBAC.
+What the contract actually buys is: support, SLA, compliance assistance
+(CRA / SBOM workflows), production-deploy consulting (HA / capacity /
+upgrade paths), priority issue handling, and the one multi-project
+UI surface — **not** more storage, not more ecosystems, not the
+governance primitives (which stay open-source), not the wedge features
+(which stay open-source). No public price; the trigger is a conversation
+with sales, not a credit-card form. The Pro feature surface is
+deliberately *narrow* — production teams that need workspace structure
+are the conversational filter for who should be paying.
 
 **Enterprise** is no longer a separate tier — the term used to imply a
 future paywalled SSO/RBAC layer, which we explicitly do not want. When
@@ -88,13 +94,16 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 ## Example dialogue
 
 > **Designer:** "Should the audit log filter live on the Portal?"
-> **Domain expert:** "No — auditing is a Pro feature, and the Portal is anonymous. Audit log review is what the Buyer cares about, but the UI lives in Admin because that's where Operators do work."
+> **Domain expert:** "No — the Portal is anonymous, and audit log review is Operator work. The audit log itself is open-source as of 2026-06-28 — putting it behind Pro pattern-matched as open-core greed and damaged the control-point story. Audit UI lives in Admin because that's where Operators do work."
 
 > **Engineer:** "Can we move OSV scanning into Pro?"
-> **Domain expert:** "No — OSV scanning is the compliance wedge. Per ADR-0003 we keep the wedge open-source so the proxy itself is the buyer's compliance instrument. Pro buys the *management UI* around the wedge: the security-intelligence dashboard, the rules engine that acts on findings, the audit log that records the decisions."
+> **Domain expert:** "No — OSV scanning, the rules engine, and the security intelligence dashboard are all open-source. Per ADR-0003 governance primitives stay free so the proxy itself is the buyer's compliance instrument. Pro buys exactly one UI surface (multi-project workspaces) plus the support / SLA / compliance / consulting contract."
 
 > **Engineer:** "Should SSO be a Pro feature?"
-> **Domain expert:** "No. 'SSO tax' kills enterprise adoption and competitors give it free. SSO/RBAC are open-source. Pro is governance/team/compliance UI + support, not commodity self-hosted infra."
+> **Domain expert:** "No. 'SSO tax' kills enterprise adoption and competitors give it free. SSO/RBAC are open-source. Pro is multi-project workspaces + support contract, not commodity self-hosted infra and not governance primitives."
+
+> **Engineer:** "Why is multi-project the only Pro UI feature now?"
+> **Domain expert:** "Multi-project naturally maps to the buyer ICP — a team running Depsilo across many projects in production is exactly who should be on a support contract. We surface that one feature so the upgrade conversation has a clear trigger ('we need workspace structure'), then the contract delivers SLA + compliance + consulting around it. A narrow gate makes the funnel high-intent."
 
 ## Flagged ambiguities
 

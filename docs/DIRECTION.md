@@ -110,11 +110,13 @@ multi-ecosystem, with a built-in **supply-chain control + compliance** layer.
 - **Two SKUs only:** Open Source (MIT, self-hosted, free) and Pro (single-tier,
   contract-priced via sales conversation). No `$9` hobby pricing, no Community/Pro/Team
   ladder, no cloud/hosted SKU.
-- The Pro contract gates a **narrow surface**: long-retention audit logs, the package
-  allow/deny rules engine + UI, the security intelligence dashboard, and multi-project
-  workspaces. Everything else — including SSO/RBAC, SBOM export, OSV scanning, HA, and
-  the T1 supply-chain wedge — stays open-source. What the contract actually buys is
-  **support + SLA + compliance assistance**, not a feature paywall.
+- The Pro contract gates **exactly one** UI surface: **multi-project workspaces**
+  (per-project isolation of audit/rules/SBOM/cache + per-project RBAC). Everything
+  else — audit logs, the rules engine + UI, the security intelligence dashboard, SBOM
+  export, OSV scanning, SSO/RBAC, HA, and the T1 supply-chain wedge — stays open-source.
+  What the contract actually buys is **support + SLA + compliance assistance + production
+  consulting + priority issue handling**, with multi-project as the conversational
+  trigger ("teams running Depsilo across many projects → support contract").
 - *No public price.* `$9/mo` signalled "hobby" and pattern-matched to open-core greed
   attacks. The new framing is "talk to us about a production deployment." Pricing
   conversations are a founder activity, not an agent task. See ADR-0003 §"Decision".
@@ -224,10 +226,12 @@ Block response = HTTP 451 with `code: MALICIOUS_BLOCKED`. Matched versions are
 never cached and any existing cache entry is evicted on first match.
 
 **Governance features go in open-source.** Minimum release age, malicious blocklist,
-SBOM export, and OSV scanning are the product wedge — they must be available to
-everyone. The Pro tier is the **management UI + workflow + contract** around them:
-long-retention audit log, the rules engine + UI, the security-intelligence dashboard
-(cross-package vulnerability view + decision workflow), and multi-project workspaces.
+SBOM export, OSV scanning, the audit log, the package allow/deny rules engine, and
+the security intelligence dashboard are all open-source product wedges — they must
+be available to everyone running a self-hosted control point. The Pro tier is the
+**multi-project workspace + support contract**: per-project isolation of all that
+governance machinery, per-project RBAC, plus the support / SLA / compliance /
+consulting bundle that the contract delivers.
 
 **SSO / RBAC go in open-source.** Updated from the original direction. The "SSO tax"
 pattern damages trust and competitors give it free; locking SSO behind Pro would kill
@@ -256,15 +260,22 @@ rationale persists:
   - **Open Source** — MIT, self-hosted, free. Everything an Operator needs.
   - **Pro** — single tier, contract via sales conversation, no public price.
 
-**Pro gates a narrow surface.** Currently four features: long-retention audit logs,
-the package allow/deny rules engine + UI, the security intelligence dashboard,
-multi-project workspaces. What the contract buys is support + SLA + compliance
-assistance + those four UIs, never feature-locked infrastructure.
+**Pro gates exactly one UI surface.** Multi-project workspaces (per-project isolation
+of audit/rules/SBOM/cache + per-project RBAC). The contract buys support + SLA +
+compliance assistance (CRA / SBOM workflows) + production-deploy consulting (HA /
+capacity / upgrade paths) + priority issue handling + that one UI. Never
+feature-locked infrastructure. Multi-project is the conversational trigger for
+the Pro upgrade — "we run Depsilo across many projects in production" maps directly
+to "we want a support contract."
 
-**Wedge stays in open-source.** OSV scanning, SBOM export, T1 supply-chain features
+**Wedge + governance primitives stay in open-source.** Audit logs, rules engine,
+security intelligence dashboard, OSV scanning, SBOM export, T1 supply-chain features
 (minimum release age, malicious blocklist, freeze/snapshot, tamper detection), HA,
-SSO/RBAC, webhook alerting — all open-source. The proxy itself is the compliance
-instrument; Pro is the *management* of that instrument.
+SSO/RBAC, webhook alerting — all open-source. The proxy itself + its governance
+primitives are the compliance instrument; Pro is *workspace structure + the support
+contract* around that instrument. Locking governance primitives behind Pro pattern-
+matched as open-core greed and was reversed on 2026-06-28; the position is
+deliberate, not provisional.
 
 **Trial system retained.** 14-day self-evaluation of Pro features still works. The
 post-trial UX no longer offers self-serve purchase; it offers a Contact sales link
@@ -280,6 +291,17 @@ server) can layer on top without breaking the public API.
 **No cloud SKU.** Cloud / managed-hosted was removed from sales surfaces. For a
 local-first dependency cache, cross-internet hosting cancels the value prop. We
 are explicit about not selling it rather than implying it might come.
+
+**Pro narrowed to multi-project (2026-06-28 second pass).** The original reset
+left four UI features in Pro (audit logs, rules engine, security intelligence
+dashboard, multi-project workspaces). A second pass on the same day moved the
+first three to open-source and left only multi-project gated. Reasoning: a
+self-hosted *control point* must ship governance primitives — audit, allow/deny
+rules, security dashboard — free; locking them undermines the entire
+positioning. Multi-project is the right single gate because it cleanly maps to
+the buyer ICP (production teams running Depsilo across many projects) and
+because the contract sells the support / SLA / compliance / consulting bundle,
+not the feature itself. A narrow gate makes the funnel high-intent.
 
 ---
 
