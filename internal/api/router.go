@@ -185,35 +185,46 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.PUT("/license/key", licenseHandler.SetKey)
 	adminGroup.DELETE("/license/key", licenseHandler.ClearKey)
 
-	// Pro features (require entitlement)
+	// Audit logs, rules engine, and the security intelligence dashboard
+	// landed in open-source on 2026-06-28 as part of the pricing reset —
+	// these are governance primitives a self-hosted control point needs
+	// from day one. See docs/DIRECTION.md "Pricing reset" decisions log
+	// and ADR-0003. They mount on the regular adminGroup (auth-only, no
+	// entitlement gate).
+	auditHandler := admin.NewAuditHandler(deps.DB)
+	adminGroup.GET("/audit-logs", auditHandler.List)
+	adminGroup.GET("/audit-logs/export", auditHandler.Export)
+
+	rulesHandler := admin.NewRulesHandler(deps.DB, deps.RulesStore, deps.RulesEngine)
+	adminGroup.GET("/rules", rulesHandler.List)
+	adminGroup.POST("/rules", rulesHandler.Create)
+	adminGroup.PUT("/rules/:id", rulesHandler.Update)
+	adminGroup.DELETE("/rules/:id", rulesHandler.Delete)
+	adminGroup.POST("/rules/test", rulesHandler.Test)
+
+	securityHandler := admin.NewSecurityHandler(deps.DB, deps.SecurityScanner, deps.SecurityImporter)
+	adminGroup.GET("/security/dashboard", securityHandler.Dashboard)
+	adminGroup.GET("/security/vulnerabilities", securityHandler.ListVulnerabilities)
+	adminGroup.GET("/security/packages", securityHandler.ListPackages)
+	adminGroup.GET("/security/suggestions", securityHandler.ListSuggestions)
+	adminGroup.POST("/security/suggestions/:vuln_id/approve", securityHandler.ApproveSuggestion)
+	adminGroup.POST("/security/suggestions/:vuln_id/dismiss", securityHandler.DismissSuggestion)
+	adminGroup.POST("/security/scan", securityHandler.TriggerScan)
+	adminGroup.POST("/security/import", securityHandler.ImportData)
+	adminGroup.GET("/security/policies", securityHandler.ListPolicies)
+	adminGroup.PUT("/security/policies/:ecosystem", securityHandler.UpdatePolicy)
+
+	// Pro features (require entitlement). Multi-project workspaces are
+	// the only UI surface gated today — production teams running Depsilo
+	// across many projects/teams are the buyer the Pro contract is built
+	// for, so "do you need multiple projects?" is the natural surfaced
+	// trigger for the sales conversation. Per-project SBOM export lives
+	// here because it's an artifact of the multi-project surface; depsilo's
+	// own SBOM (and a single-project user's SBOM) is generated through the
+	// open-source CI workflow.
 	proGroup := adminGroup.Group("")
 	proGroup.Use(entitlement.RequirePro(deps.Entitlement))
 
-	auditHandler := admin.NewAuditHandler(deps.DB)
-	proGroup.GET("/audit-logs", auditHandler.List)
-	proGroup.GET("/audit-logs/export", auditHandler.Export)
-
-	rulesHandler := admin.NewRulesHandler(deps.DB, deps.RulesStore, deps.RulesEngine)
-	proGroup.GET("/rules", rulesHandler.List)
-	proGroup.POST("/rules", rulesHandler.Create)
-	proGroup.PUT("/rules/:id", rulesHandler.Update)
-	proGroup.DELETE("/rules/:id", rulesHandler.Delete)
-	proGroup.POST("/rules/test", rulesHandler.Test)
-
-	// Security intelligence (Pro)
-	securityHandler := admin.NewSecurityHandler(deps.DB, deps.SecurityScanner, deps.SecurityImporter)
-	proGroup.GET("/security/dashboard", securityHandler.Dashboard)
-	proGroup.GET("/security/vulnerabilities", securityHandler.ListVulnerabilities)
-	proGroup.GET("/security/packages", securityHandler.ListPackages)
-	proGroup.GET("/security/suggestions", securityHandler.ListSuggestions)
-	proGroup.POST("/security/suggestions/:vuln_id/approve", securityHandler.ApproveSuggestion)
-	proGroup.POST("/security/suggestions/:vuln_id/dismiss", securityHandler.DismissSuggestion)
-	proGroup.POST("/security/scan", securityHandler.TriggerScan)
-	proGroup.POST("/security/import", securityHandler.ImportData)
-	proGroup.GET("/security/policies", securityHandler.ListPolicies)
-	proGroup.PUT("/security/policies/:ecosystem", securityHandler.UpdatePolicy)
-
-	// Project management (Pro)
 	projectsHandler := admin.NewProjectsHandler(deps.DB)
 	proGroup.GET("/projects", projectsHandler.List)
 	proGroup.POST("/projects", projectsHandler.Create)

@@ -63,11 +63,14 @@ func (l *Logger) flush(batch []db.AuditLog) {
 	}
 }
 
-// Log enqueues an audit log entry. If Pro is not active, the entry is silently dropped.
+// Log enqueues an audit log entry. As of the 2026-06-28 pricing reset
+// audit logging is an open-source primitive — a self-hosted control
+// point needs an audit trail from day one — so the previous
+// `if !IsPro()` gate is gone. The checker field is retained for now
+// to keep the constructor signature stable; future Pro-only audit
+// extensions (e.g. long-retention storage) can re-introduce a
+// granular check at that layer.
 func (l *Logger) Log(entry db.AuditLog) {
-	if !l.checker.IsPro() {
-		return
-	}
 	select {
 	case l.queue <- entry:
 	default:

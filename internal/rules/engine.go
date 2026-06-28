@@ -30,12 +30,11 @@ func NewEngine(store *Store, checker *entitlement.Checker) *Engine {
 }
 
 // Check returns (allowed, matchedRule, error).
-// Community edition always returns allowed=true.
+// As of the 2026-06-28 pricing reset the rules engine runs in open-source
+// — package allow/deny is a governance primitive a self-hosted control
+// point needs, not a paywall feature. The checker field is retained for
+// constructor stability; the previous IsPro short-circuit is gone.
 func (e *Engine) Check(ctx context.Context, ecosystem, packageName, version string) (bool, *db.PackageRule, error) {
-	if !e.checker.IsPro() {
-		return true, nil, nil
-	}
-
 	rules, err := e.loadRules()
 	if err != nil {
 		return true, nil, err // fail open
