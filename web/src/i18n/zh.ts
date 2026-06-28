@@ -242,7 +242,7 @@ const zh = {
       noLogs: '暂无审计日志',
       proRequired: '审计日志需要 Depsilo Pro',
       proDesc: '追踪谁下载了什么包、什么时间、从哪个 IP 地址。',
-      upgrade: '升级到 Pro',
+      upgrade: '联系销售',
     },
 
     // Rules
@@ -275,7 +275,7 @@ const zh = {
       noMatch: '未匹配到规则（默认：允许）',
       proRequired: '包治理规则需要 Depsilo Pro',
       proDesc: '控制哪些包可以被下载。阻止漏洞版本，强制使用已批准的包。',
-      upgrade: '升级到 Pro',
+      upgrade: '联系销售',
     },
 
     // Security
@@ -356,7 +356,7 @@ const zh = {
 
       proRequired: '包安全功能需要 Depsilo Pro',
       proDesc: '监控缓存包的已知漏洞，自动拦截高危版本。',
-      upgrade: '升级到 Pro',
+      upgrade: '联系销售',
     },
 
     // Users
@@ -553,7 +553,7 @@ const zh = {
       ecosystemBreakdown: '生态分布',
       proRequired: '项目管理需要 Depsilo Pro',
       proDesc: '按项目追踪依赖使用，生成 SBOM 清单。',
-      upgrade: '升级到 Pro',
+      upgrade: '联系销售',
     },
 
     // SBOM
@@ -626,10 +626,10 @@ const zh = {
 
       trial: {
         start_button: '开始 14 天免费试用',
-        start_explainer: '解锁审计日志、SBOM 导出、多项目、安全扫描等全部 Pro 能力。无需信用卡，无需邮箱。',
+        start_explainer: '解锁审计日志、规则引擎、安全情报视图、多项目工作区四项 Pro 能力。本地激活，无需信用卡，无需邮箱。',
         days_left: '剩余 {{count}} 天',
         expires_at: '将于 {{date}} 结束',
-        expired_message: '试用已于 {{date}} 结束。Free 功能继续保留。',
+        expired_message: '试用已于 {{date}} 结束。开源版功能继续保留。如需在生产团队长期使用 Pro，联系我们。',
       },
 
       pro: {
@@ -640,8 +640,7 @@ const zh = {
       },
 
       revalidate: '重新校验',
-      buy_pro: '购买 Pro',
-      view_pricing: '查看定价',
+      contact_sales: '联系销售',
 
       key: {
         title: '许可证密钥',
@@ -658,10 +657,10 @@ const zh = {
       },
 
       paywall: {
-        title: '此功能需要 Depsilo Pro',
-        body: 'Pro 提供审计日志、SBOM 导出、多项目工作区、安全扫描等高级能力。',
+        title: '此功能在 Pro 版本提供',
+        body: '审计日志、规则引擎、安全情报、多项目工作区是面向生产团队的能力。可以先开 14 天本地试用评估，或直接联系我们了解 Pro 与企业支持。',
         start_trial: '开始 14 天免费试用',
-        buy_pro: '购买 Pro',
+        contact_sales: '联系销售',
         learn_more: '了解更多',
         view_status: '查看许可证状态',
         dismiss: '稍后',
@@ -671,22 +670,22 @@ const zh = {
       },
 
       features: {
-        heading: 'Pro 包含哪些能力？',
+        heading: '开源版 与 Pro 各自包含什么？',
         free: {
-          f1: '12 种生态代理',
-          f2: '缓存管理 + 流量统计',
-          f3: '基础上游源管理',
-          f4: '单用户访问',
-          f5: '本地或 S3 存储',
-          f6: '健康检查与延迟优选',
+          f1: '14 种生态代理',
+          f2: '缓存管理 + 流量统计 + 仪表盘',
+          f3: '上游源管理 + 健康检查 + 延迟优选',
+          f4: 'OSV 漏洞扫描（结果在审计层面）',
+          f5: 'SBOM 导出（CycloneDX + SPDX）',
+          f6: '本地 / S3 / PostgreSQL · Webhook 告警 · Prometheus 指标',
         },
         pro: {
-          f1: '多项目工作区',
-          f2: 'OSV 安全漏洞扫描',
-          f3: 'SBOM 导出（SPDX + CycloneDX）',
-          f4: '审计日志（可导出 CSV）',
-          f5: '包级别 Allow/Deny 规则',
-          f6: '优先技术支持',
+          f1: '审计日志（长保留 + CSV 导出）',
+          f2: '包级别 Allow/Deny 规则引擎 + UI',
+          f3: '安全情报 dashboard（漏洞集中视图 + 决策工作流）',
+          f4: '多项目工作区（团队隔离）',
+          f5: '企业支持 + SLA',
+          f6: '合规协助（CRA / SBOM 流程对接）',
         },
       },
     },

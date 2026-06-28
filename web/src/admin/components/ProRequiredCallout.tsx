@@ -8,9 +8,14 @@ interface ProRequiredCalloutProps {
   title: string
   /** Already-translated description text */
   description: string
-  /** Already-translated upgrade button label */
+  /** Already-translated CTA button label — "Contact us" / "联系我们" by default */
   upgradeLabel: string
-  /** Where the upgrade button links to. Defaults to depsilo.com/#pricing. */
+  /**
+   * Where the CTA links to. Defaults to the contact-sales mailto.
+   * Depsilo's monetization moved from $9 self-serve to single-tier
+   * Enterprise contract in 2026-06; the link is no longer a pricing
+   * page but a way to start a conversation.
+   */
   upgradeHref?: string
 }
 
@@ -24,7 +29,7 @@ export default function ProRequiredCallout({
   title,
   description,
   upgradeLabel,
-  upgradeHref = 'https://depsilo.com/#pricing',
+  upgradeHref = 'mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry',
 }: ProRequiredCalloutProps) {
   return (
     <div

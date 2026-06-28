@@ -139,6 +139,9 @@ export default function License() {
       </div>
 
       {/* ── State panel ────────────────────────────── */}
+      {/* Self-serve checkout is gone — Pro is contract-based now.
+          Every CTA opens a mailto: with a subject pre-filled instead
+          of routing to a pricing page that no longer exists. */}
       {source === 'none' && !trialUsed && (
         <StatePanel
           tone="brand"
@@ -150,8 +153,8 @@ export default function License() {
             <ButtonV2 onClick={() => activateTrial.mutate()} disabled={activateTrial.isPending}>
               {t('license.trial.start_button')}
             </ButtonV2>
-            <ButtonV2 variant="secondary" onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}>
-              {t('license.view_pricing')}
+            <ButtonV2 variant="secondary" onClick={() => window.open('mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry', '_blank')}>
+              {t('license.contact_sales')}
             </ButtonV2>
           </div>
         </StatePanel>
@@ -164,8 +167,8 @@ export default function License() {
           title={`${t('license.status.pro')} · ${t('license.status.trial')}`}
           description={`${t('license.trial.days_left', { count: status.days_left })} · ${t('license.trial.expires_at', { date: formatDate(status.expires_at) })}`}
         >
-          <ButtonV2 variant="secondary" onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}>
-            {t('license.buy_pro')}
+          <ButtonV2 variant="secondary" onClick={() => window.open('mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry', '_blank')}>
+            {t('license.contact_sales')}
           </ButtonV2>
         </StatePanel>
       )}
@@ -176,8 +179,8 @@ export default function License() {
           icon="warning"
           title={t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
         >
-          <ButtonV2 onClick={() => window.open('https://depsilo.com/#pricing', '_blank')}>
-            {t('license.buy_pro')}
+          <ButtonV2 onClick={() => window.open('mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry', '_blank')}>
+            {t('license.contact_sales')}
           </ButtonV2>
         </StatePanel>
       )}

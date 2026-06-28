@@ -242,7 +242,7 @@ const en = {
       noLogs: 'No audit logs',
       proRequired: 'Audit logs require Depsilo Pro',
       proDesc: 'Track who downloaded what, when, and from which IP address.',
-      upgrade: 'Upgrade to Pro',
+      upgrade: 'Contact sales',
     },
 
     // Rules
@@ -275,7 +275,7 @@ const en = {
       noMatch: 'No rule matched (default: allow)',
       proRequired: 'Package rules require Depsilo Pro',
       proDesc: 'Control which packages can be downloaded. Block vulnerable versions, enforce approved packages.',
-      upgrade: 'Upgrade to Pro',
+      upgrade: 'Contact sales',
     },
 
     // Security
@@ -356,7 +356,7 @@ const en = {
 
       proRequired: 'Package Security requires Depsilo Pro',
       proDesc: 'Monitor cached packages for known CVEs, auto-block vulnerable versions.',
-      upgrade: 'Upgrade to Pro',
+      upgrade: 'Contact sales',
     },
 
     // Users
@@ -553,7 +553,7 @@ const en = {
       ecosystemBreakdown: 'Ecosystem Breakdown',
       proRequired: 'Projects require Depsilo Pro',
       proDesc: 'Track dependencies per project and generate SBOM reports.',
-      upgrade: 'Upgrade to Pro',
+      upgrade: 'Contact sales',
     },
 
     // SBOM
@@ -626,10 +626,10 @@ const en = {
 
       trial: {
         start_button: 'Start 14-day free trial',
-        start_explainer: 'Unlock audit logs, SBOM export, multi-project, security scanning, and the rest of Pro. No credit card. No email.',
+        start_explainer: 'Unlocks audit logs, the rules engine, the security intelligence dashboard, and multi-project workspaces. Activated locally — no credit card, no email.',
         days_left: '{{count}} days remaining',
         expires_at: 'Expires {{date}}',
-        expired_message: 'Trial ended on {{date}}. Your Free tier features are unaffected.',
+        expired_message: 'Trial ended on {{date}}. Open-source features remain available. To keep Pro running in a production team, contact us.',
       },
 
       pro: {
@@ -640,8 +640,7 @@ const en = {
       },
 
       revalidate: 'Revalidate',
-      buy_pro: 'Buy Pro',
-      view_pricing: 'View pricing',
+      contact_sales: 'Contact sales',
 
       key: {
         title: 'License key',
@@ -658,10 +657,10 @@ const en = {
       },
 
       paywall: {
-        title: 'This feature requires Depsilo Pro',
-        body: 'Pro adds audit logs, SBOM export, multi-project workspaces, security scanning, and more.',
+        title: 'This feature is part of Pro',
+        body: 'Audit logs, the rules engine, the security intelligence dashboard, and multi-project workspaces are built for production teams. Start a 14-day local trial to evaluate, or contact us to talk Pro + Enterprise support.',
         start_trial: 'Start 14-day free trial',
-        buy_pro: 'Buy Pro',
+        contact_sales: 'Contact sales',
         learn_more: 'Learn more',
         view_status: 'View license status',
         dismiss: 'Maybe later',
@@ -671,22 +670,22 @@ const en = {
       },
 
       features: {
-        heading: "What's in Pro?",
+        heading: "What's in Open Source vs Pro?",
         free: {
-          f1: 'Proxy for 12 ecosystems',
-          f2: 'Cache management + bandwidth analytics',
-          f3: 'Basic upstream source management',
-          f4: 'Single-user access',
-          f5: 'Local or S3 storage',
-          f6: 'Health checks + latency-based selection',
+          f1: 'Proxy for 14 ecosystems',
+          f2: 'Cache management + bandwidth analytics + dashboard',
+          f3: 'Upstream sources + health checks + latency-based selection',
+          f4: 'OSV vulnerability scanning (results visible at audit layer)',
+          f5: 'SBOM export (CycloneDX + SPDX)',
+          f6: 'Local / S3 / PostgreSQL · webhook alerts · Prometheus metrics',
         },
         pro: {
-          f1: 'Multi-project workspaces',
-          f2: 'OSV security vulnerability scanning',
-          f3: 'SBOM export (SPDX + CycloneDX)',
-          f4: 'Audit logs (CSV export)',
-          f5: 'Package-level allow/deny rules',
-          f6: 'Priority support',
+          f1: 'Audit log (long retention + CSV export)',
+          f2: 'Package allow/deny rules engine + UI',
+          f3: 'Security intelligence dashboard (cross-package view + workflow)',
+          f4: 'Multi-project workspaces (team isolation)',
+          f5: 'Enterprise support + SLA',
+          f6: 'Compliance assistance (CRA / SBOM workflows)',
         },
       },
     },
