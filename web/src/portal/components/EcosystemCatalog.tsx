@@ -36,6 +36,7 @@ export default function EcosystemCatalog({ selected, onSelect }: Props) {
   return (
     <nav
       aria-label={t('quickstart.pickEcosystem')}
+      className="eco-catalog"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -44,6 +45,12 @@ export default function EcosystemCatalog({ selected, onSelect }: Props) {
         padding: '12px 0 16px',
         minWidth: 0,
         overflowY: 'auto',
+        // Container queries: tiles read THIS element's width, not the
+        // viewport's. Lets the same EcosystemCatalog work as a narrow
+        // 240px rail in QuickStart and as a wide wall on a future
+        // landing page without media queries or React mode props.
+        containerType: 'inline-size',
+        containerName: 'eco-catalog',
       }}
     >
       {/* Rail title */}
@@ -79,7 +86,7 @@ export default function EcosystemCatalog({ selected, onSelect }: Props) {
             >
               {t(groupLabelKey(g))}
             </div>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            <ul className="eco-list" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {items.map(lang => {
                 const active = lang.id === selected
                 return (

@@ -659,6 +659,32 @@ a:focus:not(:focus-visible) {
   z-index: -1;
 }
 
+/* ── Container queries on the ecosystem catalog ───────────
+   The same EcosystemCatalog drives two layouts: the 240px narrow
+   rail in QuickStart and any wider variant (e.g. a future landing
+   page). Container queries let the inner <ul> read the catalog's
+   own width and switch its grid template without media queries or
+   a `mode` prop. */
+@container eco-catalog (min-width: 360px) {
+  .eco-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 4px;
+    padding: 0 8px;
+  }
+  /* Wider layouts pull the row border-left accent down to a left
+     dot so the brand-accent doesn't become a load-bearing visual
+     element on every column. */
+  .eco-list .eco-tile {
+    border-left-width: 0 !important;
+    border-radius: 8px;
+  }
+  .eco-list .eco-tile[aria-current='true'],
+  .eco-list .eco-tile:hover {
+    border-radius: 8px;
+  }
+}
+
 /* ── Scroll-driven reveal ─────────────────────────────────
    Sections fade + nudge up 8px as they enter the viewport. Pure
    CSS, GPU-composited, no IntersectionObserver. Stagger comes from
