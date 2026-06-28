@@ -19,14 +19,10 @@ api.interceptors.response.use(
       localStorage.removeItem('token')
       window.location.href = '/admin/login'
     }
-    if (
-      err.response?.status === 402 &&
-      err.response?.data?.code === 'PRO_REQUIRED'
-    ) {
-      window.dispatchEvent(
-        new CustomEvent('depsilo:pro-required', { detail: err.response.data }),
-      )
-    }
+    // 402 PRO_REQUIRED is left to each Pro-gated page to render an
+    // inline ProRequiredCallout — the previous app-wide modal popup
+    // proved too interruptive for users casually clicking around the
+    // admin sidebar.
     return Promise.reject(err)
   }
 )
