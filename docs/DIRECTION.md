@@ -96,20 +96,28 @@ multi-ecosystem, with a built-in **supply-chain control + compliance** layer.
 ### T2 — Adoptability & trust (table stakes for buyers with budget)
 
 - [ ] Rock-solid one-command deploy + **Helm chart** + strong **docs** (docs are a feature).
-- [ ] **RBAC + SSO (OIDC/LDAP)** available — not buried behind the top tier.
+- [ ] **RBAC + SSO (OIDC/LDAP) in open-source.** The "SSO tax" pattern is widely hated
+      and competitors give it free; locking SSO behind a paid tier kills enterprise
+      adoption. See `CONTEXT.md` "Product tiers" and §16 of this file for the explicit
+      open-source-only commitment.
 - [ ] **Multi-node / HA made genuinely easy** (this is where Artifactory/Nexus hurt — easy
-      HA is itself a wedge).
+      HA is itself a wedge). Open-source.
 - [ ] **Alerting:** webhook/Slack on policy hits (blocked malware, quarantined version, CVE
-      over threshold). Turns a passive cache into an active guardrail.
+      over threshold). Turns a passive cache into an active guardrail. Open-source.
 
 ### T3 — Monetization shape (informs feature-gating, not pricing)
 
-- The paid layer should be the **governance/compliance control plane** (policy engine,
-  audit log, SBOM/CRA exports, SSO, multi-node, support) — **not** "more storage." Gate
-  these features accordingly.
-- *Note for whoever sets pricing:* `$9/mo` signals "hobby." Teams that need governance are
-  used to paying far more (Artifactory self-host Pro ~$2,850/yr; managed peers ~$399/mo).
-  **Pricing itself is a founder decision, not an agent task.**
+- **Two SKUs only:** Open Source (MIT, self-hosted, free) and Pro (single-tier,
+  contract-priced via sales conversation). No `$9` hobby pricing, no Community/Pro/Team
+  ladder, no cloud/hosted SKU.
+- The Pro contract gates a **narrow surface**: long-retention audit logs, the package
+  allow/deny rules engine + UI, the security intelligence dashboard, and multi-project
+  workspaces. Everything else — including SSO/RBAC, SBOM export, OSV scanning, HA, and
+  the T1 supply-chain wedge — stays open-source. What the contract actually buys is
+  **support + SLA + compliance assistance**, not a feature paywall.
+- *No public price.* `$9/mo` signalled "hobby" and pattern-matched to open-core greed
+  attacks. The new framing is "talk to us about a production deployment." Pricing
+  conversations are a founder activity, not an agent task. See ADR-0003 §"Decision".
 
 ---
 
@@ -216,9 +224,16 @@ Block response = HTTP 451 with `code: MALICIOUS_BLOCKED`. Matched versions are
 never cached and any existing cache entry is evicted on first match.
 
 **Governance features go in open-source.** Minimum release age, malicious blocklist,
-and SBOM export are the product wedge — they must be available to everyone. The Pro
-tier is the **control plane** around them: policy engine UI, multi-team, SSO,
-long-retention audit log, advanced webhook routing.
+SBOM export, and OSV scanning are the product wedge — they must be available to
+everyone. The Pro tier is the **management UI + workflow + contract** around them:
+long-retention audit log, the rules engine + UI, the security-intelligence dashboard
+(cross-package vulnerability view + decision workflow), and multi-project workspaces.
+
+**SSO / RBAC go in open-source.** Updated from the original direction. The "SSO tax"
+pattern damages trust and competitors give it free; locking SSO behind Pro would kill
+the same enterprise adoption Pro is supposed to land. SSO/RBAC, HA, multi-node, and
+all other commodity self-hosted infrastructure stay open-source. See ADR-0003 §"Decision"
+and CONTEXT.md "Product tiers".
 
 **Versioning policy until v1.0:** breaking changes allowed across minor versions;
 config-file backwards compatibility guaranteed within each `v0.x` line.
@@ -228,6 +243,43 @@ with phoning home.
 
 **Docs language:** main README + `docs/` in English; `CONTEXT.md` + this file may
 keep bilingual notes.
+
+---
+
+## Decisions locked-in 2026-06-28 — pricing & monetization reset
+
+A second decision pass on top of the original lock-in, captured here so the
+rationale persists:
+
+**Two SKUs only, contract-priced Pro.** The previous "Community (free) / Pro ($9/mo)
+/ Team ($29/mo) / Cloud" four-tier ladder is retired. New surface:
+  - **Open Source** — MIT, self-hosted, free. Everything an Operator needs.
+  - **Pro** — single tier, contract via sales conversation, no public price.
+
+**Pro gates a narrow surface.** Currently four features: long-retention audit logs,
+the package allow/deny rules engine + UI, the security intelligence dashboard,
+multi-project workspaces. What the contract buys is support + SLA + compliance
+assistance + those four UIs, never feature-locked infrastructure.
+
+**Wedge stays in open-source.** OSV scanning, SBOM export, T1 supply-chain features
+(minimum release age, malicious blocklist, freeze/snapshot, tamper detection), HA,
+SSO/RBAC, webhook alerting — all open-source. The proxy itself is the compliance
+instrument; Pro is the *management* of that instrument.
+
+**Trial system retained.** 14-day self-evaluation of Pro features still works. The
+post-trial UX no longer offers self-serve purchase; it offers a Contact sales link
+to start the conversation.
+
+**Lemon Squeezy retired.** The HTTPS license validation handshake against
+api.lemonsqueezy.com was deleted along with the self-serve channel. License keys
+now arrive out-of-band from a contract conversation; any non-empty key activates
+Pro on the assumption "if the operator entered a key, the operator is on a
+contract." Future Enterprise tooling (signed JWT keys, depsilo-owned license
+server) can layer on top without breaking the public API.
+
+**No cloud SKU.** Cloud / managed-hosted was removed from sales surfaces. For a
+local-first dependency cache, cross-internet hosting cancels the value prop. We
+are explicit about not selling it rather than implying it might come.
 
 ---
 

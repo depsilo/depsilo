@@ -269,23 +269,32 @@ depsilo_cache_files_total
 - [ ] npm 支持
 - [ ] cargo 支持
 - [ ] Go modules 支持
-- [ ] Pro：审计日志
-- [ ] Pro：包白名单/黑名单
+- [ ] 审计日志（Pro，已实现，UI 完善中）
+- [ ] 包级 Allow/Deny 规则（Pro，已实现）
+- [ ] 最小发布年龄 / 恶意包阻断（开源版，规划中）
 
-## 💼 Pro 版本
+## 💼 Open Source 与 Pro
 
-| | 社区版 | Pro 版 |
-|---|---|---|
-| pip + apt 缓存 | ✅ | ✅ |
-| Web 界面 + 监控 | ✅ | ✅ |
-| npm / cargo / Go | ✅（开发中） | ✅ |
-| 审计日志 | — | ✅ |
-| 包白名单/黑名单 | — | ✅ |
-| PostgreSQL + S3 | — | ✅ |
-| 优先支持 | — | ✅ |
-| 价格 | 免费 | $9/月 |
+Depsilo 是**单档付费**，没有套餐分层、没有按月公开价格、没有云托管。
 
-👉 [depsilo.com/#pricing](https://depsilo.com/#pricing)
+**Open Source (MIT)** — 永远免费，自托管。
+
+包含 14 种生态代理、缓存与流量分析、上游源管理与健康检查、OSV
+漏洞扫描、SBOM 导出（CycloneDX + SPDX）、Webhook 告警、Prometheus
+指标、单/多用户访问，以及未来的供应链护城河功能（最小发布年龄、
+恶意包阻断、tamper detection）。SSO / RBAC 等自托管必需能力**不会**
+被锁在付费墙后面。
+
+**Pro · 企业支持** — 面向生产团队，联系销售。
+
+包含审计日志（长保留 + CSV 导出）、包级别 Allow/Deny 规则引擎、
+安全情报 dashboard（漏洞集中视图 + 决策工作流）、多项目工作区
+（团队隔离），以及 SLA、合规协助（CRA / SBOM 流程对接）、
+企业支持。
+
+→ <sales@depsilo.com>
+
+> 注：Pro 没有公开标价。我们卖支持 + SLA + 合规担责，不卖功能墙。
 
 ## 🤝 参与贡献
 

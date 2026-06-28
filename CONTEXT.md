@@ -18,16 +18,44 @@ _Avoid_: Developer (too broad), Consumer
 The person inside the customer org who signs the cheque. Usually the Operator's manager — CTO, head of infra, or security lead. Different motivations from the Operator (compliance, cost control, audit trail) and must be satisfied independently for a Pro/Enterprise deal to close.
 _Avoid_: Client, customer (ambiguous with org-level "customer")
 
-### Product tiers
+### Product tiers (2026-06-28 — see ADR-0003)
 
-**Free**:
-The fully open-source single-binary deployment. No license check, all 13 ecosystem adapters available. Goal: zero-friction adoption by Operators.
+There are exactly **two** tiers and they are never named otherwise in
+user-facing copy or code. The previous "Community / Pro / Team / Cloud"
+four-tier ladder and the `$9 / $29 / hosted` pricing rungs were retired
+on the date above — they signalled "hobby project" and let competitors
+attack with "open-core greed". The replacement is one OSS surface plus
+one contact-priced support contract.
 
-**Pro**:
-A paid tier gated by `license.RequirePro` middleware. Currently encodes: audit logs, rules engine, security/OSV scanning, project management + SBOM. Buyer-facing features.
+**Open Source** (MIT, free, self-hosted):
+The fully open-source single-binary deployment. No license check, all 14
+ecosystem adapters available. Includes everything an Operator needs to
+run Depsilo in production: cache + dashboard, upstream management, OSV
+vulnerability scanning, **SBOM export (CycloneDX + SPDX)**, webhook
+alerts, Prometheus metrics, single/multi-user access, **SSO / RBAC**,
+and the T1 supply-chain wedge features (minimum release age, malicious
+blocklist, freeze/snapshot, tamper detection) as those land. Goal:
+zero-friction adoption by Operators. **No self-hosted necessity ever
+gets paywalled** — especially not SSO/RBAC; the "SSO tax" pattern damages
+trust badly and competitors give it free, so we do too.
 
-**Enterprise**:
-Not yet built. Reserved language for future tier covering org-wide concerns: LDAP/SSO, clustering, SLA, professional support. Decision pending — see ADR-0001 if/when created.
+**Pro** (Enterprise support contract, single tier, contact-priced):
+A paid relationship gated by `entitlement.RequirePro` middleware,
+unlocked by an Enterprise contract key. Currently encodes four
+Buyer-facing capabilities: long-retention audit logs, the package
+allow/deny rules engine + UI, the security intelligence dashboard
+(cross-package vulnerability view + decision workflow), and multi-
+project workspaces (team isolation). What the contract actually buys
+is: support, SLA, compliance assistance (CRA / SBOM workflows), and
+those four UI surfaces — **not** more storage, not more ecosystems,
+not the wedge features (which stay open-source). No public price; the
+trigger is a conversation with sales, not a credit-card form.
+
+**Enterprise** is no longer a separate tier — the term used to imply a
+future paywalled SSO/RBAC layer, which we explicitly do not want. When
+copy needs a stronger word for "the Pro contract bundle for a large
+buyer," use "Pro · Enterprise support" rather than promising a tier
+that does not exist.
 
 ### Product surface
 
@@ -62,8 +90,11 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 > **Designer:** "Should the audit log filter live on the Portal?"
 > **Domain expert:** "No — auditing is a Pro feature, and the Portal is anonymous. Audit log review is what the Buyer cares about, but the UI lives in Admin because that's where Operators do work."
 
-> **Engineer:** "Can we move OSV scanning out of Pro?"
-> **Domain expert:** "OSV is the Buyer's reason to upgrade. Keep it in Pro."
+> **Engineer:** "Can we move OSV scanning into Pro?"
+> **Domain expert:** "No — OSV scanning is the compliance wedge. Per ADR-0003 we keep the wedge open-source so the proxy itself is the buyer's compliance instrument. Pro buys the *management UI* around the wedge: the security-intelligence dashboard, the rules engine that acts on findings, the audit log that records the decisions."
+
+> **Engineer:** "Should SSO be a Pro feature?"
+> **Domain expert:** "No. 'SSO tax' kills enterprise adoption and competitors give it free. SSO/RBAC are open-source. Pro is governance/team/compliance UI + support, not commodity self-hosted infra."
 
 ## Flagged ambiguities
 
