@@ -42,19 +42,20 @@ export default function ButtonV2({
   const isSecondary = variant === 'secondary'
   const isDanger = variant === 'danger'
 
-  // Primary buttons follow the Ink + Copper-Halo treatment: the button
-  // itself is a near-black inkwell, white text, with a copper-tinted
-  // box-shadow that reads as ambient glow rather than chrome. This keeps
-  // the brand color "alive" on the page without painting buttons with
-  // it — and lets every primary button feel like premium glass instead
-  // of solid plastic. Tokens use the brand CSS variable's hue so a
-  // future re-palette propagates automatically.
+  // Primary = Instrument's deep green button (--btn / --btn-fg).
+  // Solid fill, identical in light and dark modes per the brief. The
+  // hover state lifts via brightness (handled by the variant class)
+  // and the press state shrinks 4%. A subtle 1px inset top highlight
+  // gives it dimensionality without going back to the previous
+  // Ink+Halo approach the brief explicitly replaces. The press color
+  // (--btn-primary-press) gets used by parent overrides that want
+  // explicit :hover styling — most callers can rely on filter.
   const primaryStyle: React.CSSProperties = isPrimary
     ? {
-        background: 'var(--btn-primary-bg, oklch(0.18 0.02 250))',
-        color: 'var(--btn-primary-fg, white)',
+        background: 'var(--btn-primary-bg, #0A8654)',
+        color: 'var(--btn-primary-fg, #FFFFFF)',
         boxShadow:
-          'inset 0 1px 0 color-mix(in oklab, white 13%, transparent), 0 1px 0 oklch(0 0 0 / 0.4), 0 10px 28px color-mix(in oklab, var(--brand) 32%, transparent)',
+          'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
       }
     : {}
 

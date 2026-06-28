@@ -256,22 +256,23 @@ export default function HeroAICTA() {
                 // reads as state, not just "the button changed color".
                 background: copied
                   ? 'var(--ok-fill)'
-                  : 'var(--btn-primary-bg, oklch(0.18 0.02 250))',
+                  : 'var(--btn-primary-bg, #0A8654)',
                 color: copied
                   ? 'var(--ok-text)'
-                  : 'var(--btn-primary-fg, white)',
+                  : 'var(--btn-primary-fg, #FFFFFF)',
                 border: 'none',
                 borderRadius: 6,
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: prompt ? 'pointer' : 'not-allowed',
                 opacity: prompt ? 1 : 0.55,
-                // Ink button + copper halo — matches the ButtonV2 primary
-                // treatment so every primary CTA across the product feels
-                // like the same component.
+                // Instrument primary — solid deep green with a 1px inset
+                // top highlight + soft drop shadow. Matches ButtonV2's
+                // primary so every CTA across the product looks like
+                // the same component.
                 boxShadow: copied
                   ? 'none'
-                  : 'inset 0 1px 0 color-mix(in oklab, white 13%, transparent), 0 1px 0 oklch(0 0 0 / 0.4), 0 10px 28px color-mix(in oklab, var(--brand) 34%, transparent)',
+                  : 'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
                 transition:
                   'background 160ms ease, color 160ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
               }}

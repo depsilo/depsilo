@@ -220,8 +220,8 @@ export default function LoginV2() {
             flexDirection: 'column',
             gap: 28,
             background: `
-              radial-gradient(120% 80% at 0% 0%, oklch(0.55 0.13 200 / 0.10), transparent 55%),
-              radial-gradient(100% 80% at 100% 100%, oklch(0.72 0.11 180 / 0.08), transparent 55%),
+              radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--brand) 15%, transparent), transparent 55%),
+              radial-gradient(100% 80% at 100% 100%, color-mix(in oklab, var(--brand) 10%, transparent), transparent 55%),
               var(--bg-soft)
             `,
             borderRight: '0.5px solid var(--border)',

@@ -1,58 +1,66 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/inter-tight";
+@import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/noto-sans-sc";
 @import "material-symbols/outlined.css";
 
-/* ── Tailwind v4 @theme — turns CSS vars into utility classes ── */
+/* ── Tailwind v4 @theme — turns CSS vars into utility classes ──
+ *  These are the LIGHT mode values for the "Instrument" system.
+ *  Dark mode (the default) is set on :root below; Tailwind utility
+ *  classes that use these tokens render correctly in either mode
+ *  because the @theme block only contributes initial values for
+ *  the utility-class machinery, while the actual cascading values
+ *  on :root override them per data-theme. */
 @theme {
-  --color-bg-page:   oklch(0.995 0.003 250);
-  --color-bg-panel:  oklch(0.995 0.003 250);
-  --color-bg-card:   oklch(0.995 0.003 250);
-  --color-bg-soft:   oklch(0.965 0.004 250);
-  --color-bg-hover:  rgba(0, 0, 0, 0.035);
+  --color-bg-page:   #F6F7F6;
+  --color-bg-panel:  #FFFFFF;
+  --color-bg-card:   #FFFFFF;
+  --color-bg-soft:   #F1F3F2;
+  --color-bg-hover:  #ECEFEE;
 
-  --color-border:        rgba(0, 0, 0, 0.09);
-  --color-border-soft:   rgba(0, 0, 0, 0.05);
-  --color-border-strong: rgba(0, 0, 0, 0.18);
+  --color-border:        rgba(12, 22, 17, 0.10);
+  --color-border-soft:   rgba(12, 22, 17, 0.05);
+  --color-border-strong: rgba(12, 22, 17, 0.17);
 
-  --color-text:        #061b31;
-  --color-text-muted:  #4a5a73;
-  --color-text-soft:   #64748d;
-  --color-text-subtle: #8a96aa;
+  --color-text:        #14181A;
+  --color-text-muted:  #586068;
+  --color-text-soft:   #8A9299;
+  --color-text-subtle: #8A9299;
 
-  --color-brand:        oklch(0.55 0.13 200);
-  --color-brand-strong: oklch(0.48 0.14 200);
-  --color-brand-soft:   oklch(0.55 0.13 200 / 0.09);
-  --color-brand-border: oklch(0.55 0.13 200 / 0.30);
-  --color-brand-text:   oklch(0.40 0.12 200);
+  /* Brand = the "hit" signal green. Identical token, kept under the
+     old name so every component that reads --color-brand keeps
+     working. New code can use --color-hit. */
+  --color-brand:        #0FA86F;
+  --color-brand-strong: #0C8D5D;
+  --color-brand-soft:   #E4F6EE;
+  --color-brand-border: rgba(15, 168, 111, 0.30);
+  --color-brand-text:   #04321F;
 
-  --color-spec-1: oklch(0.55 0.14 200);
-  --color-spec-2: oklch(0.65 0.13 190);
-  --color-spec-3: oklch(0.72 0.11 180);
-  --color-spec-4: oklch(0.80 0.10 165);
+  --color-spec-1: #3DDC91;
+  --color-spec-2: #2DBE7A;
+  --color-spec-3: #0FA86F;
+  --color-spec-4: #0A8654;
 
-  --color-ok:          oklch(0.50 0.14 155);
-  --color-ok-fill:     oklch(0.50 0.14 155 / 0.10);
-  --color-ok-border:   oklch(0.50 0.14 155 / 0.28);
-  --color-ok-text:     oklch(0.36 0.12 155);
+  --color-ok:          #0FA86F;
+  --color-ok-fill:     #E4F6EE;
+  --color-ok-border:   rgba(15, 168, 111, 0.30);
+  --color-ok-text:     #04321F;
 
-  --color-warn:        oklch(0.70 0.14 65);
-  --color-warn-fill:   oklch(0.70 0.14 65 / 0.12);
-  --color-warn-border: oklch(0.70 0.14 65 / 0.30);
-  --color-warn-text:   oklch(0.45 0.12 55);
+  --color-warn:        #B5770E;
+  --color-warn-fill:   #FBEFD8;
+  --color-warn-border: rgba(181, 119, 14, 0.30);
+  --color-warn-text:   #B5770E;
 
-  --color-danger:        oklch(0.60 0.17 25);
-  --color-danger-fill:   oklch(0.60 0.17 25 / 0.10);
-  --color-danger-border: oklch(0.60 0.17 25 / 0.30);
-  --color-danger-text:   oklch(0.42 0.15 25);
+  --color-danger:        #CF4444;
+  --color-danger-fill:   #FBE9E9;
+  --color-danger-border: rgba(207, 68, 68, 0.30);
+  --color-danger-text:   #CF4444;
 
-  /* Inter Variable for Latin (Linear / Vercel-style UI font); Noto Sans SC Variable
-   * for CJK. PingFang SC kept as Apple-side fallback for higher fidelity on macOS.
-   * Mono stays Geist Mono — its tabular numerals are tuned for variable weights
-   * and the metric values across admin / portal lean on it. */
-  --font-sans: 'Inter Variable', 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  /* Inter Tight (UI text) + JetBrains Mono (numbers, code, endpoints).
+     Noto Sans SC Variable stays for CJK. PingFang SC kept as
+     Apple-side fallback. */
+  --font-sans: 'Inter Tight Variable', 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --spacing-1:  4px;
   --spacing-2:  8px;
@@ -68,212 +76,299 @@
   --radius-shell: 14px;
 }
 
-/* ── :root mirror — keeps var(--text) etc. working in inline styles ── */
+/* ── :root — Instrument LIGHT tokens ──────────────────────
+   These are the LIGHT mode values. Dark is the product default
+   and lives under [data-theme="dark"] below, which is set on
+   <html> by main.tsx before first paint to avoid FOUC.
+
+   Old token NAMES are preserved so every component that uses
+   var(--brand), var(--bg-page), etc. keeps working without
+   touching one line of JSX. The new Instrument NAMES (--bg,
+   --surface, --hit, --btn, ...) are added alongside so new
+   code can use the role-based vocabulary the brief prescribes. */
 :root {
-  --bg-page:   oklch(0.995 0.003 250);
-  --bg-panel:  oklch(0.995 0.003 250);
-  --bg-card:   oklch(0.995 0.003 250);
-  --bg-soft:   oklch(0.965 0.004 250);
-  --bg-hover:  rgba(0, 0, 0, 0.035);
+  /* Surfaces — old names */
+  --bg-page:   #F6F7F6;
+  --bg-panel:  #FFFFFF;
+  --bg-card:   #FFFFFF;
+  --bg-soft:   #F1F3F2;
+  --bg-hover:  #ECEFEE;
 
-  --border:        rgba(0, 0, 0, 0.09);
-  --border-soft:   rgba(0, 0, 0, 0.05);
-  --border-strong: rgba(0, 0, 0, 0.18);
+  --border:        rgba(12, 22, 17, 0.10);
+  --border-soft:   rgba(12, 22, 17, 0.05);
+  --border-strong: rgba(12, 22, 17, 0.17);
 
-  --text:        #061b31;
-  --text-muted:  #4a5a73;
-  --text-soft:   #64748d;
-  --text-subtle: #8a96aa;
+  --text:        #14181A;
+  --text-muted:  #586068;
+  --text-soft:   #8A9299;
+  --text-subtle: #8A9299;
 
-  /* Brand: Royal Purple (hue 310). Replaces the previous copper at
-     hue 50 which read as orange in practice. Same role across the
-     product — links, button halos, eyebrow text, status pulse — only
-     the hue moved. As before, "tinted fills" (selection backgrounds,
-     hover surfaces) drop chroma to neutral so they don't repaint the
-     page in lavender. */
-  --brand:        oklch(0.48 0.18 310);
-  --brand-strong: oklch(0.42 0.20 310);
-  --brand-soft:   oklch(0.48 0.02 310 / 0.10);
-  --brand-border: oklch(0.48 0.18 310 / 0.30);
-  --brand-text:   oklch(0.40 0.16 310);
+  /* Brand = the "hit" signal green. Used for links, active nav,
+     focus rings, status dots, cache-hit highlights — wherever the
+     previous purple lived. Per Instrument's "one rule", this is
+     SEPARATE from the primary button fill below. */
+  --brand:        #0FA86F;
+  --brand-strong: #0C8D5D;
+  --brand-soft:   #E4F6EE;
+  --brand-border: rgba(15, 168, 111, 0.30);
+  --brand-text:   #04321F;
 
-  --spec-1: oklch(0.48 0.18 310);
-  --spec-2: oklch(0.56 0.17 305);
-  --spec-3: oklch(0.62 0.14 295);
-  --spec-4: oklch(0.70 0.12 280);
+  /* Primary button fill — deeper green than the signal green,
+     ensuring the main action is visually unmistakable even on
+     pages with lots of brand-color use elsewhere. Identical
+     across themes per the brief. */
+  --btn-primary-bg: #0A8654;
+  --btn-primary-fg: #FFFFFF;
+  --btn-primary-press: #097A4B;
 
-  --grad-aurora: linear-gradient(
-    115deg,
-    var(--spec-1) 0%,
-    var(--spec-2) 40%,
-    var(--spec-3) 75%,
-    var(--spec-4) 100%
-  );
-  --grad-brand: linear-gradient(
-    120deg,
-    oklch(0.46 0.20 312) 0%,
-    oklch(0.54 0.17 290) 100%
-  );
-  --grad-rim: linear-gradient(
-    90deg,
-    transparent 0%,
-    oklch(0.48 0.18 310 / 0.45) 25%,
-    oklch(0.58 0.16 295 / 0.45) 60%,
-    transparent 100%
-  );
+  /* Aurora / brand gradients — repurposed to a green sweep so
+     the few places that still use --grad-brand (active tab
+     underline, brand bars) stay on-palette. */
+  --spec-1: #3DDC91;
+  --spec-2: #2DBE7A;
+  --spec-3: #0FA86F;
+  --spec-4: #0A8654;
 
-  /* Forest green — distinct from emerald-500 toB-default; harmonises with deep teal brand */
-  --ok:          oklch(0.50 0.14 155);
-  --ok-fill:     oklch(0.50 0.14 155 / 0.10);
-  --ok-border:   oklch(0.50 0.14 155 / 0.28);
-  --ok-text:     oklch(0.36 0.12 155);
+  --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
+  --grad-brand:  linear-gradient(120deg, #2DBE7A 0%, #0A8654 100%);
+  --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(15, 168, 111, 0.45) 25%, rgba(45, 190, 122, 0.45) 60%, transparent 100%);
 
-  --warn:        oklch(0.70 0.14 65);
-  --warn-fill:   oklch(0.70 0.14 65 / 0.12);
-  --warn-border: oklch(0.70 0.14 65 / 0.30);
-  --warn-text:   oklch(0.45 0.12 55);
+  /* OK / success — points at the same green as the brand because
+     "cache hit" and "success" are the same semantic. */
+  --ok:          #0FA86F;
+  --ok-fill:     #E4F6EE;
+  --ok-border:   rgba(15, 168, 111, 0.30);
+  --ok-text:     #04321F;
 
-  --danger:        oklch(0.60 0.17 25);
-  --danger-fill:   oklch(0.60 0.17 25 / 0.10);
-  --danger-border: oklch(0.60 0.17 25 / 0.30);
-  --danger-text:   oklch(0.42 0.15 25);
+  /* Warn / slow — amber per Instrument. */
+  --warn:        #B5770E;
+  --warn-fill:   #FBEFD8;
+  --warn-border: rgba(181, 119, 14, 0.30);
+  --warn-text:   #B5770E;
+
+  /* Danger / miss — red per Instrument. */
+  --danger:        #CF4444;
+  --danger-fill:   #FBE9E9;
+  --danger-border: rgba(207, 68, 68, 0.30);
+  --danger-text:   #CF4444;
+
+  /* Instrument role-named aliases — for new code that wants to use
+     the brief's vocabulary directly. Values track the existing
+     tokens so a future find-and-replace from old → new names is a
+     pure rename, not a value migration. */
+  --bg:        var(--bg-page);
+  --surface:   var(--bg-card);
+  --inset:     var(--bg-soft);
+  --hover:     var(--bg-hover);
+  --line:      var(--border);
+  --line-2:    var(--border-strong);
+  --fg:        var(--text);
+  --fg-mut:    var(--text-muted);
+  --fg-faint:  var(--text-subtle);
+  --hit:       var(--brand);
+  --hit-press: var(--brand-strong);
+  --hit-bg:    var(--brand-soft);
+  --on-hit:    var(--brand-text);
+  --btn:       var(--btn-primary-bg);
+  --btn-press: var(--btn-primary-press);
+  --btn-fg:    var(--btn-primary-fg);
+  --slow:      var(--warn);
+  --slow-bg:   var(--warn-fill);
+  --miss:      var(--danger);
+  --miss-bg:   var(--danger-fill);
+  --live:      #1F8FB8;
+  --glow:      rgba(15, 168, 111, 0.00);
+  --grid:      rgba(12, 22, 17, 0.025);
 
   --r-pill: 4px;
   --r-tag:  6px;
   --r-card: 10px;
   --r-shell: 14px;
+  /* Instrument radius aliases */
+  --r-sm: 6px; --r-md: 8px; --r-lg: 10px; --r-xl: 14px;
 
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
   --s-6: 24px; --s-8: 32px; --s-12: 48px;
 
-  --shadow-card: rgba(50, 50, 93, 0.06) 0 6px 18px -6px,
-                 rgba(0, 0, 0, 0.04) 0 3px 9px -3px;
-  --shadow-pop:  rgba(50, 50, 93, 0.18) 0 30px 45px -30px,
-                 rgba(0, 0, 0, 0.10) 0 18px 36px -18px;
+  --shadow-card: rgba(12, 22, 17, 0.05) 0 6px 18px -6px,
+                 rgba(12, 22, 17, 0.04) 0 3px 9px -3px;
+  --shadow-pop:  rgba(12, 22, 17, 0.15) 0 30px 45px -30px,
+                 rgba(12, 22, 17, 0.08) 0 18px 36px -18px;
 }
 
-/* ── Dark mode tokens ── */
+/* ── Dark mode — Instrument default ────────────────────── */
 html.dark,
 [data-theme="dark"] {
-  --bg-page:   oklch(0.18 0.012 250);
-  --bg-panel:  oklch(0.20 0.012 250);
-  --bg-card:   oklch(0.22 0.013 250);
-  --bg-soft:   oklch(0.25 0.014 250);
-  --bg-hover:  oklch(0.32 0.016 250 / 0.45);
+  --bg-page:   #0B0D0F;
+  --bg-panel:  #14181C;
+  --bg-card:   #14181C;
+  --bg-soft:   #1A1F24;
+  --bg-hover:  #20262C;
 
-  --border:        oklch(0.92 0.01 250 / 0.10);
-  --border-soft:   oklch(0.92 0.01 250 / 0.05);
-  --border-strong: oklch(0.92 0.01 250 / 0.22);
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-soft:   rgba(255, 255, 255, 0.04);
+  --border-strong: rgba(255, 255, 255, 0.15);
 
-  --text:        oklch(0.97 0.005 250);
-  --text-muted:  oklch(0.74 0.012 250);
-  --text-soft:   oklch(0.62 0.012 250);
-  --text-subtle: oklch(0.52 0.012 250);
+  --text:        #E9ECEE;
+  --text-muted:  #98A1A9;
+  --text-soft:   #98A1A9;
+  --text-subtle: #5E6770;
 
-  /* Dark mode brand — Royal Purple brightened so it stays legible
-     against the dark page background. Same hue (310), higher
-     lightness + slightly higher chroma to survive the lift. */
-  --brand:        oklch(0.66 0.18 310);
-  --brand-strong: oklch(0.72 0.18 310);
-  /* Same "kill the chroma in soft fills" rule as light mode — keeps
-     selection backgrounds reading as elevated panels rather than
-     lavender splotches against the dark page. */
-  --brand-soft:   oklch(0.66 0.02 310 / 0.14);
-  --brand-border: oklch(0.66 0.18 310 / 0.40);
-  --brand-text:   oklch(0.82 0.14 310);
+  /* Brand / signal-green = lifted to a brighter hit color so it
+     reads vividly on the dark surface. */
+  --brand:        #3DDC91;
+  --brand-strong: #2DBE7A;
+  --brand-soft:   rgba(61, 220, 145, 0.12);
+  --brand-border: rgba(61, 220, 145, 0.30);
+  --brand-text:   #3DDC91;
 
-  /* Ink-button inversion in dark mode: light cool-tinted pill on
-     dark page. Tint follows the brand hue family (290 lavender) so
-     the white surface and the purple halo speak the same color. */
-  --btn-primary-bg: oklch(0.94 0.012 290);
-  --btn-primary-fg: oklch(0.18 0.02 250);
+  /* Primary button stays the same deep green in both themes — the
+     brief is explicit that the CTA color does not flip. */
+  --btn-primary-bg: #0A8654;
+  --btn-primary-fg: #FFFFFF;
+  --btn-primary-press: #097A4B;
 
-  --spec-1: oklch(0.68 0.18 310);
-  --spec-2: oklch(0.74 0.16 300);
-  --spec-3: oklch(0.80 0.13 290);
-  --spec-4: oklch(0.84 0.10 275);
+  --spec-1: #3DDC91;
+  --spec-2: #2DBE7A;
+  --spec-3: #0FA86F;
+  --spec-4: #0A8654;
 
   --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-  --grad-brand:  linear-gradient(120deg, oklch(0.66 0.19 312) 0%, oklch(0.74 0.16 290) 100%);
-  --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.68 0.18 310 / 0.65) 25%, oklch(0.78 0.15 295 / 0.65) 60%, transparent 100%);
+  --grad-brand:  linear-gradient(120deg, #3DDC91 0%, #0FA86F 100%);
+  --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(61, 220, 145, 0.65) 25%, rgba(45, 190, 122, 0.65) 60%, transparent 100%);
 
-  /* Forest green — dark mode: brighter to maintain contrast against dark bg */
-  --ok:          oklch(0.70 0.16 150);
-  --ok-fill:     oklch(0.70 0.16 150 / 0.16);
-  --ok-border:   oklch(0.70 0.16 150 / 0.36);
-  --ok-text:     oklch(0.82 0.13 150);
+  --ok:          #3DDC91;
+  --ok-fill:     rgba(61, 220, 145, 0.12);
+  --ok-border:   rgba(61, 220, 145, 0.30);
+  --ok-text:     #3DDC91;
 
-  --warn:        oklch(0.80 0.14 65);
-  --warn-fill:   oklch(0.80 0.14 65 / 0.16);
-  --warn-border: oklch(0.80 0.14 65 / 0.36);
-  --warn-text:   oklch(0.88 0.12 65);
+  --warn:        #F2B544;
+  --warn-fill:   rgba(242, 181, 68, 0.13);
+  --warn-border: rgba(242, 181, 68, 0.30);
+  --warn-text:   #F2B544;
 
-  --danger:        oklch(0.74 0.17 25);
-  --danger-fill:   oklch(0.74 0.17 25 / 0.16);
-  --danger-border: oklch(0.74 0.17 25 / 0.36);
-  --danger-text:   oklch(0.84 0.13 25);
+  --danger:        #F76D6D;
+  --danger-fill:   rgba(247, 109, 109, 0.12);
+  --danger-border: rgba(247, 109, 109, 0.30);
+  --danger-text:   #F76D6D;
 
-  --shadow-card: 0 0 0 1px oklch(0.55 0.13 200 / 0.04),
-                 rgba(0, 0, 0, 0.25) 0 6px 18px -6px;
-  --shadow-pop:  0 0 0 1px oklch(0.55 0.13 200 / 0.08),
-                 rgba(0, 0, 0, 0.45) 0 24px 48px -16px;
+  /* Instrument role-named aliases follow the same redefinitions. */
+  --bg:        #0B0D0F;
+  --surface:   #14181C;
+  --inset:     #1A1F24;
+  --hover:     #20262C;
+  --line:      rgba(255, 255, 255, 0.08);
+  --line-2:    rgba(255, 255, 255, 0.15);
+  --fg:        #E9ECEE;
+  --fg-mut:    #98A1A9;
+  --fg-faint:  #5E6770;
+  --hit:       #3DDC91;
+  --hit-press: #2DBE7A;
+  --hit-bg:    rgba(61, 220, 145, 0.12);
+  --on-hit:    #042A1C;
+  --btn:       #0A8654;
+  --btn-press: #097A4B;
+  --btn-fg:    #FFFFFF;
+  --slow:      #F2B544;
+  --slow-bg:   rgba(242, 181, 68, 0.13);
+  --miss:      #F76D6D;
+  --miss-bg:   rgba(247, 109, 109, 0.12);
+  --live:      #54C6E6;
+  --glow:      rgba(61, 220, 145, 0.10);
+  --grid:      rgba(255, 255, 255, 0.022);
+
+  --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
+                 rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
+  --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
+                 rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
 }
 
-/* Auto-follow OS when user hasn't explicitly chosen */
+/* Auto-follow OS when user has selected "system" mode (i.e. no
+   class="light"/"dark" and no data-theme="light"/"dark" on <html>).
+   With dark now being the product default, this branch only kicks in
+   on a fresh install where the user has selected "system" and the OS
+   reports dark — which then matches the standard dark Instrument
+   tokens. Pulls in the same values as [data-theme="dark"] to keep
+   the two paths in lockstep. */
 @media (prefers-color-scheme: dark) {
   html:not(.light):not([data-theme="light"]) {
-    --bg-page:   oklch(0.18 0.012 250);
-    --bg-panel:  oklch(0.20 0.012 250);
-    --bg-card:   oklch(0.22 0.013 250);
-    --bg-soft:   oklch(0.25 0.014 250);
-    --bg-hover:  oklch(0.32 0.016 250 / 0.45);
+    --bg-page:   #0B0D0F;
+    --bg-panel:  #14181C;
+    --bg-card:   #14181C;
+    --bg-soft:   #1A1F24;
+    --bg-hover:  #20262C;
 
-    --border:        oklch(0.92 0.01 250 / 0.10);
-    --border-soft:   oklch(0.92 0.01 250 / 0.05);
-    --border-strong: oklch(0.92 0.01 250 / 0.22);
+    --border:        rgba(255, 255, 255, 0.08);
+    --border-soft:   rgba(255, 255, 255, 0.04);
+    --border-strong: rgba(255, 255, 255, 0.15);
 
-    --text:        oklch(0.97 0.005 250);
-    --text-muted:  oklch(0.74 0.012 250);
-    --text-soft:   oklch(0.62 0.012 250);
-    --text-subtle: oklch(0.52 0.012 250);
+    --text:        #E9ECEE;
+    --text-muted:  #98A1A9;
+    --text-soft:   #98A1A9;
+    --text-subtle: #5E6770;
 
-    --brand:        oklch(0.66 0.18 310);
-    --brand-strong: oklch(0.72 0.18 310);
-    --brand-soft:   oklch(0.66 0.02 310 / 0.14);
-    --brand-border: oklch(0.66 0.18 310 / 0.40);
-    --brand-text:   oklch(0.82 0.14 310);
+    --brand:        #3DDC91;
+    --brand-strong: #2DBE7A;
+    --brand-soft:   rgba(61, 220, 145, 0.12);
+    --brand-border: rgba(61, 220, 145, 0.30);
+    --brand-text:   #3DDC91;
 
-    --btn-primary-bg: oklch(0.94 0.012 290);
-    --btn-primary-fg: oklch(0.18 0.02 250);
+    --btn-primary-bg: #0A8654;
+    --btn-primary-fg: #FFFFFF;
+    --btn-primary-press: #097A4B;
 
-    --spec-1: oklch(0.68 0.18 310);
-    --spec-2: oklch(0.74 0.16 300);
-    --spec-3: oklch(0.80 0.13 290);
-    --spec-4: oklch(0.84 0.10 275);
+    --spec-1: #3DDC91;
+    --spec-2: #2DBE7A;
+    --spec-3: #0FA86F;
+    --spec-4: #0A8654;
 
     --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-    --grad-brand:  linear-gradient(120deg, oklch(0.72 0.14 210) 0%, oklch(0.78 0.12 190) 100%);
-    --grad-rim:    linear-gradient(90deg, transparent 0%, oklch(0.74 0.14 200 / 0.65) 25%, oklch(0.84 0.11 185 / 0.65) 60%, transparent 100%);
+    --grad-brand:  linear-gradient(120deg, #3DDC91 0%, #0FA86F 100%);
+    --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(61, 220, 145, 0.65) 25%, rgba(45, 190, 122, 0.65) 60%, transparent 100%);
 
-    --ok:          oklch(0.70 0.16 150);
-    --ok-fill:     oklch(0.70 0.16 150 / 0.16);
-    --ok-border:   oklch(0.70 0.16 150 / 0.36);
-    --ok-text:     oklch(0.82 0.13 150);
+    --ok:          #3DDC91;
+    --ok-fill:     rgba(61, 220, 145, 0.12);
+    --ok-border:   rgba(61, 220, 145, 0.30);
+    --ok-text:     #3DDC91;
 
-    --warn:        oklch(0.80 0.14 65);
-    --warn-fill:   oklch(0.80 0.14 65 / 0.16);
-    --warn-border: oklch(0.80 0.14 65 / 0.36);
-    --warn-text:   oklch(0.88 0.12 65);
+    --warn:        #F2B544;
+    --warn-fill:   rgba(242, 181, 68, 0.13);
+    --warn-border: rgba(242, 181, 68, 0.30);
+    --warn-text:   #F2B544;
 
-    --danger:        oklch(0.74 0.17 25);
-    --danger-fill:   oklch(0.74 0.17 25 / 0.16);
-    --danger-border: oklch(0.74 0.17 25 / 0.36);
-    --danger-text:   oklch(0.84 0.13 25);
+    --danger:        #F76D6D;
+    --danger-fill:   rgba(247, 109, 109, 0.12);
+    --danger-border: rgba(247, 109, 109, 0.30);
+    --danger-text:   #F76D6D;
 
-    --shadow-card: 0 0 0 1px oklch(0.55 0.13 200 / 0.04),
-                   rgba(0, 0, 0, 0.25) 0 6px 18px -6px;
-    --shadow-pop:  0 0 0 1px oklch(0.55 0.13 200 / 0.08),
-                   rgba(0, 0, 0, 0.45) 0 24px 48px -16px;
+    --bg:        #0B0D0F;
+    --surface:   #14181C;
+    --inset:     #1A1F24;
+    --hover:     #20262C;
+    --line:      rgba(255, 255, 255, 0.08);
+    --line-2:    rgba(255, 255, 255, 0.15);
+    --fg:        #E9ECEE;
+    --fg-mut:    #98A1A9;
+    --fg-faint:  #5E6770;
+    --hit:       #3DDC91;
+    --hit-press: #2DBE7A;
+    --hit-bg:    rgba(61, 220, 145, 0.12);
+    --on-hit:    #042A1C;
+    --btn:       #0A8654;
+    --btn-press: #097A4B;
+    --btn-fg:    #FFFFFF;
+    --slow:      #F2B544;
+    --slow-bg:   rgba(242, 181, 68, 0.13);
+    --miss:      #F76D6D;
+    --miss-bg:   rgba(247, 109, 109, 0.12);
+    --live:      #54C6E6;
+    --glow:      rgba(61, 220, 145, 0.10);
+    --grid:      rgba(255, 255, 255, 0.022);
+
+    --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
+                   rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
+    --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
+                   rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
   }
 }
 
@@ -283,7 +378,7 @@ html.dark,
 
 html.dark .aurora-glow::after,
 [data-theme="dark"] .aurora-glow::after {
-  background: radial-gradient(60% 80% at 50% 50%, oklch(0.74 0.14 200 / 0.28), transparent 70%);
+  background: radial-gradient(60% 80% at 50% 50%, rgba(61, 220, 145, 0.28), transparent 70%);
   filter: blur(28px);
 }
 
@@ -458,7 +553,7 @@ pre, code, .code-mono {
   position: absolute;
   left: -8%; right: -8%;
   top: 30%; bottom: -20%;
-  background: radial-gradient(60% 80% at 50% 50%, oklch(0.62 0.14 200 / 0.10), transparent 70%);
+  background: radial-gradient(60% 80% at 50% 50%, rgba(15, 168, 111, 0.10), transparent 70%);
   filter: blur(24px);
   z-index: -1;
   pointer-events: none;

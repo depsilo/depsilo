@@ -6,10 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>web</title>
     <script>
+      // Pre-paint theme init — runs before React mounts so the user
+      // never sees a flash of the wrong theme. Reads the new
+      // "depsilo-theme" key, falls back to the legacy "theme" key
+      // for users with the previous build, and defaults to "dark"
+      // when neither exists (Instrument default).
       (function(){
-        var t = localStorage.getItem('theme');
-        if (t === 'dark') document.documentElement.classList.add('dark');
-        else if (t === 'light') document.documentElement.classList.add('light');
+        var KEY = 'depsilo-theme';
+        var t = localStorage.getItem(KEY) || localStorage.getItem('theme');
+        if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'dark';
+        var resolved = t;
+        if (t === 'system') {
+          resolved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        }
+        document.documentElement.classList.add(resolved);
+        document.documentElement.setAttribute('data-theme', resolved);
       })();
     </script>
   </head>
