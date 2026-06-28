@@ -240,9 +240,6 @@ const zh = {
       latency: '耗时',
       bytes: '字节数',
       noLogs: '暂无审计日志',
-      proRequired: '审计日志需要 Depsilo Pro',
-      proDesc: '追踪谁下载了什么包、什么时间、从哪个 IP 地址。',
-      upgrade: '联系销售',
     },
 
     // Rules
@@ -273,9 +270,6 @@ const zh = {
       resultDenied: '已被禁止',
       matchedRule: '匹配的规则',
       noMatch: '未匹配到规则（默认：允许）',
-      proRequired: '包治理规则需要 Depsilo Pro',
-      proDesc: '控制哪些包可以被下载。阻止漏洞版本，强制使用已批准的包。',
-      upgrade: '联系销售',
     },
 
     // Security
@@ -353,10 +347,6 @@ const zh = {
       dropOrClick: '拖放文件或点击上传',
       importing: '导入中...',
       importError: '导入失败',
-
-      proRequired: '包安全功能需要 Depsilo Pro',
-      proDesc: '监控缓存包的已知漏洞，自动拦截高危版本。',
-      upgrade: '联系销售',
     },
 
     // Users
@@ -626,7 +616,7 @@ const zh = {
 
       trial: {
         start_button: '开始 14 天免费试用',
-        start_explainer: '解锁审计日志、规则引擎、安全情报视图、多项目工作区四项 Pro 能力。本地激活，无需信用卡，无需邮箱。',
+        start_explainer: '解锁多项目工作区——按团队/项目隔离权限、SBOM、规则集合。本地激活，无需信用卡，无需邮箱。',
         days_left: '剩余 {{count}} 天',
         expires_at: '将于 {{date}} 结束',
         expired_message: '试用已于 {{date}} 结束。开源版功能继续保留。如需在生产团队长期使用 Pro，联系我们。',
@@ -658,7 +648,7 @@ const zh = {
 
       paywall: {
         title: '此功能在 Pro 版本提供',
-        body: '审计日志、规则引擎、安全情报、多项目工作区是面向生产团队的能力。可以先开 14 天本地试用评估，或直接联系我们了解 Pro 与企业支持。',
+        body: '多项目工作区是 Depsilo Pro 唯一锁住的能力，用于把审计日志、规则、SBOM、缓存按项目/团队隔离。可以先开 14 天本地试用评估，或直接联系我们了解 Pro 与企业支持。',
         start_trial: '开始 14 天免费试用',
         contact_sales: '联系销售',
         learn_more: '了解更多',
@@ -673,19 +663,19 @@ const zh = {
         heading: '开源版 与 Pro 各自包含什么？',
         free: {
           f1: '14 种生态代理',
-          f2: '缓存管理 + 流量统计 + 仪表盘',
-          f3: '上游源管理 + 健康检查 + 延迟优选',
-          f4: 'OSV 漏洞扫描（结果在审计层面）',
+          f2: '审计日志 + CSV 导出',
+          f3: '包级别 Allow/Deny 规则引擎 + UI',
+          f4: '安全情报 dashboard（OSV · CVE · 决策工作流）',
           f5: 'SBOM 导出（CycloneDX + SPDX）',
-          f6: '本地 / S3 / PostgreSQL · Webhook 告警 · Prometheus 指标',
+          f6: '本地 / S3 / PostgreSQL · Webhook · Prometheus · 监控',
         },
         pro: {
-          f1: '审计日志（长保留 + CSV 导出）',
-          f2: '包级别 Allow/Deny 规则引擎 + UI',
-          f3: '安全情报 dashboard（漏洞集中视图 + 决策工作流）',
-          f4: '多项目工作区（团队隔离）',
-          f5: '企业支持 + SLA',
-          f6: '合规协助（CRA / SBOM 流程对接）',
+          f1: '多项目工作区（按项目隔离审计 / 规则 / 缓存）',
+          f2: '按项目分配 RBAC 权限',
+          f3: '企业支持 + 响应 SLA',
+          f4: '合规协助（CRA / SBOM 流程对接）',
+          f5: '生产部署咨询（HA / 容量规划 / 升级路径）',
+          f6: '优先 issue 处理（GitHub + 邮件）',
         },
       },
     },

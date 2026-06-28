@@ -240,9 +240,6 @@ const en = {
       latency: 'Latency',
       bytes: 'Bytes',
       noLogs: 'No audit logs',
-      proRequired: 'Audit logs require Depsilo Pro',
-      proDesc: 'Track who downloaded what, when, and from which IP address.',
-      upgrade: 'Contact sales',
     },
 
     // Rules
@@ -273,9 +270,6 @@ const en = {
       resultDenied: 'Denied',
       matchedRule: 'Matched Rule',
       noMatch: 'No rule matched (default: allow)',
-      proRequired: 'Package rules require Depsilo Pro',
-      proDesc: 'Control which packages can be downloaded. Block vulnerable versions, enforce approved packages.',
-      upgrade: 'Contact sales',
     },
 
     // Security
@@ -353,10 +347,6 @@ const en = {
       dropOrClick: 'Drop file or click to upload',
       importing: 'Importing...',
       importError: 'Import failed',
-
-      proRequired: 'Package Security requires Depsilo Pro',
-      proDesc: 'Monitor cached packages for known CVEs, auto-block vulnerable versions.',
-      upgrade: 'Contact sales',
     },
 
     // Users
@@ -626,7 +616,7 @@ const en = {
 
       trial: {
         start_button: 'Start 14-day free trial',
-        start_explainer: 'Unlocks audit logs, the rules engine, the security intelligence dashboard, and multi-project workspaces. Activated locally — no credit card, no email.',
+        start_explainer: 'Unlocks multi-project workspaces — per-project isolation of audit logs, rules, SBOM, and cache. Activated locally — no credit card, no email.',
         days_left: '{{count}} days remaining',
         expires_at: 'Expires {{date}}',
         expired_message: 'Trial ended on {{date}}. Open-source features remain available. To keep Pro running in a production team, contact us.',
@@ -658,7 +648,7 @@ const en = {
 
       paywall: {
         title: 'This feature is part of Pro',
-        body: 'Audit logs, the rules engine, the security intelligence dashboard, and multi-project workspaces are built for production teams. Start a 14-day local trial to evaluate, or contact us to talk Pro + Enterprise support.',
+        body: 'Multi-project workspaces is the one Depsilo Pro UI surface — it isolates audit, rules, SBOM, and cache per project / team. Start a 14-day local trial to evaluate, or contact us to talk Pro + Enterprise support.',
         start_trial: 'Start 14-day free trial',
         contact_sales: 'Contact sales',
         learn_more: 'Learn more',
@@ -673,19 +663,19 @@ const en = {
         heading: "What's in Open Source vs Pro?",
         free: {
           f1: 'Proxy for 14 ecosystems',
-          f2: 'Cache management + bandwidth analytics + dashboard',
-          f3: 'Upstream sources + health checks + latency-based selection',
-          f4: 'OSV vulnerability scanning (results visible at audit layer)',
+          f2: 'Audit log + CSV export',
+          f3: 'Package allow/deny rules engine + UI',
+          f4: 'Security intelligence dashboard (OSV · CVE · workflow)',
           f5: 'SBOM export (CycloneDX + SPDX)',
-          f6: 'Local / S3 / PostgreSQL · webhook alerts · Prometheus metrics',
+          f6: 'Local / S3 / PostgreSQL · webhooks · Prometheus · monitoring',
         },
         pro: {
-          f1: 'Audit log (long retention + CSV export)',
-          f2: 'Package allow/deny rules engine + UI',
-          f3: 'Security intelligence dashboard (cross-package view + workflow)',
-          f4: 'Multi-project workspaces (team isolation)',
-          f5: 'Enterprise support + SLA',
-          f6: 'Compliance assistance (CRA / SBOM workflows)',
+          f1: 'Multi-project workspaces (audit / rules / cache isolated per project)',
+          f2: 'Per-project RBAC',
+          f3: 'Enterprise support + response SLA',
+          f4: 'Compliance assistance (CRA / SBOM workflows)',
+          f5: 'Production-deploy consulting (HA / capacity / upgrade paths)',
+          f6: 'Priority issue handling (GitHub + email)',
         },
       },
     },

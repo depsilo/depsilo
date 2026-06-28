@@ -14,7 +14,6 @@ import EmptyState from '@/components/EmptyState'
 import DataTableV2 from '@/components/DataTable'
 import TabsV2 from '@/components/Tabs'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 
 const ECOSYSTEM_OPTIONS = [
   { value: '', label: 'All' },
@@ -623,24 +622,12 @@ export default function Security() {
   const { t } = useTranslation()
   const [tab, setTab] = useState('overview')
 
-  // Check Pro gating via the dashboard query
-  const { error } = useQuery({
-    queryKey: ['admin', 'security', 'dashboard'],
-    queryFn: () => adminApi.getSecurityDashboard(),
-    retry: false,
-  })
+  // Pro gate removed 2026-06-28 — the dashboard query no longer needs
+  // to be intercepted for 402, and the page's own data queries cover
+  // the loading / error UI in their tabs.
 
-  const axiosError = error as any
-  if (axiosError?.response?.status === 402) {
-    return (
-      <ProRequiredCallout
-        icon="security"
-        title={t('security.proRequired')}
-        description={t('security.proDesc')}
-        upgradeLabel={t('security.upgrade')}
-      />
-    )
-  }
+  // Security intelligence dashboard moved to open-source on 2026-06-28 —
+  // the page no longer 402s, so there is no Pro paywall branch.
 
   const tabs = [
     { key: 'overview', label: t('security.overview'), icon: <Icon name="dashboard" size="sm" /> },

@@ -12,7 +12,6 @@ import DataTableV2 from '@/components/DataTable'
 import SelectV2 from '@/components/Select'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import EmptyState from '@/components/EmptyState'
-import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 
 const ECOSYSTEM_OPTIONS = [{ value: '*', label: 'All (*)' }, { value: 'pypi', label: 'PyPI' }, { value: 'apt', label: 'APT' }, { value: 'npm', label: 'npm' }, { value: 'go', label: 'Go' }, { value: 'cargo', label: 'Cargo' }, { value: 'maven', label: 'Maven' }, { value: 'rubygems', label: 'RubyGems' }, { value: 'composer', label: 'Composer' }, { value: 'nuget', label: 'NuGet' }, { value: 'conda', label: 'Conda' }, { value: 'cran', label: 'CRAN' }, { value: 'alpine', label: 'Alpine' }, { value: 'helm', label: 'Helm' }]
 
@@ -25,7 +24,7 @@ export default function RulesV2() {
   const [dialogOpen, setDialogOpen] = useState(false); const [editId, setEditId] = useState<number | null>(null); const [form, setForm] = useState<RuleForm>(emptyForm)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null); const [testOpen, setTestOpen] = useState(false); const [testForm, setTestForm] = useState({ ecosystem: 'pypi', package: '', version: '' }); const [testResult, setTestResult] = useState<any>(null); const [testLoading, setTestLoading] = useState(false)
 
-  const { data, isLoading, error } = useQuery({ queryKey: ['admin', 'rules'], queryFn: () => adminApi.listRules(), retry: false })
+  const { data, isLoading } = useQuery({ queryKey: ['admin', 'rules'], queryFn: () => adminApi.listRules(), retry: false })
   const items: any[] = data?.data?.items || data?.data || []
 
   const createMutation = useMutation({ mutationFn: (d: any) => adminApi.createRule(d), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'rules'] }); closeDialog() } })
@@ -39,17 +38,8 @@ export default function RulesV2() {
   async function handleTest() { setTestLoading(true); setTestResult(null); try { const res = await adminApi.testRule(testForm); setTestResult(res.data) } catch (err: any) { setTestResult({ error: err?.response?.data?.message || 'Test failed' }) } finally { setTestLoading(false) } }
   const isSaving = createMutation.isPending || updateMutation.isPending
 
-  const axiosError = error as any
-  if (axiosError?.response?.status === 402) {
-    return (
-      <ProRequiredCallout
-        icon="shield"
-        title={t('rules.proRequired')}
-        description={t('rules.proDesc')}
-        upgradeLabel={t('rules.upgrade')}
-      />
-    )
-  }
+  // Rules engine moved to open-source on 2026-06-28 — the page no longer
+  // 402s, so there is no Pro paywall branch to render.
 
   const columns = [
     { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => <div className="flex items-center gap-1.5">{(v as string) !== '*' && <EcosystemIcon type={v as any} size={14} />}<BadgeV2 variant="ecosystem">{(v as string) === '*' ? t('rules.allEcosystems') : (v as string)?.toUpperCase()}</BadgeV2></div> },

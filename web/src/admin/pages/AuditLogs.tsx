@@ -8,7 +8,6 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
-import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
@@ -52,7 +51,7 @@ export default function AuditLogsV2() {
   if (appliedResult === 'miss') params.result = 'miss'
   if (appliedResult === 'error') params.result = 'error'
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['admin', 'audit-logs', appliedSearch, appliedEcosystem, appliedResult, appliedTimeRange, page],
     queryFn: () => adminApi.listAuditLogs(params),
     retry: false,
@@ -87,18 +86,8 @@ export default function AuditLogsV2() {
     cursor: 'pointer',
   }
 
-  // Pro paywall
-  const axiosError = error as any
-  if (axiosError?.response?.status === 402) {
-    return (
-      <ProRequiredCallout
-        icon="lock"
-        title={t('audit.proRequired')}
-        description={t('audit.proDesc')}
-        upgradeLabel={t('audit.upgrade')}
-      />
-    )
-  }
+  // Audit logs moved to open-source on 2026-06-28 — the page no longer
+  // 402s, so there is no Pro paywall branch to render.
 
   const headers = [
     t('audit.time'), t('audit.ecosystem'), t('audit.packageName'), t('audit.version'),
