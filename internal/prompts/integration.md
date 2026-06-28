@@ -6,21 +6,52 @@
 >
 > - `{{MIRROR_URL}}` → the running service's public URL (e.g. `http://10.4.20.52:23333`)
 >
-> The text below `---` is what reaches the LLM. Keep it brand-neutral, terse,
-> prescriptive. Edits here ship to every user immediately.
+> The text below `---` is what reaches the LLM. Keep it transparent,
+> security-tool-discipline, prescriptive. Edits here ship to every user
+> immediately. **Never re-introduce stealth/branding-discipline language** —
+> a self-hosted supply-chain control point must be honest about what it did
+> to a codebase. See `docs/adr/0003-supply-chain-control-point.md`.
 
 ---
 
-You are integrating a private package mirror into this project. Goal: route the
-project's dependency-install traffic through `{{MIRROR_URL}}` so cold builds use
-a local cache and the project no longer depends on direct public CDN access.
+You are integrating **Depsilo**, a self-hosted package cache + supply-chain
+control point, into this project. Goal: route the project's dependency-install
+traffic through `{{MIRROR_URL}}` so cold builds hit a local cache instead of the
+public CDN every time, **while keeping the public registry available as a
+documented fallback**.
 
-**Brand discipline.** Do not write the mirror's product name, hostname, or any
-identifying string into committed source. Treat `{{MIRROR_URL}}` as an opaque
-internal address. The only thing that should appear in committed files is a
-generic build-arg / env var (e.g. `NPM_REGISTRY`, `PIP_INDEX_URL`,
-`MIRROR_URL`) whose default may point at the URL, plus the language's own
-native config syntax.
+## Identification — every change must be traceable
+
+Every config edit you make must name Depsilo and the mirror URL in a comment or
+label adjacent to the change, so a future reviewer or `git blame` can answer
+"what is this URL and why is it here?" in five seconds. Examples:
+
+```bash
+# Routed via Depsilo cache: {{MIRROR_URL}}
+ARG NPM_REGISTRY={{MIRROR_URL}}/npm/
+```
+
+```toml
+# Routed via Depsilo cache: {{MIRROR_URL}}
+[source.crates-io]
+replace-with = "depsilo"
+```
+
+```yaml
+# .github/workflows/build.yml
+env:
+  PIP_INDEX_URL: {{MIRROR_URL}}/pypi/simple/  # routed via Depsilo cache
+```
+
+When you commit, suggest a subject line that names the tool, e.g.:
+
+```
+chore(deps): route install traffic through Depsilo cache ({{MIRROR_URL}})
+```
+
+This identification rule has no exceptions. If you cannot add a traceable
+comment in the file's syntax (e.g. binary JSON), surface that file in the
+report at the end instead of editing it silently.
 
 ## How to work
 
@@ -43,6 +74,9 @@ native config syntax.
    project already does.
 
 4. **Be idempotent.** If the URL is already wired for an ecosystem, skip it.
+   If a previous Depsilo integration edit is present (look for the
+   `# Routed via Depsilo cache` marker), refresh the URL if needed but do not
+   duplicate the line.
 
 5. **Stay in scope.** Do not refactor surrounding code, do not "tidy up"
    unrelated files, do not modify lockfiles. If multiple competing patterns
@@ -61,18 +95,45 @@ names verbatim, do not invent new ones.
 | npm / pnpm / yarn             | `/npm/`                             | env `npm_config_registry`; or `registry=` in `.npmrc`                                     |
 | Python (pip / uv / poetry)    | `/pypi/simple/`                     | env `PIP_INDEX_URL` (+ `PIP_TRUSTED_HOST=<host>`); or `[global] index-url = …` in `pip.conf` |
 | Go modules                    | `/go`                               | env `GOPROXY="<URL>/go,direct"`                                                           |
-| Rust / Cargo                  | `/crates/`                          | `~/.cargo/config.toml` `[source.crates-io] replace-with = "mirror"` + `[source.mirror] registry = "sparse+<URL>/crates/"` |
-| Maven / Gradle                | `/maven/`                           | `~/.m2/settings.xml` `<mirrors><mirror><mirrorOf>*</mirrorOf><url>…</url></mirror></mirrors>` |
+| Rust / Cargo                  | `/crates/`                          | `~/.cargo/config.toml` `[source.crates-io] replace-with = "depsilo"` + `[source.depsilo] registry = "sparse+<URL>/crates/"` |
+| Maven / Gradle                | `/maven/`                           | `~/.m2/settings.xml` `<mirrors><mirror><mirrorOf>*</mirrorOf><name>depsilo</name><url>…</url></mirror></mirrors>` |
 | Ruby / Bundler                | `/rubygems/`                        | `bundle config mirror.https://rubygems.org <URL>`; or `~/.bundle/config`                  |
 | PHP / Composer                | `/composer/`                        | `composer config -g repo.packagist composer <URL>`; or project `repositories` block       |
-| .NET / NuGet                  | `/nuget/v3/index.json`              | `nuget.config` `<packageSources>` entry                                                   |
+| .NET / NuGet                  | `/nuget/v3/index.json`              | `nuget.config` `<packageSources>` entry named `depsilo`                                   |
 | Conda / Mamba                 | `/conda/`                           | `~/.condarc` channels                                                                     |
 | R / CRAN                      | `/cran/`                            | `Rprofile.site` `options(repos = c(CRAN = "<URL>"))`                                      |
-| Helm                          | `/helm/`                            | `helm repo add <local-name> <URL>` (pick a neutral `<local-name>`)                        |
+| Helm                          | `/helm/`                            | `helm repo add depsilo <URL>`                                                             |
 | Debian / Ubuntu (apt)         | `/apt/<distro>` (e.g. `/apt/debian`) | rewrite `/etc/apt/sources.list` to point at the URL; do not disable signature checking    |
 | Alpine (apk)                  | `/alpine/<version>/<repo>`           | rewrite `/etc/apk/repositories`                                                           |
 | Docker registry mirror        | `/docker/`                          | `/etc/docker/daemon.json` `registry-mirrors` (host-level; only suggest, do not edit the user's daemon config) |
 | HuggingFace                   | `/huggingface/`                     | env `HF_ENDPOINT=<URL>/huggingface`                                                       |
+
+## Public-registry fallback — always preserved
+
+The mirror is a **primary route**, never a sole route. Configure the public
+registry as a documented fallback so a Depsilo outage or a misconfigured URL
+cannot brick the build pipeline:
+
+- **Go modules.** `GOPROXY="{{MIRROR_URL}}/go,direct"` — the `,direct` suffix is
+  the fallback. Required, do not omit.
+- **Cargo.** Cargo's `[source.crates-io] replace-with = "depsilo"` only swaps
+  the registry, the original `crates-io` source remains available; nothing to
+  do beyond keeping the original `[source.crates-io]` block intact.
+- **Maven.** `<mirrorOf>*</mirrorOf>` routes everything via Depsilo, but Maven
+  falls back to the original `<repository>` if the mirror returns 404 — do not
+  set `<blocked>true</blocked>` on the mirror.
+- **npm / pnpm / yarn.** The native registry knob takes a single URL, so the
+  fallback lives at the CI level: in CI configs, set the mirror URL via env
+  but leave a documented commented-out line restoring the public registry, so
+  bringing the pipeline back up during an outage is a one-line revert.
+- **pip.** Keep `PIP_EXTRA_INDEX_URL=https://pypi.org/simple/` set alongside
+  `PIP_INDEX_URL` so pip falls back when the mirror cannot satisfy a request.
+- **apt / apk.** Leave the public mirror line commented in `sources.list` /
+  `repositories` rather than deleted, with a comment pointing at this prompt.
+
+If the project has an explicit reason to enforce mirror-only (air-gapped
+environments, government / regulated targets where every dependency must come
+from a controlled mirror), the user will tell you. Do not assume.
 
 ## Hard constraints
 
@@ -91,6 +152,8 @@ names verbatim, do not invent new ones.
   `ALPINE_MIRROR`, `NPM_REGISTRY`, etc.). Feed them the new value.
 - **Never** introduce a new dependency, package, or wrapper script just to
   perform the injection. The native env / config files are sufficient.
+- **Never** remove a public-registry source entry. Replace it as primary but
+  keep it available — see the fallback section above.
 
 ## Optional: throttle for cold-cache fetch storms
 
@@ -110,15 +173,29 @@ Do not add these preemptively.
 
 ## What to report back
 
-After editing:
+After editing, print a markdown table at the bottom of your reply with one row
+per file you touched:
 
-1. List each file you changed and which ecosystem each handles.
-2. Suggest one verification command per ecosystem touched, e.g.:
-   - Docker: `docker build … && docker history <image> | grep -iE "registry|index_url|GOPROXY"` should show the URL baked in.
-   - Local Python: `pip config list` should show the new `index-url`.
-   - npm: `npm config get registry` inside the container should print the URL.
-3. Surface anything you skipped and why (e.g. "lockfile present, not touched";
-   "two competing CN-mirror flags — confirm preference").
+| File | Ecosystem | Action | Why |
+|------|-----------|--------|-----|
+| `Dockerfile` | npm | Added `ENV NPM_REGISTRY={{MIRROR_URL}}/npm/` + Depsilo identification comment | route npm install through cache |
+| `pip.conf` | pip | Set `index-url` + kept public PyPI as `extra-index-url` | route pip with documented fallback |
+
+Then:
+
+1. Suggest one verification command per ecosystem touched, e.g.:
+   - Docker: `docker build … && docker history <image> | grep -iE "registry|index_url|GOPROXY"` should show the Depsilo URL baked in.
+   - Local Python: `pip config list` should show the new `index-url` plus the
+     PyPI `extra-index-url`.
+   - npm: `npm config get registry` inside the container should print the
+     Depsilo URL.
+2. Surface anything you skipped and why (e.g. "lockfile present, not touched";
+   "two competing CN-mirror flags — confirm preference"; "binary config file,
+   could not add identification comment, please verify manually").
+3. Suggest the commit subject:
+   ```
+   chore(deps): route install traffic through Depsilo cache ({{MIRROR_URL}})
+   ```
 4. Do **not** run the build yourself unless the user explicitly asks.
 
 ## When to stop and ask
@@ -130,3 +207,6 @@ After editing:
   not silently wire it up.
 - The project publishes to a registry. Confirm you should only touch
   install-side, never publish-side, config.
+- The user has asked for mirror-only (no public fallback). Confirm the
+  enforcement context (air-gapped, regulated, etc.) before removing fallback
+  entries.

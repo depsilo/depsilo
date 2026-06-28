@@ -33,7 +33,17 @@ func TestIntegrationTemplate_HasMandatorySections(t *testing.T) {
 	// Sanity guards: if any of these phrases get accidentally removed during
 	// future edits, the prompt loses load-bearing safety constraints.
 	mustContain := []string{
-		"Brand discipline",
+		// Transparency-by-default discipline. "Identification" replaced the
+		// previous "Brand discipline" (stealth) section in T0 #1 — see
+		// docs/adr/0003-supply-chain-control-point.md. If a future edit
+		// reintroduces brand-neutrality / stealth language this assertion
+		// must fail loudly.
+		"Identification",
+		"Depsilo",
+		// Public-registry fallback is non-negotiable — a self-hosted
+		// control point that brings the build down when it's offline is
+		// worse than no control point.
+		"Public-registry fallback",
 		"Discover before editing",
 		"Hard constraints",
 		"Never",
@@ -43,6 +53,26 @@ func TestIntegrationTemplate_HasMandatorySections(t *testing.T) {
 	for _, s := range mustContain {
 		if !strings.Contains(tmpl, s) {
 			t.Errorf("integration prompt missing section/phrase %q", s)
+		}
+	}
+}
+
+// TestIntegrationTemplate_NoStealthLanguage guards against accidental
+// reintroduction of the brand-neutral / stealth framing the prompt used to
+// have. A security-positioned tool must not instruct LLMs to hide what it
+// changed, so any of these phrases creeping back in is a regression.
+func TestIntegrationTemplate_NoStealthLanguage(t *testing.T) {
+	tmpl := prompts.IntegrationTemplate()
+	mustNotContain := []string{
+		"Brand discipline",
+		"brand-neutral",
+		"no longer depends on direct public CDN",
+		"opaque internal address",
+		"Do not write the mirror's product name",
+	}
+	for _, s := range mustNotContain {
+		if strings.Contains(tmpl, s) {
+			t.Errorf("stealth-language regression: prompt contains forbidden phrase %q", s)
 		}
 	}
 }
@@ -62,7 +92,7 @@ func TestIntegration_StripsMaintainerHeader(t *testing.T) {
 		}
 	}
 	// Real content from below the separator should still be present.
-	if !strings.Contains(out, "You are integrating a private package mirror") {
+	if !strings.Contains(out, "You are integrating **Depsilo**") {
 		t.Errorf("rendered prompt missing opening instruction line")
 	}
 }
