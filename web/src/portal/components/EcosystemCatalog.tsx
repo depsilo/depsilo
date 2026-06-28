@@ -67,7 +67,7 @@ export default function EcosystemCatalog({ selected, onSelect }: Props) {
         const items = groups[g]
         if (items.length === 0) return null
         return (
-          <section key={g} style={{ marginTop: 12 }}>
+          <section key={g} className="sv-reveal" style={{ marginTop: 12 }}>
             <div
               className="eyebrow"
               style={{
@@ -87,8 +87,19 @@ export default function EcosystemCatalog({ selected, onSelect }: Props) {
                     <button
                       type="button"
                       onClick={() => onSelect(lang.id)}
-                      className="active:scale-[0.98]"
+                      className="active:scale-[0.98] eco-tile"
+                      onMouseMove={e => {
+                        // Track the pointer inside the tile via CSS vars
+                        // so a radial-gradient pseudo-element can follow it.
+                        // Zero per-frame React state — we mutate raw CSS
+                        // custom properties on the element itself.
+                        const r = e.currentTarget.getBoundingClientRect()
+                        e.currentTarget.style.setProperty('--spot-x', `${e.clientX - r.left}px`)
+                        e.currentTarget.style.setProperty('--spot-y', `${e.clientY - r.top}px`)
+                      }}
                       style={{
+                        position: 'relative',
+                        overflow: 'hidden',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 10,

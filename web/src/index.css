@@ -595,6 +595,87 @@ a:focus:not(:focus-visible) {
   }
 }
 
+/* ── Cursor-spotlight on ecosystem tiles ──────────────────
+   A radial gradient pinned to the pointer position (set by the
+   component's onMouseMove via --spot-x / --spot-y) shimmers across
+   the tile as the cursor moves. Replaces the static "hover lift"
+   with something that actually responds to the pointer. */
+.eco-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    180px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    color-mix(in oklab, var(--brand) 22%, transparent),
+    transparent 60%
+  );
+  transition: opacity 200ms ease;
+  z-index: 0;
+}
+.eco-tile:hover::before { opacity: 1; }
+/* Content above the spotlight layer. */
+.eco-tile > * { position: relative; z-index: 1; }
+
+/* ── Animated conic-gradient border for the AI eyebrow chip ────
+   The brand's only continuous animation — a slow 6s rotation of a
+   chromatic ring around the chip. @property is the load-bearing
+   modern-CSS hook: it lets the browser animate a custom property
+   as if it were a real CSS value. Restricted to one element on the
+   page; if every button had this it would feel cheap. */
+@property --ai-chip-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes aiChipRotate {
+  to { --ai-chip-angle: 360deg; }
+}
+.ai-chip {
+  position: relative;
+  isolation: isolate;
+}
+.ai-chip::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--ai-chip-angle),
+    color-mix(in oklab, var(--brand) 70%, transparent),
+    color-mix(in oklab, var(--brand) 10%, transparent) 30%,
+    color-mix(in oklab, var(--brand) 70%, transparent) 65%,
+    color-mix(in oklab, var(--brand) 10%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: aiChipRotate 6s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── Scroll-driven reveal ─────────────────────────────────
+   Sections fade + nudge up 8px as they enter the viewport. Pure
+   CSS, GPU-composited, no IntersectionObserver. Stagger comes from
+   the explicit animation-range on each child so groups read in a
+   slight cascade rather than all at once. */
+@keyframes svReveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@supports (animation-timeline: view()) {
+  .sv-reveal {
+    animation: svReveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

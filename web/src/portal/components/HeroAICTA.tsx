@@ -107,8 +107,16 @@ export default function HeroAICTA() {
           }}
         >
           <div
-            className="eyebrow"
-            style={{ color: 'var(--brand-text)', marginBottom: 8, fontSize: 10 }}
+            className="eyebrow ai-chip"
+            style={{
+              color: 'var(--brand-text)',
+              marginBottom: 8,
+              fontSize: 10,
+              alignSelf: 'flex-start',
+              padding: '4px 10px',
+              borderRadius: 999,
+              background: 'color-mix(in oklab, var(--brand) 6%, var(--bg-card))',
+            }}
           >
             <span aria-hidden style={{ marginRight: 5 }}>✦</span>
             {t('quickstart.heroEyebrow')}

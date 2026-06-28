@@ -20,13 +20,15 @@ export default function QuickStart() {
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Hero — compact horizontal strip carrying the project-level AI
           integration CTA. */}
-      <HeroAICTA />
+      <div className="sv-reveal">
+        <HeroAICTA />
+      </div>
 
       {/* Console — single card with the ecosystem rail on the left and
           the active configuration pane on the right. The two share one
           border / radius so they read as a single designed surface. */}
       <section
-        className="quickstart-console"
+        className="quickstart-console sv-reveal"
         style={{
           display: 'grid',
           gridTemplateColumns: '260px 1fr',
