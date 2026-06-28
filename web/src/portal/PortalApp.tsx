@@ -76,6 +76,7 @@ function NavTab({ to, label, isActive }: NavTabProps) {
   return (
     <Link
       to={to}
+      viewTransition
       style={{ textDecoration: 'none' }}
     >
       <button
@@ -95,6 +96,11 @@ function NavTab({ to, label, isActive }: NavTabProps) {
         {label}
         {isActive && (
           <span
+            // The single shared name across both nav tabs lets the
+            // browser morph the underline from one tab position to the
+            // other instead of fading-out + fading-in. Only the active
+            // instance ever exists in the DOM at any time, so the name
+            // collision the API normally warns about can't happen.
             style={{
               position: 'absolute',
               left: 10,
@@ -103,6 +109,7 @@ function NavTab({ to, label, isActive }: NavTabProps) {
               height: '1.5px',
               background: 'var(--grad-brand)',
               borderRadius: 1,
+              viewTransitionName: 'portal-nav-underline',
             }}
           />
         )}
@@ -155,8 +162,11 @@ export default function PortalAppV2() {
             gap: 24,
           }}
         >
-          {/* Logo area */}
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
+          {/* Logo area. viewTransition + view-transition-name keep the
+              logo stable across QuickStart ↔ Monitor navigation — the
+              browser holds the element in place while the rest of the
+              page cross-fades and morphs around it. */}
+          <Link to="/" viewTransition style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0, viewTransitionName: 'portal-brand' }}>
             <Logo size={28} />
             <span
               style={{

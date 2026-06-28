@@ -595,6 +595,44 @@ a:focus:not(:focus-visible) {
   }
 }
 
+/* ── View Transitions (in-page navigation morph) ─────────
+   React Router v7's `viewTransition` prop on <Link> hands the
+   browser a chance to play the View Transitions API between
+   route swaps. The default behavior cross-fades the entire root
+   snapshot; we tune two pieces:
+
+   1. `portal-brand` (the logo Link) holds in place across the
+      transition — the browser detects the same view-transition-name
+      on the source and target pages and morphs position/size
+      instead of fading.
+   2. `portal-nav-underline` (the active tab's underline span) is
+      shared between the two tab variants. The browser slides the
+      underline from /quickstart's position to /monitor's instead
+      of fading-out then fading-in.
+
+   ::view-transition-group(*) speed pulls the overall fade in from
+   the default 250ms to 200ms so it never feels sluggish on slow
+   machines. */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-group(*) {
+  animation-duration: 200ms;
+}
+::view-transition-old(portal-brand),
+::view-transition-new(portal-brand) {
+  /* The logo isn't redrawn — it's the same DOM element. Cancel the
+     cross-fade so it stays fully opaque the whole time. */
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-group(portal-nav-underline) {
+  /* Faster + slightly bouncy easing for the underline morph so the
+     "this is what changed" signal arrives quickly. */
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 /* ── Cursor-spotlight on ecosystem tiles ──────────────────
    A radial gradient pinned to the pointer position (set by the
    component's onMouseMove via --spot-x / --spot-y) shimmers across
