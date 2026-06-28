@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # write needed to attach the image SBOM to the GitHub Release
   packages: write
 
 env:
@@ -60,6 +60,7 @@ jobs:
             org.opencontainers.image.licenses=MIT
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -69,3 +70,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # ── SBOM: container image (the actually-deployed artifacts) ───
+      # Scans the just-pushed multi-arch image and emits CycloneDX +
+      # SPDX SBOMs. Together with the source SBOM from release.yml,
+      # these give a complete picture: source SBOM = what we asked
+      # for, image SBOM = what ran. Both are attached to the GitHub
+      # Release for the same tag.
+      #
+      # Un-signed in v0.7.x; cosign-attest layers on top once T0 #2
+      # (signed releases) lands. The image is scanned only once even
+      # though the manifest is multi-arch — Syft resolves to a single
+      # image reference here; per-arch SBOMs can come later if a
+      # buyer needs them.
+      - name: Generate image SBOM (CycloneDX)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/depsilo/depsilo:${{ github.ref_name }}
+          format: cyclonedx-json
+          output-file: depsilo-${{ github.ref_name }}-image.cdx.json
+          upload-artifact: false
+          upload-release-assets: true
+
+      - name: Generate image SBOM (SPDX)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/depsilo/depsilo:${{ github.ref_name }}
+          format: spdx-json
+          output-file: depsilo-${{ github.ref_name }}-image.spdx.json
+          upload-artifact: false
+          upload-release-assets: true

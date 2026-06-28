@@ -4,7 +4,8 @@
 	test-docker-conda test-docker-cran test-docker-helm test-docker-docker \
 	test-docker-all test-docker \
 	docker-build docker-run docker-stop docker-logs docker-shell docker-status docker-compose-up docker-compose-down docker-test \
-	tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
+	tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux \
+	sbom
 
 # ─── 变量 ─────────────────────────────────────
 APP        := depsilo
@@ -97,6 +98,21 @@ cli-flush:                      ## 清除过期缓存
 
 cli-stop:                       ## 停止后台 daemon
 	@./$(BIN) stop
+
+# ─── SBOM ─────────────────────────────────────
+# Local SBOM generation mirrors what CI emits on a tag push. Useful for
+# spot-checking what ships with a release, or for buyers asking "what's
+# in the binary?" without waiting for the next release. Requires syft
+# (https://github.com/anchore/syft) — installs are one-line.
+sbom:                           ## 生成 SBOM (CycloneDX + SPDX)
+	@command -v syft >/dev/null 2>&1 || { echo "syft not installed. Install: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin"; exit 1; }
+	@mkdir -p dist/sbom
+	@VERSION=$$(git describe --tags --dirty --always 2>/dev/null || echo dev); \
+		syft dir:. -o cyclonedx-json="dist/sbom/depsilo-$$VERSION-source.cdx.json" \
+		           -o spdx-json="dist/sbom/depsilo-$$VERSION-source.spdx.json" \
+		           --quiet; \
+		echo "wrote dist/sbom/depsilo-$$VERSION-source.cdx.json"; \
+		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
 test: test-unit                 ## 运行 Go 单元测试
