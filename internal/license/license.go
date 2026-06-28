@@ -109,51 +109,42 @@ func (m *Manager) Start(ctx context.Context) {
 	}
 }
 
+// doValidate marks the current key as Pro. The Lemon Squeezy self-serve
+// validation channel was removed when Depsilo's monetization shifted from
+// $9 self-serve to Enterprise-contract-only: keys are now issued directly
+// from a contract conversation rather than purchased, so there is no
+// upstream license server to phone. Any non-empty key activates Pro.
+// Empty keys remain OSS-only.
+//
+// Future Enterprise contract tooling can layer real validation on top of
+// this — e.g. signed JWT keys with embedded expiry, or a depsilo-owned
+// license endpoint — without rewiring the public API. For today the
+// trust model is "if the operator entered a key, the operator is on a
+// contract."
 func (m *Manager) doValidate() {
-	m.mu.RLock()
-	key := m.key
-	m.mu.RUnlock()
-
-	resp, err := validate(key)
-
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.status.LastChecked = time.Now().UTC()
+	m.status.Error = ""
 
-	if err != nil {
-		// Network error: keep previous result, log warning
-		m.status.Error = err.Error()
-		zap.L().Warn("license validation failed, keeping previous state",
-			zap.String("key", MaskKey(key)),
-			zap.Error(err),
-		)
+	if m.key == "" {
+		m.status.IsPro = false
 		return
 	}
 
-	m.status.Error = ""
-
-	if resp.Valid && resp.LicenseKey.Status == "active" {
-		m.status.IsPro = true
+	m.status.IsPro = true
+	if m.status.ActivatedAt == nil {
 		now := time.Now().UTC()
-		if m.status.ActivatedAt == nil {
-			m.status.ActivatedAt = &now
-		}
-		if resp.LicenseKey.ExpiresAt != nil {
-			if t, err := time.Parse(time.RFC3339, *resp.LicenseKey.ExpiresAt); err == nil {
-				m.status.ExpiresAt = &t
-			}
-		}
-		zap.L().Info("license validated successfully",
-			zap.String("key", MaskKey(key)),
-			zap.String("status", resp.LicenseKey.Status),
-		)
-	} else {
-		m.status.IsPro = false
-		zap.L().Warn("license is not valid",
-			zap.String("key", MaskKey(key)),
-		)
+		m.status.ActivatedAt = &now
 	}
+	// No upstream ExpiresAt to honour — contract expiry is tracked
+	// out-of-band today. Leaving m.status.ExpiresAt nil signals "no
+	// known expiry" to the frontend, which suppresses the "expires
+	// in N days" UI.
+	zap.L().Info("license accepted (Enterprise contract)",
+		zap.String("key", MaskKey(m.key)),
+	)
 }
 
 // Revalidate triggers a manual re-validation in the background.
