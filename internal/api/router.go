@@ -16,6 +16,7 @@ import (
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/notify"
+	"depsilo/internal/quarantine"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
 	"depsilo/internal/trial"
@@ -47,6 +48,12 @@ type Deps struct {
 	SecurityScanner  *security.Scanner
 	SecurityImporter *security.Importer
 	WebhookNotifier  *notify.Notifier
+	// QuarantineStore is the supply-chain quarantine helper exposed via
+	// admin endpoints for events / approvals. Separate from the
+	// adapter-side gate which goes through internal/adapter's
+	// package-level SetQuarantineChecker; this is the admin-control-
+	// plane access path.
+	QuarantineStore *quarantine.Store
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -213,6 +220,16 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.POST("/security/import", securityHandler.ImportData)
 	adminGroup.GET("/security/policies", securityHandler.ListPolicies)
 	adminGroup.PUT("/security/policies/:ecosystem", securityHandler.UpdatePolicy)
+
+	// Supply-chain quarantine — minimum-release-age event log +
+	// operator approvals. Wedge feature, open-source per
+	// docs/DIRECTION.md, so endpoints mount under adminGroup (NOT
+	// proGroup). See ADR-0003.
+	quarantineHandler := admin.NewQuarantineHandler(deps.DB, deps.QuarantineStore)
+	adminGroup.GET("/quarantine/events", quarantineHandler.ListEvents)
+	adminGroup.GET("/quarantine/approvals", quarantineHandler.ListApprovals)
+	adminGroup.POST("/quarantine/approve", quarantineHandler.Approve)
+	adminGroup.DELETE("/quarantine/approvals/:id", quarantineHandler.Revoke)
 
 	// Pro features (require entitlement). Multi-project workspaces are
 	// the only UI surface gated today — production teams running Depsilo

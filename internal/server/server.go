@@ -293,6 +293,7 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		SecurityScanner:  securityScanner,
 		SecurityImporter: securityImporter,
 		WebhookNotifier:  webhookNotifier,
+		QuarantineStore:  quarantineStore,
 	})
 
 	// Register adapter handlers
