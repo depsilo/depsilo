@@ -40,6 +40,7 @@ const en = {
       userManage: 'Users',
       settings: 'Settings',
       auditLogs: 'Audit Logs',
+      quarantine: 'Supply-chain Quarantine',
       rules: 'Package Rules',
       security: 'Package Security',
       projects: 'Projects',
@@ -218,6 +219,62 @@ const en = {
       clientIp: 'Client IP',
       noLogs: 'No logs',
       export: 'Export CSV',
+    },
+
+    // Supply-chain Quarantine
+    quarantine: {
+      title: 'Supply-chain Quarantine',
+      subtitle: 'Blocks freshly-published package versions until they age past your configured threshold. Each decision is logged below; operators can approve trusted versions through early.',
+      tab: {
+        events: 'Events',
+        approvals: 'Approvals',
+      },
+      filter: {
+        package_placeholder: 'Search by package',
+        all_ecosystems: 'All ecosystems',
+        all_actions: 'All actions',
+      },
+      action: {
+        blocked: 'Blocked',
+        served_eligible: 'Downgraded',
+        bypassed: 'Bypassed',
+        approved: 'Approved',
+        approval_revoked: 'Approval revoked',
+      },
+      col: {
+        time: 'Time',
+        ecosystem: 'Ecosystem',
+        package: 'Package',
+        version: 'Version',
+        action: 'Action',
+        reason: 'Reason',
+        created_at: 'Approved at',
+      },
+      events: {
+        empty_title: 'No quarantine events yet',
+        empty_hint: 'Decisions will appear here when a freshly-published version is requested.',
+      },
+      approvals: {
+        empty_title: 'No manual approvals',
+        empty_hint: 'Approving a blocked version from the events tab will land it here.',
+      },
+      approve: {
+        cta: 'Approve',
+        title: 'Approve this version',
+        body: 'About to approve {{pkg}} {{ver}} on {{eco}} — all clients will receive it directly, skipping the quarantine check. Reason is required and audited.',
+        submit: 'Approve',
+        submitting: 'Submitting…',
+        error: 'Approval failed. Please retry.',
+      },
+      revoke: {
+        cta: 'Revoke',
+        title: 'Revoke this approval',
+        body: 'Revoking will put {{pkg}} {{ver}} on {{eco}} back under the quarantine policy. Reason is required and audited.',
+        submit: 'Revoke',
+        submitting: 'Revoking…',
+        error: 'Revoke failed. Please retry.',
+      },
+      reason_placeholder: 'Reason (3+ characters)',
     },
 
     // Audit Logs

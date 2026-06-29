@@ -40,6 +40,7 @@ const zh = {
       userManage: '用户管理',
       settings: '系统设置',
       auditLogs: '审计日志',
+      quarantine: '供应链隔离',
       rules: '包治理',
       security: '包安全',
       projects: '项目管理',
@@ -218,6 +219,62 @@ const zh = {
       clientIp: '客户端 IP',
       noLogs: '暂无日志',
       export: '导出 CSV',
+    },
+
+    // Supply-chain Quarantine
+    quarantine: {
+      title: '供应链隔离',
+      subtitle: '基于「最小发布年龄」拦截可能被投毒的新版本。每条决策都会写入下面的事件流；管理员可以为可信版本临时放行。',
+      tab: {
+        events: '事件',
+        approvals: '已放行',
+      },
+      filter: {
+        package_placeholder: '按包名搜索',
+        all_ecosystems: '全部生态',
+        all_actions: '全部动作',
+      },
+      action: {
+        blocked: '已拦截',
+        served_eligible: '降级提供',
+        bypassed: '绕过',
+        approved: '已放行',
+        approval_revoked: '撤销放行',
+      },
+      col: {
+        time: '时间',
+        ecosystem: '生态',
+        package: '包名',
+        version: '版本',
+        action: '动作',
+        reason: '原因',
+        created_at: '放行时间',
+      },
+      events: {
+        empty_title: '暂无供应链事件',
+        empty_hint: '当一个新发布的包被请求时，决策会出现在这里。',
+      },
+      approvals: {
+        empty_title: '暂无人工放行',
+        empty_hint: '在事件流里给被拦截的版本「放行」之后会出现在这里。',
+      },
+      approve: {
+        cta: '放行',
+        title: '放行此版本',
+        body: '即将放行 {{eco}} 生态的 {{pkg}} {{ver}} ——以后所有客户端都会直接拿到此版本，跳过隔离检查。请填写原因（必填，留作审计）。',
+        submit: '确认放行',
+        submitting: '提交中…',
+        error: '放行失败，请稍后重试。',
+      },
+      revoke: {
+        cta: '撤销',
+        title: '撤销此放行',
+        body: '撤销后，{{eco}} 生态的 {{pkg}} {{ver}} 将重新受隔离策略约束。请填写撤销原因（必填）。',
+        submit: '撤销',
+        submitting: '撤销中…',
+        error: '撤销失败，请稍后重试。',
+      },
+      reason_placeholder: '填写理由（≥ 3 字）',
     },
 
     // Audit Logs

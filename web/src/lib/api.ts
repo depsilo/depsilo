@@ -113,6 +113,14 @@ export const adminApi = {
   listSecurityPolicies: () => api.get('/admin/security/policies'),
   updateSecurityPolicy: (ecosystem: string, data: any) => api.put(`/admin/security/policies/${ecosystem}`, data),
 
+  // Supply-chain quarantine (open-source wedge — NOT Pro)
+  listQuarantineEvents: (params: Record<string, any>) => api.get('/admin/quarantine/events', { params }),
+  listQuarantineApprovals: (params: Record<string, any>) => api.get('/admin/quarantine/approvals', { params }),
+  approveQuarantine: (data: { ecosystem: string; package: string; version: string; reason: string }) =>
+    api.post('/admin/quarantine/approve', data),
+  revokeQuarantineApproval: (id: number, data: { reason: string }) =>
+    api.delete(`/admin/quarantine/approvals/${id}`, { data }),
+
   // Projects (Pro)
   listProjects: () => api.get('/admin/projects'),
   createProject: (data: any) => api.post('/admin/projects', data),

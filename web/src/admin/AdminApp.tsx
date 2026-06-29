@@ -12,6 +12,7 @@ import AuditLogsV2 from './pages/AuditLogs'
 import RulesV2 from './pages/Rules'
 import Security from './pages/Security'
 import Projects from './pages/Projects'
+import Quarantine from './pages/Quarantine'
 import License from './pages/License'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,7 @@ export default function AdminAppV2() {
         <Route path="upstreams" element={<UpstreamsV2 />} />
         <Route path="logs" element={<AccessLogsV2 />} />
         <Route path="audit" element={<AuditLogsV2 />} />
+        <Route path="quarantine" element={<Quarantine />} />
         <Route path="rules" element={<RulesV2 />} />
         <Route path="security" element={<Security />} />
         <Route path="projects" element={<Projects />} />

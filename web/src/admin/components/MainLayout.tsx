@@ -70,6 +70,7 @@ export default function MainLayoutV2() {
     { label: t('bandwidth.title'), to: '/admin/bandwidth', icon: 'bar_chart' },
     { label: t('nav.accessLogs'), to: '/admin/logs', icon: 'receipt_long' },
     { label: t('nav.auditLogs'), to: '/admin/audit', icon: 'policy' },
+    { label: t('nav.quarantine'), to: '/admin/quarantine', icon: 'shield_lock' },
   ]
 
   const manageItems: NavItem[] = [
@@ -88,6 +89,7 @@ export default function MainLayoutV2() {
     '/admin/bandwidth': t('bandwidth.title'),
     '/admin/logs': t('nav.accessLogs'),
     '/admin/audit': t('nav.auditLogs'),
+    '/admin/quarantine': t('nav.quarantine'),
     '/admin/cache': t('nav.cacheManage'),
     '/admin/upstreams': t('nav.upstreams'),
     '/admin/users': t('nav.userManage'),
