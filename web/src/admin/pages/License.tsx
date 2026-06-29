@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { licenseApi } from '@/lib/api'
 import type { EntitlementStatus } from '@/lib/api'
+import { buyLifetimeUrl, LIFETIME_PRICE_LABEL } from '@/lib/buy'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
 import Icon from '@/components/Icon'
@@ -139,9 +140,9 @@ export default function License() {
       </div>
 
       {/* ── State panel ────────────────────────────── */}
-      {/* Self-serve checkout is gone — Pro is contract-based now.
-          Every CTA opens a mailto: with a subject pre-filled instead
-          of routing to a pricing page that no longer exists. */}
+      {/* No payment-provider integration yet — every Buy CTA opens an
+          email order via lib/buy.ts. The label includes the lifetime
+          price so users see what they're committing to before clicking. */}
       {source === 'none' && !trialUsed && (
         <StatePanel
           tone="brand"
@@ -153,8 +154,8 @@ export default function License() {
             <ButtonV2 onClick={() => activateTrial.mutate()} disabled={activateTrial.isPending}>
               {t('license.trial.start_button')}
             </ButtonV2>
-            <ButtonV2 variant="secondary" onClick={() => window.open('mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry', '_blank')}>
-              {t('license.contact_sales')}
+            <ButtonV2 variant="secondary" onClick={() => window.open(buyLifetimeUrl(), '_blank')}>
+              {t('license.buy_lifetime', { price: LIFETIME_PRICE_LABEL })}
             </ButtonV2>
           </div>
         </StatePanel>
@@ -167,8 +168,8 @@ export default function License() {
           title={`${t('license.status.pro')} · ${t('license.status.trial')}`}
           description={`${t('license.trial.days_left', { count: status.days_left })} · ${t('license.trial.expires_at', { date: formatDate(status.expires_at) })}`}
         >
-          <ButtonV2 variant="secondary" onClick={() => window.open('mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry', '_blank')}>
-            {t('license.contact_sales')}
+          <ButtonV2 onClick={() => window.open(buyLifetimeUrl(), '_blank')}>
+            {t('license.buy_lifetime', { price: LIFETIME_PRICE_LABEL })}
           </ButtonV2>
         </StatePanel>
       )}
@@ -179,8 +180,8 @@ export default function License() {
           icon="warning"
           title={t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
         >
-          <ButtonV2 onClick={() => window.open('mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry', '_blank')}>
-            {t('license.contact_sales')}
+          <ButtonV2 onClick={() => window.open(buyLifetimeUrl(), '_blank')}>
+            {t('license.buy_lifetime', { price: LIFETIME_PRICE_LABEL })}
           </ButtonV2>
         </StatePanel>
       )}

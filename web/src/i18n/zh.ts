@@ -541,9 +541,9 @@ const zh = {
       noPackages: '暂无包记录',
       detail: '项目详情',
       ecosystemBreakdown: '生态分布',
-      proRequired: '项目管理需要 Depsilo Pro',
-      proDesc: '按项目追踪依赖使用，生成 SBOM 清单。',
-      upgrade: '联系销售',
+      proRequired: '多项目工作区是 Depsilo Pro 功能',
+      proDesc: '按项目追踪依赖使用、生成 SBOM 清单、按项目分配 RBAC 权限。终身买断 $99。',
+      upgrade: '购买终身版 · $99',
     },
 
     // SBOM
@@ -616,10 +616,10 @@ const zh = {
 
       trial: {
         start_button: '开始 14 天免费试用',
-        start_explainer: '解锁多项目工作区——按团队/项目隔离权限、SBOM、规则集合。本地激活，无需信用卡，无需邮箱。',
+        start_explainer: '解锁多项目工作区——按团队/项目隔离权限、SBOM、规则集合。本地激活，无需信用卡，无需邮箱。试用 14 天，喜欢可以 $99 终身买断。',
         days_left: '剩余 {{count}} 天',
         expires_at: '将于 {{date}} 结束',
-        expired_message: '试用已于 {{date}} 结束。开源版功能继续保留。如需在生产团队长期使用 Pro，联系我们。',
+        expired_message: '试用已于 {{date}} 结束。开源版功能继续保留。终身买断 $99，一次付费永久使用。',
       },
 
       pro: {
@@ -630,7 +630,7 @@ const zh = {
       },
 
       revalidate: '重新校验',
-      contact_sales: '联系销售',
+      buy_lifetime: '购买终身版 · {{price}}',
 
       key: {
         title: '许可证密钥',
@@ -648,9 +648,9 @@ const zh = {
 
       paywall: {
         title: '此功能在 Pro 版本提供',
-        body: '多项目工作区是 Depsilo Pro 唯一锁住的能力，用于把审计日志、规则、SBOM、缓存按项目/团队隔离。可以先开 14 天本地试用评估，或直接联系我们了解 Pro 与企业支持。',
+        body: '多项目工作区是 Depsilo Pro 唯一锁住的能力，按项目隔离审计日志、规则、SBOM、缓存。终身买断 $99，一次付费永久使用。可以先开 14 天本地试用评估。',
         start_trial: '开始 14 天免费试用',
-        contact_sales: '联系销售',
+        buy_lifetime: '购买终身版 · $99',
         learn_more: '了解更多',
         view_status: '查看许可证状态',
         dismiss: '稍后',
@@ -670,12 +670,12 @@ const zh = {
           f6: '本地 / S3 / PostgreSQL · Webhook · Prometheus · 监控',
         },
         pro: {
-          f1: '多项目工作区（按项目隔离审计 / 规则 / 缓存）',
+          f1: '多项目工作区（按项目隔离审计 / 规则 / 缓存 / SBOM）',
           f2: '按项目分配 RBAC 权限',
-          f3: '企业支持 + 响应 SLA',
-          f4: '合规协助（CRA / SBOM 流程对接）',
-          f5: '生产部署咨询（HA / 容量规划 / 升级路径）',
-          f6: '优先 issue 处理（GitHub + 邮件）',
+          f3: '邮件优先支持',
+          f4: '后续 Pro 新功能自动包含',
+          f5: '终身买断 · 一次性 $99',
+          f6: '无订阅 · 无服务器校验 · 离线可用',
         },
       },
     },

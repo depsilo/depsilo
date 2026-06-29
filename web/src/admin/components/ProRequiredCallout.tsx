@@ -1,5 +1,6 @@
 import ButtonV2 from '@/components/Button'
 import Icon from '@/components/Icon'
+import { buyLifetimeUrl } from '@/lib/buy'
 
 interface ProRequiredCalloutProps {
   /** Material symbol name (e.g. "lock", "shield", "security", "folder_managed") */
@@ -8,13 +9,13 @@ interface ProRequiredCalloutProps {
   title: string
   /** Already-translated description text */
   description: string
-  /** Already-translated CTA button label — "Contact us" / "联系我们" by default */
+  /** Already-translated CTA button label — "Buy lifetime · $99" by default */
   upgradeLabel: string
   /**
-   * Where the CTA links to. Defaults to the contact-sales mailto.
-   * Depsilo's monetization moved from $9 self-serve to single-tier
-   * Enterprise contract in 2026-06; the link is no longer a pricing
-   * page but a way to start a conversation.
+   * Where the CTA links to. Defaults to the lifetime-buy mailto resolved
+   * from `lib/buy.ts`. When a payment provider eventually gets wired,
+   * only `lib/buy.ts` needs to change — this prop and every caller stay
+   * the same.
    */
   upgradeHref?: string
 }
@@ -29,7 +30,7 @@ export default function ProRequiredCallout({
   title,
   description,
   upgradeLabel,
-  upgradeHref = 'mailto:sales@depsilo.com?subject=Depsilo%20Pro%20inquiry',
+  upgradeHref = buyLifetimeUrl(),
 }: ProRequiredCalloutProps) {
   return (
     <div

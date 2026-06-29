@@ -541,9 +541,9 @@ const en = {
       noPackages: 'No packages recorded yet',
       detail: 'Project Detail',
       ecosystemBreakdown: 'Ecosystem Breakdown',
-      proRequired: 'Projects require Depsilo Pro',
-      proDesc: 'Track dependencies per project and generate SBOM reports.',
-      upgrade: 'Contact sales',
+      proRequired: 'Multi-project workspaces is a Depsilo Pro feature',
+      proDesc: 'Per-project dependency tracking, SBOM reports, and per-project RBAC. One-time $99 lifetime.',
+      upgrade: 'Buy lifetime · $99',
     },
 
     // SBOM
@@ -616,10 +616,10 @@ const en = {
 
       trial: {
         start_button: 'Start 14-day free trial',
-        start_explainer: 'Unlocks multi-project workspaces — per-project isolation of audit logs, rules, SBOM, and cache. Activated locally — no credit card, no email.',
+        start_explainer: 'Unlocks multi-project workspaces — per-project isolation of audit logs, rules, SBOM, and cache. Activated locally — no credit card, no email. Buy lifetime $99 after the trial if you keep it.',
         days_left: '{{count}} days remaining',
         expires_at: 'Expires {{date}}',
-        expired_message: 'Trial ended on {{date}}. Open-source features remain available. To keep Pro running in a production team, contact us.',
+        expired_message: 'Trial ended on {{date}}. Open-source features remain available. One-time $99 unlocks Pro forever.',
       },
 
       pro: {
@@ -630,7 +630,7 @@ const en = {
       },
 
       revalidate: 'Revalidate',
-      contact_sales: 'Contact sales',
+      buy_lifetime: 'Buy lifetime · {{price}}',
 
       key: {
         title: 'License key',
@@ -648,9 +648,9 @@ const en = {
 
       paywall: {
         title: 'This feature is part of Pro',
-        body: 'Multi-project workspaces is the one Depsilo Pro UI surface — it isolates audit, rules, SBOM, and cache per project / team. Start a 14-day local trial to evaluate, or contact us to talk Pro + Enterprise support.',
+        body: 'Multi-project workspaces is the one Depsilo Pro UI surface — it isolates audit, rules, SBOM, and cache per project / team. One-time $99 lifetime, no subscription. Start a 14-day local trial to evaluate.',
         start_trial: 'Start 14-day free trial',
-        contact_sales: 'Contact sales',
+        buy_lifetime: 'Buy lifetime · $99',
         learn_more: 'Learn more',
         view_status: 'View license status',
         dismiss: 'Maybe later',
@@ -670,12 +670,12 @@ const en = {
           f6: 'Local / S3 / PostgreSQL · webhooks · Prometheus · monitoring',
         },
         pro: {
-          f1: 'Multi-project workspaces (audit / rules / cache isolated per project)',
+          f1: 'Multi-project workspaces (audit / rules / cache / SBOM isolated per project)',
           f2: 'Per-project RBAC',
-          f3: 'Enterprise support + response SLA',
-          f4: 'Compliance assistance (CRA / SBOM workflows)',
-          f5: 'Production-deploy consulting (HA / capacity / upgrade paths)',
-          f6: 'Priority issue handling (GitHub + email)',
+          f3: 'Email priority support',
+          f4: 'Future Pro features included',
+          f5: 'One-time $99 · lifetime',
+          f6: 'No subscription · no phone-home · works offline',
         },
       },
     },
