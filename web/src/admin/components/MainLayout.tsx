@@ -121,7 +121,16 @@ export default function MainLayoutV2() {
         <div className="px-5 py-5 flex items-center gap-2.5">
           <Logo size={26} />
           <span className="text-[16px] font-[600] tracking-[-0.025em]" style={{ color: 'var(--text)' }}>Depsilo</span>
-          <span className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto" title={stats?.service?.version} style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)' }}>{formatVersion(stats?.service?.version)}</span>
+          {/* Min-width pre-reserves the chip's eventual filled size so the
+              first paint ("—" while stats are loading) doesn't shrink the
+              chip and jolt the logo row when the real version arrives. */}
+          <span
+            className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto inline-flex items-center justify-center tabular-nums"
+            title={stats?.service?.version}
+            style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)', minWidth: 64 }}
+          >
+            {formatVersion(stats?.service?.version)}
+          </span>
         </div>
 
         {/* Navigation */}
