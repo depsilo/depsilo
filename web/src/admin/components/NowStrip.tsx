@@ -225,23 +225,31 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
         </span>
       ) : data ? (
         <>
+          {/* No-data state used to render "—" placeholders; per user
+              request 2026-06-29 we now show the actual zero so an
+              idle instance reads as "0 req/min · 0 B/s up · 0 B/s
+              down" rather than three dashes the eye reads as
+              "broken / loading". rate.has_data on the wire is kept
+              for any downstream caller that wants to distinguish
+              never-tracked from genuinely-zero, but the NowStrip
+              treats them the same. */}
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
-            <span style={valueStyle}>{data.rate.has_data ? data.rate.requests_per_min : '—'}</span>
+            <span style={valueStyle}>{data.rate.requests_per_min ?? 0}</span>
             {t('now.reqPerMin')}
           </span>
 
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
             <span style={{ ...arrowStyle, color: 'var(--ok-text)' }} aria-hidden>↑</span>
-            <span style={valueStyle}>{data.rate.has_data ? formatBps(data.rate.egress_bps) : '—'}</span>
+            <span style={valueStyle}>{formatBps(data.rate.egress_bps ?? 0)}</span>
             {t('now.egress')}
           </span>
 
           <span style={sepStyle}>·</span>
           <span style={cellStyle}>
             <span style={{ ...arrowStyle, color: 'var(--text-muted)' }} aria-hidden>↓</span>
-            <span style={valueStyle}>{data.rate.has_data ? formatBps(data.rate.ingress_bps) : '—'}</span>
+            <span style={valueStyle}>{formatBps(data.rate.ingress_bps ?? 0)}</span>
             {t('now.ingress')}
           </span>
 
