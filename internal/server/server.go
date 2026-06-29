@@ -39,6 +39,8 @@ import (
 	"depsilo/internal/license"
 	"depsilo/internal/middleware"
 	"depsilo/internal/notify"
+	"depsilo/internal/quarantine"
+	"depsilo/internal/quarantine/resolvers"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
 	"depsilo/internal/trial"
@@ -180,6 +182,29 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	auditLogger := audit.NewLogger(database, checker)
 	go auditLogger.Start(ctx)
 	adapter.SetAuditLogger(auditLogger)
+
+	// Supply-chain quarantine (T1 Task 1 — minimum release age). Built
+	// from cfg.SupplyChain; nil-safe if the operator hasn't configured
+	// anything (the default-thresholds map ships pre-populated, so the
+	// system protects even an empty config). Failure to build the
+	// checker (e.g. an unsupported mode) is a startup error — operators
+	// must hear about misconfiguration before the first request.
+	quarantinePolicy, err := quarantine.NewPolicy(quarantine.Config{
+		MinReleaseAge: cfg.SupplyChain.MinReleaseAge,
+		Mode:          cfg.SupplyChain.Mode,
+		Allow:         cfg.SupplyChain.Allow,
+		FailClosed:    cfg.SupplyChain.FailClosed,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("quarantine policy: %w", err)
+	}
+	quarantineStore := quarantine.NewStore(database)
+	quarantineLookup := quarantine.NewLookup(quarantineStore, resolvers.NewRegistry())
+	quarantineChecker, err := quarantine.NewChecker(quarantinePolicy, quarantineLookup, quarantineStore)
+	if err != nil {
+		return nil, fmt.Errorf("quarantine checker: %w", err)
+	}
+	adapter.SetQuarantineChecker(quarantine.Wrap(quarantineChecker))
 
 	// Webhook notification engine
 	webhookNotifier := notify.New(database)

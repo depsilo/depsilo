@@ -190,6 +190,12 @@ func (h *Handler) handleIndex(c *gin.Context) {
 func (h *Handler) handleDownload(c *gin.Context) {
 	crateName := c.Param("crate")
 	version := c.Param("version")
+	// Quarantine gate. (crate, version) come pre-parsed from the
+	// /api/v1/crates/<crate>/<version>/download path by
+	// handleRequest above — no extra parsing needed here.
+	if blocked := adapter.QuarantineGate(c, "cargo", crateName, version); blocked {
+		return
+	}
 	cacheKey := CrateCacheKey(crateName, version)
 	start := time.Now()
 

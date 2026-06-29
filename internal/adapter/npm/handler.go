@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -141,6 +142,15 @@ func (h *Handler) handleScopedTarball(c *gin.Context) {
 }
 
 func (h *Handler) proxyTarball(c *gin.Context, fullName, filename, cacheKey, upstreamPath string) {
+	// Quarantine gate — parse version from filename and consult the
+	// supply-chain policy before any upstream fetch. A blocked
+	// version returns 451 directly; allowed paths fall through to
+	// the cache + upstream flow unchanged.
+	if version := packagekey.ParseNpmFilename(fullName, filename); version != "" {
+		if blocked := adapter.QuarantineGate(c, "npm", fullName, version); blocked {
+			return
+		}
+	}
 	start := time.Now()
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "npm", h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {

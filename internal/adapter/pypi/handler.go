@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -167,6 +168,22 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 // handleFileDownload proxies and caches package file downloads.
 func (h *Handler) handleFileDownload(c *gin.Context) {
 	filepath := c.Param("filepath")
+	// Quarantine gate. PyPI file paths look like
+	// "/packages/source/r/requests/requests-2.32.3.tar.gz" or the
+	// equivalent wheel; the last component carries (pkg, version)
+	// in PEP 427 / 625 form. Only fire the check for the extra-
+	// indexes / main PyPI route — we DO NOT block on the extra-index
+	// adapterID layer here since each extra-index is its own
+	// ecosystem name and may not have a quarantine threshold; the
+	// checker short-circuits on threshold-0 ecosystems anyway, so
+	// passing adapterID is safe.
+	if base := lastPathSegment(filepath); base != "" {
+		if pkg, version := packagekey.ParsePypiFilename(base); pkg != "" && version != "" {
+			if blocked := adapter.QuarantineGate(c, h.adapterID, pkg, version); blocked {
+				return
+			}
+		}
+	}
 	cacheKey := FileCacheKey(h.adapterID, filepath)
 	start := time.Now()
 
@@ -229,4 +246,14 @@ func getBaseURL(c *gin.Context) string {
 		scheme = proto
 	}
 	return scheme + "://" + c.Request.Host
+}
+
+// lastPathSegment returns the substring after the final '/'. Used by
+// the quarantine gate to find the artifact filename inside the
+// /files/*filepath catch-all.
+func lastPathSegment(p string) string {
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
