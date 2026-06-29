@@ -436,7 +436,24 @@ pre, code, .code-mono {
   letter-spacing: 0;
 }
 
-/* ── Material Symbols (unchanged) ── */
+/* ── Material Symbols ──────────────────────────────────────
+ *  Each <Icon name="dashboard" /> renders as literal text
+ *  ("dashboard") in the DOM; Material Symbols' OpenType `liga`
+ *  feature shapes that text into the icon glyph at render time.
+ *
+ *  Before the font has loaded — i.e. the moment after a hard
+ *  refresh — the literal text renders in whatever sans fallback
+ *  the browser picks (Inter Tight / system-ui), at the natural
+ *  text width (~90px for "dashboard"). When the font lands, the
+ *  ligature collapses that to a single 1em-wide glyph. Without
+ *  intervention, every sidebar nav row pre-shifts horizontally
+ *  by ~70px during the FOUT window and the label text snaps left
+ *  when the font arrives — the layout jump the user reported on
+ *  2026-06-29.
+ *
+ *  Fix: reserve the eventual glyph box (1em × 1em) and clip the
+ *  pre-font text overflow. Brief glyph-area glitch during the
+ *  font-load window, zero layout shift. */
 .icon {
   font-family: 'Material Symbols Outlined';
   font-weight: normal;
@@ -451,6 +468,15 @@ pre, code, .code-mono {
   direction: ltr;
   font-feature-settings: 'liga';
   -webkit-font-smoothing: antialiased;
+  /* Pre-allocate the rendered glyph bounding box so the literal
+     ligature text cannot push surrounding content while the font
+     is still in flight. text-align: center keeps the fallback
+     fragment visually balanced inside the 1em box during FOUT. */
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  text-align: center;
+  vertical-align: middle;
 }
 .icon-sm { font-size: 18px; }
 .icon-lg { font-size: 24px; }
