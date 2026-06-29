@@ -470,14 +470,18 @@ pre, code, .code-mono {
   -webkit-font-smoothing: antialiased;
   /* Pre-allocate the rendered glyph bounding box so the literal
      ligature text cannot push surrounding content while the font
-     is still in flight. text-align: center keeps the fallback
-     fragment visually balanced inside the 1em box during FOUT. */
+     is still in flight. The icon stays invisible until the
+     Material Symbols font has actually loaded (gated by the
+     :root.fonts-ready class set by an inline script in index.html
+     via document.fonts.ready) — visibility: hidden preserves
+     layout, so no shift, but the ugly fallback text fragment we
+     would otherwise see inside each icon slot is suppressed. */
   width: 1em;
   height: 1em;
-  overflow: hidden;
-  text-align: center;
   vertical-align: middle;
+  visibility: hidden;
 }
+:root.fonts-ready .icon { visibility: visible; }
 .icon-sm { font-size: 18px; }
 .icon-lg { font-size: 24px; }
 
