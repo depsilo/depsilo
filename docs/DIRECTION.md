@@ -108,18 +108,23 @@ multi-ecosystem, with a built-in **supply-chain control + compliance** layer.
 ### T3 — Monetization shape (informs feature-gating, not pricing)
 
 - **Two SKUs only:** Open Source (MIT, self-hosted, free) and Pro (single-tier,
-  contract-priced via sales conversation). No `$9` hobby pricing, no Community/Pro/Team
-  ladder, no cloud/hosted SKU.
-- The Pro contract gates **exactly one** UI surface: **multi-project workspaces**
-  (per-project isolation of audit/rules/SBOM/cache + per-project RBAC). Everything
-  else — audit logs, the rules engine + UI, the security intelligence dashboard, SBOM
-  export, OSV scanning, SSO/RBAC, HA, and the T1 supply-chain wedge — stays open-source.
-  What the contract actually buys is **support + SLA + compliance assistance + production
-  consulting + priority issue handling**, with multi-project as the conversational
-  trigger ("teams running Depsilo across many projects → support contract").
-- *No public price.* `$9/mo` signalled "hobby" and pattern-matched to open-core greed
-  attacks. The new framing is "talk to us about a production deployment." Pricing
-  conversations are a founder activity, not an agent task. See ADR-0003 §"Decision".
+  **one-time $99 lifetime**, self-serve via email order today). No subscription, no
+  Community/Pro/Team ladder, no cloud/hosted SKU.
+- Pro gates **exactly one** UI surface: **multi-project workspaces** (per-project
+  isolation of audit/rules/SBOM/cache + per-project RBAC). Everything else — audit
+  logs, the rules engine + UI, the security intelligence dashboard, SBOM export,
+  OSV scanning, SSO/RBAC, HA, and the T1 supply-chain wedge — stays open-source. The
+  Pro purchase bundles the multi-project UI + email priority support + automatic
+  access to future Pro features.
+- *Public price = $99 lifetime.* Earlier iterations tried $9/mo (read as "hobby") and
+  contact-pricing (no sales bandwidth to handle inbound). $99 lifetime lands in the
+  indie-tool sweet spot (Resend / Plain / Cal.com adjacent), zero-recurring is
+  honest about self-hosted philosophy, and the price is high enough to filter
+  non-serious buyers without enterprise friction.
+- *No payment provider integrated yet.* The Buy CTA opens a mailto: order email;
+  the maintainer manually processes payment (PayPal / Alipay / WeChat / bank) and
+  emails a license key back. One round-trip per sale. When provider integration
+  lands (Lemon Squeezy / Polar / Gumroad), only `web/src/lib/buy.ts` changes.
 
 ---
 
@@ -302,6 +307,21 @@ positioning. Multi-project is the right single gate because it cleanly maps to
 the buyer ICP (production teams running Depsilo across many projects) and
 because the contract sells the support / SLA / compliance / consulting bundle,
 not the feature itself. A narrow gate makes the funnel high-intent.
+
+**Pro switched to $99 lifetime self-serve (2026-06-29 third pass).** Contact-
+priced Pro from the 2026-06-28 reset turned out to assume sales bandwidth the
+project does not have — every inbound contact-sales email would consume founder
+attention with no infrastructure to triage. Switched to a flat one-time **$99
+lifetime** price, displayed prominently in every CTA. **No payment provider
+integrated yet:** the Buy CTA opens a pre-filled mailto: order email and the
+maintainer processes payment (PayPal / Alipay / WeChat / bank) + emails back a
+license key the operator pastes into the License page. One asynchronous
+round-trip per sale, zero ongoing sales work. When provider integration lands
+(Lemon Squeezy is the planned target — Merchant of Record, license-key
+delivery, EU VAT handled), only `web/src/lib/buy.ts` changes — every CTA in
+the admin UI and on the landing page reads from that helper. Price stays $99
+lifetime through and after the provider swap; the trial system stays as the
+free 14-day evaluation path before purchase.
 
 ---
 

@@ -286,22 +286,22 @@ CVE 集中视图 + 决策工作流）、SBOM 导出（CycloneDX + SPDX）、Webh
 （最小发布年龄、恶意包阻断、tamper detection）。SSO / RBAC 等自托管
 必需能力**不会**被锁在付费墙后面。
 
-**Pro · 企业支持** — 面向生产团队，联系销售。
+**Pro · 终身买断 $99** — 一次付费，永久使用。
 
 Pro 唯一锁住的 UI 能力是**多项目工作区**（按项目隔离审计日志、规则、
-SBOM、缓存 + 按项目分配 RBAC 权限）。买 Pro 实际上买的是**支持 +
-SLA + 合规担责 + 部署咨询**：
+SBOM、缓存 + 按项目分配 RBAC）。买 Pro 还包含：
 
 - 多项目工作区（按项目隔离 + 按项目 RBAC）
-- 企业支持 + 响应 SLA
-- 合规协助（CRA / SBOM 流程对接）
-- 生产部署咨询（HA / 容量规划 / 升级路径）
-- 优先 issue 处理（GitHub + 邮件）
+- 邮件优先支持
+- 后续 Pro 新功能自动包含
+- **无订阅** · **无服务器校验** · **离线可用**
 
-→ <sales@depsilo.com>
+→ 想买？邮件 <pay@depsilo.com>，主题写 "Buy Depsilo Pro Lifetime ($99)"。
+我们回付款方式（PayPal / 支付宝 / 微信 / 银行）+ 收到付款后回 license key，
+key 粘到 admin 的 License 页面即激活。
 
-> 注：Pro 没有公开标价。我们卖担责（支持 + SLA + 合规），不卖功能墙。
-> 单档付费、单家一谈。
+> 注：暂时没接支付厂商，邮件下单是手动的但一次性。整个流程 ~24h。
+> 接 Lemon Squeezy / Polar 后会自动化。
 
 ## 🤝 参与贡献
 

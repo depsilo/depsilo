@@ -42,20 +42,26 @@ gets paywalled** — especially not governance primitives (audit, rules,
 security) and not SSO/RBAC; the "SSO tax" pattern damages trust badly
 and competitors give it free, so we do too.
 
-**Pro** (Enterprise support contract, single tier, contact-priced):
+**Pro** (one-time $99 lifetime, single tier, self-serve):
 A paid relationship gated by `entitlement.RequirePro` middleware,
-unlocked by an Enterprise contract key. Encodes exactly **one**
-Buyer-facing UI capability: **multi-project workspaces** — per-project
-isolation of audit logs, rules, SBOM, and cache, plus per-project RBAC.
-What the contract actually buys is: support, SLA, compliance assistance
-(CRA / SBOM workflows), production-deploy consulting (HA / capacity /
-upgrade paths), priority issue handling, and the one multi-project
-UI surface — **not** more storage, not more ecosystems, not the
-governance primitives (which stay open-source), not the wedge features
-(which stay open-source). No public price; the trigger is a conversation
-with sales, not a credit-card form. The Pro feature surface is
-deliberately *narrow* — production teams that need workspace structure
-are the conversational filter for who should be paying.
+unlocked by a license key. Encodes exactly **one** Buyer-facing UI
+capability: **multi-project workspaces** — per-project isolation of
+audit logs, rules, SBOM, and cache, plus per-project RBAC. The
+purchase is a **one-time $99**, lifetime, no subscription, no
+renewals, no phone-home validation. Buying it also includes email
+priority support and automatic access to future Pro features. The
+Pro surface is deliberately *narrow* — production teams that need
+workspace structure self-identify as the buyer audience.
+
+**Purchase flow today (no payment provider integrated yet):** the
+operator opens the "Buy lifetime · $99" CTA, which triggers a
+pre-filled mailto to `pay@depsilo.com`. The maintainer replies with
+payment instructions (PayPal / Alipay / WeChat / bank), receives
+payment off-band, and emails back a license key the operator pastes
+into the License page. Trust-on-entry: any non-empty key is accepted
+as Pro. When a payment provider (Lemon Squeezy / Polar / Gumroad)
+gets wired in, only `web/src/lib/buy.ts` changes; the rest of the
+UI stays put.
 
 **Enterprise** is no longer a separate tier — the term used to imply a
 future paywalled SSO/RBAC layer, which we explicitly do not want. When
