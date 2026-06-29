@@ -82,6 +82,16 @@ func (h *Handler) handleRequest(c *gin.Context) {
 func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpoint string, start time.Time) {
 	reference := strings.TrimPrefix(endpoint, "manifests/")
 
+	// Quarantine gate. Only fires on tag references; digest pulls
+	// ("sha256:...") are already content-addressed and can't be
+	// "freshly poisoned" without changing the digest, which the
+	// runtime would reject — so we skip the check for sha256 refs.
+	if !strings.HasPrefix(reference, "sha256:") {
+		if blocked := adapter.QuarantineGate(c, "docker", imageName, reference); blocked {
+			return
+		}
+	}
+
 	ttl := h.cacheCfg.TTLIndex
 	if strings.HasPrefix(reference, "sha256:") {
 		ttl = h.cacheCfg.TTLBlob

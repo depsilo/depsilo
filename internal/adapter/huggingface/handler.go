@@ -5,6 +5,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/adapter"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -51,6 +52,17 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	if parsed.Kind == PathUnknown {
 		c.String(404, "unrecognized HuggingFace path")
 		return
+	}
+
+	// Quarantine gate. The HF Parsed.Ref is the revision (branch /
+	// tag / commit); on `/resolve/<ref>/<file>` paths we have both
+	// the repo (owner/name) and the ref, which the resolver maps to
+	// the model's lastModified. Skip on metadata-only requests where
+	// the resolver couldn't determine a ref.
+	if parsed.Repo != "" && parsed.Ref != "" {
+		if blocked := adapter.QuarantineGate(c, "huggingface", parsed.Repo, parsed.Ref); blocked {
+			return
+		}
 	}
 
 	up, err := h.selector.Select(c.Request.Context())

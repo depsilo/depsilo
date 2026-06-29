@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -43,6 +44,14 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	if path == "" {
 		c.Status(http.StatusNotFound)
 		return
+	}
+
+	// Quarantine gate. Only fires on .apk artifact paths;
+	// APKINDEX.tar.gz and DESCRIPTION text files pass through.
+	if pkg, version := packagekey.ParseAlpinePath(path); pkg != "" && version != "" {
+		if blocked := adapter.QuarantineGate(c, "alpine", pkg, version); blocked {
+			return
+		}
 	}
 
 	start := time.Now()

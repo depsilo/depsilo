@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -40,6 +41,15 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	if path == "" {
 		c.Status(http.StatusNotFound)
 		return
+	}
+
+	// Quarantine gate. Only the flat-container .nupkg downloads
+	// resolve to (id, version); service-index and registration JSON
+	// pass through ungated.
+	if id, version := packagekey.ParseNugetPath(path); id != "" && version != "" {
+		if blocked := adapter.QuarantineGate(c, "nuget", id, version); blocked {
+			return
+		}
 	}
 
 	switch {

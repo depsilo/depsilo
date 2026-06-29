@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -40,6 +41,14 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	if path == "" {
 		c.Status(http.StatusNotFound)
 		return
+	}
+
+	// Quarantine gate. Only fires on .conda / .tar.bz2 artifacts;
+	// repodata.json and channeldata.json pass through.
+	if pkg, version := packagekey.ParseCondaPath(path); pkg != "" && version != "" {
+		if blocked := adapter.QuarantineGate(c, "conda", pkg, version); blocked {
+			return
+		}
 	}
 
 	start := time.Now()
