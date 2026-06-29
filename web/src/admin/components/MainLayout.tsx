@@ -60,11 +60,16 @@ export default function MainLayoutV2() {
     staleTime: 30000,
   })
 
+  // Pro badges removed from audit / rules / security on 2026-06-29 —
+  // those features moved to open-source as part of the pricing reset
+  // (DIRECTION.md "Pro narrowed to multi-project" decision). The Pro
+  // badge now stays on Projects only, which is the single remaining
+  // Pro-gated UI surface.
   const monitorItems: NavItem[] = [
     { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
     { label: t('bandwidth.title'), to: '/admin/bandwidth', icon: 'bar_chart' },
     { label: t('nav.accessLogs'), to: '/admin/logs', icon: 'receipt_long' },
-    { label: t('nav.auditLogs'), to: '/admin/audit', icon: 'policy', pro: true },
+    { label: t('nav.auditLogs'), to: '/admin/audit', icon: 'policy' },
   ]
 
   const manageItems: NavItem[] = [
@@ -72,8 +77,8 @@ export default function MainLayoutV2() {
     { label: t('nav.upstreams'), to: '/admin/upstreams', icon: 'cloud_sync' },
     { label: t('nav.userManage'), to: '/admin/users', icon: 'group' },
     { label: t('license.title'), to: '/admin/license', icon: 'key' },
-    { label: t('nav.rules'), to: '/admin/rules', icon: 'shield', pro: true },
-    { label: t('nav.security'), to: '/admin/security', icon: 'security', pro: true },
+    { label: t('nav.rules'), to: '/admin/rules', icon: 'shield' },
+    { label: t('nav.security'), to: '/admin/security', icon: 'security' },
     { label: t('nav.projects'), to: '/admin/projects', icon: 'folder_managed', pro: true },
     { label: t('nav.settings'), to: '/admin/settings', icon: 'settings' },
   ]
