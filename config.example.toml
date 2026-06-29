@@ -239,3 +239,61 @@ osv_api_url = "https://api.osv.dev"
 scan_interval = "24h"
 check_ttl = "24h"
 # proxy = "http://127.0.0.1:7890"
+
+# ─── Supply-chain quarantine — minimum release age ──────────────────────
+#
+# Refuses to serve any package version whose upstream publish time is
+# younger than the configured threshold. Mitigates Shai-Hulud-style
+# self-propagating worms by giving the community a window to catch
+# and yank a poisoned version before it can enter a build.
+#
+# Threshold values accept "3d" / "7d" / "2w" / "24h" / "30m" / "0".
+# Set "0" or omit a key to disable quarantine for that ecosystem. The
+# defaults shown below match the locked-in DIRECTION.md values; you
+# only need to override what you want to change.
+#
+# Mode:
+#   block               (default) — return 451 with a clear error
+#   serve_last_eligible           — fall back to the newest version
+#                                   that IS older than the threshold
+#
+# Allow rules bypass the check for trusted pins. Three syntaxes:
+#   npm:@scope/internal-*         — glob match on package name
+#   pip:requests==2.32.3          — exact pin on (name, version)
+#   npm:react>=18.0.0             — range comparator on a name
+#
+# Operators can also approve individual (package, version) pairs at
+# runtime via the admin UI — those approvals persist permanently.
+#
+# fail_closed controls behavior when the upstream timestamp can't be
+# determined (registry 404 / parsing failure / network error):
+#   true  (default) — treat as quarantined (safer)
+#   false           — allow through (legacy / opt-in)
+
+[supply_chain]
+mode = "block"
+fail_closed = true
+
+[supply_chain.min_release_age]
+default  = "0"
+pypi     = "3d"
+npm      = "7d"
+go       = "0"     # Go modules are immutable + checksum DB validated
+cargo    = "3d"
+maven    = "3d"
+rubygems = "3d"
+composer = "3d"
+nuget    = "3d"
+conda    = "3d"
+cran     = "3d"
+helm     = "3d"
+alpine   = "3d"
+docker   = "3d"
+huggingface = "3d"
+apt      = "0"     # apt repos are curated upstream; quarantine adds noise
+
+# allow = [
+#   "npm:@your-org/internal-*",
+#   "pip:requests==2.32.3",
+#   "npm:react>=18.0.0",
+# ]

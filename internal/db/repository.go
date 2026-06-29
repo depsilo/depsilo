@@ -92,5 +92,12 @@ func AutoMigrate(db *gorm.DB) error {
 		&TrialRecord{},
 		&LicenseStorage{},
 		&WebhookConfig{},
+		// Quarantine (T1 Task 1 — minimum release age). Three tables:
+		// PackageTimestamp caches upstream publish times, ApprovedVersion
+		// records operator bypasses, QuarantineEvent is the audit log.
+		// All defined in db/quarantine.go; helpers in internal/quarantine.
+		&PackageTimestamp{},
+		&ApprovedVersion{},
+		&QuarantineEvent{},
 	)
 }
