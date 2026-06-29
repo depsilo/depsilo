@@ -46,11 +46,20 @@ type Decision struct {
 // is implemented for T1/3. serve_last_eligible is rejected at
 // construction time so an operator who sets it sees the error on
 // startup, not silently when a quarantine fires.
+// OnBlockFn is the optional hook called when Check decides to Block.
+// Wires the quarantine subsystem to side-effect channels (notify
+// webhooks, metrics counters, future SIEM exporters) without making
+// the quarantine package depend on any of those concrete consumers.
+// Called inline before Check returns, so the implementation MUST NOT
+// block — fire-and-forget into a buffered channel / goroutine.
+type OnBlockFn func(ev db.QuarantineEvent)
+
 type Checker struct {
-	policy *Policy
-	lookup *Lookup
-	store  *Store
-	now    func() time.Time // injectable for tests
+	policy  *Policy
+	lookup  *Lookup
+	store   *Store
+	now     func() time.Time // injectable for tests
+	onBlock OnBlockFn
 }
 
 // NewChecker validates the policy and wires up the dependencies.
@@ -264,22 +273,52 @@ func (c *Checker) handleLookupError(
 	}
 }
 
-// recordEvent persists a QuarantineEvent best-effort. Failures log a
-// warning but never escape to the caller — failing a quarantine
-// decision because the audit log couldn't write would be the wrong
-// tradeoff (the audit trail is for after-the-fact review; the gating
-// decision happens regardless).
+// SetOnBlock installs (or replaces) the block hook. Idempotent;
+// passing nil disables further callbacks. Safe to call after the
+// Checker is already serving — assigning a function pointer is a
+// single-word write on every architecture Go targets, and the
+// Check fast path reads via the same pointer.
+func (c *Checker) SetOnBlock(fn OnBlockFn) {
+	c.onBlock = fn
+}
+
+// recordEvent persists a QuarantineEvent best-effort and fires the
+// OnBlock hook (if registered) for ActionBlocked events. Both side-
+// effects are protected from each other: a store failure logs a
+// warning but does NOT prevent the hook firing, and a hook panic
+// does NOT prevent future RecordEvent calls (recovered via the
+// deferred recover below).
+//
+// Failures never escape to the caller — failing a quarantine
+// decision because the audit log or a webhook hiccupped would be
+// the wrong tradeoff. The audit trail is for after-the-fact review;
+// the gating decision happens regardless.
 func (c *Checker) recordEvent(ctx context.Context, ev db.QuarantineEvent) {
-	if c.store == nil {
-		return
+	if c.store != nil {
+		if err := c.store.RecordEvent(ctx, ev); err != nil {
+			zap.L().Warn("quarantine: RecordEvent",
+				zap.String("ecosystem", ev.Ecosystem),
+				zap.String("package", ev.Package),
+				zap.String("version", ev.Version),
+				zap.String("action", ev.Action),
+				zap.Error(err))
+		}
 	}
-	if err := c.store.RecordEvent(ctx, ev); err != nil {
-		zap.L().Warn("quarantine: RecordEvent",
-			zap.String("ecosystem", ev.Ecosystem),
-			zap.String("package", ev.Package),
-			zap.String("version", ev.Version),
-			zap.String("action", ev.Action),
-			zap.Error(err))
+	if c.onBlock != nil && ev.Action == ActionBlocked {
+		// Defer-recover so a panicking webhook implementation can't
+		// break the gating decision. The OnBlock hook is meant to be
+		// fire-and-forget; misbehaving callers shouldn't be able to
+		// cascade into request failures.
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					zap.L().Error("quarantine: OnBlock hook panicked",
+						zap.String("ecosystem", ev.Ecosystem),
+						zap.Any("recover", r))
+				}
+			}()
+			c.onBlock(ev)
+		}()
 	}
 }
 

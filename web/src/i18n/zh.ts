@@ -766,6 +766,7 @@ const zh = {
         disk_high: '磁盘使用率过高',
         vuln_critical: '严重安全漏洞',
         license_expiring: '许可证即将到期',
+        quarantine_blocked: '供应链隔离拦截',
       },
       lastSent: '上次发送',
       never: '从未',

@@ -766,6 +766,7 @@ const en = {
         disk_high: 'High Disk Usage',
         vuln_critical: 'Critical Vulnerability',
         license_expiring: 'License Expiring',
+        quarantine_blocked: 'Supply-chain Block',
       },
       lastSent: 'Last sent',
       never: 'Never',

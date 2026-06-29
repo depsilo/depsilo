@@ -256,6 +256,73 @@ func TestChecker_EmptyVersion_Allows(t *testing.T) {
 	}
 }
 
+func TestChecker_OnBlockHookFires(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	publishedAt := now.Add(-2 * 24 * time.Hour)
+	c := newChecker(t, Config{
+		MinReleaseAge: map[string]string{"npm": "7d"},
+	}, resolvers.Registry{
+		"npm": canned{t: publishedAt},
+	}, now)
+
+	var fired []db.QuarantineEvent
+	c.SetOnBlock(func(ev db.QuarantineEvent) {
+		fired = append(fired, ev)
+	})
+
+	d := c.Check(context.Background(), "npm", "lodash", "4.17.21", "10.0.0.1")
+	if d.Allowed {
+		t.Fatalf("expected Block; got %+v", d)
+	}
+	if len(fired) != 1 {
+		t.Fatalf("OnBlock fired %d times, want 1", len(fired))
+	}
+	if fired[0].Action != ActionBlocked {
+		t.Errorf("hook saw action %q, want %q", fired[0].Action, ActionBlocked)
+	}
+	if fired[0].Package != "lodash" || fired[0].Version != "4.17.21" {
+		t.Errorf("hook saw wrong triple: %+v", fired[0])
+	}
+}
+
+func TestChecker_OnBlockHookNotFiredOnAllow(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	publishedAt := now.Add(-30 * 24 * time.Hour) // well over threshold
+	c := newChecker(t, Config{
+		MinReleaseAge: map[string]string{"npm": "7d"},
+	}, resolvers.Registry{
+		"npm": canned{t: publishedAt},
+	}, now)
+
+	called := false
+	c.SetOnBlock(func(_ db.QuarantineEvent) { called = true })
+	d := c.Check(context.Background(), "npm", "react", "18.0.0", "")
+	if !d.Allowed {
+		t.Fatalf("expected Allow; got %+v", d)
+	}
+	if called {
+		t.Error("OnBlock should NOT fire on an Allow decision")
+	}
+}
+
+func TestChecker_OnBlockHookPanicIsRecovered(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	publishedAt := now.Add(-2 * 24 * time.Hour)
+	c := newChecker(t, Config{
+		MinReleaseAge: map[string]string{"npm": "7d"},
+	}, resolvers.Registry{
+		"npm": canned{t: publishedAt},
+	}, now)
+
+	c.SetOnBlock(func(_ db.QuarantineEvent) { panic("synthetic") })
+	// Must NOT panic — recover inside checker keeps the gating
+	// decision honest even when an OnBlock implementation misbehaves.
+	d := c.Check(context.Background(), "npm", "x", "1.0", "")
+	if d.Allowed {
+		t.Errorf("expected Block; got %+v", d)
+	}
+}
+
 func TestChecker_FormatAge(t *testing.T) {
 	cases := []struct {
 		d    time.Duration

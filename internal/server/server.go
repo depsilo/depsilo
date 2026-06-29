@@ -216,6 +216,30 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		Checker: checker,
 	})
 
+	// Quarantine → webhook bridge. Installed AFTER the notifier exists
+	// so the closure can capture it directly. Done via a setter on the
+	// checker so the quarantine package never imports notify — kept
+	// loosely coupled per the layering elsewhere (adapter.SetAuditLogger
+	// follows the same pattern). Dispatch is fire-and-forget so the
+	// gating decision returns without waiting on webhook delivery; a
+	// panicking dispatcher is recovered inside the Checker so misbehaving
+	// channels can't cascade into request failures.
+	quarantineChecker.SetOnBlock(func(ev db.QuarantineEvent) {
+		ageStr := formatSeconds(ev.AgeAtCall)
+		thresholdStr := formatSeconds(ev.Threshold)
+		webhookNotifier.Dispatch(ctx, notify.Event{
+			Type:     notify.EventQuarantineBlocked,
+			Severity: "warning",
+			Title:    fmt.Sprintf("Quarantine: %s %s on %s blocked", ev.Package, ev.Version, ev.Ecosystem),
+			Message: fmt.Sprintf(
+				"Version published %s ago, below the configured %s minimum release age.",
+				ageStr, thresholdStr,
+			),
+			Detail:    ev.Reason,
+			Timestamp: ev.CreatedAt,
+		})
+	})
+
 	// Security scanner
 	secCfg := cfg.Security
 	if secCfg.OSVURL == "" {
@@ -442,6 +466,35 @@ func syncWebhookConfigs(database *gorm.DB, webhooks []config.WebhookConfig) {
 			})
 			zap.L().Info("synced webhook config from config.toml", zap.String("name", w.Name))
 		}
+	}
+}
+
+// formatSeconds renders a seconds-count as a coarse human duration —
+// "3d 2h" / "12h" / "30m" / "45s" — for inclusion in webhook
+// payloads. The Notifier consumers (Slack / DingTalk / WeCom /
+// Feishu) all render plain text in their card bodies so we choose
+// a format that reads cleanly there rather than the more precise
+// time.Duration default which surfaces as e.g. "264h12m30s".
+func formatSeconds(secs int64) string {
+	if secs <= 0 {
+		return "0s"
+	}
+	days := secs / 86400
+	hours := (secs % 86400) / 3600
+	minutes := (secs % 3600) / 60
+	switch {
+	case days > 0 && hours > 0:
+		return fmt.Sprintf("%dd %dh", days, hours)
+	case days > 0:
+		return fmt.Sprintf("%dd", days)
+	case hours > 0 && minutes > 0:
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	case hours > 0:
+		return fmt.Sprintf("%dh", hours)
+	case minutes > 0:
+		return fmt.Sprintf("%dm", minutes)
+	default:
+		return fmt.Sprintf("%ds", secs)
 	}
 }
 
