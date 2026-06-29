@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -13,6 +14,16 @@ import (
 
 func Load() (*Config, error) {
 	v := viper.New()
+
+	// Environment overrides via viper. DEPSILO_SERVER_PORT overrides
+	// [server] port, DEPSILO_DATABASE_DRIVER overrides [database]
+	// driver, etc. — the key replacer maps "server.port" → "_SERVER_PORT"
+	// and the prefix prepends "DEPSILO". Standard 12-factor pattern.
+	// Precedence (highest wins): CLI flags (which call os.Setenv) →
+	// env vars → config file → SetDefault values below.
+	v.SetEnvPrefix("DEPSILO")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
 	// Defaults
 	v.SetDefault("server.host", "0.0.0.0")

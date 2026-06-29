@@ -49,19 +49,19 @@ func PrintHelp() {
 	fmt.Println(`Depsilo — Lightweight dependency proxy cache gateway
 
 Usage:
-    depsilo [command]
+    depsilo <command> [flags]
+    depsilo <command> --help        Show flags for a specific command
 
 Commands:
-    serve                       Start HTTP server in foreground
+    serve [flags]               Start HTTP server in foreground (see ` + "`depsilo serve --help`" + `)
     start [--daemon]            Start the server (daemon mode with --daemon)
     stop                        Stop the running daemon
     status [--json]             Show server health, cache stats, upstreams
     doctor [--json]             Run end-to-end health diagnosis with hints
     init-agent [--format ...]   Write CLAUDE.md / AGENTS.md / .cursorrules so
                                 AI coding agents auto-detect Depsilo
-    prompt [--url ...]          Print the brand-neutral project-integration
-                                prompt for an AI coding agent (Dockerfile/CI/
-                                build-script rewrite). Pipe into your agent.
+    prompt [--url ...]          Print the project-integration prompt for an
+                                AI coding agent (Dockerfile/CI/build rewrite)
     version [--json]            Print version
     activate [--shell|--eco]    Print shell environment configuration
     warmup <eco> <pkg> [pkg...] Pre-fetch packages into cache
@@ -70,17 +70,38 @@ Commands:
     restore <backup.tar.gz>     Restore config + database from backup
     help                        Show this message
 
-Global flags:
-    --json, -j                  Output machine-readable JSON (status, version, warmup)
+Common serve flags (use depsilo serve --help for full detail):
+    --port, -p N                Listen port (overrides config; default 23333)
+    --host H                    Listen host (overrides config; default 0.0.0.0)
+    --config, -c PATH           Path to config.toml
+    --log-level L               debug | info | warn | error
+
+Other flags:
+    --json, -j                  Machine-readable JSON output (status / version / warmup)
+
+Environment variables:
+    DEPSILO_URL                 Used by status / doctor to find a remote server
+    DEPSILO_TOKEN               Auth token (alternative to ~/.config/depsilo/token)
+    DEPSILO_CONFIG              Path to config.toml (default search: ./config.toml,
+                                /app/config.toml, ~/.depsilo/config.toml)
+    DEPSILO_SERVER_PORT         Override [server] port (12-factor style)
+    DEPSILO_SERVER_HOST         Override [server] host
+    DEPSILO_SERVER_LOG_LEVEL    Override [server] log_level
+    DEPSILO_LICENSE_KEY         Pro license key (alternative to [license] key)
+
+Precedence (highest wins):
+    CLI flag → environment variable → config file → built-in default
 
 Examples:
-    depsilo status
-    depsilo status --json
-    depsilo doctor
-    depsilo activate
-    eval "$(depsilo activate)"
-    depsilo start --daemon
-    depsilo warmup pypi requests numpy torch
+    depsilo serve                                Start with the default port (23333)
+    depsilo serve --port 18080                   Override only the port
+    depsilo serve -p 8080 -c /etc/depsilo.toml   Custom port + config
+    DEPSILO_SERVER_PORT=9000 depsilo serve       Same effect, via env
+    depsilo status                               Quick health check
+    depsilo status --json                        Same, machine-readable
+    depsilo doctor                               Full end-to-end diagnosis
+    eval "$(depsilo activate)"                   Configure local shell to use Depsilo
+    depsilo warmup pypi requests numpy torch     Pre-warm cache
 
 HTTP endpoints for AI agents and automation:
     GET  /health                Liveness probe (JSON)
