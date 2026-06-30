@@ -3,18 +3,36 @@
 > A north-star brief for **Claude Code**. Read this before picking up roadmap work.
 > It explains where Depsilo stands, the strategic bet, and a prioritized build
 > order with concrete first tasks. When in doubt, optimize for the bet below.
+>
+> **2026-06-30 pivot:** The original "control point" framing (ADR-0003) is
+> narrowed to "**enforcement layer**" after Artifact Keeper was found in the
+> same space with significantly more shipped features. See
+> [`docs/adr/0004-supply-chain-enforcement-layer.md`](./adr/0004-supply-chain-enforcement-layer.md)
+> and [`docs/research/2026-06-30-competitive-landscape.md`](./research/2026-06-30-competitive-landscape.md)
+> for the full reasoning. The TL;DR below reflects the post-pivot position.
 
 ---
 
 ## TL;DR — the bet
 
-Depsilo today reads as *"a fast, lightweight, self-hosted multi-ecosystem package cache."*
-That is a **commodity** in a crowded field (Artifactory, Nexus, ProGet, Cloudsmith,
-Reposilite, RepoFlow, and new all-open-source clones appearing monthly).
+Depsilo is **a supply-chain enforcement layer that sits on the package-install
+request path.** Not a general-purpose Artifactory replacement (that space is
+won by [Artifact Keeper](https://artifactkeeper.com/) on the OSS side and by
+Nexus/Artifactory on commercial). What depsilo does that none of those do
+today: refuse to serve packages in real time based on supply-chain policy —
+minimum release age, malicious blocklist, golden snapshot, tamper detection,
+CRA-mode SBOM.
 
-**The bet:** reposition Depsilo as **the lightweight, self-hosted supply-chain _control
-point_** for small/mid teams who can't or won't run Artifactory. The cache is the wedge;
-the value is **governance + security over everything that enters a build.**
+The 14-ecosystem cap is deliberate. Depth of enforcement on a focused
+ecosystem set beats shallow coverage of 45. The cache function is the wedge
+that gets the proxy installed; the value is the enforcement layer
+on top of it.
+
+**Coexistence over competition.** Operators who need a general artifact
+registry should run Artifact Keeper or Nexus. Operators who need
+supply-chain enforcement should run depsilo — optionally **in front of**
+their existing registry, doing quarantine + blocklist + SBOM-of-actual-
+traffic before requests reach the storage tier.
 
 Two tailwinds make the timing good, and both are *proxy-shaped* — a proxy you control is
 the natural place to enforce them:
@@ -48,13 +66,18 @@ enough for a security-conscious buyer.
 ## Positioning & non-goals
 
 **We ARE:** lightweight (single binary, ~50 MB RAM, ~10-min deploy), self-hosted,
-multi-ecosystem, with a built-in **supply-chain control + compliance** layer.
+multi-ecosystem, with a built-in **supply-chain enforcement** layer that operates
+on the request path (refuses to serve based on policy — not just scans and reports).
 
 **We are NOT trying to:**
-- Out-format Artifactory — do **not** chase 40+ ecosystems.
+- Out-format Artifactory **or [Artifact Keeper](https://artifactkeeper.com/)** — do **not**
+  chase 45+ ecosystems. The 14 we have stays. Deep enforcement on 14 beats shallow on 45.
 - Beat dedicated SBOM/SCA vendors (Snyk, FOSSA, Anchore, Socket) on scanning depth.
-- Be a general artifact *host* first. "Good enough + convenient + self-hosted + governed"
-  beats "most features."
+- Build the surface AK has already shipped: iOS / Android / Windows MSI clients,
+  WASM plugin host for custom formats, in-product SSO / SAML / LDAP, Helm chart parity.
+  Recommend operators run AK or Nexus alongside depsilo for those.
+- Be a general artifact *host* first. "Enforcement layer + cache wedge" beats
+  "another Artifactory clone."
 
 **Security-tool discipline (non-negotiable — we sell trust):**
 - **Transparent by default.** Never ship a feature that hides what the tool did to a
@@ -93,29 +116,61 @@ multi-ecosystem, with a built-in **supply-chain control + compliance** layer.
       (name+version, supplier, **purl**, **SHA-256** hash, license, dependency
       relationships), is signable, and has a "technical-file" export preset.
 
-### T2 — Adoptability & trust (table stakes for buyers with budget)
+### T2 — Adoptability & trust (table stakes — **reduced scope post-2026-06-30**)
 
-- [ ] Rock-solid one-command deploy + **Helm chart** + strong **docs** (docs are a feature).
-- [ ] **RBAC + SSO (OIDC/LDAP) in open-source.** The "SSO tax" pattern is widely hated
-      and competitors give it free; locking SSO behind a paid tier kills enterprise
-      adoption. See `CONTEXT.md` "Product tiers" and §16 of this file for the explicit
-      open-source-only commitment.
-- [ ] **Multi-node / HA made genuinely easy** (this is where Artifactory/Nexus hurt — easy
-      HA is itself a wedge). Open-source.
-- [ ] **Alerting:** webhook/Slack on policy hits (blocked malware, quarantined version, CVE
-      over threshold). Turns a passive cache into an active guardrail. Open-source.
+ADR-0004 found Artifact Keeper already ships SSO / RBAC / Helm chart in OSS.
+Rebuilding those is now a low-ROI use of time. Updated T2:
 
-### T3 — Monetization shape (informs feature-gating, not pricing)
+- [x] **Alerting:** webhook/Slack on policy hits (blocked malware, quarantined
+      version, CVE over threshold). **Shipped 2026-06-29 (T1/7).**
+- [ ] **One-command deploy + Helm chart** — basic only, not feature-parity with
+      AK's IaC bundle. Just enough so a k8s operator can `helm install` and have
+      a working enforcement layer.
+- [ ] **Strong docs** (deployment guide, threat model, policy-tuning guide,
+      AK + Nexus + Verdaccio coexistence guide).
+- [ ] ~~**RBAC + SSO (OIDC/LDAP) in open-source.**~~ **Dropped.** Recommend
+      operators deploy depsilo behind an OIDC reverse proxy
+      ([oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) /
+      [Authelia](https://www.authelia.com/) / [Pomerium](https://www.pomerium.com/)).
+      These are mature, OSS, and one-line YAML to wire. The "no SSO tax"
+      narrative is preserved (operators still get SSO for free) without us
+      building + maintaining yet another OIDC implementation.
+- [ ] ~~**Multi-node / HA made genuinely easy.**~~ **De-prioritized.** Single-
+      node deployment is the realistic target for the enforcement-layer use
+      case (most teams gate behind one proxy). Document the
+      PostgreSQL + S3 + load-balancer pattern when an operator asks; do not
+      ship a managed HA solution until enforcement features are demonstrably
+      ahead of AK.
+
+### T3 — Monetization shape (**reframed 2026-06-30**)
 
 - **Two SKUs only:** Open Source (MIT, self-hosted, free) and Pro (single-tier,
   **one-time $99 lifetime**, self-serve via email order today). No subscription, no
   Community/Pro/Team ladder, no cloud/hosted SKU.
-- Pro gates **exactly one** UI surface: **multi-project workspaces** (per-project
-  isolation of audit/rules/SBOM/cache + per-project RBAC). Everything else — audit
-  logs, the rules engine + UI, the security intelligence dashboard, SBOM export,
-  OSV scanning, SSO/RBAC, HA, and the T1 supply-chain wedge — stays open-source. The
-  Pro purchase bundles the multi-project UI + email priority support + automatic
-  access to future Pro features.
+
+- **Pro tier reframed (ADR-0004).** AK ships SSO / RBAC / multi-tenant workspaces
+  in OSS, which made "multi-project workspaces + email support" look thin for $99.
+  The reframed Pro is **Supply-Chain Premium** — features that only matter to
+  organizations putting depsilo on the build-policy enforcement path:
+  - Long-term audit retention (>90 days raw, vs OSS 7-day)
+  - SIEM integration (Splunk / Datadog / Elastic feed format)
+  - Custom policy DSL / scriptable allow-list rules
+  - Compliance report generation (CRA technical-file pack, NIST SSDF
+    evidence, FedRAMP attestation)
+  - Multi-project workspaces (stays Pro but no longer the headline)
+  - Email priority support
+  - Future Pro enforcement primitives bundled automatically
+
+  Concrete migration: existing "Pro = multi-project + support" customers
+  get all the new Supply-Chain Premium features at no extra cost. The
+  $99 lifetime price is unchanged.
+
+- Wedge + governance primitives stay in open-source. Audit logs, rules
+  engine, security intelligence dashboard, OSV scanning, SBOM export,
+  T1 supply-chain features (minimum release age, malicious blocklist,
+  freeze/snapshot, tamper detection), webhook alerting — all open-source.
+  These are the *enforcement layer itself*; Pro is *commercial-grade
+  observability + reporting + retention* on top.
 - *Public price = $99 lifetime.* Earlier iterations tried $9/mo (read as "hobby") and
   contact-pricing (no sales bandwidth to handle inbound). $99 lifetime lands in the
   indie-tool sweet spot (Resend / Plain / Cal.com adjacent), zero-recurring is
@@ -322,6 +377,37 @@ delivery, EU VAT handled), only `web/src/lib/buy.ts` changes — every CTA in
 the admin UI and on the landing page reads from that helper. Price stays $99
 lifetime through and after the provider swap; the trial system stays as the
 free 14-day evaluation path before purchase.
+
+**Pivot to "Supply-Chain Enforcement Layer" (2026-06-30 fourth pass —
+[ADR-0004](./adr/0004-supply-chain-enforcement-layer.md)).** Competitive research
+on 2026-06-30 found [Artifact Keeper](https://artifactkeeper.com/) — a 794-star,
+MIT-licensed, Rust-based "Artifactory alternative" that already ships 45+
+ecosystem formats, SSO/LDAP/SAML/RBAC in OSS, native iOS/Android/Windows
+clients, Helm + Terraform IaC, and a WASM plugin system. That executed most of
+ADR-0003's T2 roadmap before depsilo started it, and at $0 forever vs. our
+$99 Pro. Concurrently, **pnpm 11 / npm 11.10.0 / uv** all shipped client-side
+minimum-release-age — validating the T1 wedge thesis but making "we offer this
+feature" insufficient. Pivot:
+
+- Reposition from "lightweight multi-eco control point" → "**supply-chain
+  enforcement layer**." Cap ecosystems at 14, focus on enforcement primitives
+  only a proxy on the request path can do: minimum release age (shipped),
+  malicious blocklist (in flight), freeze/snapshot, tamper detection, CRA SBOM,
+  SIEM-grade audit + webhook routing.
+- **Reframe Pro** to "Supply-Chain Premium": long-term audit retention, SIEM
+  feeds, custom policy DSL, compliance report packs (CRA / NIST SSDF / FedRAMP),
+  multi-project workspaces (demoted from headline), priority support.
+- **Drop building SSO/RBAC ourselves.** Recommend operators front depsilo with
+  oauth2-proxy / Authelia / Pomerium. "No SSO tax" preserved without
+  re-implementing yet another OIDC stack.
+- **De-prioritize HA.** Single-node is the realistic enforcement-layer deploy.
+  Document PostgreSQL + S3 + LB pattern on request; don't ship managed HA until
+  enforcement features are demonstrably ahead of AK.
+- **Coexistence over competition.** README + landing should acknowledge AK by
+  name and recommend it for general artifact storage. Position depsilo as
+  optionally deployable **in front of** AK / Nexus / Artifactory as a
+  supply-chain wall. Honesty is positioning in OSS culture.
+- **Research record:** [`docs/research/2026-06-30-competitive-landscape.md`](./research/2026-06-30-competitive-landscape.md).
 
 ---
 
