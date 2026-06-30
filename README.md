@@ -2,10 +2,10 @@
 
 <img src="docs/brand/logo-stacked-dark.svg" alt="Depsilo" width="200">
 
-**One cache for all your dependencies.**
+**Supply-chain enforcement layer for your package installs.**
 
-Deploy in minutes. LAN-speed installs for 13 package managers.<br>
-Single binary, ~50 MB memory, zero complexity.
+14 ecosystems behind one proxy. Quarantine fresh versions, block known-malicious packages,<br>
+serve installs at LAN speed. Single binary, ~50 MB memory, deploys in 10 minutes.
 
 [![Go 1.21+](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -18,58 +18,54 @@ Single binary, ~50 MB memory, zero complexity.
 
 ---
 
-## Why Depsilo?
+## What Depsilo does
 
-Your team runs `pip install`, `npm install`, `go get`, `cargo build` hundreds of times a day. Every install hits the public internet, burning bandwidth and slowing CI. If an upstream goes down, your builds break.
+Every `pip install` / `npm install` / `cargo build` your team runs goes through
+Depsilo. On the way through, three things happen:
 
-**Depsilo sits between your team and the public registries.** First request fetches from upstream; every request after that is served from local cache at LAN speed.
+1. **Cache** — first request fetches from upstream; every request after that
+   serves from local disk at LAN speed. Offline-tolerant.
+2. **Quarantine** — versions younger than a configurable per-ecosystem window
+   (default: 7 days for npm, 3 days for pip / cargo / maven / ...) get
+   blocked at the proxy. Mitigates self-propagating worms (Shai-Hulud-class)
+   that get yanked within hours but not before damage is done.
+3. **Audit** — every block / bypass / approve writes an event you can review
+   in the admin UI, query via API, or fire to a webhook (Slack / 钉钉 /
+   企微 / Feishu).
 
-| | Nexus / Artifactory | Depsilo |
-|---|---|---|
-| Deploy time | 30+ min, Java runtime, config wizards | `docker run` — done |
-| Memory | 2+ GB | ~50 MB |
-| Binary | WAR/JAR + JVM | Single static binary |
-| Config | XML/YAML, web wizard, LDAP, roles... | One TOML file |
-| Ecosystems | Many (with per-ecosystem setup) | 13, unified config |
+It's a proxy on the request path that **refuses to serve** based on
+supply-chain policy. Operators get one config, one place to enforce
+"the org doesn't install fresh dependencies for N days." Devs use their
+package manager exactly the way they always have.
 
-> Depsilo is **not** a full artifact repository. It's a caching proxy — purpose-built to be fast, light, and invisible.
+## Supported ecosystems
 
-## Supported Ecosystems
+| Manager | Ecosystem | Quarantine threshold default |
+|---------|-----------|--------|
+| **pip** / uv / Poetry | Python | 3 days |
+| **apt** | Debian / Ubuntu | 0 (curated upstream) |
+| **npm** / yarn / pnpm | Node.js | 7 days |
+| **go get** | Go modules | 0 (checksum DB protects) |
+| **cargo** | Rust | 3 days |
+| **maven** / gradle | Java / Kotlin | 3 days |
+| **gem** / bundler | Ruby | 3 days |
+| **composer** | PHP | 3 days |
+| **dotnet** | .NET (NuGet) | 3 days |
+| **conda** | Data science | 3 days |
+| **Rscript** | R (CRAN) | 3 days |
+| **helm** | Kubernetes | 3 days |
+| **apk** | Alpine | 3 days |
+| **huggingface-cli** / transformers / datasets | HF Hub | 3 days |
 
-| Manager | Ecosystem | Proxy Type |
-|---------|-----------|------------|
-| **pip** / uv / Poetry | Python | URL rewrite |
-| **apt** | Debian / Ubuntu | Passthrough |
-| **npm** / yarn / pnpm | Node.js | URL rewrite |
-| **go get** | Go Modules | Passthrough |
-| **cargo** | Rust | config.json rewrite |
-| **maven** / gradle | Java / Kotlin | Passthrough |
-| **gem** / bundler | Ruby | Passthrough |
-| **composer** | PHP | metadata-url rewrite |
-| **dotnet** | .NET (NuGet) | service index rewrite |
-| **conda** | Data science | Passthrough |
-| **Rscript** | R (CRAN) | Passthrough |
-| **helm** | Kubernetes | Passthrough |
-| **huggingface-cli** / transformers / datasets | Hugging Face Hub (models + datasets) | Server-side LFS follow |
+All thresholds are per-ecosystem configurable. Set any to `0` to disable.
+Add per-package overrides via the allow list (glob / pin / range syntax).
 
-## Quick Start
+## Quick start
 
-### One-liner install (Linux / macOS)
+### One-liner (Linux / macOS)
 
 ```bash
 curl -fsSL https://depsilo.com/install.sh | bash
-```
-
-This downloads the latest binary for your OS/arch, verifies the checksum, and installs to `/usr/local/bin/depsilo`.
-
-### Manual download
-
-Grab the binary for your platform from [GitHub Releases](https://github.com/depsilo/depsilo/releases). Each archive includes `depsilo`, `config.example.toml`, and `docker-compose.yml`.
-
-```bash
-tar xzf depsilo_*_linux_amd64.tar.gz
-cp config.example.toml config.toml
-./depsilo serve
 ```
 
 ### Docker
@@ -78,191 +74,135 @@ cp config.example.toml config.toml
 docker run -d --name depsilo -p 23333:23333 -v depsilo-data:/app/data depsilo/depsilo:latest
 ```
 
-Open `http://localhost:23333` — the portal shows copy-paste config for all 14 ecosystems.
+Open `http://localhost:23333` for the portal — it ships copy-paste config
+for all 14 ecosystems. Default admin login: `admin` / `admin` at `/admin`.
 
-Default admin login: `admin` / `admin` at `/admin`.
-
-### Note for AI workloads
-
-Hugging Face models are large — a single weights file can be 30-50 GB.
-If you primarily use Depsilo as a model cache, raise the
-`[cache] max_size_gb` setting in `config.toml` from the default 20 GB.
-A practical starting point is 200 GB for teams using multiple LLMs.
-
-<details>
-<summary><b>docker-compose</b></summary>
-
-```yaml
-services:
-  depsilo:
-    image: depsilo/depsilo:latest
-    ports:
-      - "23333:23333"
-    volumes:
-      - ./data:/app/data
-      - ./config.toml:/app/config.toml
-    restart: unless-stopped
-```
+### Manual download
 
 ```bash
-curl -O https://raw.githubusercontent.com/depsilo/depsilo/master/config.example.toml
-mv config.example.toml config.toml
-docker compose up -d
+# Grab the binary archive for your platform from GitHub Releases
+tar xzf depsilo_*_linux_amd64.tar.gz
+cp config.example.toml config.toml
+./depsilo serve --port 23333
 ```
 
-</details>
-
-<details>
-<summary><b>Build from source</b></summary>
+### Build from source
 
 ```bash
 git clone https://github.com/depsilo/depsilo.git
 cd depsilo
 make build
-cp config.example.toml config.toml
-./bin/depsilo
+./bin/depsilo serve
 ```
 
 Requires Go 1.21+ and Node.js 20+.
 
-</details>
+## Supply-chain enforcement
 
-## Use with AI agents
+The reason Depsilo exists. Three primitives, all open source.
 
-Three increasingly automated ways to give an AI coding agent control of Depsilo, pick whichever fits your stack:
+### Minimum release age (quarantine)
 
-### 1. Bootstrap a project (one command, zero clicks)
+A version published less than the configured threshold ago gets a `451`
+with an actionable error body:
+
+```
+HTTP/1.1 451 Unavailable For Legal Reasons
+Content-Type: application/json
+
+{
+  "code": "QUARANTINED",
+  "message": "version 99.0.0 of lodash was published 1d ago, which is younger than the configured 7d minimum release age for npm",
+  "ecosystem": "npm",
+  "package": "lodash",
+  "version": "99.0.0"
+}
+```
+
+The admin can approve any specific `(ecosystem, package, version)` from
+the **Supply-Chain Quarantine** page in the admin UI — with a mandatory
+audit reason. Approvals are permanent until explicitly revoked.
+
+```toml
+[supply_chain]
+mode = "block"            # block | serve_last_eligible
+fail_closed = true        # missing upstream timestamp → block
+
+[supply_chain.min_release_age]
+default  = "0"
+pypi     = "3d"
+npm      = "7d"
+cargo    = "3d"
+# ...
+
+# Optional per-package bypass list — three syntaxes
+# allow = [
+#   "npm:@your-org/internal-*",      # glob
+#   "pip:requests==2.32.3",          # exact pin
+#   "npm:react>=18.0.0",             # version range
+# ]
+```
+
+### Audit trail
+
+Every quarantine decision (block / serve_eligible / bypass / approve /
+revoke) writes a `QuarantineEvent` to the DB. The admin UI shows the
+live event stream with ecosystem / action / package filters and a
+30-second auto-refresh.
+
+### Webhook on block
+
+Configure a Slack / DingTalk / WeCom / Feishu / generic webhook in
+**Settings → Webhooks**. Enable `quarantine_blocked` and the channel
+fires the moment a quarantine event lands.
+
+## Use with AI coding agents
+
+Three increasingly automated ways to give an AI coding agent control
+of Depsilo. Pick whichever fits your stack:
+
+### 1. Bootstrap a project (one command)
 
 ```bash
 cd my-project/
 depsilo init-agent
 ```
 
-Writes `CLAUDE.md` / `AGENTS.md` / `.cursorrules` (auto-detects which ones based on your project) with a marker-bracketed Depsilo section. From this point on, any AI coding agent you open the project with reads its own instruction file at startup and knows that **this project uses Depsilo at `http://localhost:23333`** — no copy-paste, no "did you read the docs" round-trips.
+Writes `CLAUDE.md` / `AGENTS.md` / `.cursorrules` (auto-detects which
+based on your project) with a marker-bracketed Depsilo section. Any AI
+agent you open the project with reads its own instruction file at
+startup and knows that **this project uses Depsilo at
+`http://localhost:23333`**.
 
-Re-running is idempotent: in-place update inside the markers, your own content above and below is preserved untouched.
+Idempotent — re-running updates only the content inside the markers.
 
-Flags: `--format=auto|all|claudemd|agentsmd|cursorrules`, `--endpoint=URL`, `--dry-run`, `--json`.
+### 2. Native MCP for Claude Code / Cursor / other MCP clients
 
-### 2. Native MCP for Claude Code, Cursor, and other MCP-aware clients
-
-Depsilo ships a built-in Model Context Protocol server at `POST /mcp` (JSON-RPC 2.0 over Streamable HTTP). MCP clients connect once and get **structured tool calls** instead of parsing free-form prompts.
-
-Point your client at `http://localhost:23333/mcp`. After `initialize`, call `tools/list` to enumerate. Available tools:
+Depsilo ships a built-in Model Context Protocol server at `POST /mcp`
+(JSON-RPC 2.0 over Streamable HTTP). MCP clients get structured tool
+calls instead of parsing free-form prompts. Point your client at
+`http://localhost:23333/mcp`. Available tools:
 
 | Tool | Effect |
 | --- | --- |
 | `depsilo_status` | Service health, 24h request totals, cache hit rate, configured ecosystems |
-| `depsilo_doctor` | End-to-end diagnosis (service / status / upstream health / hit rate) with hints |
-| `depsilo_configure(ecosystem)` | Returns shell / env / config / verify snippets for a given ecosystem |
-| `depsilo_search(query, ecosystem?, limit?)` | LIKE query against cached packages, ranked by hit count |
-| `depsilo_recent(limit?, only_miss?)` | Tail of cache events — useful for debugging why an install isn't hitting |
-| `depsilo_warmup(ecosystem, packages[])` | Pre-fetch packages (requires `Authorization: Bearer <admin-token>`) |
+| `depsilo_doctor` | End-to-end diagnosis with actionable hints |
+| `depsilo_configure(ecosystem)` | Returns shell / env / config / verify snippets |
+| `depsilo_search(query, ecosystem?, limit?)` | LIKE query against cached packages |
+| `depsilo_recent(limit?, only_miss?)` | Tail of cache events for debugging |
+| `depsilo_warmup(ecosystem, packages[])` | Pre-fetch packages (requires admin token) |
 
-Resources: `depsilo://discover` (service catalog) and `depsilo://stats` (live metrics). Prompt: `setup` (returns the same text as `/api/v1/agent-prompt`).
+### 3. Copy-paste prompt (any agent)
 
-Quick smoke test:
-
-```bash
-curl -s http://localhost:23333/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
-
-### 3. Copy-paste prompt (any agent, no setup)
-
-For non-MCP agents (Hermes, OpenClaw, generic LLM chat), paste the prompt below — the agent will detect which package managers your project uses, reconfigure each one, and verify the cache is reachable. No plugin or skill install needed.
-
-> Replace `http://localhost:23333` with your Depsilo URL if you deployed it elsewhere. The Portal at `/` ships an "AI" tab in each language pane that renders this prompt with the right URL pre-filled. Or `curl -sf http://localhost:23333/api/v1/agent-prompt` to fetch the live, host-substituted version.
-
-```text
-This workspace has a local dependency cache called Depsilo at http://localhost:23333.
-It caches packages from 13 ecosystems and serves them at LAN speed.
-
-Before running any package install in this workspace:
-
-1. Verify it's reachable: curl -sf http://localhost:23333/health
-
-2. Detect which package managers this project uses (requirements.txt,
-   package.json, go.mod, Cargo.toml, pom.xml, Gemfile, composer.json,
-   *.csproj, environment.yml, DESCRIPTION, Chart.yaml, etc.).
-
-3. Configure ONLY the detected tools. Pick from:
-
-   pip:      pip config set global.index-url http://localhost:23333/pypi/simple/
-   npm:      npm config set registry http://localhost:23333/npm/
-   go:       go env -w GOPROXY=http://localhost:23333/go,direct
-   cargo:    visit http://localhost:23333/ and copy the Cargo block to ~/.cargo/config.toml
-   maven:    visit http://localhost:23333/ and copy the Maven mirror block to ~/.m2/settings.xml
-   gem:      bundle config mirror.https://rubygems.org http://localhost:23333/rubygems/
-   composer: composer config -g repo.packagist composer http://localhost:23333/composer/
-   nuget:    dotnet nuget add source http://localhost:23333/nuget/v3/index.json -n depsilo
-   conda:    add channel http://localhost:23333/conda/ to ~/.condarc
-   helm:     helm repo add depsilo http://localhost:23333/helm/
-   R/CRAN:   options(repos = c(CRAN = "http://localhost:23333/cran/")) in ~/.Rprofile
-   huggingface: export HF_ENDPOINT=http://localhost:23333/huggingface
-
-4. Run install commands normally — they auto-route through Depsilo.
-
-If Depsilo is down, tools fall back to public registries — installs still
-work, just not cached. Don't waste effort on retry logic for Depsilo itself.
-```
-
-If Depsilo is unreachable from the agent's runtime, every package manager listed above falls back to its public registry automatically — installs succeed, they just miss the cache.
-
-## Usage Examples
+For non-MCP agents, paste the prompt the portal renders or fetch the
+live host-substituted version:
 
 ```bash
-# Python
-pip install requests -i http://YOUR_HOST:23333/pypi/simple/ --trusted-host YOUR_HOST
-
-# Node.js
-npm config set registry http://YOUR_HOST:23333/npm/
-
-# Go
-export GOPROXY=http://YOUR_HOST:23333/go,direct
-
-# Rust
-# ~/.cargo/config.toml
-# [source.crates-io]
-# replace-with = "depsilo"
-# [source.depsilo]
-# registry = "sparse+http://YOUR_HOST:23333/crates/"
+curl -sf http://localhost:23333/api/v1/agent-prompt
 ```
 
-See the built-in **Quick Start** page for all 13 ecosystems, including Maven, Composer, NuGet, Conda, CRAN, and Helm.
-
-## Key Features
-
-**Caching Engine**
-- **Singleflight** — 100 concurrent requests for the same package = 1 upstream fetch
-- **Stale-while-revalidate** — expired cache is served immediately while refreshing in the background
-- **Offline fallback** — if all upstreams are down, stale cache keeps your builds running
-- **Streaming** — large packages (torch ~2 GB) are never buffered in memory
-
-**Upstream Management**
-- Multiple upstreams per ecosystem with priority or latency-based selection
-- Per-upstream HTTP proxy support
-- Automatic health checks with failover
-- Circuit breaker for unhealthy upstreams
-
-**Storage**
-- Local filesystem (default) or S3-compatible (MinIO, AWS S3)
-- LRU eviction when cache exceeds configured threshold
-- Per-ecosystem cache size tracking
-
-**Observability**
-- Web portal with quick-start guides and real-time cache event stream
-- Admin dashboard with trend charts, storage visualization, upstream latency monitoring
-- Prometheus `/metrics` endpoint
-- Access logs with filtering and export
-- Audit trail for admin operations
-
-**Security**
-- JWT authentication for admin API
-- API token management (hash-only storage)
-- Package allow/deny rules
-- SQLite WAL mode for safe concurrent access
+The agent detects which package managers your project uses,
+reconfigures each, and verifies the cache is reachable.
 
 ## Configuration
 
@@ -278,7 +218,7 @@ path = "./data/cache"
 max_size_gb   = 20
 ttl_index     = "5m"        # metadata refresh interval
 ttl_blob      = "72h"       # package file TTL
-lru_threshold = 90           # trigger LRU cleanup at 90% capacity
+lru_threshold = 90          # trigger LRU cleanup at 90% capacity
 
 [[pypi.upstreams]]
 name     = "tuna"
@@ -292,25 +232,98 @@ priority = 2
 proxy    = "http://127.0.0.1:7890"    # optional per-upstream proxy
 ```
 
-See [`config.example.toml`](config.example.toml) for the full reference.
+See [`config.example.toml`](config.example.toml) for the full reference,
+including the `[supply_chain]` quarantine block.
+
+### CLI flags + environment
+
+```bash
+depsilo serve --port 18080 --host 0.0.0.0 --log-level debug
+DEPSILO_SERVER_PORT=18080 depsilo serve
+DEPSILO_CONFIG=/etc/depsilo.toml depsilo serve
+```
+
+Precedence (highest wins): CLI flag → env variable → config file → built-in
+default. Run `depsilo serve --help` for the full list.
+
+> **AI workloads:** Hugging Face models are large — a single weights file
+> can be 30-50 GB. If you primarily use Depsilo as a model cache, raise
+> `[cache] max_size_gb` from the default 20 GB. A practical starting
+> point is 200 GB for teams using multiple LLMs.
+
+## Caching engine
+
+What's happening under the hood when a `pip install` lands on Depsilo:
+
+- **Singleflight** — 100 concurrent requests for the same package = 1
+  upstream fetch. The other 99 wait on the first.
+- **Stale-while-revalidate** — expired cache is served immediately while
+  refreshed in the background. No `pip install` ever blocks waiting for
+  a metadata refresh.
+- **Offline fallback** — if all configured upstreams are down, stale
+  cache keeps your builds running.
+- **Streaming** — large packages (torch ~2 GB) are piped through
+  `io.Copy`, never buffered in memory.
+- **Multi-upstream priority or latency selection** — configure mirrors
+  per ecosystem; Depsilo picks the fastest healthy one, fails over on
+  outages, and runs a circuit breaker on repeatedly-failing endpoints.
+- **Per-upstream HTTP proxy** — different ecosystems can route through
+  different egress proxies if your network demands it.
+
+## Observability
+
+- Web portal at `/` with copy-paste configuration for every ecosystem
+  and live cache event stream
+- Admin dashboard at `/admin` with trend charts, storage visualization,
+  per-upstream latency monitoring, supply-chain quarantine event log
+- Prometheus `/metrics`
+- Structured access logs with filtering + CSV export
+- Audit trail for every admin action
+
+## Security
+
+- JWT authentication for the admin API
+- API tokens stored as hash-only
+- SQLite WAL mode for safe concurrent access
+- Configurable RBAC roles
+- For SSO / OIDC, deploy behind a reverse proxy like
+  [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/),
+  [Authelia](https://www.authelia.com/), or
+  [Pomerium](https://www.pomerium.com/) — these are mature and pair
+  cleanly with Depsilo's auth model
 
 ## Roadmap
 
-- [x] 12 ecosystem proxies
-- [x] Web UI (portal + admin dashboard)
-- [x] Real-time cache event stream (SSE)
-- [x] Storage visualization & package search
+Shipped:
+- [x] 14 ecosystem proxies
+- [x] Web portal + admin dashboard
+- [x] Minimum release age quarantine (Shai-Hulud mitigation)
+- [x] Quarantine audit log + admin approve / revoke
+- [x] Webhook fire on quarantine events
 - [x] Prometheus metrics
 - [x] Audit logs
-- [x] Package allow/deny rules
-- [ ] Docker Registry proxy
-- [ ] Cluster mode (multi-node shared cache)
-- [ ] LDAP / SSO integration
-- [ ] Bandwidth savings reports
+- [x] Package allow / deny rules
+- [x] CLI: `serve` / `status` / `doctor` / `warmup` / `flush` / `init-agent`
+- [x] Native MCP server for AI agents
+- [x] OSV vulnerability scanning + Settings → Security dashboard
+
+Next up:
+- [ ] Known-malicious blocklist (OSV malicious + GitHub Advisory malware
+      feed, hard block with 24h auto-expiring override)
+- [ ] CRA-mode SBOM workflow (CycloneDX + SPDX, signed, per-project)
+- [ ] Freeze / golden snapshot mode (reproducible build set, immune to
+      upstream poisoning)
+- [ ] Tamper detection (per-version hash, alert on upstream republish)
+- [ ] Signed releases (cosign keyless via CI)
+- [ ] Helm chart
 
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+guidelines. The codebase is documented at three levels:
+[`docs/DIRECTION.md`](docs/DIRECTION.md) (product direction),
+[`docs/adr/`](docs/adr/) (architecture decisions), and the per-package
+README comments in `internal/`.
 
 ## License
 
