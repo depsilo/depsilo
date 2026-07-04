@@ -1,7 +1,8 @@
-// Button on QuickStart that opens a modal with the brand-neutral
+// Button on QuickStart that opens a modal with the transparent Depsilo
 // project-integration prompt. The user copies the prompt into their AI coding
 // agent (Claude Code / Cursor / Copilot Chat) and the agent edits Dockerfile /
-// CI / build scripts to route installs through this mirror.
+// CI / build scripts to route installs through this mirror with traceable
+// comments and public-registry fallback.
 //
 // Distinct from the "AI prompt" mode inside AllInOnePane, which configures the
 // developer's local machine. This one rewrites project source.

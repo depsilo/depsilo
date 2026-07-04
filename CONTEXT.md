@@ -1,6 +1,8 @@
 # Depsilo
 
-A lightweight, single-binary dependency proxy/cache gateway covering 13 package ecosystems, sold as Open Core to mid-sized Chinese tech companies that want supply-chain compliance without operating Nexus.
+A lightweight, single-binary supply-chain enforcement layer for package installs.
+It proxies 14 package ecosystems, caches artifacts locally, and refuses to serve
+packages that violate operator policy.
 
 ## Language
 
@@ -15,64 +17,30 @@ Anyone whose `pip install` / `npm install` / `mvn` resolves through Depsilo. Nev
 _Avoid_: Developer (too broad), Consumer
 
 **Buyer**:
-The person inside the customer org who signs the cheque. Usually the Operator's manager — CTO, head of infra, or security lead. Different motivations from the Operator (compliance, cost control, audit trail) and must be satisfied independently for a Pro/Enterprise deal to close.
+The person inside the customer org who signs off on adoption. Usually the
+Operator's manager — CTO, head of infra, or security lead. Different motivations
+from the Operator (compliance, cost control, audit trail) and must be satisfied
+independently for Depsilo to stay deployed.
 _Avoid_: Client, customer (ambiguous with org-level "customer")
 
-### Product tiers (2026-06-28 — see ADR-0003)
+### Distribution posture
 
-There are exactly **two** tiers and they are never named otherwise in
-user-facing copy or code. The previous "Community / Pro / Team / Cloud"
-four-tier ladder and the `$9 / $29 / hosted` pricing rungs were retired
-on the date above — they signalled "hobby project" and let competitors
-attack with "open-core greed". The replacement is one OSS surface plus
-one contact-priced support contract.
-
-**Open Source** (MIT, free, self-hosted):
-The fully open-source single-binary deployment. No license check, all 14
-ecosystem adapters available. Includes everything an Operator needs to
-run Depsilo in production: cache + dashboard, upstream management,
-**audit logs**, **package allow/deny rules engine + UI**, **security
-intelligence dashboard** (OSV / CVE cross-package view + decision
-workflow), **SBOM export (CycloneDX + SPDX)**, webhook alerts,
-Prometheus metrics, single/multi-user access, **SSO / RBAC**, and the
-T1 supply-chain wedge features (minimum release age, malicious
-blocklist, freeze/snapshot, tamper detection) as those land. Goal:
-zero-friction adoption by Operators. **No self-hosted necessity ever
-gets paywalled** — especially not governance primitives (audit, rules,
-security) and not SSO/RBAC; the "SSO tax" pattern damages trust badly
-and competitors give it free, so we do too.
-
-**Pro** (one-time $99 lifetime, single tier, self-serve):
-A paid relationship gated by `entitlement.RequirePro` middleware,
-unlocked by a license key. Encodes exactly **one** Buyer-facing UI
-capability: **multi-project workspaces** — per-project isolation of
-audit logs, rules, SBOM, and cache, plus per-project RBAC. The
-purchase is a **one-time $99**, lifetime, no subscription, no
-renewals, no phone-home validation. Buying it also includes email
-priority support and automatic access to future Pro features. The
-Pro surface is deliberately *narrow* — production teams that need
-workspace structure self-identify as the buyer audience.
-
-**Purchase flow today (no payment provider integrated yet):** the
-operator opens the "Buy lifetime · $99" CTA, which triggers a
-pre-filled mailto to `pay@depsilo.com`. The maintainer replies with
-payment instructions (PayPal / Alipay / WeChat / bank), receives
-payment off-band, and emails back a license key the operator pastes
-into the License page. Trust-on-entry: any non-empty key is accepted
-as Pro. When a payment provider (Lemon Squeezy / Polar / Gumroad)
-gets wired in, only `web/src/lib/buy.ts` changes; the rest of the
-UI stays put.
-
-**Enterprise** is no longer a separate tier — the term used to imply a
-future paywalled SSO/RBAC layer, which we explicitly do not want. When
-copy needs a stronger word for "the Pro contract bundle for a large
-buyer," use "Pro · Enterprise support" rather than promising a tier
-that does not exist.
+User-facing documentation should describe Depsilo as MIT-licensed,
+self-hosted, and open-source. Do not introduce product-tier copy in docs. The
+current product story is the enforcement layer itself: cache, upstream
+management, audit logs, package allow/deny rules, security intelligence, SBOM
+export, webhook alerts, Prometheus metrics, and supply-chain policy primitives
+such as minimum release age, malicious blocklist, freeze/snapshot, and tamper
+detection as they land.
 
 ### Product surface
 
 **Ecosystem**:
-A package manager protocol that Depsilo proxies — `pypi`, `apt`, `npm`, `go`, `cargo`, `maven`, `rubygems`, `composer`, `nuget`, `conda`, `cran`, `helm`, `docker`. 13 of them as of 2026-05-18.
+A package manager protocol that Depsilo proxies — `pypi`, `apt`, `npm`, `go`,
+`cargo`, `maven`, `rubygems`, `composer`, `nuget`, `conda`, `cran`, `helm`,
+`alpine`, `docker`, and `huggingface`. 14 first-class install surfaces in the
+product copy today; Docker is served via the OCI `/v2/` route rather than the
+same adapter list used by the other HTTP path prefixes.
 _Avoid_: Registry (overloaded with "Docker Registry"), Repo (overloaded with `apt` repo concept), Adapter (that's the code, not the product surface)
 
 **Adapter**:
@@ -92,7 +60,6 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 ## Relationships
 
 - A **Buyer** authorises money; an **Operator** runs the product; **End Users** consume it. All three must be satisfied for a sale to stick.
-- The **Pro** tier exists to convert **Operators** of **Free** into paying **Buyers**.
 - An **Ecosystem** is the product-language name; an **Adapter** is its implementation. One Ecosystem ↔ one Adapter.
 - An **Upstream** belongs to exactly one **Ecosystem**.
 - The **Portal** serves the first-90-seconds experience; the **Admin** serves everything after.
@@ -100,16 +67,13 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 ## Example dialogue
 
 > **Designer:** "Should the audit log filter live on the Portal?"
-> **Domain expert:** "No — the Portal is anonymous, and audit log review is Operator work. The audit log itself is open-source as of 2026-06-28 — putting it behind Pro pattern-matched as open-core greed and damaged the control-point story. Audit UI lives in Admin because that's where Operators do work."
+> **Domain expert:** "No — the Portal is anonymous, and audit log review is Operator work. Audit UI lives in Admin because that's where Operators do work."
 
-> **Engineer:** "Can we move OSV scanning into Pro?"
-> **Domain expert:** "No — OSV scanning, the rules engine, and the security intelligence dashboard are all open-source. Per ADR-0003 governance primitives stay free so the proxy itself is the buyer's compliance instrument. Pro buys exactly one UI surface (multi-project workspaces) plus the support / SLA / compliance / consulting contract."
+> **Engineer:** "Can we make OSV scanning optional or hidden?"
+> **Domain expert:** "No — OSV scanning, the rules engine, and the security intelligence dashboard are part of the self-hosted control surface. Governance primitives stay open so the proxy itself is the buyer's compliance instrument."
 
-> **Engineer:** "Should SSO be a Pro feature?"
-> **Domain expert:** "No. 'SSO tax' kills enterprise adoption and competitors give it free. SSO/RBAC are open-source. Pro is multi-project workspaces + support contract, not commodity self-hosted infra and not governance primitives."
-
-> **Engineer:** "Why is multi-project the only Pro UI feature now?"
-> **Domain expert:** "Multi-project naturally maps to the buyer ICP — a team running Depsilo across many projects in production is exactly who should be on a support contract. We surface that one feature so the upgrade conversation has a clear trigger ('we need workspace structure'), then the contract delivers SLA + compliance + consulting around it. A narrow gate makes the funnel high-intent."
+> **Engineer:** "Should we build SSO into Depsilo?"
+> **Domain expert:** "No. The 'SSO tax' pattern damages trust. Recommend a mature OIDC reverse proxy rather than building a shallow in-product SSO layer."
 
 ## Flagged ambiguities
 

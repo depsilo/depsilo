@@ -53,9 +53,9 @@ the natural place to enforce them:
 ## Where we are (honest)
 
 - **Pre-traction:** ~0 stars/forks, no published releases, `v0.7.1+dev`.
-- **Product surface is broad and well-built:** 13 ecosystems, SBOM, CVE/OSV scanning,
+- **Product surface is broad and well-built:** 14 ecosystems, SBOM, CVE/OSV scanning,
   multi-upstream with health checks, local/S3 storage, Prometheus, a polished site.
-- **The missing 90% is users, trust, distribution, monetization — not features.**
+- **The missing 90% is users, trust, and distribution — not features.**
 
 **Implication for engineering:** do **not** add breadth for its own sake. Add the few
 things that (a) make the *control-point* story real and (b) make the tool trustworthy
@@ -91,13 +91,13 @@ on the request path (refuses to serve based on policy — not just scans and rep
 
 ### T0 — Credibility fixes (do first; small, high trust-value)
 
-- [ ] **Remove the "brand discipline" stealth integration prompt.** The Quick Start
+- [x] **Remove the "brand discipline" stealth integration prompt.** The Quick Start
       "one-prompt AI integration" currently tells the agent **not to write the product
       name/hostname** and to **drop the public-CDN fallback**. For a security-positioned
       tool this pattern-matches to the very attacks we defend against and will repel the
       buyers we want. Replace with a **transparent** prompt: name Depsilo + the URL, keep
       the public index as a fallback, make the change reviewable. *(Frontend Quick Start
-      page + the prompt generator.)*
+      page + the prompt generator; completed 2026-07-02.)*
 - [ ] **Ship real, signed releases.** CI to build, sign (cosign/sigstore), and publish
       versioned binaries + checksums. There are no published releases today.
 - [ ] **Dogfood SBOM.** Generate + publish Depsilo's own CycloneDX + SPDX SBOM in CI.
@@ -141,47 +141,6 @@ Rebuilding those is now a low-ROI use of time. Updated T2:
       PostgreSQL + S3 + load-balancer pattern when an operator asks; do not
       ship a managed HA solution until enforcement features are demonstrably
       ahead of AK.
-
-### T3 — Monetization shape (**reframed 2026-06-30**)
-
-- **Two SKUs only:** Open Source (MIT, self-hosted, free) and Pro (single-tier,
-  **one-time $99 lifetime**, self-serve via email order today). No subscription, no
-  Community/Pro/Team ladder, no cloud/hosted SKU.
-
-- **Pro tier reframed (ADR-0004).** AK ships SSO / RBAC / multi-tenant workspaces
-  in OSS, which made "multi-project workspaces + email support" look thin for $99.
-  The reframed Pro is **Supply-Chain Premium** — features that only matter to
-  organizations putting depsilo on the build-policy enforcement path:
-  - Long-term audit retention (>90 days raw, vs OSS 7-day)
-  - SIEM integration (Splunk / Datadog / Elastic feed format)
-  - Custom policy DSL / scriptable allow-list rules
-  - Compliance report generation (CRA technical-file pack, NIST SSDF
-    evidence, FedRAMP attestation)
-  - Multi-project workspaces (stays Pro but no longer the headline)
-  - Email priority support
-  - Future Pro enforcement primitives bundled automatically
-
-  Concrete migration: existing "Pro = multi-project + support" customers
-  get all the new Supply-Chain Premium features at no extra cost. The
-  $99 lifetime price is unchanged.
-
-- Wedge + governance primitives stay in open-source. Audit logs, rules
-  engine, security intelligence dashboard, OSV scanning, SBOM export,
-  T1 supply-chain features (minimum release age, malicious blocklist,
-  freeze/snapshot, tamper detection), webhook alerting — all open-source.
-  These are the *enforcement layer itself*; Pro is *commercial-grade
-  observability + reporting + retention* on top.
-- *Public price = $99 lifetime.* Earlier iterations tried $9/mo (read as "hobby") and
-  contact-pricing (no sales bandwidth to handle inbound). $99 lifetime lands in the
-  indie-tool sweet spot (Resend / Plain / Cal.com adjacent), zero-recurring is
-  honest about self-hosted philosophy, and the price is high enough to filter
-  non-serious buyers without enterprise friction.
-- *No payment provider integrated yet.* The Buy CTA opens a mailto: order email;
-  the maintainer manually processes payment (PayPal / Alipay / WeChat / bank) and
-  emails a license key back. One round-trip per sale. When provider integration
-  lands (Lemon Squeezy / Polar / Gumroad), only `web/src/lib/buy.ts` changes.
-
----
 
 ## First tasks, specced
 
@@ -288,16 +247,12 @@ never cached and any existing cache entry is evicted on first match.
 **Governance features go in open-source.** Minimum release age, malicious blocklist,
 SBOM export, OSV scanning, the audit log, the package allow/deny rules engine, and
 the security intelligence dashboard are all open-source product wedges — they must
-be available to everyone running a self-hosted control point. The Pro tier is the
-**multi-project workspace + support contract**: per-project isolation of all that
-governance machinery, per-project RBAC, plus the support / SLA / compliance /
-consulting bundle that the contract delivers.
+be available to everyone running a self-hosted control point.
 
 **SSO / RBAC go in open-source.** Updated from the original direction. The "SSO tax"
-pattern damages trust and competitors give it free; locking SSO behind Pro would kill
-the same enterprise adoption Pro is supposed to land. SSO/RBAC, HA, multi-node, and
-all other commodity self-hosted infrastructure stay open-source. See ADR-0003 §"Decision"
-and CONTEXT.md "Product tiers".
+pattern damages trust and competitors give it free. Prefer documenting mature reverse
+proxy options over building a shallow in-product SSO layer. Commodity self-hosted
+infrastructure should not distract from enforcement primitives.
 
 **Versioning policy until v1.0:** breaking changes allowed across minor versions;
 config-file backwards compatibility guaranteed within each `v0.x` line.
@@ -310,82 +265,16 @@ keep bilingual notes.
 
 ---
 
-## Decisions locked-in 2026-06-28 — pricing & monetization reset
+## Decisions locked-in 2026-06-30 — enforcement-layer pivot
 
-A second decision pass on top of the original lock-in, captured here so the
-rationale persists:
-
-**Two SKUs only, contract-priced Pro.** The previous "Community (free) / Pro ($9/mo)
-/ Team ($29/mo) / Cloud" four-tier ladder is retired. New surface:
-  - **Open Source** — MIT, self-hosted, free. Everything an Operator needs.
-  - **Pro** — single tier, contract via sales conversation, no public price.
-
-**Pro gates exactly one UI surface.** Multi-project workspaces (per-project isolation
-of audit/rules/SBOM/cache + per-project RBAC). The contract buys support + SLA +
-compliance assistance (CRA / SBOM workflows) + production-deploy consulting (HA /
-capacity / upgrade paths) + priority issue handling + that one UI. Never
-feature-locked infrastructure. Multi-project is the conversational trigger for
-the Pro upgrade — "we run Depsilo across many projects in production" maps directly
-to "we want a support contract."
-
-**Wedge + governance primitives stay in open-source.** Audit logs, rules engine,
-security intelligence dashboard, OSV scanning, SBOM export, T1 supply-chain features
-(minimum release age, malicious blocklist, freeze/snapshot, tamper detection), HA,
-SSO/RBAC, webhook alerting — all open-source. The proxy itself + its governance
-primitives are the compliance instrument; Pro is *workspace structure + the support
-contract* around that instrument. Locking governance primitives behind Pro pattern-
-matched as open-core greed and was reversed on 2026-06-28; the position is
-deliberate, not provisional.
-
-**Trial system retained.** 14-day self-evaluation of Pro features still works. The
-post-trial UX no longer offers self-serve purchase; it offers a Contact sales link
-to start the conversation.
-
-**Lemon Squeezy retired.** The HTTPS license validation handshake against
-api.lemonsqueezy.com was deleted along with the self-serve channel. License keys
-now arrive out-of-band from a contract conversation; any non-empty key activates
-Pro on the assumption "if the operator entered a key, the operator is on a
-contract." Future Enterprise tooling (signed JWT keys, depsilo-owned license
-server) can layer on top without breaking the public API.
-
-**No cloud SKU.** Cloud / managed-hosted was removed from sales surfaces. For a
-local-first dependency cache, cross-internet hosting cancels the value prop. We
-are explicit about not selling it rather than implying it might come.
-
-**Pro narrowed to multi-project (2026-06-28 second pass).** The original reset
-left four UI features in Pro (audit logs, rules engine, security intelligence
-dashboard, multi-project workspaces). A second pass on the same day moved the
-first three to open-source and left only multi-project gated. Reasoning: a
-self-hosted *control point* must ship governance primitives — audit, allow/deny
-rules, security dashboard — free; locking them undermines the entire
-positioning. Multi-project is the right single gate because it cleanly maps to
-the buyer ICP (production teams running Depsilo across many projects) and
-because the contract sells the support / SLA / compliance / consulting bundle,
-not the feature itself. A narrow gate makes the funnel high-intent.
-
-**Pro switched to $99 lifetime self-serve (2026-06-29 third pass).** Contact-
-priced Pro from the 2026-06-28 reset turned out to assume sales bandwidth the
-project does not have — every inbound contact-sales email would consume founder
-attention with no infrastructure to triage. Switched to a flat one-time **$99
-lifetime** price, displayed prominently in every CTA. **No payment provider
-integrated yet:** the Buy CTA opens a pre-filled mailto: order email and the
-maintainer processes payment (PayPal / Alipay / WeChat / bank) + emails back a
-license key the operator pastes into the License page. One asynchronous
-round-trip per sale, zero ongoing sales work. When provider integration lands
-(Lemon Squeezy is the planned target — Merchant of Record, license-key
-delivery, EU VAT handled), only `web/src/lib/buy.ts` changes — every CTA in
-the admin UI and on the landing page reads from that helper. Price stays $99
-lifetime through and after the provider swap; the trial system stays as the
-free 14-day evaluation path before purchase.
-
-**Pivot to "Supply-Chain Enforcement Layer" (2026-06-30 fourth pass —
+**Pivot to "Supply-Chain Enforcement Layer" (2026-06-30 —
 [ADR-0004](./adr/0004-supply-chain-enforcement-layer.md)).** Competitive research
 on 2026-06-30 found [Artifact Keeper](https://artifactkeeper.com/) — a 794-star,
 MIT-licensed, Rust-based "Artifactory alternative" that already ships 45+
 ecosystem formats, SSO/LDAP/SAML/RBAC in OSS, native iOS/Android/Windows
 clients, Helm + Terraform IaC, and a WASM plugin system. That executed most of
-ADR-0003's T2 roadmap before depsilo started it, and at $0 forever vs. our
-$99 Pro. Concurrently, **pnpm 11 / npm 11.10.0 / uv** all shipped client-side
+ADR-0003's T2 roadmap before depsilo started it. Concurrently,
+**pnpm 11 / npm 11.10.0 / uv** all shipped client-side
 minimum-release-age — validating the T1 wedge thesis but making "we offer this
 feature" insufficient. Pivot:
 
@@ -394,9 +283,6 @@ feature" insufficient. Pivot:
   only a proxy on the request path can do: minimum release age (shipped),
   malicious blocklist (in flight), freeze/snapshot, tamper detection, CRA SBOM,
   SIEM-grade audit + webhook routing.
-- **Reframe Pro** to "Supply-Chain Premium": long-term audit retention, SIEM
-  feeds, custom policy DSL, compliance report packs (CRA / NIST SSDF / FedRAMP),
-  multi-project workspaces (demoted from headline), priority support.
 - **Drop building SSO/RBAC ourselves.** Recommend operators front depsilo with
   oauth2-proxy / Authelia / Pomerium. "No SSO tax" preserved without
   re-implementing yet another OIDC stack.
@@ -418,5 +304,5 @@ feature" insufficient. Pivot:
    and reversible; show a short plan before any large change.
 3. Hold to the **security-tool discipline**: transparent by default, signed, dogfooded,
    public fallback preserved.
-4. **Out of scope for you (founder TODOs):** pricing, getting the first 10 users, launch
+4. **Out of scope for you (founder TODOs):** getting the first 10 users, launch
    content, directory listings. Don't spend cycles here.

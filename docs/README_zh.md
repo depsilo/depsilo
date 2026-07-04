@@ -10,7 +10,7 @@
   <br>
   <strong>依仓 · Depsilo</strong>
   <br>
-  <em>一个缓存，搞定所有依赖</em>
+  <em>依赖安装链路上的供应链策略执行层</em>
 </p>
 
 ---
@@ -20,7 +20,9 @@
 
 ## ✨ 特性
 
-- 🚀 **13 个生态代理缓存** — pip, apt, npm, Go, cargo, Maven, RubyGems, Composer, NuGet, Conda, CRAN, Helm, Hugging Face
+- 🚀 **14 个生态代理缓存** — pip, apt, npm, Go, cargo, Maven, RubyGems, Composer, NuGet, Conda, CRAN, Helm, Alpine, Hugging Face
+- 🛡️ **最小发布年龄隔离** — 按生态配置新版本冷却窗口，阻断刚发布的高风险版本
+- 🧾 **审计与 Webhook** — block / bypass / approve 都可追踪，并可推送到 Slack / 钉钉 / 企微 / 飞书
 - ⚡ **Singleflight** — 100 个并发请求只触发 1 次回源
 - 🌐 **多上游源**，支持为每个源单独配置 HTTP 代理
 - 🔄 **自动健康检查**，基于延迟自动切换
@@ -103,7 +105,7 @@ Hugging Face 模型动辄几十 GB（单个权重文件可达 50 GB+）。
 
 ```text
 This workspace has a local dependency cache called Depsilo at http://localhost:23333.
-It caches packages from 13 ecosystems and serves them at LAN speed.
+It caches packages from 14 ecosystems and serves them at LAN speed.
 
 Before running any package install in this workspace:
 
@@ -273,35 +275,16 @@ depsilo_cache_files_total
 - [ ] 包级 Allow/Deny 规则（开源，已实现）
 - [ ] 最小发布年龄 / 恶意包阻断（开源，规划中）
 
-## 💼 Open Source 与 Pro
+## 🔓 开源承诺
 
-Depsilo 是**单档付费**，没有套餐分层、没有按月公开价格、没有云托管。
+Depsilo 是 MIT 许可证、自托管、单二进制部署。文档面向运维落地，重点
+说明如何部署、接入和执行供应链策略。
 
-**Open Source (MIT)** — 永远免费，自托管。
-
-包含 14 种生态代理、缓存与流量分析、上游源管理与健康检查、**审计
-日志**、**包级 Allow/Deny 规则引擎**、**安全情报 dashboard**（OSV /
-CVE 集中视图 + 决策工作流）、SBOM 导出（CycloneDX + SPDX）、Webhook
-告警、Prometheus 指标、单/多用户访问，以及未来的供应链护城河功能
-（最小发布年龄、恶意包阻断、tamper detection）。SSO / RBAC 等自托管
-必需能力**不会**被锁在付费墙后面。
-
-**Pro · 终身买断 $99** — 一次付费，永久使用。
-
-Pro 唯一锁住的 UI 能力是**多项目工作区**（按项目隔离审计日志、规则、
-SBOM、缓存 + 按项目分配 RBAC）。买 Pro 还包含：
-
-- 多项目工作区（按项目隔离 + 按项目 RBAC）
-- 邮件优先支持
-- 后续 Pro 新功能自动包含
-- **无订阅** · **无服务器校验** · **离线可用**
-
-→ 想买？邮件 <pay@depsilo.com>，主题写 "Buy Depsilo Pro Lifetime ($99)"。
-我们回付款方式（PayPal / 支付宝 / 微信 / 银行）+ 收到付款后回 license key，
-key 粘到 admin 的 License 页面即激活。
-
-> 注：暂时没接支付厂商，邮件下单是手动的但一次性。整个流程 ~24h。
-> 接 Lemon Squeezy / Polar 后会自动化。
+当前开源能力包括 14 种生态代理、缓存与流量分析、上游源管理与健康检查、
+审计日志、包级 Allow/Deny 规则引擎、安全情报 dashboard（OSV / CVE 集中
+视图 + 决策工作流）、SBOM 导出（CycloneDX + SPDX）、Webhook 告警、
+Prometheus 指标，以及供应链策略功能（最小发布年龄、恶意包阻断、
+freeze/snapshot、tamper detection 等按路线图落地）。
 
 ## 🤝 参与贡献
 

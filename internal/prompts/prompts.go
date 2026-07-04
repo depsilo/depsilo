@@ -1,5 +1,5 @@
 // Package prompts serves the canonical "paste this into your AI coding agent"
-// prompt that auto-integrates a project with the running mirror.
+// prompt that auto-integrates a project with the running Depsilo mirror.
 //
 // The prompt text is the single source of truth at integration.md (embedded).
 // Both the public HTTP endpoint (GET /api/v1/integration-prompt) and the CLI
@@ -8,7 +8,8 @@
 // Distinct from internal/api/public.DiscoverHandler.AgentPrompt — that one
 // configures the user's local DEVELOPER MACHINE (`pip config set`, `npm config
 // set`); this one rewrites the user's PROJECT SOURCE (Dockerfile / CI / build
-// scripts) and is intentionally brand-neutral.
+// scripts) and is intentionally transparent: generated edits should name
+// Depsilo, include the mirror URL, and preserve public-registry fallback.
 package prompts
 
 import (

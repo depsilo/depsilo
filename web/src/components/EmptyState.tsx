@@ -9,6 +9,7 @@ interface EmptyStateProps {
   title: string
   hint?: string
   action?: ReactNode
+  tone?: 'neutral' | 'danger' | 'warn'
   /** Minimum vertical box so the section doesn't collapse to nothing. */
   minHeight?: number
 }
@@ -18,12 +19,15 @@ export default function EmptyState({
   title,
   hint,
   action,
+  tone = 'neutral',
   minHeight = 160,
 }: EmptyStateProps) {
+  const toneColor = tone === 'danger' ? 'var(--danger-text)' : tone === 'warn' ? 'var(--warn-text)' : 'var(--text-soft)'
+
   return (
     <div
       className="flex flex-col items-center justify-center text-center py-8"
-      style={{ minHeight, color: 'var(--text-soft)' }}
+      style={{ minHeight, color: toneColor }}
     >
       <Icon name={icon} size="lg" />
       <p className="text-[13px] font-[500] mt-3" style={{ color: 'var(--text-muted)' }}>

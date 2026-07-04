@@ -9,15 +9,15 @@ import (
 	"depsilo/internal/prompts"
 )
 
-// IntegrationPromptHandler serves the brand-neutral "rewrite this project to
-// use a mirror" prompt that the Portal renders for users to paste into their
-// coding LLM (Claude Code / Cursor / Copilot Chat).
+// IntegrationPromptHandler serves the transparent "rewrite this project to use
+// Depsilo" prompt that the Portal renders for users to paste into their coding
+// LLM (Claude Code / Cursor / Copilot Chat).
 //
 // Distinct from DiscoverHandler.AgentPrompt — that prompt configures a
 // developer's local machine (`pip config set`, `npm config set`); this one
-// rewrites a project's BUILD-time files (Dockerfile / CI / build scripts) and
-// is intentionally brand-neutral so the URL never appears in the user's
-// committed source.
+// rewrites a project's BUILD-time files (Dockerfile / CI / build scripts). It
+// deliberately names Depsilo and the URL in generated edits so reviewers can
+// trace why package-install traffic changed.
 type IntegrationPromptHandler struct{}
 
 func NewIntegrationPromptHandler() *IntegrationPromptHandler {

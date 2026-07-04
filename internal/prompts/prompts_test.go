@@ -17,6 +17,22 @@ func TestIntegration_SubstitutesMirrorURL(t *testing.T) {
 	}
 }
 
+func TestIntegration_RenderedPromptIsTransparent(t *testing.T) {
+	out := prompts.Integration("http://10.4.20.52:23333")
+	mustContain := []string{
+		"You are integrating **Depsilo**",
+		"Routed via Depsilo cache: http://10.4.20.52:23333",
+		"Public-registry fallback",
+		"PIP_EXTRA_INDEX_URL=https://pypi.org/simple/",
+		"GOPROXY=\"http://10.4.20.52:23333/go,direct\"",
+	}
+	for _, s := range mustContain {
+		if !strings.Contains(out, s) {
+			t.Errorf("rendered transparent prompt missing %q", s)
+		}
+	}
+}
+
 func TestIntegration_StripsTrailingSlash(t *testing.T) {
 	out := prompts.Integration("http://example.local/")
 	// After trimming, no double-slash should appear right after the URL.
@@ -69,6 +85,7 @@ func TestIntegrationTemplate_NoStealthLanguage(t *testing.T) {
 		"no longer depends on direct public CDN",
 		"opaque internal address",
 		"Do not write the mirror's product name",
+		"never writes the product name",
 	}
 	for _, s := range mustNotContain {
 		if strings.Contains(tmpl, s) {

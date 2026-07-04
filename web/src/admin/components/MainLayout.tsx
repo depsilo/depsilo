@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
@@ -18,11 +19,12 @@ interface NavItem {
   pro?: boolean
 }
 
-function SidebarNavItem({ item }: { item: NavItem }) {
+function SidebarNavItem({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   return (
     <NavLink
       to={item.to}
       end={item.end}
+      onClick={onNavigate}
       className="flex items-center gap-2.5 mx-2 px-3 py-2 text-[13px] rounded-[6px] transition-colors duration-150 no-underline"
       style={({ isActive }) => ({
         color: isActive ? 'var(--brand-text)' : 'var(--text-soft)',
@@ -41,6 +43,7 @@ export default function MainLayoutV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // Resilient localStorage parse: a corrupted "user" entry should not white-screen admin.
   const user: { username: string; role: string } = (() => {
@@ -102,6 +105,10 @@ export default function MainLayoutV2() {
 
   const pageTitle = pageTitles[location.pathname] || t('nav.dashboard')
 
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [location.pathname])
+
   const handleLogout = async () => {
     try { await authApi.logout() } catch { /* ignore */ }
     localStorage.removeItem('token')
@@ -109,84 +116,94 @@ export default function MainLayoutV2() {
     navigate('/admin/login', { replace: true })
   }
 
+  const sidebar = (
+    <>
+      <div className="px-5 py-5 flex items-center gap-2.5">
+        <Logo size={26} />
+        <span className="text-[16px] font-[600] tracking-[-0.025em]" style={{ color: 'var(--text)' }}>Depsilo</span>
+        <span
+          className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto inline-flex items-center justify-center tabular-nums"
+          title={stats?.service?.version}
+          style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)', minWidth: 64 }}
+        >
+          {formatVersion(stats?.service?.version)}
+        </span>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-2">
+        <p
+          className="font-mono uppercase mt-2 mb-1.5 px-5"
+          style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+        >
+          {t('nav.monitor')}
+        </p>
+        {monitorItems.map((item) => (
+          <SidebarNavItem key={item.to} item={item} onNavigate={() => setMobileNavOpen(false)} />
+        ))}
+
+        <p
+          className="font-mono uppercase mt-6 mb-1.5 px-5"
+          style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+        >
+          {t('nav.manage')}
+        </p>
+        {manageItems.map((item) => (
+          <SidebarNavItem key={item.to} item={item} onNavigate={() => setMobileNavOpen(false)} />
+        ))}
+      </nav>
+
+      <div style={{ borderTop: '0.5px solid var(--border)' }} className="px-3 py-3">
+        <div className="flex items-center gap-2.5 rounded-[6px] px-2 py-2 group transition-colors duration-150 cursor-default hover:bg-[var(--bg-hover)]">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[600] shrink-0"
+            style={{ background: 'var(--brand)', color: 'white' }}
+          >
+            {user.username?.[0]?.toUpperCase() || 'A'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-[500] truncate leading-tight" style={{ color: 'var(--text)' }}>{user.username}</p>
+            <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-subtle)' }}>
+              {user.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="bg-transparent opacity-100 lg:opacity-0 lg:group-hover:opacity-100 cursor-pointer transition-[opacity,color,transform] duration-150 active:scale-[0.96] p-1.5 rounded-[4px] text-[var(--text-soft)] hover:text-[var(--text)] min-h-10 min-w-10 inline-flex items-center justify-center"
+            title={t('nav.logout')}
+          >
+            <Icon name="logout" size="sm" />
+          </button>
+        </div>
+      </div>
+    </>
+  )
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
       {/* Page-wide ambient gradient — same mesh used in Portal so the
           two halves of the product feel cohesive. */}
       <div className="page-wash" />
-      {/* Sidebar — 220px */}
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[2px] lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed on desktop, drawer on narrow screens */}
       <aside
-        className="fixed left-0 top-0 z-30 h-screen w-[220px] flex flex-col"
+        className={`fixed left-0 top-0 z-50 h-screen w-[260px] lg:w-[220px] flex flex-col transition-transform duration-200 lg:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ background: 'var(--bg-card)', borderRight: '0.5px solid var(--border)' }}
       >
-        {/* Logo */}
-        <div className="px-5 py-5 flex items-center gap-2.5">
-          <Logo size={26} />
-          <span className="text-[16px] font-[600] tracking-[-0.025em]" style={{ color: 'var(--text)' }}>Depsilo</span>
-          {/* Min-width pre-reserves the chip's eventual filled size so the
-              first paint ("—" while stats are loading) doesn't shrink the
-              chip and jolt the logo row when the real version arrives. */}
-          <span
-            className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto inline-flex items-center justify-center tabular-nums"
-            title={stats?.service?.version}
-            style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)', minWidth: 64 }}
-          >
-            {formatVersion(stats?.service?.version)}
-          </span>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-2">
-          <p
-            className="font-mono uppercase mt-2 mb-1.5 px-5"
-            style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
-          >
-            {t('nav.monitor')}
-          </p>
-          {monitorItems.map((item) => (
-            <SidebarNavItem key={item.to} item={item} />
-          ))}
-
-          <p
-            className="font-mono uppercase mt-6 mb-1.5 px-5"
-            style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
-          >
-            {t('nav.manage')}
-          </p>
-          {manageItems.map((item) => (
-            <SidebarNavItem key={item.to} item={item} />
-          ))}
-        </nav>
-
-        {/* User info */}
-        <div style={{ borderTop: '0.5px solid var(--border)' }} className="px-3 py-3">
-          <div className="flex items-center gap-2.5 rounded-[6px] px-2 py-2 group transition-colors duration-150 cursor-default hover:bg-[var(--bg-hover)]">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[600] shrink-0"
-              style={{ background: 'var(--brand)', color: 'white' }}
-            >
-              {user.username?.[0]?.toUpperCase() || 'A'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-[500] truncate leading-tight" style={{ color: 'var(--text)' }}>{user.username}</p>
-              <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-subtle)' }}>
-                {user.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
-              </p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="bg-transparent opacity-0 group-hover:opacity-100 cursor-pointer transition-[opacity,color,transform] duration-150 active:scale-[0.96] p-1.5 rounded-[4px] text-[var(--text-soft)] hover:text-[var(--text)]"
-              title={t('nav.logout')}
-            >
-              <Icon name="logout" size="sm" />
-            </button>
-          </div>
-        </div>
+        {sidebar}
       </aside>
 
       {/* Top bar — 48px */}
       <header
-        className="aurora-rim-bottom fixed top-0 left-[220px] right-0 z-40 flex items-center justify-between px-8"
+        className="aurora-rim-bottom fixed top-0 left-0 lg:left-[220px] right-0 z-30 flex items-center justify-between px-4 sm:px-6 lg:px-8"
         style={{
           height: 48,
           background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
@@ -194,20 +211,30 @@ export default function MainLayoutV2() {
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
         }}
       >
-        <h1 className="text-[17px] font-[600] tracking-[-0.015em] flex-shrink-0" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
+        <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
+          <button
+            type="button"
+            className="lg:hidden h-10 w-10 inline-flex items-center justify-center rounded-[6px] bg-transparent text-[var(--text-soft)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] transition-[background,color,transform] duration-150 active:scale-[0.96]"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Icon name="menu" size="sm" />
+          </button>
+          <h1 className="text-[17px] font-[600] tracking-[-0.015em] truncate" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
+        </div>
 
         {/* Now strip rides between the page title and the right-side controls.
             Single-row layout sized to fit the 48px topbar; carries the live
             status + bandwidth signal on every admin page so the operator
             never has to navigate just to check liveness. */}
-        <div className="flex-1 min-w-0 mx-6">
+        <div className="hidden md:block flex-1 min-w-0 mx-4 lg:mx-6">
           <NowStrip variant="topbar" />
         </div>
 
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
           <Link
             to="/"
-            className="text-[12px] font-[500] no-underline transition-colors duration-150 inline-flex items-center gap-1 text-[var(--text-soft)] hover:text-[var(--text)]"
+            className="hidden sm:inline-flex text-[12px] font-[500] no-underline transition-colors duration-150 items-center gap-1 text-[var(--text-soft)] hover:text-[var(--text)]"
             title={t('portal.backLink')}
           >
             {t('portal.backLink')}
@@ -218,7 +245,10 @@ export default function MainLayoutV2() {
       </header>
 
       {/* Main content */}
-      <main className="ml-[220px] p-8 min-h-screen" style={{ paddingTop: 80, background: 'var(--bg-page)' }}>
+      <main className="lg:ml-[220px] px-4 py-6 sm:px-6 lg:p-8 min-h-screen" style={{ paddingTop: 80, background: 'var(--bg-page)' }}>
+        <div className="md:hidden mb-4">
+          <NowStrip variant="topbar" />
+        </div>
         <Outlet />
       </main>
     </div>

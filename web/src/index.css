@@ -704,6 +704,9 @@ a:focus:not(:focus-visible) {
    860px the rail moves above the config pane so neither cell gets
    crushed under 200px and content stays readable on tablet / phone. */
 @media (max-width: 860px) {
+  .quickstart-setup {
+    grid-template-columns: 1fr !important;
+  }
   .quickstart-console {
     grid-template-columns: 1fr !important;
     min-height: 0 !important;

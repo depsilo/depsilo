@@ -79,7 +79,7 @@ export default function DashboardV2() {
   const { t } = useTranslation()
   const [range, setRange] = useState<TrendsRange>('1h')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin', 'dashboard'],
     queryFn: () => adminApi.getDashboard(),
     refetchInterval: 30000,
@@ -102,7 +102,7 @@ export default function DashboardV2() {
   if (isLoading) {
     return (
       <div className="space-y-12">
-        <div className="grid gap-8 grid-cols-4 py-2">
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 py-2">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
               <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
@@ -112,6 +112,28 @@ export default function DashboardV2() {
         </div>
         <div className="h-72 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
       </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <EmptyState
+        icon="wifi_off"
+        title={t('common.loadFailed', 'Could not load dashboard')}
+        hint={t('dashboard.loadFailedHint', 'Check whether the Depsilo server is reachable, then retry.')}
+        tone="danger"
+        minHeight={360}
+        action={(
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="inline-flex min-h-10 items-center justify-center rounded-[6px] px-3 text-[12px] font-[600] transition-[background,color,transform] duration-150 active:scale-[0.96]"
+            style={{ background: 'var(--brand)', color: 'white' }}
+          >
+            {t('common.retry', 'Retry')}
+          </button>
+        )}
+      />
     )
   }
 
@@ -156,7 +178,7 @@ export default function DashboardV2() {
     <div className="space-y-12">
       {/* ── 24h metrics row ─────────────────────────── */}
       <section>
-        <div className="grid grid-cols-4 gap-8 py-2">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4 xl:gap-8 py-2">
           {metrics.map((m) => (
             <Metric key={m.label} label={m.label} value={m.value} change={m.change} />
           ))}
@@ -214,7 +236,7 @@ export default function DashboardV2() {
                 </Link>
               }
             />
-            <div className="grid grid-cols-4 gap-x-10 gap-y-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-10 gap-y-5 mb-6">
               <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(bw.total_bytes || 0)} />
               <Metric
                 label={t('bandwidth.trafficSaved')}

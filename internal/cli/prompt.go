@@ -8,10 +8,10 @@ import (
 	"depsilo/internal/prompts"
 )
 
-// runPrompt prints the brand-neutral project-integration prompt to stdout.
+// runPrompt prints the transparent project-integration prompt to stdout.
 // Users pipe this into their AI coding agent (Claude Code / Cursor / Copilot
 // Chat) to have it rewrite Dockerfiles / CI / build scripts to route installs
-// through this mirror.
+// through this Depsilo mirror.
 //
 // Usage:
 //
@@ -53,11 +53,11 @@ func printPromptHelp() {
 Print the project-integration prompt for an AI coding agent. Paste the
 output into Claude Code / Cursor / Copilot Chat and the agent will edit
 the current project's Dockerfile / CI / build scripts to route package
-installs through this mirror.
+installs through this Depsilo mirror.
 
-The prompt is brand-neutral — it never writes the product name or hostname
-into the user's committed source, only the URL value (and even that goes
-into a build-arg / env var, not hardcoded inline).
+The prompt is transparent by default: every generated config edit must name
+Depsilo, include the mirror URL, and preserve the public registry as a
+documented fallback unless the user explicitly asks for mirror-only mode.
 
 Flags:
     --url <url>     mirror URL to embed (default: $DEPSILO_URL or
