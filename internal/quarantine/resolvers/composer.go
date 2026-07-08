@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -32,7 +33,15 @@ func (r *composerResolver) Lookup(ctx context.Context, pkg, version string) (tim
 	// composer package names are always "vendor/name" — the slash
 	// MUST be preserved (it's the path separator on the wire), so
 	// we only escape per-segment, not the whole identifier.
-	url := fmt.Sprintf("%s/p2/%s.json", r.base, pkg)
+	//
+	// Branch versions ("dev-*" / "*-dev") live in the separate
+	// ~dev metadata file; looking them up in the main file would
+	// always miss, which under fail_closed blocks every dev dist.
+	file := pkg
+	if strings.HasPrefix(version, "dev-") || strings.HasSuffix(version, "-dev") {
+		file = pkg + "~dev"
+	}
+	url := fmt.Sprintf("%s/p2/%s.json", r.base, file)
 
 	var doc composerPackageDoc
 	if err := fetchJSON(ctx, r.client, url, &doc); err != nil {

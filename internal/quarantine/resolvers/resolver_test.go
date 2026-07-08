@@ -194,6 +194,30 @@ func TestComposerResolver(t *testing.T) {
 	}
 }
 
+func TestComposerResolver_DevVersion(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Branch versions live ONLY in the ~dev metadata file; the
+		// main file must not be consulted for them.
+		if r.URL.Path == "/p2/symfony/console~dev.json" {
+			_, _ = w.Write([]byte(`{"packages":{"symfony/console":[
+				{"version":"dev-main","time":"2026-06-15T12:34:56+00:00"}
+			]}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	r := &composerResolver{client: http.DefaultClient, base: srv.URL}
+
+	got, err := r.Lookup(context.Background(), "symfony/console", "dev-main")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if !got.Equal(fixedTime) {
+		t.Errorf("got %v, want %v", got, fixedTime)
+	}
+}
+
 func TestNugetResolver(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// IDs and versions must be lowercased on the wire.

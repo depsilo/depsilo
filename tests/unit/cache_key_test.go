@@ -213,7 +213,7 @@ func TestCacheKey_Composer_DevMetadata(t *testing.T) {
 }
 
 func TestCacheKey_Composer_Dist(t *testing.T) {
-	key := composerAdapter.DistCacheKey("monolog", "monolog", "abc123")
+	key := composerAdapter.DistCacheKey("monolog", "monolog", "abc123", "zip")
 	if key != "composer/dist/monolog/monolog/abc123.zip" {
 		t.Errorf("got %s", key)
 	}

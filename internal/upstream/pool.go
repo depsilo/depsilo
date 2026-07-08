@@ -23,14 +23,14 @@ const DefaultProbeInterval = 30 * time.Minute
 
 // Upstream represents a single upstream source with its HTTP client.
 type Upstream struct {
-	Name     string
-	URL      string
-	Proxy    string
+	Name          string
+	URL           string
+	Proxy         string
 	Priority      int
 	ProbeMode     string        // "active" or "passive"
 	ProbeInterval time.Duration // parsed from config string
 	Healthy       bool
-	client   *http.Client
+	client        *http.Client
 
 	mu          sync.RWMutex
 	avgLatency  time.Duration
@@ -98,8 +98,23 @@ func (p *Pool) Upstreams() []*Upstream {
 
 // Fetch performs an HTTP GET to the upstream, joining the given path.
 func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error) {
-	reqURL := u.URL + path
+	return u.do(ctx, u.URL+path, true)
+}
 
+// FetchURL performs an HTTP GET against an absolute URL using this
+// upstream's client (including its per-upstream proxy). Used by
+// adapters whose artifact downloads live on a different host than
+// the metadata endpoint — e.g. Composer dists, which the p2
+// metadata points at GitHub or a mirror's storage host.
+//
+// Latency/health are deliberately NOT reported: the target is a
+// third-party host, and charging its latency or failures to this
+// upstream would poison the mirror's health accounting.
+func (u *Upstream) FetchURL(ctx context.Context, reqURL string) (*FetchResult, error) {
+	return u.do(ctx, reqURL, false)
+}
+
+func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -111,17 +126,23 @@ func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error)
 	latency := time.Since(start)
 
 	if err != nil {
-		u.Report(latency, false)
+		if report {
+			u.Report(latency, false)
+		}
 		return nil, fmt.Errorf("fetch %s: %w", reqURL, err)
 	}
 
 	if resp.StatusCode >= 400 {
 		resp.Body.Close()
-		u.Report(latency, resp.StatusCode < 500)
-		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, path)
+		if report {
+			u.Report(latency, resp.StatusCode < 500)
+		}
+		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, reqURL)
 	}
 
-	u.Report(latency, true)
+	if report {
+		u.Report(latency, true)
+	}
 
 	return &FetchResult{
 		Body:        resp.Body,

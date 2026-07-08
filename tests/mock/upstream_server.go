@@ -173,7 +173,13 @@ func (m *MockUpstream) RegisterComposer() {
 	})
 	m.mux.HandleFunc("/p2/test/pkg.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"packages":{"test/pkg":[{"name":"test/pkg","version":"1.0.0","dist":{"url":"https://example.com/test.zip","type":"zip","reference":"abc"}}]}}`)
+		// dist.url points back at this mock (resolved per-request
+		// from the Host header) so the proxy's absolute dist fetch
+		// stays inside the test sandbox.
+		fmt.Fprintf(w, `{"packages":{"test/pkg":[{"name":"test/pkg","version":"1.0.0","version_normalized":"1.0.0.0","dist":{"url":"http://%s/composer-dist/test.zip","type":"zip","reference":"abc"}}]}}`, r.Host)
+	})
+	m.mux.HandleFunc("/composer-dist/test.zip", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE_COMPOSER_DIST"))
 	})
 }
 

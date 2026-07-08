@@ -12,6 +12,6 @@ func DevMetadataCacheKey(vendor, pkg string) string {
 	return "composer/p2/" + vendor + "/" + pkg + "~dev.json"
 }
 
-func DistCacheKey(vendor, pkg, reference string) string {
-	return "composer/dist/" + vendor + "/" + pkg + "/" + reference + ".zip"
+func DistCacheKey(vendor, pkg, reference, ext string) string {
+	return "composer/dist/" + vendor + "/" + pkg + "/" + reference + "." + ext
 }

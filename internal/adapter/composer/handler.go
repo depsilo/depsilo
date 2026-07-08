@@ -44,7 +44,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	case strings.HasPrefix(path, "p2/"):
 		h.proxyPassthrough(c, path, h.cfg.TTLIndex) // metadata, short TTL
 	case strings.HasPrefix(path, "dist/"):
-		h.proxyPassthrough(c, path, h.cfg.TTLBlob) // dist files, long TTL
+		h.handleDist(c, path) // dist archives via the injected mirror template
 	default:
 		h.proxyPassthrough(c, path, h.cfg.TTLIndex)
 	}
@@ -107,6 +107,164 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 	c.String(http.StatusOK, content)
 
 	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+}
+
+// handleDist serves a dist archive requested through the mirror
+// template injected into packages.json. The mirror URL only carries
+// (package, version_normalized, reference); the real download
+// location lives in the p2 metadata, so the handler resolves the
+// version manifest first — which also yields the pretty version the
+// quarantine gate needs.
+func (h *Handler) handleDist(c *gin.Context, path string) {
+	vendor, pkg, versionNorm, reference, ext, ok := ParseDistPath(path)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "malformed composer dist path"})
+		return
+	}
+	fullName := vendor + "/" + pkg
+
+	entry, err := h.resolveDistEntry(c.Request.Context(), vendor, pkg, versionNorm, reference)
+	if err != nil {
+		zap.L().Error("failed to resolve composer dist metadata", zap.String("package", fullName), zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		return
+	}
+	if entry == nil || entry.Dist.URL == "" {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "version not present in upstream metadata"})
+		return
+	}
+	// The extension must match the metadata's dist type: it feeds the
+	// cache key, and accepting arbitrary client-supplied values would
+	// let unauthenticated requests store the same artifact under
+	// unbounded keys (cache/storage amplification).
+	if want := entry.Dist.Type; (want != "" && ext != want) || (want == "" && ext != "zip") {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "dist type mismatch"})
+		return
+	}
+	// The dist URL comes from upstream-controlled metadata and is
+	// fetched as an absolute URL — refuse anything but plain HTTP(S)
+	// so metadata can't point the proxy at other schemes.
+	distURL := entry.Dist.URL
+	if !strings.HasPrefix(distURL, "https://") && !strings.HasPrefix(distURL, "http://") {
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_ERROR", "message": "unsupported dist url scheme"})
+		return
+	}
+
+	// Quarantine gate with the pretty version — the same string the
+	// composer publish-time resolver matches against p2 metadata.
+	// NOTE: composer falls back to the original dist URL on 451
+	// (see the enforcement caveat in rewriter.go), so this blocks
+	// best-effort and records the audit event; it is not airtight
+	// against a client with direct registry egress.
+	if blocked := adapter.QuarantineGate(c, "composer", fullName, entry.Version); blocked {
+		return
+	}
+
+	start := time.Now()
+	cacheKey := DistCacheKey(vendor, pkg, reference, ext)
+
+	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "composer", h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+		ups, err := h.selector.Select(ctx)
+		if err != nil {
+			return nil, "", 0, "", err
+		}
+
+		zap.L().Info("fetching composer dist",
+			zap.String("package", fullName),
+			zap.String("url", distURL),
+			zap.String("upstream", ups.Name),
+		)
+
+		// Dist archives live wherever the metadata points (GitHub
+		// for packagist, the mirror's own storage for CN mirrors) —
+		// fetched absolutely, but through the selected upstream's
+		// client so its proxy setting applies.
+		fetchResult, err := ups.FetchURL(ctx, distURL)
+		if err != nil {
+			return nil, "", 0, "", err
+		}
+
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
+	})
+
+	if err != nil {
+		zap.L().Error("failed to fetch composer dist", zap.String("package", fullName), zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+		return
+	}
+	defer result.Reader.Close()
+
+	ct := result.ContentType
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	c.Header("Content-Type", ct)
+	if result.Size > 0 {
+		c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
+	}
+	c.Status(http.StatusOK)
+	written, copyErr := io.Copy(c.Writer, result.Reader)
+	if copyErr != nil {
+		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
+	}
+
+	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+}
+
+// resolveDistEntry loads the p2 metadata for a package (through the
+// cache, so dist resolution shares the entry the p2 passthrough
+// route populates) and finds the manifest for the requested version.
+// Dev versions live in the separate ~dev metadata file, so a miss in
+// the primary file falls back to the other one.
+func (h *Handler) resolveDistEntry(ctx context.Context, vendor, pkg, versionNorm, reference string) (*distEntry, error) {
+	fullName := vendor + "/" + pkg
+	dev := strings.HasPrefix(versionNorm, "dev-") || strings.HasSuffix(versionNorm, "-dev")
+
+	doc, err := h.fetchMetadataDoc(ctx, vendor, pkg, dev)
+	if err != nil {
+		return nil, err
+	}
+	if entry := findDistEntry(doc, fullName, versionNorm, reference); entry != nil {
+		return entry, nil
+	}
+
+	// Fall back to the other metadata file. Its absence upstream
+	// (404 → fetch error) is expected for most packages: the primary
+	// lookup already worked, the version simply isn't there.
+	doc, err = h.fetchMetadataDoc(ctx, vendor, pkg, !dev)
+	if err != nil {
+		return nil, nil
+	}
+	return findDistEntry(doc, fullName, versionNorm, reference), nil
+}
+
+// fetchMetadataDoc reads a p2 metadata file through the cache manager
+// using the same cache key the p2 passthrough route uses, so both
+// paths share one cached copy.
+func (h *Handler) fetchMetadataDoc(ctx context.Context, vendor, pkg string, dev bool) ([]byte, error) {
+	metaPath := "p2/" + vendor + "/" + pkg + ".json"
+	cacheKey := MetadataCacheKey(vendor, pkg)
+	if dev {
+		metaPath = "p2/" + vendor + "/" + pkg + "~dev.json"
+		cacheKey = DevMetadataCacheKey(vendor, pkg)
+	}
+
+	result, err := h.cacheMgr.Get(ctx, cacheKey, "composer", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+		ups, err := h.selector.Select(ctx)
+		if err != nil {
+			return nil, "", 0, "", err
+		}
+		fetchResult, err := ups.Fetch(ctx, "/"+metaPath)
+		if err != nil {
+			return nil, "", 0, "", err
+		}
+		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer result.Reader.Close()
+	return io.ReadAll(result.Reader)
 }
 
 // proxyPassthrough proxies a request to the upstream with caching, no content modification.
