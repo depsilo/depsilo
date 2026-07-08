@@ -13,7 +13,7 @@ export default function PromptCard({
   badge = 'AI',
   label,
   mono = false,
-  maxHeight = 180,
+  maxHeight = 260,
 }: Props) {
   const bodyStyle: React.CSSProperties = mono
     ? {
@@ -30,11 +30,12 @@ export default function PromptCard({
         overflow: 'auto',
       }
     : {
-        padding: '12px 14px',
-        fontSize: 12,
-        lineHeight: 1.6,
+        padding: '18px 20px',
+        fontSize: 14,
+        lineHeight: 1.75,
         color: 'var(--text)',
         whiteSpace: 'pre-wrap',
+        overflowWrap: 'anywhere',
         maxHeight,
         overflowY: 'auto',
       }
@@ -43,18 +44,19 @@ export default function PromptCard({
     <div
       style={{
         background: 'var(--bg-soft)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 8,
+        border: '0.5px solid var(--border-strong)',
+        borderRadius: 12,
         overflow: 'hidden',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
       <div
         style={{
-          height: 32,
+          height: 38,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 8px 0 12px',
+          padding: '0 10px 0 16px',
           borderBottom: '0.5px solid var(--border)',
           background: 'var(--bg-card)',
         }}
@@ -63,7 +65,7 @@ export default function PromptCard({
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 10,
+              fontSize: 11,
               color: 'var(--brand)',
               padding: '1px 6px',
               background: 'var(--brand-soft)',
@@ -73,7 +75,7 @@ export default function PromptCard({
           >
             {badge}
           </span>
-          {label && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>}
+          {label && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{label}</span>}
         </div>
         <CopyButton text={prompt} />
       </div>

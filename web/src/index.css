@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
 @import "@fontsource-variable/inter-tight";
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/noto-sans-sc";
@@ -56,10 +57,10 @@
   --color-danger-border: rgba(207, 68, 68, 0.30);
   --color-danger-text:   #CF4444;
 
-  /* Inter Tight (UI text) + JetBrains Mono (numbers, code, endpoints).
-     Noto Sans SC Variable stays for CJK. PingFang SC kept as
-     Apple-side fallback. */
-  --font-sans: 'Inter Tight Variable', 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  /* Inter Variable for UI text, Inter Tight only for display headings.
+     CJK prefers platform fonts first for a lighter, more native read. */
+  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --spacing-1:  4px;
@@ -87,6 +88,10 @@
    --surface, --hit, --btn, ...) are added alongside so new
    code can use the role-based vocabulary the brief prescribes. */
 :root {
+  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
   /* Surfaces — old names */
   --bg-page:   #F6F7F6;
   --bg-panel:  #FFFFFF;
@@ -388,17 +393,21 @@ html, body {
   color: var(--text);
   font-family: var(--font-sans);
   font-size: 13px;
+  font-weight: 390;
   line-height: 1.5;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 body { margin: 0; }
+#root { overflow-x: hidden; }
 * { box-sizing: border-box; }
 
 @layer base {
   h1, h2, h3, h4 {
+    font-family: var(--font-display);
     color: var(--text);
-    font-weight: 700;
+    font-weight: 660;
     letter-spacing: -0.025em;
     line-height: 1.1;
     margin: 0;
@@ -552,6 +561,12 @@ pre, code, .code-mono {
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--brand) 3%, transparent) 0%, transparent 34%),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    linear-gradient(180deg, var(--grid) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+  mask-image: linear-gradient(to bottom, black 0%, black 44%, transparent 84%);
 }
 
 @layer utilities {
@@ -720,6 +735,38 @@ a:focus:not(:focus-visible) {
      squeeze side by side. */
   .quickstart-hero {
     grid-template-columns: 1fr !important;
+    padding: 28px !important;
+    min-height: 0 !important;
+    gap: 22px !important;
+    border-radius: 14px !important;
+  }
+  .quickstart-console {
+    border-radius: 14px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .portal-admin-link,
+  .portal-theme-control,
+  .portal-status-pill {
+    display: none !important;
+  }
+  .quickstart-hero {
+    padding: 22px !important;
+  }
+  .quickstart-hero pre {
+    font-size: 12px !important;
+  }
+  .quickstart-hero-actions {
+    flex-wrap: wrap;
+    align-items: flex-start !important;
+  }
+  .quickstart-hero-actions > button {
+    min-height: 40px;
+  }
+  .quickstart-hero-compat {
+    flex-basis: 100%;
+    margin-left: 0 !important;
   }
 }
 

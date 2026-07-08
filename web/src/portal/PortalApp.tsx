@@ -91,6 +91,7 @@ function NavTab({ to, label, isActive }: NavTabProps) {
           background: 'none',
           border: 'none',
           cursor: 'pointer',
+          whiteSpace: 'nowrap',
         }}
       >
         {label}
@@ -156,10 +157,10 @@ export default function PortalAppV2() {
             height: 52,
             maxWidth: 1440,
             margin: '0 auto',
-            padding: '0 28px',
+            padding: '0 clamp(12px, 2vw, 28px)',
             display: 'flex',
             alignItems: 'center',
-            gap: 24,
+            gap: 16,
           }}
         >
           {/* Logo area. viewTransition + view-transition-name keep the
@@ -204,12 +205,13 @@ export default function PortalAppV2() {
           <div style={{ flex: 1 }} />
 
           {/* Right side controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Endpoint pill — copy-able URL, hidden on narrow viewports. */}
             <EndpointPill />
             {/* Status pill — tinted chip matching service health */}
             {data && (
               <span
+                className="portal-status-pill"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -238,9 +240,12 @@ export default function PortalAppV2() {
               </span>
             )}
             <LangToggle />
-            <ThemeToggle />
+            <span className="portal-theme-control" style={{ display: 'inline-flex' }}>
+              <ThemeToggle />
+            </span>
             <a
               href="/admin"
+              className="portal-admin-link"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -265,7 +270,7 @@ export default function PortalAppV2() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 28px' }}>
+      <main style={{ maxWidth: 1520, margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) clamp(16px, 2.1vw, 32px) 48px' }}>
         <Routes>
           <Route index element={<QuickStart />} />
           <Route path="monitor" element={<MonitorV2 />} />

@@ -1,12 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 import { statsApi } from '@/lib/api'
 import StatusDot from '@/components/StatusDot'
 import Sparkline from '@/components/Sparkline'
 import HeroSparkline from '@/components/HeroSparkline'
-import EcosystemIcon from '@/components/EcosystemIcon'
-import { HeartbeatBar, type UpstreamItem } from '@/components/UpstreamCard'
+import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
 import type { MirrorStatus } from '@/lib/ecosystemData'
 
 interface LatencyPoint {
@@ -236,198 +234,30 @@ function mirrorStatus(u: UpstreamInfo): MirrorStatus {
 
 function latencySeriesToBeats(series?: LatencyPoint[]): (number | null)[] {
   if (!series || series.length === 0) return []
-  return series.map(pt => {
-    if (pt.requests === 0) return null
+  return series.filter(pt => pt.requests > 0).map(pt => {
     if (!pt.healthy) return -1
     return pt.latency_ms
   })
 }
 
-function UpstreamRow({ upstream, isLast, locale }: { upstream: UpstreamInfo; isLast: boolean; locale: string }) {
-  const isFailed = !upstream.healthy
-  const beats = latencySeriesToBeats(upstream.latency_series)
-  const timeLabels = upstream.latency_series?.map(pt =>
+function latencySeriesToLabels(series: LatencyPoint[] | undefined, locale: string): string[] {
+  return series?.filter(pt => pt.requests > 0).map(pt =>
     new Date(pt.time).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   ) ?? []
-  const upstreamItem: UpstreamItem = {
+}
+
+function toUpstreamItem(upstream: UpstreamInfo, locale: string): UpstreamItem {
+  const beats = latencySeriesToBeats(upstream.latency_series)
+  return {
     name: upstream.name,
     adapter: upstream.adapter,
     healthy: upstream.healthy,
     avg_latency_ms: upstream.avg_latency_ms,
     success_rate: upstream.success_rate,
+    beats: beats.length > 0 ? beats : undefined,
+    beatLabels: latencySeriesToLabels(upstream.latency_series, locale),
   }
-
-  return (
-    <div
-      style={{
-        paddingBottom: isLast ? 0 : 8,
-        borderBottom: isLast ? 'none' : '0.5px solid var(--border)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, marginBottom: 4 }}>
-        <span
-          className="mono"
-          style={{
-            fontSize: 11.5,
-            color: isFailed ? 'var(--text-subtle)' : 'var(--text)',
-            textDecoration: isFailed ? 'line-through' : 'none',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {upstream.name}
-        </span>
-        <span
-          className="num"
-          style={{
-            fontSize: 10.5,
-            flexShrink: 0,
-            color: isFailed
-              ? 'var(--text-subtle)'
-              : upstream.avg_latency_ms > 100
-              ? 'oklch(0.65 0.12 50)'
-              : 'var(--text-muted)',
-          }}
-        >
-          {isFailed ? '-' : `${upstream.avg_latency_ms}ms`}
-        </span>
-        <span style={{ fontSize: 10, color: upstream.healthy ? 'var(--ok)' : 'var(--danger)' }}>●</span>
-      </div>
-      <HeartbeatBar upstream={upstreamItem} externalBeats={beats.length > 0 ? beats : undefined} labels={timeLabels} />
-    </div>
-  )
 }
-
-function EcosystemCard({ adapter, upstreams, locale }: { adapter: string; upstreams: UpstreamInfo[]; locale: string }) {
-  const worstStatus = upstreams.some(u => !u.healthy)
-    ? 'failed'
-    : upstreams.some(u => u.avg_latency_ms > 150)
-    ? 'degraded'
-    : 'healthy'
-
-  return (
-    <div
-      className="card"
-      style={{
-        padding: '10px 12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        breakInside: 'avoid',
-        marginBottom: 10,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <EcosystemIcon type={adapter as any} size={14} useColor />
-        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '-0.01em' }}>
-          {adapter}
-        </span>
-        <span
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: '50%',
-            background: worstStatus === 'healthy' ? 'oklch(0.68 0.14 155)' : worstStatus === 'degraded' ? 'oklch(0.75 0.12 70)' : 'oklch(0.65 0.15 25)',
-            flexShrink: 0,
-          }}
-        />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {upstreams.map((u, i) => (
-          <UpstreamRow key={u.name} upstream={u} isLast={i === upstreams.length - 1} locale={locale} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function MirrorMatrix({ upstreams, locale }: { upstreams: UpstreamInfo[]; locale: string }) {
-  const groups = new Map<string, UpstreamInfo[]>()
-  for (const u of upstreams) {
-    const list = groups.get(u.adapter) ?? []
-    list.push(u)
-    groups.set(u.adapter, list)
-  }
-
-  return (
-    <div style={{ columns: 3, columnGap: 10 }}>
-      {Array.from(groups.entries()).map(([adapter, list]) => (
-        <EcosystemCard key={adapter} adapter={adapter} upstreams={list} locale={locale} />
-      ))}
-    </div>
-  )
-}
-
-// ── EmptyTraffic ──────────────────────────────────────────────────
-
-function EmptyTraffic() {
-  const { t } = useTranslation()
-  return (
-    <div
-      className="card"
-      style={{
-        padding: '48px 32px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        textAlign: 'center',
-        gap: 12,
-      }}
-    >
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 12,
-          background: 'var(--brand-soft)',
-          border: '0.5px solid var(--brand-border)',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--brand)',
-        }}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M3 12h4l3 8 4-16 3 8h4" />
-        </svg>
-      </div>
-      <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-        {t('monitor.emptyTitle')}
-      </h2>
-      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--text-muted)', maxWidth: 460 }}>
-        {t('monitor.emptyDesc')}
-      </p>
-      <Link
-        to="/"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '6px 12px',
-          fontSize: 13,
-          fontWeight: 500,
-          color: 'var(--brand-text)',
-          background: 'var(--brand-soft)',
-          border: '0.5px solid var(--brand-border)',
-          borderRadius: 6,
-          textDecoration: 'none',
-          marginTop: 4,
-        }}
-      >
-        {t('monitor.emptyCta')}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-          <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </Link>
-    </div>
-  )
-}
-
-// ── Page ──────────────────────────────────────────────────────────
-
 
 export default function MonitorPage() {
   const { t, i18n } = useTranslation()
@@ -476,11 +306,12 @@ export default function MonitorPage() {
     },
     {} as Record<MirrorStatus, number>
   )
+  const upstreamItems = upstreams.map(u => toUpstreamItem(u, locale))
 
   return (
-    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Title row */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* Page summary */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
           <h1
             style={{
@@ -496,23 +327,36 @@ export default function MonitorPage() {
           </h1>
           <p
             style={{
-              margin: '14px 0 0 0',
-              fontSize: 17,
-              lineHeight: 1.45,
-              color: 'var(--text)',
-              maxWidth: 620,
-              fontWeight: 400,
-              letterSpacing: '-0.005em',
+              margin: '10px 0 0 0',
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '8px 12px',
+              fontSize: 13,
+              lineHeight: 1.3,
+              color: 'var(--text-muted)',
             }}
           >
-            {t('monitor.subtitle')}
+            <span>
+              <span className="num">{upstreams.length}</span> {t('monitor.upstreams')}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <StatusDot status="healthy" />
+              <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <StatusDot status="degraded" />
+              <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <StatusDot status="failed" />
+              <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
+            </span>
           </p>
         </div>
       </div>
 
-      {today.total_requests === 0 ? (
-        <EmptyTraffic />
-      ) : (
+      {today.total_requests > 0 && (
         <>
           <HitRateHero hitRate={hitRate} series={series} />
           <StatStrip data={today} upstreams={upstreams} series={series} />
@@ -520,57 +364,10 @@ export default function MonitorPage() {
       )}
 
       {/* Mirrors section */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 26,
-                fontWeight: 700,
-                letterSpacing: '-0.03em',
-                lineHeight: 1.1,
-              }}
-            >
-              {t('monitor.upstreams')}{' '}
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  letterSpacing: '-0.02em',
-                  color: 'var(--text-subtle)',
-                  marginLeft: 6,
-                }}
-              >
-                {upstreams.length}
-              </span>
-            </h2>
-            <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <StatusDot status="healthy" />
-                <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
-              </span>
-              <span style={{ margin: '0 10px', color: 'var(--border-strong)' }}>·</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <StatusDot status="degraded" />
-                <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
-              </span>
-              <span style={{ margin: '0 10px', color: 'var(--border-strong)' }}>·</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <StatusDot status="failed" />
-                <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
-              </span>
-            </p>
-          </div>
-        </div>
-        {upstreams.length > 0 && <MirrorMatrix upstreams={upstreams} locale={locale} />}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {upstreamItems.length > 0 && (
+          <UpstreamGroupedPanel upstreams={upstreamItems} variant="cards" minColumnWidth={380} />
+        )}
       </div>
     </div>
   )

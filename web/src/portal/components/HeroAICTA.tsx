@@ -57,13 +57,15 @@ export default function HeroAICTA() {
           overflow: 'hidden',
           isolation: 'isolate',
           background: 'var(--bg-card)',
-          border: '0.5px solid var(--border)',
-          borderRadius: 12,
+          border: '0.5px solid var(--border-strong)',
+          borderRadius: 18,
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 0.45fr) minmax(0, 0.55fr)',
+          gridTemplateColumns: 'minmax(340px, 0.44fr) minmax(0, 0.56fr)',
           alignItems: 'stretch',
-          gap: 24,
-          padding: '20px 22px 20px 26px',
+          gap: 36,
+          padding: '54px 56px',
+          minHeight: 310,
+          boxShadow: 'var(--shadow-pop)',
         }}
       >
         {/* Brand-aurora wash — pulled back from "salmon cream wash" to
@@ -79,7 +81,7 @@ export default function HeroAICTA() {
             position: 'absolute',
             inset: 0,
             background:
-              'radial-gradient(540px 320px at 0% 110%, color-mix(in oklab, var(--brand) 9%, transparent) 0%, color-mix(in oklab, var(--brand) 3%, transparent) 50%, transparent 75%)',
+              'radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 13%, transparent) 0%, color-mix(in oklab, var(--brand) 4%, transparent) 54%, transparent 78%), linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 90%, var(--brand) 10%) 0%, var(--bg-card) 48%, var(--bg-card) 100%)',
             pointerEvents: 'none',
             zIndex: -1,
           }}
@@ -92,7 +94,7 @@ export default function HeroAICTA() {
             left: 0,
             top: 0,
             bottom: 0,
-            width: 4,
+            width: 5,
             background: 'var(--grad-brand)',
           }}
         />
@@ -110,10 +112,10 @@ export default function HeroAICTA() {
             className="eyebrow ai-chip"
             style={{
               color: 'var(--brand-text)',
-              marginBottom: 8,
-              fontSize: 10,
+              marginBottom: 14,
+              fontSize: 12,
               alignSelf: 'flex-start',
-              padding: '4px 10px',
+              padding: '6px 12px',
               borderRadius: 999,
               background: 'color-mix(in oklab, var(--brand) 6%, var(--bg-card))',
             }}
@@ -124,29 +126,32 @@ export default function HeroAICTA() {
           <h2
             style={{
               margin: 0,
-              fontSize: 22,
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.18,
+              fontSize: 'clamp(34px, 3vw, 48px)',
+              fontFamily: 'var(--font-display)',
+              fontWeight: 680,
+              letterSpacing: '-0.045em',
+              lineHeight: 1.02,
               color: 'var(--text)',
+              maxWidth: 560,
             }}
           >
             {t('quickstart.heroTitle')}
           </h2>
           <p
             style={{
-              margin: '8px 0 0 0',
-              fontSize: 12.5,
+              margin: '16px 0 0 0',
+              fontSize: 16,
               lineHeight: 1.55,
               color: 'var(--text-muted)',
+              maxWidth: 560,
             }}
           >
             {t('quickstart.heroDescShort')}
           </p>
           <p
             style={{
-              margin: '6px 0 0 0',
-              fontSize: 11,
+              margin: '8px 0 0 0',
+              fontSize: 13,
               lineHeight: 1.5,
               color: 'var(--text-subtle)',
             }}
@@ -161,10 +166,11 @@ export default function HeroAICTA() {
             display: 'flex',
             flexDirection: 'column',
             background: 'var(--bg-soft)',
-            border: '0.5px solid var(--border)',
-            borderRadius: 10,
+            border: '0.5px solid var(--border-strong)',
+            borderRadius: 14,
             overflow: 'hidden',
             minWidth: 0,
+            boxShadow: 'var(--shadow-card)',
           }}
         >
           {/* Preview header */}
@@ -174,14 +180,14 @@ export default function HeroAICTA() {
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 8,
-              padding: '6px 8px 6px 12px',
+              padding: '9px 12px 9px 16px',
               borderBottom: '0.5px solid var(--border)',
               background: 'var(--bg-card)',
             }}
           >
             <span
               className="eyebrow"
-              style={{ color: 'var(--text-subtle)', fontSize: 9, margin: 0 }}
+              style={{ color: 'var(--text-subtle)', fontSize: 10, margin: 0 }}
             >
               {t('quickstart.heroPreviewLabel')}
             </span>
@@ -199,16 +205,16 @@ export default function HeroAICTA() {
           <pre
             style={{
               margin: 0,
-              padding: 12,
+              padding: '18px 18px 16px',
               flex: 1,
               fontFamily: 'var(--font-mono)',
-              fontSize: 11.5,
-              lineHeight: 1.55,
+              fontSize: 13,
+              lineHeight: 1.58,
               color: 'var(--text)',
               whiteSpace: 'pre',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              maxHeight: 110,
+              maxHeight: 152,
               position: 'relative',
             }}
           >
@@ -233,11 +239,12 @@ export default function HeroAICTA() {
           </pre>
           {/* Preview actions */}
           <div
+            className="quickstart-hero-actions"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              padding: '8px 8px 8px 12px',
+              padding: '12px 14px',
               borderTop: '0.5px solid var(--border)',
               background: 'var(--bg-card)',
             }}
@@ -251,7 +258,7 @@ export default function HeroAICTA() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '6px 12px',
+                padding: '9px 15px',
                 // Copied — switches to ok-fill tint so the success state
                 // reads as state, not just "the button changed color".
                 background: copied
@@ -261,9 +268,10 @@ export default function HeroAICTA() {
                   ? 'var(--ok-text)'
                   : 'var(--btn-primary-fg, #FFFFFF)',
                 border: 'none',
-                borderRadius: 6,
-                fontSize: 12,
+                borderRadius: 8,
+                fontSize: 13,
                 fontWeight: 600,
+                whiteSpace: 'nowrap',
                 cursor: prompt ? 'pointer' : 'not-allowed',
                 opacity: prompt ? 1 : 0.55,
                 // Instrument primary — solid deep green with a 1px inset
@@ -292,8 +300,9 @@ export default function HeroAICTA() {
                 background: 'transparent',
                 color: 'var(--text-muted)',
                 border: '0.5px solid var(--border)',
-                borderRadius: 6,
-                fontSize: 12,
+                borderRadius: 8,
+                fontSize: 13,
+                whiteSpace: 'nowrap',
                 cursor: 'pointer',
                 transition:
                   'color 120ms ease, background 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
@@ -311,6 +320,7 @@ export default function HeroAICTA() {
               <span aria-hidden style={{ opacity: 0.7 }}>→</span>
             </button>
             <span
+              className="quickstart-hero-compat"
               style={{
                 marginLeft: 'auto',
                 fontSize: 11,

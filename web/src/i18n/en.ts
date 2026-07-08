@@ -562,6 +562,7 @@ const en = {
       orSaveToConfig: 'Config file',
       method: {
         cmdline: 'Command line',
+        dockerfile: 'Dockerfile',
         envvar: 'Environment variable',
         inline: 'Inline',
       },
@@ -618,7 +619,6 @@ const en = {
     // Monitor
     monitor: {
       title: 'Live monitoring',
-      subtitle: 'Real-time view of cache performance and upstream mirror health.',
       hitRateToday: 'Cache hit rate · today',
       requests: 'Total requests',
       bandwidthSaved: 'Bandwidth saved',
@@ -628,9 +628,7 @@ const en = {
       healthy: 'healthy',
       degraded: 'degraded',
       failed: 'failed',
-      emptyTitle: 'No traffic through Depsilo yet',
-      emptyDesc: 'Configure any client to route through Depsilo. Traffic appears here within 2 seconds.',
-      emptyCta: 'Back to Quick start',
+      historySummary: 'Last 24h · {{count}} checks',
     },
 
     // Setup Wizard

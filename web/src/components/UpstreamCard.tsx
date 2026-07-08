@@ -20,18 +20,22 @@ export interface UpstreamItem {
   url?: string
   proxy?: string
   priority?: number
+  beats?: (number | null)[]
+  beatLabels?: string[]
 }
 
 // ── Heartbeat bar ──────────────────────────────────────────────────
 
-const HEARTBEAT_SLOTS = 90
+const HEARTBEAT_LIMIT = 44
+const BEAT_WIDTH = 6
+const BEAT_GAP = 2
 
 function beatColor(latency: number | null): string {
-  if (latency === null) return 'var(--border-strong)'
-  if (latency < 0) return 'var(--danger)'
-  if (latency < 200) return 'var(--ok)'
-  if (latency < 500) return 'var(--warn)'
-  return 'var(--danger)'
+  if (latency === null) return 'color-mix(in oklab, var(--border-strong) 58%, var(--bg-card))'
+  if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
+  if (latency < 200) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
+  if (latency < 500) return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
+  return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
 }
 
 function beatLabel(latency: number | null): string {
@@ -42,6 +46,21 @@ function beatLabel(latency: number | null): string {
 
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleString(document.documentElement.lang || undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function normalizeBeats(
+  beats: (number | null)[],
+  labels: string[] = [],
+  limit = HEARTBEAT_LIMIT,
+): { beats: (number | null)[]; labels: string[] } {
+  if (beats.length <= limit) {
+    return { beats, labels }
+  }
+
+  return {
+    beats: beats.slice(-limit),
+    labels: labels.slice(-limit),
+  }
 }
 
 function useBeats(upstream: UpstreamItem, enabled = true): { beats: (number | null)[]; labels: string[] } {
@@ -56,25 +75,13 @@ function useBeats(upstream: UpstreamItem, enabled = true): { beats: (number | nu
 
   return useMemo(() => {
     if (realPoints.length > 0) {
-      if (realPoints.length <= HEARTBEAT_SLOTS) {
-        const padN = HEARTBEAT_SLOTS - realPoints.length
-        return {
-          beats: [...Array(padN).fill(null), ...realPoints.map(p => p.latency_ms)],
-          labels: [...Array(padN).fill(''), ...realPoints.map(p => p.time ? fmtTime(p.time) : '')],
-        }
-      }
-      const step = realPoints.length / HEARTBEAT_SLOTS
-      const beats: (number | null)[] = []
-      const labels: string[] = []
-      for (let i = 0; i < HEARTBEAT_SLOTS; i++) {
-        const idx = Math.min(Math.floor(i * step), realPoints.length - 1)
-        beats.push(realPoints[idx].latency_ms)
-        labels.push(realPoints[idx].time ? fmtTime(realPoints[idx].time!) : '')
-      }
-      return { beats, labels }
+      return normalizeBeats(
+        realPoints.map(p => p.latency_ms),
+        realPoints.map(p => p.time ? fmtTime(p.time) : ''),
+      )
     }
     return {
-      beats: Array(HEARTBEAT_SLOTS).fill(null) as (number | null)[],
+      beats: [] as (number | null)[],
       labels: [] as string[],
     }
   }, [realPoints, upstream.avg_latency_ms, upstream.success_rate])
@@ -83,27 +90,40 @@ function useBeats(upstream: UpstreamItem, enabled = true): { beats: (number | nu
 export function HeartbeatBar({ upstream, externalBeats, labels }: { upstream: UpstreamItem; externalBeats?: (number | null)[]; labels?: string[] }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const hook = useBeats(upstream, !externalBeats)
-  const beats = externalBeats ?? hook.beats
-  const resolvedLabels = labels ?? hook.labels
+  const normalized = useMemo(
+    () => externalBeats ? normalizeBeats(externalBeats, labels) : hook,
+    [externalBeats, labels, hook],
+  )
+  const beats = normalized.beats
+  const resolvedLabels = normalized.labels
+  const emptySlots = Math.max(0, HEARTBEAT_LIMIT - beats.length)
+  const displayBeats = [...Array(emptySlots).fill(null), ...beats]
+  const displayLabels = [...Array(emptySlots).fill(''), ...resolvedLabels]
+  const tooltipLeft = hoveredIdx === null
+    ? '0%'
+    : hoveredIdx * (BEAT_WIDTH + BEAT_GAP) + (BEAT_WIDTH / 2)
 
   return (
-    <div className="relative" style={{ height: 22 }}>
+    <div className="relative" style={{ height: 26 }} aria-label="Upstream latency history">
       <div
-        className="absolute bottom-0 left-0 right-0 flex items-end gap-[1.5px]"
+        className="absolute bottom-0 left-0 flex items-stretch"
+        style={{ gap: BEAT_GAP, height: 20 }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
-        {beats.map((lat, i) => (
+        {displayBeats.map((lat, i) => (
           <div
             key={i}
             className="cursor-pointer"
             style={{
-              height: hoveredIdx === i ? 20 : 16,
-              flex: '1 1 0%',
-              minWidth: 2,
-              borderRadius: 2,
+              width: BEAT_WIDTH,
+              flex: '0 0 auto',
+              borderRadius: 4,
               background: beatColor(lat),
-              opacity: lat === null ? 0.45 : (hoveredIdx !== null && hoveredIdx !== i ? 0.5 : 1),
-              transition: 'height 75ms, opacity 75ms',
+              opacity: beats.length === 0 || lat === null ? 0.14 : (hoveredIdx !== null && hoveredIdx !== i ? 0.42 : 1),
+              boxShadow: hoveredIdx === i
+                ? '0 0 0 1px color-mix(in oklab, var(--text) 22%, transparent) inset'
+                : 'none',
+              transition: 'opacity 90ms ease, box-shadow 90ms ease',
             }}
             onMouseEnter={() => setHoveredIdx(i)}
           />
@@ -112,9 +132,11 @@ export function HeartbeatBar({ upstream, externalBeats, labels }: { upstream: Up
       {hoveredIdx !== null && (
         <div
           className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[10px] font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: `${(hoveredIdx / beats.length) * 100}%`, transform: 'translateX(-50%)' }}
+          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: tooltipLeft, transform: 'translateX(-50%)' }}
         >
-          {resolvedLabels?.[hoveredIdx] ? `${resolvedLabels[hoveredIdx]} · ` : ''}{beatLabel(beats[hoveredIdx])}
+          {displayBeats[hoveredIdx] === null
+            ? beatLabel(null)
+            : <>{displayLabels?.[hoveredIdx] ? `${displayLabels[hoveredIdx]} · ` : ''}{beatLabel(displayBeats[hoveredIdx])}</>}
         </div>
       )}
     </div>
@@ -143,7 +165,7 @@ export function UpstreamRow({ upstream, actions }: { upstream: UpstreamItem; act
           {actions}
         </div>
       </div>
-      <HeartbeatBar upstream={upstream} />
+      <HeartbeatBar upstream={upstream} externalBeats={upstream.beats} labels={upstream.beatLabels} />
     </div>
   )
 }
@@ -153,9 +175,11 @@ export function UpstreamRow({ upstream, actions }: { upstream: UpstreamItem; act
 interface UpstreamGroupedPanelProps {
   upstreams: UpstreamItem[]
   renderActions?: (upstream: UpstreamItem) => React.ReactNode
+  variant?: 'plain' | 'cards'
+  minColumnWidth?: number
 }
 
-export function UpstreamGroupedPanel({ upstreams, renderActions }: UpstreamGroupedPanelProps) {
+export function UpstreamGroupedPanel({ upstreams, renderActions, variant = 'plain', minColumnWidth = 360 }: UpstreamGroupedPanelProps) {
   const { t } = useTranslation()
 
   const groups = useMemo(() => {
@@ -172,32 +196,49 @@ export function UpstreamGroupedPanel({ upstreams, renderActions }: UpstreamGroup
     return <p className="text-[13px] py-4" style={{ color: 'var(--text-soft)' }}>{t('monitor.noUpstreams')}</p>
   }
 
+  const isCards = variant === 'cards'
+
   return (
-    <div className="grid grid-cols-2 gap-x-10 gap-y-6">
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(auto-fit, minmax(${minColumnWidth}px, 1fr))`,
+        gap: isCards ? 12 : '24px 40px',
+      }}
+    >
       {groups.map(([adapter, items]) => (
-        <div key={adapter}>
-          <div
-            className="flex items-center gap-2 pb-2 mb-3"
-            style={{ borderBottom: '1px solid var(--border)' }}
-          >
-            <EcosystemIcon type={adapter as any} size={14} />
-            <span className="text-[11px] font-mono font-[600] uppercase tracking-[0.1em]" style={{ color: 'var(--text)' }}>
-              {adapter}
-            </span>
-            <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--text-subtle)' }}>
-              {items.filter(u => u.healthy).length}/{items.length}
-            </span>
-          </div>
-          <div className="space-y-3">
-            {items.map((u) => (
-              <UpstreamRow
-                key={u.name}
-                upstream={u}
-                actions={renderActions?.(u)}
-              />
-            ))}
-          </div>
-        </div>
+        (() => {
+          const checkCount = Math.max(0, ...items.map(u => u.beats?.length ?? 0))
+          return (
+            <div
+              key={adapter}
+              className={isCards ? 'card' : undefined}
+              style={isCards ? { padding: '12px 14px' } : undefined}
+            >
+              <div
+                className="flex items-center gap-2 pb-2 mb-3"
+                style={{ borderBottom: '1px solid var(--border)' }}
+              >
+                <EcosystemIcon type={adapter as any} size={14} useColor />
+                <span className="text-[11px] font-mono font-[600] uppercase tracking-[0.1em]" style={{ color: 'var(--text)' }}>
+                  {adapter}
+                </span>
+                <span className="text-[10px] font-mono tabular-nums ml-auto" style={{ color: 'var(--text-subtle)' }}>
+                  {t('monitor.historySummary', { count: checkCount })} · {items.filter(u => u.healthy).length}/{items.length}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {items.map((u) => (
+                  <UpstreamRow
+                    key={u.name}
+                    upstream={u}
+                    actions={renderActions?.(u)}
+                  />
+                ))}
+              </div>
+            </div>
+          )
+        })()
       ))}
     </div>
   )

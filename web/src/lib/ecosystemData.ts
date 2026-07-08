@@ -707,6 +707,8 @@ export const LANGUAGES: Language[] = [
         quick:      { lang: 'sh', body: 'apk add --repository {URL}/alpine/v3.19/main curl' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'apk add --repository {URL}/alpine/v3.19/main curl' },
+          { label: 'quickstart.method.dockerfile', lang: 'dockerfile',
+            body: 'FROM alpine:3.19\n\nARG DEPSILO_URL={URL}\nRUN printf "%s\\n" \\\n  "${DEPSILO_URL}/alpine/v3.19/main" \\\n  "${DEPSILO_URL}/alpine/v3.19/community" \\\n  > /etc/apk/repositories \\\n  && apk add --no-cache curl ca-certificates' },
         ],
         persistent: { file: '/etc/apk/repositories', lang: 'conf',
           body: '{URL}/alpine/v3.19/main\n{URL}/alpine/v3.19/community' },
@@ -718,6 +720,7 @@ export const LANGUAGES: Language[] = [
         tutorial: [
           'Replace the lines in /etc/apk/repositories with the Depsilo URLs above (keep main + community).',
           'Match the Alpine version in the path (v3.19, v3.20, edge…) to your release — check /etc/alpine-release.',
+          'In Docker builds, override DEPSILO_URL when needed: localhost inside the build container is not your host machine.',
           'APKINDEX.tar.gz is signed; Depsilo passes it through untouched so signature verification still works.',
           'Run apk update to refresh the index, then apk add <pkg> to install through the cache.',
         ],

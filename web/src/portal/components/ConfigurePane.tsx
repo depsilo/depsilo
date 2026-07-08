@@ -30,7 +30,7 @@ function ManagerTabs({
   const { t } = useTranslation()
   const isAI = active === 'ai'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       {/* AI option: always first */}
       <button
         type="button"
@@ -38,10 +38,11 @@ function ManagerTabs({
         style={{
           display: 'inline-flex',
           flexDirection: 'column',
-          padding: '6px 10px',
+          minHeight: 52,
+          padding: '9px 14px',
           background: isAI ? 'var(--brand-soft)' : 'transparent',
           border: `0.5px solid ${isAI ? 'var(--brand-border)' : 'var(--border)'}`,
-          borderRadius: 6,
+          borderRadius: 9,
           textAlign: 'left',
           cursor: 'pointer',
           transition: 'background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
@@ -65,8 +66,8 @@ function ManagerTabs({
           </span>
           <span
             style={{
-              fontSize: 12,
-              fontWeight: 500,
+              fontSize: 14,
+              fontWeight: 600,
               color: isAI ? 'var(--brand)' : 'var(--text-muted)',
               whiteSpace: 'nowrap',
             }}
@@ -74,7 +75,7 @@ function ManagerTabs({
             {t('quickstart.aiTab')}
           </span>
         </span>
-        <span style={{ fontSize: 10, color: isAI ? 'var(--brand)' : 'var(--text-subtle)', whiteSpace: 'nowrap', opacity: 0.8 }}>
+        <span style={{ fontSize: 11.5, color: isAI ? 'var(--brand)' : 'var(--text-subtle)', whiteSpace: 'nowrap', opacity: 0.82 }}>
           {t('quickstart.aiTabHint')}
         </span>
       </button>
@@ -89,10 +90,12 @@ function ManagerTabs({
             style={{
               display: 'inline-flex',
               flexDirection: 'column',
-              padding: '6px 10px',
+              minHeight: 52,
+              minWidth: 132,
+              padding: '9px 14px',
               background: isActive ? 'var(--bg-card)' : 'transparent',
               border: `0.5px solid ${isActive ? 'var(--border-strong)' : 'var(--border)'}`,
-              borderRadius: 6,
+              borderRadius: 9,
               textAlign: 'left',
               cursor: 'pointer',
               transition: 'all 120ms ease',
@@ -100,15 +103,15 @@ function ManagerTabs({
           >
             <span
               style={{
-                fontSize: 12,
-                fontWeight: 500,
+                fontSize: 14,
+                fontWeight: isActive ? 600 : 460,
                 color: isActive ? 'var(--text)' : 'var(--text-muted)',
                 whiteSpace: 'nowrap',
               }}
             >
               {m.name}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 11.5, color: 'var(--text-subtle)', whiteSpace: 'nowrap', marginTop: 1 }}>
               {m.hint}
             </span>
           </button>
@@ -216,8 +219,8 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
           display: 'flex',
           alignItems: 'center',
           borderBottom: '0.5px solid var(--border)',
-          padding: '0 14px',
-          height: 44,
+          padding: '0 22px',
+          height: 66,
           flexShrink: 0,
           gap: 12,
         }}
@@ -225,9 +228,9 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' }}>
           <span
             style={{
-              width: 22,
-              height: 22,
-              borderRadius: 5,
+              width: 32,
+              height: 32,
+              borderRadius: 8,
               background: 'var(--brand-soft)',
               border: '0.5px solid var(--brand-border)',
               display: 'inline-flex',
@@ -235,12 +238,12 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
               justifyContent: 'center',
             }}
           >
-            <EcosystemIcon type={lang.iconAdapter as any} size={14} useColor={true} />
+            <EcosystemIcon type={lang.iconAdapter as any} size={18} useColor={true} />
           </span>
-          <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 25, fontWeight: 680, letterSpacing: '-0.035em' }}>
             {t('quickstart.configureTitle', { name: lang.name })}
           </span>
-          <span style={{ fontSize: 10, color: 'var(--text-subtle)', marginLeft: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-subtle)', marginLeft: 4 }}>
             {t('quickstart.managerCount', { count: lang.managers.length })}
           </span>
         </div>
@@ -250,10 +253,10 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
       {/* Body */}
       <div
         style={{
-          padding: 16,
+          padding: 22,
           display: 'flex',
           flexDirection: 'column',
-          gap: 16,
+          gap: 20,
         }}
       >
         <ManagerTabs managers={lang.managers} active={mgrId} onChange={setMgrId} />

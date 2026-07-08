@@ -562,6 +562,7 @@ const zh = {
       orSaveToConfig: '配置文件',
       method: {
         cmdline: '命令行方式',
+        dockerfile: 'Dockerfile',
         envvar: '环境变量方式',
         inline: '内联方式',
       },
@@ -618,7 +619,6 @@ const zh = {
     // Monitor
     monitor: {
       title: '实时监控',
-      subtitle: '缓存性能与上游镜像源健康状况的实时视图。',
       hitRateToday: '缓存命中率 · 今日',
       requests: '总请求数',
       bandwidthSaved: '节省带宽',
@@ -628,9 +628,7 @@ const zh = {
       healthy: '健康',
       degraded: '性能下降',
       failed: '故障',
-      emptyTitle: '还没有请求经过 Depsilo',
-      emptyDesc: '配置任一客户端走 Depsilo，2 秒内即可在这里看到流量。',
-      emptyCta: '回到快速开始',
+      historySummary: '近 24 小时 · {{count}} 次探测',
     },
 
     // Setup Wizard
