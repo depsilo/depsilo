@@ -25,32 +25,7 @@ func Load() (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
-	// Defaults
-	v.SetDefault("server.host", "0.0.0.0")
-	v.SetDefault("server.port", 23333)
-	v.SetDefault("database.driver", "sqlite")
-	v.SetDefault("database.dsn", "./data/depsilo.db")
-	v.SetDefault("storage.type", "local")
-	v.SetDefault("storage.path", "./data/cache")
-	v.SetDefault("cache.max_size_gb", 20)
-	v.SetDefault("cache.ttl_index", "5m")
-	v.SetDefault("cache.ttl_blob", "72h")
-	v.SetDefault("cache.lru_threshold", 90)
-	v.SetDefault("auth.enabled", true)
-	v.SetDefault("auth.jwt_secret", "change-me-in-production")
-	v.SetDefault("auth.token_ttl", "168h")
-	// Access log rollup. retention_days bounds the raw access_logs table
-	// at 7 days of detail (the admin "recent logs" page); rollup retention
-	// keeps a year of aggregated dashboards. Operators who upgrade and
-	// want to keep the historical raw rows can override both to 0 in
-	// config.toml to disable sweeping entirely. Rollup writes themselves
-	// are on by default — flip to false to fall back to raw-only writes.
-	v.SetDefault("access_log.retention_days", 7)
-	v.SetDefault("access_log.batch_size", 100)
-	v.SetDefault("access_log.batch_interval", "5s")
-	v.SetDefault("access_log.rollup_enabled", true)
-	v.SetDefault("access_log.rollup_retention_days", 365)
-	v.SetDefault("access_log.backfill_on_start", true)
+	setDefaults(v)
 
 	// Config file path resolution
 	configPath := os.Getenv("DEPSILO_CONFIG")
@@ -142,4 +117,44 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func setDefaults(v *viper.Viper) {
+	v.SetDefault("server.host", "0.0.0.0")
+	v.SetDefault("server.port", 23333)
+	v.SetDefault("database.driver", "sqlite")
+	v.SetDefault("database.dsn", "./data/depsilo.db")
+	v.SetDefault("storage.type", "local")
+	v.SetDefault("storage.path", "./data/cache")
+	v.SetDefault("cache.max_size_gb", 20)
+	v.SetDefault("cache.ttl_index", "5m")
+	v.SetDefault("cache.ttl_blob", "72h")
+	v.SetDefault("cache.lru_threshold", 90)
+	v.SetDefault("auth.enabled", true)
+	v.SetDefault("auth.jwt_secret", "change-me-in-production")
+	v.SetDefault("auth.token_ttl", "168h")
+	// Access log rollup. retention_days bounds the raw access_logs table
+	// at 7 days of detail (the admin "recent logs" page); rollup retention
+	// keeps a year of aggregated dashboards. Operators who upgrade and
+	// want to keep the historical raw rows can override both to 0 in
+	// config.toml to disable sweeping entirely. Rollup writes themselves
+	// are on by default — flip to false to fall back to raw-only writes.
+	v.SetDefault("access_log.retention_days", 7)
+	v.SetDefault("access_log.batch_size", 100)
+	v.SetDefault("access_log.batch_interval", "5s")
+	v.SetDefault("access_log.rollup_enabled", true)
+	v.SetDefault("access_log.rollup_retention_days", 365)
+	v.SetDefault("access_log.backfill_on_start", true)
+	v.SetDefault("alpine.upstreams", []map[string]any{
+		{
+			"name":     "tuna",
+			"url":      "https://mirrors.tuna.tsinghua.edu.cn/alpine",
+			"priority": 1,
+		},
+		{
+			"name":     "official",
+			"url":      "https://dl-cdn.alpinelinux.org/alpine",
+			"priority": 2,
+		},
+	})
 }

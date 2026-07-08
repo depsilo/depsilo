@@ -89,7 +89,7 @@ func WriteConfig(path string, req SetupRequest) error {
 		"pypi": "pypi", "apt": "apt", "npm": "npm", "go": "go",
 		"cargo": "cargo", "maven": "maven", "rubygems": "rubygems",
 		"composer": "composer", "nuget": "nuget", "conda": "conda",
-		"cran": "cran", "helm": "helm",
+		"cran": "cran", "alpine": "alpine", "helm": "helm",
 	}
 
 	for eco, setup := range req.Ecosystems {
@@ -107,6 +107,8 @@ func WriteConfig(path string, req SetupRequest) error {
 			b.WriteString(fmt.Sprintf("priority = %d\n", u.Priority))
 			if u.Proxy != "" {
 				b.WriteString(fmt.Sprintf("proxy = %q\n", u.Proxy))
+			} else {
+				b.WriteString("# proxy = \"http://127.0.0.1:7890\"\n")
 			}
 			b.WriteString("\n")
 		}
