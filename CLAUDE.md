@@ -6,13 +6,14 @@
 
 ## 一、项目概述
 
-**Depsilo** 是一个轻量级依赖包代理缓存网关，用 Go 编写，单二进制部署。
+**Depsilo** 是一个**供应链执行层（Supply-Chain Enforcement Layer）**：站在包安装请求路径上的自托管代理，依据供应链策略实时**拒绝服务**（而非扫描后报告），同时提供代理缓存加速。用 Go 编写，单二进制部署。
+
+> 2026-06-30 战略转向（ADR-0004）：缓存是"楔子"（让代理被装进去的理由），执行层是核心价值。战略权威文档是 `docs/DIRECTION.md` + `docs/adr/0003`、`docs/adr/0004`，本文件侧重实现规范。
 
 ### 核心价值
-- 支持 12 种主流包管理生态：pip、apt、npm、Go Modules、Cargo、Maven、RubyGems、Composer、NuGet、Conda、CRAN、Helm
-- 局域网内秒级响应，所有生态共享同一套缓存引擎、存储后端和 Web UI
-- 多上游源支持，自动健康检查与延迟优选
-- 每个上游源可单独配置 HTTP 代理
+- **供应链强制执行**：最小发布年龄隔离（quarantine，HTTP 451 + 审批流 + 审计事件，见 4.21）、包 allow/deny 规则、Webhook 通知（Slack/钉钉/企微/飞书）——"组织级强制"是与客户端个人配置（pnpm minimumReleaseAge 等）的核心差异
+- 支持 15 个适配器（14 个生态 + Docker Registry），所有生态共享同一套缓存引擎、存储后端和 Web UI
+- 多上游源支持，自动健康检查；每个上游源可单独配置 HTTP 代理
 - 统一 Web 入口：用户门户（无需登录）+ 管理后台（需登录）
 - 新增生态通过 Adapter 插件实现，不影响核心逻辑
 
@@ -27,15 +28,17 @@
 | 5   | Cargo      | `/crates/`   | Rust                        | config.json 重写   |
 | 6   | Maven      | `/maven/`    | Java / Kotlin / Gradle      | Passthrough        |
 | 7   | RubyGems   | `/rubygems/` | Ruby (bundler / gem)        | Passthrough        |
-| 8   | Composer   | `/composer/` | PHP (Packagist)             | metadata-url 重写  |
+| 8   | Composer   | `/composer/` | PHP (Packagist)             | metadata-url + dist mirrors 重写 |
 | 9   | NuGet      | `/nuget/`    | .NET (dotnet)               | service index 重写 |
 | 10  | Conda      | `/conda/`    | Python 数据科学             | Passthrough        |
 | 11  | CRAN       | `/cran/`     | R                           | Passthrough        |
 | 12  | Helm       | `/helm/`     | Kubernetes Charts           | Passthrough        |
 | 13  | Alpine     | `/alpine/`   | Alpine Linux (apk)          | Passthrough        |
+| 14  | Docker     | `/v2/`       | 容器镜像（Registry V2）     | Passthrough（token 代理） |
+| 15  | HuggingFace| `/huggingface/` | AI 模型/数据集           | Passthrough        |
 
-### 竞品定位
-比 Nexus Repository 更轻量，10 分钟内完成部署，无复杂企业概念。
+### 定位
+与通用制品库（Nexus / Artifactory / Artifact Keeper）**共存而非竞争**：可部署在既有 registry 前面做隔离墙（chainable proxy）。只做"唯有请求路径上的代理才能做"的事；生态数量刻意封顶（不追 45+），详见 ADR-0004。
 
 ---
 
@@ -54,21 +57,26 @@
 | 限流       | `golang.org/x/time/rate`              | 令牌桶，每上游独立限流        |
 | 熔断       | `github.com/sony/gobreaker`           | 上游请求熔断                  |
 | Metrics    | `github.com/prometheus/client_golang` | 暴露 `/metrics`               |
-| 前端       | React 18 + TypeScript + Vite          | 见第五节                      |
-| 前端组件库 | **shadcn/ui** + Tailwind CSS          | 见第五节                      |
+| 前端       | React 19 + TypeScript + Vite          | 见第五节                      |
+| 前端样式   | Tailwind CSS v4 + 自研 "Instrument" 设计系统 | 见第五节（已不用 shadcn/ui） |
 | 前端打包   | Go `embed`                            | 编译进二进制                  |
 
 ---
 
 ## 三、项目目录结构
 
-严格按照以下结构创建文件，不得随意新增顶层目录：
+严格按照以下结构创建文件，不得随意新增顶层目录。
+
+> 下面的树是 2026-05 的核心骨架，此后新增了这些包（放置新代码时优先归入既有包）：
+> `internal/`：`quarantine/`（供应链隔离，见 4.21）、`accesslog/`（rollup 聚合）、`audit/`、`rules/`、`security/`（OSV）、`notify/`（Webhook）、`license/` + `trial/` + `entitlement/`（Pro 门控）、`sbom/`、`cli/`（13 个命令）、`server/`（装配）、`tray/`、`prompts/`、`version/`；
+> `internal/adapter/`：`alpine/`、`docker/`、`huggingface/`、`packagekey/`（包名/版本解析）；
+> `cmd/`：`depsilo/`（CLI + server 主入口）、`depsilo-tray/`（托盘）；`testground/docker-<eco>/`（E2E）。
 
 ```
 depsilo/
 ├── cmd/
 │   └── server/
-│       └── main.go                  # 入口：加载配置、初始化、启动
+│       └── main.go                  # 旧入口（主入口已迁移至 cmd/depsilo）
 ├── internal/
 │   ├── config/
 │   │   ├── config.go                # 配置结构体定义
@@ -371,7 +379,10 @@ type Selector interface {
 ### 4.11 Composer 适配器要点（internal/adapter/composer/）
 
 - **必须重写 `packages.json` 中的 `metadata-url` 字段**指向本服务
-- 支持 Packagist V2（p2）协议
+- **必须在 `packages.json` 中注入 `mirrors` dist-url 模板**（`/composer/dist/%package%/%version%/%reference%.%type%`，`preferred: true`）——否则 dist 下载直连 GitHub 绕过代理，缓存和 quarantine 都失效；composer 在 mirror 失败时自动回退原始 URL，注入不降低可用性
+- **执行力边界（重要）**：composer 客户端把 mirror 的 451 也当作"mirror 失败"回退原始 URL 直连下载——与 npm/pypi/cargo（重写后客户端无原始 URL 可回退）不同，composer 的 Gate 只能提供缓存 + 审计 + best-effort 拦截；硬执行需要网络出口管控（proxy-only）或 p2 元数据过滤（产品决策，见 11.4）
+- dist 请求处理（`dist.go` + `handler.go handleDist`）：解析路径 →（经自身缓存）读 p2 元数据 → minified 展开（per-key `"__unset"` 哨兵）→ 匹配要求 `version_normalized` **且** `dist.reference` 一致（防元数据漂移后串 commit / 缓存污染；reference 单独匹配可兜底）→ ext 必须等于 `dist.type`（防任选 cache key 放大）→ 用 pretty version 过 QuarantineGate → `Upstream.FetchURL` 绝对地址回源（不计入上游健康统计）
+- 支持 Packagist V2（p2）协议；p2 元数据 passthrough
 - 元数据：短 TTL；dist 下载文件：长 TTL
 - 客户端配置：`composer config -g repo.packagist composer http://HOST:PORT/composer/`
 
@@ -483,6 +494,8 @@ type APIToken struct {
 ```
 
 ### 4.17 API 路由总表（internal/api/router.go）
+
+> 本表为早期骨架，此后新增了大量路由（`/api/v1/discover`、`/mcp`、`/events/stream`、`/setup/*`、admin 下的 bandwidth / audit-logs / rules / security / quarantine / webhooks / license / projects 等）。**以 `internal/api/router.go` 为准**；quarantine 管理端点见 4.21。
 
 ```
 # 公开路由（无需认证）
@@ -633,6 +646,26 @@ var webFS embed.FS
 // - / 和 /admin → 返回 index.html（SPA fallback）
 ```
 
+### 4.21 供应链隔离接入规范（internal/quarantine/ + internal/adapter/quarantine.go）
+
+**每个新增/修改的 adapter 必须在制品下载 handler 顶部接入 QuarantineGate**（这是新 adapter 的强制契约，composer 曾因遗漏此步导致隔离对整个生态失效）：
+
+```go
+// 1. 从请求路径/文件名解析出 (pkg, version)（解析函数放 internal/adapter/packagekey/）
+if pkg, version := packagekey.ParseXxxPath(path); pkg != "" && version != "" {
+    // 2. Gate：true = 已写 451 响应，handler 必须立即 return
+    if blocked := adapter.QuarantineGate(c, "<ecosystem>", pkg, version); blocked {
+        return
+    }
+}
+```
+
+- 决策链（`internal/quarantine/checker.go`）：阈值 0 放行 → allow 规则放行 → 管理员批准放行 → 三级查发布时间（内存 → DB → 上游 registry API）→ 年龄不足则 451 `QUARANTINED` + 审计事件 + Webhook
+- 每个生态需在 `internal/quarantine/resolvers/` 提供发布时间 resolver（真 API 或 Last-Modified 近似）
+- 默认阈值（`policy.go DefaultThresholds`）：npm 7d，多数生态 3d，go/apt 0（免检）；**空配置也生效**，fail-closed 默认开
+- 元数据请求不 gate，只 gate 制品下载；版本字符串必须与 resolver 在上游元数据中能匹配到的形式一致（如 composer 用 pretty version 而非 normalized）
+- 集成测试注意：`tests/integration/main_test.go` 已把所有生态阈值归零（resolver 会查真实 registry，mock 包不存在会被 fail-closed 拦截）
+
 ---
 
 ## 五、前端实现规范
@@ -640,39 +673,45 @@ var webFS embed.FS
 ### 5.1 技术栈
 
 ```
-React 18 + TypeScript
+React 19 + TypeScript
 Vite（构建工具）
-shadcn/ui（组件库，按需安装）
-Tailwind CSS（样式）
-React Router v6（路由）
+Tailwind CSS v4（@theme token；组件大量使用内联 style + CSS 变量）
+自研 "Instrument" 设计系统（src/index.css 角色化 token；暗色为默认主题）
+React Router v7（路由，viewTransition）
 TanStack Query v5（数据请求 + 缓存）
 axios（HTTP 客户端）
-lucide-react（图标）
-recharts（图表，shadcn chart 组件依赖）
+i18next + react-i18next（i18n，zh 默认/回退）
+Material Symbols（图标）+ 自托管 @fontsource 字体（Inter Variable / Inter Tight / JetBrains Mono / Noto Sans SC）
+recharts（图表）
 ```
 
-### 5.2 需要安装的 shadcn/ui 组件
+### 5.2 基础组件
 
-```bash
-npx shadcn@latest add button card table input select badge
-npx shadcn@latest add dialog dropdown-menu tabs toast
-npx shadcn@latest add sidebar chart
-```
+**不使用 shadcn/ui**（历史文档遗留，已被自研组件替代）。基础组件在 `web/src/components/`（Button / Badge / Modal / DataTable / Tabs / Sparkline / StatusDot / EcosystemIcon / UpstreamCard 等 20 个），新 UI 优先复用这些组件，风格与 `src/index.css` 的 Instrument token 保持一致。
 
-### 5.3 路由结构（src/App.tsx）
+### 5.3 路由结构（src/App.tsx，2026-07 实况）
 
 ```
+（首次启动 needs_setup 时整站渲染 src/setup/SetupWizard）
+
 /                    → PortalApp（用户门户，无需登录）
-  /                  → QuickStart（默认页，快速开始）
-  /status            → ServiceStatus（服务状态）
+  /                  → QuickStart（生态目录 + 配置面板 + AI 集成 CTA）
+  /monitor           → Monitor（命中率/流量 KPI + 上游健康面板）
 
-/admin               → AdminApp（管理后台）
-  /admin/login       → Login（登录页，未认证时重定向到此）
+/admin               → AdminApp（管理后台，RequireAuth）
+  /admin/login       → Login
   /admin             → Dashboard（默认页）
+  /admin/bandwidth   → BandwidthReport
+  /admin/logs        → AccessLogs
+  /admin/audit       → AuditLogs
+  /admin/quarantine  → Quarantine（隔离事件 + 审批，开源功能）
   /admin/cache       → CacheManage
   /admin/upstreams   → Upstreams
-  /admin/logs        → AccessLogs
+  /admin/rules       → Rules
+  /admin/security    → Security
+  /admin/projects    → Projects（唯一 Pro 门控页）
   /admin/users       → Users
+  /admin/license     → License
   /admin/settings    → Settings
 ```
 
@@ -999,6 +1038,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 | 在前端代码中硬编码 `localhost:8080`                          | 用 `window.location.origin`                             | 部署地址不是 localhost              |
 | 忽略 Go error（`_ = xxx`）                                   | **所有 error 必须处理或传递**                           | 静默吞错导致难以排查的线上问题      |
 | 新增文件放在错误的目录                                       | 严格按照第三节目录结构                                  | 项目约定不可随意创建顶层目录        |
+| 新增/改造 adapter 忘接 QuarantineGate                        | 制品下载 handler 顶部必须过 Gate（见 4.21）             | 漏接 = 该生态供应链隔离整体失效     |
 
 ---
 
@@ -1063,18 +1103,19 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 ---
 
-## 十一、项目现状快照（2026-05-18 更新）
+## 十一、项目现状快照（2026-07-08 更新）
 
-> 本节记录项目深度审查的结论，供后续开发决策参考。上次更新：2026-05-18。
+> 本节记录项目深度审查的结论，供后续开发决策参考。上次更新：2026-07-08（战略与路线图以 `docs/DIRECTION.md` + ADR-0004 为权威）。
 
 ### 11.1 规模统计
 
-- ~13,500 行 Go 代码，~100 个 Go 文件
-- 前端 50 个 TSX/TS 文件，~7,000+ 行
-- 22 个 Go 测试文件（单元 7 + 集成 13 + mock 1 + main_test 1）
-- 13 个生态适配器已实现（含 Docker Registry，已验证 `docker pull` 可用）
-- **每生态独立 Docker E2E**：`testground/docker-<eco>/Dockerfile` × 13，`make test-docker-<eco>` 单独跑，`make test-docker-all` 12 生态串跑（Docker Registry 因需 dind 单独 opt-in：`make test-docker-docker`）
-- 10+ 个设计 spec 文档 + 1 份 2026-05-18 代码与功能分层审查报告（`docs/reviews/`）+ 1 份术语表（`CONTEXT.md`）+ ADR-0001
+- ~28,500 行 Go 代码（含测试）；48 个 Go 测试文件
+- 前端 68 个 TSX/TS 文件，~12,800 行；i18n en/zh 各 621 键（同步）
+- **15 个适配器**已实现（14 生态 + Docker Registry + Hugging Face）
+- 23 个 GORM 模型（models.go 20 + quarantine.go 3）；CLI 13 个命令（serve/start/stop/status/doctor/init-agent/prompt/version/activate/warmup/flush/backup/restore）
+- **quarantine 子系统**（`internal/quarantine/`，~3,400 行含测试）：最小发布年龄隔离 + 审批流 + 审计事件 + Webhook，2026-07 上线（T1/1–T1/7 提交系列）
+- **每生态独立 Docker E2E**：`testground/docker-<eco>/Dockerfile`，`make test-docker-<eco>` 单独跑，`make test-docker-all` 串跑（Docker Registry 因需 dind 单独 opt-in：`make test-docker-docker`）
+- 设计 spec 文档（`docs/specs/`）+ 审查报告（`docs/reviews/`）+ 术语表（`CONTEXT.md`）+ ADR-0001~0004 + 战略文档 `docs/DIRECTION.md`
 
 ### 11.2 架构优势
 
@@ -1107,22 +1148,23 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 | 问题                              | 严重度 | 说明                                                                  |
 | --------------------------------- | ------ | --------------------------------------------------------------------- |
-| i18n key 无编译时校验             | 低     | en.ts 与 zh.ts 目前同步（478 key），但缺少自动检查机制                |
+| composer 451 可被客户端回退绕过   | 高     | composer 把 mirror 的 451 当"mirror 失败"回退原始 URL 直连；审计事件仍记 blocked（信号与实际不符）。硬执行需 p2 元数据过滤（需处理事件语义/审批联动/minified 重发，建议出 ADR）或部署层出口管控 |
+| packagist dist 走 GitHub API 限流 | 中     | 上游为 repo.packagist.org 时 dist.url 指向 api.github.com（未认证 60 req/h/IP），冷缓存 CI 突发会 403；默认 aliyun 上游无此问题（dist 自托管） |
+| Selector 读 `u.Healthy` 未加锁    | 中     | `selector.go` 无锁读与 Report/health check 加锁写并存，存在数据竞争   |
+| apt handler 硬编码剥 `/apt` 前缀  | 中     | `/p/:slug/apt` 项目路由下疑似会算错上游路径（未验证）                 |
+| license 任意非空 key 即激活 Pro   | 中     | Lemon Squeezy 校验已随 Enterprise 合同制转向移除，无远端验证          |
+| i18n key 无编译时校验             | 低     | en.ts 与 zh.ts 目前同步（621 key），但缺少自动检查机制                |
+| quarantine Gate 层无 HTTP 级测试  | 低     | checker/resolver 单测充分，composer dist 有集成测试，其余 adapter 的 Gate 接线无 HTTP 级断言 |
+| 5 个生态发布时间用 Last-Modified 近似 | 低  | maven/helm/conda/alpine/docker 无发布时间 API，用制品 Last-Modified 兜底 |
 | Docker Registry E2E 需手动 opt-in | 低     | `test-docker-docker` 需 dind/特权，默认不进 all       |
 | Docker token 缓存非持久化         | 低     | 重启后丢失，影响首次请求延迟（~1s），非功能性问题                     |
-| Security.tsx / Monitor.tsx 偏大   | 低     | 单文件 704 / 505 行，4 合 1 功能，可按 tab 拆但 ROI 低                |
-| 前端 Pro 路由无侧栏锁标识         | 低     | 免费用户点 Audit/Rules/Security/Projects 才看到 402，应该侧栏显示锁   |
+| Security.tsx / Monitor.tsx 偏大   | 低     | 单文件较大、多合一功能，可按 tab 拆但 ROI 低                          |
 
-### 11.5 竞品对比定位
+已于 2026-07-08 修复：composer dist 绕过代理且未接 QuarantineGate（补 mirrors 注入 + dist handler + Gate + E2E 验证）；集成测试套件被 quarantine fail-closed 默认策略整体打挂（测试配置阈值归零）；`TestRules_CommunityBypass` 断言 6-28 定价重置前的旧行为（改为断言社区版强制执行规则）。同日对抗复审后加固：dist 匹配要求 reference 一致（防元数据漂移串 commit/缓存污染）、ext 必须等于 dist.type（防任选 cache key）、minified `__unset` 改为 per-key 哨兵格式（原实现为不存在的数组格式）、composer resolver 支持 `~dev.json`（否则 fail-closed 误拦全部 dev dist）、`FetchURL` 不再把第三方主机延迟记入上游健康统计。
 
-| &nbsp;     | Nexus / Artifactory | Verdaccio    | **Depsilo**           |
-| ---------- | ------------------- | ------------ | --------------------- |
-| 部署复杂度 | 高（JVM）           | 低（仅 npm） | **极低（单二进制）**  |
-| 生态覆盖   | 广                  | 仅 npm       | **13 种**             |
-| 资源占用   | 重（GB 级内存）     | 轻           | **轻（Go + SQLite）** |
-| 学习成本   | 高                  | 低           | **低**                |
+### 11.5 定位（2026-06-30 ADR-0004 之后）
 
-核心 slogan：**"10 分钟部署，13 种生态"**
+不再按"更轻的 Nexus"做竞品对比。定位是**供应链执行层**：与 Artifact Keeper / Nexus 共存（README 甚至主动推荐它们做通用 registry），Depsilo 作为前置隔离墙串联部署（chainable proxy）。差异化 = 只做"唯有 serve-path 代理才能做"的事：最小发布年龄隔离（已上线）、恶意包封锁、CRA SBOM、freeze 快照、篡改检测；卖点是"组织级强制 + 审计"，而非生态数量或速度。GTM 姿态："honesty as positioning"（详见 `docs/DIRECTION.md`、`docs/research/2026-06-30-competitive-landscape.md`）。
 
 ### 11.6 路线图优先级
 
@@ -1143,9 +1185,9 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 **P2（可以做）：**
 
-1. 包安全扫描完整流程（OSV 已集成，需跑通展示）
-2. 访问控制 allow/deny 规则
-3. Webhook 通知（缓存未命中、上游异常 → Slack/DingTalk）
+1. ~~包安全扫描完整流程~~ ✅ 已完成（OSV 集成 + Security 页 + 按生态策略）
+2. ~~访问控制 allow/deny 规则~~ ✅ 已完成（`internal/rules/`，2026-06-28 起开源）
+3. ~~Webhook 通知~~ ✅ 已完成（`internal/notify/`，Slack/钉钉/企微/飞书 + quarantine 阻断事件）
 4. macOS app 代码签名 + notarization（v1 是 unsigned，Gatekeeper 会拦）
 5. Linux `.deb` / `.rpm` / AppImage 正式包（`make install-linux` 已覆盖手动安装；正式 release 时用 `nfpm` 一键打包）
 6. Windows 系统托盘 installer（systray 库已跨平台支持 Windows，只缺 `.msi` / `.exe` 打包脚本）
@@ -1153,21 +1195,21 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 **建议推迟：**
 
 - Wails 桌面版：投入产出比低，维护成本高（已被 menu-bar app 路线覆盖，更轻量）
-- License Key 系统：除非确定走商业化 Pro 版
+- ~~License Key 系统~~ 已落地简化版（任意非空 key 激活 + 14 天试用，无远端校验）
 
-### 11.7 商业化方向
+> **2026-06-30 起，前瞻路线图以 `docs/DIRECTION.md` 的 T1/T2 build order 为准**（恶意包 blocklist、CRA SBOM、freeze 快照、篡改检测等执行原语）；本节仅保留历史勾选记录。
 
-**推荐 Open Core 模式：**
+### 11.7 商业化现状（2026-06-28 定价重置后）
 
-| 开源版（免费）     | Pro 版（付费）      |
-| ------------------ | ------------------- |
-| 所有 13 种生态代理 | 审计日志            |
-| 本地存储 + SQLite  | SBOM 导出           |
-| 单用户管理         | 多项目/多团队       |
-| 基础统计           | 高级报表 + 趋势分析 |
-|                    | LDAP/OIDC 集成      |
-|                    | 包安全扫描          |
-|                    | 优先技术支持        |
+**Open Core，但 Pro 面已大幅收窄**——审计日志、包规则（allow/deny）、安全扫描、供应链隔离全部下放开源（治理原语必须开源是 ADR-0003/0004 的原则）：
+
+| 开源版（免费）                               | Pro 版（付费，Enterprise 合同制）  |
+| -------------------------------------------- | ---------------------------------- |
+| 全部 15 个适配器代理 + 缓存                  | 多项目工作区（Projects）           |
+| 审计日志 / 包规则 / 安全扫描 / 隔离+审批流   | 每项目 SBOM 导出                   |
+| Webhook 通知、带宽报表、CLI、托盘应用        | 优先技术支持                       |
+
+实现：`internal/license/`（任意非空 key 即激活，无远端校验）+ `internal/trial/`（14 天本地试用）+ `internal/entitlement/`（`RequirePro` → 402）。
 
 **目标用户：**
 
