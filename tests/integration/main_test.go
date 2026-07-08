@@ -87,6 +87,30 @@ lru_threshold = 90
 [auth]
 enabled = false
 
+# Quarantine ships enabled with per-ecosystem default thresholds, and
+# its publish-time resolvers query the REAL registries. The fake
+# packages served by the mock don't exist there, so the fail-closed
+# default would 451 every artifact download (and make results depend
+# on live registry data). Zero every threshold so the integration
+# suite exercises the proxy, not the quarantine policy.
+[supply_chain.min_release_age]
+default = "0"
+pypi = "0"
+npm = "0"
+go = "0"
+cargo = "0"
+maven = "0"
+rubygems = "0"
+composer = "0"
+nuget = "0"
+conda = "0"
+cran = "0"
+helm = "0"
+alpine = "0"
+docker = "0"
+huggingface = "0"
+apt = "0"
+
 [[pypi.upstreams]]
 name = "mock"
 url = "%s"

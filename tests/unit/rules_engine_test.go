@@ -174,8 +174,10 @@ func TestRules_PrefixMatch(t *testing.T) {
 	}
 }
 
-func TestRules_CommunityBypass(t *testing.T) {
-	// Do NOT set DEPSILO_DEV_PRO — community mode
+func TestRules_CommunityEnforced(t *testing.T) {
+	// Do NOT set DEPSILO_DEV_PRO — community mode. Since the
+	// 2026-06-28 pricing reset (b03ca01) rules are open-source and
+	// enforce without any entitlement; the old IsPro bypass is gone.
 	os.Unsetenv("DEPSILO_DEV_PRO")
 
 	database, err := db.Open("sqlite", ":memory:")
@@ -197,12 +199,15 @@ func TestRules_CommunityBypass(t *testing.T) {
 	store := rules.NewStore(database)
 	engine := rules.NewEngine(store, checker)
 
-	allowed, _, err := engine.Check(context.Background(), "pypi", "log4j", "2.14.0")
+	allowed, matched, err := engine.Check(context.Background(), "pypi", "log4j", "2.14.0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !allowed {
-		t.Error("community edition should bypass rules")
+	if allowed {
+		t.Error("deny rule must enforce in community edition — rules are open-source")
+	}
+	if matched == nil || matched.PackageName != "log4j" {
+		t.Errorf("expected the log4j deny rule to match, got %+v", matched)
 	}
 }
 
