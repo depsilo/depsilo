@@ -70,7 +70,12 @@ const zh = {
     },
 
     // Dashboard
+    common: {
+      loadFailed: '加载失败',
+      retry: '重试',
+    },
     dashboard: {
+      loadFailedHint: '请确认 Depsilo 服务可达后重试。',
       todayRequests: '今日请求',
       last24hRequests: '近 24 小时请求',
       hitRate: '命中率',

@@ -3,6 +3,61 @@
 All notable changes to Depsilo will be documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.8.0] - 2026-07-09
+
+The "enforcement layer" release: Depsilo pivots from cache-with-extras to a
+supply-chain enforcement layer (ADR-0003 / ADR-0004) and ships its first
+enforcement primitive.
+
+### Added
+- **Supply-chain quarantine (minimum release age)**: package versions younger
+  than a per-ecosystem threshold (npm 7d, most ecosystems 3d, go/apt exempt)
+  are refused with HTTP 451 `QUARANTINED`. Fail-closed by default when publish
+  time can't be determined; allowlist supports glob / exact pin / version
+  ranges; admin approval flow with audited revoke; every decision writes a
+  `QuarantineEvent`; block decisions fire webhooks (Slack / DingTalk / WeCom /
+  Feishu). Wired into 13 adapters via publish-time resolvers (8 real registry
+  APIs + Last-Modified approximation for the rest). Ships enabled with safe
+  defaults — an empty config is protected.
+- **Composer dist mirroring**: `packages.json` now injects a preferred dist
+  mirror so archives flow through the proxy — previously Composer downloads
+  went straight to GitHub (no cache, no quarantine). Dist serving requires
+  version *and* reference to match upstream metadata (metadata drift 404s and
+  Composer falls back to the origin URL with the correct bytes); the
+  quarantine resolver understands `~dev` metadata. Known limit documented:
+  Composer treats a mirror 451 as a failed mirror and falls back to the
+  origin, so this gate is caching + audit + best-effort blocking.
+- `/api/v1/stats` gains a `week` block (7-day rolling window) so portal value
+  metrics no longer reset at midnight.
+- Portal redesign (design spec in `docs/superpowers/specs/`): dual-value hero
+  ("Install fast. Install safe."), frosted film-grain background, chromatic
+  shimmer on the primary CTA, prompt preview with filename/line numbers,
+  hi-res (2560px) layout support, health-first Monitor with a quick filter
+  ("/" to focus; matches ecosystems, aliases, upstream names/URLs) and 7-day
+  value chips.
+- CLI: `serve --port / --host / --config / --log-level` plus 12-factor
+  `DEPSILO_*` environment variables.
+
+### Changed
+- **Pricing reset**: audit logs, package allow/deny rules and security
+  scanning are now open-source; Pro narrows to multi-project workspaces +
+  per-project SBOM export (contract-priced, Lemon Squeezy self-serve removed).
+- "Instrument" design system (signal-green, dark default) across portal and
+  admin; display typography, contrast and micro-interactions tuned in an
+  aesthetic review pass (WCAG-AA small text, CJK-aware heading tracking).
+- Heartbeat ticks: red now strictly means *down*; slow-but-alive upstreams
+  paint amber, thresholds unified with status dots at 150ms.
+- Integration prompt rewritten for transparency (no hidden product naming);
+  release + image pipelines now dogfood CycloneDX + SPDX SBOMs.
+
+### Fixed
+- Integration test suite was fully red: quarantine's fail-closed default
+  reached real registries for mock packages; thresholds now zeroed in the
+  test config. A rules test still asserted pre-pricing-reset Pro gating.
+- Admin sidebar layout jumps from Material Symbols FOUT; missing dashboard
+  error-state i18n keys; stale Pro badges on unlocked pages.
+- Alpine ships default upstreams (tuna / dl-cdn) and config-writer support.
+
 ## [0.7.1] - 2026-06-23
 
 ### Fixed

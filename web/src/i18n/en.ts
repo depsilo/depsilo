@@ -70,7 +70,12 @@ const en = {
     },
 
     // Dashboard
+    common: {
+      loadFailed: 'Could not load data',
+      retry: 'Retry',
+    },
     dashboard: {
+      loadFailedHint: 'Check whether the Depsilo server is reachable, then retry.',
       todayRequests: 'Requests Today',
       last24hRequests: 'Requests (24h)',
       hitRate: 'Hit Rate',
