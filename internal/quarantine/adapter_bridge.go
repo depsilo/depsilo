@@ -29,6 +29,7 @@ func (a AdapterChecker) Check(ctx context.Context, ecosystem, pkg, version, clie
 	d := a.inner.Check(ctx, ecosystem, pkg, version, clientIP)
 	return adapter.QuarantineDecision{
 		Allowed: d.Allowed,
+		Code:    d.Code,
 		Reason:  d.Reason,
 	}
 }

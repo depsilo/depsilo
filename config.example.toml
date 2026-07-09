@@ -297,3 +297,17 @@ apt      = "0"     # apt repos are curated upstream; quarantine adds noise
 #   "pip:requests==2.32.3",
 #   "npm:react>=18.0.0",
 # ]
+
+# ── Known-malicious blocklist (hard block, 451 MALICIOUS_BLOCKED) ──
+# Syncs the OSV malicious-packages dataset (MAL-* advisories; GHSA
+# malware is aliased into it) and refuses matched versions outright.
+# The quarantine allow-list CANNOT bypass a malware match — the only
+# exemption is an audited admin override that expires after 24h.
+# Enabled by default; sync failures degrade (last good data keeps
+# blocking, an empty local store blocks nothing) and never break the
+# proxy itself.
+[supply_chain.blocklist]
+enabled       = true
+sync_interval = "6h"
+# mirror_url  = "https://osv-vulnerabilities.storage.googleapis.com"
+# proxy       = "http://127.0.0.1:7890"   # required in mainland China

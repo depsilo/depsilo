@@ -364,3 +364,93 @@ func hasEventForVersion(t *testing.T, store *Store, pkg, version, action string)
 	}
 	return count > 0
 }
+
+// ── Step 0: known-malicious blocklist ─────────────────────────────
+
+// fakeBlocklist is a canned Blocklist implementation.
+type fakeBlocklist struct {
+	match      *BlocklistMatch
+	overridden bool
+	err        error
+}
+
+func (f fakeBlocklist) Check(_ context.Context, _, _, _ string) (*BlocklistMatch, bool, error) {
+	return f.match, f.overridden, f.err
+}
+
+func TestChecker_MalwareBlocksBeforeEverything(t *testing.T) {
+	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	// Allow-list matches AND the ecosystem has threshold 0 — both
+	// would normally allow. The malware match must win regardless.
+	c := newChecker(t, Config{
+		Allow: []string{"go:github.com/evil/*"},
+	}, resolvers.Registry{}, now)
+	c.SetBlocklist(fakeBlocklist{match: &BlocklistMatch{SourceID: "MAL-2026-9999", Summary: "credential stealer"}})
+
+	var hookFired *db.QuarantineEvent
+	c.SetOnBlock(func(ev db.QuarantineEvent) { hookFired = &ev })
+
+	d := c.Check(context.Background(), "go", "github.com/evil/mod", "v1.0.0", "10.0.0.1")
+	if d.Allowed {
+		t.Fatalf("known-malicious version served: %+v", d)
+	}
+	if d.Code != CodeMaliciousBlocked {
+		t.Errorf("Code = %q, want %q", d.Code, CodeMaliciousBlocked)
+	}
+	if !strings.Contains(d.Reason, "MAL-2026-9999") {
+		t.Errorf("reason should cite the advisory: %q", d.Reason)
+	}
+	if hookFired == nil || hookFired.Action != ActionMalwareBlocked {
+		t.Errorf("OnBlock hook: %+v", hookFired)
+	}
+}
+
+func TestChecker_MalwareOverrideFallsThroughToQuarantine(t *testing.T) {
+	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	// Override exempts from the malware block — but the version is
+	// also 1 day old with a 7d threshold, so quarantine still blocks.
+	publishedAt := now.Add(-24 * time.Hour)
+	c := newChecker(t, Config{
+		MinReleaseAge: map[string]string{"npm": "7d"},
+	}, resolvers.Registry{"npm": canned{t: publishedAt}}, now)
+	c.SetBlocklist(fakeBlocklist{
+		match:      &BlocklistMatch{SourceID: "MAL-2026-8888", Summary: "false positive"},
+		overridden: true,
+	})
+
+	d := c.Check(context.Background(), "npm", "disputed-pkg", "2.0.0", "10.0.0.1")
+	if d.Allowed {
+		t.Fatalf("override must not exempt from the age quarantine: %+v", d)
+	}
+	if d.Code != CodeQuarantined {
+		t.Errorf("Code = %q, want %q (quarantine, not malware)", d.Code, CodeQuarantined)
+	}
+}
+
+func TestChecker_MalwareOverrideLookupErrorBlocks(t *testing.T) {
+	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	c := newChecker(t, Config{}, resolvers.Registry{}, now)
+	// Confirmed match + failed override lookup → block (the safe
+	// direction for malware).
+	c.SetBlocklist(fakeBlocklist{
+		match:      &BlocklistMatch{SourceID: "MAL-2026-7777", Summary: "worm"},
+		overridden: true, // claims overridden, but err says the lookup failed
+		err:        errors.New("db locked"),
+	})
+	d := c.Check(context.Background(), "go", "github.com/x/y", "v1.0.0", "10.0.0.1")
+	if d.Allowed || d.Code != CodeMaliciousBlocked {
+		t.Errorf("match + override-lookup error must block: %+v", d)
+	}
+}
+
+func TestChecker_BlocklistLookupErrorDegrades(t *testing.T) {
+	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	c := newChecker(t, Config{}, resolvers.Registry{}, now)
+	// No match + lookup error → degrade: the request proceeds through
+	// the rest of the chain (threshold 0 here → allow).
+	c.SetBlocklist(fakeBlocklist{err: errors.New("db unavailable")})
+	d := c.Check(context.Background(), "go", "github.com/x/y", "v1.0.0", "10.0.0.1")
+	if !d.Allowed {
+		t.Errorf("blocklist DB error must not take the proxy down: %+v", d)
+	}
+}

@@ -32,7 +32,12 @@ type QuarantineChecker interface {
 // its own Decision into this shape.
 type QuarantineDecision struct {
 	Allowed bool
-	Reason  string
+	// Code distinguishes WHY the request was refused: "QUARANTINED"
+	// (too young, retry later or ask for approval) vs
+	// "MALICIOUS_BLOCKED" (known malware, do not retry). Empty
+	// defaults to QUARANTINED for backward compatibility.
+	Code   string
+	Reason string
 }
 
 var quarantineChecker QuarantineChecker
@@ -84,8 +89,12 @@ func QuarantineGate(c *gin.Context, ecosystem, pkg, version string) bool {
 	if d.Allowed {
 		return false
 	}
+	code := d.Code
+	if code == "" {
+		code = "QUARANTINED"
+	}
 	c.JSON(http.StatusUnavailableForLegalReasons, gin.H{
-		"code":      "QUARANTINED",
+		"code":      code,
 		"message":   d.Reason,
 		"ecosystem": ecosystem,
 		"package":   pkg,

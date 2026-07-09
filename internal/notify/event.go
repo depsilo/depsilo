@@ -15,6 +15,12 @@ const (
 	// alert to whoever owns the affected build pipeline. See
 	// docs/DIRECTION.md §Task 1 and ADR-0003.
 	EventQuarantineBlocked = "quarantine_blocked"
+	// EventMalwareBlocked fires when the known-malicious blocklist
+	// refuses to serve a version (451 MALICIOUS_BLOCKED). Severity is
+	// always critical — someone in the org just tried to install
+	// known malware, which is exactly the page-a-human moment. See
+	// docs/DIRECTION.md §Task 2.
+	EventMalwareBlocked = "malware_blocked"
 )
 
 // Event represents a notification-worthy occurrence in Depsilo.

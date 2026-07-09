@@ -10,6 +10,7 @@ import (
 	"depsilo/internal/api/admin"
 	"depsilo/internal/api/public"
 	"depsilo/internal/audit"
+	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/entitlement"
@@ -32,13 +33,13 @@ var startTime = time.Now()
 // is the ordered list used by UIs to render upstreams deterministically.
 // See docs/adr/0001-pools-map.md.
 type Deps struct {
-	DB         *gorm.DB
-	Storage    cache.Storage
-	Config     *config.Config
-	Pools      map[string]*upstream.Pool
-	Ecosystems []string
-	CacheMgr   *cache.Manager
-	EventBus   *cache.EventBus
+	DB               *gorm.DB
+	Storage          cache.Storage
+	Config           *config.Config
+	Pools            map[string]*upstream.Pool
+	Ecosystems       []string
+	CacheMgr         *cache.Manager
+	EventBus         *cache.EventBus
 	LicenseManager   *license.Manager
 	TrialManager     *trial.Manager       // NEW
 	Entitlement      *entitlement.Checker // NEW
@@ -54,6 +55,11 @@ type Deps struct {
 	// package-level SetQuarantineChecker; this is the admin-control-
 	// plane access path.
 	QuarantineStore *quarantine.Store
+	// BlocklistStore / BlocklistSyncer power the known-malicious
+	// blocklist admin endpoints (status / manual sync / overrides).
+	// Both nil when [supply_chain.blocklist] enabled = false.
+	BlocklistStore  *blocklist.Store
+	BlocklistSyncer *blocklist.Syncer
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -230,6 +236,17 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminGroup.GET("/quarantine/approvals", quarantineHandler.ListApprovals)
 	adminGroup.POST("/quarantine/approve", quarantineHandler.Approve)
 	adminGroup.DELETE("/quarantine/approvals/:id", quarantineHandler.Revoke)
+
+	// Known-malicious blocklist (DIRECTION Task 2) — sync status,
+	// manual refresh, and 24h-expiring false-positive overrides.
+	// Open-source like quarantine; blocked-request events surface via
+	// /quarantine/events (action = malware_blocked).
+	blocklistHandler := admin.NewBlocklistHandler(deps.BlocklistStore, deps.BlocklistSyncer)
+	adminGroup.GET("/blocklist/status", blocklistHandler.Status)
+	adminGroup.POST("/blocklist/sync", blocklistHandler.TriggerSync)
+	adminGroup.GET("/blocklist/overrides", blocklistHandler.ListOverrides)
+	adminGroup.POST("/blocklist/overrides", blocklistHandler.CreateOverride)
+	adminGroup.DELETE("/blocklist/overrides/:id", blocklistHandler.RevokeOverride)
 
 	// Pro features (require entitlement). Multi-project workspaces are
 	// the only UI surface gated today — production teams running Depsilo

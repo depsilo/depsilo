@@ -99,5 +99,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&PackageTimestamp{},
 		&ApprovedVersion{},
 		&QuarantineEvent{},
+		// Known-malicious blocklist (DIRECTION Task 2). Defined in
+		// db/blocklist.go; helpers in internal/blocklist.
+		&MaliciousPackage{},
+		&MalwareOverride{},
+		&BlocklistSyncState{},
 	)
 }

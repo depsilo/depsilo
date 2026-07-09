@@ -121,6 +121,15 @@ export const adminApi = {
   revokeQuarantineApproval: (id: number, data: { reason: string }) =>
     api.delete(`/admin/quarantine/approvals/${id}`, { data }),
 
+  // Known-malicious blocklist (open-source, DIRECTION Task 2)
+  getBlocklistStatus: () => api.get('/admin/blocklist/status'),
+  triggerBlocklistSync: () => api.post('/admin/blocklist/sync'),
+  listBlocklistOverrides: () => api.get('/admin/blocklist/overrides'),
+  createBlocklistOverride: (data: { ecosystem: string; package: string; version: string; reason: string }) =>
+    api.post('/admin/blocklist/overrides', data),
+  revokeBlocklistOverride: (id: number, data: { reason: string }) =>
+    api.delete(`/admin/blocklist/overrides/${id}`, { data }),
+
   // Projects (Pro)
   listProjects: () => api.get('/admin/projects'),
   createProject: (data: any) => api.post('/admin/projects', data),

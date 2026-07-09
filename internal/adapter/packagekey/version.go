@@ -1,6 +1,9 @@
 package packagekey
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // ParseNpmFilename extracts the version from an npm tarball filename
 // of shape "<pkg>-<version>.tgz". pkg may itself contain hyphens
@@ -207,8 +210,10 @@ func ParseCondaPath(path string) (pkg, version string) {
 
 // ParseCranPath extracts (pkg, version) from a CRAN download path.
 // Two shapes:
-//   /src/contrib/<pkg>_<ver>.tar.gz                 — current
-//   /src/contrib/Archive/<pkg>/<pkg>_<ver>.tar.gz   — archived
+//
+//	/src/contrib/<pkg>_<ver>.tar.gz                 — current
+//	/src/contrib/Archive/<pkg>/<pkg>_<ver>.tar.gz   — archived
+//
 // Underscore is the CRAN convention separating package and version,
 // distinct from PyPI's hyphen.
 func ParseCranPath(path string) (pkg, version string) {
@@ -305,4 +310,46 @@ func ParseDockerPath(path string) (image, tag string) {
 	// would arrive as "sha256:..." which is fine to pass through; a
 	// trailing slash or query strings shouldn't reach here).
 	return image, tag
+}
+
+// ParseGoZipPath extracts (module, version) from a GOPROXY zip
+// download path like "github.com/user/repo/@v/v1.2.3.zip". The module
+// portion is decoded from the proxy's escaped form ("!a" → 'A', per
+// golang.org/x/mod/module) so it matches advisory/registry spellings.
+// Only .zip paths parse — .info/.mod are metadata, not artifacts.
+func ParseGoZipPath(path string) (module, version string) {
+	i := strings.Index(path, "/@v/")
+	if i <= 0 || !strings.HasSuffix(path, ".zip") {
+		return "", ""
+	}
+	version = strings.TrimSuffix(path[i+len("/@v/"):], ".zip")
+	module = unescapeGoPath(path[:i])
+	if module == "" || version == "" || strings.Contains(version, "/") {
+		return "", ""
+	}
+	return module, version
+}
+
+// unescapeGoPath reverses the GOPROXY "!lower" escaping for uppercase
+// letters ("github.com/!azure/x" → "github.com/Azure/x").
+func unescapeGoPath(p string) string {
+	if !strings.Contains(p, "!") {
+		return p
+	}
+	var b strings.Builder
+	b.Grow(len(p))
+	bang := false
+	for _, r := range p {
+		if bang {
+			b.WriteRune(unicode.ToUpper(r))
+			bang = false
+			continue
+		}
+		if r == '!' {
+			bang = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

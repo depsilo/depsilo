@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -56,6 +57,17 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		h.proxyVersionFile(c, path, "mod")
 
 	case strings.HasSuffix(path, ".zip"):
+		// Malware gate. Go deliberately has NO age quarantine
+		// (threshold 0 — the checksum DB covers re-tag attacks), but
+		// the known-malicious blocklist is checker step 0 and runs
+		// before the threshold short-circuit, so the gate call still
+		// belongs here (v0.8.0 review finding: Go data was synced but
+		// never enforced).
+		if module, version := packagekey.ParseGoZipPath(path); module != "" {
+			if blocked := adapter.QuarantineGate(c, "go", module, version); blocked {
+				return
+			}
+		}
 		h.proxyVersionFile(c, path, "zip")
 
 	default:

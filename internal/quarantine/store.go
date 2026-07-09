@@ -22,6 +22,13 @@ const (
 	ActionBypassed  = "bypassed"         // matched an Allow rule
 	ActionApproved  = "approved"         // admin approved an individual version
 	ActionRevoked   = "approval_revoked" // admin revoked a prior approval
+
+	// Known-malicious blocklist actions (DIRECTION Task 2), written by
+	// Checker step 0. The override CRUD actions (override_created /
+	// override_revoked) live in internal/blocklist next to the code
+	// that records them.
+	ActionMalwareBlocked  = "malware_blocked"  // request denied: known-malicious version
+	ActionMalwareBypassed = "malware_bypassed" // served under an unexpired operator override
 )
 
 // Store wraps the GORM handle with the small set of helpers the

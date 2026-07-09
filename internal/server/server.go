@@ -14,6 +14,7 @@ import (
 
 	"depsilo/internal/accesslog"
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/alpine"
 	"depsilo/internal/adapter/apt"
 	"depsilo/internal/adapter/cargo"
 	"depsilo/internal/adapter/composer"
@@ -23,7 +24,6 @@ import (
 	"depsilo/internal/adapter/goproxy"
 	"depsilo/internal/adapter/helm"
 	"depsilo/internal/adapter/huggingface"
-	"depsilo/internal/adapter/alpine"
 	"depsilo/internal/adapter/maven"
 	"depsilo/internal/adapter/npm"
 	"depsilo/internal/adapter/nuget"
@@ -32,6 +32,7 @@ import (
 	"depsilo/internal/adapter/rubygems"
 	"depsilo/internal/api"
 	"depsilo/internal/audit"
+	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
@@ -206,6 +207,30 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	}
 	adapter.SetQuarantineChecker(quarantine.Wrap(quarantineChecker))
 
+	// Known-malicious blocklist (DIRECTION Task 2) — wired in as the
+	// checker's step 0. Enabled by default; the sync scheduler degrades
+	// on failure (blocking continues on the last good dataset; no data
+	// at all means no malware blocking, never a broken proxy).
+	var blocklistStore *blocklist.Store
+	var blocklistSyncer *blocklist.Syncer
+	blCfg := blocklist.Config{
+		Enabled:      cfg.SupplyChain.Blocklist.Enabled,
+		SyncInterval: cfg.SupplyChain.Blocklist.SyncInterval,
+		MirrorURL:    cfg.SupplyChain.Blocklist.MirrorURL,
+		Proxy:        cfg.SupplyChain.Blocklist.Proxy,
+	}
+	if blCfg.IsEnabled() {
+		blocklistStore = blocklist.NewStore(database)
+		blocklistSyncer, err = blocklist.NewSyncer(blocklistStore, blCfg)
+		if err != nil {
+			return nil, fmt.Errorf("blocklist: %w", err)
+		}
+		quarantineChecker.SetBlocklist(blocklistStore.QuarantineBridge())
+		go blocklistSyncer.Start(ctx)
+	} else {
+		zap.L().Info("malicious-package blocklist disabled by config")
+	}
+
 	// Webhook notification engine
 	webhookNotifier := notify.New(database)
 	if err := webhookNotifier.LoadConfigs(); err != nil {
@@ -225,6 +250,20 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	// panicking dispatcher is recovered inside the Checker so misbehaving
 	// channels can't cascade into request failures.
 	quarantineChecker.SetOnBlock(func(ev db.QuarantineEvent) {
+		// Malware blocks page at critical severity — someone in the
+		// org just tried to install known malware. Age quarantines
+		// stay warnings: a too-young version is an inconvenience.
+		if ev.Action == quarantine.ActionMalwareBlocked {
+			webhookNotifier.Dispatch(ctx, notify.Event{
+				Type:      notify.EventMalwareBlocked,
+				Severity:  "critical",
+				Title:     fmt.Sprintf("MALWARE blocked: %s %s on %s", ev.Package, ev.Version, ev.Ecosystem),
+				Message:   "Known-malicious package version refused (OSV malicious-packages dataset).",
+				Detail:    ev.Reason,
+				Timestamp: ev.CreatedAt,
+			})
+			return
+		}
 		ageStr := formatSeconds(ev.AgeAtCall)
 		thresholdStr := formatSeconds(ev.Threshold)
 		webhookNotifier.Dispatch(ctx, notify.Event{
@@ -318,26 +357,56 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		SecurityImporter: securityImporter,
 		WebhookNotifier:  webhookNotifier,
 		QuarantineStore:  quarantineStore,
+		BlocklistStore:   blocklistStore,
+		BlocklistSyncer:  blocklistSyncer,
 	})
 
 	// Register adapter handlers
 	type adapterFactory func(*cache.Manager, upstream.Selector, config.CacheConfig, *gorm.DB) adapter.Adapter
 
 	adapterFactories := map[string]adapterFactory{
-		"pypi":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return pypi.New(cm, s, cc, db) },
-		"apt":      func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return apt.New(cm, s, cc, db) },
-		"npm":      func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return npm.New(cm, s, cc, db) },
-		"go":       func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return goproxy.New(cm, s, cc, db) },
-		"cargo":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return cargo.New(cm, s, cc, db) },
-		"maven":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return maven.New(cm, s, cc, db) },
-		"rubygems": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return rubygems.New(cm, s, cc, db) },
-		"composer": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return composer.New(cm, s, cc, db) },
-		"nuget":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return nuget.New(cm, s, cc, db) },
-		"conda":    func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return conda.New(cm, s, cc, db) },
-		"cran":     func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return cran.New(cm, s, cc, db) },
-		"alpine":   func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return alpine.New(cm, s, cc, db) },
-		"helm":         func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return helm.New(cm, s, cc, db) },
-		"huggingface":  func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter { return huggingface.New(cm, s, cc, db) },
+		"pypi": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return pypi.New(cm, s, cc, db)
+		},
+		"apt": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return apt.New(cm, s, cc, db)
+		},
+		"npm": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return npm.New(cm, s, cc, db)
+		},
+		"go": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return goproxy.New(cm, s, cc, db)
+		},
+		"cargo": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return cargo.New(cm, s, cc, db)
+		},
+		"maven": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return maven.New(cm, s, cc, db)
+		},
+		"rubygems": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return rubygems.New(cm, s, cc, db)
+		},
+		"composer": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return composer.New(cm, s, cc, db)
+		},
+		"nuget": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return nuget.New(cm, s, cc, db)
+		},
+		"conda": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return conda.New(cm, s, cc, db)
+		},
+		"cran": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return cran.New(cm, s, cc, db)
+		},
+		"alpine": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return alpine.New(cm, s, cc, db)
+		},
+		"helm": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return helm.New(cm, s, cc, db)
+		},
+		"huggingface": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
+			return huggingface.New(cm, s, cc, db)
+		},
 	}
 
 	handlers := make(map[string]adapter.Adapter, len(ecosystems))

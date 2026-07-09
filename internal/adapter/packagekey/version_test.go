@@ -57,8 +57,8 @@ func TestParsePypiFilename(t *testing.T) {
 
 func TestParseCargoCratePath(t *testing.T) {
 	cases := []struct {
-		path                 string
-		crate, version       string
+		path           string
+		crate, version string
 	}{
 		{"/api/v1/crates/serde/1.0.197/download", "serde", "1.0.197"},
 		{"api/v1/crates/serde-json/1.0.114/download", "serde-json", "1.0.114"},
@@ -228,7 +228,7 @@ func TestParseAlpinePath(t *testing.T) {
 
 func TestParseDockerPath(t *testing.T) {
 	cases := []struct {
-		path        string
+		path       string
 		image, tag string
 	}{
 		{"/v2/library/alpine/manifests/3.19", "library/alpine", "3.19"},
@@ -245,6 +245,22 @@ func TestParseDockerPath(t *testing.T) {
 		if gotI != c.image || gotT != c.tag {
 			t.Errorf("ParseDockerPath(%q) = (%q, %q), want (%q, %q)",
 				c.path, gotI, gotT, c.image, c.tag)
+		}
+	}
+}
+
+func TestParseGoZipPath(t *testing.T) {
+	cases := []struct{ path, module, version string }{
+		{"github.com/user/repo/@v/v1.2.3.zip", "github.com/user/repo", "v1.2.3"},
+		{"github.com/!azure/azure-sdk/@v/v0.1.0.zip", "github.com/Azure/azure-sdk", "v0.1.0"},
+		{"github.com/user/repo/@v/v1.2.3.info", "", ""}, // metadata, not artifact
+		{"github.com/user/repo/@latest", "", ""},
+		{"noatv.zip", "", ""},
+	}
+	for _, c := range cases {
+		m, v := ParseGoZipPath(c.path)
+		if m != c.module || v != c.version {
+			t.Errorf("ParseGoZipPath(%q) = (%q, %q), want (%q, %q)", c.path, m, v, c.module, c.version)
 		}
 	}
 }

@@ -87,6 +87,16 @@ lru_threshold = 90
 [auth]
 enabled = false
 
+# The malicious blocklist syncs from the mock's OSV endpoint — it
+# marks npm "malicious-pkg" as malware, driving the end-to-end 451
+# MALICIOUS_BLOCKED test. Note the age thresholds below are all zero,
+# which deliberately does NOT disable the blocklist: malware blocking
+# is checker step 0, before any threshold logic.
+[supply_chain.blocklist]
+enabled = true
+sync_interval = "6h"
+mirror_url = "%s"
+
 # Quarantine ships enabled with per-ecosystem default thresholds, and
 # its publish-time resolvers query the REAL registries. The fake
 # packages served by the mock don't exist there, so the fail-closed
@@ -183,6 +193,7 @@ default_registry = "mock"
 name = "mock"
 url = "%s"
 `, port, dir, dir,
+		upstreamURL, // blocklist mirror_url (mock OSV endpoint)
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,

@@ -49,20 +49,52 @@ type ApprovedVersion = {
 }
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker', 'huggingface']
-const ACTIONS = ['blocked', 'served_eligible', 'bypassed', 'approved', 'approval_revoked']
+const ACTIONS = ['blocked', 'malware_blocked', 'served_eligible', 'bypassed', 'malware_bypassed', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
+
+type BlocklistStatus = {
+  enabled: boolean
+  last_sync_at: string | null
+  last_success_at: string | null
+  last_error: string
+  duration_ms: number
+  entry_count: number
+  per_ecosystem: Record<string, number>
+  ecosystems: string[]
+  running?: boolean
+  next_sync_at?: string | null
+}
+
+type MalwareOverride = {
+  id: number
+  ecosystem: string
+  package: string
+  version: string
+  reason: string
+  actor_id: number
+  created_at: string
+  expires_at: string
+}
 
 function actionBadge(action: string, t: (k: string) => string) {
   switch (action) {
     case 'blocked':
       return <BadgeV2 variant="error">{t('quarantine.action.blocked')}</BadgeV2>
+    case 'malware_blocked':
+      return <BadgeV2 variant="error">{t('quarantine.action.malware_blocked')}</BadgeV2>
     case 'served_eligible':
       return <BadgeV2 variant="warning">{t('quarantine.action.served_eligible')}</BadgeV2>
     case 'bypassed':
       return <BadgeV2 variant="success">{t('quarantine.action.bypassed')}</BadgeV2>
+    case 'malware_bypassed':
+      return <BadgeV2 variant="warning">{t('quarantine.action.malware_bypassed')}</BadgeV2>
     case 'approved':
       return <BadgeV2 variant="success">{t('quarantine.action.approved')}</BadgeV2>
     case 'approval_revoked':
       return <BadgeV2>{t('quarantine.action.approval_revoked')}</BadgeV2>
+    case 'override_created':
+      return <BadgeV2 variant="warning">{t('quarantine.action.override_created')}</BadgeV2>
+    case 'override_revoked':
+      return <BadgeV2>{t('quarantine.action.override_revoked')}</BadgeV2>
     default:
       return <BadgeV2>{action}</BadgeV2>
   }
@@ -71,7 +103,7 @@ function actionBadge(action: string, t: (k: string) => string) {
 export default function Quarantine() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const [tab, setTab] = useState<'events' | 'approvals'>('events')
+  const [tab, setTab] = useState<'events' | 'approvals' | 'blocklist'>('events')
 
   // Filters (events tab)
   const [ecoFilter, setEcoFilter] = useState('all')
@@ -158,6 +190,7 @@ export default function Quarantine() {
         {[
           { id: 'events' as const, label: t('quarantine.tab.events') },
           { id: 'approvals' as const, label: t('quarantine.tab.approvals') },
+          { id: 'blocklist' as const, label: t('quarantine.tab.blocklist') },
         ].map((x) => {
           const active = tab === x.id
           return (
@@ -194,7 +227,7 @@ export default function Quarantine() {
             setApproveOpen(true)
           }}
         />
-      ) : (
+      ) : tab === 'approvals' ? (
         <ApprovalsTab
           approvalsQ={approvalsQ}
           onRevoke={(row) => {
@@ -203,6 +236,8 @@ export default function Quarantine() {
             setRevokeOpen(true)
           }}
         />
+      ) : (
+        <BlocklistTab />
       )}
 
       {/* Approve dialog */}
@@ -439,6 +474,283 @@ function ApprovalsTab(props: {
       </table>
     </div>
   )
+}
+
+// ── Blocklist tab ──────────────────────────────────────────────────
+//
+// Sync status + entry counts + manual refresh, and the 24h-expiring
+// false-positive overrides. Blocked-request events show up in the
+// Events tab (action = malware_blocked) — this tab is about the
+// dataset and the exemptions, not the traffic.
+
+function BlocklistTab() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+
+  const [createOpen, setCreateOpen] = useState(false)
+  const [form, setForm] = useState({ ecosystem: 'npm', package: '', version: '', reason: '' })
+  const [revokeTarget, setRevokeTarget] = useState<MalwareOverride | null>(null)
+  const [revokeReason, setRevokeReason] = useState('')
+
+  const statusQ = useQuery({
+    queryKey: ['admin', 'blocklist', 'status'],
+    queryFn: async () => (await adminApi.getBlocklistStatus()).data as BlocklistStatus,
+    refetchInterval: 15_000,
+  })
+  const overridesQ = useQuery({
+    queryKey: ['admin', 'blocklist', 'overrides'],
+    queryFn: async () => (await adminApi.listBlocklistOverrides()).data as { items: MalwareOverride[]; now: string },
+    refetchInterval: 30_000,
+  })
+
+  const syncM = useMutation({
+    mutationFn: () => adminApi.triggerBlocklistSync(),
+    onSuccess: () => {
+      // The sync runs async server-side; refresh status shortly after
+      // so LastSyncAt flips while the operator is still looking.
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['admin', 'blocklist'] }), 1500)
+    },
+  })
+  const createM = useMutation({
+    mutationFn: () => adminApi.createBlocklistOverride(form),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'blocklist'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
+      setCreateOpen(false)
+      setForm({ ecosystem: 'npm', package: '', version: '', reason: '' })
+    },
+  })
+  const revokeM = useMutation({
+    mutationFn: () => adminApi.revokeBlocklistOverride(revokeTarget!.id, { reason: revokeReason.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'blocklist'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
+      setRevokeTarget(null)
+      setRevokeReason('')
+    },
+  })
+
+  const st = statusQ.data
+  if (statusQ.isLoading) {
+    return <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</p>
+  }
+  if (st && !st.enabled) {
+    return (
+      <EmptyState
+        icon="gpp_bad"
+        title={t('quarantine.blocklist.disabled_title')}
+        hint={t('quarantine.blocklist.disabled_hint')}
+      />
+    )
+  }
+
+  const overrides = overridesQ.data?.items ?? []
+  const now = overridesQ.data?.now ? new Date(overridesQ.data.now).getTime() : Date.now()
+
+  return (
+    <div className="space-y-5">
+      {/* Status card */}
+      <div className="rounded-[8px] border p-4 flex flex-wrap items-center gap-x-8 gap-y-3"
+           style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+        <StatusItem label={t('quarantine.blocklist.entries')}>
+          <span className="text-[22px] font-mono font-[600] tabular-nums">{st?.entry_count ?? 0}</span>
+        </StatusItem>
+        <StatusItem label={t('quarantine.blocklist.last_success')}>
+          <span className="text-[13px] font-mono" style={{ color: st?.last_success_at ? 'var(--text)' : 'var(--warn-text)' }}>
+            {st?.last_success_at ? formatTime(st.last_success_at) : t('quarantine.blocklist.never')}
+          </span>
+        </StatusItem>
+        <StatusItem label={t('quarantine.blocklist.next_sync')}>
+          <span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>
+            {st?.running
+              ? t('quarantine.blocklist.syncing')
+              : st?.next_sync_at
+                ? formatTime(st.next_sync_at)
+                : '—'}
+          </span>
+        </StatusItem>
+        <StatusItem label={t('quarantine.blocklist.coverage')}>
+          <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>
+            {(st?.ecosystems ?? []).join(' · ')}
+          </span>
+        </StatusItem>
+        {st?.last_error && (
+          <StatusItem label={t('quarantine.blocklist.last_error')}>
+            <span className="text-[12px]" style={{ color: 'var(--danger-text)' }}>{st.last_error}</span>
+          </StatusItem>
+        )}
+        <div className="ml-auto flex gap-2">
+          <ButtonV2 variant="secondary" onClick={() => setCreateOpen(true)}>
+            <Icon name="add" size="sm" /> {t('quarantine.blocklist.add_override')}
+          </ButtonV2>
+          <ButtonV2 onClick={() => syncM.mutate()} disabled={syncM.isPending || !!st?.running}>
+            <Icon name="sync" size="sm" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
+          </ButtonV2>
+        </div>
+      </div>
+
+      {/* Overrides */}
+      <div>
+        <h3 className="text-[14px] font-[600] mb-2">{t('quarantine.blocklist.overrides_title')}</h3>
+        <p className="text-[12px] mb-3" style={{ color: 'var(--text-soft)' }}>
+          {t('quarantine.blocklist.overrides_hint')}
+        </p>
+        {overrides.length === 0 ? (
+          <EmptyState
+            icon="verified_user"
+            title={t('quarantine.blocklist.no_overrides_title')}
+            hint={t('quarantine.blocklist.no_overrides_hint')}
+          />
+        ) : (
+          <div className="rounded-[8px] border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+              <thead style={{ background: 'var(--bg-soft)' }}>
+                <tr>
+                  <Th>{t('quarantine.col.ecosystem')}</Th>
+                  <Th>{t('quarantine.col.package')}</Th>
+                  <Th>{t('quarantine.col.version')}</Th>
+                  <Th>{t('quarantine.col.reason')}</Th>
+                  <Th>{t('quarantine.blocklist.col_expires')}</Th>
+                  <Th>{' '}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {overrides.map((row) => {
+                  const msLeft = new Date(row.expires_at).getTime() - now
+                  const expired = msLeft <= 0
+                  return (
+                    <tr key={row.id} style={{ borderTop: '0.5px solid var(--border)', opacity: expired ? 0.55 : 1 }}>
+                      <Td>
+                        <div className="flex items-center gap-1.5">
+                          <EcosystemIcon type={row.ecosystem as any} size={14} />
+                          <span className="text-[12px] font-mono">{row.ecosystem}</span>
+                        </div>
+                      </Td>
+                      <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
+                      <Td>
+                        <span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>
+                          {row.version || t('quarantine.blocklist.all_versions')}
+                        </span>
+                      </Td>
+                      <Td><span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{row.reason}</span></Td>
+                      <Td>
+                        {expired ? (
+                          <BadgeV2>{t('quarantine.blocklist.expired')}</BadgeV2>
+                        ) : (
+                          <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--warn-text)' }}>
+                            {formatRemaining(msLeft)}
+                          </span>
+                        )}
+                      </Td>
+                      <Td>
+                        {!expired && (
+                          <ButtonV2 size="sm" variant="danger" onClick={() => { setRevokeTarget(row); setRevokeReason('') }}>
+                            <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
+                          </ButtonV2>
+                        )}
+                      </Td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Create override dialog */}
+      <ModalV2 open={createOpen} onClose={() => setCreateOpen(false)} title={t('quarantine.blocklist.create_title')}>
+        <div className="space-y-4">
+          <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+            {t('quarantine.blocklist.create_body')}
+          </p>
+          <div className="flex gap-2">
+            <FilterSelect
+              value={form.ecosystem}
+              onChange={(v) => setForm({ ...form, ecosystem: v })}
+              options={ECOSYSTEMS.map((eco) => ({ value: eco, label: eco }))}
+            />
+            <InputV2
+              placeholder={t('quarantine.blocklist.package_placeholder')}
+              value={form.package}
+              onChange={(e) => setForm({ ...form, package: e.target.value })}
+            />
+          </div>
+          <InputV2
+            placeholder={t('quarantine.blocklist.version_placeholder')}
+            value={form.version}
+            onChange={(e) => setForm({ ...form, version: e.target.value })}
+            mono
+          />
+          <InputV2
+            placeholder={t('quarantine.reason_placeholder')}
+            value={form.reason}
+            onChange={(e) => setForm({ ...form, reason: e.target.value })}
+          />
+          {createM.isError && (
+            <p className="text-[12px]" style={{ color: 'var(--danger-text)' }}>
+              {(createM.error as any)?.response?.data?.message || t('quarantine.blocklist.create_error')}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <ButtonV2 variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
+            <ButtonV2
+              onClick={() => createM.mutate()}
+              disabled={!form.package.trim() || form.reason.trim().length < 3 || createM.isPending}
+            >
+              {createM.isPending ? t('quarantine.approve.submitting') : t('quarantine.blocklist.create_submit')}
+            </ButtonV2>
+          </div>
+        </div>
+      </ModalV2>
+
+      {/* Revoke override dialog */}
+      <ModalV2 open={!!revokeTarget} onClose={() => setRevokeTarget(null)} title={t('quarantine.revoke.title')}>
+        {revokeTarget && (
+          <div className="space-y-4">
+            <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
+              {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
+            </p>
+            <InputV2
+              placeholder={t('quarantine.reason_placeholder')}
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <ButtonV2 variant="secondary" onClick={() => setRevokeTarget(null)}>{t('cancel')}</ButtonV2>
+              <ButtonV2
+                variant="danger"
+                onClick={() => revokeM.mutate()}
+                disabled={revokeReason.trim().length < 3 || revokeM.isPending}
+              >
+                {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
+              </ButtonV2>
+            </div>
+          </div>
+        )}
+      </ModalV2>
+    </div>
+  )
+}
+
+function StatusItem({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] font-mono font-[600] uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
+        {label}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+// formatRemaining renders "23h 59m" style countdowns for override TTL.
+function formatRemaining(ms: number): string {
+  const totalMin = Math.max(0, Math.floor(ms / 60_000))
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
 // ── Tiny shared helpers ────────────────────────────────────────────

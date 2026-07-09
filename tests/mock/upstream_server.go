@@ -1,6 +1,8 @@
 package mock
 
 import (
+	"archive/zip"
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -343,4 +345,46 @@ func (m *MockUpstream) RegisterAll() {
 	m.RegisterHelm()
 	m.RegisterHuggingFace()
 	m.RegisterDocker()
+	m.RegisterOSVBlocklist()
+}
+
+// RegisterOSVBlocklist serves the OSV bulk-data layout the blocklist
+// syncer downloads ({Ecosystem}/all.zip). Every ecosystem archive is
+// the same tiny zip holding one MAL advisory that marks npm's
+// "malicious-pkg" (every version) as malware — enough to drive the
+// end-to-end 451 MALICIOUS_BLOCKED test.
+func (m *MockUpstream) RegisterOSVBlocklist() {
+	const advisory = `{
+		"id": "MAL-2026-0001",
+		"summary": "malicious-pkg exfiltrates environment variables",
+		"modified": "2026-07-01T00:00:00Z",
+		"affected": [{
+			"package": {"ecosystem": "npm", "name": "malicious-pkg"},
+			"ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}]}]
+		}]
+	}`
+	const goAdvisory = `{
+		"id": "MAL-2026-0002",
+		"summary": "evil Go module runs curl|sh in go generate",
+		"modified": "2026-07-01T00:00:00Z",
+		"affected": [{
+			"package": {"ecosystem": "Go", "name": "github.com/evil/module"},
+			"ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}]}]
+		}]
+	}`
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, _ := zw.Create("MAL-2026-0001.json")
+	_, _ = w.Write([]byte(advisory))
+	w2, _ := zw.Create("MAL-2026-0002.json")
+	_, _ = w2.Write([]byte(goAdvisory))
+	_ = zw.Close()
+	archive := buf.Bytes()
+
+	for _, eco := range []string{"npm", "PyPI", "crates.io", "RubyGems", "Packagist", "NuGet", "Go", "Maven"} {
+		m.mux.HandleFunc("/"+eco+"/all.zip", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/zip")
+			_, _ = w.Write(archive)
+		})
+	}
 }

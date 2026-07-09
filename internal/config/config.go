@@ -47,6 +47,20 @@ type SupplyChainConfig struct {
 	Mode          string            `mapstructure:"mode"`
 	Allow         []string          `mapstructure:"allow"`
 	FailClosed    *bool             `mapstructure:"fail_closed"`
+	// Blocklist mirrors blocklist.Config field-for-field — same
+	// convention as the fields above (config carries the raw operator
+	// shape; the domain package owns semantics and defaults).
+	Blocklist BlocklistConfig `mapstructure:"blocklist"`
+}
+
+// BlocklistConfig is [supply_chain.blocklist]: the known-malicious
+// package blocklist (DIRECTION Task 2). Enabled defaults to true;
+// sync failures degrade rather than break the proxy.
+type BlocklistConfig struct {
+	Enabled      *bool  `mapstructure:"enabled"`
+	SyncInterval string `mapstructure:"sync_interval"` // default 6h
+	MirrorURL    string `mapstructure:"mirror_url"`    // default: official OSV bucket
+	Proxy        string `mapstructure:"proxy"`         // HTTP(S) proxy for sync fetches
 }
 
 type WebhookConfig struct {

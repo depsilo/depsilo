@@ -18,8 +18,22 @@ import (
 // error body." Audit / webhook side-effects are recorded inside
 // Check before the Decision is returned, so the caller never has to
 // thread an audit hook through every adapter.
+// Machine-readable decision codes carried in the 451 response body.
+// Distinct so CI logs and tooling can tell "too young, wait or ask
+// for approval" from "known malware, do not retry".
+const (
+	CodeQuarantined      = "QUARANTINED"
+	CodeMaliciousBlocked = "MALICIOUS_BLOCKED"
+)
+
 type Decision struct {
 	Allowed bool
+
+	// Code identifies WHY a blocked decision blocked (CodeQuarantined
+	// or CodeMaliciousBlocked). Empty on allowed decisions; the
+	// adapter gate defaults it to CodeQuarantined for backward
+	// compatibility.
+	Code string
 
 	// Reason is the human-readable explanation. For Blocked
 	// decisions it goes in the 451 response body so the user
@@ -54,12 +68,37 @@ type Decision struct {
 // block — fire-and-forget into a buffered channel / goroutine.
 type OnBlockFn func(ev db.QuarantineEvent)
 
+// BlocklistMatch mirrors blocklist.Match. Defined here (with the
+// Blocklist interface below) so this package never imports
+// internal/blocklist — the concrete store is wired in by server.go
+// through blocklist's own bridge, keeping the dependency one-way.
+type BlocklistMatch struct {
+	SourceID string
+	Summary  string
+}
+
+// Blocklist is the known-malicious lookup consulted as Check's very
+// first step. Check returns the advisory match (nil = clean), whether
+// an unexpired operator override exempts this exact request, and any
+// storage error.
+type Blocklist interface {
+	Check(ctx context.Context, ecosystem, pkg, version string) (*BlocklistMatch, bool, error)
+}
+
 type Checker struct {
-	policy  *Policy
-	lookup  *Lookup
-	store   *Store
-	now     func() time.Time // injectable for tests
-	onBlock OnBlockFn
+	policy    *Policy
+	lookup    *Lookup
+	store     *Store
+	now       func() time.Time // injectable for tests
+	onBlock   OnBlockFn
+	blocklist Blocklist
+}
+
+// SetBlocklist installs the known-malicious lookup. Same lifecycle
+// contract as SetOnBlock: single-word pointer write, safe to call
+// once during server boot; nil disables the malware gate.
+func (c *Checker) SetBlocklist(bl Blocklist) {
+	c.blocklist = bl
 }
 
 // NewChecker validates the policy and wires up the dependencies.
@@ -112,6 +151,56 @@ func NewChecker(p *Policy, l *Lookup, s *Store) (*Checker, error) {
 func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP string) Decision {
 	if c == nil || c.policy == nil {
 		return Decision{Allowed: true}
+	}
+
+	// Step 0: known-malicious blocklist — the hardest gate, evaluated
+	// before EVERYTHING else. Threshold-0 ecosystems (go/apt) and the
+	// quarantine allow-list deliberately cannot bypass it; the only
+	// exemption is an unexpired, audited operator override. Error
+	// posture is asymmetric on purpose: a failed override lookup on a
+	// confirmed match blocks (the safe direction for malware), while a
+	// failed blocklist lookup on an unknown package logs and continues
+	// (a DB hiccup must not take the proxy down).
+	if c.blocklist != nil && version != "" {
+		match, overridden, err := c.blocklist.Check(ctx, ecosystem, pkg, version)
+		switch {
+		case match != nil && err != nil:
+			zap.L().Warn("quarantine: blocklist override lookup failed — blocking the confirmed match",
+				zap.String("ecosystem", ecosystem), zap.String("package", pkg),
+				zap.String("version", version), zap.Error(err))
+			overridden = false
+			fallthrough
+		case match != nil:
+			if overridden {
+				c.recordEvent(ctx, db.QuarantineEvent{
+					Ecosystem: ecosystem,
+					Package:   pkg,
+					Version:   version,
+					Action:    ActionMalwareBypassed,
+					Reason:    fmt.Sprintf("operator override active for %s", match.SourceID),
+					ClientIP:  clientIP,
+				})
+				// Fall through to the age checks below — an override
+				// exempts from the malware block, not from quarantine.
+				break
+			}
+			reason := fmt.Sprintf(
+				"%s@%s is a known-malicious version (%s): %s — refusing to serve",
+				pkg, version, match.SourceID, match.Summary,
+			)
+			c.recordEvent(ctx, db.QuarantineEvent{
+				Ecosystem: ecosystem,
+				Package:   pkg,
+				Version:   version,
+				Action:    ActionMalwareBlocked,
+				Reason:    reason,
+				ClientIP:  clientIP,
+			})
+			return Decision{Allowed: false, Code: CodeMaliciousBlocked, Reason: reason}
+		case err != nil:
+			zap.L().Warn("quarantine: blocklist lookup failed — continuing without it",
+				zap.String("ecosystem", ecosystem), zap.String("package", pkg), zap.Error(err))
+		}
 	}
 
 	// Step 1: ecosystem disabled.
@@ -194,6 +283,7 @@ func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP s
 		})
 		return Decision{
 			Allowed:   false,
+			Code:      CodeQuarantined,
 			Reason:    reason,
 			AgeAtCall: age,
 			Threshold: threshold,
@@ -268,6 +358,7 @@ func (c *Checker) handleLookupError(
 	})
 	return Decision{
 		Allowed:   false,
+		Code:      CodeQuarantined,
 		Reason:    reason,
 		Threshold: threshold,
 	}
@@ -294,6 +385,12 @@ func (c *Checker) SetOnBlock(fn OnBlockFn) {
 // the wrong tradeoff. The audit trail is for after-the-fact review;
 // the gating decision happens regardless.
 func (c *Checker) recordEvent(ctx context.Context, ev db.QuarantineEvent) {
+	// Stamp the event before it reaches the store copy AND the hook —
+	// the OnBlock webhook formats ev.CreatedAt, and the zero value
+	// renders as year 0001 in every chat channel (v0.8.0 review).
+	if ev.CreatedAt.IsZero() {
+		ev.CreatedAt = c.now()
+	}
 	if c.store != nil {
 		if err := c.store.RecordEvent(ctx, ev); err != nil {
 			zap.L().Warn("quarantine: RecordEvent",
@@ -304,7 +401,7 @@ func (c *Checker) recordEvent(ctx context.Context, ev db.QuarantineEvent) {
 				zap.Error(err))
 		}
 	}
-	if c.onBlock != nil && ev.Action == ActionBlocked {
+	if c.onBlock != nil && (ev.Action == ActionBlocked || ev.Action == ActionMalwareBlocked) {
 		// Defer-recover so a panicking webhook implementation can't
 		// break the gating decision. The OnBlock hook is meant to be
 		// fire-and-forget; misbehaving callers shouldn't be able to
