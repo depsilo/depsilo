@@ -13,7 +13,7 @@
  *  the utility-class machinery, while the actual cascading values
  *  on :root override them per data-theme. */
 @theme {
-  --color-bg-page:   #F6F7F6;
+  --color-bg-page:   #F0F2F1;
   --color-bg-panel:  #FFFFFF;
   --color-bg-card:   #FFFFFF;
   --color-bg-soft:   #F1F3F2;
@@ -26,7 +26,7 @@
   --color-text:        #14181A;
   --color-text-muted:  #586068;
   --color-text-soft:   #8A9299;
-  --color-text-subtle: #8A9299;
+  --color-text-subtle: #6B737C;
 
   /* Brand = the "hit" signal green. Identical token, kept under the
      old name so every component that reads --color-brand keeps
@@ -93,7 +93,7 @@
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Surfaces — old names */
-  --bg-page:   #F6F7F6;
+  --bg-page:   #F0F2F1;
   --bg-panel:  #FFFFFF;
   --bg-card:   #FFFFFF;
   --bg-soft:   #F1F3F2;
@@ -106,7 +106,7 @@
   --text:        #14181A;
   --text-muted:  #586068;
   --text-soft:   #8A9299;
-  --text-subtle: #8A9299;
+  --text-subtle: #6B737C;
 
   /* Brand = the "hit" signal green. Used for links, active nav,
      focus rings, status dots, cache-hit highlights — wherever the
@@ -197,6 +197,10 @@
 
   --shadow-card: rgba(12, 22, 17, 0.05) 0 6px 18px -6px,
                  rgba(12, 22, 17, 0.04) 0 3px 9px -3px;
+  /* Surface lift for .card — light theme only. Dark elevation comes
+     from surface color + hairline; a glow there would look smoky. */
+  --shadow-surface: rgba(12, 22, 17, 0.04) 0 1px 2px,
+                    rgba(12, 22, 17, 0.06) 0 4px 12px -6px;
   --shadow-pop:  rgba(12, 22, 17, 0.15) 0 30px 45px -30px,
                  rgba(12, 22, 17, 0.08) 0 18px 36px -18px;
 }
@@ -217,7 +221,7 @@ html.dark,
   --text:        #E9ECEE;
   --text-muted:  #98A1A9;
   --text-soft:   #98A1A9;
-  --text-subtle: #5E6770;
+  --text-subtle: #7A8591;
 
   /* Brand / signal-green = lifted to a brighter hit color so it
      reads vividly on the dark surface. */
@@ -284,6 +288,7 @@ html.dark,
 
   --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
                  rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
+  --shadow-surface: none;
   --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
                  rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
 }
@@ -310,7 +315,7 @@ html.dark,
     --text:        #E9ECEE;
     --text-muted:  #98A1A9;
     --text-soft:   #98A1A9;
-    --text-subtle: #5E6770;
+    --text-subtle: #7A8591;
 
     --brand:        #3DDC91;
     --brand-strong: #2DBE7A;
@@ -372,6 +377,7 @@ html.dark,
 
     --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
                    rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
+    --shadow-surface: none;
     --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
                    rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
   }
@@ -416,8 +422,12 @@ body { margin: 0; }
        headlines, "Configure {{name}}", etc. */
     text-wrap: balance;
   }
-  h1 { font-size: 44px; letter-spacing: -0.04em; line-height: 1.02; }
-  h2 { font-size: 26px; letter-spacing: -0.03em; }
+  /* Inter Tight is already a tightened cut — stacking aggressive
+     negative tracking on top double-tightens Latin headings (and CJK
+     glyphs have no sidebearings to absorb any of it). Keep display
+     tracking modest. */
+  h1 { font-size: 44px; letter-spacing: -0.028em; line-height: 1.02; }
+  h2 { font-size: 26px; letter-spacing: -0.022em; }
   h3 { font-size: 17px; letter-spacing: -0.02em; line-height: 1.2; }
   h4 { font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
   /* Body copy: pretty wraps to avoid widow/orphan single words at the
@@ -561,12 +571,42 @@ pre, code, .code-mono {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--brand) 3%, transparent) 0%, transparent 34%),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
-    linear-gradient(180deg, var(--grid) 1px, transparent 1px);
-  background-size: auto, 44px 44px, 44px 44px;
-  mask-image: linear-gradient(to bottom, black 0%, black 44%, transparent 84%);
+  /* No ambient color: brand-tinted washes have been tried and removed
+     TWICE now (copper/purple mesh era, then the 2026-07-09 green glow)
+     — every time they read as "tinted screen". The page sits on plain
+     --bg-page; this element only carries the film-grain frost below,
+     and the brand green lives in UI elements where it means something. */
+  background: none;
+}
+
+/* Frosted film grain — a tiled SVG fractal-noise texture over the page
+   background (2026-07-09 redesign follow-up, paper-design/shaders as
+   the aesthetic reference; implemented dependency-free). Deliberately
+   STATIC: the frosted feel comes from texture, not motion, and the
+   page's single ambient animation stays the CTA shimmer. The layer
+   lives under all content (cards paint over it), so text never sits
+   on noise. Monochrome and uniform across the full page. */
+.page-wash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  /* Light theme: ink-on-paper grain, kept very quiet. */
+  opacity: 0.05;
+  mix-blend-mode: multiply;
+}
+html.dark .page-wash::before,
+[data-theme="dark"] .page-wash::before {
+  /* Dark theme: brighter speckle lifted out of the surface. */
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+}
+@media (prefers-color-scheme: dark) {
+  html:not(.light):not([data-theme="light"]) .page-wash::before {
+    opacity: 0.07;
+    mix-blend-mode: overlay;
+  }
 }
 
 @layer utilities {
@@ -629,6 +669,7 @@ pre, code, .code-mono {
   background: var(--bg-card);
   border: 0.5px solid var(--border);
   border-radius: var(--r-card);
+  box-shadow: var(--shadow-surface);
 }
 
 .shell {
@@ -661,6 +702,28 @@ html.dark .logo-icon-light,
   to   { opacity: 1; transform: translateY(0); }
 }
 .fade-up { animation: fadeUp 220ms ease both; }
+/* Stagger helpers — semantic page blocks enter ~70ms apart instead of
+   the whole page fading in as one slab. `both` fill on .fade-up keeps
+   delayed blocks hidden until their turn. */
+.fade-up-d1 { animation-delay: 70ms; }
+.fade-up-d2 { animation-delay: 140ms; }
+.fade-up-d3 { animation-delay: 210ms; }
+
+/* ── Hit-area extension ───────────────────────────────────
+   Small header controls (endpoint pill, nav tabs, admin link) are
+   visually ~22-30px tall — under the 40px minimum touch target. The
+   ::after plane extends the clickable box vertically without changing
+   the visible chrome. Vertical-only: neighbors sit 2-8px apart
+   horizontally and hit areas must never overlap. */
+.hit-extend { position: relative; }
+.hit-extend::after {
+  content: '';
+  position: absolute;
+  top: -9px;
+  bottom: -9px;
+  left: 0;
+  right: 0;
+}
 
 @keyframes skeletonPulse {
   0%, 100% { opacity: 0.5; }
@@ -808,6 +871,34 @@ a:focus:not(:focus-visible) {
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+
+/* ── QuickStart hero backdrop ─────────────────────────────
+   Brand glow rising from the hero card's lower-left corner. The dark
+   values are the original design; light mode halves every brand stop —
+   at full strength the mint tint reads as grime on a white card. */
+.quickstart-hero-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 6%, transparent) 0%, color-mix(in oklab, var(--brand) 2%, transparent) 54%, transparent 78%),
+    linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 95%, var(--brand) 5%) 0%, var(--bg-card) 48%, var(--bg-card) 100%);
+}
+html.dark .quickstart-hero-wash,
+[data-theme="dark"] .quickstart-hero-wash {
+  background:
+    radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 13%, transparent) 0%, color-mix(in oklab, var(--brand) 4%, transparent) 54%, transparent 78%),
+    linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 90%, var(--brand) 10%) 0%, var(--bg-card) 48%, var(--bg-card) 100%);
+}
+@media (prefers-color-scheme: dark) {
+  html:not(.light):not([data-theme="light"]) .quickstart-hero-wash {
+    background:
+      radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 13%, transparent) 0%, color-mix(in oklab, var(--brand) 4%, transparent) 54%, transparent 78%),
+      linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 90%, var(--brand) 10%) 0%, var(--bg-card) 48%, var(--bg-card) 100%);
+  }
+}
+
 /* ── Cursor-spotlight on ecosystem tiles ──────────────────
    A radial gradient pinned to the pointer position (set by the
    component's onMouseMove via --spot-x / --spot-y) shimmers across
@@ -831,43 +922,50 @@ a:focus:not(:focus-visible) {
 /* Content above the spotlight layer. */
 .eco-tile > * { position: relative; z-index: 1; }
 
-/* ── Animated conic-gradient border for the AI eyebrow chip ────
-   The brand's only continuous animation — a slow 6s rotation of a
-   chromatic ring around the chip. @property is the load-bearing
-   modern-CSS hook: it lets the browser animate a custom property
-   as if it were a real CSS value. Restricted to one element on the
-   page; if every button had this it would feel cheap. */
-@property --ai-chip-angle {
+/* ── Animated chromatic shimmer ring on the primary CTA ────
+   The page's only continuous animation — a slow multi-hue conic ring
+   circling the "copy the full prompt" button (moved here from the old
+   AI eyebrow chip per the 2026-07-09 redesign spec). @property is the
+   load-bearing modern-CSS hook: it lets the browser animate a custom
+   property as if it were a real CSS value. Restricted to one element;
+   if every button had this it would feel cheap. The JSX only attaches
+   the class in the resting enabled state, so copied/disabled buttons
+   don't shimmer. Under prefers-reduced-motion the global rule freezes
+   the rotation — the ring degrades to a static gradient border. */
+@property --cta-angle {
   syntax: '<angle>';
   initial-value: 0deg;
   inherits: false;
 }
-@keyframes aiChipRotate {
-  to { --ai-chip-angle: 360deg; }
+@keyframes ctaShimmerRotate {
+  to { --cta-angle: 360deg; }
 }
-.ai-chip {
+.cta-shimmer {
   position: relative;
   isolation: isolate;
 }
-.ai-chip::before {
+.cta-shimmer::before {
   content: '';
   position: absolute;
-  inset: -1.5px;
-  border-radius: inherit;
+  inset: -2px;
+  /* Button radius 8 + 2px offset — concentric. */
+  border-radius: 10px;
   padding: 1.5px;
   background: conic-gradient(
-    from var(--ai-chip-angle),
-    color-mix(in oklab, var(--brand) 70%, transparent),
-    color-mix(in oklab, var(--brand) 10%, transparent) 30%,
-    color-mix(in oklab, var(--brand) 70%, transparent) 65%,
-    color-mix(in oklab, var(--brand) 10%, transparent) 100%
+    from var(--cta-angle),
+    #3DDC91,
+    #54C6E6 28%,
+    color-mix(in oklab, #54C6E6 30%, transparent) 42%,
+    #F2B544 58%,
+    #2DBE7A 78%,
+    #3DDC91 100%
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-  animation: aiChipRotate 6s linear infinite;
+  animation: ctaShimmerRotate 8s linear infinite;
   pointer-events: none;
   z-index: -1;
 }
@@ -918,6 +1016,9 @@ a:focus:not(:focus-visible) {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
+    /* Also zero delays — a staggered .fade-up-d* block with `both`
+       fill would otherwise sit invisible for its whole delay. */
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;

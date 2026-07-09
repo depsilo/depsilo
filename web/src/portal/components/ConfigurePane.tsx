@@ -87,6 +87,7 @@ function ManagerTabs({
             key={m.id}
             type="button"
             onClick={() => onChange(m.id)}
+            className="active:scale-[0.96]"
             style={{
               display: 'inline-flex',
               flexDirection: 'column',
@@ -98,7 +99,8 @@ function ManagerTabs({
               borderRadius: 9,
               textAlign: 'left',
               cursor: 'pointer',
-              transition: 'all 120ms ease',
+              transition:
+                'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
             }}
           >
             <span
@@ -262,7 +264,19 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
         <ManagerTabs managers={lang.managers} active={mgrId} onChange={setMgrId} />
 
         {mgrId === 'ai' ? (
-          <PromptCard prompt={prompt} label={t('quickstart.promptForTools')} />
+          <>
+            <PromptCard prompt={prompt} label={t('quickstart.promptForTools')} />
+            {/* Fill the lower half of the pane with the natural next
+                step — the same verify command the manual tabs end with,
+                so the AI path doesn't leave the console feeling empty. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
+                {t('quickstart.aiVerifyHint')}
+              </span>
+              <div style={{ flex: 1, height: '0.5px', background: 'var(--border)' }} />
+            </div>
+            <CodeBlock code={fill(m.verify.body)} language={m.verify.lang} />
+          </>
         ) : (
           <>
             {/* Quick methods (e.g. -i flag, env var) */}

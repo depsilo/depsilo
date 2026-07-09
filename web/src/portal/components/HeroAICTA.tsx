@@ -19,7 +19,7 @@ import { copyText } from '@/lib/clipboard'
 const PREVIEW_LINES = 5
 
 export default function HeroAICTA() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -39,6 +39,7 @@ export default function HeroAICTA() {
   const previewText =
     prompt?.split('\n').slice(0, PREVIEW_LINES).join('\n') ??
     (isLoading ? t('quickstart.loading') : '')
+  const promptLines = prompt ? prompt.split('\n').length : 0
 
   async function handleCopy() {
     if (!prompt) return
@@ -68,24 +69,10 @@ export default function HeroAICTA() {
           boxShadow: 'var(--shadow-pop)',
         }}
       >
-        {/* Brand-aurora wash — pulled back from "salmon cream wash" to
-            a single soft warm glow rising from the lower-left corner.
-            7% peak alpha drops to transparent before crossing the
-            midline so the right half (where the preview card lives)
-            stays neutral. The previous 14%-from-left-to-42% covered
-            the entire strip and made the eye see "pinkish hero"; this
-            reads as "warm light leaking up from one corner". */}
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 13%, transparent) 0%, color-mix(in oklab, var(--brand) 4%, transparent) 54%, transparent 78%), linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 90%, var(--brand) 10%) 0%, var(--bg-card) 48%, var(--bg-card) 100%)',
-            pointerEvents: 'none',
-            zIndex: -1,
-          }}
-        />
+        {/* Brand glow rising from the lower-left corner. Theme-aware
+            (.quickstart-hero-wash in index.css): light mode halves the
+            tint so the white card doesn't read minty. */}
+        <div aria-hidden className="quickstart-hero-wash" />
         {/* Left-edge brand bar. */}
         <div
           aria-hidden
@@ -109,7 +96,7 @@ export default function HeroAICTA() {
           }}
         >
           <div
-            className="eyebrow ai-chip"
+            className="eyebrow"
             style={{
               color: 'var(--brand-text)',
               marginBottom: 14,
@@ -117,19 +104,22 @@ export default function HeroAICTA() {
               alignSelf: 'flex-start',
               padding: '6px 12px',
               borderRadius: 999,
+              border: '0.5px solid var(--brand-border)',
               background: 'color-mix(in oklab, var(--brand) 6%, var(--bg-card))',
             }}
           >
-            <span aria-hidden style={{ marginRight: 5 }}>✦</span>
             {t('quickstart.heroEyebrow')}
           </div>
           <h2
             style={{
               margin: 0,
-              fontSize: 'clamp(34px, 3vw, 48px)',
+              fontSize: 'clamp(34px, 3.2vw, 56px)',
               fontFamily: 'var(--font-display)',
               fontWeight: 680,
-              letterSpacing: '-0.045em',
+              // Inter Tight is pre-tightened; keep added tracking mild
+              // for Latin, and milder still for CJK (hanzi carry no
+              // sidebearings to absorb negative tracking).
+              letterSpacing: i18n.language === 'zh' ? '-0.02em' : '-0.025em',
               lineHeight: 1.02,
               color: 'var(--text)',
               maxWidth: 560,
@@ -173,18 +163,29 @@ export default function HeroAICTA() {
             boxShadow: 'var(--shadow-card)',
           }}
         >
-          {/* Preview header */}
+          {/* Preview header — filename first, the old label demoted to
+              a secondary hint beside it. */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
               gap: 8,
               padding: '9px 12px 9px 16px',
               borderBottom: '0.5px solid var(--border)',
               background: 'var(--bg-card)',
             }}
           >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              depsilo-integrate.md
+            </span>
             <span
               className="eyebrow"
               style={{ color: 'var(--text-subtle)', fontSize: 10, margin: 0 }}
@@ -193,6 +194,7 @@ export default function HeroAICTA() {
             </span>
             <span
               style={{
+                marginLeft: 'auto',
                 fontSize: 10,
                 fontFamily: 'var(--font-mono)',
                 color: 'var(--text-subtle)',
@@ -201,11 +203,11 @@ export default function HeroAICTA() {
               {t('quickstart.heroSizeHint')}
             </span>
           </div>
-          {/* Preview body */}
+          {/* Preview body — numbered lines, code-editor style. */}
           <pre
             style={{
               margin: 0,
-              padding: '18px 18px 16px',
+              padding: '16px 18px 14px 14px',
               flex: 1,
               fontFamily: 'var(--font-mono)',
               fontSize: 13,
@@ -213,13 +215,31 @@ export default function HeroAICTA() {
               color: 'var(--text)',
               whiteSpace: 'pre',
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
               maxHeight: 152,
               position: 'relative',
             }}
           >
             <code style={{ display: 'block', opacity: prompt ? 1 : 0.5 }}>
-              {error ? t('quickstart.aiIntegrationError') : previewText}
+              {error
+                ? t('quickstart.aiIntegrationError')
+                : previewText.split('\n').map((line, i) => (
+                    <span key={i} style={{ display: 'flex', gap: 12 }}>
+                      <span
+                        aria-hidden
+                        style={{
+                          userSelect: 'none',
+                          minWidth: 16,
+                          textAlign: 'right',
+                          color: 'var(--text-subtle)',
+                          opacity: 0.7,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</span>
+                    </span>
+                  ))}
             </code>
             {/* Fade-out gradient at the bottom edge so the truncation
                 reads as "more below" rather than "cut off". */}
@@ -253,7 +273,7 @@ export default function HeroAICTA() {
               type="button"
               onClick={handleCopy}
               disabled={!prompt}
-              className="active:scale-[0.96]"
+              className={`active:scale-[0.96]${prompt && !copied ? ' cta-shimmer' : ''}`}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -285,13 +305,48 @@ export default function HeroAICTA() {
                   'background 160ms ease, color 160ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
               }}
             >
-              <span aria-hidden>{copied ? '✓' : '⧉'}</span>
-              {copied ? t('quickstart.copied') : t('quickstart.heroCopyCta')}
+              {/* Cross-fade the glyph (both stay in the DOM) and stack
+                  both labels in one grid cell so the button keeps the
+                  width of the longer label — no layout jump on copy. */}
+              <span aria-hidden style={{ position: 'relative', display: 'inline-flex', width: 12, height: 15 }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    opacity: copied ? 0 : 1,
+                    transform: copied ? 'scale(0.25)' : 'scale(1)',
+                    filter: copied ? 'blur(4px)' : 'blur(0)',
+                    transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
+                  }}
+                >
+                  ⧉
+                </span>
+                <span
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    opacity: copied ? 1 : 0,
+                    transform: copied ? 'scale(1)' : 'scale(0.25)',
+                    filter: copied ? 'blur(0)' : 'blur(4px)',
+                    transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
+                  }}
+                >
+                  ✓
+                </span>
+              </span>
+              <span style={{ display: 'grid', textAlign: 'center' }}>
+                <span style={{ gridArea: '1 / 1', opacity: copied ? 0 : 1, transition: 'opacity 160ms ease' }}>
+                  {t('quickstart.heroCopyCta')}
+                </span>
+                <span style={{ gridArea: '1 / 1', opacity: copied ? 1 : 0, transition: 'opacity 160ms ease' }}>
+                  {t('quickstart.copied')}
+                </span>
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="active:scale-[0.96]"
+              className="active:scale-[0.96] hit-extend"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -319,17 +374,21 @@ export default function HeroAICTA() {
               {t('quickstart.heroViewFull')}
               <span aria-hidden style={{ opacity: 0.7 }}>→</span>
             </button>
-            <span
-              className="quickstart-hero-compat"
-              style={{
-                marginLeft: 'auto',
-                fontSize: 11,
-                color: 'var(--text-subtle)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {t('quickstart.heroCompat')}
-            </span>
+            {promptLines > 0 && (
+              <span
+                className="quickstart-hero-compat"
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: 11,
+                  fontFamily: 'var(--font-mono)',
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'var(--text-subtle)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t('quickstart.heroPromptMeta', { n: promptLines })}
+              </span>
+            )}
           </div>
         </div>
       </section>

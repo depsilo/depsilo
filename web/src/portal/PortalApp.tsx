@@ -33,7 +33,7 @@ function EndpointPill() {
     <button
       type="button"
       onClick={handleCopy}
-      className="active:scale-[0.96] portal-endpoint-pill"
+      className="active:scale-[0.96] portal-endpoint-pill hit-extend"
       title={url}
       style={{
         display: 'inline-flex',
@@ -59,8 +59,38 @@ function EndpointPill() {
       }}
     >
       <span style={{ letterSpacing: '-0.01em' }}>{compact}</span>
-      <span style={{ fontSize: 10, color: copied ? 'var(--ok-text)' : 'var(--text-subtle)' }}>
-        {copied ? '✓' : '⧉'}
+      {/* Both glyphs stay in the DOM and cross-fade (opacity + scale +
+          blur) so the ⧉ → ✓ swap reads as a state change instead of a
+          hard snap. */}
+      <span style={{ position: 'relative', display: 'inline-flex', width: 11, height: 13, fontSize: 10 }}>
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            color: 'var(--text-subtle)',
+            opacity: copied ? 0 : 1,
+            transform: copied ? 'scale(0.25)' : 'scale(1)',
+            filter: copied ? 'blur(4px)' : 'blur(0)',
+            transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
+          }}
+        >
+          ⧉
+        </span>
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            color: 'var(--ok-text)',
+            opacity: copied ? 1 : 0,
+            transform: copied ? 'scale(1)' : 'scale(0.25)',
+            filter: copied ? 'blur(0)' : 'blur(4px)',
+            transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
+          }}
+        >
+          ✓
+        </span>
       </span>
     </button>
   )
@@ -80,6 +110,7 @@ function NavTab({ to, label, isActive }: NavTabProps) {
       style={{ textDecoration: 'none' }}
     >
       <button
+        className="hit-extend"
         style={{
           position: 'relative',
           padding: '6px 10px',
@@ -92,6 +123,13 @@ function NavTab({ to, label, isActive }: NavTabProps) {
           border: 'none',
           cursor: 'pointer',
           whiteSpace: 'nowrap',
+          transition: 'color 120ms ease',
+        }}
+        onMouseEnter={e => {
+          if (!isActive) e.currentTarget.style.color = 'var(--text)'
+        }}
+        onMouseLeave={e => {
+          if (!isActive) e.currentTarget.style.color = 'var(--text-soft)'
         }}
       >
         {label}
@@ -155,7 +193,9 @@ export default function PortalAppV2() {
         <div
           style={{
             height: 52,
-            maxWidth: 1440,
+            // Tracks the main content width below so header content and
+            // page content share edges on wide (2560px+) displays.
+            maxWidth: 'clamp(1280px, 92vw, 1840px)',
             margin: '0 auto',
             padding: '0 clamp(12px, 2vw, 28px)',
             display: 'flex',
@@ -245,7 +285,7 @@ export default function PortalAppV2() {
             </span>
             <a
               href="/admin"
-              className="portal-admin-link"
+              className="portal-admin-link hit-extend"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -270,7 +310,7 @@ export default function PortalAppV2() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1520, margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) clamp(16px, 2.1vw, 32px) 48px' }}>
+      <main style={{ maxWidth: 'clamp(1280px, 92vw, 1840px)', margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) clamp(16px, 2.1vw, 32px) 48px' }}>
         <Routes>
           <Route index element={<QuickStart />} />
           <Route path="monitor" element={<MonitorV2 />} />
