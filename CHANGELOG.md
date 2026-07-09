@@ -3,6 +3,34 @@
 All notable changes to Depsilo will be documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- **Known-malicious blocklist (DIRECTION Task 2)**: syncs the OSV
+  malicious-packages dataset (MAL-* advisories) every 6h and refuses
+  matched versions with HTTP 451 `MALICIOUS_BLOCKED` as the quarantine
+  checker's step 0 — threshold-0 ecosystems (go) and the quarantine
+  allow-list cannot bypass it. Audited operator overrides expire after
+  24h and cannot be extended. Critical-severity webhooks on every
+  block; admin tab (sync status / manual sync / overrides) on the
+  Quarantine page; enabled by default with degrade-on-failure (sync
+  errors keep blocking on the last good dataset). `mirror_url` +
+  `proxy` configurable for restricted-egress deployments.
+- Go modules gained the malware gate on `@v/*.zip` downloads (with
+  GOPROXY `!upper` path decoding); extra PyPI-compatible indexes
+  canonicalize to the pypi blocklist rows.
+
+### Fixed
+- Blocklist import semantics hardened by adversarial review against
+  the LIVE dataset: bounded-range advisories without version lists
+  (fsevents, @solana/web3.js) are skipped instead of blocking every
+  clean release; withdrawn advisories are never imported; NuGet names
+  lowercase to match the flat-container protocol; a zero-entry archive
+  can no longer wipe a populated ecosystem; syncs are two-phase (no
+  partial cross-ecosystem commits) and re-entrancy guarded.
+- Quarantine/malware webhook timestamps were the zero value (rendered
+  as year 0001 in chat channels).
+
 ## [0.8.0] - 2026-07-09
 
 The "enforcement layer" release: Depsilo pivots from cache-with-extras to a
