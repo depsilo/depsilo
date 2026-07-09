@@ -83,22 +83,54 @@ jobs:
       # though the manifest is multi-arch — Syft resolves to a single
       # image reference here; per-arch SBOMs can come later if a
       # buyer needs them.
+      # Two v0.8.0 postmortem fixes baked in (both failed on the first
+      # tag that exercised this path):
+      # 1. Image tags come from metadata-action's semver patterns and
+      #    carry NO "v" prefix — `github.ref_name` (v0.8.0) pointed at
+      #    a manifest that doesn't exist. Use steps.meta.outputs.version.
+      # 2. Scan the Docker Hub image, not ghcr — Syft's registry
+      #    provider hit UNAUTHORIZED on ghcr even after docker login
+      #    (it doesn't read the daemon's cred store), and the Docker
+      #    Hub package is the publicly documented install path anyway.
       - name: Generate image SBOM (CycloneDX)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/depsilo/depsilo:${{ github.ref_name }}
+          image: depsilo/depsilo:${{ steps.meta.outputs.version }}
           format: cyclonedx-json
           output-file: depsilo-${{ github.ref_name }}-image.cdx.json
           upload-artifact: false
-          upload-release-assets: true
+          upload-release-assets: false
 
       - name: Generate image SBOM (SPDX)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: anchore/sbom-action@v0
         with:
-          image: ghcr.io/depsilo/depsilo:${{ github.ref_name }}
+          image: depsilo/depsilo:${{ steps.meta.outputs.version }}
           format: spdx-json
           output-file: depsilo-${{ github.ref_name }}-image.spdx.json
           upload-artifact: false
-          upload-release-assets: true
+          upload-release-assets: false
+
+      # sbom-action's own upload-release-assets only fires on `release`
+      # events; this workflow triggers on tag PUSH, so it silently
+      # skipped (v0.8.0 postmortem). Upload explicitly instead. The
+      # Release workflow creates the release for the same tag; --clobber
+      # keeps a re-run idempotent, and the retry loop covers the race
+      # where this job outruns GoReleaser creating the release.
+      - name: Upload image SBOMs to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in 1 2 3 4 5; do
+            if gh release upload "${{ github.ref_name }}" \
+                 "depsilo-${{ github.ref_name }}-image.cdx.json" \
+                 "depsilo-${{ github.ref_name }}-image.spdx.json" \
+                 --clobber -R "${{ github.repository }}"; then
+              exit 0
+            fi
+            echo "release not ready yet, retry $i/5 in 60s"
+            sleep 60
+          done
+          exit 1

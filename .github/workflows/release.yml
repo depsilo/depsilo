@@ -68,7 +68,7 @@ jobs:
           format: cyclonedx-json
           output-file: depsilo-${{ github.ref_name }}-source.cdx.json
           upload-artifact: false
-          upload-release-assets: true
+          upload-release-assets: false
 
       - name: Generate source SBOM (SPDX)
         uses: anchore/sbom-action@v0
@@ -77,7 +77,20 @@ jobs:
           format: spdx-json
           output-file: depsilo-${{ github.ref_name }}-source.spdx.json
           upload-artifact: false
-          upload-release-assets: true
+          upload-release-assets: false
+
+      # sbom-action's upload-release-assets only fires on `release`
+      # events — on tag pushes it silently skips (v0.8.0 postmortem:
+      # green run, no assets). GoReleaser created the release earlier
+      # in this job, so a plain explicit upload works here.
+      - name: Upload source SBOMs to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "depsilo-${{ github.ref_name }}-source.cdx.json" \
+            "depsilo-${{ github.ref_name }}-source.spdx.json" \
+            --clobber -R "${{ github.repository }}"
 
   # Job 2: macOS menu-bar app (.app bundle, unsigned)
   # Built on macOS via `make app-macos` which wraps `cmd/depsilo-tray` in
