@@ -30,12 +30,16 @@ const HEARTBEAT_LIMIT = 44
 const BEAT_WIDTH = 6
 const BEAT_GAP = 2
 
+// Red is reserved for DOWN (-1): a slow-but-alive upstream must never
+// paint the panel in danger color — a wall of red on a page whose
+// header says "0 failed" reads as a contradiction. Slow is a single
+// amber tier, and the 150ms threshold matches mirrorStatus() on the
+// Monitor page so ticks and status dots always agree.
 function beatColor(latency: number | null): string {
   if (latency === null) return 'color-mix(in oklab, var(--border-strong) 58%, var(--bg-card))'
   if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
-  if (latency < 200) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
-  if (latency < 500) return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
-  return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
+  if (latency < 150) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
+  return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
 }
 
 function beatLabel(latency: number | null): string {
@@ -111,9 +115,10 @@ export function HeartbeatBar({ upstream, externalBeats, labels }: { upstream: Up
         onMouseLeave={() => setHoveredIdx(null)}
       >
         {displayBeats.map((lat, i) => (
+          // Hover-only affordance (tooltip): default cursor — pointer
+          // would promise a click these bars don't have.
           <div
             key={i}
-            className="cursor-pointer"
             style={{
               width: BEAT_WIDTH,
               flex: '0 0 auto',

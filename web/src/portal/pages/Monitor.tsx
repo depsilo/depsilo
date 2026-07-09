@@ -1,11 +1,21 @@
+// Monitor — the portal's health page.
+//
+// Audience: an End User whose install is slow or failing, coming here
+// to answer "is it the proxy or the upstream?". Upstream health panels
+// are therefore the page's main content, right below the header.
+//
+// Value metrics (hit rate / bandwidth saved) are demoted to two compact
+// numbers in the header summary row and use a 7-day rolling window from
+// /api/v1/stats `week` — a day-scoped rate resets at midnight and
+// swings wildly at low sample counts. Request counts live in the admin
+// dashboard, not here.
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
 import StatusDot from '@/components/StatusDot'
-import Sparkline from '@/components/Sparkline'
-import HeroSparkline from '@/components/HeroSparkline'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
-import type { MirrorStatus } from '@/lib/ecosystemData'
+import { LANGUAGES, type MirrorStatus } from '@/lib/ecosystemData'
 
 interface LatencyPoint {
   time: string
@@ -24,207 +34,24 @@ interface UpstreamInfo {
   latency_series?: LatencyPoint[]
 }
 
-interface SeriesPoint {
-  time_unix: number
-  requests: number
-  hits: number
-  hit_rate: number
-  bytes_saved: number
-  avg_latency_ms: number
-}
-
 interface StatsData {
   service: { status: string }
-  today: {
+  week?: {
     total_requests: number
     hit_count: number
-    miss_count: number
     hit_rate: number
-    bytes_served: number
     bytes_saved: number
   }
-  cache: { total_files: number; total_size_bytes: number }
   upstreams: UpstreamInfo[]
-  series?: {
-    interval_minutes: number
-    points: SeriesPoint[]
-  }
 }
 
 function formatBytes(bytes: number): { value: string; unit: string } {
   if (bytes >= 1e12) return { value: (bytes / 1e12).toFixed(1), unit: 'TB' }
   if (bytes >= 1e9)  return { value: (bytes / 1e9).toFixed(0),  unit: 'GB' }
   if (bytes >= 1e6)  return { value: (bytes / 1e6).toFixed(0),  unit: 'MB' }
+  if (bytes >= 1e3)  return { value: (bytes / 1e3).toFixed(0),  unit: 'KB' }
   return { value: String(bytes), unit: 'B' }
 }
-
-function formatRequests(n: number): { value: string; unit: string } {
-  if (n >= 1e6) return { value: (n / 1e6).toFixed(2), unit: 'M' }
-  if (n >= 1e3) return { value: (n / 1e3).toFixed(1), unit: 'K' }
-  return { value: String(n), unit: '' }
-}
-
-// ── HitRateHero ───────────────────────────────────────────────────
-
-function HitRateHero({ hitRate, series }: { hitRate: number; series: SeriesPoint[] }) {
-  const { t } = useTranslation()
-  const displayRate = (hitRate * 100).toFixed(1)
-  const sparkValues = series.length > 0 ? series.map(p => p.hit_rate) : [0, 0]
-
-  return (
-    <div
-      className="card aurora-rim"
-      style={{
-        padding: '28px 32px',
-        display: 'grid',
-        gridTemplateColumns: '320px 1fr',
-        alignItems: 'stretch',
-        gap: 32,
-        minHeight: 168,
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <div>
-          <div
-            className="eyebrow"
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-          >
-            <StatusDot status="healthy" live />
-            <span>{t('monitor.hitRateToday')}</span>
-          </div>
-          <div
-            className="aurora-glow"
-            style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 14 }}
-          >
-            <span
-              className="grad-text-aurora"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 76,
-                fontWeight: 600,
-                letterSpacing: '-0.06em',
-                lineHeight: 1,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {displayRate}
-            </span>
-            <span style={{ fontSize: 22, color: 'var(--text-soft)' }}>%</span>
-          </div>
-        </div>
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          position: 'relative',
-          borderLeft: '0.5px solid var(--border)',
-          paddingLeft: 32,
-        }}
-      >
-        <HeroSparkline values={sparkValues} />
-      </div>
-    </div>
-  )
-}
-
-// ── StatStrip ─────────────────────────────────────────────────────
-
-function StatStrip({ data, upstreams, series }: { data: StatsData['today']; upstreams: UpstreamInfo[]; series: SeriesPoint[] }) {
-  const { t } = useTranslation()
-  const reqFmt   = formatRequests(data.total_requests)
-  const savedFmt = formatBytes(data.bytes_saved)
-
-  const healthyLatencies = upstreams.filter(u => u.healthy && u.avg_latency_ms > 0).map(u => u.avg_latency_ms)
-  const p50Ms = healthyLatencies.length > 0
-    ? Math.round(healthyLatencies.reduce((a, b) => a + b, 0) / healthyLatencies.length)
-    : null
-
-  const reqSeries     = series.length > 0 ? series.map(p => p.requests) : [0, 0]
-  const savedSeries   = series.length > 0 ? series.map(p => p.bytes_saved) : [0, 0]
-  const latencySeries = series.length > 0 ? series.map(p => p.avg_latency_ms) : [0, 0]
-
-  const items = [
-    {
-      label: t('monitor.requests'),
-      value: reqFmt.value,
-      unit: reqFmt.unit,
-      tone: 'brand' as const,
-      series: reqSeries,
-    },
-    {
-      label: t('monitor.bandwidthSaved'),
-      value: savedFmt.value,
-      unit: savedFmt.unit,
-      tone: 'brand' as const,
-      series: savedSeries,
-    },
-    {
-      label: t('monitor.avgLatency'),
-      value: p50Ms !== null ? String(p50Ms) : '-',
-      unit: p50Ms !== null ? 'ms' : '',
-      tone: 'neutral' as const,
-      series: latencySeries,
-    },
-  ]
-
-  return (
-    <div
-      className="card"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 0,
-        padding: 0,
-      }}
-    >
-      {items.map((it, i) => (
-        <div
-          key={it.label}
-          style={{
-            padding: '16px 20px',
-            borderRight: i < items.length - 1 ? '0.5px solid var(--border)' : 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{it.label}</span>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'baseline',
-              justifyContent: 'space-between',
-              gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 32,
-                  fontWeight: 600,
-                  letterSpacing: '-0.04em',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {it.value}
-              </span>
-              <span style={{ fontSize: 13, color: 'var(--text-soft)' }}>{it.unit}</span>
-            </div>
-            <Sparkline data={it.series} width={120} height={26} tone={it.tone} />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── MirrorTile ────────────────────────────────────────────────────
 
 function mirrorStatus(u: UpstreamInfo): MirrorStatus {
   if (!u.healthy) return 'failed'
@@ -251,6 +78,7 @@ function toUpstreamItem(upstream: UpstreamInfo, locale: string): UpstreamItem {
   return {
     name: upstream.name,
     adapter: upstream.adapter,
+    url: upstream.url,
     healthy: upstream.healthy,
     avg_latency_ms: upstream.avg_latency_ms,
     success_rate: upstream.success_rate,
@@ -259,9 +87,153 @@ function toUpstreamItem(upstream: UpstreamInfo, locale: string): UpstreamItem {
   }
 }
 
+// adapter → extra searchable aliases (ecosystem id + display name), so
+// "python" finds the pypi group and "node" finds npm. Built once from
+// the same catalog QuickStart uses.
+const ADAPTER_ALIASES: Record<string, string> = {}
+for (const lang of LANGUAGES) {
+  ADAPTER_ALIASES[lang.iconAdapter] =
+    `${ADAPTER_ALIASES[lang.iconAdapter] ?? ''} ${lang.id} ${lang.name}`.toLowerCase()
+}
+
+function matchesQuery(u: UpstreamItem, q: string): boolean {
+  return (
+    u.adapter.toLowerCase().includes(q) ||
+    (ADAPTER_ALIASES[u.adapter] ?? '').includes(q) ||
+    u.name.toLowerCase().includes(q) ||
+    (u.url ?? '').toLowerCase().includes(q)
+  )
+}
+
+// ── SearchPill ────────────────────────────────────────────────────
+// Compact header search. "/" focuses it from anywhere on the page,
+// Escape clears and blurs. Pure client-side filter — the stats payload
+// already carries every upstream.
+function SearchPill({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== '/') return
+      const t = e.target as HTMLElement
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable) return
+      e.preventDefault()
+      ref.current?.focus()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  return (
+    <div
+      role="search"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 7,
+        width: 230,
+        padding: '6px 8px 6px 10px',
+        background: 'var(--bg-soft)',
+        border: `0.5px solid ${focused ? 'var(--brand-border)' : 'var(--border)'}`,
+        borderRadius: 8,
+        transition: 'border-color 120ms ease, background 120ms ease',
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" style={{ color: 'var(--text-subtle)', flexShrink: 0 }}>
+        <circle cx="11" cy="11" r="7" />
+        <path d="M21 21l-4.3-4.3" />
+      </svg>
+      <input
+        ref={ref}
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') {
+            onChange('')
+            e.currentTarget.blur()
+          }
+        }}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          background: 'transparent',
+          border: 'none',
+          outline: 'none',
+          fontSize: 12.5,
+          fontFamily: 'var(--font-mono)',
+          color: 'var(--text)',
+        }}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => {
+            onChange('')
+            ref.current?.focus()
+          }}
+          aria-label="Clear"
+          className="hit-extend"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 16,
+            height: 16,
+            padding: 0,
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 4,
+            color: 'var(--text-subtle)',
+            cursor: 'pointer',
+            transition: 'color 120ms ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-subtle)' }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
+            <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
+          </svg>
+        </button>
+      ) : (
+        <kbd
+          aria-hidden
+          style={{
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-subtle)',
+            padding: '0 5px',
+            lineHeight: '15px',
+            border: '0.5px solid var(--border)',
+            borderRadius: 4,
+            opacity: focused ? 0 : 1,
+            transition: 'opacity 120ms ease',
+          }}
+        >
+          /
+        </kbd>
+      )}
+    </div>
+  )
+}
+
 export default function MonitorPage() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
+  const [query, setQuery] = useState('')
   const { data } = useQuery<StatsData>({
     queryKey: ['stats-monitor'],
     queryFn: async () => {
@@ -287,16 +259,7 @@ export default function MonitorPage() {
     ...u,
     latency_series: latencyMap?.[u.name],
   }))
-  const hitRate   = data?.today.hit_rate ?? 0
-  const series    = data?.series?.points ?? []
-  const today     = data?.today ?? {
-    total_requests: 0,
-    hit_count: 0,
-    miss_count: 0,
-    hit_rate: 0,
-    bytes_served: 0,
-    bytes_saved: 0,
-  }
+  const week = data?.week
 
   const healthyCounts = upstreams.reduce(
     (acc, u) => {
@@ -308,23 +271,48 @@ export default function MonitorPage() {
   )
   const upstreamItems = upstreams.map(u => toUpstreamItem(u, locale))
 
+  // Client-side quick filter. Header counts stay GLOBAL — they describe
+  // the service, not the current search.
+  const q = query.trim().toLowerCase()
+  const visibleItems = q ? upstreamItems.filter(u => matchesQuery(u, q)) : upstreamItems
+
+  const savedFmt = formatBytes(week?.bytes_saved ?? 0)
+
   return (
-    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    // Stagger: header first, the upstream panel ~70ms later.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Page summary */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
-          <h1
+          <div
             style={{
-              margin: 0,
-              fontSize: 44,
-              fontWeight: 700,
-              letterSpacing: '-0.04em',
-              lineHeight: 1.02,
-              color: 'var(--text)',
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+              gap: '12px 16px',
+              flexWrap: 'wrap',
             }}
           >
-            {t('monitor.title')}
-          </h1>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 'clamp(32px, 5vw, 44px)',
+                fontWeight: 700,
+                // Inter Tight is pre-tightened — mild tracking only,
+                // and milder still for CJK.
+                letterSpacing: i18n.language === 'zh' ? '-0.02em' : '-0.025em',
+                lineHeight: 1.02,
+                color: 'var(--text)',
+              }}
+            >
+              {t('monitor.title')}
+            </h1>
+            <SearchPill
+              value={query}
+              onChange={setQuery}
+              placeholder={t('monitor.searchPlaceholder')}
+            />
+          </div>
           <p
             style={{
               margin: '10px 0 0 0',
@@ -352,21 +340,42 @@ export default function MonitorPage() {
               <StatusDot status="failed" />
               <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
             </span>
+            {/* Value metrics — compact, 7-day rolling window. Hidden on
+                fresh installs (no traffic yet) so the row never shows a
+                meaningless 0%. */}
+            {week && week.total_requests > 0 && (
+              <>
+                <span
+                  aria-hidden
+                  style={{ width: 1, height: 12, background: 'var(--border-strong)' }}
+                />
+                <span>
+                  {t('monitor.hitRate7d')}{' '}
+                  <span className="num" style={{ color: 'var(--brand-text)', fontWeight: 600 }}>
+                    {(week.hit_rate * 100).toFixed(1)}%
+                  </span>
+                </span>
+                <span>
+                  {t('monitor.saved7d')}{' '}
+                  <span className="num" style={{ color: 'var(--text)', fontWeight: 600 }}>
+                    {savedFmt.value} {savedFmt.unit}
+                  </span>
+                </span>
+              </>
+            )}
           </p>
         </div>
       </div>
 
-      {today.total_requests > 0 && (
-        <>
-          <HitRateHero hitRate={hitRate} series={series} />
-          <StatStrip data={today} upstreams={upstreams} series={series} />
-        </>
-      )}
-
-      {/* Mirrors section */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {upstreamItems.length > 0 && (
-          <UpstreamGroupedPanel upstreams={upstreamItems} variant="cards" minColumnWidth={380} />
+      {/* Upstream health — the page's main content */}
+      <div className="fade-up fade-up-d1" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {visibleItems.length > 0 && (
+          <UpstreamGroupedPanel upstreams={visibleItems} variant="cards" minColumnWidth={380} />
+        )}
+        {q !== '' && visibleItems.length === 0 && upstreamItems.length > 0 && (
+          <p style={{ margin: 0, padding: '28px 0', fontSize: 13, color: 'var(--text-soft)', textAlign: 'center' }}>
+            {t('monitor.noMatch', { q: query.trim() })}
+          </p>
         )}
       </div>
     </div>
