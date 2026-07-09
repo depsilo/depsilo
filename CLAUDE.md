@@ -593,6 +593,12 @@ PUT  /api/v1/admin/settings
     "bytes_served": 36700000000,
     "bytes_saved": 34200000000
   },
+  "week": {
+    "total_requests": 88410,
+    "hit_count": 78040,
+    "hit_rate": 0.883,
+    "bytes_saved": 231000000000
+  },
   "cache": {
     "total_files": 5263,
     "total_size_bytes": 9021800000,

@@ -229,6 +229,42 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 		hitRate = float64(hitCount) / float64(totalRequests)
 	}
 
+	// 7-day rolling window (6 finished days + today). The daily rollup
+	// only holds FINISHED days (the compactor runs at UTC 00:05), so
+	// the week block sums access_log_daily for [today-6, yesterday] and
+	// adds today's totals computed above. Portal surfaces use this
+	// instead of the today block — a day-scoped hit rate resets at
+	// midnight and swings wildly at low sample counts.
+	var weekTotal, weekHits, weekBytesSaved int64
+	if h.useRollup {
+		todayDate := todayStartUTC.Format("2006-01-02")
+		weekStartDate := todayStartUTC.AddDate(0, 0, -6).Format("2006-01-02")
+		var w struct {
+			Total      int64
+			Hits       int64
+			BytesSaved int64
+		}
+		h.db.Table("access_log_daily").
+			Select(`COALESCE(SUM(request_count),0) AS total,
+				COALESCE(SUM(CASE WHEN hit=1 THEN request_count ELSE 0 END),0) AS hits,
+				COALESCE(SUM(CASE WHEN hit=1 THEN total_bytes ELSE 0 END),0) AS bytes_saved`).
+			Where("date >= ? AND date < ?", weekStartDate, todayDate).
+			Scan(&w)
+		weekTotal = w.Total + totalRequests
+		weekHits = w.Hits + hitCount
+		weekBytesSaved = w.BytesSaved + bytesSaved
+	} else {
+		weekStartUTC := todayStartUTC.AddDate(0, 0, -6)
+		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?)", weekStartUTC).Count(&weekTotal)
+		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", weekStartUTC, true).Count(&weekHits)
+		h.db.Model(&db.AccessLog{}).Where("datetime(created_at) >= datetime(?) AND hit = ?", weekStartUTC, true).
+			Select("COALESCE(SUM(bytes_sent), 0)").Scan(&weekBytesSaved)
+	}
+	var weekHitRate float64
+	if weekTotal > 0 {
+		weekHitRate = float64(weekHits) / float64(weekTotal)
+	}
+
 	// Cache stats
 	var totalFiles int64
 	var totalSizeBytes int64
@@ -311,6 +347,12 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 			"hit_rate":       hitRate,
 			"bytes_served":   bytesSent,
 			"bytes_saved":    bytesSaved,
+		},
+		"week": gin.H{
+			"total_requests": weekTotal,
+			"hit_count":      weekHits,
+			"hit_rate":       weekHitRate,
+			"bytes_saved":    weekBytesSaved,
 		},
 		"cache": gin.H{
 			"total_files":      totalFiles,
