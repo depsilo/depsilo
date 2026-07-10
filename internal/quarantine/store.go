@@ -29,6 +29,11 @@ const (
 	// that records them.
 	ActionMalwareBlocked  = "malware_blocked"  // request denied: known-malicious version
 	ActionMalwareBypassed = "malware_bypassed" // served under an unexpired operator override
+
+	// Tamper detection (DIRECTION T1): an immutable artifact's
+	// re-fetched bytes did not match the first-seen SHA-256. Written
+	// by internal/tamper; shares the quarantine event stream.
+	ActionTamperDetected = "tamper_detected"
 )
 
 // Store wraps the GORM handle with the small set of helpers the

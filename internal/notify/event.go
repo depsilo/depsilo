@@ -21,6 +21,11 @@ const (
 	// known malware, which is exactly the page-a-human moment. See
 	// docs/DIRECTION.md §Task 2.
 	EventMalwareBlocked = "malware_blocked"
+	// EventTamperDetected fires when an immutable artifact's upstream
+	// content changed under the same version. Severity critical — a
+	// registry silently swapping bytes is a supply-chain compromise
+	// signal. See docs/DIRECTION.md §T1 tamper detection.
+	EventTamperDetected = "tamper_detected"
 )
 
 // Event represents a notification-worthy occurrence in Depsilo.
