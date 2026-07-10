@@ -82,10 +82,12 @@ func (r *Recorder) Verify(ctx context.Context, key, ecosystem, pkg, version, sha
 	}
 
 	if rec.SHA256 == sha256 {
-		r.db.WithContext(ctx).Model(&rec).Updates(map[string]interface{}{
+		if updErr := r.db.WithContext(ctx).Model(&rec).Updates(map[string]interface{}{
 			"last_verified_at": r.now(),
 			"verify_count":     rec.VerifyCount + 1,
-		})
+		}).Error; updErr != nil {
+			zap.L().Warn("tamper: verify bump", zap.String("key", key), zap.Error(updErr))
+		}
 		return cache.TamperResult{}
 	}
 

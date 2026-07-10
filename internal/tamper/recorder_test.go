@@ -44,6 +44,9 @@ func TestRecorder_FirstSeenThenMatch(t *testing.T) {
 	if rec.VerifyCount != 1 {
 		t.Errorf("VerifyCount = %d, want 1", rec.VerifyCount)
 	}
+	if !rec.LastVerifiedAt.After(rec.FirstSeenAt) {
+		t.Errorf("LastVerifiedAt (%v) did not advance past FirstSeenAt (%v)", rec.LastVerifiedAt, rec.FirstSeenAt)
+	}
 }
 
 func TestRecorder_MismatchAlertsAndProtects(t *testing.T) {
@@ -98,5 +101,61 @@ func TestRecorder_VerifyWithoutBaselineRecords(t *testing.T) {
 	}
 	if rec.SHA256 != "firsthash" {
 		t.Errorf("adopted hash = %s", rec.SHA256)
+	}
+}
+
+func TestRecorder_RecordIsIdempotent(t *testing.T) {
+	r := newTestRecorder(t)
+	ctx := context.Background()
+	key := "npm/dep/-/dep-1.0.0.tgz"
+
+	// First Record sets the baseline. A SECOND Record with a DIFFERENT
+	// hash must be a no-op — the trusted first-seen hash is never
+	// overwritten.
+	r.Record(ctx, key, "npm", "dep", "1.0.0", "original", 10)
+	r.Record(ctx, key, "npm", "dep", "1.0.0", "attacker-swapped", 10)
+
+	var rec db.TamperRecord
+	if err := r.db.First(&rec, "key = ?", key).Error; err != nil {
+		t.Fatal(err)
+	}
+	if rec.SHA256 != "original" {
+		t.Errorf("baseline overwritten by second Record: %s", rec.SHA256)
+	}
+}
+
+func TestRecorder_OnTamperPanicRecovered(t *testing.T) {
+	r := newTestRecorder(t)
+	ctx := context.Background()
+	key := "npm/dep/-/dep-2.0.0.tgz"
+
+	// A panicking hook must not escape Verify — the refresh path must
+	// survive a misbehaving webhook.
+	r.SetOnTamper(func(db.QuarantineEvent) { panic("boom") })
+	r.Record(ctx, key, "npm", "dep", "2.0.0", "good", 10)
+
+	// If the panic escaped, this call would crash the test.
+	res := r.Verify(ctx, key, "npm", "dep", "2.0.0", "evil", 10, "10.0.0.9")
+	if !res.KnownMismatch {
+		t.Error("mismatch should still report KnownMismatch even when the hook panics")
+	}
+}
+
+func TestRecorder_VerifyLookupErrorDegrades(t *testing.T) {
+	r := newTestRecorder(t)
+	ctx := context.Background()
+	key := "npm/dep/-/dep-3.0.0.tgz"
+	r.Record(ctx, key, "npm", "dep", "3.0.0", "good", 10)
+
+	// Force a non-ErrRecordNotFound DB error by dropping the table the
+	// Verify lookup reads, then confirm Verify degrades to
+	// KnownMismatch=false (a DB fault must never manufacture a false
+	// tamper alarm) and writes no tamper event.
+	if err := r.db.Migrator().DropTable(&db.TamperRecord{}); err != nil {
+		t.Fatal(err)
+	}
+	res := r.Verify(ctx, key, "npm", "dep", "3.0.0", "whatever", 10, "10.0.0.10")
+	if res.KnownMismatch {
+		t.Error("a DB lookup error must degrade to KnownMismatch=false, not alarm")
 	}
 }
