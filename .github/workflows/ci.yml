@@ -27,6 +27,13 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Embed placeholder
+        # cmd/server embeds web/dist (a gitignored build artifact), so
+        # vet/test/build fail to compile without it. The REAL frontend
+        # build is validated by the test-frontend job; here a stub is
+        # enough to satisfy the //go:embed all:dist directive.
+        run: mkdir -p web/dist && echo '<!doctype html><title>ci</title>' > web/dist/index.html
+
       - name: Vet
         run: go vet ./...
 
