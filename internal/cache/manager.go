@@ -2,7 +2,10 @@ package cache
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"strings"
 	"sync"
@@ -16,25 +19,38 @@ import (
 	"depsilo/internal/db"
 )
 
-// countingReader wraps an io.Reader and counts bytes read through it.
-// Used to determine actual body size when upstream doesn't report Content-Length.
+// countingReader wraps an io.Reader, counts bytes read through it, and
+// computes a streaming SHA-256 of everything it reads. Used to size
+// bodies when upstream omits Content-Length AND to fingerprint content
+// for tamper detection — both come free in the single pass the storage
+// pump already makes.
 type countingReader struct {
 	r io.Reader
 	n int64
+	h hash.Hash
 }
 
 func NewCountingReader(r io.Reader) *countingReader {
-	return &countingReader{r: r}
+	return &countingReader{r: r, h: sha256.New()}
 }
 
 func (cr *countingReader) Read(p []byte) (int, error) {
 	n, err := cr.r.Read(p)
-	cr.n += int64(n)
+	if n > 0 {
+		cr.n += int64(n)
+		cr.h.Write(p[:n]) // hash.Hash.Write never returns an error
+	}
 	return n, err
 }
 
 func (cr *countingReader) BytesRead() int64 {
 	return cr.n
+}
+
+// SumHex returns the lowercase-hex SHA-256 of all bytes read so far.
+// Call after the reader is fully drained.
+func (cr *countingReader) SumHex() string {
+	return hex.EncodeToString(cr.h.Sum(nil))
 }
 
 // SecurityScanner is the optional contract for scanning new packages on miss.
