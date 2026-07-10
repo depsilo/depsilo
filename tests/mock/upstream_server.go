@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,10 +21,11 @@ type RecordedRequest struct {
 
 // MockUpstream is a configurable mock HTTP server for testing upstream interactions.
 type MockUpstream struct {
-	server   *httptest.Server
-	mux      *http.ServeMux
-	mu       sync.Mutex
-	requests []RecordedRequest
+	server     *httptest.Server
+	mux        *http.ServeMux
+	mu         sync.Mutex
+	requests   []RecordedRequest
+	tamperBody atomic.Value // string; the current bytes served at /tamperpkg/-/tamperpkg-1.0.0.tgz
 }
 
 // NewMockUpstream creates and starts a new mock upstream server.
@@ -329,6 +331,24 @@ func (m *MockUpstream) RegisterDocker() {
 	})
 }
 
+// SetTamperBody swaps the bytes the tamper test endpoint serves, so a
+// test can simulate an upstream silently changing an immutable artifact.
+func (m *MockUpstream) SetTamperBody(s string) { m.tamperBody.Store(s) }
+
+// RegisterTamper serves a fixed npm-shaped metadata doc plus a tarball
+// whose bytes are controlled by SetTamperBody.
+func (m *MockUpstream) RegisterTamper() {
+	m.tamperBody.Store("ORIGINAL-BYTES")
+	m.mux.HandleFunc("/tamperpkg", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"name":"tamperpkg","dist-tags":{"latest":"1.0.0"},"versions":{"1.0.0":{"name":"tamperpkg","version":"1.0.0","dist":{"tarball":"%s/tamperpkg/-/tamperpkg-1.0.0.tgz","shasum":"x","integrity":"sha512-x"}}}}`, m.URL())
+	})
+	m.mux.HandleFunc("/tamperpkg/-/tamperpkg-1.0.0.tgz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		_, _ = w.Write([]byte(m.tamperBody.Load().(string)))
+	})
+}
+
 // RegisterAll registers mock responses for all supported ecosystems.
 func (m *MockUpstream) RegisterAll() {
 	m.RegisterPyPI()
@@ -346,6 +366,7 @@ func (m *MockUpstream) RegisterAll() {
 	m.RegisterHuggingFace()
 	m.RegisterDocker()
 	m.RegisterOSVBlocklist()
+	m.RegisterTamper()
 }
 
 // RegisterOSVBlocklist serves the OSV bulk-data layout the blocklist

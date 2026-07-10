@@ -126,10 +126,16 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 
 	// Initialize event bus and cache manager
 	eventBus := cache.NewEventBus()
-	// 1h immutable threshold: sits between the 5m index TTL and 72h
-	// blob TTL defaults, so artifact blobs classify as immutable and
-	// metadata does not.
-	cacheMgr := cache.NewManager(storage, database, eventBus, time.Hour)
+	// Immutable-artifact threshold for tamper detection: artifacts are
+	// fetched with ttl=ttl_blob and metadata with ttl=ttl_index, so
+	// ttl >= ttl_blob selects exactly the blobs. Deriving from ttl_blob
+	// (rather than a fixed 1h) keeps metadata OUT of tamper tracking for
+	// any ttl_index < ttl_blob. An explicit config override wins.
+	immutableThreshold := cfg.SupplyChain.TamperDetection.ImmutableThresholdOverride()
+	if immutableThreshold <= 0 {
+		immutableThreshold = cfg.Cache.TTLBlob
+	}
+	cacheMgr := cache.NewManager(storage, database, eventBus, immutableThreshold)
 
 	// Ecosystem definitions: name, route path, and upstream config
 	type ecosystemDef struct {

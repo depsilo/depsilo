@@ -140,6 +140,53 @@ func (s *memStorage) Stat(_ context.Context, key string) (*ObjectMeta, error) {
 func (s *memStorage) List(_ context.Context, prefix string) ([]ObjectMeta, error) { return nil, nil }
 func (s *memStorage) TotalSize(_ context.Context) (int64, error)                  { return 0, nil }
 
+func TestManager_MetadataNotImmutableUnderBlobThreshold(t *testing.T) {
+	// Production default: threshold == ttl_blob (72h). Metadata is
+	// fetched with the shorter ttl_index, so it must classify MUTABLE
+	// and never reach the recorder (else legitimate metadata churn
+	// would false-alarm as tampering).
+	d, err := db.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(d); err != nil {
+		t.Fatal(err)
+	}
+	const ttlBlob = 72 * time.Hour
+	const ttlIndex = time.Hour // matches shipped config.example.toml
+	m := NewManager(newMemStorage(), d, NewEventBus(), ttlBlob)
+	rec := &fakeRecorder{}
+	m.SetTamperRecorder(rec)
+
+	// A metadata fetch at ttl_index must NOT be recorded. Close the
+	// reader without draining it (matches TestManager_MutableMissSkipsRecorder)
+	// so the background storage-commit goroutine can reach EOF on the
+	// unbuffered client/storage pipes.
+	res, err := m.Get(context.Background(), "pypi/simple/x/index.html", "pypi", ttlIndex,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return io.NopCloser(strings.NewReader("<html>")), "text/html", -1, "mock", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Reader.Close()
+	time.Sleep(200 * time.Millisecond)
+	if keys := rec.recordedKeys(); len(keys) != 0 {
+		t.Errorf("metadata (ttl_index=%v) classified immutable under blob threshold %v: %v", ttlIndex, ttlBlob, keys)
+	}
+
+	// A blob fetch at ttl_blob MUST be recorded.
+	res, err = m.Get(context.Background(), "pypi/files/x-1.0.0.tar.gz", "pypi", ttlBlob,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return io.NopCloser(strings.NewReader("blob")), "application/gzip", -1, "mock", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Reader.Close()
+	waitFor(t, func() bool { return len(rec.recordedKeys()) == 1 })
+}
+
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

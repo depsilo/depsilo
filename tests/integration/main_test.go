@@ -81,7 +81,7 @@ path = "%s/cache"
 [cache]
 max_size_gb = 1
 ttl_index = "5m"
-ttl_blob = "72h"
+ttl_blob = "2s"
 lru_threshold = 90
 
 [auth]
@@ -96,6 +96,15 @@ enabled = false
 enabled = true
 sync_interval = "6h"
 mirror_url = "%s"
+
+# Tamper detection ships enabled by default with the threshold derived
+# from cache.ttl_blob. ttl_blob is shortened to 2s above so the tamper
+# integration test can trigger a background refresh within test time;
+# override the threshold to 1s here so that 2s-TTL blob still classifies
+# as immutable (threshold must be <= the blob TTL it's meant to cover).
+[supply_chain.tamper_detection]
+enabled = true
+immutable_threshold_seconds = 1
 
 # Quarantine ships enabled with per-ecosystem default thresholds, and
 # its publish-time resolvers query the REAL registries. The fake

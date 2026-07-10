@@ -71,10 +71,24 @@ type BlocklistConfig struct {
 // overhead.
 type TamperConfig struct {
 	Enabled *bool `mapstructure:"enabled"`
+	// ImmutableThresholdSeconds overrides the TTL at/above which an
+	// artifact is treated as immutable for tamper detection. 0 (unset)
+	// means "derive from cache.ttl_blob" — see server assembly. Tests
+	// and unusual deployments set it explicitly.
+	ImmutableThresholdSeconds int `mapstructure:"immutable_threshold_seconds"`
 }
 
 // IsEnabled applies the default-true semantics.
 func (c TamperConfig) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
+
+// ImmutableThresholdOverride returns the configured override, or 0 when
+// unset (meaning the server should derive the default from ttl_blob).
+func (c TamperConfig) ImmutableThresholdOverride() time.Duration {
+	if c.ImmutableThresholdSeconds > 0 {
+		return time.Duration(c.ImmutableThresholdSeconds) * time.Second
+	}
+	return 0
+}
 
 type WebhookConfig struct {
 	Name     string `mapstructure:"name"`
