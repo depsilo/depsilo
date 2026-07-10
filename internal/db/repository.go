@@ -104,5 +104,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&MaliciousPackage{},
 		&MalwareOverride{},
 		&BlocklistSyncState{},
+		// Tamper detection (DIRECTION T1). Defined in db/tamper.go;
+		// helper in internal/tamper.
+		&TamperRecord{},
 	)
 }
