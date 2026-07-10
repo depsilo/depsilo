@@ -148,8 +148,8 @@ type slowReader struct {
 	pause      time.Duration
 	firstByte  *time.Time // captured by the test
 	firstMu    sync.Mutex
-	errAfter   int      // if > 0, return errAfter bytes then an error
-	errToThrow error    // optional error returned after errAfter bytes
+	errAfter   int   // if > 0, return errAfter bytes then an error
+	errToThrow error // optional error returned after errAfter bytes
 }
 
 func (r *slowReader) Read(p []byte) (int, error) {
@@ -196,7 +196,7 @@ func makeFetchFn(body []byte, chunk int, pause time.Duration) cache.FetchFunc {
 func TestMissPath_FirstByteIsFast(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil)
+	mgr := cache.NewManager(store, d, nil, time.Hour)
 
 	// 1 MB body in 16 KB chunks, 50 ms between chunks → ~3.2 s total.
 	const total = 1 << 20
@@ -230,7 +230,7 @@ func TestMissPath_FirstByteIsFast(t *testing.T) {
 func TestMissPath_ClientDisconnect_StorageStillCompletes(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil)
+	mgr := cache.NewManager(store, d, nil, time.Hour)
 
 	const total = 256 << 10 // 256 KB
 	const chunk = 16 << 10
@@ -281,7 +281,7 @@ func TestMissPath_ClientDisconnect_StorageStillCompletes(t *testing.T) {
 func TestMissPath_UpstreamErrorMidStream_NoOrphan(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil)
+	mgr := cache.NewManager(store, d, nil, time.Hour)
 
 	const total = 128 << 10
 	const chunk = 8 << 10
@@ -334,7 +334,7 @@ func TestMissPath_UpstreamErrorMidStream_NoOrphan(t *testing.T) {
 func TestMissPath_Singleflight_ConcurrentSameKey(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil)
+	mgr := cache.NewManager(store, d, nil, time.Hour)
 
 	const total = 64 << 10
 	const chunk = 8 << 10
@@ -397,7 +397,7 @@ func TestMissPath_Singleflight_ConcurrentSameKey(t *testing.T) {
 func TestMissPath_FullBodyRelayedToClient(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil)
+	mgr := cache.NewManager(store, d, nil, time.Hour)
 
 	const total = 200 << 10
 	const chunk = 4 << 10

@@ -125,7 +125,10 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 
 	// Initialize event bus and cache manager
 	eventBus := cache.NewEventBus()
-	cacheMgr := cache.NewManager(storage, database, eventBus)
+	// 1h immutable threshold: sits between the 5m index TTL and 72h
+	// blob TTL defaults, so artifact blobs classify as immutable and
+	// metadata does not.
+	cacheMgr := cache.NewManager(storage, database, eventBus, time.Hour)
 
 	// Ecosystem definitions: name, route path, and upstream config
 	type ecosystemDef struct {

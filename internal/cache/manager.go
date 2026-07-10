@@ -76,6 +76,9 @@ type Manager struct {
 	eventBus        *EventBus
 	securityScanner SecurityScanner
 
+	tamper             TamperRecorder
+	immutableThreshold time.Duration
+
 	inflightMu sync.Mutex
 	inflight   map[string]*inflightFetch
 }
@@ -94,14 +97,27 @@ func (m *Manager) SetSecurityScanner(s SecurityScanner) {
 	m.securityScanner = s
 }
 
-// NewManager creates a new cache manager.
-func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus) *Manager {
+// NewManager creates a new cache manager. immutableThreshold is the TTL
+// at or above which an artifact is treated as immutable for tamper
+// detection (metadata uses short TTLs, blobs long ones). Pass e.g. 1h.
+func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus, immutableThreshold time.Duration) *Manager {
 	return &Manager{
-		storage:  storage,
-		db:       database,
-		eventBus: eventBus,
-		inflight: make(map[string]*inflightFetch),
+		storage:            storage,
+		db:                 database,
+		eventBus:           eventBus,
+		inflight:           make(map[string]*inflightFetch),
+		immutableThreshold: immutableThreshold,
 	}
+}
+
+// SetTamperRecorder attaches the optional content-integrity recorder.
+// Pass nil to disable tamper detection entirely (zero overhead — the
+// hash is still computed by countingReader but never consulted).
+func (m *Manager) SetTamperRecorder(r TamperRecorder) { m.tamper = r }
+
+// isImmutable reports whether a TTL marks an artifact as immutable.
+func (m *Manager) isImmutable(ttl time.Duration) bool {
+	return m.immutableThreshold > 0 && ttl >= m.immutableThreshold
 }
 
 // FetchFunc is called on cache miss to fetch data from upstream.
@@ -368,6 +384,13 @@ func (m *Manager) storeAndCommit(key, adapterType string, ttl time.Duration, con
 		})
 	}
 
+	// Tamper baseline: first-seen SHA-256 of immutable artifacts.
+	if m.tamper != nil && m.isImmutable(ttl) {
+		pkgName := packagekey.ExtractName(adapterType, key)
+		m.tamper.Record(context.Background(), key, adapterType, pkgName,
+			versionFromKey(adapterType, key), cr.SumHex(), size)
+	}
+
 	m.publishEvent(key, adapterType, false, size)
 
 	if m.securityScanner != nil {
@@ -411,13 +434,37 @@ func (m *Manager) backgroundRefresh(key string, adapterType string, ttl time.Dur
 
 		cr := NewCountingReader(body)
 
+		// Immutable + tamper on: verify-only. Drain to discard (do NOT
+		// overwrite storage — immutable bytes are supposed to be
+		// identical), then compare the hash. A mismatch keeps the
+		// trusted first-seen copy and alerts; a match just extends TTL.
+		if m.tamper != nil && m.isImmutable(ttl) {
+			if _, copyErr := io.Copy(io.Discard, cr); copyErr != nil {
+				return nil, fmt.Errorf("bg verify read: %w", copyErr)
+			}
+			pkgName := packagekey.ExtractName(adapterType, key)
+			res := m.tamper.Verify(context.Background(), key, adapterType, pkgName,
+				versionFromKey(adapterType, key), cr.SumHex(), cr.BytesRead(), "")
+			if res.KnownMismatch {
+				zap.L().Warn("tamper: refusing to overwrite tampered artifact", zap.String("key", key))
+				// Keep first-seen bytes; do not touch storage or TTL.
+				return nil, nil
+			}
+			now := time.Now()
+			m.db.Where("key = ?", key).Updates(map[string]interface{}{
+				"expires_at":    now.Add(ttl),
+				"last_accessed": now,
+			})
+			return nil, nil
+		}
+
+		// Mutable (or tamper off): normal refresh — overwrite storage.
 		if putErr := m.storage.Put(ctx, key, cr, size, contentType); putErr != nil {
 			return nil, fmt.Errorf("bg refresh put: %w", putErr)
 		}
 		if size <= 0 {
 			size = cr.BytesRead()
 		}
-
 		now := time.Now()
 		m.db.Where("key = ?", key).Updates(map[string]interface{}{
 			"size":          size,
@@ -489,4 +536,16 @@ func (m *Manager) Storage() Storage {
 // DB returns the underlying database for direct access.
 func (m *Manager) DB() *gorm.DB {
 	return m.db
+}
+
+// versionFromKey is a best-effort version string for tamper event
+// readability. The cache key already encodes the artifact; we only need
+// something human-facing, so an empty result is acceptable.
+func versionFromKey(adapterType, key string) string {
+	// The filename tail usually carries the version; keep it simple —
+	// the authoritative identity is the cache key itself.
+	if i := strings.LastIndex(key, "/"); i >= 0 {
+		return key[i+1:]
+	}
+	return ""
 }

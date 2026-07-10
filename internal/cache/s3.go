@@ -28,7 +28,7 @@ func NewS3Storage(endpoint, bucket, region, accessKey, secretKey string) (*S3Sto
 	}
 
 	client := s3.New(s3.Options{
-		Region: region,
+		Region:       region,
 		BaseEndpoint: aws.String(endpoint),
 		Credentials:  credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
 		UsePathStyle: true, // required for MinIO compatibility
