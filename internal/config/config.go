@@ -3,31 +3,31 @@ package config
 import "time"
 
 type Config struct {
-	IsDefault  bool   `mapstructure:"-" json:"-"`  // true when no config file found
-	ConfigPath string `mapstructure:"-" json:"-"`  // resolved path for config file
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Storage  StorageConfig  `mapstructure:"storage"`
-	Cache    CacheConfig    `mapstructure:"cache"`
-	AccessLog AccessLogConfig `mapstructure:"access_log"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	PyPI     AdapterConfig  `mapstructure:"pypi"`
-	APT      AdapterConfig  `mapstructure:"apt"`
-	NPM      AdapterConfig  `mapstructure:"npm"`
-	Go       AdapterConfig  `mapstructure:"go"`
-	Cargo    AdapterConfig  `mapstructure:"cargo"`
-	Maven    AdapterConfig  `mapstructure:"maven"`
-	RubyGems AdapterConfig  `mapstructure:"rubygems"`
-	Composer AdapterConfig  `mapstructure:"composer"`
-	NuGet    AdapterConfig  `mapstructure:"nuget"`
-	Conda    AdapterConfig  `mapstructure:"conda"`
-	CRAN     AdapterConfig  `mapstructure:"cran"`
-	Alpine   AdapterConfig  `mapstructure:"alpine"`
-	Helm        AdapterConfig  `mapstructure:"helm"`
-	HuggingFace AdapterConfig  `mapstructure:"huggingface"`
-	Docker      DockerConfig   `mapstructure:"docker"`
-	License  LicenseConfig  `mapstructure:"license"`
-	Security     SecurityConfig   `mapstructure:"security"`
+	IsDefault    bool               `mapstructure:"-" json:"-"` // true when no config file found
+	ConfigPath   string             `mapstructure:"-" json:"-"` // resolved path for config file
+	Server       ServerConfig       `mapstructure:"server"`
+	Database     DatabaseConfig     `mapstructure:"database"`
+	Storage      StorageConfig      `mapstructure:"storage"`
+	Cache        CacheConfig        `mapstructure:"cache"`
+	AccessLog    AccessLogConfig    `mapstructure:"access_log"`
+	Auth         AuthConfig         `mapstructure:"auth"`
+	PyPI         AdapterConfig      `mapstructure:"pypi"`
+	APT          AdapterConfig      `mapstructure:"apt"`
+	NPM          AdapterConfig      `mapstructure:"npm"`
+	Go           AdapterConfig      `mapstructure:"go"`
+	Cargo        AdapterConfig      `mapstructure:"cargo"`
+	Maven        AdapterConfig      `mapstructure:"maven"`
+	RubyGems     AdapterConfig      `mapstructure:"rubygems"`
+	Composer     AdapterConfig      `mapstructure:"composer"`
+	NuGet        AdapterConfig      `mapstructure:"nuget"`
+	Conda        AdapterConfig      `mapstructure:"conda"`
+	CRAN         AdapterConfig      `mapstructure:"cran"`
+	Alpine       AdapterConfig      `mapstructure:"alpine"`
+	Helm         AdapterConfig      `mapstructure:"helm"`
+	HuggingFace  AdapterConfig      `mapstructure:"huggingface"`
+	Docker       DockerConfig       `mapstructure:"docker"`
+	License      LicenseConfig      `mapstructure:"license"`
+	Security     SecurityConfig     `mapstructure:"security"`
 	ExtraIndexes []ExtraIndexConfig `mapstructure:"extra_indexes"`
 	Webhooks     []WebhookConfig    `mapstructure:"webhooks"`
 	// SupplyChain: minimum-release-age quarantine + (future) malicious
@@ -51,6 +51,9 @@ type SupplyChainConfig struct {
 	// convention as the fields above (config carries the raw operator
 	// shape; the domain package owns semantics and defaults).
 	Blocklist BlocklistConfig `mapstructure:"blocklist"`
+	// TamperDetection: content-integrity tracking of immutable
+	// artifacts. Enabled by default.
+	TamperDetection TamperConfig `mapstructure:"tamper_detection"`
 }
 
 // BlocklistConfig is [supply_chain.blocklist]: the known-malicious
@@ -62,6 +65,16 @@ type BlocklistConfig struct {
 	MirrorURL    string `mapstructure:"mirror_url"`    // default: official OSV bucket
 	Proxy        string `mapstructure:"proxy"`         // HTTP(S) proxy for sync fetches
 }
+
+// TamperConfig is [supply_chain.tamper_detection] (DIRECTION T1).
+// Enabled defaults to true; disabling detaches the recorder for zero
+// overhead.
+type TamperConfig struct {
+	Enabled *bool `mapstructure:"enabled"`
+}
+
+// IsEnabled applies the default-true semantics.
+func (c TamperConfig) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
 
 type WebhookConfig struct {
 	Name     string `mapstructure:"name"`

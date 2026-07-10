@@ -311,3 +311,13 @@ enabled       = true
 sync_interval = "6h"
 # mirror_url  = "https://osv-vulnerabilities.storage.googleapis.com"
 # proxy       = "http://127.0.0.1:7890"   # required in mainland China
+
+# ── Tamper detection (content integrity of immutable artifacts) ──
+# Records the SHA-256 of each immutable artifact (wheel/.crate/.gem/…)
+# on first fetch. When the artifact is naturally re-fetched (background
+# refresh) and the upstream bytes differ, depsilo keeps the trusted
+# first-seen copy, refuses to cache the new content, and fires a
+# critical alert — a registry silently swapping bytes under the same
+# version is a supply-chain compromise signal. Alert-only; never blocks.
+[supply_chain.tamper_detection]
+enabled = true

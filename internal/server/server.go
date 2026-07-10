@@ -44,6 +44,7 @@ import (
 	"depsilo/internal/quarantine/resolvers"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
+	"depsilo/internal/tamper"
 	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
 	web "depsilo/web"
@@ -234,6 +235,17 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 		zap.L().Info("malicious-package blocklist disabled by config")
 	}
 
+	// Tamper detection (DIRECTION T1): first-seen SHA-256 of immutable
+	// artifacts; a re-fetch whose hash differs keeps the trusted bytes
+	// and alerts. Enabled by default; nil recorder = fully off.
+	var tamperRecorder *tamper.Recorder
+	if cfg.SupplyChain.TamperDetection.IsEnabled() {
+		tamperRecorder = tamper.NewRecorder(database)
+		cacheMgr.SetTamperRecorder(tamperRecorder)
+	} else {
+		zap.L().Info("tamper detection disabled by config")
+	}
+
 	// Webhook notification engine
 	webhookNotifier := notify.New(database)
 	if err := webhookNotifier.LoadConfigs(); err != nil {
@@ -281,6 +293,23 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 			Timestamp: ev.CreatedAt,
 		})
 	})
+
+	// Tamper → webhook bridge. Same loose coupling as the quarantine
+	// bridge: the tamper package never imports notify. Critical
+	// severity — a registry swapping bytes under a version is a
+	// compromise signal.
+	if tamperRecorder != nil {
+		tamperRecorder.SetOnTamper(func(ev db.QuarantineEvent) {
+			webhookNotifier.Dispatch(ctx, notify.Event{
+				Type:      notify.EventTamperDetected,
+				Severity:  "critical",
+				Title:     fmt.Sprintf("Tamper: %s %s on %s changed upstream", ev.Package, ev.Version, ev.Ecosystem),
+				Message:   "An immutable artifact's upstream content changed under the same version. The first-seen bytes are being served; the new content was NOT cached.",
+				Detail:    ev.Reason,
+				Timestamp: ev.CreatedAt,
+			})
+		})
+	}
 
 	// Security scanner
 	secCfg := cfg.Security
