@@ -38,7 +38,7 @@ func (cr *countingReader) Read(p []byte) (int, error) {
 	n, err := cr.r.Read(p)
 	if n > 0 {
 		cr.n += int64(n)
-		cr.h.Write(p[:n]) // hash.Hash.Write never returns an error
+		_, _ = cr.h.Write(p[:n]) // hash.Hash.Write never returns an error
 	}
 	return n, err
 }
