@@ -667,6 +667,9 @@ if pkg, version := packagekey.ParseXxxPath(path); pkg != "" && version != "" {
 ```
 
 - 决策链（`internal/quarantine/checker.go`）：**第 0 步恶意封锁**（`internal/blocklist/`，OSV MAL-* 数据集，命中即 451 `MALICIOUS_BLOCKED`，阈值 0 生态和 allowlist 均不可绕过，唯一豁免是 24h 审计 override）→ 阈值 0 放行 → allow 规则放行 → 管理员批准放行 → 三级查发布时间（内存 → DB → 上游 registry API）→ 年龄不足则 451 `QUARANTINED` + 审计事件 + Webhook
+- **篡改检测（后台刷新时）**：不可变制品首次抓取记 SHA-256 基线（`internal/tamper/`）；
+  后台刷新时重抓字节比对基线，不匹配则保留首见字节、不覆盖缓存、写 `tamper_detected`
+  事件 + critical webhook（信任首见，告警不阻断）。不可变判定用 TTL 阈值（默认取 cache.ttl_blob）。
 - 每个生态需在 `internal/quarantine/resolvers/` 提供发布时间 resolver（真 API 或 Last-Modified 近似）
 - 默认阈值（`policy.go DefaultThresholds`）：npm 7d，多数生态 3d，go/apt 0（免检）；**空配置也生效**，fail-closed 默认开
 - 元数据请求不 gate，只 gate 制品下载；版本字符串必须与 resolver 在上游元数据中能匹配到的形式一致（如 composer 用 pretty version 而非 normalized）

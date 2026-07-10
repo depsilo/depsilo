@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Tamper detection (DIRECTION T1)**: records the SHA-256 of each
+  immutable artifact on first fetch; when a natural re-fetch (background
+  refresh) yields different upstream bytes under the same version,
+  depsilo keeps the trusted first-seen copy, refuses to cache the new
+  content, and fires a critical `tamper_detected` webhook + audit event.
+  Alert-only (never blocks); the hash is computed free in the existing
+  storage-pump reader; immutability inferred from TTL (no adapter
+  changes). `[supply_chain.tamper_detection] enabled` (default true).
 - **Known-malicious blocklist (DIRECTION Task 2)**: syncs the OSV
   malicious-packages dataset (MAL-* advisories) every 6h and refuses
   matched versions with HTTP 451 `MALICIOUS_BLOCKED` as the quarantine
