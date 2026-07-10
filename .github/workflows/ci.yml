@@ -1,10 +1,14 @@
 name: CI
 
+# Runs on every push and PR to the default branch. The repo's default
+# branch is `master` — the previous `main` filter meant CI never fired
+# on ordinary pushes (v0.8.0 blind spot). Image publishing lives in
+# docker-publish.yml (tag-triggered); this workflow is tests only.
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   test-backend:
@@ -16,7 +20,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          # Follow go.mod's toolchain directive — a hard-coded older
+          # version (was '1.21') can't build a newer `go x.y` module.
+          go-version-file: go.mod
 
       - name: Download dependencies
         run: go mod download
@@ -24,11 +30,16 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
-        run: go test ./... -v -race
+      - name: Unit tests (race)
+        run: go test ./... -race
+
+      - name: Integration tests
+        # Build-tagged suite: spawns the server against a mock upstream
+        # and exercises the proxy/quarantine/blocklist paths end-to-end.
+        run: go test -tags integration ./tests/integration/ -count=1
 
       - name: Build binary
-        run: go build -o bin/depsilo ./cmd/server
+        run: go build -o bin/depsilo ./cmd/depsilo
 
   test-frontend:
     name: Frontend Tests
@@ -55,30 +66,6 @@ jobs:
       - name: Build
         run: npm run build
 
-  docker-build:
-    name: Docker Build & Push
-    runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/depsilo:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/depsilo:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: i18n audit
+        working-directory: .
+        run: python3 scripts/i18n-audit.py
