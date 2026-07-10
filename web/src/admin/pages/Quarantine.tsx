@@ -49,7 +49,7 @@ type ApprovedVersion = {
 }
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker', 'huggingface']
-const ACTIONS = ['blocked', 'malware_blocked', 'served_eligible', 'bypassed', 'malware_bypassed', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
+const ACTIONS = ['blocked', 'malware_blocked', 'tamper_detected', 'served_eligible', 'bypassed', 'malware_bypassed', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
 
 type BlocklistStatus = {
   enabled: boolean
@@ -81,6 +81,8 @@ function actionBadge(action: string, t: (k: string) => string) {
       return <BadgeV2 variant="error">{t('quarantine.action.blocked')}</BadgeV2>
     case 'malware_blocked':
       return <BadgeV2 variant="error">{t('quarantine.action.malware_blocked')}</BadgeV2>
+    case 'tamper_detected':
+      return <BadgeV2 variant="error">{t('quarantine.action.tamper_detected')}</BadgeV2>
     case 'served_eligible':
       return <BadgeV2 variant="warning">{t('quarantine.action.served_eligible')}</BadgeV2>
     case 'bypassed':

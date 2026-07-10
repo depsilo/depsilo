@@ -243,6 +243,7 @@ const zh = {
       action: {
         blocked: '已拦截',
         malware_blocked: '恶意封锁',
+        tamper_detected: '内容篡改',
         served_eligible: '降级提供',
         bypassed: '绕过',
         malware_bypassed: '豁免放行',

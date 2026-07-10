@@ -243,6 +243,7 @@ const en = {
       action: {
         blocked: 'Blocked',
         malware_blocked: 'Malware blocked',
+        tamper_detected: 'Tampered',
         served_eligible: 'Downgraded',
         bypassed: 'Bypassed',
         malware_bypassed: 'Override served',
