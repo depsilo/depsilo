@@ -135,6 +135,11 @@ func StartServer(ctx context.Context) (*http.Server, error) {
 	if immutableThreshold <= 0 {
 		immutableThreshold = cfg.Cache.TTLBlob
 	}
+	if cfg.SupplyChain.TamperDetection.IsEnabled() && cfg.Cache.TTLIndex >= immutableThreshold {
+		zap.L().Warn("tamper detection: ttl_index >= immutable threshold — index metadata may be misclassified as immutable and false-alarm; lower ttl_index or raise the threshold",
+			zap.Duration("ttl_index", cfg.Cache.TTLIndex),
+			zap.Duration("immutable_threshold", immutableThreshold))
+	}
 	cacheMgr := cache.NewManager(storage, database, eventBus, immutableThreshold)
 
 	// Ecosystem definitions: name, route path, and upstream config

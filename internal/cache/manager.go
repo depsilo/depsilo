@@ -111,8 +111,9 @@ func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus, immutabl
 }
 
 // SetTamperRecorder attaches the optional content-integrity recorder.
-// Pass nil to disable tamper detection entirely (zero overhead — the
-// hash is still computed by countingReader but never consulted).
+// Pass nil to disable tamper detection (the streaming SHA-256 is still
+// computed by countingReader — it is cheap relative to the network I/O
+// on the miss/refresh paths — but is never consulted).
 func (m *Manager) SetTamperRecorder(r TamperRecorder) { m.tamper = r }
 
 // isImmutable reports whether a TTL marks an artifact as immutable.
@@ -387,8 +388,14 @@ func (m *Manager) storeAndCommit(key, adapterType string, ttl time.Duration, con
 	// Tamper baseline: first-seen SHA-256 of immutable artifacts.
 	if m.tamper != nil && m.isImmutable(ttl) {
 		pkgName := packagekey.ExtractName(adapterType, key)
-		m.tamper.Record(context.Background(), key, adapterType, pkgName,
-			versionFromKey(adapterType, key), cr.SumHex(), size)
+		// Verify (not Record): on a miss where a baseline already exists
+		// — e.g. the artifact was LRU-evicted and re-fetched — a differing
+		// hash is tampering and must alert. Alert-only here: the prior
+		// bytes are already gone from storage, so we can't preserve them,
+		// but the operator learns the cached copy changed. clientIP is
+		// unknown at the store layer (the leader may have disconnected).
+		_ = m.tamper.Verify(context.Background(), key, adapterType, pkgName,
+			versionFromKey(adapterType, key), cr.SumHex(), size, "")
 	}
 
 	m.publishEvent(key, adapterType, false, size)
@@ -447,7 +454,17 @@ func (m *Manager) backgroundRefresh(key string, adapterType string, ttl time.Dur
 				versionFromKey(adapterType, key), cr.SumHex(), cr.BytesRead(), "")
 			if res.KnownMismatch {
 				zap.L().Warn("tamper: refusing to overwrite tampered artifact", zap.String("key", key))
-				// Keep first-seen bytes; do not touch storage or TTL.
+				// Keep first-seen bytes (no storage.Put). Advance the TTL
+				// anyway so this stale entry stops re-triggering a refresh
+				// on every request — otherwise a hot tampered package would
+				// re-download the artifact and re-fire the critical webhook
+				// per request. Re-verification (and the alert) now recurs at
+				// most once per TTL.
+				now := time.Now()
+				m.db.Where("key = ?", key).Updates(map[string]interface{}{
+					"expires_at":    now.Add(ttl),
+					"last_accessed": now,
+				})
 				return nil, nil
 			}
 			now := time.Now()
@@ -455,6 +472,7 @@ func (m *Manager) backgroundRefresh(key string, adapterType string, ttl time.Dur
 				"expires_at":    now.Add(ttl),
 				"last_accessed": now,
 			})
+			zap.L().Debug("tamper: integrity verified", zap.String("key", key))
 			return nil, nil
 		}
 

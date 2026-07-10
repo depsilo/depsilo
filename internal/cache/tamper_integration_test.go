@@ -43,6 +43,12 @@ func (f *fakeRecorder) recordedKeys() []string {
 	return append([]string(nil), f.recorded...)
 }
 
+func (f *fakeRecorder) verifiedKeys() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.verified...)
+}
+
 func newTamperTestManager(t *testing.T) (*Manager, *fakeRecorder) {
 	t.Helper()
 	d, err := db.Open("sqlite", ":memory:")
@@ -60,9 +66,11 @@ func newTamperTestManager(t *testing.T) (*Manager, *fakeRecorder) {
 	return m, rec
 }
 
-func TestManager_ImmutableMissRecordsBaseline(t *testing.T) {
+func TestManager_ImmutableMissVerifiesBaseline(t *testing.T) {
 	m, rec := newTamperTestManager(t)
-	// TTL >= threshold ⇒ immutable ⇒ Record called on miss.
+	// TTL >= threshold ⇒ immutable ⇒ Verify called on miss (adopts the
+	// baseline when none exists, alerts when an existing baseline — e.g.
+	// after LRU eviction — no longer matches).
 	res, err := m.Get(context.Background(), "pypi/files/x-1.0.0.tar.gz", "pypi", 72*time.Hour,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			return io.NopCloser(strings.NewReader("payload-A")), "application/gzip", -1, "mock", nil
@@ -72,14 +80,14 @@ func TestManager_ImmutableMissRecordsBaseline(t *testing.T) {
 	}
 	// The manager fans the upstream body out to the client via an
 	// unbuffered io.Pipe; the background storage-commit goroutine (which
-	// runs Record) can't drain to EOF until the client side is consumed
+	// runs Verify) can't drain to EOF until the client side is consumed
 	// or closed. Close without reading, matching how a disconnecting
 	// client is handled elsewhere in this package.
 	_ = res.Reader.Close()
 	// Give the async storeAndCommit goroutine time to run.
-	waitFor(t, func() bool { return len(rec.recordedKeys()) == 1 })
-	if keys := rec.recordedKeys(); keys[0] != "pypi/files/x-1.0.0.tar.gz" {
-		t.Errorf("Record key = %s", keys[0])
+	waitFor(t, func() bool { return len(rec.verifiedKeys()) == 1 })
+	if keys := rec.verifiedKeys(); keys[0] != "pypi/files/x-1.0.0.tar.gz" {
+		t.Errorf("Verify key = %s", keys[0])
 	}
 }
 
@@ -94,10 +102,14 @@ func TestManager_MutableMissSkipsRecorder(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = res.Reader.Close()
-	// Nothing should ever be recorded for a mutable key.
+	// The recorder must never be touched for a mutable key — neither
+	// Record nor Verify.
 	time.Sleep(200 * time.Millisecond)
 	if keys := rec.recordedKeys(); len(keys) != 0 {
 		t.Errorf("mutable key recorded: %v", keys)
+	}
+	if keys := rec.verifiedKeys(); len(keys) != 0 {
+		t.Errorf("mutable key verified: %v", keys)
 	}
 }
 
@@ -158,10 +170,11 @@ func TestManager_MetadataNotImmutableUnderBlobThreshold(t *testing.T) {
 	rec := &fakeRecorder{}
 	m.SetTamperRecorder(rec)
 
-	// A metadata fetch at ttl_index must NOT be recorded. Close the
-	// reader without draining it (matches TestManager_MutableMissSkipsRecorder)
-	// so the background storage-commit goroutine can reach EOF on the
-	// unbuffered client/storage pipes.
+	// A metadata fetch at ttl_index must NOT touch the recorder (neither
+	// Record nor Verify). Close the reader without draining it (matches
+	// TestManager_MutableMissSkipsRecorder) so the background
+	// storage-commit goroutine can reach EOF on the unbuffered
+	// client/storage pipes.
 	res, err := m.Get(context.Background(), "pypi/simple/x/index.html", "pypi", ttlIndex,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			return io.NopCloser(strings.NewReader("<html>")), "text/html", -1, "mock", nil
@@ -174,8 +187,11 @@ func TestManager_MetadataNotImmutableUnderBlobThreshold(t *testing.T) {
 	if keys := rec.recordedKeys(); len(keys) != 0 {
 		t.Errorf("metadata (ttl_index=%v) classified immutable under blob threshold %v: %v", ttlIndex, ttlBlob, keys)
 	}
+	if keys := rec.verifiedKeys(); len(keys) != 0 {
+		t.Errorf("metadata (ttl_index=%v) verified under blob threshold %v: %v", ttlIndex, ttlBlob, keys)
+	}
 
-	// A blob fetch at ttl_blob MUST be recorded.
+	// A blob fetch at ttl_blob MUST reach the recorder (Verify on miss).
 	res, err = m.Get(context.Background(), "pypi/files/x-1.0.0.tar.gz", "pypi", ttlBlob,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			return io.NopCloser(strings.NewReader("blob")), "application/gzip", -1, "mock", nil
@@ -184,7 +200,7 @@ func TestManager_MetadataNotImmutableUnderBlobThreshold(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = res.Reader.Close()
-	waitFor(t, func() bool { return len(rec.recordedKeys()) == 1 })
+	waitFor(t, func() bool { return len(rec.verifiedKeys()) == 1 })
 }
 
 func waitFor(t *testing.T, cond func() bool) {
