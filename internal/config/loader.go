@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/user"
@@ -68,15 +69,37 @@ func Load() (*Config, error) {
 		resolvedPath = v.ConfigFileUsed()
 	}
 
-	cfg := &Config{}
-	if err := v.Unmarshal(cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal config: %w", err)
+	cfg, err := decodeViper(v)
+	if err != nil {
+		return nil, err
 	}
 
 	cfg.IsDefault = isDefault
 	cfg.ConfigPath = resolvedPath
 
-	// Parse duration fields from string
+	// License key from env (overrides config file)
+	if envKey := os.Getenv("DEPSILO_LICENSE_KEY"); envKey != "" {
+		cfg.License.Key = envKey
+	}
+
+	// Warn if JWT secret is still the default placeholder
+	if cfg.Auth.JWTSecret == "change-me-in-production" {
+		zap.L().Warn("⚠ auth.jwt_secret is using the default value — this is INSECURE for production. Please set a strong secret in your config file or via DEPSILO_AUTH_JWT_SECRET environment variable.")
+	}
+
+	if err := ValidateSettingsSnapshot(SettingsSnapshotFromConfig(cfg)); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func decodeViper(v *viper.Viper) (*Config, error) {
+	cfg := &Config{}
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
+	}
+
 	if raw := v.GetString("cache.ttl_index"); raw != "" {
 		d, err := time.ParseDuration(raw)
 		if err != nil {
@@ -106,22 +129,32 @@ func Load() (*Config, error) {
 		cfg.AccessLog.BatchInterval = d
 	}
 
-	// License key from env (overrides config file)
-	if envKey := os.Getenv("DEPSILO_LICENSE_KEY"); envKey != "" {
-		cfg.License.Key = envKey
-	}
+	return cfg, nil
+}
 
-	// Warn if JWT secret is still the default placeholder
-	if cfg.Auth.JWTSecret == "change-me-in-production" {
-		zap.L().Warn("⚠ auth.jwt_secret is using the default value — this is INSECURE for production. Please set a strong secret in your config file or via DEPSILO_AUTH_JWT_SECRET environment variable.")
+func decodeConfigDocument(data []byte) (*Config, error) {
+	v := viper.New()
+	setDefaults(v)
+	if len(data) > 0 {
+		v.SetConfigType("toml")
+		if err := v.ReadConfig(bytes.NewReader(data)); err != nil {
+			return nil, fmt.Errorf("parse config: %w", err)
+		}
 	}
-
+	cfg, err := decodeViper(v)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateSettingsSnapshot(SettingsSnapshotFromConfig(cfg)); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 23333)
+	v.SetDefault("server.log_level", "info")
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.dsn", "./data/depsilo.db")
 	v.SetDefault("storage.type", "local")
