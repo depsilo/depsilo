@@ -67,6 +67,9 @@ func Load() (*Config, error) {
 		}
 	} else {
 		resolvedPath = v.ConfigFileUsed()
+		if err := readSanitizedConfig(v, resolvedPath); err != nil {
+			return nil, fmt.Errorf("read config: %w", err)
+		}
 	}
 
 	cfg, err := decodeViper(v)
@@ -136,8 +139,12 @@ func decodeConfigDocument(data []byte) (*Config, error) {
 	v := viper.New()
 	setDefaults(v)
 	if len(data) > 0 {
+		sanitized, err := sanitizeConfigDocumentForViper(data)
+		if err != nil {
+			return nil, err
+		}
 		v.SetConfigType("toml")
-		if err := v.ReadConfig(bytes.NewReader(data)); err != nil {
+		if err := v.ReadConfig(bytes.NewReader(sanitized)); err != nil {
 			return nil, fmt.Errorf("parse config: %w", err)
 		}
 	}
@@ -149,6 +156,18 @@ func decodeConfigDocument(data []byte) (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func readSanitizedConfig(v *viper.Viper, path string) error {
+	document, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	sanitized, err := sanitizeConfigDocumentForViper(document)
+	if err != nil {
+		return err
+	}
+	return v.ReadConfig(bytes.NewReader(sanitized))
 }
 
 func setDefaults(v *viper.Viper) {
