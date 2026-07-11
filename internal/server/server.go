@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -50,6 +52,103 @@ import (
 	web "depsilo/web"
 )
 
+type adapterFactory func(*cache.Manager, upstream.Selector, config.CacheConfig, *gorm.DB) adapter.Adapter
+
+type ecosystemDef struct {
+	name      string
+	route     string
+	upstreams []config.UpstreamConfig
+	explicit  bool
+	factory   adapterFactory
+}
+
+func standardEcosystemDefinitions(cfg *config.Config) []ecosystemDef {
+	explicit := cfg.ExplicitUpstreamEcosystems
+	return []ecosystemDef{
+		{"pypi", "/pypi", cfg.PyPI.Upstreams, explicit["pypi"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return pypi.New(cm, s, cc, database)
+		}},
+		{"apt", "/apt", cfg.APT.Upstreams, explicit["apt"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return apt.New(cm, s, cc, database)
+		}},
+		{"npm", "/npm", cfg.NPM.Upstreams, explicit["npm"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return npm.New(cm, s, cc, database)
+		}},
+		{"go", "/go", cfg.Go.Upstreams, explicit["go"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return goproxy.New(cm, s, cc, database)
+		}},
+		{"cargo", "/crates", cfg.Cargo.Upstreams, explicit["cargo"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return cargo.New(cm, s, cc, database)
+		}},
+		{"maven", "/maven", cfg.Maven.Upstreams, explicit["maven"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return maven.New(cm, s, cc, database)
+		}},
+		{"rubygems", "/rubygems", cfg.RubyGems.Upstreams, explicit["rubygems"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return rubygems.New(cm, s, cc, database)
+		}},
+		{"composer", "/composer", cfg.Composer.Upstreams, explicit["composer"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return composer.New(cm, s, cc, database)
+		}},
+		{"nuget", "/nuget", cfg.NuGet.Upstreams, explicit["nuget"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return nuget.New(cm, s, cc, database)
+		}},
+		{"conda", "/conda", cfg.Conda.Upstreams, explicit["conda"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return conda.New(cm, s, cc, database)
+		}},
+		{"cran", "/cran", cfg.CRAN.Upstreams, explicit["cran"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return cran.New(cm, s, cc, database)
+		}},
+		{"alpine", "/alpine", cfg.Alpine.Upstreams, explicit["alpine"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return alpine.New(cm, s, cc, database)
+		}},
+		{"helm", "/helm", cfg.Helm.Upstreams, explicit["helm"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return helm.New(cm, s, cc, database)
+		}},
+		{"huggingface", "/huggingface", cfg.HuggingFace.Upstreams, explicit["huggingface"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
+			return huggingface.New(cm, s, cc, database)
+		}},
+	}
+}
+
+func seedSources(definitions []ecosystemDef) []upstream.SeedSource {
+	sources := make([]upstream.SeedSource, 0, len(definitions))
+	for _, definition := range definitions {
+		if definition.explicit {
+			sources = append(sources, upstream.SeedSource{Ecosystem: definition.name, Upstreams: definition.upstreams})
+		}
+	}
+	return sources
+}
+
+func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystemDef, error) {
+	byName := make(map[string]ecosystemDef, len(definitions))
+	for _, definition := range definitions {
+		byName[definition.name] = definition
+	}
+	result := make([]ecosystemDef, 0, len(active))
+	for _, ecosystem := range active {
+		definition, ok := byName[ecosystem]
+		if !ok {
+			return nil, fmt.Errorf("active ecosystem %q has no compiled adapter", ecosystem)
+		}
+		result = append(result, definition)
+	}
+	return result, nil
+}
+
+func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB) error {
+	for _, definition := range definitions {
+		pool := pools[definition.name]
+		if pool == nil {
+			return fmt.Errorf("active ecosystem %s has no pool", definition.name)
+		}
+		handler := definition.factory(cacheMgr, upstream.NewPrioritySelector(pool), cacheConfig, database)
+		handler.Register(root.Group(definition.route))
+		handler.Register(project.Group(definition.route))
+	}
+	return nil
+}
+
 // StartServer initializes all components and starts the HTTP server.
 // Returns the *http.Server for lifecycle control by the caller.
 // The provided context controls background goroutine shutdown.
@@ -65,6 +164,26 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	}
 	logLevel.SetLevel(parsed.Level())
 	settingsStore := config.NewStore(cfg.ConfigPath, cfg, logLevel)
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("listen on %s: %w", addr, err)
+	}
+	serverCtx, cancelServer := context.WithCancel(ctx)
+	started := false
+	var accessRecorder accesslog.Recorder
+	defer func() {
+		if started {
+			return
+		}
+		cancelServer()
+		_ = listener.Close()
+		if accessRecorder != nil {
+			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = accessRecorder.Close(closeCtx)
+		}
+	}()
 	zap.L().Info("config loaded",
 		zap.String("db_driver", cfg.Database.Driver),
 		zap.String("storage_type", cfg.Storage.Type),
@@ -77,6 +196,20 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	}
 	if err := db.AutoMigrate(database); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
+	}
+	definitions := standardEcosystemDefinitions(cfg)
+	bootstrap, err := upstream.ReconcileBootstrap(database, seedSources(definitions))
+	if err != nil {
+		return nil, fmt.Errorf("reconcile upstream control plane: %w", err)
+	}
+	registry, err := upstream.NewRegistry(database, bootstrap.ActiveEcosystems)
+	if err != nil {
+		return nil, fmt.Errorf("build upstream registry: %w", err)
+	}
+	pools := registry.Pools()
+	activeDefs, err := activeDefinitions(definitions, bootstrap.ActiveEcosystems)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create default admin user if none exists
@@ -91,18 +224,18 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	// adapter's LogAccess switches to recorder.Record once SetRecorder
 	// runs; until then it writes raw rows synchronously.
 	if cfg.AccessLog.BackfillOnStart {
-		if err := accesslog.BackfillIfEmpty(ctx, database); err != nil {
+		if err := accesslog.BackfillIfEmpty(serverCtx, database); err != nil {
 			zap.L().Warn("access log rollup backfill failed", zap.Error(err))
 		}
 	}
-	accessRecorder := accesslog.NewRecorder(database, accesslog.Config{
+	accessRecorder = accesslog.NewRecorder(database, accesslog.Config{
 		Enabled:       cfg.AccessLog.RollupEnabled,
 		BatchSize:     cfg.AccessLog.BatchSize,
 		BatchInterval: cfg.AccessLog.BatchInterval,
 	})
 	adapter.SetRecorder(accessRecorder)
-	go accesslog.StartCompactor(ctx, database)
-	go accesslog.StartRetention(ctx, database, accesslog.RetentionConfig{
+	go accesslog.StartCompactor(serverCtx, database)
+	go accesslog.StartRetention(serverCtx, database, accesslog.RetentionConfig{
 		RawDays:    cfg.AccessLog.RetentionDays,
 		RollupDays: cfg.AccessLog.RollupRetentionDays,
 	})
@@ -148,46 +281,12 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	}
 	cacheMgr := cache.NewManager(storage, database, eventBus, immutableThreshold)
 
-	// Ecosystem definitions: name, route path, and upstream config
-	type ecosystemDef struct {
-		name      string
-		route     string
-		upstreams []config.UpstreamConfig
-	}
-	ecosystems := []ecosystemDef{
-		{"pypi", "/pypi", cfg.PyPI.Upstreams},
-		{"apt", "/apt", cfg.APT.Upstreams},
-		{"npm", "/npm", cfg.NPM.Upstreams},
-		{"go", "/go", cfg.Go.Upstreams},
-		{"cargo", "/crates", cfg.Cargo.Upstreams},
-		{"maven", "/maven", cfg.Maven.Upstreams},
-		{"rubygems", "/rubygems", cfg.RubyGems.Upstreams},
-		{"composer", "/composer", cfg.Composer.Upstreams},
-		{"nuget", "/nuget", cfg.NuGet.Upstreams},
-		{"conda", "/conda", cfg.Conda.Upstreams},
-		{"cran", "/cran", cfg.CRAN.Upstreams},
-		{"alpine", "/alpine", cfg.Alpine.Upstreams},
-		{"helm", "/helm", cfg.Helm.Upstreams},
-		{"huggingface", "/huggingface", cfg.HuggingFace.Upstreams},
-	}
-
-	// Sync upstreams and create pools
-	pools := make(map[string]*upstream.Pool, len(ecosystems))
-	for _, eco := range ecosystems {
-		syncUpstreams(database, eco.name, eco.upstreams)
-		pool, err := upstream.NewPool(eco.upstreams)
-		if err != nil {
-			return nil, fmt.Errorf("create %s pool: %w", eco.name, err)
-		}
-		pools[eco.name] = pool
-	}
-
 	// Sync webhook configs from config.toml to DB
 	syncWebhookConfigs(database, cfg.Webhooks)
 
 	// Initialize license manager
 	licenseManager := license.NewManager(cfg.License, database)
-	go licenseManager.Start(ctx)
+	go licenseManager.Start(serverCtx)
 
 	// Phase 5: construct trial + checker BEFORE audit and rules
 	// (these modules query IsPro to decide whether to record entries / enforce rules)
@@ -202,7 +301,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	rulesEngine := rules.NewEngine(rulesStore, checker)
 
 	auditLogger := audit.NewLogger(database, checker)
-	go auditLogger.Start(ctx)
+	go auditLogger.Start(serverCtx)
 	adapter.SetAuditLogger(auditLogger)
 
 	// Supply-chain quarantine (T1 Task 1 — minimum release age). Built
@@ -247,7 +346,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 			return nil, fmt.Errorf("blocklist: %w", err)
 		}
 		quarantineChecker.SetBlocklist(blocklistStore.QuarantineBridge())
-		go blocklistSyncer.Start(ctx)
+		go blocklistSyncer.Start(serverCtx)
 	} else {
 		zap.L().Info("malicious-package blocklist disabled by config")
 	}
@@ -268,7 +367,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	if err := webhookNotifier.LoadConfigs(); err != nil {
 		zap.L().Warn("failed to load webhook configs", zap.Error(err))
 	}
-	go notify.StartScheduler(ctx, webhookNotifier, notify.SchedulerConfig{
+	go notify.StartScheduler(serverCtx, webhookNotifier, notify.SchedulerConfig{
 		Pools:   pools,
 		Checker: checker,
 	})
@@ -286,7 +385,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		// org just tried to install known malware. Age quarantines
 		// stay warnings: a too-young version is an inconvenience.
 		if ev.Action == quarantine.ActionMalwareBlocked {
-			webhookNotifier.Dispatch(ctx, notify.Event{
+			webhookNotifier.Dispatch(serverCtx, notify.Event{
 				Type:      notify.EventMalwareBlocked,
 				Severity:  "critical",
 				Title:     fmt.Sprintf("MALWARE blocked: %s %s on %s", ev.Package, ev.Version, ev.Ecosystem),
@@ -298,7 +397,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		}
 		ageStr := formatSeconds(ev.AgeAtCall)
 		thresholdStr := formatSeconds(ev.Threshold)
-		webhookNotifier.Dispatch(ctx, notify.Event{
+		webhookNotifier.Dispatch(serverCtx, notify.Event{
 			Type:     notify.EventQuarantineBlocked,
 			Severity: "warning",
 			Title:    fmt.Sprintf("Quarantine: %s %s on %s blocked", ev.Package, ev.Version, ev.Ecosystem),
@@ -317,7 +416,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	// compromise signal.
 	if tamperRecorder != nil {
 		tamperRecorder.SetOnTamper(func(ev db.QuarantineEvent) {
-			webhookNotifier.Dispatch(ctx, notify.Event{
+			webhookNotifier.Dispatch(serverCtx, notify.Event{
 				Type:      notify.EventTamperDetected,
 				Severity:  "critical",
 				Title:     fmt.Sprintf("Tamper: %s %s on %s changed upstream", ev.Package, ev.Version, ev.Ecosystem),
@@ -345,7 +444,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	securityImporter := security.NewImporter(database)
 
 	if secCfg.Enabled {
-		go security.StartBackgroundScan(ctx, securityScanner, secCfg.ScanInterval)
+		go security.StartBackgroundScan(serverCtx, securityScanner, secCfg.ScanInterval)
 		zap.L().Info("security vulnerability scanner enabled",
 			zap.Duration("scan_interval", secCfg.ScanInterval),
 			zap.Duration("check_ttl", secCfg.CheckTTL),
@@ -360,19 +459,8 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		zap.L().Info("license key configured, validation in progress")
 	}
 
-	// Restore latency metrics from DB before starting health checks
-	allPools := make([]*upstream.Pool, 0, len(pools))
-	for _, eco := range ecosystems {
-		allPools = append(allPools, pools[eco.name])
-	}
-	for _, pool := range allPools {
-		upstream.RestoreFromDB(pool, database)
-	}
-	for _, pool := range allPools {
-		go upstream.StartHealthCheck(ctx, pool, database, upstream.DefaultProbeInterval)
-	}
-	go upstream.StartLatencyLogCleanup(ctx, database)
-	go cache.StartLRUCleanup(ctx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
+	go upstream.StartLatencyLogCleanup(serverCtx, database)
+	go cache.StartLRUCleanup(serverCtx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
 
 	// Setup Gin
 	r := gin.New()
@@ -382,8 +470,8 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	r.Use(middleware.ProjectTokenMiddleware(database))
 
 	// Build ordered ecosystem name list (defines UI iteration order)
-	ecosystemNames := make([]string, 0, len(ecosystems))
-	for _, eco := range ecosystems {
+	ecosystemNames := make([]string, 0, len(activeDefs))
+	for _, eco := range activeDefs {
 		ecosystemNames = append(ecosystemNames, eco.name)
 	}
 
@@ -394,6 +482,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		Config:           cfg,
 		ConfigStore:      settingsStore,
 		Pools:            pools,
+		UpstreamRegistry: registry,
 		Ecosystems:       ecosystemNames,
 		CacheMgr:         cacheMgr,
 		EventBus:         eventBus,
@@ -411,60 +500,12 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		BlocklistSyncer:  blocklistSyncer,
 	})
 
-	// Register adapter handlers
-	type adapterFactory func(*cache.Manager, upstream.Selector, config.CacheConfig, *gorm.DB) adapter.Adapter
-
-	adapterFactories := map[string]adapterFactory{
-		"pypi": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return pypi.New(cm, s, cc, db)
-		},
-		"apt": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return apt.New(cm, s, cc, db)
-		},
-		"npm": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return npm.New(cm, s, cc, db)
-		},
-		"go": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return goproxy.New(cm, s, cc, db)
-		},
-		"cargo": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return cargo.New(cm, s, cc, db)
-		},
-		"maven": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return maven.New(cm, s, cc, db)
-		},
-		"rubygems": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return rubygems.New(cm, s, cc, db)
-		},
-		"composer": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return composer.New(cm, s, cc, db)
-		},
-		"nuget": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return nuget.New(cm, s, cc, db)
-		},
-		"conda": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return conda.New(cm, s, cc, db)
-		},
-		"cran": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return cran.New(cm, s, cc, db)
-		},
-		"alpine": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return alpine.New(cm, s, cc, db)
-		},
-		"helm": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return helm.New(cm, s, cc, db)
-		},
-		"huggingface": func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, db *gorm.DB) adapter.Adapter {
-			return huggingface.New(cm, s, cc, db)
-		},
-	}
-
-	handlers := make(map[string]adapter.Adapter, len(ecosystems))
-	for _, eco := range ecosystems {
-		factory := adapterFactories[eco.name]
-		h := factory(cacheMgr, upstream.NewPrioritySelector(pools[eco.name]), cfg.Cache, database)
-		h.Register(r.Group(eco.route))
-		handlers[eco.name] = h
+	// Project-scoped proxy routes (/p/:slug/...) share Registry-owned Pools
+	// with their standard counterparts, so runtime mutations are immediate.
+	projectGroup := r.Group("/p/:slug")
+	projectGroup.Use(middleware.ProjectSlugMiddleware(database))
+	if err := registerActiveAdapters(r, projectGroup, activeDefs, pools, cacheMgr, cfg.Cache, database); err != nil {
+		return nil, err
 	}
 
 	if len(cfg.Docker.Registries) > 0 {
@@ -477,23 +518,15 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		)
 	}
 
-	// Project-scoped proxy routes (/p/:slug/...)
-	projectGroup := r.Group("/p/:slug")
-	projectGroup.Use(middleware.ProjectSlugMiddleware(database))
-	// Re-register all adapter handlers under the project group
-	for _, eco := range ecosystems {
-		handlers[eco.name].Register(projectGroup.Group(eco.route))
-	}
-
 	// Register extra PyPI-compatible indexes
 	for _, idx := range cfg.ExtraIndexes {
 		idxPool, err := upstream.NewPool(idx.Upstreams)
 		if err != nil {
 			return nil, fmt.Errorf("create extra index %s pool: %w", idx.Name, err)
 		}
-		syncUpstreams(database, "extra:"+idx.Name, idx.Upstreams)
+		syncConfigOwnedUpstreams(database, "extra:"+idx.Name, idx.Upstreams)
 		upstream.RestoreFromDB(idxPool, database)
-		go upstream.StartHealthCheck(ctx, idxPool, database, upstream.DefaultProbeInterval)
+		go upstream.StartHealthCheck(serverCtx, idxPool, database, upstream.DefaultProbeInterval)
 
 		idxHandler := pypi.NewWithPrefix(cacheMgr, upstream.NewPrioritySelector(idxPool), cfg.Cache, database, "/"+idx.Path, "extra:"+idx.Name)
 		idxHandler.Register(r.Group("/" + idx.Path))
@@ -524,31 +557,25 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	})
 
 	// Create and start HTTP server
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: r,
+		Addr: addr,
 	}
-
-	// Flush the access-log recorder during graceful shutdown so the last
-	// in-memory batch lands in SQLite instead of being lost. RegisterOnShutdown
-	// callbacks run inside Server.Shutdown() before it returns, exactly the
-	// hook we want. A 5s cap keeps a stuck flush from blocking shutdown
-	// indefinitely.
-	srv.RegisterOnShutdown(func() {
+	lifecycle := registerServerLifecycle(srv, func() error {
+		cancelServer()
+		_ = listener.Close()
+		registry.Close()
 		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := accessRecorder.Close(flushCtx); err != nil {
-			zap.L().Warn("access log recorder close failed", zap.Error(err))
-		}
+		return accessRecorder.Close(flushCtx)
 	})
+	srv.Handler = lifecycle.track(r)
+	registry.Start(serverCtx)
 
 	go func() {
 		zap.L().Info("starting server", zap.String("addr", addr))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			zap.L().Fatal("server failed", zap.Error(err))
-		}
+		serveHTTP(srv, listener)
 	}()
+	started = true
 
 	return srv, nil
 }
@@ -617,32 +644,49 @@ func formatSeconds(secs int64) string {
 	}
 }
 
-// syncUpstreams ensures configured upstreams exist in the database.
-func syncUpstreams(database *gorm.DB, adapterType string, upstreams []config.UpstreamConfig) {
-	for _, u := range upstreams {
+// syncConfigOwnedUpstreams persists extra-index sources, which remain outside
+// the dynamic standard-ecosystem Registry.
+func syncConfigOwnedUpstreams(database *gorm.DB, adapterType string, upstreams []config.UpstreamConfig) {
+	for _, item := range upstreams {
+		mode := item.ProbeMode
+		if mode == "" {
+			mode = "active"
+		}
+		interval := item.ProbeInterval
+		if interval == "" {
+			interval = upstream.DefaultProbeInterval.String()
+		}
 		var record db.UpstreamRecord
-		result := database.Where("name = ? AND adapter_type = ?", u.Name, adapterType).First(&record)
-		if result.Error == gorm.ErrRecordNotFound {
+		result := database.Where("name = ? AND adapter_type = ?", item.Name, adapterType).First(&record)
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			record = db.UpstreamRecord{
-				AdapterType: adapterType,
-				Name:        u.Name,
-				URL:         u.URL,
-				Proxy:       u.Proxy,
-				Priority:    u.Priority,
-				Healthy:     true,
-				SuccessRate: 1.0,
+				AdapterType:   adapterType,
+				Name:          item.Name,
+				URL:           item.URL,
+				Proxy:         item.Proxy,
+				Priority:      item.Priority,
+				ProbeMode:     mode,
+				ProbeInterval: interval,
+				Healthy:       true,
+				SuccessRate:   1,
 			}
 			if err := database.Create(&record).Error; err != nil {
-				zap.L().Warn("failed to sync upstream to db", zap.String("name", u.Name), zap.Error(err))
-			} else {
-				zap.L().Info("synced upstream to db", zap.String("name", u.Name), zap.String("type", adapterType))
+				zap.L().Warn("failed to sync config-owned upstream", zap.String("name", item.Name), zap.Error(err))
 			}
-		} else if result.Error == nil {
-			database.Model(&record).Updates(map[string]interface{}{
-				"url":      u.URL,
-				"proxy":    u.Proxy,
-				"priority": u.Priority,
-			})
+			continue
+		}
+		if result.Error != nil {
+			zap.L().Warn("failed to read config-owned upstream", zap.String("name", item.Name), zap.Error(result.Error))
+			continue
+		}
+		if err := database.Model(&record).Updates(map[string]any{
+			"url":            item.URL,
+			"proxy":          item.Proxy,
+			"priority":       item.Priority,
+			"probe_mode":     mode,
+			"probe_interval": interval,
+		}).Error; err != nil {
+			zap.L().Warn("failed to update config-owned upstream", zap.String("name", item.Name), zap.Error(err))
 		}
 	}
 }

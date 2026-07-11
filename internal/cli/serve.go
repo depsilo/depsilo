@@ -154,7 +154,7 @@ func RunServe(args []string) int {
 
 	<-ctx.Done()
 	zap.L().Info("shutting down server...")
-	if err := srv.Shutdown(context.Background()); err != nil {
+	if err := server.Shutdown(context.Background(), srv); err != nil {
 		zap.L().Error("server shutdown error", zap.Error(err))
 		return 1
 	}

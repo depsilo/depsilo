@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
@@ -19,35 +17,6 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
-
-type countingUpstreamRegistry struct {
-	calls int
-}
-
-func (registry *countingUpstreamRegistry) List() []upstream.RuntimeUpstream {
-	registry.calls++
-	return nil
-}
-
-func (registry *countingUpstreamRegistry) Create(context.Context, upstream.MutationInput) (upstream.RuntimeUpstream, error) {
-	registry.calls++
-	return upstream.RuntimeUpstream{}, nil
-}
-
-func (registry *countingUpstreamRegistry) Update(context.Context, uint, upstream.MutationInput) (upstream.RuntimeUpstream, error) {
-	registry.calls++
-	return upstream.RuntimeUpstream{}, nil
-}
-
-func (registry *countingUpstreamRegistry) Delete(context.Context, uint) (upstream.RuntimeUpstream, error) {
-	registry.calls++
-	return upstream.RuntimeUpstream{}, nil
-}
-
-func (registry *countingUpstreamRegistry) Check(context.Context, uint) (upstream.RuntimeUpstream, upstream.ProbeResult, error) {
-	registry.calls++
-	return upstream.RuntimeUpstream{}, upstream.ProbeResult{}, nil
-}
 
 func upstreamRouterFixtureWithPrincipal(t *testing.T, count int, canWrite bool, firstURL, firstProxy string) (*upstream.Registry, *gin.Engine) {
 	t.Helper()
@@ -224,38 +193,32 @@ func TestUpstreamMutationRejectsMalformedBodiesBeforeRegistryCall(t *testing.T) 
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			registry := &countingUpstreamRegistry{}
-			handler := &UpstreamHandler{registry: registry}
+			handler := &UpstreamHandler{}
 			router := gin.New()
 			router.POST("/upstreams", handler.Create)
 			recorder := performJSON(router, http.MethodPost, "/upstreams", body)
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
-			if registry.calls != 0 {
-				t.Fatalf("registry calls=%d", registry.calls)
-			}
 		})
 	}
 
-	registry := &countingUpstreamRegistry{}
-	handler := &UpstreamHandler{registry: registry}
+	handler := &UpstreamHandler{}
 	router := gin.New()
 	router.PUT("/upstreams/:id", handler.Update)
 	recorder := performJSON(router, http.MethodPut, "/upstreams/1", `{"adapter_type":"pypi","name":"x","url":"https://x.example","priority":1,"probe_mode":"passive","probe_interval":"30m","URL":"https://alias.example"}`)
-	if recorder.Code != http.StatusBadRequest || registry.calls != 0 {
-		t.Fatalf("update status=%d calls=%d body=%s", recorder.Code, registry.calls, recorder.Body.String())
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("update status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
 func TestUpstreamIDOverflowRejectedBeforeRegistryCall(t *testing.T) {
-	registry := &countingUpstreamRegistry{}
-	handler := &UpstreamHandler{registry: registry}
+	handler := &UpstreamHandler{}
 	router := gin.New()
 	router.DELETE("/upstreams/:id", handler.Delete)
 	recorder := performJSON(router, http.MethodDelete, "/upstreams/18446744073709551616", "")
-	if recorder.Code != http.StatusBadRequest || registry.calls != 0 {
-		t.Fatalf("status=%d calls=%d body=%s", recorder.Code, registry.calls, recorder.Body.String())
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
@@ -347,34 +310,13 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 }
 
 func TestWritableUpstreamCheckRetainsOperationalError(t *testing.T) {
-	registryResult := &fixedCheckRegistry{
-		item:   upstream.RuntimeUpstream{ID: 1, AdapterType: "pypi", Name: "source", URL: "https://source.example", ProbeMode: "passive", ProbeInterval: "30m"},
-		result: upstream.ProbeResult{CheckedAt: time.Now(), Err: errors.New("dial tcp: connection refused")},
-	}
-	handler := &UpstreamHandler{registry: registryResult}
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set(middleware.ContextKeyPrincipal, middleware.Principal{CanWrite: true})
-		c.Next()
-	})
-	router.POST("/upstreams/:id/check", handler.Check)
+	_, router := upstreamRouterFixtureWithPrincipal(t, 1, true, "http://127.0.0.1:1", "")
 	recorder := performJSON(router, http.MethodPost, "/upstreams/1/check", "")
 	var response checkUpstreamResponse
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Check.Error == nil || *response.Check.Error != "dial tcp: connection refused" {
+	if response.Check.Error == nil || *response.Check.Error == "" || *response.Check.Error == "upstream check failed" {
 		t.Fatalf("response=%s", recorder.Body.String())
 	}
-}
-
-type fixedCheckRegistry struct {
-	countingUpstreamRegistry
-	item   upstream.RuntimeUpstream
-	result upstream.ProbeResult
-}
-
-func (registry *fixedCheckRegistry) Check(context.Context, uint) (upstream.RuntimeUpstream, upstream.ProbeResult, error) {
-	registry.calls++
-	return registry.item, registry.result, nil
 }

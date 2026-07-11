@@ -43,13 +43,13 @@ func main() {
 
 	shutdown := func() {
 		zap.L().Info("tray: shutting down server")
+		cancel()
 		// Give the server up to 5s to drain in-flight requests.
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer stopCancel()
-		if err := srv.Shutdown(stopCtx); err != nil {
+		if err := server.Shutdown(stopCtx, srv); err != nil {
 			zap.L().Warn("server shutdown returned error", zap.Error(err))
 		}
-		cancel()
 	}
 
 	baseURL := serverURL()

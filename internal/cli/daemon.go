@@ -53,7 +53,10 @@ func runStart(args []string) int {
 		fmt.Println("\nShutting down server...")
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
-		srv.Shutdown(shutdownCtx)
+		if err := server.Shutdown(shutdownCtx, srv); err != nil {
+			fmt.Fprintf(os.Stderr, "Error shutting down server: %v\n", err)
+			return 1
+		}
 		return 0
 	}
 

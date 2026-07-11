@@ -38,6 +38,7 @@ type Deps struct {
 	Config           *config.Config
 	ConfigStore      *config.Store
 	Pools            map[string]*upstream.Pool
+	UpstreamRegistry *upstream.Registry
 	Ecosystems       []string
 	CacheMgr         *cache.Manager
 	EventBus         *cache.EventBus
@@ -151,7 +152,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.POST("/cache/warmup", warmupHandler.Warmup)
 
 	// Upstream management
-	upstreamHandler := admin.NewUpstreamHandler(deps.DB)
+	upstreamHandler := admin.NewUpstreamHandler(deps.UpstreamRegistry)
 	adminRead.GET("/upstreams", upstreamHandler.List)
 	adminWrite.POST("/upstreams", upstreamHandler.Create)
 	adminWrite.PUT("/upstreams/:id", upstreamHandler.Update)
