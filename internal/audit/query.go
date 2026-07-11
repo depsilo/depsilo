@@ -1,9 +1,6 @@
 package audit
 
 import (
-	"bytes"
-	"encoding/csv"
-	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -64,16 +61,20 @@ func RunQuery(database *gorm.DB, q Query) (*QueryResult, error) {
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
 
 	var items []db.AuditLog
 	// Order via datetime() too — otherwise rows whose stored zone-suffix
 	// differs (legacy CST vs new UTC-Z) get sorted lexicographically and
 	// "16:10+08:00" wrongly outranks "08:25Z" despite being earlier.
-	query.Order("datetime(created_at) DESC").
+	if err := query.Order("datetime(created_at) DESC").
 		Offset((q.Page - 1) * q.PageSize).
 		Limit(q.PageSize).
-		Find(&items)
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
 
 	return &QueryResult{
 		Total: total,
@@ -82,8 +83,9 @@ func RunQuery(database *gorm.DB, q Query) (*QueryResult, error) {
 	}, nil
 }
 
-// Export returns audit log entries as CSV bytes, limited to 10000 rows.
-func Export(database *gorm.DB, q Query) ([]byte, error) {
+// RunExportQuery returns filtered audit rows, capped at 10,000. HTTP-layer
+// DTO mapping and credential policy are deliberately applied by the caller.
+func RunExportQuery(database *gorm.DB, q Query) ([]db.AuditLog, error) {
 	query := database.Model(&db.AuditLog{})
 
 	if q.Ecosystem != "" {
@@ -106,26 +108,6 @@ func Export(database *gorm.DB, q Query) ([]byte, error) {
 	}
 
 	var items []db.AuditLog
-	query.Order("datetime(created_at) DESC").Limit(10000).Find(&items)
-
-	var buf bytes.Buffer
-	w := csv.NewWriter(&buf)
-	w.Write([]string{"Time", "Ecosystem", "Package", "Version", "Action", "Result", "Client IP", "Latency(ms)", "Bytes"})
-
-	for _, item := range items {
-		w.Write([]string{
-			item.CreatedAt.Format(time.RFC3339),
-			item.Ecosystem,
-			item.PackageName,
-			item.Version,
-			item.Action,
-			item.CacheResult,
-			item.ClientIP,
-			fmt.Sprintf("%d", item.LatencyMs),
-			fmt.Sprintf("%d", item.BytesSent),
-		})
-	}
-	w.Flush()
-
-	return buf.Bytes(), w.Error()
+	err := query.Order("datetime(created_at) DESC").Limit(10000).Find(&items).Error
+	return items, err
 }

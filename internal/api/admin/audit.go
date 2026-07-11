@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/audit"
@@ -30,13 +31,17 @@ func (h *AuditHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, toAuditListResponse(result))
 }
 
 // Export returns audit log entries as a CSV download.
 func (h *AuditHandler) Export(c *gin.Context) {
-	q := h.parseQuery(c)
-	data, err := audit.Export(h.db, q)
+	items, err := audit.RunExportQuery(h.db, h.parseQuery(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "EXPORT_ERROR", "message": err.Error()})
+		return
+	}
+	data, err := encodeAuditCSV(toAuditLogResponses(items))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "EXPORT_ERROR", "message": err.Error()})
 		return
@@ -52,9 +57,17 @@ func (h *AuditHandler) parseQuery(c *gin.Context) audit.Query {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
 
+	packageName, hasPackage := c.GetQuery("package")
+	if !hasPackage {
+		packageName = c.Query("search")
+		if packageName != "" {
+			zap.L().Warn("deprecated admin query parameter", zap.String("endpoint", "audit-logs"), zap.String("parameter", "search"), zap.String("replacement", "package"))
+		}
+	}
+
 	q := audit.Query{
 		Ecosystem:   c.Query("ecosystem"),
-		PackageName: c.Query("package"),
+		PackageName: packageName,
 		ClientIP:    c.Query("ip"),
 		CacheResult: c.Query("result"),
 		Page:        page,
