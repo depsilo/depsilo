@@ -4,6 +4,7 @@ import PortalApp from '@/portal/PortalApp'
 import AdminApp from '@/admin/AdminApp'
 import { setupApi } from '@/lib/api'
 import SetupWizard from '@/setup/SetupWizard'
+import { ToastProvider } from '@/components/Toast'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,8 +47,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <div className="page-wash" />
-        <AppRoutes />
+        <ToastProvider>
+          <div className="page-wash" />
+          <AppRoutes />
+        </ToastProvider>
       </BrowserRouter>
     </QueryClientProvider>
   )
