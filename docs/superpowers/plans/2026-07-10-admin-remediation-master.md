@@ -490,9 +490,10 @@ expected=(
   "feat(auth): resolve current request principal"
   "fix(auth): enforce admin route capabilities"
   "chore(plan): approve Plan 01 Task 6 overlaps"
-  "fix(admin): prevent administrator lockout"
+  "fix(admin): secure user responses and administrator invariants"
   "fix(admin-ui): consume typed principal contracts"
   "chore(plan): approve Plan 01 Task 8 overlaps"
+  "docs(plan): reconcile executed admin subjects"
 )
 mapfile -t actual < <(git log --format=%s --reverse "$baseline_sha"..HEAD)
 if (( ${#actual[@]} != ${#expected[@]} )); then
@@ -509,11 +510,11 @@ done
 
 unexpected=$(git diff --name-only "$baseline_sha"..HEAD -- internal/config internal/upstream internal/server web/src/admin/pages/Settings.tsx web/src/admin/pages/Upstreams.tsx)
 [[ -z "$unexpected" ]] || { printf 'premature Settings/Registry paths:\n%s\n' "$unexpected" >&2; exit 1; }
-printf 'Plan 01 exact business commit count: 8; overlap approval commits: 2\n'
+printf 'Plan 01 exact business commit count: 8; overlap approval commits: 2; plan corrections: 1\n'
 BASH
 ```
 
-Expected: PASS with `Plan 01 exact business commit count: 8; overlap approval commits: 2`; the eight business subjects remain exact and ordered, each overlap owner is followed by its artifact-only approval commit, and no Settings/Registry implementation path has changed.
+Expected: PASS with `Plan 01 exact business commit count: 8; overlap approval commits: 2; plan corrections: 1`; the eight business subjects remain exact and ordered, each overlap owner is followed by its artifact-only approval commit, the post-baseline plan correction is explicit, and no Settings/Registry implementation path has changed.
 
 ### Task 3: Land the Settings backend control plane
 
