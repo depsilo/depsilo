@@ -19,6 +19,8 @@ config.toml
 
 # Test
 testground/.venv/
+web/playwright-report/
+web/test-results/
 
 # IDE
 .idea/
