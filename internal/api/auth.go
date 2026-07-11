@@ -88,21 +88,27 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
 
-func (h *AuthHandler) Refresh(c *gin.Context) {
-	userID, _ := c.Get(middleware.ContextKeyUserID)
-	username, _ := c.Get(middleware.ContextKeyUsername)
-	role, _ := c.Get(middleware.ContextKeyRole)
+func (h *AuthHandler) Me(c *gin.Context) {
+	principal, ok := middleware.PrincipalFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "principal unavailable"})
+		return
+	}
+	c.JSON(http.StatusOK, principal)
+}
 
-	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, userID.(uint), username.(string), role.(string), h.cfg.TokenTTL)
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	principal, ok := middleware.PrincipalFromContext(c)
+	if !ok || principal.AuthMethod != middleware.AuthMethodJWT {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "valid JWT required"})
+		return
+	}
+	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, principal.ID, principal.Username, principal.Role, h.cfg.TokenTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "failed to generate token"})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"token":      token,
-		"expires_at": time.Now().Add(h.cfg.TokenTTL).Unix(),
-	})
+	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": time.Now().Add(h.cfg.TokenTTL).Unix()})
 }
 
 // EnsureDefaultAdmin creates a default admin user if no admin exists.

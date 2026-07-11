@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -28,88 +29,108 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// JWTAuth returns a middleware that validates JWT tokens or API tokens.
-func JWTAuth(secret string, database *gorm.DB) gin.HandlerFunc {
+func Authenticate(secret string, database *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr := extractToken(c)
-		if tokenStr == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    "UNAUTHORIZED",
-				"message": "missing authorization token",
-			})
+		tokenString := extractToken(c)
+		if tokenString == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "missing authorization token"})
 			return
 		}
-
-		// Try JWT first
-		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-			return []byte(secret), nil
-		})
-
-		if err == nil && token.Valid {
-			c.Set(ContextKeyUserID, claims.UserID)
-			c.Set(ContextKeyUsername, claims.Username)
-			c.Set(ContextKeyRole, claims.Role)
+		if principal, err := resolveJWTPrincipal(secret, database, tokenString); err == nil {
+			setPrincipal(c, principal)
 			c.Next()
 			return
 		}
-
-		// Try API token
-		hash := sha256.Sum256([]byte(tokenStr))
-		tokenHash := hex.EncodeToString(hash[:])
-
-		var apiToken db.APIToken
-		if err := database.Where("token_hash = ?", tokenHash).First(&apiToken).Error; err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    "UNAUTHORIZED",
-				"message": "invalid or expired token",
-			})
+		principal, err := resolveAPITokenPrincipal(database, tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "invalid or expired token"})
 			return
 		}
-
-		// Check expiry
-		if apiToken.ExpiresAt != nil && time.Now().After(*apiToken.ExpiresAt) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    "UNAUTHORIZED",
-				"message": "token expired",
-			})
-			return
-		}
-
-		// Update last used
-		now := time.Now()
-		database.Model(&apiToken).Update("last_used_at", &now)
-
-		// Load user
-		var user db.User
-		if err := database.First(&user, apiToken.UserID).Error; err != nil || !user.Enabled {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    "UNAUTHORIZED",
-				"message": "user disabled or not found",
-			})
-			return
-		}
-
-		c.Set(ContextKeyUserID, user.ID)
-		c.Set(ContextKeyUsername, user.Username)
-		c.Set(ContextKeyRole, user.Role)
+		setPrincipal(c, principal)
 		c.Next()
 	}
 }
 
-// AdminRequired ensures the user has admin role.
-func AdminRequired() gin.HandlerFunc {
+func JWTOnly(secret string, database *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, exists := c.Get(ContextKeyRole)
-		if !exists || role.(string) != "admin" {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code":    "FORBIDDEN",
-				"message": "admin role required",
-			})
+		tokenString := extractToken(c)
+		principal, err := resolveJWTPrincipal(secret, database, tokenString)
+		if tokenString == "" || err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "valid JWT required"})
 			return
 		}
+		setPrincipal(c, principal)
 		c.Next()
 	}
+}
+
+func resolveJWTPrincipal(secret string, database *gorm.DB, tokenString string) (Principal, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		return []byte(secret), nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
+	if err != nil || token == nil || !token.Valid || claims.UserID == 0 {
+		return Principal{}, errors.New("invalid JWT")
+	}
+	var user db.User
+	if err := database.First(&user, claims.UserID).Error; err != nil {
+		return Principal{}, err
+	}
+	if !user.Enabled {
+		return Principal{}, errors.New("user disabled")
+	}
+	if user.Role != "admin" && user.Role != "readonly" {
+		return Principal{}, errors.New("unsupported user role")
+	}
+	return Principal{
+		ID: user.ID, Username: user.Username, Role: user.Role, Enabled: true,
+		AuthMethod: AuthMethodJWT, TokenPermissions: nil, CanWrite: user.Role == "admin",
+	}, nil
+}
+
+func resolveAPITokenPrincipal(database *gorm.DB, tokenString string) (Principal, error) {
+	digest := sha256.Sum256([]byte(tokenString))
+	tokenHash := hex.EncodeToString(digest[:])
+	var apiToken db.APIToken
+	if err := database.Where("token_hash = ?", tokenHash).First(&apiToken).Error; err != nil {
+		return Principal{}, err
+	}
+	if apiToken.ExpiresAt != nil && time.Now().After(*apiToken.ExpiresAt) {
+		return Principal{}, errors.New("token expired")
+	}
+	if apiToken.Permissions != "readonly" && apiToken.Permissions != "readwrite" {
+		return Principal{}, errors.New("unsupported token permissions")
+	}
+	var user db.User
+	if err := database.First(&user, apiToken.UserID).Error; err != nil {
+		return Principal{}, err
+	}
+	if !user.Enabled {
+		return Principal{}, errors.New("user disabled")
+	}
+	if user.Role != "admin" && user.Role != "readonly" {
+		return Principal{}, errors.New("unsupported user role")
+	}
+	now := time.Now()
+	if err := database.Model(&apiToken).Update("last_used_at", &now).Error; err != nil {
+		zap.L().Warn("failed to update API token last_used_at", zap.Uint("token_id", apiToken.ID), zap.Error(err))
+	}
+	permissions := apiToken.Permissions
+	return Principal{
+		ID: user.ID, Username: user.Username, Role: user.Role, Enabled: true,
+		AuthMethod: AuthMethodAPIToken, TokenPermissions: &permissions,
+		CanWrite: user.Role == "admin" && permissions == "readwrite",
+	}, nil
+}
+
+// JWTAuth is retained until all routes are migrated to Authenticate.
+func JWTAuth(secret string, database *gorm.DB) gin.HandlerFunc {
+	return Authenticate(secret, database)
+}
+
+// AdminRequired is retained until all routes are migrated to WriteRequired.
+func AdminRequired() gin.HandlerFunc {
+	return WriteRequired()
 }
 
 // GenerateJWT creates a new JWT token for a user.
