@@ -955,10 +955,20 @@ a:focus:not(:focus-visible) {
 }
 
 @media (max-width: 560px) {
-  .portal-admin-link,
   .portal-theme-control,
   .portal-status-pill {
     display: none !important;
+  }
+  .portal-version,
+  .portal-admin-label {
+    display: none !important;
+  }
+  .portal-admin-link {
+    width: 40px;
+    height: 40px;
+    padding: 0 !important;
+    justify-content: center;
+    flex-shrink: 0;
   }
   .quickstart-hero {
     padding: 22px !important;
@@ -976,6 +986,16 @@ a:focus:not(:focus-visible) {
   .quickstart-hero-compat {
     flex-basis: 100%;
     margin-left: 0 !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .portal-brand-name {
+    display: none !important;
+  }
+  .portal-header-inner {
+    gap: 10px !important;
+    padding-inline: 8px !important;
   }
 }
 

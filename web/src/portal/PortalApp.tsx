@@ -9,6 +9,7 @@ import Logo from '@/components/Logo'
 import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import StatusDot from '@/components/StatusDot'
+import Icon from '@/components/Icon'
 import QuickStart from '@/portal/pages/QuickStart'
 import MonitorV2 from '@/portal/pages/Monitor'
 
@@ -191,6 +192,7 @@ export default function PortalAppV2() {
         }}
       >
         <div
+          className="portal-header-inner"
           style={{
             height: 52,
             // Tracks the main content width below so header content and
@@ -210,6 +212,7 @@ export default function PortalAppV2() {
           <Link to="/" viewTransition style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0, viewTransitionName: 'portal-brand' }}>
             <Logo size={28} />
             <span
+              className="portal-brand-name"
               style={{
                 fontSize: 15,
                 fontWeight: 700,
@@ -220,6 +223,7 @@ export default function PortalAppV2() {
               depsilo
             </span>
             <span
+              className="portal-version"
               title={data?.service?.version}
               style={{
                 fontFamily: 'var(--font-mono)',
@@ -286,6 +290,8 @@ export default function PortalAppV2() {
             <a
               href="/admin"
               className="portal-admin-link hit-extend"
+              aria-label={t('portal.adminPanel')}
+              title={t('portal.adminPanel')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -301,10 +307,8 @@ export default function PortalAppV2() {
                 whiteSpace: 'nowrap',
               }}
             >
-              {t('portal.adminPanel')}
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                <path d="M2 8L8 2M8 2H4M8 2v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <Icon name="admin_panel_settings" size="sm" />
+              <span className="portal-admin-label">{t('portal.adminPanel')}</span>
             </a>
           </div>
         </div>

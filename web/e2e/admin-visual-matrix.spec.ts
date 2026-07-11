@@ -29,6 +29,21 @@ for (const width of [1920, 2560]) {
   })
 }
 
+test('Portal mobile header keeps Admin navigation reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await setUiPreferences(page, 'dark', 'zh')
+  await page.goto('/')
+  await expectResolvedUiPreferences(page, 'dark', 'zh')
+
+  const adminLink = page.getByRole('link', { name: /管理后台/ })
+  await expect(adminLink).toBeVisible()
+  const box = await adminLink.boundingBox()
+  expect(box?.width).toBeGreaterThanOrEqual(40)
+  expect(box?.height).toBeGreaterThanOrEqual(40)
+  await adminLink.click()
+  await expect(page).toHaveURL(/\/admin(?:\/|$)/)
+})
+
 for (const route of ['/', '/monitor']) for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const) {
   test(`Portal ${route} ${width} ${theme} has no token regression`, async ({ page }) => {
     const consoleErrors: string[] = []
