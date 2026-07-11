@@ -36,6 +36,7 @@ type Deps struct {
 	DB               *gorm.DB
 	Storage          cache.Storage
 	Config           *config.Config
+	ConfigStore      *config.Store
 	Pools            map[string]*upstream.Pool
 	Ecosystems       []string
 	CacheMgr         *cache.Manager
@@ -180,7 +181,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.DELETE("/tokens/:id", tokenHandler.Delete)
 
 	// Settings
-	settingsHandler := admin.NewSettingsHandler(deps.Config)
+	settingsHandler := admin.NewSettingsHandler(deps.ConfigStore)
 	adminRead.GET("/settings", settingsHandler.Get)
 	adminWrite.PUT("/settings", settingsHandler.Update)
 

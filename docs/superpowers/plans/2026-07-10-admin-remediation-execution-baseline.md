@@ -217,6 +217,8 @@ internal/api/router.go	fix(auth): enforce admin route capabilities	preserved	945
 web/src/lib/api.ts	fix(admin-ui): consume typed principal contracts	mixed	d1708fa0e3f9f6aa356282bee43f448ee9d80c0242166ece0bf7b07d0e095afb	api-open-audit	pending-review	2026-07-11T09:51:55Z
 config.example.toml	feat(config): define validated admin settings model	preserved	cec8205d2f614d89debf27bb10e18eae8e27aa22d3385fef368b9555ba285afa	config-example-supply-chain	pending-review	2026-07-11T10:10:14Z
 internal/server/server.go	feat(logging): share atomic server log level	preserved	a4b7cd06151936edf310a1d1048ebc2ccdbcfe07f0fcf44ae8bf226bc01d6329	server-tamper-semantics	pending-review	2026-07-11T10:50:29Z
+internal/api/router.go	feat(admin): expose truthful settings contract	preserved	5a9816c97114504eccf44e468c048e326973467b30f973a479bc2ebd31c05854	router-existing-semantics	pending-review	2026-07-11T11:07:39Z
+internal/server/server.go	feat(admin): expose truthful settings contract	preserved	307dbf2687b18998cb33f41962f2d39ea228039e5c42cd87486d4f6922062daa	server-tamper-semantics	pending-review	2026-07-11T11:07:39Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

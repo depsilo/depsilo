@@ -64,6 +64,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		return nil, fmt.Errorf("parse server.log_level: %w", err)
 	}
 	logLevel.SetLevel(parsed.Level())
+	settingsStore := config.NewStore(cfg.ConfigPath, cfg, logLevel)
 	zap.L().Info("config loaded",
 		zap.String("db_driver", cfg.Database.Driver),
 		zap.String("storage_type", cfg.Storage.Type),
@@ -391,6 +392,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		DB:               database,
 		Storage:          storage,
 		Config:           cfg,
+		ConfigStore:      settingsStore,
 		Pools:            pools,
 		Ecosystems:       ecosystemNames,
 		CacheMgr:         cacheMgr,
