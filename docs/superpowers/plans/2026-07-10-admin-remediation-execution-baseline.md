@@ -223,5 +223,6 @@ After both reviewer turns approve, the controller appends one row: path, exact s
 
 ```text
 <!-- OVERLAP_APPROVALS_BEGIN -->
+internal/api/router.go	fix(auth): enforce admin route capabilities	chore(plan): approve Plan 01 Task 6 overlaps	preserved	07caebaa9d5b4f586bb68aff5d72722156f69cb3	945ca5fe5abefe1289aa8a427afd70266de06b9e5de4a441d7855d5b8da2ddfa	router-existing-semantics	spec-approved:Plan01-T6	quality-approved:Plan01-T6	2026-07-11T09:10:19Z
 <!-- OVERLAP_APPROVALS_END -->
 ```
