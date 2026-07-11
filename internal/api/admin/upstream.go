@@ -23,6 +23,12 @@ func NewUpstreamHandler(database *gorm.DB) *UpstreamHandler {
 func (h *UpstreamHandler) List(c *gin.Context) {
 	var upstreams []db.UpstreamRecord
 	h.db.Order("adapter_type, priority").Find(&upstreams)
+	if !principalCanViewCredentials(c) {
+		for i := range upstreams {
+			upstreams[i].URL = maskURLUserInfo(upstreams[i].URL)
+			upstreams[i].Proxy = maskURLUserInfo(upstreams[i].Proxy)
+		}
+	}
 	c.JSON(http.StatusOK, upstreams)
 }
 
@@ -162,8 +168,8 @@ func (h *UpstreamHandler) Check(c *gin.Context) {
 
 	// Update DB record
 	h.db.Model(&record).Updates(map[string]interface{}{
-		"healthy":        healthy,
-		"avg_latency_ms": latencyMs,
+		"healthy":         healthy,
+		"avg_latency_ms":  latencyMs,
 		"last_checked_at": time.Now(),
 	})
 

@@ -123,16 +123,6 @@ func resolveAPITokenPrincipal(database *gorm.DB, tokenString string) (Principal,
 	}, nil
 }
 
-// JWTAuth is retained until all routes are migrated to Authenticate.
-func JWTAuth(secret string, database *gorm.DB) gin.HandlerFunc {
-	return Authenticate(secret, database)
-}
-
-// AdminRequired is retained until all routes are migrated to WriteRequired.
-func AdminRequired() gin.HandlerFunc {
-	return WriteRequired()
-}
-
 // GenerateJWT creates a new JWT token for a user.
 func GenerateJWT(secret string, userID uint, username, role string, ttl time.Duration) (string, error) {
 	claims := Claims{

@@ -4,6 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -466,32 +469,22 @@ func TestAuthenticateDatabaseFailuresAreGeneric(t *testing.T) {
 	}
 }
 
-func TestCompatibilityMiddlewareUsesCurrentPrincipal(t *testing.T) {
-	database := newAuthTestDB(t)
-	admin := createAuthTestUser(t, database, "admin", "admin", true)
-	createAuthTestAPIToken(t, database, admin.ID, "compat-readonly", "readonly")
-	createAuthTestAPIToken(t, database, admin.ID, "compat-readwrite", "readwrite")
-	jwtToken, err := GenerateJWT(authTestSecret, admin.ID, admin.Username, admin.Role, time.Hour)
+func TestCompatibilityMiddlewareWrappersAreRemoved(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "auth.go", nil, 0)
 	if err != nil {
-		t.Fatalf("generate JWT: %v", err)
+		t.Fatalf("parse auth.go: %v", err)
 	}
-	r := gin.New()
-	r.POST("/", JWTAuth(authTestSecret, database), AdminRequired(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
-
-	assertGenericForbidden(t, authRequest(r, http.MethodPost, "/", "compat-readonly"), "compat-readonly")
-	for _, token := range []string{"compat-readwrite", jwtToken} {
-		if rec := authRequest(r, http.MethodPost, "/", token); rec.Code != http.StatusNoContent {
-			t.Fatalf("admin status = %d, body = %s", rec.Code, rec.Body.String())
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		switch function.Name.Name {
+		case "JWTAuth", "AdminRequired":
+			t.Errorf("obsolete compatibility wrapper %s is still declared", function.Name.Name)
 		}
 	}
-	if err := database.Model(&admin).Update("role", "readonly").Error; err != nil {
-		t.Fatalf("downgrade admin: %v", err)
-	}
-	assertGenericForbidden(t, authRequest(r, http.MethodPost, "/", jwtToken), jwtToken)
-	if err := database.Model(&admin).Updates(map[string]any{"role": "admin", "enabled": false}).Error; err != nil {
-		t.Fatalf("disable admin: %v", err)
-	}
-	assertGenericUnauthorized(t, authRequest(r, http.MethodPost, "/", "compat-readwrite"), "compat-readwrite")
 }
 
 func runConcurrentAuthPhase(t *testing.T, r *gin.Engine, token string, count int) []int {

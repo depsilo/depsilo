@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
-	"net/url"
 	"time"
 
 	"depsilo/internal/audit"
@@ -33,38 +32,34 @@ type auditListResponse struct {
 	Page  int                `json:"page"`
 }
 
-func toAuditLogResponse(item db.AuditLog) auditLogResponse {
+func toAuditLogResponse(item db.AuditLog, canViewCredentials bool) auditLogResponse {
+	upstreamURL := item.UpstreamURL
+	if !canViewCredentials {
+		upstreamURL = maskURLUserInfo(upstreamURL)
+	}
 	return auditLogResponse{
 		ID: item.ID, Ecosystem: item.Ecosystem, PackageName: item.PackageName,
 		Version: item.Version, Action: item.Action, CacheResult: item.CacheResult,
-		ClientIP: item.ClientIP, UserAgent: item.UserAgent, UpstreamURL: maskAuditURLUserInfo(item.UpstreamURL),
+		ClientIP: item.ClientIP, UserAgent: item.UserAgent, UpstreamURL: upstreamURL,
 		LatencyMs: item.LatencyMs, BytesSent: item.BytesSent, StatusCode: item.StatusCode,
 		CreatedAt: item.CreatedAt,
 	}
 }
 
 func maskAuditURLUserInfo(raw string) string {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "***"
-	}
-	if parsed.User == nil {
-		return raw
-	}
-	parsed.User = url.UserPassword("***", "***")
-	return parsed.String()
+	return maskURLUserInfo(raw)
 }
 
-func toAuditLogResponses(rows []db.AuditLog) []auditLogResponse {
+func toAuditLogResponses(rows []db.AuditLog, canViewCredentials bool) []auditLogResponse {
 	items := make([]auditLogResponse, len(rows))
 	for i, row := range rows {
-		items[i] = toAuditLogResponse(row)
+		items[i] = toAuditLogResponse(row, canViewCredentials)
 	}
 	return items
 }
 
-func toAuditListResponse(result *audit.QueryResult) auditListResponse {
-	return auditListResponse{Items: toAuditLogResponses(result.Items), Total: result.Total, Page: result.Page}
+func toAuditListResponse(result *audit.QueryResult, canViewCredentials bool) auditListResponse {
+	return auditListResponse{Items: toAuditLogResponses(result.Items, canViewCredentials), Total: result.Total, Page: result.Page}
 }
 
 func encodeAuditCSV(items []auditLogResponse) ([]byte, error) {

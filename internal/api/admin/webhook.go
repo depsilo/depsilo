@@ -20,6 +20,19 @@ type WebhookHandler struct {
 	Notifier *notify.Notifier
 }
 
+type webhookListResponse struct {
+	ID              uint       `json:"id"`
+	Name            string     `json:"name"`
+	Platform        string     `json:"platform"`
+	URL             string     `json:"url"`
+	Enabled         bool       `json:"enabled"`
+	Events          string     `json:"events"`
+	CooldownMinutes int        `json:"cooldown_minutes"`
+	LastSentAt      *time.Time `json:"last_sent_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
 // NewWebhookHandler creates a new WebhookHandler.
 func NewWebhookHandler(database *gorm.DB, n *notify.Notifier) *WebhookHandler {
 	return &WebhookHandler{DB: database, Notifier: n}
@@ -32,10 +45,20 @@ func (h *WebhookHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	if configs == nil {
-		configs = []db.WebhookConfig{}
+	canViewCredentials := principalCanViewCredentials(c)
+	items := make([]webhookListResponse, len(configs))
+	for i, config := range configs {
+		urlValue := config.URL
+		if !canViewCredentials {
+			urlValue = maskWebhookURL(urlValue)
+		}
+		items[i] = webhookListResponse{
+			ID: config.ID, Name: config.Name, Platform: config.Platform, URL: urlValue,
+			Enabled: config.Enabled, Events: config.Events, CooldownMinutes: config.CooldownMinutes,
+			LastSentAt: config.LastSentAt, CreatedAt: config.CreatedAt, UpdatedAt: config.UpdatedAt,
+		}
 	}
-	c.JSON(http.StatusOK, configs)
+	c.JSON(http.StatusOK, items)
 }
 
 // Create adds a new webhook configuration.

@@ -213,6 +213,7 @@ Before committing, each owner appends one row: path, exact subject, disposition,
 
 ```text
 <!-- OVERLAP_PENDING_BEGIN -->
+internal/api/router.go	fix(auth): enforce admin route capabilities	preserved	945ca5fe5abefe1289aa8a427afd70266de06b9e5de4a441d7855d5b8da2ddfa	router-existing-semantics	pending-review	2026-07-11T09:05:17Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

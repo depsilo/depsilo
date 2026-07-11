@@ -31,7 +31,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, toAuditListResponse(result))
+	c.JSON(http.StatusOK, toAuditListResponse(result, principalCanViewCredentials(c)))
 }
 
 // Export returns audit log entries as a CSV download.
@@ -41,7 +41,7 @@ func (h *AuditHandler) Export(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "EXPORT_ERROR", "message": err.Error()})
 		return
 	}
-	data, err := encodeAuditCSV(toAuditLogResponses(items))
+	data, err := encodeAuditCSV(toAuditLogResponses(items, principalCanViewCredentials(c)))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "EXPORT_ERROR", "message": err.Error()})
 		return

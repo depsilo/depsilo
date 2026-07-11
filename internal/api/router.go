@@ -118,85 +118,87 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	authGroup := apiV1.Group("/auth")
 	authGroup.POST("/login", authHandler.Login)
 	authGroup.POST("/logout", authHandler.Logout)
-	authGroup.POST("/refresh",
-		middleware.JWTAuth(deps.Config.Auth.JWTSecret, deps.DB),
-		authHandler.Refresh,
-	)
+	authGroup.GET("/me", middleware.Authenticate(deps.Config.Auth.JWTSecret, deps.DB), authHandler.Me)
+	authGroup.POST("/refresh", middleware.JWTOnly(deps.Config.Auth.JWTSecret, deps.DB), authHandler.Refresh)
 
-	// Admin routes (require JWT + admin role)
+	// Admin routes require authentication and an explicit capability.
 	adminGroup := apiV1.Group("/admin")
-	adminGroup.Use(middleware.JWTAuth(deps.Config.Auth.JWTSecret, deps.DB))
-	adminGroup.Use(middleware.AdminRequired())
+	adminGroup.Use(middleware.Authenticate(deps.Config.Auth.JWTSecret, deps.DB))
+	adminRead := adminGroup.Group("")
+	adminRead.Use(middleware.ReadRequired())
+	adminWrite := adminGroup.Group("")
+	adminWrite.Use(middleware.WriteRequired())
 
 	// Dashboard
 	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled)
-	adminGroup.GET("/dashboard", dashHandler.GetDashboard)
-	adminGroup.GET("/dashboard/trends", dashHandler.GetTrends)
+	adminRead.GET("/dashboard", dashHandler.GetDashboard)
+	adminRead.GET("/dashboard/trends", dashHandler.GetTrends)
 
 	// Bandwidth report
 	bandwidthHandler := admin.NewBandwidthHandler(deps.DB, deps.Config.AccessLog.RollupEnabled)
-	adminGroup.GET("/bandwidth", bandwidthHandler.GetReport)
+	adminRead.GET("/bandwidth", bandwidthHandler.GetReport)
 
 	// Cache management
 	cacheHandler := admin.NewCacheHandler(deps.DB, deps.Storage, deps.Config.Cache.MaxSizeGB)
-	adminGroup.GET("/cache", cacheHandler.List)
-	adminGroup.DELETE("/cache/:id", cacheHandler.Delete)
-	adminGroup.POST("/cache/cleanup", cacheHandler.Cleanup)
-	adminGroup.GET("/cache/distribution", cacheHandler.GetDistribution)
+	adminRead.GET("/cache", cacheHandler.List)
+	adminRead.GET("/cache/distribution", cacheHandler.GetDistribution)
+	adminWrite.DELETE("/cache/:id", cacheHandler.Delete)
+	adminWrite.POST("/cache/cleanup", cacheHandler.Cleanup)
 
 	// Cache warmup
 	warmupHandler := admin.NewWarmupHandler(deps.CacheMgr, deps.Pools, deps.Config)
-	adminGroup.POST("/cache/warmup", warmupHandler.Warmup)
+	adminWrite.POST("/cache/warmup", warmupHandler.Warmup)
 
 	// Upstream management
 	upstreamHandler := admin.NewUpstreamHandler(deps.DB)
-	adminGroup.GET("/upstreams", upstreamHandler.List)
-	adminGroup.POST("/upstreams", upstreamHandler.Create)
-	adminGroup.PUT("/upstreams/:id", upstreamHandler.Update)
-	adminGroup.DELETE("/upstreams/:id", upstreamHandler.Delete)
-	adminGroup.POST("/upstreams/:id/check", upstreamHandler.Check)
+	adminRead.GET("/upstreams", upstreamHandler.List)
+	adminWrite.POST("/upstreams", upstreamHandler.Create)
+	adminWrite.PUT("/upstreams/:id", upstreamHandler.Update)
+	adminWrite.DELETE("/upstreams/:id", upstreamHandler.Delete)
+	adminWrite.POST("/upstreams/:id/check", upstreamHandler.Check)
 
 	// Upstream latency history
 	latencyHandler := admin.NewLatencyHandler(deps.DB)
-	adminGroup.GET("/upstreams/:id/latency", latencyHandler.GetLatencyHistory)
+	adminRead.GET("/upstreams/:id/latency", latencyHandler.GetLatencyHistory)
 
 	// Access logs
 	logHandler := admin.NewAccessLogHandler(deps.DB)
-	adminGroup.GET("/logs", logHandler.List)
+	adminRead.GET("/logs", logHandler.List)
+	adminRead.GET("/logs/export", logHandler.Export)
 
 	// User management
 	userHandler := admin.NewUserHandler(deps.DB)
-	adminGroup.GET("/users", userHandler.List)
-	adminGroup.POST("/users", userHandler.Create)
-	adminGroup.PUT("/users/:id", userHandler.Update)
-	adminGroup.DELETE("/users/:id", userHandler.Delete)
+	adminRead.GET("/users", userHandler.List)
+	adminWrite.POST("/users", userHandler.Create)
+	adminWrite.PUT("/users/:id", userHandler.Update)
+	adminWrite.DELETE("/users/:id", userHandler.Delete)
 
 	// API Tokens
 	tokenHandler := admin.NewTokenHandler(deps.DB)
-	adminGroup.GET("/tokens", tokenHandler.List)
-	adminGroup.POST("/tokens", tokenHandler.Create)
-	adminGroup.DELETE("/tokens/:id", tokenHandler.Delete)
+	adminRead.GET("/tokens", tokenHandler.List)
+	adminWrite.POST("/tokens", tokenHandler.Create)
+	adminWrite.DELETE("/tokens/:id", tokenHandler.Delete)
 
 	// Settings
 	settingsHandler := admin.NewSettingsHandler(deps.Config)
-	adminGroup.GET("/settings", settingsHandler.Get)
-	adminGroup.PUT("/settings", settingsHandler.Update)
+	adminRead.GET("/settings", settingsHandler.Get)
+	adminWrite.PUT("/settings", settingsHandler.Update)
 
 	// Webhook notifications
 	webhookHandler := admin.NewWebhookHandler(deps.DB, deps.WebhookNotifier)
-	adminGroup.GET("/webhooks", webhookHandler.List)
-	adminGroup.POST("/webhooks", webhookHandler.Create)
-	adminGroup.PUT("/webhooks/:id", webhookHandler.Update)
-	adminGroup.DELETE("/webhooks/:id", webhookHandler.Delete)
-	adminGroup.POST("/webhooks/:id/test", webhookHandler.Test)
+	adminRead.GET("/webhooks", webhookHandler.List)
+	adminWrite.POST("/webhooks", webhookHandler.Create)
+	adminWrite.PUT("/webhooks/:id", webhookHandler.Update)
+	adminWrite.DELETE("/webhooks/:id", webhookHandler.Delete)
+	adminWrite.POST("/webhooks/:id/test", webhookHandler.Test)
 
 	// License — status, key mutation, trial activation (no Pro gate; free users need these)
 	licenseHandler := admin.NewLicenseHandler(deps.LicenseManager, deps.TrialManager, deps.Entitlement)
-	adminGroup.GET("/license/status", licenseHandler.GetStatus)
-	adminGroup.POST("/license/revalidate", licenseHandler.Revalidate)
-	adminGroup.POST("/license/trial/activate", licenseHandler.ActivateTrial)
-	adminGroup.PUT("/license/key", licenseHandler.SetKey)
-	adminGroup.DELETE("/license/key", licenseHandler.ClearKey)
+	adminRead.GET("/license/status", licenseHandler.GetStatus)
+	adminWrite.POST("/license/revalidate", licenseHandler.Revalidate)
+	adminWrite.POST("/license/trial/activate", licenseHandler.ActivateTrial)
+	adminWrite.PUT("/license/key", licenseHandler.SetKey)
+	adminWrite.DELETE("/license/key", licenseHandler.ClearKey)
 
 	// Audit logs, rules engine, and the security intelligence dashboard
 	// landed in open-source on 2026-06-28 as part of the pricing reset —
@@ -205,48 +207,48 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// and ADR-0003. They mount on the regular adminGroup (auth-only, no
 	// entitlement gate).
 	auditHandler := admin.NewAuditHandler(deps.DB)
-	adminGroup.GET("/audit-logs", auditHandler.List)
-	adminGroup.GET("/audit-logs/export", auditHandler.Export)
+	adminRead.GET("/audit-logs", auditHandler.List)
+	adminRead.GET("/audit-logs/export", auditHandler.Export)
 
 	rulesHandler := admin.NewRulesHandler(deps.DB, deps.RulesStore, deps.RulesEngine)
-	adminGroup.GET("/rules", rulesHandler.List)
-	adminGroup.POST("/rules", rulesHandler.Create)
-	adminGroup.PUT("/rules/:id", rulesHandler.Update)
-	adminGroup.DELETE("/rules/:id", rulesHandler.Delete)
-	adminGroup.POST("/rules/test", rulesHandler.Test)
+	adminRead.GET("/rules", rulesHandler.List)
+	adminRead.POST("/rules/test", rulesHandler.Test)
+	adminWrite.POST("/rules", rulesHandler.Create)
+	adminWrite.PUT("/rules/:id", rulesHandler.Update)
+	adminWrite.DELETE("/rules/:id", rulesHandler.Delete)
 
 	securityHandler := admin.NewSecurityHandler(deps.DB, deps.SecurityScanner, deps.SecurityImporter)
-	adminGroup.GET("/security/dashboard", securityHandler.Dashboard)
-	adminGroup.GET("/security/vulnerabilities", securityHandler.ListVulnerabilities)
-	adminGroup.GET("/security/packages", securityHandler.ListPackages)
-	adminGroup.GET("/security/suggestions", securityHandler.ListSuggestions)
-	adminGroup.POST("/security/suggestions/:vuln_id/approve", securityHandler.ApproveSuggestion)
-	adminGroup.POST("/security/suggestions/:vuln_id/dismiss", securityHandler.DismissSuggestion)
-	adminGroup.POST("/security/scan", securityHandler.TriggerScan)
-	adminGroup.POST("/security/import", securityHandler.ImportData)
-	adminGroup.GET("/security/policies", securityHandler.ListPolicies)
-	adminGroup.PUT("/security/policies/:ecosystem", securityHandler.UpdatePolicy)
+	adminRead.GET("/security/dashboard", securityHandler.Dashboard)
+	adminRead.GET("/security/vulnerabilities", securityHandler.ListVulnerabilities)
+	adminRead.GET("/security/packages", securityHandler.ListPackages)
+	adminRead.GET("/security/suggestions", securityHandler.ListSuggestions)
+	adminRead.GET("/security/policies", securityHandler.ListPolicies)
+	adminWrite.POST("/security/suggestions/:vuln_id/approve", securityHandler.ApproveSuggestion)
+	adminWrite.POST("/security/suggestions/:vuln_id/dismiss", securityHandler.DismissSuggestion)
+	adminWrite.POST("/security/scan", securityHandler.TriggerScan)
+	adminWrite.POST("/security/import", securityHandler.ImportData)
+	adminWrite.PUT("/security/policies/:ecosystem", securityHandler.UpdatePolicy)
 
 	// Supply-chain quarantine — minimum-release-age event log +
 	// operator approvals. Wedge feature, open-source per
 	// docs/DIRECTION.md, so endpoints mount under adminGroup (NOT
 	// proGroup). See ADR-0003.
 	quarantineHandler := admin.NewQuarantineHandler(deps.DB, deps.QuarantineStore)
-	adminGroup.GET("/quarantine/events", quarantineHandler.ListEvents)
-	adminGroup.GET("/quarantine/approvals", quarantineHandler.ListApprovals)
-	adminGroup.POST("/quarantine/approve", quarantineHandler.Approve)
-	adminGroup.DELETE("/quarantine/approvals/:id", quarantineHandler.Revoke)
+	adminRead.GET("/quarantine/events", quarantineHandler.ListEvents)
+	adminRead.GET("/quarantine/approvals", quarantineHandler.ListApprovals)
+	adminWrite.POST("/quarantine/approve", quarantineHandler.Approve)
+	adminWrite.DELETE("/quarantine/approvals/:id", quarantineHandler.Revoke)
 
 	// Known-malicious blocklist (DIRECTION Task 2) — sync status,
 	// manual refresh, and 24h-expiring false-positive overrides.
 	// Open-source like quarantine; blocked-request events surface via
 	// /quarantine/events (action = malware_blocked).
 	blocklistHandler := admin.NewBlocklistHandler(deps.BlocklistStore, deps.BlocklistSyncer)
-	adminGroup.GET("/blocklist/status", blocklistHandler.Status)
-	adminGroup.POST("/blocklist/sync", blocklistHandler.TriggerSync)
-	adminGroup.GET("/blocklist/overrides", blocklistHandler.ListOverrides)
-	adminGroup.POST("/blocklist/overrides", blocklistHandler.CreateOverride)
-	adminGroup.DELETE("/blocklist/overrides/:id", blocklistHandler.RevokeOverride)
+	adminRead.GET("/blocklist/status", blocklistHandler.Status)
+	adminRead.GET("/blocklist/overrides", blocklistHandler.ListOverrides)
+	adminWrite.POST("/blocklist/sync", blocklistHandler.TriggerSync)
+	adminWrite.POST("/blocklist/overrides", blocklistHandler.CreateOverride)
+	adminWrite.DELETE("/blocklist/overrides/:id", blocklistHandler.RevokeOverride)
 
 	// Pro features (require entitlement). Multi-project workspaces are
 	// the only UI surface gated today — production teams running Depsilo
@@ -256,18 +258,20 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// here because it's an artifact of the multi-project surface; depsilo's
 	// own SBOM (and a single-project user's SBOM) is generated through the
 	// open-source CI workflow.
-	proGroup := adminGroup.Group("")
-	proGroup.Use(entitlement.RequirePro(deps.Entitlement))
+	proRead := adminRead.Group("")
+	proRead.Use(entitlement.RequirePro(deps.Entitlement))
+	proWrite := adminWrite.Group("")
+	proWrite.Use(entitlement.RequirePro(deps.Entitlement))
 
 	projectsHandler := admin.NewProjectsHandler(deps.DB)
-	proGroup.GET("/projects", projectsHandler.List)
-	proGroup.POST("/projects", projectsHandler.Create)
-	proGroup.GET("/projects/:id", projectsHandler.Detail)
-	proGroup.PUT("/projects/:id", projectsHandler.Update)
-	proGroup.DELETE("/projects/:id", projectsHandler.Delete)
-	proGroup.GET("/projects/:id/packages", projectsHandler.ListPackages)
-	proGroup.POST("/projects/:id/token", projectsHandler.RegenerateToken)
-	proGroup.GET("/projects/:id/sbom", projectsHandler.ExportSBOM)
+	proRead.GET("/projects", projectsHandler.List)
+	proRead.GET("/projects/:id", projectsHandler.Detail)
+	proRead.GET("/projects/:id/packages", projectsHandler.ListPackages)
+	proRead.GET("/projects/:id/sbom", projectsHandler.ExportSBOM)
+	proWrite.POST("/projects", projectsHandler.Create)
+	proWrite.PUT("/projects/:id", projectsHandler.Update)
+	proWrite.DELETE("/projects/:id", projectsHandler.Delete)
+	proWrite.POST("/projects/:id/token", projectsHandler.RegenerateToken)
 }
 
 func healthHandler(c *gin.Context) {
