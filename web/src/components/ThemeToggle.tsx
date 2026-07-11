@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
+import IconButton from './IconButton'
 
 type Theme = 'light' | 'dark' | 'system'
 // Storage key matches the Instrument brief. The legacy "theme" key
@@ -62,26 +63,10 @@ export function useTheme(): [Theme, (t: Theme) => void] {
   return [theme, setTheme]
 }
 
-const ICONS: Record<Theme, React.ReactNode> = {
-  light: (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.2" />
-      <g stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
-        <path d="M8 1.5v1.5M8 13v1.5M14.5 8H13M3 8H1.5M12.6 3.4l-1 1M4.4 11.6l-1 1M12.6 12.6l-1-1M4.4 4.4l-1-1" />
-      </g>
-    </svg>
-  ),
-  dark: (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M13 9.5A5.5 5.5 0 016.5 3a5.5 5.5 0 106.5 6.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  ),
-  system: (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2" y="3" width="12" height="8.5" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M5.5 14h5M8 11.5V14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  ),
+const ICONS: Record<Theme, string> = {
+  light: 'light_mode',
+  dark: 'dark_mode',
+  system: 'computer',
 }
 
 export default function ThemeToggle() {
@@ -100,28 +85,11 @@ export default function ThemeToggle() {
   }
 
   return (
-    <button
-      type="button"
+    <IconButton
+      icon={ICONS[theme]}
+      label={t('theme.changeNamed', { theme: LABELS[theme] })}
       onClick={cycle}
-      title={LABELS[theme]}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 5,
-        height: 26,
-        padding: '0 8px',
-        border: '0.5px solid var(--border)',
-        borderRadius: 6,
-        background: 'var(--bg-soft)',
-        color: 'var(--text-muted)',
-        fontSize: 11,
-        fontWeight: 500,
-        cursor: 'pointer',
-        transition: 'background 120ms ease, color 120ms ease',
-      }}
-    >
-      {ICONS[theme]}
-      <span>{LABELS[theme]}</span>
-    </button>
+      style={{ border: '0.5px solid var(--border)', background: 'var(--bg-soft)' }}
+    />
   )
 }

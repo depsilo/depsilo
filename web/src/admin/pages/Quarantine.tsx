@@ -20,6 +20,7 @@ import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
 import ModalV2 from '@/components/Modal'
 import InputV2 from '@/components/Input'
+import TableViewport from '@/components/TableViewport'
 
 // Backend mirrors db.QuarantineEvent + db.ApprovedVersion. We keep
 // the shape narrow to avoid leaking schema details into TS — extra
@@ -363,8 +364,9 @@ function EventsTab(props: {
           hint={t('quarantine.events.empty_hint')}
         />
       ) : (
-        <div className="rounded-[8px] border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+        <TableViewport label={t('quarantine.events.table')} minWidth={920}>
+          <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
+            <table className="w-full" style={{ borderCollapse: 'collapse' }}>
             <thead style={{ background: 'var(--bg-soft)' }}>
               <tr>
                 <Th>{t('quarantine.col.time')}</Th>
@@ -406,8 +408,9 @@ function EventsTab(props: {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+            </table>
+          </div>
+        </TableViewport>
       )}
     </div>
   )
@@ -436,8 +439,9 @@ function ApprovalsTab(props: {
     )
   }
   return (
-    <div className="rounded-[8px] border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-      <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+    <TableViewport label={t('quarantine.approvals.table')} minWidth={820}>
+      <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
+        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
         <thead style={{ background: 'var(--bg-soft)' }}>
           <tr>
             <Th>{t('quarantine.col.created_at')}</Th>
@@ -473,8 +477,9 @@ function ApprovalsTab(props: {
             </tr>
           ))}
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
+    </TableViewport>
   )
 }
 
@@ -604,8 +609,9 @@ function BlocklistTab() {
             hint={t('quarantine.blocklist.no_overrides_hint')}
           />
         ) : (
-          <div className="rounded-[8px] border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+          <TableViewport label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
+            <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
+              <table className="w-full" style={{ borderCollapse: 'collapse' }}>
               <thead style={{ background: 'var(--bg-soft)' }}>
                 <tr>
                   <Th>{t('quarantine.col.ecosystem')}</Th>
@@ -655,8 +661,9 @@ function BlocklistTab() {
                   )
                 })}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </TableViewport>
         )}
       </div>
 

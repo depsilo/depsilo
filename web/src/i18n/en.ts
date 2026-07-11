@@ -5,6 +5,11 @@ const en = {
       light: 'Light',
       dark: 'Dark',
       auto: 'Auto',
+      changeNamed: 'Change theme; current theme: {{theme}}',
+    },
+    language: {
+      switchToEnglish: 'Switch to English',
+      switchToChinese: 'Switch to Chinese',
     },
     // Common
     loading: 'Loading...',
@@ -178,6 +183,8 @@ const en = {
 
     // Cache
     cache: {
+      table: 'Cache entries table',
+      deleteNamed: 'Delete cache entry {{key}}',
       searchPlaceholder: 'Search cache key...',
       cleanExpired: 'Clean Expired',
       size: 'Size',
@@ -220,10 +227,14 @@ const en = {
       checking: 'Checking...',
       checkAll: 'Check All',
       checkOne: 'Manual Check',
+      checkNamed: 'Check {{name}}',
+      editNamed: 'Edit {{name}}',
+      deleteNamed: 'Delete {{name}}',
     },
 
     // Access Logs
     logs: {
+      table: 'Access logs table',
       searchPlaceholder: 'Search package...',
       hit: 'Hit',
       miss: 'Miss',
@@ -289,6 +300,7 @@ const en = {
         version_placeholder: 'Version (empty = all versions)',
         create_error: 'Failed to create override',
         create_submit: 'Create override (24h)',
+        overrides_table: 'Malware override table',
       },
       col: {
         time: 'Time',
@@ -300,10 +312,12 @@ const en = {
         created_at: 'Approved at',
       },
       events: {
+        table: 'Quarantine events table',
         empty_title: 'No quarantine events yet',
         empty_hint: 'Decisions will appear here when a freshly-published version is requested.',
       },
       approvals: {
+        table: 'Quarantine approvals table',
         empty_title: 'No manual approvals',
         empty_hint: 'Approving a blocked version from the events tab will land it here.',
       },
@@ -329,6 +343,7 @@ const en = {
     // Audit Logs
     audit: {
       title: 'Audit Logs',
+      table: 'Audit logs table',
       searchPlaceholder: 'Search package...',
       ecosystem: 'Ecosystem',
       result: 'Result',
@@ -351,6 +366,9 @@ const en = {
     // Rules
     rules: {
       title: 'Package Rules',
+      table: 'Package rules table',
+      editNamed: 'Edit rule for {{name}}',
+      deleteNamed: 'Delete rule for {{name}}',
       addRule: 'Add Rule',
       editRule: 'Edit Rule',
       testRule: 'Test Rule',
@@ -381,6 +399,7 @@ const en = {
     // Security
     security: {
       title: 'Package Security',
+      vulnerabilitiesTable: 'Security vulnerabilities table',
       overview: 'Overview',
       vulnerabilities: 'Vulnerabilities',
       suggestions: 'Suggested Rules',
@@ -458,6 +477,12 @@ const en = {
     // Users
     users: {
       title: 'Users',
+      table: 'Users table',
+      tokensTable: 'API tokens table',
+      editNamed: 'Edit {{name}}',
+      disableNamed: 'Disable {{name}}',
+      enableNamed: 'Enable {{name}}',
+      copyToken: 'Copy generated token',
       addUser: 'Add User',
       editUser: 'Edit User',
       user: 'User',
@@ -657,6 +682,14 @@ const en = {
     // Projects
     projects: {
       title: 'Projects',
+      table: 'Projects table',
+      packagesTable: 'Project packages table',
+      view: 'View',
+      viewNamed: 'View {{name}}',
+      deleteNamed: 'Delete {{name}}',
+      backToList: 'Back to projects',
+      copyProxyUrl: 'Copy proxy URL',
+      copyToken: 'Copy project token',
       create: 'Create Project',
       name: 'Project Name',
       namePlaceholder: 'e.g. ai-platform',

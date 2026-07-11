@@ -12,6 +12,8 @@ import ModalV2 from '@/components/Modal'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
+import IconButton from '@/components/IconButton'
+import TableViewport from '@/components/TableViewport'
 import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
@@ -190,7 +192,7 @@ export default function CacheManageV2() {
       </div>
 
       {/* ── Cache entries table (bare) ───────────────────────────── */}
-      <div>
+      <TableViewport label={t('cache.table')} minWidth={820}>
         {isLoading ? (
           <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
@@ -205,9 +207,9 @@ export default function CacheManageV2() {
               </tr>
             </thead>
             <tbody>
-              {items.map((row: any, i: number) => (
+              {items.map((row: any) => (
                 <tr
-                  key={i}
+                  key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
@@ -230,20 +232,19 @@ export default function CacheManageV2() {
                     <span style={{ color: 'var(--text-soft)' }}>{formatTime(row.last_accessed)}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <button
+                    <IconButton
+                      icon="delete"
+                      label={t('cache.deleteNamed', { key: row.key })}
+                      tone="danger"
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }}
-                      className="bg-transparent cursor-pointer p-1.5 rounded-[3px] opacity-40 hover:opacity-100 transition-[opacity,transform] active:scale-[0.96]"
-                      style={{ color: 'var(--danger)' }}
-                    >
-                      <Icon name="delete" size="sm" />
-                    </button>
+                    />
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-      </div>
+      </TableViewport>
 
       {/* Pagination */}
       {totalPages > 1 && (

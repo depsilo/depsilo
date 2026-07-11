@@ -13,6 +13,7 @@ import SelectV2 from '@/components/Select'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
+import IconButton from '@/components/IconButton'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
 
@@ -43,7 +44,7 @@ function formatTime(t: string): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false)
   async function handleClick() {
     if (await copyText(text)) {
@@ -52,14 +53,12 @@ function CopyButton({ text }: { text: string }) {
     }
   }
   return (
-    <button
+    <IconButton
+      icon={copied ? 'check' : 'content_copy'}
+      label={label}
       onClick={handleClick}
-      className="bg-transparent cursor-pointer p-1 rounded-[4px] transition-colors duration-150"
       style={{ color: copied ? 'var(--ok-text)' : 'var(--text-soft)' }}
-      title="Copy"
-    >
-      <Icon name={copied ? 'check' : 'content_copy'} size="sm" />
-    </button>
+    />
   )
 }
 
@@ -194,13 +193,11 @@ export default function ProjectsV2() {
       <div className="space-y-12">
         {/* Detail header */}
         <div className="flex items-center gap-3">
-          <button
+          <IconButton
+            icon="arrow_back"
+            label={t('projects.backToList')}
             onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
-            className="bg-transparent cursor-pointer p-1.5 rounded-[4px] transition-colors duration-150"
-            style={{ color: 'var(--text-soft)' }}
-          >
-            <Icon name="arrow_back" size="sm" />
-          </button>
+          />
           <h2 className="text-[20px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
         </div>
 
@@ -211,7 +208,7 @@ export default function ProjectsV2() {
             <div className="flex items-center gap-3">
               <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.proxyUrl')}</span>
               <span className="font-mono text-[12px] px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}>{proxyUrl}</span>
-              <CopyButton text={proxyUrl} />
+              <CopyButton text={proxyUrl} label={t('projects.copyProxyUrl')} />
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.packageCount')}</span>
@@ -276,7 +273,8 @@ export default function ProjectsV2() {
               columns={pkgColumns}
               data={packages.map((pkg) => ({ ...pkg }))}
               rowKey={(row) => `${row.ecosystem}:${row.package_name}:${row.version}`}
-              ariaLabel={t('projects.packages')}
+              ariaLabel={t('projects.packagesTable')}
+              minWidth={900}
             />
           )}
           {pkgTotalPages > 1 && (
@@ -303,19 +301,17 @@ export default function ProjectsV2() {
       label: t('actions'),
       render: (_v: unknown, row: ProjectSummary & Record<string, unknown>) => (
         <div className="flex gap-1">
-          <button
+          <ButtonV2
+            variant="ghost"
+            size="sm"
             type="button"
-            aria-label={t('projects.detail')}
-            title={t('projects.detail')}
+            aria-label={t('projects.viewNamed', { name: row.name })}
             onClick={() => { setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }}
-            className="bg-transparent cursor-pointer p-1.5 rounded-[4px]"
-            style={{ color: 'var(--text-soft)' }}
           >
             <Icon name="visibility" size="sm" />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }} className="bg-transparent cursor-pointer p-1.5 rounded-[4px]" style={{ color: 'var(--text-soft)' }}>
-            <Icon name="delete" size="sm" />
-          </button>
+            {t('projects.view')}
+          </ButtonV2>
+          <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }} />
         </div>
       ),
     },
@@ -344,7 +340,8 @@ export default function ProjectsV2() {
           columns={columns}
           data={projects.map((project) => ({ ...project }))}
           rowKey={(row) => row.id as number}
-          ariaLabel={t('projects.title')}
+          ariaLabel={t('projects.table')}
+          minWidth={720}
         />
       )}
 
@@ -389,7 +386,7 @@ export default function ProjectsV2() {
                 <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.token}
                 </code>
-                <CopyButton text={tokenData.token} />
+                <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
               </div>
             </div>
             <div>
@@ -398,7 +395,7 @@ export default function ProjectsV2() {
                 <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.proxy_url}
                 </code>
-                <CopyButton text={tokenData.proxy_url} />
+                <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />
               </div>
             </div>
             <div className="flex justify-end pt-2">

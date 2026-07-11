@@ -20,7 +20,7 @@ function latencyColor(ms: number): string {
 }
 
 export default function AccessLogsV2() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [adapterType, setAdapterType] = useState('all')
   const [hitFilter, setHitFilter] = useState('all')
@@ -108,7 +108,7 @@ export default function AccessLogsV2() {
 
       {/* Table — bare */}
       <TableViewport
-        label={i18n.resolvedLanguage?.startsWith('zh') ? '访问日志表格' : 'Access logs table'}
+        label={t('logs.table')}
         minWidth={860}
       >
         {isLoading ? (

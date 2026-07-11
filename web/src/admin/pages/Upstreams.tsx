@@ -7,6 +7,7 @@ import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
+import IconButton from '@/components/IconButton'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
 import type { AdminUpstream, AdminUpstreamListResponse, UpstreamMutationRequest } from '@/lib/adminApi.types'
 
@@ -83,6 +84,7 @@ export default function UpstreamsV2() {
 
   // Manual check state
   const [checking, setChecking] = useState(false)
+  const [checkingIds, setCheckingIds] = useState<ReadonlySet<number>>(() => new Set())
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'upstreams'],
@@ -187,11 +189,20 @@ export default function UpstreamsV2() {
     const upstream = current?.items.find((item) => item.id === id)
     if (!upstream) return
     const baseline = captureCheckBaseline(upstream)
-    const { data: result } = await adminApi.checkUpstream(id)
-    queryClient.setQueryData<AdminUpstreamListResponse>(
-      ['admin', 'upstreams'],
-      (latest) => mergeRuntimeChecks(latest, [{ upstream: result.upstream, baseline }], resourceGenerations.current),
-    )
+    setCheckingIds((current) => new Set(current).add(id))
+    try {
+      const { data: result } = await adminApi.checkUpstream(id)
+      queryClient.setQueryData<AdminUpstreamListResponse>(
+        ['admin', 'upstreams'],
+        (latest) => mergeRuntimeChecks(latest, [{ upstream: result.upstream, baseline }], resourceGenerations.current),
+      )
+    } finally {
+      setCheckingIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending
@@ -234,30 +245,25 @@ export default function UpstreamsV2() {
           renderActions={(u) => (
             <div className="flex gap-0.5 ml-1">
               {u.id && (
-                <button
+                <IconButton
+                  icon="refresh"
+                  label={t('upstreams.checkNamed', { name: u.name })}
+                  loading={checkingIds.has(u.id)}
                   onClick={() => checkOne(u.id!)}
-                  className="bg-transparent cursor-pointer p-1.5 rounded-[3px] transition-[opacity,transform] duration-100 opacity-40 hover:opacity-100 active:scale-[0.96]"
-                  style={{ color: 'var(--text-soft)' }}
-                  title={t('upstreams.checkOne')}
-                >
-                  <Icon name="refresh" size="sm" />
-                </button>
+                />
               )}
-              <button
+              <IconButton
+                icon="edit"
+                label={t('upstreams.editNamed', { name: u.name })}
                 onClick={() => openEdit(u)}
-                className="bg-transparent cursor-pointer p-1.5 rounded-[3px] transition-[opacity,transform] duration-100 opacity-40 hover:opacity-100 active:scale-[0.96]"
-                style={{ color: 'var(--text-soft)' }}
-              >
-                <Icon name="edit" size="sm" />
-              </button>
+              />
               {u.id && (
-                <button
+                <IconButton
+                  icon="delete"
+                  label={t('upstreams.deleteNamed', { name: u.name })}
+                  tone="danger"
                   onClick={() => setDeleteTarget(u.id!)}
-                  className="bg-transparent cursor-pointer p-1.5 rounded-[3px] transition-[opacity,transform] duration-100 opacity-40 hover:opacity-100 active:scale-[0.96]"
-                  style={{ color: 'var(--text-soft)' }}
-                >
-                  <Icon name="delete" size="sm" />
-                </button>
+                />
               )}
             </div>
           )}

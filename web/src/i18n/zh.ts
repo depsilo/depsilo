@@ -5,6 +5,11 @@ const zh = {
       light: '浅色',
       dark: '深色',
       auto: '自动',
+      changeNamed: '切换主题；当前主题：{{theme}}',
+    },
+    language: {
+      switchToEnglish: '切换到英文',
+      switchToChinese: '切换到中文',
     },
     // Common
     loading: '加载中...',
@@ -178,6 +183,8 @@ const zh = {
 
     // Cache
     cache: {
+      table: '缓存条目表格',
+      deleteNamed: '删除缓存条目 {{key}}',
       searchPlaceholder: '搜索缓存 key...',
       cleanExpired: '清理过期',
       size: '大小',
@@ -220,10 +227,14 @@ const zh = {
       checking: '检测中...',
       checkAll: '全部检测',
       checkOne: '手动检测',
+      checkNamed: '检测 {{name}}',
+      editNamed: '编辑 {{name}}',
+      deleteNamed: '删除 {{name}}',
     },
 
     // Access Logs
     logs: {
+      table: '访问日志表格',
       searchPlaceholder: '搜索包名...',
       hit: '命中',
       miss: '未命中',
@@ -289,6 +300,7 @@ const zh = {
         version_placeholder: '版本（留空 = 全部版本）',
         create_error: '创建失败',
         create_submit: '创建豁免（24h）',
+        overrides_table: '恶意封锁豁免表格',
       },
       col: {
         time: '时间',
@@ -300,10 +312,12 @@ const zh = {
         created_at: '放行时间',
       },
       events: {
+        table: '供应链隔离事件表格',
         empty_title: '暂无供应链事件',
         empty_hint: '当一个新发布的包被请求时，决策会出现在这里。',
       },
       approvals: {
+        table: '供应链隔离放行表格',
         empty_title: '暂无人工放行',
         empty_hint: '在事件流里给被拦截的版本「放行」之后会出现在这里。',
       },
@@ -329,6 +343,7 @@ const zh = {
     // Audit Logs
     audit: {
       title: '审计日志',
+      table: '审计日志表格',
       searchPlaceholder: '搜索包名...',
       ecosystem: '生态',
       result: '结果',
@@ -351,6 +366,9 @@ const zh = {
     // Rules
     rules: {
       title: '包治理规则',
+      table: '包治理规则表格',
+      editNamed: '编辑 {{name}} 的规则',
+      deleteNamed: '删除 {{name}} 的规则',
       addRule: '添加规则',
       editRule: '编辑规则',
       testRule: '测试规则',
@@ -381,6 +399,7 @@ const zh = {
     // Security
     security: {
       title: '包安全',
+      vulnerabilitiesTable: '安全漏洞表格',
       overview: '总览',
       vulnerabilities: '漏洞列表',
       suggestions: '建议规则',
@@ -458,6 +477,12 @@ const zh = {
     // Users
     users: {
       title: '用户',
+      table: '用户表格',
+      tokensTable: 'API Token 表格',
+      editNamed: '编辑 {{name}}',
+      disableNamed: '禁用 {{name}}',
+      enableNamed: '启用 {{name}}',
+      copyToken: '复制生成的 Token',
       addUser: '添加用户',
       editUser: '编辑用户',
       user: '用户',
@@ -657,6 +682,14 @@ const zh = {
     // Projects
     projects: {
       title: '项目管理',
+      table: '项目表格',
+      packagesTable: '项目包表格',
+      view: '查看',
+      viewNamed: '查看 {{name}}',
+      deleteNamed: '删除 {{name}}',
+      backToList: '返回项目列表',
+      copyProxyUrl: '复制代理地址',
+      copyToken: '复制项目 Token',
       create: '创建项目',
       name: '项目名称',
       namePlaceholder: '例如 ai-platform',

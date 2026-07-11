@@ -12,6 +12,7 @@ import DataTableV2 from '@/components/DataTable'
 import SelectV2 from '@/components/Select'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import EmptyState from '@/components/EmptyState'
+import IconButton from '@/components/IconButton'
 
 const ECOSYSTEM_OPTIONS = [{ value: '*', label: 'All (*)' }, { value: 'pypi', label: 'PyPI' }, { value: 'apt', label: 'APT' }, { value: 'npm', label: 'npm' }, { value: 'go', label: 'Go' }, { value: 'cargo', label: 'Cargo' }, { value: 'maven', label: 'Maven' }, { value: 'rubygems', label: 'RubyGems' }, { value: 'composer', label: 'Composer' }, { value: 'nuget', label: 'NuGet' }, { value: 'conda', label: 'Conda' }, { value: 'cran', label: 'CRAN' }, { value: 'alpine', label: 'Alpine' }, { value: 'helm', label: 'Helm' }]
 
@@ -48,7 +49,7 @@ export default function RulesV2() {
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="error">{t('rules.deny')}</BadgeV2> },
     { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px]" style={{ color: 'var(--text-soft)' }} title={v as string}>{(v as string) || '-'}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string, 'relative')}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: any) => (<div className="flex gap-1"><button onClick={() => openEdit(row)} className="bg-transparent cursor-pointer p-1.5 rounded-[4px]" style={{ color: 'var(--text-soft)' }}><Icon name="edit" size="sm" /></button><button onClick={() => setDeleteTarget(row.id)} className="bg-transparent cursor-pointer p-1.5 rounded-[4px]" style={{ color: 'var(--text-soft)' }}><Icon name="delete" size="sm" /></button></div>) },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: any) => (<div className="flex gap-1"><IconButton icon="edit" label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon="delete" label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => setDeleteTarget(row.id)} /></div>) },
   ]
 
   return (
@@ -69,7 +70,8 @@ export default function RulesV2() {
           columns={columns}
           data={items}
           rowKey={(row) => row.id}
-          ariaLabel={t('rules.title')}
+          ariaLabel={t('rules.table')}
+          minWidth={860}
         />
       )}
 

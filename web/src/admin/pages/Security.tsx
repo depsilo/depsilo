@@ -15,6 +15,7 @@ import EmptyState from '@/components/EmptyState'
 import DataTableV2 from '@/components/DataTable'
 import TabsV2 from '@/components/Tabs'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import IconButton from '@/components/IconButton'
 import type {
   SecurityPolicy,
   SecurityQuery,
@@ -288,8 +289,9 @@ function VulnerabilitiesTab() {
         <DataTableV2
           columns={columns}
           data={items.map((item) => ({ ...item }))}
-          rowKey={(row) => row.osv_id as string}
-          ariaLabel={t('security.vulnerabilities')}
+          rowKey={(row) => row.id as number}
+          ariaLabel={t('security.vulnerabilitiesTable')}
+          minWidth={800}
         />
       )}
 
@@ -300,15 +302,11 @@ function VulnerabilitiesTab() {
             {t('security.showingResults', { from: (page - 1) * perPage + 1, to: Math.min(page * perPage, total), total })}
           </span>
           <div className="flex gap-1">
-            <ButtonV2 variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              <Icon name="chevron_left" size="sm" />
-            </ButtonV2>
+            <IconButton icon="chevron_left" label={t('prevPage')} disabled={page <= 1} onClick={() => setPage(page - 1)} />
             <span className="flex items-center px-2 text-[12px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>
               {page} / {totalPages}
             </span>
-            <ButtonV2 variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-              <Icon name="chevron_right" size="sm" />
-            </ButtonV2>
+            <IconButton icon="chevron_right" label={t('nextPage')} disabled={page >= totalPages} onClick={() => setPage(page + 1)} />
           </div>
         </div>
       )}
@@ -418,15 +416,11 @@ function SuggestionsTab() {
 
       {/* Simple page nav */}
       <div className="flex justify-center gap-2 mt-6">
-        <ButtonV2 variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-          <Icon name="chevron_left" size="sm" />
-        </ButtonV2>
+        <IconButton icon="chevron_left" label={t('prevPage')} disabled={page <= 1} onClick={() => setPage(page - 1)} />
         <span className="flex items-center text-[12px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>
           {page}
         </span>
-        <ButtonV2 variant="ghost" size="sm" disabled={items.length < 20} onClick={() => setPage(page + 1)}>
-          <Icon name="chevron_right" size="sm" />
-        </ButtonV2>
+        <IconButton icon="chevron_right" label={t('nextPage')} disabled={items.length < 20} onClick={() => setPage(page + 1)} />
       </div>
     </div>
   )

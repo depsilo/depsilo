@@ -13,6 +13,7 @@ import DataTableV2 from '@/components/DataTable'
 import ModalV2 from '@/components/Modal'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
+import IconButton from '@/components/IconButton'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import type {
   AdminUser,
@@ -35,6 +36,7 @@ export default function UsersV2() {
   const [createdToken, setCreatedToken] = useState<string | null>(null)
   const [tokenResultOpen, setTokenResultOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [togglingUserIds, setTogglingUserIds] = useState<ReadonlySet<number>>(() => new Set())
 
   const { data: usersData, isLoading: usersLoading } = useQuery({ queryKey: ['admin', 'users'], queryFn: () => adminApi.listUsers() })
   const { data: tokensData, isLoading: tokensLoading } = useQuery({ queryKey: ['admin', 'tokens'], queryFn: () => adminApi.listTokens() })
@@ -44,7 +46,16 @@ export default function UsersV2() {
 
   const createUserMutation = useMutation({ mutationFn: (data: CreateUserRequest) => adminApi.createUser(data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }); closeUserDialog() } })
   const updateUserMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: UpdateUserRequest }) => adminApi.updateUser(id, data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }); closeUserDialog() } })
-  const toggleUserMutation = useMutation({ mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => adminApi.updateUser(id, { enabled }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }) } })
+  const toggleUserMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => adminApi.updateUser(id, { enabled }),
+    onMutate: ({ id }) => setTogglingUserIds((current) => new Set(current).add(id)),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }) },
+    onSettled: (_data, _error, { id }) => setTogglingUserIds((current) => {
+      const next = new Set(current)
+      next.delete(id)
+      return next
+    }),
+  })
   const createTokenMutation = useMutation({ mutationFn: (data: CreateAPITokenRequest) => adminApi.createToken(data), onSuccess: (res) => { setCreatedToken(res.data.token); setTokenDialogOpen(false); setTokenResultOpen(true); queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] }) } })
   const deleteTokenMutation = useMutation({ mutationFn: (id: number) => adminApi.deleteToken(id), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] }) } })
 
@@ -80,7 +91,7 @@ export default function UsersV2() {
     { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'error'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><button onClick={(e) => { e.stopPropagation(); openEditUser(row) }} className="bg-transparent cursor-pointer p-1.5 rounded-[4px] transition-[color,background,transform] duration-150 active:scale-[0.96] hover:text-[var(--text)]" style={{ color: 'var(--text-soft)' }}><Icon name="edit" size="sm" /></button>{!isSelf(row) && <button onClick={(e) => { e.stopPropagation(); if (canWrite) toggleUserMutation.mutate({ id: row.id, enabled: !row.enabled }) }} className="bg-transparent cursor-pointer p-1.5 rounded-[4px] transition-[color,background,transform] duration-150 active:scale-[0.96] hover:text-[var(--text)]" style={{ color: 'var(--text-soft)' }}><Icon name={row.enabled ? 'person_off' : 'person'} size="sm" /></button>}</div>) : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? 'person_off' : 'person'} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (canWrite) toggleUserMutation.mutate({ id: row.id, enabled: !row.enabled }) }} />}</div>) : null },
   ]
 
   const tokenColumns = [
@@ -108,7 +119,8 @@ export default function UsersV2() {
             columns={userColumns}
             data={users.map((user) => ({ ...user }))}
             rowKey={(row) => row.id as number}
-            ariaLabel={t('users.title')}
+            ariaLabel={t('users.table')}
+            minWidth={900}
           />
         )}
       </section>
@@ -128,7 +140,8 @@ export default function UsersV2() {
             columns={tokenColumns}
             data={tokens.map((token) => ({ ...token }))}
             rowKey={(row) => row.id as number}
-            ariaLabel={`${t('users.title')} API Tokens`}
+            ariaLabel={t('users.tokensTable')}
+            minWidth={760}
           />
         )}
       </section>
@@ -155,7 +168,7 @@ export default function UsersV2() {
         <p className="text-[14px] mb-3" style={{ color: 'var(--text-soft)' }}>{t('users.tokenCopyWarning')}</p>
         <div className="flex items-center gap-2 rounded-[4px] p-3" style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
           <code className="flex-1 font-mono text-[13px] break-all" style={{ color: 'var(--text)' }}>{createdToken}</code>
-          <button onClick={copyToken} className="bg-transparent cursor-pointer p-1.5 shrink-0 rounded-[4px]" style={{ color: 'var(--text-soft)' }}><Icon name={copied ? 'check' : 'content_copy'} size="sm" /></button>
+          <IconButton icon={copied ? 'check' : 'content_copy'} label={t('users.copyToken')} onClick={copyToken} />
         </div>
         <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('users.tokenSaveWarning')}</p>
         <div className="flex justify-end mt-4"><ButtonV2 onClick={() => setTokenResultOpen(false)}>{t('confirm')}</ButtonV2></div>

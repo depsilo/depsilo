@@ -8,6 +8,7 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
+import TableViewport from '@/components/TableViewport'
 import type { AuditLogQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
@@ -156,7 +157,7 @@ export default function AuditLogsV2() {
       </div>
 
       {/* Table — bare */}
-      <div>
+      <TableViewport label={t('audit.table')} minWidth={980}>
         {isLoading ? (
           <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
@@ -173,9 +174,9 @@ export default function AuditLogsV2() {
               </tr>
             </thead>
             <tbody>
-              {items.map((row: any, i: number) => (
+              {items.map((row: any) => (
                 <tr
-                  key={i}
+                  key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
@@ -211,7 +212,7 @@ export default function AuditLogsV2() {
             </tbody>
           </table>
         )}
-      </div>
+      </TableViewport>
 
       {/* Pagination */}
       {totalPages > 1 && (
