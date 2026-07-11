@@ -222,6 +222,8 @@ internal/server/server.go	feat(admin): expose truthful settings contract	preserv
 internal/config/config.go	feat(upstream): persist registry seed state	mixed	27bec5da0ffe1c0bf40e55fc0569ff8bb21cf53e5324e06e2f159dbec6c1fa1f	config-existing-semantics	pending-review	2026-07-11T11:28:21Z
 internal/api/router.go	feat(server): assemble active upstream registry routes	mixed	b07213015df022a81d76de75c4fab8804fa22212e1a1662d940a83589147e712	router-existing-semantics	pending-review	2026-07-11T13:33:43Z
 internal/server/server.go	feat(server): assemble active upstream registry routes	mixed	443df2d5941a56e301ebb755ec084448ad714bfcfdf81342dc27572ec4558d11	server-tamper-semantics	pending-review	2026-07-11T13:33:43Z
+web/src/i18n/en.ts	fix(admin): make shell status and navigation accessible	preserved	03493f1b6d71518db5ff6cf00065acef5406454ad618b611ae1e6beb7843253b	i18n-current-product-copy	pending-review	2026-07-11T16:14:59Z
+web/src/i18n/zh.ts	fix(admin): make shell status and navigation accessible	preserved	9363f7383f74d8de59cdb2bcf9fe72c0b33d342a96365cda8ca5d502cdd370ff	i18n-current-product-copy	pending-review	2026-07-11T16:14:59Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

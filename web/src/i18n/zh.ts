@@ -47,6 +47,9 @@ const zh = {
       logout: '退出登录',
       admin: '管理员',
       readonly: '只读',
+      openNavigation: '打开导航',
+      closeNavigation: '关闭导航',
+      adminNavigation: '管理导航',
     },
 
     // Login
@@ -69,10 +72,16 @@ const zh = {
       backToPortal: '返回门户',
     },
 
+    auth: {
+      principalLoadError: '无法加载当前用户信息。',
+    },
+
     // Dashboard
     common: {
       loadFailed: '加载失败',
       retry: '重试',
+      permissionDenied: '权限不足',
+      close: '关闭',
     },
     dashboard: {
       loadFailedHint: '请确认 Depsilo 服务可达后重试。',
@@ -113,6 +122,9 @@ const zh = {
       statusReady: '已就绪',
       statusDegraded: '部分降级',
       statusDown: '故障',
+      statusUnavailable: '状态不可用',
+      staleData: '数据已过期',
+      refresh: '刷新',
       reqPerMin: '请求/分钟',
       egress: '出口',
       ingress: '入口',

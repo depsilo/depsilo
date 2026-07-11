@@ -15,15 +15,24 @@ import Projects from './pages/Projects'
 import Quarantine from './pages/Quarantine'
 import License from './pages/License'
 import { usePrincipal } from '@/hooks/usePrincipal'
+import QueryErrorState from '@/components/QueryErrorState'
+import { useTranslation } from 'react-i18next'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
   const location = useLocation()
   const token = localStorage.getItem('token')
-  const { principal, isPending, isError } = usePrincipal(Boolean(token))
+  const { principal, isPending, isError, refetch } = usePrincipal(Boolean(token))
 
   if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
   if (isPending) return <div aria-busy="true" className="min-h-screen" />
-  if (isError || !principal) return <div role="alert">Unable to load the authenticated user.</div>
+  if (isError || !principal) {
+    return (
+      <main className="grid min-h-screen place-items-center p-4">
+        <QueryErrorState message={t('auth.principalLoadError')} onRetry={() => { void refetch() }} />
+      </main>
+    )
+  }
   return <>{children}</>
 }
 

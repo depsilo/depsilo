@@ -9,6 +9,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import ButtonV2 from '@/components/Button'
 import { statsApi } from '@/lib/api'
 import { formatBps } from '@/lib/utils'
 
@@ -152,7 +153,14 @@ interface NowStripProps {
 export default function NowStrip({ variant = 'card' }: NowStripProps) {
   const isTopbar = variant === 'topbar'
   const { t } = useTranslation()
-  const { data } = useQuery<NowData>({
+  const {
+    data,
+    isPending,
+    isError,
+    isRefetchError,
+    dataUpdatedAt,
+    refetch,
+  } = useQuery<NowData>({
     queryKey: ['admin', 'now'],
     queryFn: async () => {
       const res = await statsApi.getNow()
@@ -164,12 +172,23 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
   })
 
   // Empty / onboarding state: no traffic ever recorded.
-  const isEmpty = data && !data.last_activity && data.rate.requests_per_min === 0
-  const status = data?.status ?? 'healthy'
-  const statusLabel =
-    status === 'healthy' ? t(isEmpty ? 'now.statusReady' : 'now.statusHealthy')
-    : status === 'degraded' ? t('now.statusDegraded')
-    : t('now.statusDown')
+  const isEmpty = Boolean(data && !data.last_activity && data.rate.requests_per_min === 0)
+  const hasInitialError = isError && !data
+  const hasStaleData = isRefetchError && Boolean(data)
+  const statusLabel = hasInitialError
+    ? t('now.statusUnavailable')
+    : isPending && !data
+      ? t('loading')
+      : data?.status === 'healthy'
+        ? t(isEmpty ? 'now.statusReady' : 'now.statusHealthy')
+        : data?.status === 'degraded'
+          ? t('now.statusDegraded')
+          : t('now.statusDown')
+  const dotColor = hasInitialError
+    ? 'var(--warn-text)'
+    : isPending && !data
+      ? 'var(--text-subtle)'
+      : statusColor(data?.status ?? 'down')
 
   const containerStyle: React.CSSProperties = isTopbar
     ? {
@@ -182,7 +201,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
         borderRadius: 0,
         flexWrap: 'nowrap',
         // The topbar is 48px; line-height has to fit cleanly.
-        height: 26,
+        height: 40,
         minWidth: 0,
         overflow: 'hidden',
       }
@@ -198,27 +217,48 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
       }
 
   return (
-    <div style={containerStyle}>
+    <div data-query-key="now" style={containerStyle}>
       <style>{breathing}</style>
+
+      {hasStaleData && (
+        <span
+          className="inline-flex shrink-0 items-center gap-2 text-[11px]"
+          style={{ color: 'var(--warn-text)' }}
+          title={dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleString() : undefined}
+        >
+          {t('now.staleData')}
+          <ButtonV2
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="min-h-10 shrink-0"
+            onClick={() => { void refetch() }}
+          >
+            {t('now.refresh')}
+          </ButtonV2>
+        </span>
+      )}
 
       {/* Status dot + label — always visible */}
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         <span
-          className="now-pulse"
+          className={!hasInitialError && !(isPending && !data) ? 'now-pulse' : undefined}
           aria-hidden
           style={{
             display: 'inline-block',
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: statusColor(status),
-            boxShadow: `0 0 0 3px ${statusColor(status)}22`,
+            background: dotColor,
+            boxShadow: `0 0 0 3px ${dotColor}22`,
           }}
         />
         <span style={{ ...valueStyle, fontWeight: 500 }}>{statusLabel}</span>
       </span>
 
-      {isEmpty ? (
+      {hasInitialError ? (
+        <span className="min-w-0 flex-1" />
+      ) : isEmpty ? (
         // Onboarding hint — replaces the metrics row when no traffic exists.
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           {t('now.emptyHint')}

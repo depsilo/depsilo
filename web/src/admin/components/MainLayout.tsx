@@ -1,16 +1,18 @@
-import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { type RefObject, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import Icon from '@/components/Icon'
-import Logo from '@/components/Logo'
-import LangToggle from '@/components/LangToggle'
-import ThemeToggle from '@/components/ThemeToggle'
+
 import BadgeV2 from '@/components/Badge'
+import DrawerV2 from '@/components/Drawer'
+import Icon from '@/components/Icon'
+import LangToggle from '@/components/LangToggle'
+import Logo from '@/components/Logo'
+import ThemeToggle from '@/components/ThemeToggle'
 import NowStrip from '@/admin/components/NowStrip'
+import { usePrincipal } from '@/hooks/usePrincipal'
 import { authApi, statsApi } from '@/lib/api'
 import { formatVersion } from '@/lib/utils'
-import { usePrincipal } from '@/hooks/usePrincipal'
 
 interface NavItem {
   label: string
@@ -20,13 +22,33 @@ interface NavItem {
   pro?: boolean
 }
 
-function SidebarNavItem({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
+interface SidebarContentProps {
+  monitorItems: NavItem[]
+  manageItems: NavItem[]
+  username?: string
+  canWrite: boolean
+  version?: string
+  firstNavigationRef?: RefObject<HTMLAnchorElement | null>
+  onNavigate?: () => void
+  onLogout: () => void
+}
+
+function SidebarNavItem({
+  item,
+  linkRef,
+  onNavigate,
+}: {
+  item: NavItem
+  linkRef?: RefObject<HTMLAnchorElement | null>
+  onNavigate?: () => void
+}) {
   return (
     <NavLink
+      ref={linkRef}
       to={item.to}
       end={item.end}
       onClick={onNavigate}
-      className="flex items-center gap-2.5 mx-2 px-3 py-2 text-[13px] rounded-[6px] transition-colors duration-150 no-underline"
+      className="mx-2 flex items-center gap-2.5 rounded-[6px] px-3 py-2 text-[13px] no-underline transition-colors duration-150"
       style={({ isActive }) => ({
         color: isActive ? 'var(--brand-text)' : 'var(--text-soft)',
         background: isActive ? 'var(--brand-soft)' : 'transparent',
@@ -40,13 +62,94 @@ function SidebarNavItem({ item, onNavigate }: { item: NavItem; onNavigate?: () =
   )
 }
 
+function SidebarContent({
+  monitorItems,
+  manageItems,
+  username,
+  canWrite,
+  version,
+  firstNavigationRef,
+  onNavigate,
+  onLogout,
+}: SidebarContentProps) {
+  const { t } = useTranslation()
+  return (
+    <>
+      <div className="flex items-center gap-2.5 px-5 py-5">
+        <Logo size={26} />
+        <span className="text-[15px] font-[700]" style={{ color: 'var(--text)' }}>depsilo</span>
+        <span
+          className="ml-auto inline-flex min-w-16 items-center justify-center rounded-[4px] border px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
+          title={version}
+          style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
+        >
+          {formatVersion(version)}
+        </span>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-2">
+        <p
+          className="mt-2 mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase"
+          style={{ letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+        >
+          {t('nav.monitor')}
+        </p>
+        {monitorItems.map((item, index) => (
+          <SidebarNavItem
+            key={item.to}
+            item={item}
+            linkRef={index === 0 ? firstNavigationRef : undefined}
+            onNavigate={onNavigate}
+          />
+        ))}
+
+        <p
+          className="mt-6 mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase"
+          style={{ letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+        >
+          {t('nav.manage')}
+        </p>
+        {manageItems.map(item => (
+          <SidebarNavItem key={item.to} item={item} onNavigate={onNavigate} />
+        ))}
+      </nav>
+
+      <div className="px-3 py-3" style={{ borderTop: '0.5px solid var(--border)' }}>
+        <div className="group flex cursor-default items-center gap-2.5 rounded-[6px] px-2 py-2 transition-colors duration-150 hover:bg-[var(--bg-hover)]">
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-[13px] font-[600]"
+            style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}
+          >
+            {username?.[0]?.toUpperCase() || 'A'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--text)' }}>{username}</p>
+            <p className="mt-0.5 text-[10px] leading-tight" style={{ color: 'var(--text-subtle)' }}>
+              {canWrite ? t('nav.admin') : t('nav.readonly')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-[4px] bg-transparent p-1.5 text-[var(--text-soft)] opacity-100 transition-[opacity,color,transform] duration-150 hover:text-[var(--text)] active:scale-[0.96] lg:opacity-0 lg:group-hover:opacity-100"
+            aria-label={t('nav.logout')}
+          >
+            <Icon name="logout" size="sm" />
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 export default function MainLayoutV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const { principal } = usePrincipal()
+  const firstMobileNavigationRef = useRef<HTMLAnchorElement>(null)
+  const { principal, canWrite } = usePrincipal()
 
   const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
     queryKey: ['stats-status'],
@@ -55,11 +158,6 @@ export default function MainLayoutV2() {
     staleTime: 30000,
   })
 
-  // Pro badges removed from audit / rules / security on 2026-06-29 —
-  // those features moved to open-source as part of the pricing reset
-  // (DIRECTION.md "Pro narrowed to multi-project" decision). The Pro
-  // badge now stays on Projects only, which is the single remaining
-  // Pro-gated UI surface.
   const monitorItems: NavItem[] = [
     { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
     { label: t('bandwidth.title'), to: '/admin/bandwidth', icon: 'bar_chart' },
@@ -67,7 +165,6 @@ export default function MainLayoutV2() {
     { label: t('nav.auditLogs'), to: '/admin/audit', icon: 'policy' },
     { label: t('nav.quarantine'), to: '/admin/quarantine', icon: 'shield_lock' },
   ]
-
   const manageItems: NavItem[] = [
     { label: t('nav.cacheManage'), to: '/admin/cache', icon: 'storage' },
     { label: t('nav.upstreams'), to: '/admin/upstreams', icon: 'cloud_sync' },
@@ -78,7 +175,6 @@ export default function MainLayoutV2() {
     { label: t('nav.projects'), to: '/admin/projects', icon: 'folder_managed', pro: true },
     { label: t('nav.settings'), to: '/admin/settings', icon: 'settings' },
   ]
-
   const pageTitles: Record<string, string> = {
     '/admin': t('nav.dashboard'),
     '/admin/bandwidth': t('bandwidth.title'),
@@ -94,155 +190,91 @@ export default function MainLayoutV2() {
     '/admin/projects': t('nav.projects'),
     '/admin/settings': t('nav.settings'),
   }
-
-  const pageTitle = pageTitles[location.pathname] || t('nav.dashboard')
-
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [location.pathname])
+  const sidebarProps = {
+    monitorItems,
+    manageItems,
+    username: principal?.username,
+    canWrite,
+    version: stats?.service?.version,
+  }
 
   const handleLogout = async () => {
-    try { await authApi.logout() } catch { /* ignore */ }
+    try { await authApi.logout() } catch { /* logout remains local when the server is unavailable */ }
     localStorage.removeItem('token')
     queryClient.clear()
     navigate('/admin/login', { replace: true })
   }
 
-  const sidebar = (
-    <>
-      <div className="px-5 py-5 flex items-center gap-2.5">
-        <Logo size={26} />
-        <span className="text-[16px] font-[600] tracking-[-0.025em]" style={{ color: 'var(--text)' }}>Depsilo</span>
-        <span
-          className="text-[10px] font-mono rounded-[4px] px-1.5 py-0.5 ml-auto inline-flex items-center justify-center tabular-nums"
-          title={stats?.service?.version}
-          style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', border: '1px solid var(--border)', minWidth: 64 }}
-        >
-          {formatVersion(stats?.service?.version)}
-        </span>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto py-2">
-        <p
-          className="font-mono uppercase mt-2 mb-1.5 px-5"
-          style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
-        >
-          {t('nav.monitor')}
-        </p>
-        {monitorItems.map((item) => (
-          <SidebarNavItem key={item.to} item={item} onNavigate={() => setMobileNavOpen(false)} />
-        ))}
-
-        <p
-          className="font-mono uppercase mt-6 mb-1.5 px-5"
-          style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
-        >
-          {t('nav.manage')}
-        </p>
-        {manageItems.map((item) => (
-          <SidebarNavItem key={item.to} item={item} onNavigate={() => setMobileNavOpen(false)} />
-        ))}
-      </nav>
-
-      <div style={{ borderTop: '0.5px solid var(--border)' }} className="px-3 py-3">
-        <div className="flex items-center gap-2.5 rounded-[6px] px-2 py-2 group transition-colors duration-150 cursor-default hover:bg-[var(--bg-hover)]">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[600] shrink-0"
-            style={{ background: 'var(--brand)', color: 'white' }}
-          >
-            {principal?.username?.[0]?.toUpperCase() || 'A'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-[500] truncate leading-tight" style={{ color: 'var(--text)' }}>{principal?.username}</p>
-            <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-subtle)' }}>
-              {principal?.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="bg-transparent opacity-100 lg:opacity-0 lg:group-hover:opacity-100 cursor-pointer transition-[opacity,color,transform] duration-150 active:scale-[0.96] p-1.5 rounded-[4px] text-[var(--text-soft)] hover:text-[var(--text)] min-h-10 min-w-10 inline-flex items-center justify-center"
-            title={t('nav.logout')}
-          >
-            <Icon name="logout" size="sm" />
-          </button>
-        </div>
-      </div>
-    </>
-  )
-
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
-      {/* Page-wide ambient gradient — same mesh used in Portal so the
-          two halves of the product feel cohesive. */}
+    <div className="flex min-h-screen" style={{ background: 'var(--bg-page)' }}>
       <div className="page-wash" />
-      {mobileNavOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[2px] lg:hidden"
-          onClick={() => setMobileNavOpen(false)}
-        />
-      )}
-
-      {/* Sidebar — fixed on desktop, drawer on narrow screens */}
       <aside
-        className={`fixed left-0 top-0 z-50 h-screen w-[260px] lg:w-[220px] flex flex-col transition-transform duration-200 lg:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col lg:flex"
         style={{ background: 'var(--bg-card)', borderRight: '0.5px solid var(--border)' }}
       >
-        {sidebar}
+        <SidebarContent {...sidebarProps} onLogout={() => { void handleLogout() }} />
       </aside>
 
-      {/* Top bar — 48px */}
-      <header
-        className="aurora-rim-bottom fixed top-0 left-0 lg:left-[220px] right-0 z-30 flex items-center justify-between px-4 sm:px-6 lg:px-8"
-        style={{
-          height: 48,
-          background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
-          backdropFilter: 'saturate(180%) blur(8px)',
-          WebkitBackdropFilter: 'saturate(180%) blur(8px)',
-        }}
+      <DrawerV2
+        open={mobileNavOpen}
+        onOpenChange={setMobileNavOpen}
+        title={t('nav.adminNavigation')}
+        initialFocus={firstMobileNavigationRef}
       >
-        <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
+        <div id="admin-mobile-navigation" className="flex h-full flex-col">
+          <SidebarContent
+            {...sidebarProps}
+            firstNavigationRef={firstMobileNavigationRef}
+            onNavigate={() => setMobileNavOpen(false)}
+            onLogout={() => { void handleLogout() }}
+          />
+        </div>
+      </DrawerV2>
+
+      <div data-admin-main className="min-w-0 flex-1 lg:ml-[220px]">
+        <header
+          className="aurora-rim-bottom fixed top-0 right-0 left-0 z-20 flex h-24 flex-wrap items-center gap-x-2.5 px-4 sm:px-6 md:h-12 md:flex-nowrap lg:left-[220px] lg:px-8"
+          style={{
+            background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
+            backdropFilter: 'saturate(180%) blur(8px)',
+            WebkitBackdropFilter: 'saturate(180%) blur(8px)',
+          }}
+        >
           <button
             type="button"
-            className="lg:hidden h-10 w-10 inline-flex items-center justify-center rounded-[6px] bg-transparent text-[var(--text-soft)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] transition-[background,color,transform] duration-150 active:scale-[0.96]"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] bg-transparent text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.96] lg:hidden"
             onClick={() => setMobileNavOpen(true)}
-            aria-label="Open navigation"
+            aria-label={t('nav.openNavigation')}
+            aria-expanded={mobileNavOpen}
+            aria-controls="admin-mobile-navigation"
           >
             <Icon name="menu" size="sm" />
           </button>
-          <h1 className="text-[17px] font-[600] tracking-[-0.015em] truncate" style={{ color: 'var(--text)' }}>{pageTitle}</h1>
-        </div>
+          <h1 className="min-w-0 flex-1 truncate text-[17px] font-[600] md:flex-none md:shrink" style={{ color: 'var(--text)' }}>
+            {pageTitles[location.pathname] || t('nav.dashboard')}
+          </h1>
+          <div className="order-last min-w-0 basis-full overflow-hidden md:order-none md:flex-1 md:basis-auto md:px-3 lg:px-5">
+            <NowStrip variant="topbar" />
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+            <Link
+              to="/"
+              className="hidden items-center gap-1 text-[12px] font-[500] text-[var(--text-soft)] no-underline transition-colors duration-150 hover:text-[var(--text)] sm:inline-flex"
+              title={t('portal.backLink')}
+            >
+              {t('portal.backLink')}
+            </Link>
+            <LangToggle />
+            <ThemeToggle />
+          </div>
+        </header>
 
-        {/* Now strip rides between the page title and the right-side controls.
-            Single-row layout sized to fit the 48px topbar; carries the live
-            status + bandwidth signal on every admin page so the operator
-            never has to navigate just to check liveness. */}
-        <div className="hidden md:block flex-1 min-w-0 mx-4 lg:mx-6">
-          <NowStrip variant="topbar" />
-        </div>
-
-        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
-          <Link
-            to="/"
-            className="hidden sm:inline-flex text-[12px] font-[500] no-underline transition-colors duration-150 items-center gap-1 text-[var(--text-soft)] hover:text-[var(--text)]"
-            title={t('portal.backLink')}
-          >
-            {t('portal.backLink')}
-          </Link>
-          <LangToggle />
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* Main content */}
-      <main className="lg:ml-[220px] px-4 py-6 sm:px-6 lg:p-8 min-h-screen" style={{ paddingTop: 80, background: 'var(--bg-page)' }}>
-        <div className="md:hidden mb-4">
-          <NowStrip variant="topbar" />
-        </div>
-        <Outlet />
-      </main>
+        <main className="min-h-screen bg-[var(--bg-page)] pt-28 pb-6 md:pt-20">
+          <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

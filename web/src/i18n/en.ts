@@ -47,6 +47,9 @@ const en = {
       logout: 'Sign out',
       admin: 'Admin',
       readonly: 'Read-only',
+      openNavigation: 'Open navigation',
+      closeNavigation: 'Close navigation',
+      adminNavigation: 'Admin navigation',
     },
 
     // Login
@@ -69,10 +72,16 @@ const en = {
       backToPortal: 'Back to Portal',
     },
 
+    auth: {
+      principalLoadError: 'Unable to load the authenticated user.',
+    },
+
     // Dashboard
     common: {
       loadFailed: 'Could not load data',
       retry: 'Retry',
+      permissionDenied: 'Permission denied',
+      close: 'Close',
     },
     dashboard: {
       loadFailedHint: 'Check whether the Depsilo server is reachable, then retry.',
@@ -113,6 +122,9 @@ const en = {
       statusReady: 'Ready',
       statusDegraded: 'Degraded',
       statusDown: 'Down',
+      statusUnavailable: 'Status unavailable',
+      staleData: 'Stale data',
+      refresh: 'Refresh',
       reqPerMin: 'req/min',
       egress: 'egress',
       ingress: 'ingress',
