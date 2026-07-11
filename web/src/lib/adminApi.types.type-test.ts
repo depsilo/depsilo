@@ -1,11 +1,15 @@
 import { adminApi, authApi } from './api'
 import type {
   AccessLogListResponse,
+  AdminUpstream,
+  AdminUpstreamListResponse,
   ApproveSuggestionRequest,
   ApproveSuggestionResponse,
   AuditLogListResponse,
+  CheckUpstreamResponse,
   CreateProjectRequest,
   CreateProjectResponse,
+  DeleteUpstreamResponse,
   DeleteProjectResponse,
   DismissSuggestionResponse,
   Principal,
@@ -27,6 +31,7 @@ import type {
   SecurityVulnerabilityPage,
   UpdateProjectRequest,
   UpdateSecurityPolicyRequest,
+  UpstreamMutationRequest,
 } from './adminApi.types'
 
 export type Equal<A, B> =
@@ -70,3 +75,14 @@ export type CreateProjectInputContract = Assert<Equal<FirstArg<typeof adminApi.c
 export type UpdateProjectInputContract = Assert<Equal<SecondArg<typeof adminApi.updateProject>, UpdateProjectRequest>>
 export type ProjectPackagesInputContract = Assert<Equal<SecondArg<typeof adminApi.listProjectPackages>, ProjectPackageQuery>>
 export type ExportProjectSBOMInputContract = Assert<Equal<SecondArg<typeof adminApi.exportSbom>, ProjectSBOMQuery>>
+
+type UpstreamIsAny<T> = 0 extends (1 & T) ? true : false
+
+export type UpstreamListContract = Assert<Equal<ResponseData<typeof adminApi.listUpstreams>, AdminUpstreamListResponse>>
+export type UpstreamCreateContract = Assert<Equal<ResponseData<typeof adminApi.createUpstream>, AdminUpstream>>
+export type UpstreamUpdateContract = Assert<Equal<ResponseData<typeof adminApi.updateUpstream>, AdminUpstream>>
+export type UpstreamDeleteContract = Assert<Equal<ResponseData<typeof adminApi.deleteUpstream>, DeleteUpstreamResponse>>
+export type UpstreamCheckContract = Assert<Equal<ResponseData<typeof adminApi.checkUpstream>, CheckUpstreamResponse>>
+export type UpstreamRequestNotAny = Assert<Equal<UpstreamIsAny<Parameters<typeof adminApi.createUpstream>[0]>, false>>
+const validMutation: UpstreamMutationRequest = { adapter_type: 'pypi', name: 'primary', url: 'https://pypi.org', proxy: '', priority: 1, probe_mode: 'active', probe_interval: '30m' }
+void validMutation

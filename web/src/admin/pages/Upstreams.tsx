@@ -32,7 +32,7 @@ export default function UpstreamsV2() {
     queryKey: ['admin', 'upstreams'],
     queryFn: () => adminApi.listUpstreams(),
   })
-  const allUpstreams: any[] = data?.data?.items || data?.data || []
+  const allUpstreams = data?.data.items ?? []
 
   // Map to UpstreamItem shape
   const upstreamItems: UpstreamItem[] = allUpstreams.map((u: any) => ({

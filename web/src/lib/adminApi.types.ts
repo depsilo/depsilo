@@ -195,3 +195,29 @@ export interface UpdateAdminSettingsResponse extends AdminSettingsResponse {
   restart_required: EditableSettingPath[]
   blocked_by_override: EditableSettingPath[]
 }
+
+export interface UpstreamMutationRequest {
+  adapter_type: string
+  name: string
+  url: string
+  proxy: string
+  priority: number
+  probe_mode: 'active' | 'passive'
+  probe_interval: string
+}
+
+export interface AdminUpstream extends UpstreamMutationRequest {
+  id: number
+  healthy: boolean
+  avg_latency_ms: number
+  success_rate: number
+  last_checked_at: string | null
+  worker_running: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminUpstreamListResponse { items: AdminUpstream[]; total: number }
+export interface DeleteUpstreamResponse { deleted_id: number; adapter_type: string }
+export interface UpstreamCheckResult { healthy: boolean; latency_ms: number; checked_at: string; error: string | null }
+export interface CheckUpstreamResponse { upstream: AdminUpstream; check: UpstreamCheckResult }

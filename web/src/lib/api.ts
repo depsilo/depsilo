@@ -3,18 +3,22 @@ import type {
   AccessLogListResponse,
   AccessLogQuery,
   AdminSettingsResponse,
+  AdminUpstream,
+  AdminUpstreamListResponse,
   AdminUser,
   APITokenSummary,
   ApproveSuggestionRequest,
   ApproveSuggestionResponse,
   AuditLogListResponse,
   AuditLogQuery,
+  CheckUpstreamResponse,
   CreateAPITokenRequest,
   CreateAPITokenResponse,
   CreateProjectRequest,
   CreateProjectResponse,
   CreateUserRequest,
   DeleteProjectResponse,
+  DeleteUpstreamResponse,
   DismissSuggestionResponse,
   LoginResponse,
   Principal,
@@ -40,6 +44,7 @@ import type {
   UpdateAdminSettingsResponse,
   UpdateSecurityPolicyRequest,
   UpdateUserRequest,
+  UpstreamMutationRequest,
 } from './adminApi.types'
 
 const api = axios.create({ baseURL: '/api/v1' })
@@ -102,11 +107,11 @@ export const adminApi = {
   warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post('/admin/cache/warmup', data),
 
   // Upstreams
-  listUpstreams: () => api.get('/admin/upstreams'),
-  createUpstream: (data: any) => api.post('/admin/upstreams', data),
-  updateUpstream: (id: number, data: any) => api.put(`/admin/upstreams/${id}`, data),
-  deleteUpstream: (id: number) => api.delete(`/admin/upstreams/${id}`),
-  checkUpstream: (id: number) => api.post(`/admin/upstreams/${id}/check`),
+  listUpstreams: () => api.get<AdminUpstreamListResponse>('/admin/upstreams'),
+  createUpstream: (data: UpstreamMutationRequest) => api.post<AdminUpstream>('/admin/upstreams', data),
+  updateUpstream: (id: number, data: UpstreamMutationRequest) => api.put<AdminUpstream>(`/admin/upstreams/${id}`, data),
+  deleteUpstream: (id: number) => api.delete<DeleteUpstreamResponse>(`/admin/upstreams/${id}`),
+  checkUpstream: (id: number) => api.post<CheckUpstreamResponse>(`/admin/upstreams/${id}/check`),
   getUpstreamLatency: (id: number, range_: string = '24h') =>
     api.get(`/admin/upstreams/${id}/latency`, { params: { range: range_ } }),
 

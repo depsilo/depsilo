@@ -228,6 +228,7 @@ web/src/admin/pages/Settings.tsx	fix(admin): show truthful settings application 
 web/src/lib/api.ts	fix(admin): show truthful settings application state	mixed	35dbcc2adcd2b04af98c006196801afd8e478eb81b1ac15fe44a6eaab6439f03	api-open-audit	pending-review	2026-07-11T16:32:27Z
 web/src/i18n/en.ts	fix(admin): show truthful settings application state	preserved	388553929351e6705db260f70891101442f7337bdf2a1704b36049fca694337c	i18n-current-product-copy	pending-review	2026-07-11T16:32:27Z
 web/src/i18n/zh.ts	fix(admin): show truthful settings application state	preserved	621198771ab030ad408f77218539540d23d9d5859a4e2aa931965612ecacb75c	i18n-current-product-copy	pending-review	2026-07-11T16:32:27Z
+web/src/lib/api.ts	refactor(web): type upstream registry API	mixed	8eeb989b51ed3a28b188cad85b0f7fb53806b7c74d14dc06a5a2bc052f503a4a	api-open-audit	pending-review	2026-07-11T16:54:48Z
 <!-- OVERLAP_PENDING_END -->
 ```
 
