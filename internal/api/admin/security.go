@@ -1,12 +1,14 @@
 package admin
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
@@ -25,17 +27,26 @@ func NewSecurityHandler(database *gorm.DB, scanner *security.Scanner, importer *
 
 func (h *SecurityHandler) Dashboard(c *gin.Context) {
 	var totalVulns int64
-	h.db.Model(&db.Vulnerability{}).Count(&totalVulns)
+	if err := h.db.Model(&db.Vulnerability{}).Count(&totalVulns).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
 	var affectedPkgs int64
-	h.db.Model(&db.VulnerabilityCheck{}).Where("has_vulnerabilities = ?", true).Count(&affectedPkgs)
+	if err := h.db.Model(&db.VulnerabilityCheck{}).Where("has_vulnerabilities = ?", true).Count(&affectedPkgs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
 	type severityCount struct {
 		Severity string
 		Count    int64
 	}
 	var bySeverity []severityCount
-	h.db.Model(&db.Vulnerability{}).Select("severity, count(*) as count").Group("severity").Find(&bySeverity)
+	if err := h.db.Model(&db.Vulnerability{}).Select("severity, count(*) as count").Group("severity").Find(&bySeverity).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
 	severityMap := map[string]int64{"critical": 0, "high": 0, "medium": 0, "low": 0}
 	for _, s := range bySeverity {
@@ -43,7 +54,10 @@ func (h *SecurityHandler) Dashboard(c *gin.Context) {
 	}
 
 	var autoBlocked int64
-	h.db.Model(&db.PackageRule{}).Where("created_by = 'security-scanner'").Count(&autoBlocked)
+	if err := h.db.Model(&db.PackageRule{}).Where("created_by = 'security-scanner'").Count(&autoBlocked).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
 	lastScan := h.scanner.LastScanTime()
 	var lastScanStr *string
@@ -52,13 +66,13 @@ func (h *SecurityHandler) Dashboard(c *gin.Context) {
 		lastScanStr = &s
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"total_vulnerabilities": totalVulns,
-		"affected_packages":     affectedPkgs,
-		"by_severity":           severityMap,
-		"auto_blocked_count":    autoBlocked,
-		"last_scan_at":          lastScanStr,
-		"scan_in_progress":      h.scanner.IsScanning(),
+	c.JSON(http.StatusOK, securityDashboardResponse{
+		TotalVulnerabilities: totalVulns,
+		AffectedPackages:     affectedPkgs,
+		BySeverity:           severityMap,
+		AutoBlockedCount:     autoBlocked,
+		LastScanAt:           lastScanStr,
+		ScanInProgress:       h.scanner.IsScanning(),
 	})
 }
 
@@ -79,18 +93,32 @@ func (h *SecurityHandler) ListVulnerabilities(c *gin.Context) {
 	if sev := c.Query("severity"); sev != "" {
 		query = query.Where("severity = ?", sev)
 	}
-	if pkg := c.Query("package"); pkg != "" {
+	pkg := c.Query("package")
+	_, packagePresent := c.Request.URL.Query()["package"]
+	if !packagePresent {
+		pkg = c.Query("q")
+		if pkg != "" {
+			zap.L().Warn("deprecated admin query parameter", zap.String("endpoint", "security/vulnerabilities"), zap.String("parameter", "q"), zap.String("replacement", "package"))
+		}
+	}
+	if pkg != "" {
 		query = query.Where("package_name LIKE ?", "%"+pkg+"%")
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
 	var vulns []db.Vulnerability
-	query.Order("cvss_score DESC, published_at DESC").
-		Offset((page - 1) * perPage).Limit(perPage).Find(&vulns)
+	if err := query.Order("cvss_score DESC, published_at DESC").
+		Offset((page - 1) * perPage).Limit(perPage).Find(&vulns).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"items": vulns, "total": total, "page": page})
+	c.JSON(http.StatusOK, securityPage[vulnerabilityResponse]{Items: toVulnerabilityResponses(vulns), Total: total, Page: page})
 }
 
 func (h *SecurityHandler) ListPackages(c *gin.Context) {
@@ -109,13 +137,19 @@ func (h *SecurityHandler) ListPackages(c *gin.Context) {
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
 	var checks []db.VulnerabilityCheck
-	query.Order("vulnerability_count DESC").
-		Offset((page - 1) * perPage).Limit(perPage).Find(&checks)
+	if err := query.Order("vulnerability_count DESC").
+		Offset((page - 1) * perPage).Limit(perPage).Find(&checks).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"items": checks, "total": total, "page": page})
+	c.JSON(http.StatusOK, securityPage[vulnerabilityCheckResponse]{Items: toVulnerabilityCheckResponses(checks), Total: total, Page: page})
 }
 
 func (h *SecurityHandler) ListSuggestions(c *gin.Context) {
@@ -135,12 +169,18 @@ func (h *SecurityHandler) ListSuggestions(c *gin.Context) {
 	}
 
 	var total int64
-	query.Count(&total)
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
 	var vulns []db.Vulnerability
-	query.Offset((page - 1) * perPage).Limit(perPage).Find(&vulns)
+	if err := query.Offset((page - 1) * perPage).Limit(perPage).Find(&vulns).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"items": vulns, "total": total, "page": page})
+	c.JSON(http.StatusOK, securityPage[vulnerabilityResponse]{Items: toVulnerabilityResponses(vulns), Total: total, Page: page})
 }
 
 func (h *SecurityHandler) ApproveSuggestion(c *gin.Context) {
@@ -148,7 +188,11 @@ func (h *SecurityHandler) ApproveSuggestion(c *gin.Context) {
 
 	var vuln db.Vulnerability
 	if err := h.db.First(&vuln, vulnID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "vulnerability not found"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "vulnerability not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		}
 		return
 	}
 
@@ -226,30 +270,35 @@ func (h *SecurityHandler) ImportData(c *gin.Context) {
 
 func (h *SecurityHandler) ListPolicies(c *gin.Context) {
 	var policies []db.SecurityPolicy
-	h.db.Order("ecosystem").Find(&policies)
-	c.JSON(http.StatusOK, policies)
+	if err := h.db.Order("ecosystem").Find(&policies).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, toSecurityPolicyResponses(policies))
 }
 
 func (h *SecurityHandler) UpdatePolicy(c *gin.Context) {
 	ecosystem := c.Param("ecosystem")
 
-	var body struct {
-		AutoBlockEnabled bool    `json:"auto_block_enabled"`
-		MinCVSSScore     float32 `json:"min_cvss_score"`
+	var req updateSecurityPolicyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid request body"})
+		return
 	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "INVALID_BODY", "message": err.Error()})
+	minCVSSScore, valid := req.validatedMinCVSSScore()
+	if !valid {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "INVALID_POLICY", "message": "min_cvss_score must be between 0 and 10"})
 		return
 	}
 
 	policy := db.SecurityPolicy{
-		Ecosystem: ecosystem, AutoBlockEnabled: body.AutoBlockEnabled,
-		MinCVSSScore: body.MinCVSSScore, CreatedBy: "admin",
+		Ecosystem: ecosystem, AutoBlockEnabled: req.AutoBlockEnabled,
+		MinCVSSScore: minCVSSScore, CreatedBy: "admin",
 	}
 	result := h.db.Where("ecosystem = ?", ecosystem).Assign(policy).FirstOrCreate(&policy)
 	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "UPDATE_FAILED", "message": result.Error.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": result.Error.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, policy)
+	c.JSON(http.StatusOK, toSecurityPolicyResponse(policy))
 }
