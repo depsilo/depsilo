@@ -2,6 +2,7 @@ package upstream
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -20,7 +21,11 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 	}
 	for _, u := range pool.Snapshot() {
 		var logs []db.UpstreamLatencyLog
-		database.Where("name = ? AND healthy = ?", u.Name, true).
+		query := database.Where("upstream_id = ? AND healthy = ?", u.ID, true)
+		if u.ID == 0 {
+			query = query.Where("name = ?", u.Name)
+		}
+		query.
 			Order("datetime(created_at) DESC").
 			Limit(10).
 			Find(&logs)
@@ -53,7 +58,7 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 // Passive-mode upstreams are skipped — they rely on request-time Report() calls.
 func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, defaultInterval time.Duration) {
 	for _, u := range pool.Snapshot() {
-		if u.ProbeMode == "passive" {
+		if u.ProbeMode != "active" {
 			zap.L().Info("upstream in passive probe mode, skipping health check",
 				zap.String("upstream", u.Name))
 			continue
@@ -78,62 +83,66 @@ func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB,
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			checkUpstream(ctx, u, database)
+			result := probe(ctx, u)
+			u.applyProbe(result)
+			if err := persistProbe(database, u, result); err != nil {
+				zap.L().Warn("persist upstream probe", zap.Uint("upstream_id", u.ID), zap.Error(err))
+			}
 		}
 	}
 }
 
-func checkUpstream(ctx context.Context, u *Upstream, database *gorm.DB) {
+func probe(ctx context.Context, u *Upstream) ProbeResult {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.URL, nil)
 	if err != nil {
-		u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now().UTC(), Err: err})
-		zap.L().Warn("health check request error", zap.String("upstream", u.Name), zap.Error(err))
-		return
+		return ProbeResult{CheckedAt: time.Now().UTC(), Err: err}
 	}
+	req.Header.Set("User-Agent", "depsilo/0.1")
 
 	start := time.Now()
 	resp, err := u.client.Do(req)
-	latency := time.Since(start)
-
-	if err != nil {
-		result := ProbeResult{Healthy: false, Latency: latency, CheckedAt: time.Now().UTC(), Err: err}
-		u.applyProbe(result)
-		zap.L().Warn("upstream unhealthy", zap.String("upstream", u.Name), zap.Error(err))
-		if database != nil {
-			go func() {
-				database.Create(&db.UpstreamLatencyLog{
-					Name:      u.Name,
-					LatencyMs: latency.Milliseconds(),
-					Healthy:   false,
-				})
-			}()
+	result := ProbeResult{Latency: time.Since(start), CheckedAt: time.Now().UTC(), Err: err}
+	if err == nil {
+		resp.Body.Close()
+		result.Healthy = resp.StatusCode < 500
+		if !result.Healthy {
+			result.Err = fmt.Errorf("upstream returned status %d", resp.StatusCode)
 		}
-		return
 	}
-	resp.Body.Close()
+	return result
+}
 
-	healthy := resp.StatusCode < 500
-	result := ProbeResult{Healthy: healthy, Latency: latency, CheckedAt: time.Now().UTC()}
-	u.applyProbe(result)
-
-	if database != nil {
-		go func() {
-			database.Create(&db.UpstreamLatencyLog{
-				Name:      u.Name,
-				LatencyMs: latency.Milliseconds(),
-				Healthy:   healthy,
+func persistProbe(database *gorm.DB, u *Upstream, result ProbeResult) error {
+	if database == nil {
+		return nil
+	}
+	health := u.HealthSnapshot()
+	return database.Transaction(func(tx *gorm.DB) error {
+		if u.ID != 0 {
+			updated := tx.Model(&db.UpstreamRecord{}).Where("id = ?", u.ID).Updates(map[string]any{
+				"healthy":         health.Healthy,
+				"avg_latency_ms":  health.AvgLatency.Milliseconds(),
+				"success_rate":    health.SuccessRate,
+				"last_checked_at": health.LastCheckedAt,
 			})
-		}()
-	}
-
-	zap.L().Debug("health check done",
-		zap.String("upstream", u.Name),
-		zap.Bool("healthy", healthy),
-		zap.Duration("latency", latency),
-	)
+			if updated.Error != nil {
+				return updated.Error
+			}
+			if updated.RowsAffected != 1 {
+				return fmt.Errorf("persist upstream %d: expected one row, updated %d", u.ID, updated.RowsAffected)
+			}
+		}
+		return tx.Create(&db.UpstreamLatencyLog{
+			UpstreamID: u.ID,
+			Name:       u.Name,
+			LatencyMs:  result.Latency.Milliseconds(),
+			Healthy:    result.Healthy,
+			CreatedAt:  result.CheckedAt,
+		}).Error
+	})
 }
 
 // StartLatencyLogCleanup periodically removes latency logs older than 7 days.
