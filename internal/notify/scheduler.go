@@ -12,9 +12,9 @@ import (
 
 // SchedulerConfig holds the polling knobs for the webhook scheduler.
 type SchedulerConfig struct {
-	CheckInterval   time.Duration              // how often to poll (default 60s)
-	DiskThreshold   float64                    // 0.0–1.0; trigger when usage exceeds (reserved for future)
-	LicenseWarnDays int                        // days before expiry to warn (default 7)
+	CheckInterval   time.Duration // how often to poll (default 60s)
+	DiskThreshold   float64       // 0.0–1.0; trigger when usage exceeds (reserved for future)
+	LicenseWarnDays int           // days before expiry to warn (default 7)
 	Pools           map[string]*upstream.Pool
 	Checker         *entitlement.Checker
 }

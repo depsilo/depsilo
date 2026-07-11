@@ -35,14 +35,14 @@ func NewNowHandler(database *gorm.DB, pools map[string]*upstream.Pool, startTime
 // nowResponse is the JSON shape consumed by web/src/admin/components/NowStrip.tsx.
 // Fields are kept short to minimize payload bytes on the 5s poll.
 type nowResponse struct {
-	Status        string             `json:"status"` // healthy | degraded | down
-	UptimeSeconds int64              `json:"uptime_seconds"`
-	NowUnix       int64              `json:"now_unix"`
-	Version       string             `json:"version"`
-	LastActivity  *lastActivity      `json:"last_activity,omitempty"`
-	Rate          rateBlock          `json:"rate"`
-	Upstreams     upstreamRollup     `json:"upstreams"`
-	Sparkline     []sparklinePoint   `json:"sparkline"`
+	Status        string           `json:"status"` // healthy | degraded | down
+	UptimeSeconds int64            `json:"uptime_seconds"`
+	NowUnix       int64            `json:"now_unix"`
+	Version       string           `json:"version"`
+	LastActivity  *lastActivity    `json:"last_activity,omitempty"`
+	Rate          rateBlock        `json:"rate"`
+	Upstreams     upstreamRollup   `json:"upstreams"`
+	Sparkline     []sparklinePoint `json:"sparkline"`
 }
 
 type lastActivity struct {
@@ -150,9 +150,9 @@ func (h *NowHandler) lastActivity(now time.Time) *lastActivity {
 func (h *NowHandler) rate(now time.Time) rateBlock {
 	since := now.Add(-60 * time.Second)
 	var agg struct {
-		Requests  int64
-		Egress    int64
-		Ingress   int64
+		Requests int64
+		Egress   int64
+		Ingress  int64
 	}
 	h.db.Model(&db.AccessLog{}).
 		Select(`COUNT(*) AS requests,
