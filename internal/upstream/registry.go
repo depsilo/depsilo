@@ -42,6 +42,7 @@ type workerHandle struct {
 
 type Registry struct {
 	db            *gorm.DB
+	commit        func(*gorm.DB) error
 	active        []string
 	pools         map[string]*Pool
 	mutationLocks map[string]*sync.Mutex
@@ -65,6 +66,7 @@ func NewRegistry(database *gorm.DB, active []string) (*Registry, error) {
 	}
 	r := &Registry{
 		db:            database,
+		commit:        func(tx *gorm.DB) error { return tx.Commit().Error },
 		active:        ordered,
 		pools:         make(map[string]*Pool),
 		mutationLocks: make(map[string]*sync.Mutex),
