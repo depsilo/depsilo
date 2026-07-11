@@ -20,6 +20,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import type { TooltipContentProps, TooltipValueType } from 'recharts'
 
 import EmptyState from '@/components/EmptyState'
 import SectionHeader from '@/components/SectionHeader'
@@ -153,9 +154,7 @@ const TABS: { value: TrendsTab; key: string }[] = [
   { value: 'errors', key: 'trendTabErrors' },
 ]
 
-// Tooltip payload typing is deferred to Plan 04 Task 11.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   const { t } = useTranslation()
   if (!active || !payload?.length) return null
   return (
@@ -164,8 +163,7 @@ function ChartTooltip({ active, payload, label }: any) {
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
     >
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      {payload.map((entry: any) => {
+      {payload.map((entry) => {
         const v = entry.value
         let display: string
         if (entry.dataKey === 'hit_rate_pct' || entry.dataKey === 'error_rate_pct') {
@@ -178,7 +176,7 @@ function ChartTooltip({ active, payload, label }: any) {
           display = Number(v).toLocaleString()
         }
         return (
-          <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
+          <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
             {entry.name}: {display}
           </p>
         )
@@ -287,7 +285,7 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
             </defs>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" {...axisProps} />
-            <Tooltip content={<ChartTooltip />} />
+            <Tooltip content={ChartTooltip} />
             <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
 
             {tab === 'requests' && (

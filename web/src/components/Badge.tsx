@@ -36,7 +36,6 @@ export default function BadgeV2({
         fontSize: '11px',
         fontWeight: 600,
         lineHeight: '1.4',
-        letterSpacing: '0.005em',
       }}
     >
       {children}

@@ -12,7 +12,8 @@ import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
 import TableViewport from '@/components/TableViewport'
 import { getApiError } from '@/lib/apiError'
-import type { AuditLogQuery } from '@/lib/adminApi.types'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
+import type { AuditLog, AuditLogQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
@@ -179,14 +180,14 @@ export default function AuditLogsV2() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {headers.map(h => (
-                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase tracking-[0.08em] py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {items.map((row: any) => (
+              {items.map((row: AuditLog) => (
                 <tr
                   key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
@@ -197,7 +198,7 @@ export default function AuditLogsV2() {
                   </td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
-                      <EcosystemIcon type={row.ecosystem} size={13} />
+                      {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={13} />}
                       <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.ecosystem}</span>
                     </div>
                   </td>

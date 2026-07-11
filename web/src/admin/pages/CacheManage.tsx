@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Treemap, ResponsiveContainer, Tooltip } from 'recharts'
+import type { TooltipContentProps, TooltipValueType, TreemapNode } from 'recharts'
 import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
@@ -20,8 +21,21 @@ import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
+import type { CacheQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
+
+interface CacheTreemapItem { name: string; size: number; type: string; hits: number }
+
+function isCacheTreemapItem(value: unknown): value is CacheTreemapItem {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Record<string, unknown>
+  return typeof item.name === 'string'
+    && typeof item.size === 'number'
+    && typeof item.type === 'string'
+    && typeof item.hits === 'number'
+}
 
 export default function CacheManageV2() {
   const { t } = useTranslation()
@@ -39,7 +53,7 @@ export default function CacheManageV2() {
   const [warmupLoading, setWarmupLoading] = useState(false)
   const [warmupResult, setWarmupResult] = useState<string | null>(null)
 
-  const params: Record<string, any> = { page, page_size: 20 }
+  const params: CacheQuery = { page, page_size: 20 }
   if (search) params.search = search
   if (adapterType !== 'all') params.adapter_type = adapterType
 
@@ -102,7 +116,7 @@ export default function CacheManageV2() {
           {/* Left: usage + ecosystem breakdown */}
           <section>
             <SectionHeader title={t('cache.storageOverview')} />
-            <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>
+            <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', lineHeight: 1.05 }}>
               {formatBytes(distribution.total_size)}
               <span className="text-[12px] font-[400] ml-2" style={{ color: 'var(--text-soft)' }}>
                 / {formatBytes(distribution.max_size)}
@@ -110,7 +124,7 @@ export default function CacheManageV2() {
             </p>
             {/* Progress bar */}
             <div className="h-2 rounded-full overflow-hidden flex mb-4" style={{ background: 'var(--bg-soft)' }}>
-              {distribution.by_type.map((bt: any) => {
+              {distribution.by_type.map((bt) => {
                 const pct = distribution.max_size > 0 ? (bt.size / distribution.max_size) * 100 : 0
                 return (
                   <div
@@ -124,12 +138,12 @@ export default function CacheManageV2() {
             </div>
             {/* Ecosystem breakdown */}
             <div className="space-y-1.5">
-              {distribution.by_type.map((bt: any) => {
+              {distribution.by_type.map((bt) => {
                 const pct = distribution.total_size > 0 ? ((bt.size / distribution.total_size) * 100).toFixed(1) : '0'
                 return (
                   <div key={bt.type} className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[bt.type] || 'var(--brand)' }} />
-                    <EcosystemIcon type={bt.type} size={12} />
+                    {isAdminEcosystem(bt.type) && <EcosystemIcon type={bt.type} size={12} />}
                     <span className="text-[11px] uppercase flex-1" style={{ color: 'var(--text)' }}>{bt.type}</span>
                     <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(bt.size)}</span>
                     <span className="text-[10px] font-mono tabular-nums w-10 text-right" style={{ color: 'var(--text-subtle)' }}>{pct}%</span>
@@ -146,16 +160,19 @@ export default function CacheManageV2() {
             {distribution.top_packages && distribution.top_packages.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <Treemap
-                  data={distribution.top_packages.map((p: any) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
+                  data={distribution.top_packages.map((p) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
                   dataKey="size" aspectRatio={4 / 3} stroke="var(--bg)" isAnimationActive={false}
-                  content={({ x, y, width, height, name, size }: any) => {
+                  content={(node: TreemapNode) => {
+                    const { x, y, width, height, name } = node
+                    const size = typeof node.size === 'number' ? node.size : node.value
                     if (width < 4 || height < 4) return <g />
                     const showLabel = width > 60 && height > 30 && name
-                    const type = distribution.top_packages.find((p: any) => p.name === name)?.type
+                    const type = distribution.top_packages.find((p) => p.name === name)?.type
+                    const fill = type ? ECO_COLORS[type] || 'var(--brand)' : 'var(--brand)'
                     return (
                       <g>
                         <rect x={x} y={y} width={width} height={height}
-                          fill={ECO_COLORS[type] || 'var(--brand)'}
+                          fill={fill}
                           fillOpacity={0.25 + Math.min(0.5, ((size || 0) / (distribution.top_packages[0]?.size || 1)) * 0.5)}
                           stroke="var(--bg)" strokeWidth={1.5} rx={3}
                         />
@@ -173,9 +190,10 @@ export default function CacheManageV2() {
                     )
                   }}
                 >
-                  <Tooltip content={({ payload }: any) => {
+                  <Tooltip content={({ payload }: TooltipContentProps<TooltipValueType, string | number>) => {
                     if (!payload?.length) return null
-                    const item = payload[0]?.payload
+                    const item: unknown = payload[0]?.payload
+                    if (!isCacheTreemapItem(item)) return null
                     return (
                       <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                         <p className="font-[500]" style={{ color: 'var(--text)' }}>{item.name}</p>
@@ -238,12 +256,12 @@ export default function CacheManageV2() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Key', t('type'), t('cache.size'), t('cache.hitCount'), t('cache.lastAccessed'), t('actions')].map(h => (
-                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase tracking-[0.08em] py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</th>
+                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {items.map((row: any) => (
+              {items.map((row) => (
                 <tr
                   key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
@@ -254,7 +272,7 @@ export default function CacheManageV2() {
                   </td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
-                      <EcosystemIcon type={row.adapter_type} size={13} />
+                      {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
                       <BadgeV2 variant="ecosystem">{row.adapter_type?.toUpperCase()}</BadgeV2>
                     </div>
                   </td>

@@ -26,6 +26,7 @@ import QueryErrorState from '@/components/QueryErrorState'
 import TabsV2 from '@/components/Tabs'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
 
 // Backend mirrors db.QuarantineEvent + db.ApprovedVersion. We keep
 // the shape narrow to avoid leaking schema details into TS — extra
@@ -189,7 +190,7 @@ export default function Quarantine() {
     <div className="space-y-6">
       {/* Header + tabs */}
       <div>
-        <h2 className="text-[20px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
+        <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>
           {t('quarantine.title')}
         </h2>
         <p className="text-[13px] mt-1 max-w-2xl" style={{ color: 'var(--text-soft)' }}>
@@ -378,7 +379,7 @@ function EventsTab(props: {
                   </Td>
                   <Td>
                     <div className="flex items-center gap-1.5">
-                      <EcosystemIcon type={ev.ecosystem as any} size={14} />
+                      {isAdminEcosystem(ev.ecosystem) && <EcosystemIcon type={ev.ecosystem} size={14} />}
                       <span className="text-[12px] font-mono">{ev.ecosystem}</span>
                     </div>
                   </Td>
@@ -459,7 +460,7 @@ function ApprovalsTab(props: {
               </Td>
               <Td>
                 <div className="flex items-center gap-1.5">
-                  <EcosystemIcon type={row.ecosystem as any} size={14} />
+                  {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
                   <span className="text-[12px] font-mono">{row.ecosystem}</span>
                 </div>
               </Td>
@@ -498,6 +499,7 @@ function BlocklistTab() {
   const [form, setForm] = useState({ ecosystem: 'npm', package: '', version: '', reason: '' })
   const [revokeTarget, setRevokeTarget] = useState<MalwareOverride | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
+  const [mountedAt] = useState(() => Date.now())
 
   const statusQ = useQuery({
     queryKey: ['admin', 'blocklist', 'status'],
@@ -544,7 +546,7 @@ function BlocklistTab() {
 
   const st = statusQ.data
   const overrides = overridesQ.data?.items ?? []
-  const now = overridesQ.data?.now ? new Date(overridesQ.data.now).getTime() : Date.now()
+  const now = overridesQ.data?.now ? new Date(overridesQ.data.now).getTime() : mountedAt
 
   return (
     <div className="space-y-5">
@@ -647,7 +649,7 @@ function BlocklistTab() {
                     <tr key={row.id} style={{ borderTop: '0.5px solid var(--border)', opacity: expired ? 0.55 : 1 }}>
                       <Td>
                         <div className="flex items-center gap-1.5">
-                          <EcosystemIcon type={row.ecosystem as any} size={14} />
+                          {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
                           <span className="text-[12px] font-mono">{row.ecosystem}</span>
                         </div>
                       </Td>
@@ -763,7 +765,7 @@ function BlocklistTab() {
 function StatusItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-mono font-[600] uppercase tracking-wider" style={{ color: 'var(--text-subtle)' }}>
+      <span className="text-[10px] font-mono font-[600] uppercase" style={{ color: 'var(--text-subtle)' }}>
         {label}
       </span>
       {children}
@@ -783,7 +785,7 @@ function formatRemaining(ms: number): string {
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="text-left px-3 py-2.5 text-[11px] font-mono font-[600] uppercase tracking-wider"
+    <th className="text-left px-3 py-2.5 text-[11px] font-mono font-[600] uppercase"
         style={{ color: 'var(--text-subtle)' }}>{children}</th>
   )
 }

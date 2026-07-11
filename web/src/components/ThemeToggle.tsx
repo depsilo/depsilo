@@ -19,13 +19,19 @@ function readTheme(): Theme {
       localStorage.setItem(STORAGE_KEY, legacy)
       return legacy
     }
-  } catch {}
+  } catch {
+    // Storage can be unavailable in hardened browser contexts.
+  }
   // Instrument default = dark.
   return 'dark'
 }
 
 function writeTheme(t: Theme) {
-  try { localStorage.setItem(STORAGE_KEY, t) } catch {}
+  try {
+    localStorage.setItem(STORAGE_KEY, t)
+  } catch {
+    // Keep the in-memory selection when persistence is unavailable.
+  }
 }
 
 function applyTheme(t: Theme) {
@@ -45,7 +51,7 @@ function applyTheme(t: Theme) {
   root.setAttribute('data-theme', resolved)
 }
 
-export function useTheme(): [Theme, (t: Theme) => void] {
+function useTheme(): [Theme, (t: Theme) => void] {
   const [theme, setTheme] = React.useState<Theme>(readTheme)
 
   React.useEffect(() => {

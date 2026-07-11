@@ -90,7 +90,7 @@ function SidebarContent({
       <nav className="flex-1 overflow-y-auto py-2">
         <p
           className="mt-2 mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase"
-          style={{ letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+          style={{ color: 'var(--text-subtle)' }}
         >
           {t('nav.monitor')}
         </p>
@@ -105,7 +105,7 @@ function SidebarContent({
 
         <p
           className="mt-6 mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase"
-          style={{ letterSpacing: '0.12em', color: 'var(--text-subtle)' }}
+          style={{ color: 'var(--text-subtle)' }}
         >
           {t('nav.manage')}
         </p>

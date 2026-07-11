@@ -16,6 +16,22 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
+import type { TooltipContentProps, TooltipValueType } from 'recharts'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
+import type { BandwidthSummary } from '@/lib/adminApi.types'
+
+const EMPTY_SUMMARY: BandwidthSummary = {
+  total_bytes: 0,
+  hit_bytes: 0,
+  miss_bytes: 0,
+  savings_rate: 0,
+  total_requests: 0,
+  hit_requests: 0,
+  miss_requests: 0,
+  time_saved_ms: 0,
+  avg_hit_latency: 0,
+  avg_miss_latency: 0,
+}
 
 function formatTimeSaved(ms: number, t: (key: string) => string): string {
   if (ms <= 0) return '0s'
@@ -27,28 +43,28 @@ function formatTimeSaved(ms: number, t: (key: string) => string): string {
   return `${seconds}${t('bandwidth.seconds')}`
 }
 
-function ChartTooltip({ active, payload, label }: any) {
+function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
-      {payload.map((entry: any) => (
-        <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
-          {entry.name}: {formatBytes(entry.value)}
+      {payload.map((entry) => (
+        <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
+          {entry.name}: {formatBytes(Number(entry.value))}
         </p>
       ))}
     </div>
   )
 }
 
-function LatencyTooltip({ active, payload, label }: any) {
+function LatencyTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
-      {payload.map((entry: any) => (
-        <p key={entry.dataKey} className="font-mono tabular-nums" style={{ color: entry.color }}>
-          {entry.name}: {Math.round(entry.value)} ms
+      {payload.map((entry) => (
+        <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
+          {entry.name}: {Math.round(Number(entry.value))} ms
         </p>
       ))}
     </div>
@@ -75,7 +91,7 @@ export default function BandwidthReport() {
   })
 
   const report = data?.data
-  const summary = report?.summary || {}
+  const summary = report?.summary ?? EMPTY_SUMMARY
   const daily = report?.daily || []
   const byEcosystem = report?.by_ecosystem || []
   const topPackages = report?.top_packages || []
@@ -89,18 +105,18 @@ export default function BandwidthReport() {
   ]
 
   const ecoDonutData = byEcosystem
-    .map((e: any) => ({ name: e.ecosystem, value: e.hit_bytes + e.miss_bytes }))
-    .filter((e: any) => e.value > 0)
-    .sort((a: any, b: any) => b.value - a.value)
+    .map((e) => ({ name: e.ecosystem, value: e.hit_bytes + e.miss_bytes }))
+    .filter((e) => e.value > 0)
+    .sort((a, b) => b.value - a.value)
 
   const latencyData = byEcosystem
-    .filter((e: any) => e.avg_miss_latency_ms > 0)
-    .map((e: any) => ({
+    .filter((e) => e.avg_miss_latency_ms > 0)
+    .map((e) => ({
       ecosystem: e.ecosystem,
       hit: Math.round(e.avg_hit_latency_ms),
       miss: Math.round(e.avg_miss_latency_ms),
     }))
-    .sort((a: any, b: any) => b.miss - a.miss)
+    .sort((a, b) => b.miss - a.miss)
 
   if (queryEnabled && isPending) {
     return (
@@ -205,7 +221,7 @@ export default function BandwidthReport() {
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => formatBytes(v)} />
-              <Tooltip content={<ChartTooltip />} />
+              <Tooltip content={ChartTooltip} />
               <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
               <Area type="monotone" dataKey="hit_bytes" stackId="1" stroke="var(--ok)" strokeWidth={1.5} fill="url(#gradHitBytes)" name={t('bandwidth.hitBytes')} />
               <Area type="monotone" dataKey="miss_bytes" stackId="1" stroke="var(--danger)" strokeWidth={1.5} fill="url(#gradMissBytes)" name={t('bandwidth.missBytes')} />
@@ -239,10 +255,10 @@ export default function BandwidthReport() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-1.5 mt-3">
-                {ecoDonutData.slice(0, 6).map((e: any, i: number) => (
+                {ecoDonutData.slice(0, 6).map((e, i) => (
                   <div key={e.name} className="flex items-center gap-2 text-[11px]">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: getEcosystemColor(e.name, i) }} />
-                    <EcosystemIcon type={e.name} size={12} />
+                    {isAdminEcosystem(e.name) && <EcosystemIcon type={e.name} size={12} />}
                     <span className="font-mono" style={{ color: 'var(--text)' }}>{e.name}</span>
                     <span className="ml-auto font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(e.value)}</span>
                   </div>
@@ -259,7 +275,7 @@ export default function BandwidthReport() {
           <SectionHeader title={t('bandwidth.topPackages')} />
           {topPackages.length > 0 ? (
             <div>
-              {topPackages.map((p: any, i: number) => {
+              {topPackages.map((p, i) => {
                 const max = topPackages[0]?.total_bytes || 1
                 return (
                   <div
@@ -268,7 +284,7 @@ export default function BandwidthReport() {
                     style={{ borderBottom: i < topPackages.length - 1 ? '1px solid var(--border-soft, var(--border))' : 'none' }}
                   >
                     <span className="text-[11px] font-mono tabular-nums w-4 shrink-0 text-right" style={{ color: 'var(--text-subtle)' }}>{i + 1}</span>
-                    <EcosystemIcon type={p.ecosystem} size={12} />
+                    {isAdminEcosystem(p.ecosystem) && <EcosystemIcon type={p.ecosystem} size={12} />}
                     <span className="font-mono text-[11px] truncate flex-1" style={{ color: 'var(--text)' }}>{p.package_name}</span>
                     <span className="font-mono text-[10px] tabular-nums shrink-0" style={{ color: 'var(--text-soft)' }}>{formatBytes(p.total_bytes)}</span>
                     <div className="w-14 h-[3px] rounded-full shrink-0" style={{ background: 'var(--bg-soft)' }}>
@@ -318,7 +334,7 @@ export default function BandwidthReport() {
               <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="ecosystem" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}ms`} />
-              <Tooltip content={<LatencyTooltip />} />
+              <Tooltip content={LatencyTooltip} />
               <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
               <Bar dataKey="hit" fill="var(--ok)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgHitLatency')} />
               <Bar dataKey="miss" fill="var(--danger)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgMissLatency')} />

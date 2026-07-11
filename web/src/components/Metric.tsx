@@ -20,7 +20,7 @@ export default function Metric({
   return (
     <div className="flex flex-col items-center text-center">
       <span
-        className="text-[10px] font-mono font-[600] uppercase tracking-[0.12em]"
+        className="text-[10px] font-mono font-[600] uppercase"
         style={{ color: 'var(--text-subtle)' }}
       >
         {label}
@@ -31,7 +31,6 @@ export default function Metric({
         style={{
           fontSize: size,
           lineHeight: 1.05,
-          letterSpacing: size >= 36 ? '-0.04em' : '-0.03em',
           fontWeight: 600,
           color: valueTone === 'ok' ? 'var(--ok-text)' : 'var(--text)',
         }}

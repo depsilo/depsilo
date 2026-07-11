@@ -19,6 +19,7 @@ import QueryErrorState from '@/components/QueryErrorState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
 
 const ECOSYSTEM_OPTIONS = [
@@ -196,7 +197,7 @@ export default function ProjectsV2() {
         label: t('type'),
         render: (v: unknown) => (
           <div className="flex items-center gap-1.5">
-            <EcosystemIcon type={v as any} size={14} />
+            {typeof v === 'string' && isAdminEcosystem(v) && <EcosystemIcon type={v} size={14} />}
             <BadgeV2 variant="ecosystem">{(v as string)?.toUpperCase()}</BadgeV2>
           </div>
         ),
@@ -217,7 +218,7 @@ export default function ProjectsV2() {
             label={t('projects.backToList')}
             onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
           />
-          <h2 className="text-[20px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
+          <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
         </div>
 
         {/* Project info */}
@@ -248,7 +249,7 @@ export default function ProjectsV2() {
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(ecosystems).map(([eco, count]) => (
                     <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)' }}>
-                      <EcosystemIcon type={eco as any} size={12} />
+                      {isAdminEcosystem(eco) && <EcosystemIcon type={eco} size={12} />}
                       <span className="text-[12px]" style={{ color: 'var(--text)' }}>{eco.toUpperCase()}</span>
                       <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{count}</span>
                     </div>

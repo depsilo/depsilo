@@ -8,6 +8,7 @@
 // their first client.
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 import ButtonV2 from '@/components/Button'
 import QueryErrorState from '@/components/QueryErrorState'
@@ -64,8 +65,7 @@ function statusColor(s: NowData['status']): string {
   return 'var(--danger)'
 }
 
-function formatRelative(seconds: number, // eslint-disable-next-line @typescript-eslint/no-explicit-any
-t: (key: string, options?: any) => string): string {
+function formatRelative(seconds: number, t: TFunction): string {
   if (seconds < 5) return t('now.justNow')
   if (seconds < 60) return t('now.secondsAgo', { count: seconds })
   if (seconds < 3600) return t('now.minutesAgo', { count: Math.floor(seconds / 60) })
@@ -73,8 +73,7 @@ t: (key: string, options?: any) => string): string {
   return t('now.daysAgo', { count: Math.floor(seconds / 86400) })
 }
 
-function formatUptime(seconds: number, // eslint-disable-next-line @typescript-eslint/no-explicit-any
-t: (key: string, options?: any) => string): string {
+function formatUptime(seconds: number, t: TFunction): string {
   const days = Math.floor(seconds / 86400)
   const hours = Math.floor((seconds % 86400) / 3600)
   if (days > 0) return t('now.uptimeDH', { days, hours })
@@ -123,7 +122,6 @@ const valueStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   color: 'var(--text)',
-  letterSpacing: '-0.01em',
   // Tabular numerals so the 5-second poll doesn't shift req/min, MB/s,
   // and upstream-count cells horizontally as their digit widths change.
   fontVariantNumeric: 'tabular-nums',

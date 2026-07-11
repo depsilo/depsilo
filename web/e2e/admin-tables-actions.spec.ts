@@ -35,7 +35,6 @@ const cases = [
 ] as const
 
 async function expectNoFocusableRows(page: Page) {
-  const rows = page.locator('tr')
   await expect.poll(async () => {
     await page.locator('body').press('Home')
     for (let index = 0; index < 40; index += 1) {

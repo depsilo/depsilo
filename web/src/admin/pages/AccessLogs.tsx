@@ -12,6 +12,7 @@ import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
 import TableViewport from '@/components/TableViewport'
 import { getApiError } from '@/lib/apiError'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AccessLog, AccessLogQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
@@ -133,7 +134,7 @@ export default function AccessLogsV2() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp')].map(h => (
-                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase tracking-[0.08em] py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </th>
                 ))}
@@ -154,7 +155,7 @@ export default function AccessLogsV2() {
                   {/* Ecosystem */}
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
-                      <EcosystemIcon type={row.adapter_type as any} size={13} />
+                      {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
                       <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.adapter_type}</span>
                     </div>
                   </td>

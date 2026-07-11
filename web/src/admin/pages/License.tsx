@@ -148,7 +148,7 @@ export default function License() {
       )}
       {/* ── Page heading ───────────────────────────── */}
       <div>
-        <h2 className="text-[20px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
+        <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>
           {t('license.title')}
         </h2>
         <p className="text-[13px] mt-1" style={{ color: 'var(--text-soft)' }}>
@@ -246,7 +246,7 @@ export default function License() {
           style={{ borderBottom: '1px solid var(--border)' }}
           onClick={() => setKeyExpanded(!keyExpanded)}
         >
-          <span className="text-[13px] font-[600] tracking-[-0.005em]" style={{ color: 'var(--text)' }}>
+          <span className="text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
             {t('license.key.title')}
           </span>
           <Icon name={keyExpanded ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--text-soft)' }} />

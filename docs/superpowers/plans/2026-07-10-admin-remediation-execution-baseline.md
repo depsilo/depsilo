@@ -237,6 +237,7 @@ web/src/i18n/zh.ts	fix(admin): rebuild webhook workflow	preserved	55580241153c78
 web/src/lib/api.ts	fix(admin): rebuild webhook workflow	mixed	79deddd9d7ca0c0f1c3e91272bdd82f971dc1ecbb91bac37564be382a3e1c8d7	api-open-audit	pending-review	2026-07-11T17:26:49Z
 web/src/i18n/en.ts	fix(admin): make tables and row actions accessible	preserved	1c97c12b6e34759c35149d22134a140695725d3e4e2274d24dc6e02fc1bc1253	i18n-current-product-copy	pending-review	2026-07-11T18:18:09Z
 web/src/i18n/zh.ts	fix(admin): make tables and row actions accessible	preserved	40e085cc19dd45c8645a3fb3fb0ebeccba910f1db19713777ead4c2d07691668	i18n-current-product-copy	pending-review	2026-07-11T18:18:09Z
+web/src/lib/api.ts	refactor(admin): type all remediated UI paths	mixed	c178146070318b4bfb0edd65608b0c48ff117d7b6cc24aeece57de62e2ad2374	api-open-audit	pending-review	2026-07-11T20:13:30Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

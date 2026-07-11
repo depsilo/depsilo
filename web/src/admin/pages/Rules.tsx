@@ -18,12 +18,14 @@ import IconButton from '@/components/IconButton'
 import QueryErrorState from '@/components/QueryErrorState'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
+import type { RuleListResponse, RuleRecord, RuleRequest, RuleTestResponse } from '@/lib/adminApi.types'
 
 const ECOSYSTEM_OPTIONS = [{ value: '*', label: 'All (*)' }, { value: 'pypi', label: 'PyPI' }, { value: 'apt', label: 'APT' }, { value: 'npm', label: 'npm' }, { value: 'go', label: 'Go' }, { value: 'cargo', label: 'Cargo' }, { value: 'maven', label: 'Maven' }, { value: 'rubygems', label: 'RubyGems' }, { value: 'composer', label: 'Composer' }, { value: 'nuget', label: 'NuGet' }, { value: 'conda', label: 'Conda' }, { value: 'cran', label: 'CRAN' }, { value: 'alpine', label: 'Alpine' }, { value: 'helm', label: 'Helm' }]
 
-interface RuleForm { ecosystem: string; package_name: string; version: string; action: 'allow' | 'deny'; reason: string }
-interface RuleRecord extends RuleForm { id: number; created_at: string }
-type RuleListPayload = RuleRecord[] | { items: RuleRecord[] }
+type RuleForm = RuleRequest
+type RuleListPayload = RuleListResponse
+type RuleTestState = RuleTestResponse | { error: string }
 const emptyForm: RuleForm = { ecosystem: '*', package_name: '', version: '*', action: 'deny', reason: '' }
 
 function upsertRule(current: AxiosResponse<RuleListPayload> | undefined, response: AxiosResponse<RuleRecord>): AxiosResponse<RuleListPayload> {
@@ -39,22 +41,22 @@ export default function RulesV2() {
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
   const [dialogOpen, setDialogOpen] = useState(false); const [editId, setEditId] = useState<number | null>(null); const [form, setForm] = useState<RuleForm>(emptyForm)
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null); const [testOpen, setTestOpen] = useState(false); const [testForm, setTestForm] = useState({ ecosystem: 'pypi', package: '', version: '' }); const [testResult, setTestResult] = useState<any>(null); const [testLoading, setTestLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null); const [testOpen, setTestOpen] = useState(false); const [testForm, setTestForm] = useState({ ecosystem: 'pypi', package: '', version: '' }); const [testResult, setTestResult] = useState<RuleTestState | null>(null); const [testLoading, setTestLoading] = useState(false)
 
   const query = useQuery({ queryKey: ['admin', 'rules'], queryFn: () => adminApi.listRules(), retry: false })
   const { data } = query
-  const rulePayload = data?.data as RuleListPayload | undefined
+  const rulePayload = data?.data
   const items = rulePayload ? (Array.isArray(rulePayload) ? rulePayload : rulePayload.items) : []
 
   const createMutation = useMutation({
-    mutationFn: async (input: RuleForm) => await adminApi.createRule(input) as AxiosResponse<RuleRecord>,
+    mutationFn: (input: RuleForm) => adminApi.createRule(input),
     onSuccess: (response) => {
       queryClient.setQueryData<AxiosResponse<RuleListPayload>>(['admin', 'rules'], (current) => upsertRule(current, response))
       closeDialog()
     },
   })
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data: input }: { id: number; data: RuleForm }) => await adminApi.updateRule(id, input) as AxiosResponse<RuleRecord>,
+    mutationFn: ({ id, data: input }: { id: number; data: RuleForm }) => adminApi.updateRule(id, input),
     onSuccess: (response) => {
       queryClient.setQueryData<AxiosResponse<RuleListPayload>>(['admin', 'rules'], (current) => upsertRule(current, response))
       closeDialog()
@@ -66,7 +68,7 @@ export default function RulesV2() {
   function openCreate() { createMutation.reset(); setEditId(null); setForm({ ...emptyForm }); setDialogOpen(true) }
   function openEdit(rule: RuleRecord) { updateMutation.reset(); setEditId(rule.id); setForm({ ecosystem: rule.ecosystem || '*', package_name: rule.package_name || '', version: rule.version || '*', action: rule.action || 'deny', reason: rule.reason || '' }); setDialogOpen(true) }
   function handleSubmit(e: React.FormEvent) { e.preventDefault(); if (!canWrite) return; if (editId) updateMutation.mutate({ id: editId, data: form }); else createMutation.mutate(form) }
-  async function handleTest() { setTestLoading(true); setTestResult(null); try { const res = await adminApi.testRule(testForm); setTestResult(res.data) } catch (err: any) { setTestResult({ error: err?.response?.data?.message || 'Test failed' }) } finally { setTestLoading(false) } }
+  async function handleTest() { setTestLoading(true); setTestResult(null); try { const res = await adminApi.testRule(testForm); setTestResult(res.data) } catch (error: unknown) { setTestResult({ error: getApiError(error).message }) } finally { setTestLoading(false) } }
   const isSaving = createMutation.isPending || updateMutation.isPending
   const saveError = editId ? updateMutation.error : createMutation.error
   const apiError = getApiError(query.error)
@@ -75,7 +77,7 @@ export default function RulesV2() {
   // 402s, so there is no Pro paywall branch to render.
 
   const columns = [
-    { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => <div className="flex items-center gap-1.5">{(v as string) !== '*' && <EcosystemIcon type={v as any} size={14} />}<BadgeV2 variant="ecosystem">{(v as string) === '*' ? t('rules.allEcosystems') : (v as string)?.toUpperCase()}</BadgeV2></div> },
+    { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<BadgeV2 variant="ecosystem">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystem.toUpperCase()}</BadgeV2></div> } },
     { key: 'package_name', label: t('rules.packageName'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
     { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="error">{t('rules.deny')}</BadgeV2> },
@@ -139,13 +141,13 @@ export default function RulesV2() {
           <InputV2 label={t('rules.packageName')} mono value={testForm.package} onChange={(e) => setTestForm({ ...testForm, package: e.target.value })} placeholder={t('rules.packagePlaceholder')} />
           <InputV2 label={t('rules.version')} mono value={testForm.version} onChange={(e) => setTestForm({ ...testForm, version: e.target.value })} placeholder={t('rules.versionPlaceholder')} />
           <ButtonV2 onClick={handleTest} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
-          {testResult && !testResult.error && (
+          {testResult && !('error' in testResult) && (
             <div className="rounded-[4px] p-4" style={{ background: testResult.allowed ? 'var(--ok-fill)' : 'var(--danger-fill)', border: `1px solid ${testResult.allowed ? 'var(--ok-border)' : 'var(--danger)'}` }}>
               <div className="flex items-center gap-2 mb-2"><Icon name={testResult.allowed ? 'check_circle' : 'cancel'} size="sm" style={{ color: testResult.allowed ? 'var(--ok-text)' : 'var(--danger)' }} /><span className="font-[400] text-[14px]" style={{ color: testResult.allowed ? 'var(--ok-text)' : 'var(--danger)' }}>{testResult.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}</span></div>
               {testResult.matched_rule ? (<div className="text-[12px] space-y-1" style={{ color: 'var(--text-soft)' }}><p className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.matchedRule')}:</p><p className="font-mono">{testResult.matched_rule.ecosystem}/{testResult.matched_rule.package_name}@{testResult.matched_rule.version} → {testResult.matched_rule.action}</p>{testResult.matched_rule.reason && <p>{testResult.matched_rule.reason}</p>}</div>) : (<p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('rules.noMatch')}</p>)}
             </div>
           )}
-          {testResult?.error && <div className="rounded-[4px] p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
+          {testResult && 'error' in testResult && <div className="rounded-[4px] p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
         </div>
       </ModalV2>
     </div>

@@ -8,20 +8,22 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
-import TrendsCard, { type TrendsRange } from '@/admin/components/TrendsCard'
+import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/components/TrendsCard'
 import EmptyState from '@/components/EmptyState'
 import ButtonV2 from '@/components/Button'
 import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
 import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 import { getApiError } from '@/lib/apiError'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
+import type { DashboardResponse } from '@/lib/adminApi.types'
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
 } from 'recharts'
 
 // ── Top packages (merged, sorted by hits) ──────────────────────────
 
-function TopPackagesList({ topPackages }: { topPackages: { pypi?: any[]; apt?: any[] } }) {
+function TopPackagesList({ topPackages }: { topPackages: DashboardResponse['top_packages'] }) {
   const { t } = useTranslation()
 
   const merged = useMemo(() => {
@@ -58,7 +60,7 @@ function TopPackagesList({ topPackages }: { topPackages: { pypi?: any[]; apt?: a
           >
             {i + 1}
           </span>
-          <EcosystemIcon type={p.ecosystem as any} size={12} />
+          {isAdminEcosystem(p.ecosystem) && <EcosystemIcon type={p.ecosystem} size={12} />}
           <span className="font-mono text-[12px] truncate flex-1" style={{ color: 'var(--text)' }}>
             {p.name}
           </span>
@@ -130,14 +132,15 @@ export default function DashboardV2() {
     return <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void refetch() }} />
   }
 
-  const last24h = dashboard?.last_24h || {} as any
-  const prev24h = dashboard?.prev_24h || {} as any
+  const last24h = dashboard?.last_24h ?? { total_requests: 0, hit_count: 0, hit_rate: 0, bytes_served: 0, avg_latency_ms: 0 }
+  const prev24h = dashboard?.prev_24h ?? { total_requests: 0, hit_count: 0, hit_rate: 0, bytes_served: 0, avg_latency_ms: 0 }
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
-  const rawTrendPoints = (trendsQuery.data?.data?.points || []) as any[]
+  const rawTrendPoints: RawTrendPoint[] = trendsQuery.data?.data.points ?? []
   const bandwidthData = bandwidthQuery.data
   const bandwidthSummary = bandwidthData?.data?.summary
   const bandwidthDaily = bandwidthData?.data?.daily || []
+  const cacheUsagePercent = dashboard?.cache_usage_percent
 
   function formatTimeSaved(ms: number) {
     if (ms <= 0) return '0s'
@@ -195,17 +198,17 @@ export default function DashboardV2() {
       </section>
 
       {/* ── Storage alert (kept colored for emphasis) ── */}
-      {dashboard?.cache_usage_percent > 80 && (
+      {cacheUsagePercent !== undefined && cacheUsagePercent > 80 && (
         <div
           className="flex flex-wrap items-center gap-2 rounded-[5px] px-4 py-2.5 text-[13px]"
           style={{
-            background: dashboard.cache_usage_percent > 95 ? 'var(--danger-fill)' : 'var(--warn-fill)',
-            color: dashboard.cache_usage_percent > 95 ? 'var(--danger-text)' : 'var(--warn-text)',
-            border: `0.5px solid ${dashboard.cache_usage_percent > 95 ? 'var(--danger-border)' : 'var(--warn-border)'}`,
+            background: cacheUsagePercent > 95 ? 'var(--danger-fill)' : 'var(--warn-fill)',
+            color: cacheUsagePercent > 95 ? 'var(--danger-text)' : 'var(--warn-text)',
+            border: `0.5px solid ${cacheUsagePercent > 95 ? 'var(--danger-border)' : 'var(--warn-border)'}`,
           }}
         >
           <Icon name="warning" size="sm" />
-          {t('dashboard.storageWarning', { percent: dashboard.cache_usage_percent?.toFixed(1) })}
+          {t('dashboard.storageWarning', { percent: cacheUsagePercent.toFixed(1) })}
         </div>
       )}
 

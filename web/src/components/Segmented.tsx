@@ -36,7 +36,6 @@ export default function Segmented({ options, value, onChange }: Props) {
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
               fontWeight: active ? 600 : 400,
-              letterSpacing: '0.01em',
               color: active ? 'var(--text)' : 'var(--text-soft)',
               background: active ? 'var(--bg-card)' : 'transparent',
               border: active ? '0.5px solid var(--border-strong)' : '0.5px solid transparent',

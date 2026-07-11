@@ -30,7 +30,7 @@ export default function DataTableV2<T extends Record<string, unknown>>({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="py-2 px-3 first:pl-0 text-left text-[10px] font-mono font-[600] uppercase tracking-[0.08em]"
+                className="py-2 px-3 first:pl-0 text-left text-[10px] font-mono font-[600] uppercase"
                 style={{ color: 'var(--text-subtle)' }}
               >
                 {col.label}

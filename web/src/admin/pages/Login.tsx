@@ -9,6 +9,7 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import { authApi, statsApi } from '@/lib/api'
 import { formatVersion } from '@/lib/utils'
 import { LANGUAGES } from '@/lib/ecosystemData'
+import { isAdminEcosystem } from '@/lib/adminApi.types'
 
 interface LoginStats {
   service?: { version?: string }
@@ -137,7 +138,6 @@ export default function LoginV2() {
                 style={{
                   fontSize: 17,
                   fontWeight: 600,
-                  letterSpacing: '-0.025em',
                   color: 'var(--text)',
                 }}
               >
@@ -149,7 +149,6 @@ export default function LoginV2() {
                 margin: 0,
                 fontSize: 24,
                 fontWeight: 600,
-                letterSpacing: '-0.025em',
                 color: 'var(--text)',
                 lineHeight: 1.15,
               }}
@@ -239,7 +238,6 @@ export default function LoginV2() {
                 margin: 0,
                 fontSize: 22,
                 fontWeight: 600,
-                letterSpacing: '-0.025em',
                 lineHeight: 1.15,
                 color: 'var(--text)',
               }}
@@ -268,7 +266,7 @@ export default function LoginV2() {
                     opacity: 0.72,
                   }}
                 >
-                  <EcosystemIcon type={lang.iconAdapter as any} size={18} useColor />
+                  {isAdminEcosystem(lang.iconAdapter) && <EcosystemIcon type={lang.iconAdapter} size={18} useColor />}
                 </span>
               ))}
             </div>
@@ -300,7 +298,7 @@ export default function LoginV2() {
                   borderLeft: i === 0 ? 'none' : '0.5px solid var(--border)',
                 }}
               >
-                <span style={{ fontSize: 10.5, color: 'var(--text-subtle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: 10.5, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>
                   {s.label}
                 </span>
                 <span
@@ -308,7 +306,6 @@ export default function LoginV2() {
                   style={{
                     fontSize: 22,
                     fontWeight: 600,
-                    letterSpacing: '-0.02em',
                     color: 'var(--text)',
                     lineHeight: 1,
                   }}

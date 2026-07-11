@@ -11,6 +11,10 @@ import type {
   ApproveSuggestionResponse,
   AuditLogListResponse,
   AuditLogQuery,
+  BandwidthReportResponse,
+  CacheDistributionResponse,
+  CacheListResponse,
+  CacheQuery,
   CheckUpstreamResponse,
   CreateAPITokenRequest,
   CreateAPITokenResponse,
@@ -19,6 +23,8 @@ import type {
   CreateUserRequest,
   DeleteProjectResponse,
   DeleteUpstreamResponse,
+  DashboardResponse,
+  DashboardTrendsResponse,
   DismissSuggestionResponse,
   LoginResponse,
   Principal,
@@ -28,8 +34,14 @@ import type {
   ProjectPackageQuery,
   ProjectPackagesResponse,
   ProjectSBOMQuery,
+  QuarantineQuery,
   RefreshResponse,
   RegenerateProjectTokenResponse,
+  RuleListResponse,
+  RuleRecord,
+  RuleRequest,
+  RuleTestRequest,
+  RuleTestResponse,
   SecurityBaseQuery,
   SecurityDashboard,
   SecurityImportResponse,
@@ -39,6 +51,7 @@ import type {
   SecurityScanResponse,
   SecuritySuggestionPage,
   SecurityVulnerabilityPage,
+  SetupRequest,
   UpdateProjectRequest,
   UpdateAdminSettingsRequest,
   UpdateAdminSettingsResponse,
@@ -95,15 +108,15 @@ export const authApi = {
 }
 
 export const adminApi = {
-  getDashboard: () => api.get('/admin/dashboard'),
+  getDashboard: () => api.get<DashboardResponse>('/admin/dashboard'),
   getDashboardTrends: (range_: string = '7d') =>
-    api.get('/admin/dashboard/trends', { params: { range: range_ } }),
+    api.get<DashboardTrendsResponse>('/admin/dashboard/trends', { params: { range: range_ } }),
 
   // Cache
-  listCache: (params: Record<string, any>) => api.get('/admin/cache', { params }),
+  listCache: (params: CacheQuery) => api.get<CacheListResponse>('/admin/cache', { params }),
   deleteCache: (id: number) => api.delete(`/admin/cache/${id}`),
   cleanupCache: () => api.post('/admin/cache/cleanup'),
-  getCacheDistribution: () => api.get('/admin/cache/distribution'),
+  getCacheDistribution: () => api.get<CacheDistributionResponse>('/admin/cache/distribution'),
   warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post('/admin/cache/warmup', data),
 
   // Upstreams
@@ -139,15 +152,15 @@ export const adminApi = {
   exportAuditLogs: (params: AuditLogQuery) => api.get<Blob>('/admin/audit-logs/export', { params, responseType: 'blob' }),
 
   // Package Rules (Pro)
-  listRules: () => api.get('/admin/rules'),
-  createRule: (data: any) => api.post('/admin/rules', data),
-  updateRule: (id: number, data: any) => api.put(`/admin/rules/${id}`, data),
+  listRules: () => api.get<RuleListResponse>('/admin/rules'),
+  createRule: (data: RuleRequest) => api.post<RuleRecord>('/admin/rules', data),
+  updateRule: (id: number, data: RuleRequest) => api.put<RuleRecord>(`/admin/rules/${id}`, data),
   deleteRule: (id: number) => api.delete(`/admin/rules/${id}`),
-  testRule: (data: { ecosystem: string; package: string; version: string }) => api.post('/admin/rules/test', data),
+  testRule: (data: RuleTestRequest) => api.post<RuleTestResponse>('/admin/rules/test', data),
 
   // Bandwidth report
   getBandwidthReport: (params: { range?: string; start?: string; end?: string }) =>
-    api.get('/admin/bandwidth', { params }),
+    api.get<BandwidthReportResponse>('/admin/bandwidth', { params }),
 
   // Package Security (Pro)
   getSecurityDashboard: () => api.get<SecurityDashboard>('/admin/security/dashboard'),
@@ -162,8 +175,8 @@ export const adminApi = {
   updateSecurityPolicy: (ecosystem: string, data: UpdateSecurityPolicyRequest) => api.put<SecurityPolicy>(`/admin/security/policies/${ecosystem}`, data),
 
   // Supply-chain quarantine (open-source wedge — NOT Pro)
-  listQuarantineEvents: (params: Record<string, any>) => api.get('/admin/quarantine/events', { params }),
-  listQuarantineApprovals: (params: Record<string, any>) => api.get('/admin/quarantine/approvals', { params }),
+  listQuarantineEvents: (params: QuarantineQuery) => api.get('/admin/quarantine/events', { params }),
+  listQuarantineApprovals: (params: QuarantineQuery) => api.get('/admin/quarantine/approvals', { params }),
   approveQuarantine: (data: { ecosystem: string; package: string; version: string; reason: string }) =>
     api.post('/admin/quarantine/approve', data),
   revokeQuarantineApproval: (id: number, data: { reason: string }) =>
@@ -192,7 +205,7 @@ export const adminApi = {
 // Setup wizard (no auth)
 export const setupApi = {
   getStatus: () => api.get('/setup/status'),
-  complete: (data: any) => api.post('/setup/complete', data),
+  complete: (data: SetupRequest) => api.post('/setup/complete', data),
 }
 
 // License / entitlement types
