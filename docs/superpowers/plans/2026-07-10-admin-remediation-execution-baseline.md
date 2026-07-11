@@ -227,5 +227,6 @@ After both reviewer turns approve, the controller appends one row: path, exact s
 <!-- OVERLAP_APPROVALS_BEGIN -->
 internal/api/router.go	fix(auth): enforce admin route capabilities	chore(plan): approve Plan 01 Task 6 overlaps	preserved	07caebaa9d5b4f586bb68aff5d72722156f69cb3	945ca5fe5abefe1289aa8a427afd70266de06b9e5de4a441d7855d5b8da2ddfa	router-existing-semantics	spec-approved:Plan01-T6	quality-approved:Plan01-T6	2026-07-11T09:10:19Z
 web/src/lib/api.ts	fix(admin-ui): consume typed principal contracts	chore(plan): approve Plan 01 Task 8 overlaps	mixed	0c502b6504967708fee416304b420a12db73dd45	d1708fa0e3f9f6aa356282bee43f448ee9d80c0242166ece0bf7b07d0e095afb	api-open-audit	spec-approved:Plan01-T8	quality-approved:Plan01-T8	2026-07-11T10:04:00Z
+config.example.toml	feat(config): define validated admin settings model	chore(plan): approve Plan 02 Task 1 overlaps	preserved	8b45f4cfb40fa749022de78b5abf6f46dc06fe3d	cec8205d2f614d89debf27bb10e18eae8e27aa22d3385fef368b9555ba285afa	config-example-supply-chain	spec-approved:Plan02-T1	quality-approved:Plan02-T1	2026-07-11T10:17:42Z
 <!-- OVERLAP_APPROVALS_END -->
 ```
