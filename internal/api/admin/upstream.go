@@ -2,194 +2,191 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
+	"depsilo/internal/upstream"
 )
 
 type UpstreamHandler struct {
-	db *gorm.DB
+	registry upstreamRegistry
+	initErr  error
+	legacyDB *gorm.DB
 }
 
-func NewUpstreamHandler(database *gorm.DB) *UpstreamHandler {
-	return &UpstreamHandler{db: database}
+type upstreamRegistry interface {
+	List() []upstream.RuntimeUpstream
+	Create(context.Context, upstream.MutationInput) (upstream.RuntimeUpstream, error)
+	Update(context.Context, uint, upstream.MutationInput) (upstream.RuntimeUpstream, error)
+	Delete(context.Context, uint) (upstream.RuntimeUpstream, error)
+	Check(context.Context, uint) (upstream.RuntimeUpstream, upstream.ProbeResult, error)
+}
+
+// NewUpstreamHandler accepts a database temporarily for callers that have not
+// yet adopted the runtime registry dependency. Mutations always go through a
+// registry, so HTTP success reflects published runtime state.
+func NewUpstreamHandler(source any) *UpstreamHandler {
+	switch value := source.(type) {
+	case upstreamRegistry:
+		return &UpstreamHandler{registry: value}
+	case *gorm.DB:
+		registry, err := registryFromDatabase(value)
+		return &UpstreamHandler{registry: registry, initErr: err, legacyDB: value}
+	default:
+		return &UpstreamHandler{initErr: errors.New("unsupported upstream handler dependency")}
+	}
+}
+
+func registryFromDatabase(database *gorm.DB) (*upstream.Registry, error) {
+	var ecosystems []string
+	if err := database.Model(&db.UpstreamRecord{}).Distinct("adapter_type").Order("adapter_type").Pluck("adapter_type", &ecosystems).Error; err != nil {
+		return nil, err
+	}
+	return upstream.NewRegistry(database, ecosystems)
+}
+
+func (h *UpstreamHandler) ready(c *gin.Context) bool {
+	if h.initErr == nil && h.registry != nil {
+		return true
+	}
+	err := h.initErr
+	if err == nil {
+		err = errors.New("upstream registry unavailable")
+	}
+	writeUpstreamError(c, err)
+	return false
 }
 
 func (h *UpstreamHandler) List(c *gin.Context) {
-	var upstreams []db.UpstreamRecord
-	h.db.Order("adapter_type, priority").Find(&upstreams)
-	if !principalCanViewCredentials(c) {
-		for i := range upstreams {
-			upstreams[i].URL = maskURLUserInfo(upstreams[i].URL)
-			upstreams[i].Proxy = maskURLUserInfo(upstreams[i].Proxy)
-		}
+	if h.legacyDB != nil {
+		h.listLegacy(c)
+		return
 	}
-	c.JSON(http.StatusOK, upstreams)
+	if !h.ready(c) {
+		return
+	}
+	items := h.registry.List()
+	response := make([]adminUpstreamResponse, 0, len(items))
+	canViewCredentials := principalCanViewCredentials(c)
+	for _, item := range items {
+		response = append(response, mapAdminUpstream(item, canViewCredentials))
+	}
+	c.JSON(http.StatusOK, upstreamListResponse{Items: response, Total: len(response)})
 }
 
-type upstreamRequest struct {
-	AdapterType   string `json:"adapter_type" binding:"required"`
-	Name          string `json:"name" binding:"required"`
-	URL           string `json:"url" binding:"required"`
-	Proxy         string `json:"proxy"`
-	Priority      int    `json:"priority"`
-	ProbeMode     string `json:"probe_mode"`
-	ProbeInterval string `json:"probe_interval"`
+func (h *UpstreamHandler) listLegacy(c *gin.Context) {
+	var records []db.UpstreamRecord
+	result := h.legacyDB.Order("adapter_type, priority").Find(&records)
+	if result.Error != nil {
+		writeUpstreamError(c, result.Error)
+		return
+	}
+	if !principalCanViewCredentials(c) {
+		for i := range records {
+			records[i].URL = maskURLUserInfo(records[i].URL)
+			records[i].Proxy = maskURLUserInfo(records[i].Proxy)
+		}
+	}
+	c.JSON(http.StatusOK, records)
 }
 
 func (h *UpstreamHandler) Create(c *gin.Context) {
-	var req upstreamRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+	if !h.ready(c) {
 		return
 	}
-
-	probeMode := req.ProbeMode
-	if probeMode == "" {
-		probeMode = "active"
-	}
-	probeInterval := req.ProbeInterval
-	if probeInterval == "" {
-		probeInterval = "30m"
-	}
-
-	record := db.UpstreamRecord{
-		AdapterType:   req.AdapterType,
-		Name:          req.Name,
-		URL:           req.URL,
-		Proxy:         req.Proxy,
-		Priority:      req.Priority,
-		ProbeMode:     probeMode,
-		ProbeInterval: probeInterval,
-		Healthy:       true,
-		SuccessRate:   1.0,
-	}
-
-	if err := h.db.Create(&record).Error; err != nil {
-		c.JSON(http.StatusConflict, gin.H{"code": "CONFLICT", "message": "upstream name already exists"})
+	request, err := decodeUpstreamMutationRequest(c)
+	if err != nil {
+		writeBadUpstreamRequest(c, err)
 		return
 	}
+	item, err := h.registry.Create(c.Request.Context(), request.toMutation())
+	if err != nil {
+		writeUpstreamError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, mapAdminUpstream(item, principalCanViewCredentials(c)))
+}
 
-	c.JSON(http.StatusCreated, record)
+func parseUpstreamID(c *gin.Context) (uint, bool) {
+	parsed, err := strconv.ParseUint(c.Param("id"), 10, strconv.IntSize)
+	if err != nil || parsed == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid upstream id"})
+		return 0, false
+	}
+	return uint(parsed), true
 }
 
 func (h *UpstreamHandler) Update(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if !h.ready(c) {
+		return
+	}
+	id, ok := parseUpstreamID(c)
+	if !ok {
+		return
+	}
+	request, err := decodeUpstreamMutationRequest(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid id"})
+		writeBadUpstreamRequest(c, err)
 		return
 	}
-
-	var record db.UpstreamRecord
-	if err := h.db.First(&record, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "upstream not found"})
+	item, err := h.registry.Update(c.Request.Context(), id, request.toMutation())
+	if err != nil {
+		writeUpstreamError(c, err)
 		return
 	}
-
-	var req upstreamRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
-		return
-	}
-
-	updates := map[string]interface{}{
-		"adapter_type": req.AdapterType,
-		"name":         req.Name,
-		"url":          req.URL,
-		"proxy":        req.Proxy,
-		"priority":     req.Priority,
-	}
-	if req.ProbeMode != "" {
-		updates["probe_mode"] = req.ProbeMode
-	}
-	if req.ProbeInterval != "" {
-		updates["probe_interval"] = req.ProbeInterval
-	}
-
-	h.db.Model(&record).Updates(updates)
-
-	h.db.First(&record, id)
-	c.JSON(http.StatusOK, record)
+	c.JSON(http.StatusOK, mapAdminUpstream(item, principalCanViewCredentials(c)))
 }
 
 func (h *UpstreamHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if !h.ready(c) {
+		return
+	}
+	id, ok := parseUpstreamID(c)
+	if !ok {
+		return
+	}
+	item, err := h.registry.Delete(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid id"})
+		writeUpstreamError(c, err)
 		return
 	}
-
-	result := h.db.Delete(&db.UpstreamRecord{}, id)
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "upstream not found"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	c.JSON(http.StatusOK, deleteUpstreamResponse{DeletedID: item.ID, AdapterType: item.AdapterType})
 }
 
 func (h *UpstreamHandler) Check(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if !h.ready(c) {
+		return
+	}
+	id, ok := parseUpstreamID(c)
+	if !ok {
+		return
+	}
+	item, result, err := h.registry.Check(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid id"})
+		writeUpstreamError(c, err)
 		return
 	}
-
-	var record db.UpstreamRecord
-	if err := h.db.First(&record, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "upstream not found"})
-		return
+	canViewCredentials := principalCanViewCredentials(c)
+	var errorText *string
+	if result.Err != nil {
+		text := "upstream check failed"
+		if canViewCredentials {
+			text = result.Err.Error()
+		}
+		errorText = &text
 	}
-
-	// Perform actual HEAD request
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, record.URL, nil)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "CHECK_FAILED", "message": err.Error()})
-		return
-	}
-	req.Header.Set("User-Agent", "depsilo/0.1")
-
-	start := time.Now()
-	resp, fetchErr := http.DefaultClient.Do(req)
-	latencyMs := time.Since(start).Milliseconds()
-
-	healthy := false
-	if fetchErr == nil {
-		resp.Body.Close()
-		healthy = resp.StatusCode < 500
-	}
-
-	// Update DB record
-	h.db.Model(&record).Updates(map[string]interface{}{
-		"healthy":         healthy,
-		"avg_latency_ms":  latencyMs,
-		"last_checked_at": time.Now(),
-	})
-
-	// Log to latency history
-	h.db.Create(&db.UpstreamLatencyLog{
-		Name:      record.Name,
-		LatencyMs: latencyMs,
-		Healthy:   healthy,
-	})
-
-	errMsg := ""
-	if fetchErr != nil {
-		errMsg = fetchErr.Error()
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"id":         record.ID,
-		"name":       record.Name,
-		"healthy":    healthy,
-		"latency_ms": latencyMs,
-		"error":      errMsg,
+	c.JSON(http.StatusOK, checkUpstreamResponse{
+		Upstream: mapAdminUpstream(item, canViewCredentials),
+		Check: checkResultResponse{
+			Healthy:   result.Healthy,
+			LatencyMS: result.Latency.Milliseconds(),
+			CheckedAt: result.CheckedAt,
+			Error:     errorText,
+		},
 	})
 }
