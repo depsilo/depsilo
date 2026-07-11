@@ -4,7 +4,7 @@
 
 **Goal:** Make Admin Settings a truthful control plane whose whitelisted edits are atomically persisted to `config.toml`, whose runtime effect is explicitly reported, and whose UI distinguishes effective, pending-restart, environment-blocked, read-only, stale, and failed states.
 
-**Architecture:** `config.Store` owns the boundary between the file-configured snapshot and the process-effective snapshot. It reparses the current TOML for every mutation, uses the existing go-toml parser's source ranges to replace only selected scalar values, atomically writes a same-directory temporary file, and applies only `server.log_level` through the exact `zap.AtomicLevel` used by the process logger. The Gin handler is a strict DTO adapter over the Store; the React page sends only dirty fields and renders the Store's result arrays rather than inferring success from HTTP 200.
+**Architecture:** `config.Store` owns the boundary between the file-configured snapshot and the process-effective snapshot. It reparses the current TOML for every mutation, uses the existing go-toml parser's source ranges to replace only selected scalar values, atomically writes a same-directory temporary file, distinguishes non-mutating pre-rename failure from an already-committed post-rename durability warning, and applies only `server.log_level` through the exact `zap.AtomicLevel` used by the process logger. The Gin handler is a strict DTO adapter over the Store; the React page sends only dirty fields and renders the Store's result arrays rather than inferring success from HTTP 200.
 
 **Tech Stack:** Go 1.25.6, Gin 1.12, Viper 1.21, `github.com/pelletier/go-toml/v2` 2.2.4, zap 1.27, React 19, TypeScript 5.9, TanStack Query 5, Axios 1.14, Base UI wrappers from Plan 04, Playwright.
 
@@ -21,7 +21,10 @@
 - Only non-overridden `server.log_level` is hot-applied. Cache and auth fields remain at boot-effective values until restart.
 - Reject invalid duration syntax, `cache.max_size_gb <= 0`, `cache.lru_threshold` outside `1..100`, unsupported `auth.token_ttl = "never"`, unsupported log levels, empty patches, and non-whitelisted JSON fields. Never partially write an invalid patch.
 - Preserve untouched TOML bytes, including sections, key order, whitespace, comments, newline style, and file permission bits. Writes use a same-directory temporary file, file `fsync`, atomic rename, and directory `fsync`.
-- Read-only files/directories return `409 CONFIG_READ_ONLY`; failed atomic writes return `500 CONFIG_WRITE_FAILED`; malformed/unreadable current files return `500 CONFIG_READ_FAILED`; setting validation returns `422 INVALID_SETTING`. Keep the existing `{code,message}` error shape.
+- Read-only files/directories return `409 CONFIG_READ_ONLY`; a proven pre-rename atomic-write failure returns
+  `500 CONFIG_WRITE_FAILED`; malformed/unreadable current files return `500 CONFIG_READ_FAILED`; setting validation
+  returns `422 INVALID_SETTING`. Once rename commits new bytes, never report the update as failed: warn on directory
+  sync failure and align runtime with the committed file. Keep the existing `{code,message}` error shape.
 - Backend tasks in this plan are independently executable. The final frontend task starts only after Plan 01 provides `usePrincipal().canWrite` and Plan 04 Tasks 1/3/4/5 provide the strict API fixture, labelled fields/Switch, feedback/toast, responsive Tabs, and `useMediaQuery`.
 - Plan 02 exclusively owns Settings DTOs, `Settings.tsx`, Settings API typing, Settings i18n, and Settings-specific browser tests. Plan 04 owns shared components and Webhook; do not implement shared components here.
 - Mobile Settings uses horizontal tabs below 768px and a 180px vertical rail at 768px and above. All Settings form grids use `grid-cols-1 sm:grid-cols-2`; the page must not create document-level horizontal scrolling at 320px or 390px.
@@ -42,7 +45,8 @@
 - `internal/logging/production.go` — construct the production logger and return its shared `zap.AtomicLevel`.
 - `internal/logging/production_test.go` — prove changing the returned level changes the constructed logger's enabled levels.
 - `internal/config/store.go` — own configured/effective state, environment provenance, update classification, serialization, and typed Store errors.
-- `internal/config/store_test.go` — cover legal/illegal patches, no-write failures, read-only paths, concurrency, atomic failure, comment retention, overrides, and reload-after-restart.
+- `internal/config/store_test.go` — cover legal/illegal patches, no-write failures, read-only paths, concurrency,
+  pre-rename non-mutation, post-rename committed/runtime alignment, comment retention, overrides, and reload-after-restart.
 - `internal/api/admin/settings.go` — replace map responses and in-memory mutation with strict request/response structs over a small Store interface.
 - `internal/api/admin/settings_test.go` — contract-test exact GET/PUT JSON and error/status mapping.
 - `internal/api/router.go` — inject `*config.Store` into the Settings handler.
@@ -354,7 +358,11 @@ git commit -m "feat(config): define validated admin settings model"
 **Interfaces:**
 - Consumes: `SettingsPatch.entries()` from Task 1.
 - Produces: `patchSettingsDocument(document []byte, patch SettingsPatch) ([]byte, map[SettingPath]bool, error)`; the map reports all explicit setting paths after patching.
-- Produces: `atomicFileWriter.Write(path string, data []byte, mode fs.FileMode) error` and `configWritable(path string) bool`.
+- Produces: `atomicWriteOutcome{committed,durabilityErr}`,
+  `atomicFileWriter.Write(path string, data []byte, mode fs.FileMode) (atomicWriteOutcome, error)`, and
+  `configWritable(path string) bool`. A non-nil `error` is strictly pre-rename and therefore non-mutating;
+  once rename succeeds, `committed` is true and any directory-sync failure is carried only as
+  `durabilityErr`, never as a false write failure.
 
 - [ ] **Step 1: Write failing lossless-patch tests**
 
@@ -453,19 +461,45 @@ func patchSettingsDocument(document []byte, patch SettingsPatch) ([]byte, map[Se
 
 - [ ] **Step 4: Write failing atomic-write tests**
 
-Create `internal/config/atomic_write_test.go`:
+Create `internal/config/atomic_write_test.go` with the required `errors`, `os`, `path/filepath`, and `testing`
+imports:
 
 ```go
 func TestOSAtomicFileWriterReplacesAndPreservesMode(t *testing.T) {
 	dir := t.TempDir(); path := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(path, []byte("old"), 0o640); err != nil { t.Fatal(err) }
 	before, _ := os.Stat(path)
-	if err := (osAtomicFileWriter{}).Write(path, []byte("new"), before.Mode()); err != nil { t.Fatal(err) }
+	outcome, err := (osAtomicFileWriter{}).Write(path, []byte("new"), before.Mode())
+	if err != nil { t.Fatal(err) }
+	if !outcome.committed || outcome.durabilityErr != nil { t.Fatalf("outcome = %+v", outcome) }
 	after, err := os.Stat(path); if err != nil { t.Fatal(err) }
 	data, _ := os.ReadFile(path)
 	if string(data) != "new" || after.Mode().Perm() != 0o640 { t.Fatalf("data/mode = %q/%o", data, after.Mode().Perm()) }
 	if os.SameFile(before, after) { t.Fatal("expected rename to replace inode") }
 	matches, _ := filepath.Glob(filepath.Join(dir, ".config.toml.tmp-*")); if len(matches) != 0 { t.Fatalf("leftover temp files: %v", matches) }
+}
+
+func TestOSAtomicFileWriterRenameFailureIsNotCommittedAndDoesNotMutate(t *testing.T) {
+	dir := t.TempDir(); path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte("old"), 0o640); err != nil { t.Fatal(err) }
+	renameErr := errors.New("injected rename failure")
+	writer := osAtomicFileWriter{rename: func(string, string) error { return renameErr }}
+	outcome, err := writer.Write(path, []byte("new"), 0o640)
+	if !errors.Is(err, renameErr) || outcome.committed { t.Fatalf("outcome/error = %+v/%v", outcome, err) }
+	data, readErr := os.ReadFile(path); if readErr != nil { t.Fatal(readErr) }
+	if string(data) != "old" { t.Fatalf("pre-rename failure changed bytes: %q", data) }
+}
+
+func TestOSAtomicFileWriterDirectorySyncFailureIsAlreadyCommitted(t *testing.T) {
+	dir := t.TempDir(); path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte("old"), 0o640); err != nil { t.Fatal(err) }
+	syncErr := errors.New("injected directory sync failure")
+	writer := osAtomicFileWriter{syncDir: func(string) error { return syncErr }}
+	outcome, err := writer.Write(path, []byte("new"), 0o640)
+	if err != nil { t.Fatalf("committed rename reported write failure: %v", err) }
+	if !outcome.committed || !errors.Is(outcome.durabilityErr, syncErr) { t.Fatalf("outcome = %+v", outcome) }
+	data, readErr := os.ReadFile(path); if readErr != nil { t.Fatal(readErr) }
+	if string(data) != "new" { t.Fatalf("committed bytes = %q", data) }
 }
 
 func TestConfigWritableHonorsReadOnlyBits(t *testing.T) {
@@ -477,26 +511,50 @@ func TestConfigWritableHonorsReadOnlyBits(t *testing.T) {
 
 - [ ] **Step 5: Implement durable replacement**
 
-Create `internal/config/atomic_write.go` with `atomicFileWriter`, production `osAtomicFileWriter`, and this exact order:
+Create `internal/config/atomic_write.go` with `atomicWriteOutcome`, `atomicFileWriter`, production
+`osAtomicFileWriter`, and this exact order. The optional function fields are failure seams for same-package tests;
+zero values select `os.Rename` and the real directory sync:
 
 ```go
-func (osAtomicFileWriter) Write(path string, data []byte, mode fs.FileMode) (err error) {
+type atomicWriteOutcome struct {
+	committed bool
+	durabilityErr error
+}
+
+type atomicFileWriter interface {
+	Write(path string, data []byte, mode fs.FileMode) (atomicWriteOutcome, error)
+}
+
+type osAtomicFileWriter struct {
+	rename func(string, string) error
+	syncDir func(string) error
+}
+
+func (w osAtomicFileWriter) Write(path string, data []byte, mode fs.FileMode) (outcome atomicWriteOutcome, err error) {
 	dir, base := filepath.Dir(path), filepath.Base(path)
 	tmp, err := os.CreateTemp(dir, "."+base+".tmp-*")
-	if err != nil { return err }
+	if err != nil { return outcome, err }
 	tmpName := tmp.Name()
 	defer func() { tmp.Close(); if err != nil { os.Remove(tmpName) } }()
-	if err = tmp.Chmod(mode.Perm()); err != nil { return err }
-	if _, err = tmp.Write(data); err != nil { return err }
-	if err = tmp.Sync(); err != nil { return err }
-	if err = tmp.Close(); err != nil { return err }
-	if err = os.Rename(tmpName, path); err != nil { return err }
-	d, err := os.Open(dir)
-	if err != nil { return err }
-	defer d.Close()
-	return d.Sync()
+	if err = tmp.Chmod(mode.Perm()); err != nil { return outcome, err }
+	if _, err = tmp.Write(data); err != nil { return outcome, err }
+	if err = tmp.Sync(); err != nil { return outcome, err }
+	if err = tmp.Close(); err != nil { return outcome, err }
+	rename := w.rename
+	if rename == nil { rename = os.Rename }
+	if err = rename(tmpName, path); err != nil { return outcome, err }
+	outcome.committed = true
+	syncDir := w.syncDir
+	if syncDir == nil { syncDir = syncDirectory }
+	outcome.durabilityErr = syncDir(dir)
+	return outcome, nil
 }
 ```
+
+`syncDirectory` opens the directory, calls `Sync`, and closes it, returning the first error. No operation after
+`os.Rename` may be returned through the ordinary `error` channel: the pathname already contains the new bytes.
+Callers must treat `committed=true` as the authoritative disk state, align runtime state, and may emit
+`durabilityErr` only as a structured durability warning.
 
 `configWritable` first rejects an existing file with no write bits and a directory with no write bits, then creates/closes/removes a probe temp file in the same directory. Missing parent directories are not created by Admin Settings and report false.
 
@@ -709,7 +767,9 @@ func assertStoreCode(t *testing.T, err error, want StoreErrorCode) {
 }
 
 type failingWriter struct{ err error }
-func (w failingWriter) Write(string, []byte, fs.FileMode) error { return w.err }
+func (w failingWriter) Write(string, []byte, fs.FileMode) (atomicWriteOutcome, error) {
+	return atomicWriteOutcome{}, w.err
+}
 
 func TestStoreUpdatePersistsClassifiesAndPreservesComments(t *testing.T) {
 	path, store, level := newStoreFixture(t)
@@ -764,11 +824,11 @@ func TestStoreUpdateReadOnlyFile(t *testing.T) {
 	if !bytes.Equal(after, before) { t.Fatal("read-only update changed disk") }
 }
 
-func TestStoreUpdateAtomicFailureLeavesFileAndEffectiveUntouched(t *testing.T) {
+func TestStoreUpdatePreRenameFailureLeavesFileAndEffectiveUntouched(t *testing.T) {
 	clearSettingsEnvironment(t)
 	path := writeStoreFixture(t)
 	cfg, level := loadStoreFixture(t, path)
-	store := newStore(path, cfg, level, failingWriter{err: errors.New("rename failed")})
+	store := newStore(path, cfg, level, failingWriter{err: errors.New("injected pre-rename failure")})
 	before, _ := os.ReadFile(path)
 	value := "debug"
 	_, err := store.Update(context.Background(), SettingsPatch{Server:&SettingsServerPatch{LogLevel:&value}})
@@ -777,6 +837,25 @@ func TestStoreUpdateAtomicFailureLeavesFileAndEffectiveUntouched(t *testing.T) {
 	if !bytes.Equal(after, before) { t.Fatal("failed atomic write changed disk") }
 	state, err := store.Snapshot(context.Background()); if err != nil { t.Fatal(err) }
 	if state.Effective.Server.LogLevel != "info" || level.Level() != zap.InfoLevel { t.Fatalf("effective/level changed: %+v %s", state.Effective, level.Level()) }
+}
+
+func TestStoreUpdatePostRenameSyncFailureReturnsCommittedResultAndAlignsRuntime(t *testing.T) {
+	clearSettingsEnvironment(t)
+	path := writeStoreFixture(t)
+	cfg, level := loadStoreFixture(t, path)
+	store := newStore(path, cfg, level, osAtomicFileWriter{
+		syncDir: func(string) error { return errors.New("directory sync failed after rename") },
+	})
+	value := "debug"
+	result, err := store.Update(context.Background(), SettingsPatch{Server:&SettingsServerPatch{LogLevel:&value}})
+	if err != nil { t.Fatalf("committed update reported failure: %v", err) }
+	assertPaths(t, result.AppliedNow, []SettingPath{SettingServerLogLevel})
+	data, readErr := os.ReadFile(path); if readErr != nil { t.Fatal(readErr) }
+	if !bytes.Contains(data, []byte(`log_level = "debug"`)) { t.Fatalf("committed file not returned as success:\n%s", data) }
+	state, snapshotErr := store.Snapshot(context.Background()); if snapshotErr != nil { t.Fatal(snapshotErr) }
+	if state.Effective.Server.LogLevel != "debug" || level.Level() != zap.DebugLevel {
+		t.Fatalf("committed disk/runtime diverged: %+v %s", state.Effective, level.Level())
+	}
 }
 
 func TestStoreConcurrentUpdatesMergeDistinctFields(t *testing.T) {
@@ -891,8 +970,13 @@ var settingEnvNames = map[SettingPath]string{
 4. Patch only the remaining request fields and validate the complete decoded document.
 5. If no fields changed, return the current state with four allocated empty result slices and do not touch the file.
 6. Return `StoreConfigReadOnly` if the permission/probe check fails.
-7. Call the atomic writer with the original permission bits (or `0644` for a missing file); map every failure to `StoreConfigWriteFailed`.
-8. Only after persistence succeeds, apply a changed, non-overridden log level with `s.logLevel.SetLevel(parsed.Level())` and update `s.effective.Server.LogLevel`.
+7. Call the atomic writer with the original permission bits (or `0644` for a missing file). Only a returned error
+   with `committed=false` maps to `StoreConfigWriteFailed`; its tests must prove the old pathname bytes are unchanged.
+8. When `committed=true`, treat the new file as authoritative even when `durabilityErr` is non-nil: emit that value
+   only through
+   `zap.L().Warn("config rename committed but directory sync failed", zap.String("path", s.path), zap.Error(outcome.durabilityErr))`,
+   never return it as `CONFIG_WRITE_FAILED`, then apply a changed, non-overridden log level with
+   `s.logLevel.SetLevel(parsed.Level())` and update `s.effective.Server.LogLevel` before returning success.
 9. Build result lists in canonical editable order: overridden changes -> blocked; non-overridden log -> applied; all other non-overridden changes -> restart required.
 10. Build `pending_restart` from all current configured/effective differences, not merely this request's changes.
 
@@ -1385,12 +1469,13 @@ cd web
 npm run test:e2e -- admin-settings.spec.ts
 npm run type-check
 npm run build
-npx eslint src/admin/pages/Settings.tsx src/lib/api.ts src/lib/adminApi.types.ts
 cd ..
 python3 scripts/i18n-audit.py
 ```
 
-Expected: all commands PASS; browser test records no unmatched `/api/v1/**` request or console error.
+Expected: all commands PASS; browser test records no unmatched `/api/v1/**` request or console error. ESLint runs later
+from Plan 04 Task 11's sole authoritative `web/admin-remediation-eslint-files.txt` manifest, which includes this task's
+Settings test and source paths; do not invent an earlier ad hoc lint scope.
 
 - [ ] **Step 8: Commit the Settings frontend**
 

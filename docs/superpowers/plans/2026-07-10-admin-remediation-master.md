@@ -20,6 +20,8 @@
 - Every subsystem task keeps its own TDD cycle and commit. Do not squash intermediate review points while implementation is active.
 - No new frontend runtime dependency is allowed. The only new frontend packages are the approved development dependencies `@playwright/test` and `@axe-core/playwright`.
 - Do not clear unrelated lint debt or refactor untouched adapters. Modified files must be typed, formatted, and lint-clean within the declared scope.
+- `web/admin-remediation-eslint-files.txt` is the sole frontend ESLint scope authority after Plan 04 Task 11 creates
+  it. Master gates must consume its exact paths and must never reconstruct lint scope from Git diffs.
 
 ---
 
@@ -524,11 +526,16 @@ Expected: PASS with `Plan 01 exact business commit count: 8; overlap approval co
 
 - [ ] **Step 1: Execute Plan 02 Tasks 1-2**
 
-Keep `github.com/pelletier/go-toml/v2` at `v2.2.4`; source-range usage is isolated in `toml_patch.go`. Verify unchanged bytes, comments, CRLF, unknown sections, mode bits, atomic rename, and failed-write non-mutation.
+Keep `github.com/pelletier/go-toml/v2` at `v2.2.4`; source-range usage is isolated in `toml_patch.go`. Verify
+unchanged bytes, comments, CRLF, unknown sections, mode bits, atomic rename, pre-rename failure non-mutation, and the
+explicit post-rename outcome: a directory-sync error is `committed=true`, not a false write failure.
 
 - [ ] **Step 2: Execute Plan 02 Tasks 3-4**
 
-Every server entry point must receive the same `zap.AtomicLevel` used by the process logger. Only a non-overridden `server.log_level` update calls it; Cache and Auth remain boot-effective.
+Every server entry point must receive the same `zap.AtomicLevel` used by the process logger. Only a non-overridden
+`server.log_level` update calls it; Cache and Auth remain boot-effective. When rename committed but directory sync
+reports a durability warning, the Store returns the committed Settings result and aligns this same runtime level;
+only a proven pre-rename failure maps to `CONFIG_WRITE_FAILED`.
 
 - [ ] **Step 3: Execute Plan 02 Task 5**
 
@@ -543,7 +550,9 @@ go test -race ./internal/config ./internal/api/admin ./internal/server
 go test ./...
 ```
 
-Expected: PASS. Exact error mappings include 400 malformed JSON, 409 `CONFIG_READ_ONLY`, 422 `INVALID_SETTING`, and 500 read/write failures; invalid patches never alter disk or runtime state.
+Expected: PASS. Exact error mappings include 400 malformed JSON, 409 `CONFIG_READ_ONLY`, 422 `INVALID_SETTING`, and
+500 read failures or pre-rename write failures; invalid/pre-rename-failed patches never alter disk or runtime state,
+while a post-rename directory-sync warning returns committed success with disk and runtime aligned.
 
 ### Task 4: Land the dynamic Upstream Registry backend
 
@@ -650,13 +659,14 @@ cd web
 npm run type-check
 npm run build
 npm run test:e2e -- admin-settings.spec.ts
-npx eslint src/admin/pages/Settings.tsx src/admin/pages/Upstreams.tsx src/lib/api.ts src/lib/adminApi.types.ts
 cd ..
 python3 scripts/i18n-audit.py
 go test -race ./internal/config ./internal/upstream ./internal/api/... ./internal/server
 ```
 
-Expected: PASS; Settings never reports inferred success, and Upstream mutations update the runtime row returned by the server.
+Expected: PASS; Settings never reports inferred success, and Upstream mutations update the runtime row returned by
+the server. Touched-file ESLint is intentionally deferred until Plan 04 Task 11 creates the sole authoritative
+`web/admin-remediation-eslint-files.txt` manifest.
 
 ### Task 7: Finish every Admin route and UI state
 
@@ -960,39 +970,31 @@ Run:
 
 ```bash
 bash -euo pipefail <<'BASH'
-artifact=docs/superpowers/plans/2026-07-10-admin-remediation-execution-baseline.md
-baseline_sha=$(awk '$1 == "Baseline" && $2 == "SHA:" {print $3}' "$artifact")
-[[ "$baseline_sha" =~ ^[0-9a-f]{40}$ ]]
-git cat-file -e "$baseline_sha^{commit}"
-
-declare -A starting_dirty=()
-while IFS= read -r path; do
-  [[ -n "$path" ]] && starting_dirty["$path"]=1
-done < <(awk '/<!-- DIRTY_PATHS_BEGIN -->/{capture=1;next}/<!-- DIRTY_PATHS_END -->/{capture=0}capture' "$artifact")
-
-mapfile -d '' -t candidates < <(git diff --name-only -z --diff-filter=ACMR "$baseline_sha"..HEAD -- ':(glob)web/src/**/*.ts' ':(glob)web/src/**/*.tsx')
-ui_files=()
-for path in "${candidates[@]}"; do
-  [[ ${starting_dirty[$path]+present} ]] && continue
-  [[ "$path" == web/* ]]
-  ui_files+=("${path#web/}")
-done
-
 cd web
 npm run type-check
 npm run type-check:e2e
 npm run build
 npm run test:e2e
-if (( ${#ui_files[@]} > 0 )); then
-  printf '%s\0' "${ui_files[@]}" | xargs -0 -r npx --no-install eslint
-fi
-printf 'eslint checked %d remediation-owned TS/TSX files; starting dirty paths were excluded\n' "${#ui_files[@]}"
+manifest=admin-remediation-eslint-files.txt
+[[ -s "$manifest" ]]
+mapfile -t ui_files < "$manifest"
+[[ ${#ui_files[@]} -gt 0 ]]
+[[ -z $(printf '%s\n' "${ui_files[@]}" | sort | uniq -d) ]]
+for path in "${ui_files[@]}"; do
+  [[ "$path" =~ ^[A-Za-z0-9._/-]+$ && "$path" != /* && "$path" != ../* && "$path" != */../* ]]
+  [[ -f "$path" ]] || { printf 'missing ESLint manifest path: %s\n' "$path" >&2; exit 1; }
+done
+printf '%s\0' "${ui_files[@]}" | xargs -0 -r npx --no-install eslint
+printf 'eslint checked %d exact manifest paths\n' "${#ui_files[@]}"
 cd ..
 BASH
 python3 scripts/i18n-audit.py
 ```
 
-Expected: every command exits zero; application and E2E fixture TypeScript projects both type-check; all 13 Admin routes pass the light/dark, zh/en, mobile/desktop axe matrix; Portal `/` and `/monitor` have no token regression.
+Expected: every command exits zero; application and E2E fixture TypeScript projects both type-check; ESLint reads
+only the exact, duplicate-free paths in `web/admin-remediation-eslint-files.txt` and never derives scope from Git;
+all 13 Admin routes pass the light/dark, zh/en, mobile/desktop axe matrix; Portal `/` and `/monitor` have no token
+regression.
 
 - [ ] **Step 3: Run the reproducible permission and control-plane smoke matrix**
 
@@ -1004,7 +1006,7 @@ go test -race ./internal/middleware ./internal/api/... \
   -count=1
 
 go test -race ./internal/config ./internal/api/admin \
-  -run 'Test(Store|Settings)' \
+  -run 'Test(Store|Settings|OSAtomicFileWriter)' \
   -count=1
 
 go test -race ./internal/upstream ./internal/server \
@@ -1016,7 +1018,12 @@ npm run test:e2e -- admin-contracts.spec.ts admin-settings.spec.ts admin-query-s
 cd ..
 ```
 
-Expected: PASS. The first command proves readonly/readwrite JWT and API-token routing, refresh rejection, credential masking, self-lockout, and final-admin behavior. The second proves exact Settings response sets, disk bytes, atomic failure, override classification, immediate log level, restart reload, and cleanup. The third proves one-time seed, restart persistence, last-source protection, commit failure, worker replacement, live invariant recovery, and the next real proxy request switch. Playwright proves the same contracts and mutation affordances through the browser fixture with no unmatched API request.
+Expected: PASS. The first command proves readonly/readwrite JWT and API-token routing, refresh rejection, credential
+masking, self-lockout, and final-admin behavior. The second proves exact Settings response sets, disk bytes,
+pre-rename non-mutation, post-rename committed/runtime alignment, override classification, immediate log level, restart
+reload, and cleanup. The third proves one-time seed, restart persistence, last-source protection, commit failure, worker
+replacement, live invariant recovery, and the next real proxy request switch. Playwright proves the same contracts and
+mutation affordances through the browser fixture with no unmatched API request.
 
 - [ ] **Step 4: Request two-stage code review**
 

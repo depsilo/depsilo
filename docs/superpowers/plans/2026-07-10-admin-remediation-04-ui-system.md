@@ -1575,6 +1575,17 @@ const mutationCases: MutationCase[] = [
   },
   {
     name: 'Upstream save', path: '/admin/upstreams', endpoint: 'POST /api/v1/admin/upstreams', status: 422,
+    fixtures: {
+      'GET /api/v1/admin/upstreams': {
+        items: [{
+          id: 1, adapter_type: 'pypi', name: 'tuna', url: 'https://pypi.example/simple', proxy: '', priority: 1,
+          probe_mode: 'active', probe_interval: '30m', healthy: true, avg_latency_ms: 12, success_rate: 1,
+          last_checked_at: '2026-07-10T00:00:00Z', worker_running: true,
+          created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z',
+        }],
+        total: 1,
+      },
+    },
     submit: async page => {
       await page.getByRole('button', { name: /添加上游源/ }).click()
       await page.getByLabel(/^名称$/).fill('fixture')
@@ -1796,6 +1807,7 @@ Create `web/admin-remediation-eslint-files.txt` with paths relative to `web/`, o
 playwright.config.ts
 e2e/fixtures/admin-api.ts
 e2e/admin-smoke.spec.ts
+e2e/admin-settings.spec.ts
 e2e/admin-contrast.spec.ts
 e2e/admin-forms.spec.ts
 e2e/admin-dialog-actions.spec.ts

@@ -21,7 +21,7 @@
 - JWT requests reload the current user on every request. Disabled users receive `401`; role changes take effect without waiting for the JWT to expire.
 - API-token writes require both an enabled current owner with role `admin` and token permissions `readwrite`; API tokens cannot call `/api/v1/auth/refresh`.
 - Never allow deletion, disabling, or demotion of the final enabled admin. Never allow a user to delete, disable, or demote themselves; self password changes remain allowed.
-- Readonly responses must not disclose credentials. Webhook URLs are redacted server-side; token hashes, raw project tokens, password hashes, license keys, and storage credentials remain absent or masked.
+- Readonly responses must not disclose credentials. Webhook URLs and Audit upstream URL credentials are redacted server-side in both JSON and CSV; write-capable principals receive the complete operational URL. Token hashes, raw project tokens outside create/regenerate responses, password hashes, license keys, and storage credentials remain absent or masked.
 - Do not add frontend runtime dependencies. Browser contract coverage and broad action-by-action UI migration belong to the later Playwright/UI remediation plan; this plan establishes typed APIs and the shared capability hook.
 - Required backend gates: `go test -race ./internal/middleware ./internal/api/...` and `go test ./...`.
 - Required frontend gates: `cd web && npm run type-check && npm run build`.
@@ -38,6 +38,7 @@
 - `internal/api/admin/audit_contract.go` — create: Audit response DTOs and mapping.
 - `internal/api/admin/audit_contract_test.go` — create: `package`/`search` compatibility and canonical response tests.
 - `internal/api/admin/audit.go` — modify: canonical parameter precedence, deprecated alias logging, and DTO mapping.
+- `internal/audit/query.go` — modify: return export rows to the Admin DTO/CSV boundary instead of encoding persistence models directly.
 - `internal/api/admin/projects_contract.go` — create: Project request/response DTOs, package mapping, and proxy URL construction.
 - `internal/api/admin/projects_contract_test.go` — create: list envelope, package field, and `/p/{slug}` proxy tests.
 - `internal/api/admin/projects.go` — modify: stop embedding GORM models in responses and return canonical Project DTOs.
@@ -49,11 +50,11 @@
 - `internal/api/router.go` — modify carefully: add `/auth/me`, use `JWTOnly` for refresh, and register Admin handlers on explicit read/write groups.
 - `internal/api/router_permissions_test.go` — create: AST-backed declaration test that prevents routes bypassing capability groups.
 - `internal/api/admin/credentials.go` — create: readonly credential redaction helpers.
-- `internal/api/admin/credentials_test.go` — create: webhook and URL-userinfo redaction tests.
+- `internal/api/admin/credentials_test.go` — create: Webhook, Upstream URL-userinfo, and Audit list/export redaction tests.
 - `internal/api/admin/webhook.go` — modify: explicit list response with server-side readonly URL masking.
 - `internal/api/admin/upstream.go` — modify narrowly: redact URL userinfo in readonly list responses until the Registry plan replaces this mapper.
-- `internal/api/admin/user.go` — modify: serialize user mutations and enforce transactional self-lockout/final-admin invariants.
-- `internal/api/admin/user_test.go` — create: invariant, password, and concurrent mutation tests.
+- `internal/api/admin/user.go` — modify: explicit safe User DTOs, serialized mutations, and transactional self-lockout/final-admin invariants.
+- `internal/api/admin/user_test.go` — create: response-leakage, invariant, password, and concurrent mutation tests.
 - `web/src/lib/adminApi.types.ts` — create: canonical Principal, Security, Logs, Audit, Projects, User, and API-token DTOs; later Settings/Upstream plans append their types.
 - `web/src/lib/adminApi.types.type-test.ts` — create: compile-time assertions that affected Axios response data is exact and not `any`.
 - `web/src/lib/api.ts` — modify carefully: typed auth and affected Admin methods.
@@ -75,10 +76,11 @@
 - Create: `internal/api/admin/audit_contract.go`
 - Create: `internal/api/admin/audit_contract_test.go`
 - Modify: `internal/api/admin/audit.go:25-76`
+- Modify: `internal/audit/query.go:86-137`
 
 **Interfaces:**
 - Consumes: `audit.Query`, `audit.QueryResult`, and `db.AuditLog` internally.
-- Produces: `auditLogResponse` and `auditListResponse`; no GORM model crosses the handler boundary.
+- Produces: `auditLogResponse`, `auditListResponse`, `audit.RunExportQuery`, and `encodeAuditCSV`; neither JSON nor CSV encodes a GORM model directly.
 - Produces: canonical `package`; deprecated `search` is used only when `package` is absent. List and Export both call the same `parseQuery`.
 
 - [ ] **Step 1: Write failing canonical/alias tests**
@@ -117,7 +119,7 @@ func TestAuditPackageQueryAndDeprecatedSearchAlias(t *testing.T) {
 	}
 	now := time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC)
 	items := []db.AuditLog{
-		{Ecosystem: "pypi", PackageName: "requests", Version: "2.32.0", Action: "download", CacheResult: "hit", ClientIP: "10.0.0.1", LatencyMs: 8, BytesSent: 1200, StatusCode: 200, CreatedAt: now},
+		{Ecosystem: "pypi", PackageName: "requests", Version: "2.32.0", Action: "download", CacheResult: "hit", ClientIP: "10.0.0.1", UpstreamURL: "https://alice:secret@packages.example.test/simple", LatencyMs: 8, BytesSent: 1200, StatusCode: 200, CreatedAt: now},
 		{Ecosystem: "pypi", PackageName: "flask", Version: "3.1.0", Action: "download", CacheResult: "miss", ClientIP: "10.0.0.2", LatencyMs: 30, BytesSent: 900, StatusCode: 200, CreatedAt: now.Add(-time.Minute)},
 	}
 	if err := database.Create(&items).Error; err != nil {
@@ -166,6 +168,9 @@ func TestAuditPackageQueryAndDeprecatedSearchAlias(t *testing.T) {
 	if exportRec.Code != http.StatusOK || len(records) != 2 || records[1][2] != "requests" {
 		t.Fatalf("export status = %d, records = %#v", exportRec.Code, records)
 	}
+	if len(records[0]) != 10 || records[0][9] != "Upstream URL" || records[1][9] == "" {
+		t.Fatalf("export DTO columns = %#v", records)
+	}
 }
 ```
 
@@ -183,6 +188,9 @@ Create `internal/api/admin/audit_contract.go`:
 package admin
 
 import (
+	"bytes"
+	"encoding/csv"
+	"fmt"
 	"time"
 
 	"depsilo/internal/audit"
@@ -221,18 +229,80 @@ func toAuditLogResponse(item db.AuditLog) auditLogResponse {
 	}
 }
 
-func toAuditListResponse(result *audit.QueryResult) auditListResponse {
-	items := make([]auditLogResponse, len(result.Items))
-	for i, item := range result.Items {
-		items[i] = toAuditLogResponse(item)
+func toAuditLogResponses(rows []db.AuditLog) []auditLogResponse {
+	items := make([]auditLogResponse, len(rows))
+	for i, row := range rows {
+		items[i] = toAuditLogResponse(row)
 	}
-	return auditListResponse{Items: items, Total: result.Total, Page: result.Page}
+	return items
+}
+
+func toAuditListResponse(result *audit.QueryResult) auditListResponse {
+	return auditListResponse{Items: toAuditLogResponses(result.Items), Total: result.Total, Page: result.Page}
+}
+
+func encodeAuditCSV(items []auditLogResponse) ([]byte, error) {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	if err := w.Write([]string{"Time", "Ecosystem", "Package", "Version", "Action", "Result", "Client IP", "Latency(ms)", "Bytes", "Upstream URL"}); err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		if err := w.Write([]string{
+			item.CreatedAt.Format(time.RFC3339), item.Ecosystem, item.PackageName,
+			item.Version, item.Action, item.CacheResult, item.ClientIP,
+			fmt.Sprintf("%d", item.LatencyMs), fmt.Sprintf("%d", item.BytesSent), item.UpstreamURL,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	w.Flush()
+	return buf.Bytes(), w.Error()
 }
 ```
 
-- [ ] **Step 4: Resolve the canonical query once and map the list**
+- [ ] **Step 4: Resolve the canonical query once and route list/export through DTOs**
 
-In `internal/api/admin/audit.go`, import `go.uber.org/zap`, change `List` to `c.JSON(http.StatusOK, toAuditListResponse(result))`, and replace the `PackageName` initialization in `parseQuery` with:
+In `internal/audit/query.go`, replace `Export` with a query-only boundary. Remove its `bytes`, `encoding/csv`, and `fmt` imports:
+
+```go
+// RunExportQuery returns filtered audit rows, capped at 10,000. HTTP-layer
+// DTO mapping and credential policy are deliberately applied by the caller.
+func RunExportQuery(database *gorm.DB, q Query) ([]db.AuditLog, error) {
+	query := database.Model(&db.AuditLog{})
+	if q.Ecosystem != "" { query = query.Where("ecosystem = ?", q.Ecosystem) }
+	if q.PackageName != "" { query = query.Where("package_name LIKE ?", "%"+q.PackageName+"%") }
+	if q.ClientIP != "" { query = query.Where("client_ip = ?", q.ClientIP) }
+	if q.CacheResult != "" { query = query.Where("cache_result = ?", q.CacheResult) }
+	if !q.StartTime.IsZero() { query = query.Where("datetime(created_at) >= datetime(?)", q.StartTime.UTC()) }
+	if !q.EndTime.IsZero() { query = query.Where("datetime(created_at) <= datetime(?)", q.EndTime.UTC()) }
+
+	var items []db.AuditLog
+	err := query.Order("datetime(created_at) DESC").Limit(10000).Find(&items).Error
+	return items, err
+}
+```
+
+In `internal/api/admin/audit.go`, import `go.uber.org/zap`, change `List` to `c.JSON(http.StatusOK, toAuditListResponse(result))`, replace `Export` with the DTO encoder below, and replace the `PackageName` initialization in `parseQuery` with the following canonical/alias block:
+
+```go
+func (h *AuditHandler) Export(c *gin.Context) {
+	items, err := audit.RunExportQuery(h.db, h.parseQuery(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "EXPORT_ERROR", "message": err.Error()})
+		return
+	}
+	data, err := encodeAuditCSV(toAuditLogResponses(items))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "EXPORT_ERROR", "message": err.Error()})
+		return
+	}
+	filename := fmt.Sprintf("depsilo-audit-%s.csv", time.Now().Format("2006-01-02"))
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	c.Data(http.StatusOK, "text/csv", data)
+}
+```
 
 ```go
 	packageName := c.Query("package")
@@ -257,14 +327,14 @@ Do not duplicate alias logic in `Export`; it must continue to call `h.parseQuery
 
 - [ ] **Step 5: Run focused tests and the audit package**
 
-Run: `gofmt -w internal/api/admin/audit.go internal/api/admin/audit_contract.go internal/api/admin/audit_contract_test.go && go test ./internal/api/admin -run TestAuditPackageQueryAndDeprecatedSearchAlias -count=1 && go test ./internal/audit ./internal/api/admin -count=1`
+Run: `gofmt -w internal/audit/query.go internal/api/admin/audit.go internal/api/admin/audit_contract.go internal/api/admin/audit_contract_test.go && go test ./internal/api/admin -run TestAuditPackageQueryAndDeprecatedSearchAlias -count=1 && go test ./internal/audit ./internal/api/admin -count=1`
 
 Expected: PASS.
 
 - [ ] **Step 6: Commit the Audit contract**
 
 ```bash
-git add internal/api/admin/audit.go internal/api/admin/audit_contract.go internal/api/admin/audit_contract_test.go
+git add internal/audit/query.go internal/api/admin/audit.go internal/api/admin/audit_contract.go internal/api/admin/audit_contract_test.go
 git commit -m "fix(admin): align audit query contract"
 ```
 
@@ -1730,6 +1800,8 @@ git commit -m "feat(auth): resolve current request principal"
 - Create: `internal/api/router_permissions_test.go`
 - Create: `internal/api/admin/credentials.go`
 - Create: `internal/api/admin/credentials_test.go`
+- Modify: `internal/api/admin/audit_contract.go`
+- Modify: `internal/api/admin/audit.go`
 - Modify: `internal/api/admin/webhook.go:28-39`
 - Modify narrowly: `internal/api/admin/upstream.go:23-27`
 
@@ -1737,7 +1809,7 @@ git commit -m "feat(auth): resolve current request principal"
 - Consumes: `middleware.Authenticate`, `ReadRequired`, `WriteRequired`, `JWTOnly`, and `PrincipalFromContext` from Task 5.
 - Produces: Gin groups named `adminRead`, `adminWrite`, `proRead`, and `proWrite`; no Admin endpoint registers directly on `adminGroup` or a capability-free Pro group.
 - Produces: `GET /api/v1/auth/me`, `GET /api/v1/admin/logs/export`, and the exact capability classification in Global Constraints.
-- Produces: `maskWebhookURL(string) string` and `maskURLUserInfo(string) string`; write-capable principals receive operational values, readonly principals receive redacted credentials.
+- Produces: `maskWebhookURL(string) string` and `maskURLUserInfo(string) string`; write-capable principals receive operational values, readonly principals receive redacted credentials in Webhook, Upstream, and Audit JSON/CSV responses.
 
 - [ ] **Step 1: Write a declaration-level route guard test**
 
@@ -1935,11 +2007,14 @@ Create `internal/api/admin/credentials_test.go`:
 package admin
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -1957,7 +2032,7 @@ func TestCredentialURLMasking(t *testing.T) {
 	if got := maskWebhookURL("not a URL"); got != "***" {
 		t.Fatalf("invalid maskWebhookURL = %q", got)
 	}
-	if got := maskURLUserInfo("http://alice:password@proxy.example.test:8080/path"); got != "http://***:***@proxy.example.test:8080/path" {
+	if got := maskURLUserInfo("http://alice:password@proxy.example.test:8080/path"); got != "http://%2A%2A%2A:%2A%2A%2A@proxy.example.test:8080/path" {
 		t.Fatalf("maskURLUserInfo = %q", got)
 	}
 }
@@ -2001,6 +2076,77 @@ func TestWebhookListMasksURLForReadonlyPrincipal(t *testing.T) {
 		t.Fatalf("admin url = %v", got)
 	}
 }
+
+func TestAuditListAndExportMaskUpstreamCredentialsByPrincipal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "audit-credentials.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := database.AutoMigrate(&db.AuditLog{}); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	const rawURL = "https://alice:secret@packages.example.test/simple"
+	entry := db.AuditLog{Ecosystem: "pypi", PackageName: "requests", Version: "2.32.0", Action: "download", CacheResult: "miss", ClientIP: "10.0.0.1", UpstreamURL: rawURL, StatusCode: 200, CreatedAt: time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC)}
+	if err := database.Create(&entry).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	request := func(canWrite bool, path string) *httptest.ResponseRecorder {
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			role := "readonly"
+			if canWrite { role = "admin" }
+			c.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: 1, Username: "operator", Role: role, Enabled: true, AuthMethod: middleware.AuthMethodJWT, CanWrite: canWrite})
+			c.Next()
+		})
+		h := NewAuditHandler(database)
+		r.GET("/audit-logs", h.List)
+		r.GET("/audit-logs/export", h.Export)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s canWrite=%v status=%d body=%s", path, canWrite, rec.Code, rec.Body.String())
+		}
+		return rec
+	}
+
+	listURL := func(rec *httptest.ResponseRecorder) string {
+		var body struct { Items []struct { UpstreamURL string `json:"upstream_url"` } `json:"items"` }
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Items) != 1 {
+			t.Fatalf("decode audit list: err=%v body=%s", err, rec.Body.String())
+		}
+		return body.Items[0].UpstreamURL
+	}
+	if got := listURL(request(true, "/audit-logs")); got != rawURL {
+		t.Fatalf("writer list upstream_url = %q", got)
+	}
+	readonlyList := request(false, "/audit-logs")
+	if got := listURL(readonlyList); got != "https://%2A%2A%2A:%2A%2A%2A@packages.example.test/simple" {
+		t.Fatalf("readonly list upstream_url = %q", got)
+	}
+	if strings.Contains(readonlyList.Body.String(), "alice") || strings.Contains(readonlyList.Body.String(), "secret") {
+		t.Fatalf("readonly list leaked credentials: %s", readonlyList.Body.String())
+	}
+
+	exportURL := func(rec *httptest.ResponseRecorder) string {
+		records, err := csv.NewReader(strings.NewReader(rec.Body.String())).ReadAll()
+		if err != nil || len(records) != 2 || len(records[1]) != 10 || records[0][9] != "Upstream URL" {
+			t.Fatalf("decode audit export: err=%v records=%#v", err, records)
+		}
+		return records[1][9]
+	}
+	if got := exportURL(request(true, "/audit-logs/export")); got != rawURL {
+		t.Fatalf("writer export upstream_url = %q", got)
+	}
+	readonlyExport := request(false, "/audit-logs/export")
+	if got := exportURL(readonlyExport); got != "https://%2A%2A%2A:%2A%2A%2A@packages.example.test/simple" {
+		t.Fatalf("readonly export upstream_url = %q", got)
+	}
+	if strings.Contains(readonlyExport.Body.String(), "alice") || strings.Contains(readonlyExport.Body.String(), "secret") {
+		t.Fatalf("readonly export leaked credentials: %s", readonlyExport.Body.String())
+	}
+}
 ```
 
 - [ ] **Step 5: Implement redaction and explicit webhook list responses**
@@ -2040,6 +2186,48 @@ func maskURLUserInfo(raw string) string {
 	return parsed.String()
 }
 ```
+
+In `internal/api/admin/audit_contract.go`, make credential visibility an explicit mapper input. Do not infer it from a role string or from request data:
+
+```go
+func toAuditLogResponse(item db.AuditLog, canViewCredentials bool) auditLogResponse {
+	upstreamURL := item.UpstreamURL
+	if !canViewCredentials {
+		upstreamURL = maskURLUserInfo(upstreamURL)
+	}
+	return auditLogResponse{
+		ID: item.ID, Ecosystem: item.Ecosystem, PackageName: item.PackageName,
+		Version: item.Version, Action: item.Action, CacheResult: item.CacheResult,
+		ClientIP: item.ClientIP, UserAgent: item.UserAgent, UpstreamURL: upstreamURL,
+		LatencyMs: item.LatencyMs, BytesSent: item.BytesSent, StatusCode: item.StatusCode,
+		CreatedAt: item.CreatedAt,
+	}
+}
+
+func toAuditLogResponses(rows []db.AuditLog, canViewCredentials bool) []auditLogResponse {
+	items := make([]auditLogResponse, len(rows))
+	for i, row := range rows {
+		items[i] = toAuditLogResponse(row, canViewCredentials)
+	}
+	return items
+}
+
+func toAuditListResponse(result *audit.QueryResult, canViewCredentials bool) auditListResponse {
+	return auditListResponse{Items: toAuditLogResponses(result.Items, canViewCredentials), Total: result.Total, Page: result.Page}
+}
+```
+
+In `internal/api/admin/audit.go`, pass the same server-issued Principal decision to both response paths:
+
+```go
+// List, after audit.RunQuery succeeds:
+c.JSON(http.StatusOK, toAuditListResponse(result, principalCanViewCredentials(c)))
+
+// Export, after audit.RunExportQuery succeeds:
+data, err := encodeAuditCSV(toAuditLogResponses(items, principalCanViewCredentials(c)))
+```
+
+No Audit handler may return `item.UpstreamURL` or rows from `audit.RunExportQuery` without these mappers.
 
 In `internal/api/admin/webhook.go`, add an explicit list DTO and replace `List`:
 
@@ -2095,7 +2283,7 @@ The later Registry implementation must preserve this mapper behavior when it rep
 
 - [ ] **Step 6: Run route, redaction, and permission tests**
 
-Run: `gofmt -w internal/api/router.go internal/api/router_permissions_test.go internal/api/admin/credentials.go internal/api/admin/credentials_test.go internal/api/admin/webhook.go internal/api/admin/upstream.go && go test -race ./internal/middleware ./internal/api/... -run 'Test(AdminRoutes|Credential|Webhook|JWT|API)' -count=1`
+Run: `gofmt -w internal/api/router.go internal/api/router_permissions_test.go internal/api/admin/credentials.go internal/api/admin/credentials_test.go internal/api/admin/audit.go internal/api/admin/audit_contract.go internal/api/admin/webhook.go internal/api/admin/upstream.go && go test -race ./internal/middleware ./internal/api/... -run 'Test(AdminRoutes|Audit|Credential|Webhook|JWT|API)' -count=1`
 
 Expected: PASS. `rg -n 'adminGroup\.(GET|POST|PUT|PATCH|DELETE)|proGroup\.(GET|POST|PUT|PATCH|DELETE)' internal/api/router.go` must print no matches.
 
@@ -2103,13 +2291,13 @@ Expected: PASS. `rg -n 'adminGroup\.(GET|POST|PUT|PATCH|DELETE)|proGroup\.(GET|P
 
 ```bash
 git add -p internal/api/router.go
-git add internal/api/router_permissions_test.go internal/api/admin/credentials.go internal/api/admin/credentials_test.go internal/api/admin/webhook.go internal/api/admin/upstream.go
+git add internal/api/router_permissions_test.go internal/api/admin/credentials.go internal/api/admin/credentials_test.go internal/api/admin/audit.go internal/api/admin/audit_contract.go internal/api/admin/webhook.go internal/api/admin/upstream.go
 git commit -m "fix(auth): enforce admin route capabilities"
 ```
 
 ---
 
-### Task 7: Self-Lockout and Final-Admin Invariants
+### Task 7: Safe User DTOs and Administrator Invariants
 
 **Files:**
 - Modify: `internal/api/admin/user.go:14-143`
@@ -2117,12 +2305,13 @@ git commit -m "fix(auth): enforce admin route capabilities"
 
 **Interfaces:**
 - Consumes: `middleware.PrincipalFromContext` from Task 5.
+- Produces: `userResponse` as the only success payload item for List, Create, and Update; it is an explicit whitelist and never contains `password_hash`, token data, or future persistence-only fields.
 - Produces: an effective admin predicate of `role = 'admin' AND enabled = true`.
 - Produces: `409 SELF_LOCKOUT` for self-delete, self-disable, or self-demotion; self password updates remain `200`.
 - Produces: `409 LAST_ADMIN` whenever a mutation would remove the final effective admin.
 - Produces: serialized, transactional Update/Delete mutations so two concurrent admins cannot remove each other and leave zero effective admins.
 
-- [ ] **Step 1: Write failing self and concurrency tests**
+- [ ] **Step 1: Write failing response-leakage, self-lockout, and concurrency tests**
 
 Create `internal/api/admin/user_test.go`:
 
@@ -2170,6 +2359,8 @@ func newUserTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		c.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: uint(actorID), Username: "actor", Role: "admin", Enabled: true, AuthMethod: middleware.AuthMethodJWT, CanWrite: true})
 		c.Next()
 	})
+	r.GET("/users", h.List)
+	r.POST("/users", h.Create)
 	r.PUT("/users/:id", h.Update)
 	r.DELETE("/users/:id", h.Delete)
 	return r, database
@@ -2204,6 +2395,63 @@ func responseCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 		t.Fatalf("decode response: %v; body=%s", err, rec.Body.String())
 	}
 	return body.Code
+}
+
+func assertSafeUserObject(t *testing.T, raw json.RawMessage) {
+	t.Helper()
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		t.Fatalf("decode user object: %v; body=%s", err, raw)
+	}
+	allowed := map[string]bool{
+		"id": true, "username": true, "role": true, "enabled": true,
+		"last_login_at": true, "created_at": true, "updated_at": true,
+	}
+	if len(object) != len(allowed) {
+		t.Fatalf("user response keys = %#v", object)
+	}
+	for key := range object {
+		if !allowed[key] {
+			t.Fatalf("user response leaked noncontract field %q: %s", key, raw)
+		}
+	}
+	for key := range allowed {
+		if _, ok := object[key]; !ok {
+			t.Fatalf("user response missing %q: %s", key, raw)
+		}
+	}
+}
+
+func TestUserListCreateAndUpdateUseSafeDTO(t *testing.T) {
+	r, database := newUserTestRouter(t)
+	actor := createUserForMutationTest(t, database, "owner", "admin", true)
+	target := createUserForMutationTest(t, database, "reader", "readonly", true)
+
+	// This compile-time use makes the RED phase fail until the explicit mapper exists.
+	var _ userResponse = toUserResponse(target)
+
+	listRec := userMutationRequest(r, http.MethodGet, "/users", "", actor.ID)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+	var list []json.RawMessage
+	if err := json.Unmarshal(listRec.Body.Bytes(), &list); err != nil || len(list) != 2 {
+		t.Fatalf("decode list: err=%v body=%s", err, listRec.Body.String())
+	}
+	for _, item := range list { assertSafeUserObject(t, item) }
+
+	createRec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"new-reader","password":"create-secret","role":"readonly"}`, actor.ID)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", createRec.Code, createRec.Body.String())
+	}
+	assertSafeUserObject(t, createRec.Body.Bytes())
+
+	path := "/users/" + strconv.FormatUint(uint64(target.ID), 10)
+	updateRec := userMutationRequest(r, http.MethodPut, path, `{"password":"update-secret"}`, actor.ID)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("update status=%d body=%s", updateRec.Code, updateRec.Body.String())
+	}
+	assertSafeUserObject(t, updateRec.Body.Bytes())
 }
 
 func TestUserCannotLockOutSelfButCanChangePassword(t *testing.T) {
@@ -2285,13 +2533,55 @@ func TestConcurrentAdminDemotionsLeaveOneEnabledAdmin(t *testing.T) {
 
 - [ ] **Step 2: Run and verify the unsafe mutations**
 
-Run: `go test -race ./internal/api/admin -run 'TestUserCannot|TestConcurrentAdmin' -count=1`
+Run: `go test -race ./internal/api/admin -run 'TestUser(List|Cannot)|TestConcurrentAdmin' -count=1`
 
-Expected: FAIL. Existing Update demotes/disables self, and concurrent demotions can leave zero admins.
+Expected: FAIL first with `undefined: userResponse`/`undefined: toUserResponse`; after only stubbing those names, existing Update still demotes/disables self and concurrent demotions can leave zero admins.
 
-- [ ] **Step 3: Serialize mutations and define invariant errors**
+- [ ] **Step 3: Add the safe response whitelist, then serialize mutations and define invariant errors**
 
-In `internal/api/admin/user.go`, add `errors`, `sync`, and `depsilo/internal/middleware`, then change the handler and constructor to:
+In `internal/api/admin/user.go`, add `errors`, `sync`, `time`, and `depsilo/internal/middleware`. Define the only User success DTO and map List/Create through it:
+
+```go
+type userResponse struct {
+	ID          uint       `json:"id"`
+	Username    string     `json:"username"`
+	Role        string     `json:"role"`
+	Enabled     bool       `json:"enabled"`
+	LastLoginAt *time.Time `json:"last_login_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+func toUserResponse(user db.User) userResponse {
+	return userResponse{
+		ID: user.ID, Username: user.Username, Role: user.Role, Enabled: user.Enabled,
+		LastLoginAt: user.LastLoginAt, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
+	}
+}
+
+func toUserResponses(users []db.User) []userResponse {
+	items := make([]userResponse, len(users))
+	for i, user := range users { items[i] = toUserResponse(user) }
+	return items
+}
+
+func (h *UserHandler) List(c *gin.Context) {
+	var users []db.User
+	if err := h.db.Order("datetime(created_at)").Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, toUserResponses(users))
+}
+```
+
+Keep the explicit `createUserRequest`; after `h.db.Create(&user)` succeeds, replace `user.PasswordHash = ""` and the model response with:
+
+```go
+c.JSON(http.StatusCreated, toUserResponse(user))
+```
+
+Then change the handler and constructor to:
 
 ```go
 type UserHandler struct {
@@ -2404,8 +2694,7 @@ Parse the ID and body before acquiring the mutex. Hash a non-empty requested pas
 		writeUserMutationError(c, err)
 		return
 	}
-	saved.PasswordHash = ""
-	c.JSON(http.StatusOK, saved)
+	c.JSON(http.StatusOK, toUserResponse(saved))
 ```
 
 - [ ] **Step 5: Replace Delete with the same serialized invariant**
@@ -2450,7 +2739,7 @@ After parsing ID and Principal, use:
 
 - [ ] **Step 6: Run focused and race tests**
 
-Run: `gofmt -w internal/api/admin/user.go internal/api/admin/user_test.go && go test -race ./internal/api/admin -run 'TestUserCannot|TestConcurrentAdmin' -count=10`
+Run: `gofmt -w internal/api/admin/user.go internal/api/admin/user_test.go && go test -race ./internal/api/admin -run 'TestUser(List|Cannot)|TestConcurrentAdmin' -count=10`
 
 Expected: PASS in all ten runs. Then run `go test -race ./internal/middleware ./internal/api/...`; expected PASS.
 
@@ -2458,7 +2747,7 @@ Expected: PASS in all ten runs. Then run `go test -race ./internal/middleware ./
 
 ```bash
 git add internal/api/admin/user.go internal/api/admin/user_test.go
-git commit -m "fix(admin): prevent administrator lockout"
+git commit -m "fix(admin): secure user responses and administrator invariants"
 ```
 
 ---
@@ -2494,12 +2783,31 @@ Create `web/src/lib/adminApi.types.type-test.ts` before the types file exists:
 import { adminApi, authApi } from './api'
 import type {
   AccessLogListResponse,
+  ApproveSuggestionRequest,
+  ApproveSuggestionResponse,
   AuditLogListResponse,
+  CreateProjectRequest,
+  CreateProjectResponse,
+  DeleteProjectResponse,
+  DismissSuggestionResponse,
   Principal,
+  Project,
+  ProjectDetail,
   ProjectListResponse,
+  ProjectPackageQuery,
   ProjectPackagesResponse,
+  ProjectSBOMQuery,
+  RegenerateProjectTokenResponse,
+  SecurityDashboard,
+  SecurityImportResponse,
+  SecurityPackagePage,
   SecurityPolicy,
+  SecurityQuery,
+  SecurityScanResponse,
+  SecuritySuggestionPage,
   SecurityVulnerabilityPage,
+  UpdateProjectRequest,
+  UpdateSecurityPolicyRequest,
 } from './adminApi.types'
 
 export type Equal<A, B> =
@@ -2508,21 +2816,48 @@ export type Equal<A, B> =
 export type Assert<T extends true> = T
 export type ResponseData<T extends (...args: never[]) => unknown> =
   Awaited<ReturnType<T>> extends { data: infer Data } ? Data : never
+export type FirstArg<T extends (...args: never[]) => unknown> = Parameters<T>[0]
+export type SecondArg<T extends (...args: never[]) => unknown> = Parameters<T>[1]
 
 export type PrincipalContract = Assert<Equal<ResponseData<typeof authApi.me>, Principal>>
 export type LogsContract = Assert<Equal<ResponseData<typeof adminApi.listLogs>, AccessLogListResponse>>
 export type AuditContract = Assert<Equal<ResponseData<typeof adminApi.listAuditLogs>, AuditLogListResponse>>
+export type SecurityDashboardContract = Assert<Equal<ResponseData<typeof adminApi.getSecurityDashboard>, SecurityDashboard>>
 export type VulnerabilityContract = Assert<Equal<ResponseData<typeof adminApi.listVulnerabilities>, SecurityVulnerabilityPage>>
+export type VulnerablePackagesContract = Assert<Equal<ResponseData<typeof adminApi.listVulnerablePackages>, SecurityPackagePage>>
+export type SuggestionsContract = Assert<Equal<ResponseData<typeof adminApi.listSuggestions>, SecuritySuggestionPage>>
+export type ApproveSuggestionContract = Assert<Equal<ResponseData<typeof adminApi.approveSuggestion>, ApproveSuggestionResponse>>
+export type DismissSuggestionContract = Assert<Equal<ResponseData<typeof adminApi.dismissSuggestion>, DismissSuggestionResponse>>
+export type SecurityScanContract = Assert<Equal<ResponseData<typeof adminApi.triggerSecurityScan>, SecurityScanResponse>>
+export type SecurityImportContract = Assert<Equal<ResponseData<typeof adminApi.importVulnerabilities>, SecurityImportResponse>>
 export type PolicyContract = Assert<Equal<ResponseData<typeof adminApi.listSecurityPolicies>, SecurityPolicy[]>>
+export type UpdatePolicyContract = Assert<Equal<ResponseData<typeof adminApi.updateSecurityPolicy>, SecurityPolicy>>
+export type SecurityQueryContract = Assert<Equal<FirstArg<typeof adminApi.listVulnerabilities>, SecurityQuery>>
+export type VulnerablePackagesQueryContract = Assert<Equal<FirstArg<typeof adminApi.listVulnerablePackages>, SecurityQuery>>
+export type SuggestionsQueryContract = Assert<Equal<FirstArg<typeof adminApi.listSuggestions>, SecurityQuery>>
+export type ApproveSuggestionInputContract = Assert<Equal<SecondArg<typeof adminApi.approveSuggestion>, ApproveSuggestionRequest | undefined>>
+export type SecurityImportInputContract = Assert<Equal<FirstArg<typeof adminApi.importVulnerabilities>, FormData>>
+export type UpdatePolicyInputContract = Assert<Equal<SecondArg<typeof adminApi.updateSecurityPolicy>, UpdateSecurityPolicyRequest>>
+
 export type ProjectsContract = Assert<Equal<ResponseData<typeof adminApi.listProjects>, ProjectListResponse>>
+export type CreateProjectContract = Assert<Equal<ResponseData<typeof adminApi.createProject>, CreateProjectResponse>>
+export type ProjectDetailContract = Assert<Equal<ResponseData<typeof adminApi.getProject>, ProjectDetail>>
+export type UpdateProjectContract = Assert<Equal<ResponseData<typeof adminApi.updateProject>, Project>>
+export type DeleteProjectContract = Assert<Equal<ResponseData<typeof adminApi.deleteProject>, DeleteProjectResponse>>
 export type ProjectPackagesContract = Assert<Equal<ResponseData<typeof adminApi.listProjectPackages>, ProjectPackagesResponse>>
+export type RegenerateProjectTokenContract = Assert<Equal<ResponseData<typeof adminApi.regenerateProjectToken>, RegenerateProjectTokenResponse>>
+export type ExportProjectSBOMContract = Assert<Equal<ResponseData<typeof adminApi.exportSbom>, Blob>>
+export type CreateProjectInputContract = Assert<Equal<FirstArg<typeof adminApi.createProject>, CreateProjectRequest>>
+export type UpdateProjectInputContract = Assert<Equal<SecondArg<typeof adminApi.updateProject>, UpdateProjectRequest>>
+export type ProjectPackagesInputContract = Assert<Equal<SecondArg<typeof adminApi.listProjectPackages>, ProjectPackageQuery>>
+export type ExportProjectSBOMInputContract = Assert<Equal<SecondArg<typeof adminApi.exportSbom>, ProjectSBOMQuery>>
 ```
 
 - [ ] **Step 2: Run type-check and verify the contract module is missing**
 
 Run: `cd web && npm run type-check`
 
-Expected: FAIL with `Cannot find module './adminApi.types'` and missing `authApi.me`.
+Expected: FAIL with `Cannot find module './adminApi.types'`, missing `authApi.me`, and untyped/missing Security or Projects methods. An affected method left as `any` cannot satisfy its exact request/response assertion.
 
 - [ ] **Step 3: Define every affected TypeScript contract**
 
@@ -2608,6 +2943,10 @@ export type SecurityPackagePage = SecurityPage<SecurityVulnerabilityCheck>
 export interface SecurityQuery { page?: number; per_page?: number; ecosystem?: string; severity?: SecuritySeverity; package?: string }
 export interface UpdateSecurityPolicyRequest { auto_block_enabled: boolean; min_cvss_score: number }
 export interface ApproveSuggestionRequest { version?: string; reason?: string }
+export interface ApproveSuggestionResponse { rule_id: number }
+export interface DismissSuggestionResponse { status: 'dismissed' }
+export interface SecurityScanResponse { status: 'scan_started' }
+export interface SecurityImportResponse { imported: number }
 
 export interface AccessLog {
   id: number
@@ -2674,6 +3013,9 @@ export interface ProjectPackage { ecosystem: string; package_name: string; versi
 export interface ProjectPackageQuery { page?: number; per_page?: number; ecosystem?: string; search?: string }
 export interface ProjectPackagesResponse { items: ProjectPackage[]; total: number; page: number }
 export interface RegenerateProjectTokenResponse { token: string; proxy_url: string }
+export interface DeleteProjectResponse { status: 'deleted' }
+export type ProjectSBOMFormat = 'spdx' | 'cyclonedx'
+export interface ProjectSBOMQuery { format: ProjectSBOMFormat; ecosystem?: string }
 
 export interface AdminUser { id: number; username: string; role: UserRole; enabled: boolean; last_login_at: string | null; created_at: string; updated_at: string }
 export interface CreateUserRequest { username: string; password: string; role: UserRole }
@@ -2694,6 +3036,7 @@ import type {
   AdminUser,
   APITokenSummary,
   ApproveSuggestionRequest,
+  ApproveSuggestionResponse,
   AuditLogListResponse,
   AuditLogQuery,
   CreateAPITokenRequest,
@@ -2701,6 +3044,8 @@ import type {
   CreateProjectRequest,
   CreateProjectResponse,
   CreateUserRequest,
+  DeleteProjectResponse,
+  DismissSuggestionResponse,
   LoginResponse,
   Principal,
   Project,
@@ -2708,12 +3053,15 @@ import type {
   ProjectListResponse,
   ProjectPackageQuery,
   ProjectPackagesResponse,
+  ProjectSBOMQuery,
   RefreshResponse,
   RegenerateProjectTokenResponse,
   SecurityDashboard,
+  SecurityImportResponse,
   SecurityPackagePage,
   SecurityPolicy,
   SecurityQuery,
+  SecurityScanResponse,
   SecuritySuggestionPage,
   SecurityVulnerabilityPage,
   UpdateProjectRequest,
@@ -2739,15 +3087,20 @@ export const adminApi = {
   listVulnerabilities: (params: SecurityQuery) => api.get<SecurityVulnerabilityPage>('/admin/security/vulnerabilities', { params }),
   listVulnerablePackages: (params: SecurityQuery) => api.get<SecurityPackagePage>('/admin/security/packages', { params }),
   listSuggestions: (params: SecurityQuery) => api.get<SecuritySuggestionPage>('/admin/security/suggestions', { params }),
-  approveSuggestion: (vulnerabilityID: number, data: ApproveSuggestionRequest = {}) => api.post<{ rule_id: number }>(`/admin/security/suggestions/${vulnerabilityID}/approve`, data),
+  approveSuggestion: (vulnerabilityID: number, data: ApproveSuggestionRequest = {}) => api.post<ApproveSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/approve`, data),
+  dismissSuggestion: (vulnerabilityID: number) => api.post<DismissSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/dismiss`),
+  triggerSecurityScan: () => api.post<SecurityScanResponse>('/admin/security/scan'),
+  importVulnerabilities: (formData: FormData) => api.post<SecurityImportResponse>('/admin/security/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   listSecurityPolicies: () => api.get<SecurityPolicy[]>('/admin/security/policies'),
   updateSecurityPolicy: (ecosystem: string, data: UpdateSecurityPolicyRequest) => api.put<SecurityPolicy>(`/admin/security/policies/${ecosystem}`, data),
   listProjects: () => api.get<ProjectListResponse>('/admin/projects'),
   createProject: (data: CreateProjectRequest) => api.post<CreateProjectResponse>('/admin/projects', data),
   getProject: (id: number) => api.get<ProjectDetail>(`/admin/projects/${id}`),
   updateProject: (id: number, data: UpdateProjectRequest) => api.put<Project>(`/admin/projects/${id}`, data),
+  deleteProject: (id: number) => api.delete<DeleteProjectResponse>(`/admin/projects/${id}`),
   listProjectPackages: (id: number, params: ProjectPackageQuery) => api.get<ProjectPackagesResponse>(`/admin/projects/${id}/packages`, { params }),
   regenerateProjectToken: (id: number) => api.post<RegenerateProjectTokenResponse>(`/admin/projects/${id}/token`),
+  exportSbom: (id: number, params: ProjectSBOMQuery) => api.get<Blob>(`/admin/projects/${id}/sbom`, { params, responseType: 'blob' }),
   listUsers: () => api.get<AdminUser[]>('/admin/users'),
   createUser: (data: CreateUserRequest) => api.post<AdminUser>('/admin/users', data),
   updateUser: (id: number, data: UpdateUserRequest) => api.put<AdminUser>(`/admin/users/${id}`, data),
@@ -2756,7 +3109,7 @@ export const adminApi = {
 }
 ```
 
-Merge these members into the existing `adminApi` object rather than deleting unaffected dashboard, cache, rules, quarantine, blocklist, license, delete, import, export, or mutation members.
+Merge these members into the existing `adminApi` object rather than deleting unaffected dashboard, cache, rules, quarantine, blocklist, license, or other feature members. Replace every pre-existing Security/Projects member with the signature above; do not leave a duplicate untyped overload, `Record<string, any>`, `data?: any`, or `data: any` for any Security/Projects call or mutation.
 
 - [ ] **Step 5: Add the Principal query and replace local role inference**
 
@@ -2856,7 +3209,10 @@ resultBadge(row.cache_result, t)
 
 ```ts
 // Projects.tsx
+import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
+
 const [selectedProject, setSelectedProject] = useState<ProjectSummary | null>(null)
+const [sbomFormat, setSbomFormat] = useState<ProjectSBOMFormat>('spdx')
 const projects = data?.data.items ?? []
 const projectDetail: ProjectDetail | ProjectSummary | null = detailData?.data ?? selectedProject
 const packages = pkgData?.data.items ?? []
@@ -2872,9 +3228,12 @@ const pkgColumns = [
   { key: 'last_seen_at', label: t('projects.lastSeen') },
   { key: 'download_count', label: t('projects.downloads') },
 ]
+
+// Replace the existing createMutation mutationFn property:
+mutationFn: (input: CreateProjectRequest) => adminApi.createProject(input),
 ```
 
-Use `last_activity_at` in the Project list. Every client fallback must contain `/p/`; remove both existing `/projects/` fallback strings.
+Use `last_activity_at` in the Project list. Every client fallback must contain `/p/`; remove both existing `/projects/` fallback strings. In the SBOM Select, narrow the DOM string at the UI boundary with `onChange={(event) => setSbomFormat(event.target.value as ProjectSBOMFormat)}` so `exportSbom` receives `ProjectSBOMQuery` without widening it to `string`.
 
 In `Users.tsx`, use typed arrays and Principal capability:
 
@@ -2895,9 +3254,10 @@ Expected: PASS. Then run:
 
 ```bash
 rg -n "params\.q|params\.search = appliedSearch|auto_block\b|cvss_threshold\b|/projects/\$\{.*slug|localStorage\.(getItem|setItem)\('user'\)" web/src/admin web/src/lib
+rg -n '^\s*(getSecurityDashboard|listVulnerabilities|listVulnerablePackages|listSuggestions|approveSuggestion|dismissSuggestion|triggerSecurityScan|importVulnerabilities|listSecurityPolicies|updateSecurityPolicy|listProjects|createProject|getProject|updateProject|deleteProject|listProjectPackages|regenerateProjectToken|exportSbom):.*\bany\b' web/src/lib/api.ts
 ```
 
-Expected: no matches in the affected Security, Audit, Projects, shell, or login paths.
+Expected: neither command prints a match. The compile-time assertions must cover all 10 Security methods and all 9 Projects methods, including mutation request payloads and the `Blob` SBOM response.
 
 - [ ] **Step 8: Commit the typed Principal foundation**
 
