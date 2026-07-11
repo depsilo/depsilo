@@ -25,8 +25,8 @@
 
   --color-text:        #14181A;
   --color-text-muted:  #586068;
-  --color-text-soft:   #8A9299;
-  --color-text-subtle: #6B737C;
+  --color-text-soft:   #626A72;
+  --color-text-subtle: #646C74;
 
   /* Brand = the "hit" signal green. Identical token, kept under the
      old name so every component that reads --color-brand keeps
@@ -50,12 +50,13 @@
   --color-warn:        #B5770E;
   --color-warn-fill:   #FBEFD8;
   --color-warn-border: rgba(181, 119, 14, 0.30);
-  --color-warn-text:   #B5770E;
+  --color-warn-text:   #8A4F00;
 
   --color-danger:        #CF4444;
   --color-danger-fill:   #FBE9E9;
   --color-danger-border: rgba(207, 68, 68, 0.30);
-  --color-danger-text:   #CF4444;
+  --color-danger-text:   #A52E2E;
+  --color-focus-ring:    #0C8D5D;
 
   /* Inter Variable for UI text, Inter Tight only for display headings.
      CJK prefers platform fonts first for a lighter, more native read. */
@@ -105,8 +106,8 @@
 
   --text:        #14181A;
   --text-muted:  #586068;
-  --text-soft:   #8A9299;
-  --text-subtle: #6B737C;
+  --text-soft:   #626A72;
+  --text-subtle: #646C74;
 
   /* Brand = the "hit" signal green. Used for links, active nav,
      focus rings, status dots, cache-hit highlights — wherever the
@@ -149,13 +150,14 @@
   --warn:        #B5770E;
   --warn-fill:   #FBEFD8;
   --warn-border: rgba(181, 119, 14, 0.30);
-  --warn-text:   #B5770E;
+  --warn-text:   #8A4F00;
 
   /* Danger / miss — red per Instrument. */
   --danger:        #CF4444;
   --danger-fill:   #FBE9E9;
   --danger-border: rgba(207, 68, 68, 0.30);
-  --danger-text:   #CF4444;
+  --danger-text:   #A52E2E;
+  --focus-ring:    #0C8D5D;
 
   /* Instrument role-named aliases — for new code that wants to use
      the brief's vocabulary directly. Values track the existing
@@ -260,6 +262,7 @@ html.dark,
   --danger-fill:   rgba(247, 109, 109, 0.12);
   --danger-border: rgba(247, 109, 109, 0.30);
   --danger-text:   #F76D6D;
+  --focus-ring:    #3DDC91;
 
   /* Instrument role-named aliases follow the same redefinitions. */
   --bg:        #0B0D0F;
@@ -350,6 +353,7 @@ html.dark,
     --danger-fill:   rgba(247, 109, 109, 0.12);
     --danger-border: rgba(247, 109, 109, 0.30);
     --danger-text:   #F76D6D;
+    --focus-ring:    #3DDC91;
 
     --bg:        #0B0D0F;
     --surface:   #14181C;
@@ -763,9 +767,12 @@ html.dark .logo-icon-light,
 
 /* ── Accessibility: keyboard focus + reduced motion ── */
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
+}
+.stripe-focus-ring:focus-visible {
+  outline-color: var(--focus-ring);
 }
 button:focus:not(:focus-visible),
 a:focus:not(:focus-visible) {

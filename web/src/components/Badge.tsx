@@ -8,15 +8,13 @@ interface BadgeV2Props {
   className?: string
 }
 
-// Borderless tinted chip. Modern Linear / Vercel style: bg + fg, no outline.
-// `pro` is the only variant with a touch of decoration — an aurora-gradient
-// background (very low alpha so the brand-text stays readable on top).
-const variantStyles: Record<BadgeV2Variant, { bg: string; color: string }> = {
+// Tinted chip. Pro adds a subtle brand border to distinguish entitlement.
+const variantStyles: Record<BadgeV2Variant, { bg: string; color: string; border?: string }> = {
   default:   { bg: 'var(--brand-soft)',  color: 'var(--brand-text)' },
   success:   { bg: 'var(--ok-fill)',     color: 'var(--ok-text)' },
   error:     { bg: 'var(--danger-fill)', color: 'var(--danger-text)' },
   warning:   { bg: 'var(--warn-fill)',   color: 'var(--warn-text)' },
-  pro:       { bg: 'var(--grad-aurora)', color: 'var(--brand-text)' },
+  pro:       { bg: 'var(--brand-soft)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
   ecosystem: { bg: 'var(--brand-soft)',  color: 'var(--brand-text)' },
 }
 
@@ -33,6 +31,7 @@ export default function BadgeV2({
       style={{
         background: s.bg,
         color: s.color,
+        border: s.border ? `0.5px solid ${s.border}` : undefined,
         borderRadius: 'var(--r-tag)',
         fontSize: '11px',
         fontWeight: 600,

@@ -24,7 +24,7 @@ export default function ButtonV2({
   ...rest
 }: ButtonV2Props) {
   const base =
-    'inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-[background,color,border-color,filter,transform] duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] stripe-focus-ring'
+    'inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-[background,color,border-color,transform] duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] stripe-focus-ring'
 
   const sizes = {
     sm: 'text-[12px] px-2.5 py-1 rounded-[5px]',
@@ -32,7 +32,7 @@ export default function ButtonV2({
   }
 
   const variants: Record<string, string> = {
-    primary: 'text-white hover:brightness-110',
+    primary: 'text-[var(--btn-fg)] bg-[var(--btn)] hover:bg-[var(--btn-press)]',
     secondary: 'hover:bg-[var(--brand-soft)]',
     ghost: 'bg-transparent hover:bg-[var(--bg-hover)]',
     danger: 'hover:bg-[var(--danger-fill)]',
@@ -42,18 +42,10 @@ export default function ButtonV2({
   const isSecondary = variant === 'secondary'
   const isDanger = variant === 'danger'
 
-  // Primary = Instrument's deep green button (--btn / --btn-fg).
-  // Solid fill, identical in light and dark modes per the brief. The
-  // hover state lifts via brightness (handled by the variant class)
-  // and the press state shrinks 4%. A subtle 1px inset top highlight
-  // gives it dimensionality without going back to the previous
-  // Ink+Halo approach the brief explicitly replaces. The press color
-  // (--btn-primary-press) gets used by parent overrides that want
-  // explicit :hover styling — most callers can rely on filter.
+  // Primary = Instrument's deep green command button. Semantic tokens
+  // keep its resting and pressed colors stable across both themes.
   const primaryStyle: React.CSSProperties = isPrimary
     ? {
-        background: 'var(--btn-primary-bg, #0A8654)',
-        color: 'var(--btn-primary-fg, #FFFFFF)',
         boxShadow:
           'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
       }

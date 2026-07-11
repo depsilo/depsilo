@@ -153,6 +153,8 @@ const TABS: { value: TrendsTab; key: string }[] = [
   { value: 'errors', key: 'trendTabErrors' },
 ]
 
+// Tooltip payload typing is deferred to Plan 04 Task 11.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ChartTooltip({ active, payload, label }: any) {
   const { t } = useTranslation()
   if (!active || !payload?.length) return null
@@ -162,6 +164,7 @@ function ChartTooltip({ active, payload, label }: any) {
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
     >
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       {payload.map((entry: any) => {
         const v = entry.value
         let display: string
@@ -230,17 +233,22 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
             </div>
             <span style={{ width: 1, height: 14, background: 'var(--border)' }} aria-hidden />
             {/* Range selector */}
-            <div className="flex items-center gap-1">
+            <div
+              className="flex items-center gap-1"
+              role="group"
+              aria-label={t('dashboard.hitMissTrend')}
+            >
               {RANGES.map(r => {
                 const active = range === r.value
                 return (
                   <button
                     key={r.value}
                     onClick={() => onRangeChange(r.value)}
+                    aria-pressed={active}
                     className="px-2.5 py-1 text-[11px] font-[500] rounded-[4px] cursor-pointer active:scale-[0.96] transition-[background,color,border-color,transform] duration-150"
                     style={{
-                      background: active ? 'var(--brand)' : 'transparent',
-                      color: active ? 'white' : 'var(--text-soft)',
+                      background: active ? 'var(--btn)' : 'transparent',
+                      color: active ? 'var(--btn-fg)' : 'var(--text-soft)',
                       border: active ? 'none' : '1px solid transparent',
                     }}
                   >
