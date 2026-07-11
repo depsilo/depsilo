@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Admin control plane remediation**: Settings now atomically preserves and patches
+  `config.toml` with explicit immediate/restart/environment-override results; ordinary
+  upstream CRUD is database-authoritative and atomically updates live proxy Pools; fresh
+  Principal authorization, exact Admin DTOs, responsive Base UI wrappers, and Playwright/
+  axe regression coverage make all 13 Admin routes permission-aware and truthful about
+  loading, empty, stale, error, and mutation states.
 - **Tamper detection (DIRECTION T1)**: records the SHA-256 of each
   immutable artifact on first fetch; when a natural re-fetch (background
   refresh) yields different upstream bytes under the same version,

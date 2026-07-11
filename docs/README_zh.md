@@ -251,6 +251,8 @@ sudo apt update
 
 管理后台地址：`http://你的IP:23333/admin`（需登录）。
 
+Settings 持久化、上游源实时变更、Principal 权限、响应语义和运维验证见 [Admin 控制面说明](admin-control-plane.md)。
+
 ## 📊 监控指标
 
 Prometheus 指标暴露在 `/metrics` 端点：

@@ -278,6 +278,9 @@ What's happening under the hood when a `pip install` lands on Depsilo:
   and live cache event stream
 - Admin dashboard at `/admin` with trend charts, storage visualization,
   per-upstream latency monitoring, supply-chain quarantine event log
+
+See [Admin Control Plane](docs/admin-control-plane.md) for Settings persistence, live Upstream mutation, Principal permissions, response semantics, and operator verification.
+
 - Prometheus `/metrics`
 - Structured access logs with filtering + CSV export
 - Audit trail for every admin action

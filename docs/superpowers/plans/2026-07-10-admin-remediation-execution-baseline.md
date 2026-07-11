@@ -239,6 +239,11 @@ web/src/i18n/en.ts	fix(admin): make tables and row actions accessible	preserved	
 web/src/i18n/zh.ts	fix(admin): make tables and row actions accessible	preserved	40e085cc19dd45c8645a3fb3fb0ebeccba910f1db19713777ead4c2d07691668	i18n-current-product-copy	pending-review	2026-07-11T18:18:09Z
 web/src/lib/api.ts	refactor(admin): type all remediated UI paths	mixed	c178146070318b4bfb0edd65608b0c48ff117d7b6cc24aeece57de62e2ad2374	api-open-audit	pending-review	2026-07-11T20:13:30Z
 DESIGN.md	test(admin): enforce accessibility and responsive matrix	mixed	746ccd7815dd6cd6122a2c68e1c8d5b841350292b286ec93a6c7047378a1b348	design-instrument	pending-review	2026-07-11T20:49:22Z
+docs/README_zh.md	docs: document admin control plane operations	preserved	74b015d171ae873d662c9f0bd1469ba7e8cf615ef53870f7d7cf6cb4b77e1716	zh-readme-supply-chain	pending-review	2026-07-11T22:03:36Z
+DESIGN.md	docs: document admin control plane operations	mixed	2f1be4ce9845a0fddb05c95dcf3b6f8ec9647988373fbca5d8d5e1d9ab318169	design-instrument	pending-review	2026-07-11T22:03:36Z
+CHANGELOG.md	docs: document admin control plane operations	preserved	9d6ed9f72d813f44fcf0766d4c48f65fe06e0965267b372804a7caa62a6e19eb	changelog-supply-chain	pending-review	2026-07-11T22:03:36Z
+README.md	docs: document admin control plane operations	preserved	12a4100c782f8337cbc51b9fd4e29a6b582ef9ea52567936a0246dfc09391b40	readme-supply-chain	pending-review	2026-07-11T22:04:04Z
+docs/self-test-checklist.md	docs: document admin control plane operations	mixed	809a2969d188eafaec76e0d8cbeff68a0c70141e150868da50c17b86067f9230	self-test-operator-truth	pending-review	2026-07-11T22:04:26Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

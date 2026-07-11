@@ -191,6 +191,18 @@ request is pending, and row-local failures preserve the current data and form.
 Independent sibling queries own independent pending, error, stale, and empty
 boundaries. A failure in one panel must not erase successful data in another.
 
+### Control-Plane Authority
+
+| Resource | Authority | Runtime application |
+| --- | --- | --- |
+| Settings | `config.toml` | Log level applies immediately; Cache/Auth changes require restart |
+| Ordinary active Upstreams | Database | Registry atomically updates the next proxy request |
+| Docker registries and extra indexes | `config.toml` | Restart-managed; absent from Admin Upstream CRUD |
+| Users, tokens, rules, Webhooks, security policy | Database | Existing handler-specific runtime behavior |
+
+The complete permission, response, persistence, and operator verification
+contract is documented in [Admin Control Plane](docs/admin-control-plane.md).
+
 ## Interaction Rules
 
 - Icons identify familiar tools; text accompanies commands where the action is

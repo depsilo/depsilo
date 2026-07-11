@@ -90,12 +90,18 @@ GOPROXY=http://localhost:23333/go,direct go install github.com/spf13/cobra@lates
 
 - [ ] **命中率统计准确**：Phase 2 完成后，Admin Dashboard "命中率"应 > 0%
 - [ ] **带宽节省统计**：Bandwidth Report 显示"节省流量"和"节省时间"非零
-- [ ] **上游故障切换**：
-  1. Admin → Upstreams 找到任一生态主上游，临时改成不可达的 URL（如 `http://invalid.invalid`）
-  2. 立即触发一次该生态的 install
-  3. 应自动 fallback 到备用上游，install 仍然成功
-  4. **改回 URL**
-- [ ] **熔断恢复**：被熔断的上游 60s 后应自动尝试探活并恢复
+- [ ] 上游选择符合“最高优先级的健康源”。健康检查或一次请求结果把主源标记
+      unhealthy 后，**后续请求**才会选择备用源；当前失败请求不会自动重试
+- [ ] Admin Upstream 新增、修改或删除成功后，下一次真实代理请求立即使用数据库中的新 Pool 快照；无需重启
+- [ ] 删除普通上游源后重启，确认首次 seed 已完成的生态不会被 `config.toml` 重新回填
+- [ ] 删除 active ecosystem 的最后一个上游源返回 `409 LAST_UPSTREAM`
+- [ ] Settings 修改 `server.log_level` 后，响应将该字段列入 `applied_now`，无需重启即可观察到新日志级别
+- [ ] Settings 修改 Cache/Auth 字段后，响应将字段列入 `restart_required`，页面持续显示 `pending_restart`，重启后清除
+- [ ] 用 `DEPSILO_SERVER_LOG_LEVEL` 覆盖日志级别后再保存，文件仍更新，响应和页面将该字段列入 `blocked_by_override` 并显示准确环境变量名
+- [ ] Settings 保存前后对比 `config.toml`，确认未修改的注释、空白、键顺序和文件权限模式保持不变
+- [ ] 将配置文件或其目录设为只读后保存，确认返回 `409 CONFIG_READ_ONLY`，运行中日志级别和页面草稿不变
+- [ ] 不存在 60 秒 circuit breaker。上游恢复依赖健康检查和后续请求结果；
+      默认周期见 `internal/upstream/pool.go`
 - [ ] **MCP 端点**（可选，给 AI 客户端用）：
   ```bash
   curl -X POST http://localhost:23333/mcp \
