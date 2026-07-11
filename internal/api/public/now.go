@@ -102,9 +102,10 @@ func (h *NowHandler) upstreamRollup() upstreamRollup {
 		if pool == nil {
 			continue
 		}
-		for _, u := range pool.Upstreams() {
+		for _, u := range pool.Snapshot() {
+			health := u.HealthSnapshot()
 			total++
-			if u.Healthy {
+			if health.Healthy {
 				healthy++
 			}
 		}

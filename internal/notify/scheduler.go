@@ -71,13 +71,14 @@ func checkUpstreamHealth(ctx context.Context, n *Notifier, pools map[string]*ups
 		return
 	}
 	for eco, pool := range pools {
-		upstreams := pool.Upstreams()
+		upstreams := pool.Snapshot()
 		if len(upstreams) == 0 {
 			continue
 		}
 		allDown := true
 		for _, u := range upstreams {
-			if u.IsHealthy() {
+			health := u.HealthSnapshot()
+			if health.Healthy {
 				allDown = false
 				break
 			}

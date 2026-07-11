@@ -18,7 +18,7 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 	if database == nil {
 		return
 	}
-	for _, u := range pool.Upstreams() {
+	for _, u := range pool.Snapshot() {
 		var logs []db.UpstreamLatencyLog
 		database.Where("name = ? AND healthy = ?", u.Name, true).
 			Order("datetime(created_at) DESC").
@@ -36,8 +36,9 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 		avgMs := total / int64(len(logs))
 
 		u.mu.Lock()
-		u.avgLatency = time.Duration(avgMs) * time.Millisecond
-		u.Healthy = logs[0].Healthy
+		u.health.avgLatency = time.Duration(avgMs) * time.Millisecond
+		u.health.healthy = logs[0].Healthy
+		u.health.lastCheckedAt = logs[0].CreatedAt
 		u.mu.Unlock()
 
 		zap.L().Debug("restored upstream metrics from db",
@@ -51,7 +52,7 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 // StartHealthCheck launches one goroutine per active-mode upstream in the pool.
 // Passive-mode upstreams are skipped — they rely on request-time Report() calls.
 func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, defaultInterval time.Duration) {
-	for _, u := range pool.Upstreams() {
+	for _, u := range pool.Snapshot() {
 		if u.ProbeMode == "passive" {
 			zap.L().Info("upstream in passive probe mode, skipping health check",
 				zap.String("upstream", u.Name))
@@ -88,6 +89,7 @@ func checkUpstream(ctx context.Context, u *Upstream, database *gorm.DB) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.URL, nil)
 	if err != nil {
+		u.applyProbe(ProbeResult{Healthy: false, CheckedAt: time.Now().UTC(), Err: err})
 		zap.L().Warn("health check request error", zap.String("upstream", u.Name), zap.Error(err))
 		return
 	}
@@ -97,9 +99,8 @@ func checkUpstream(ctx context.Context, u *Upstream, database *gorm.DB) {
 	latency := time.Since(start)
 
 	if err != nil {
-		u.mu.Lock()
-		u.Healthy = false
-		u.mu.Unlock()
+		result := ProbeResult{Healthy: false, Latency: latency, CheckedAt: time.Now().UTC(), Err: err}
+		u.applyProbe(result)
 		zap.L().Warn("upstream unhealthy", zap.String("upstream", u.Name), zap.Error(err))
 		if database != nil {
 			go func() {
@@ -115,14 +116,8 @@ func checkUpstream(ctx context.Context, u *Upstream, database *gorm.DB) {
 	resp.Body.Close()
 
 	healthy := resp.StatusCode < 500
-	u.mu.Lock()
-	u.Healthy = healthy
-	if u.avgLatency == 0 {
-		u.avgLatency = latency
-	} else {
-		u.avgLatency = (u.avgLatency*7 + latency*3) / 10
-	}
-	u.mu.Unlock()
+	result := ProbeResult{Healthy: healthy, Latency: latency, CheckedAt: time.Now().UTC()}
+	u.applyProbe(result)
 
 	if database != nil {
 		go func() {

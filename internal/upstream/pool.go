@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 
 	"depsilo/internal/config"
+	"depsilo/internal/db"
 )
 
 // DefaultProbeInterval is the fallback periodic health-check interval used when
@@ -23,20 +25,45 @@ const DefaultProbeInterval = 30 * time.Minute
 
 // Upstream represents a single upstream source with its HTTP client.
 type Upstream struct {
+	ID            uint
+	AdapterType   string
 	Name          string
 	URL           string
 	Proxy         string
 	Priority      int
 	ProbeMode     string        // "active" or "passive"
 	ProbeInterval time.Duration // parsed from config string
-	Healthy       bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 	client        *http.Client
 
-	mu          sync.RWMutex
-	avgLatency  time.Duration
-	successRate float64
-	totalReqs   int64
-	successReqs int64
+	mu     sync.RWMutex
+	health healthState
+}
+
+type healthState struct {
+	healthy       bool
+	avgLatency    time.Duration
+	successRate   float64
+	totalReqs     int64
+	successReqs   int64
+	lastCheckedAt time.Time
+}
+
+// HealthSnapshot is one consistent sample of an upstream's mutable health.
+type HealthSnapshot struct {
+	Healthy       bool
+	AvgLatency    time.Duration
+	SuccessRate   float64
+	LastCheckedAt time.Time
+}
+
+// ProbeResult captures one active health-check outcome.
+type ProbeResult struct {
+	Healthy   bool
+	Latency   time.Duration
+	CheckedAt time.Time
+	Err       error
 }
 
 // FetchResult holds the response from an upstream fetch.
@@ -48,52 +75,148 @@ type FetchResult struct {
 }
 
 // Pool manages a set of upstreams for a given adapter type.
-type Pool struct {
+type poolSnapshot struct {
 	upstreams []*Upstream
+	byID      map[uint]*Upstream
+}
+
+type Pool struct {
+	snapshot atomic.Pointer[poolSnapshot]
 }
 
 // NewPool creates an upstream pool from config.
 func NewPool(cfgs []config.UpstreamConfig) (*Pool, error) {
-	upstreams := make([]*Upstream, 0, len(cfgs))
+	records := make([]db.UpstreamRecord, 0, len(cfgs))
 	for _, cfg := range cfgs {
-		client, err := buildClient(cfg.Proxy)
-		if err != nil {
-			return nil, fmt.Errorf("build client for %s: %w", cfg.Name, err)
-		}
-		probeMode := cfg.ProbeMode
-		if probeMode == "" {
-			probeMode = "active"
-		}
-		probeInterval, err := time.ParseDuration(cfg.ProbeInterval)
-		if err != nil || probeInterval <= 0 {
-			probeInterval = DefaultProbeInterval
-		}
-		upstreams = append(upstreams, &Upstream{
-			Name:          cfg.Name,
-			URL:           cfg.URL,
-			Proxy:         cfg.Proxy,
-			Priority:      cfg.Priority,
-			ProbeMode:     probeMode,
-			ProbeInterval: probeInterval,
-			Healthy:       true,
-			client:        client,
-			successRate:   1.0,
+		records = append(records, db.UpstreamRecord{
+			Name: cfg.Name, URL: cfg.URL, Proxy: cfg.Proxy, Priority: cfg.Priority,
+			ProbeMode: cfg.ProbeMode, ProbeInterval: cfg.ProbeInterval,
+			Healthy: true, SuccessRate: 1,
 		})
+	}
+	pool, err := NewPoolFromRecords(records)
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range pool.Snapshot() {
 		zap.L().Info("registered upstream",
-			zap.String("name", cfg.Name),
-			zap.String("url", cfg.URL),
-			zap.Int("priority", cfg.Priority),
-			zap.String("proxy", cfg.Proxy),
-			zap.String("probe_mode", probeMode),
-			zap.Duration("probe_interval", probeInterval),
+			zap.String("name", u.Name),
+			zap.String("url", u.URL),
+			zap.Int("priority", u.Priority),
+			zap.String("proxy", u.Proxy),
+			zap.String("probe_mode", u.ProbeMode),
+			zap.Duration("probe_interval", u.ProbeInterval),
 		)
 	}
-	return &Pool{upstreams: upstreams}, nil
+	return pool, nil
 }
 
-// Upstreams returns all upstreams.
-func (p *Pool) Upstreams() []*Upstream {
-	return p.upstreams
+// NewPoolFromRecords creates a pool from persisted upstream records.
+func NewPoolFromRecords(records []db.UpstreamRecord) (*Pool, error) {
+	next, err := buildPoolSnapshot(records, nil)
+	if err != nil {
+		return nil, err
+	}
+	pool := &Pool{}
+	pool.Replace(next)
+	return pool, nil
+}
+
+func (p *Pool) load() *poolSnapshot {
+	return p.snapshot.Load()
+}
+
+// Snapshot returns a caller-owned copy of the current upstream list.
+func (p *Pool) Snapshot() []*Upstream {
+	current := p.load()
+	if current == nil {
+		return nil
+	}
+	return append([]*Upstream(nil), current.upstreams...)
+}
+
+// Replace atomically publishes an immutable pool snapshot.
+func (p *Pool) Replace(next *poolSnapshot) {
+	p.snapshot.Store(next)
+}
+
+// Find returns an upstream from the currently published snapshot.
+func (p *Pool) Find(id uint) (*Upstream, bool) {
+	current := p.load()
+	if current == nil {
+		return nil, false
+	}
+	u, ok := current.byID[id]
+	return u, ok
+}
+
+func buildPoolSnapshot(records []db.UpstreamRecord, previous *poolSnapshot) (*poolSnapshot, error) {
+	next := &poolSnapshot{
+		upstreams: make([]*Upstream, 0, len(records)),
+		byID:      make(map[uint]*Upstream, len(records)),
+	}
+	for _, record := range records {
+		if previous != nil {
+			if existing := previous.byID[record.ID]; existing != nil && existing.sameConfig(record) {
+				next.upstreams = append(next.upstreams, existing)
+				next.byID[record.ID] = existing
+				continue
+			}
+		}
+		u, err := newUpstreamFromRecord(record)
+		if err != nil {
+			return nil, err
+		}
+		next.upstreams = append(next.upstreams, u)
+		next.byID[u.ID] = u
+	}
+	return next, nil
+}
+
+func normalizeRecordProbe(record db.UpstreamRecord) (string, time.Duration, error) {
+	mode := record.ProbeMode
+	if mode == "" {
+		mode = "active"
+	}
+	if mode != "active" && mode != "passive" {
+		return "", 0, fmt.Errorf("invalid probe mode %q", mode)
+	}
+	intervalText := record.ProbeInterval
+	if intervalText == "" {
+		intervalText = DefaultProbeInterval.String()
+	}
+	interval, err := time.ParseDuration(intervalText)
+	if err != nil || interval <= 0 {
+		return "", 0, fmt.Errorf("invalid probe interval %q", intervalText)
+	}
+	return mode, interval, nil
+}
+
+func newUpstreamFromRecord(record db.UpstreamRecord) (*Upstream, error) {
+	mode, interval, err := normalizeRecordProbe(record)
+	if err != nil {
+		return nil, err
+	}
+	client, err := buildClient(record.Proxy)
+	if err != nil {
+		return nil, fmt.Errorf("build client for %s: %w", record.Name, err)
+	}
+	return &Upstream{
+		ID: record.ID, AdapterType: record.AdapterType, Name: record.Name, URL: record.URL,
+		Proxy: record.Proxy, Priority: record.Priority, ProbeMode: mode, ProbeInterval: interval,
+		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, client: client,
+		health: healthState{
+			healthy: record.Healthy, avgLatency: time.Duration(record.AvgLatencyMs) * time.Millisecond,
+			successRate: record.SuccessRate, lastCheckedAt: record.LastCheckedAt,
+		},
+	}, nil
+}
+
+func (u *Upstream) sameConfig(record db.UpstreamRecord) bool {
+	mode, interval, err := normalizeRecordProbe(record)
+	return err == nil && u.ID == record.ID && u.AdapterType == record.AdapterType &&
+		u.Name == record.Name && u.URL == record.URL && u.Proxy == record.Proxy &&
+		u.Priority == record.Priority && u.ProbeMode == mode && u.ProbeInterval == interval
 }
 
 // Fetch performs an HTTP GET to the upstream, joining the given path.
@@ -198,42 +321,68 @@ func (u *Upstream) Report(latency time.Duration, success bool) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	u.totalReqs++
+	u.health.totalReqs++
 	if success {
-		u.successReqs++
+		u.health.successReqs++
 	}
-	u.successRate = float64(u.successReqs) / float64(u.totalReqs)
+	u.health.successRate = float64(u.health.successReqs) / float64(u.health.totalReqs)
 
 	// Exponential moving average for latency
-	if u.avgLatency == 0 {
-		u.avgLatency = latency
+	if u.health.avgLatency == 0 {
+		u.health.avgLatency = latency
 	} else {
-		u.avgLatency = (u.avgLatency*7 + latency*3) / 10
+		u.health.avgLatency = (u.health.avgLatency*7 + latency*3) / 10
 	}
 
 	// Mark unhealthy if success rate drops too low
-	u.Healthy = u.successRate > 0.3
+	u.health.healthy = u.health.successRate > 0.3
+}
+
+func (u *Upstream) applyProbe(result ProbeResult) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
+	u.health.totalReqs++
+	if result.Healthy {
+		u.health.successReqs++
+	}
+	u.health.successRate = float64(u.health.successReqs) / float64(u.health.totalReqs)
+	u.health.healthy = result.Healthy
+	u.health.lastCheckedAt = result.CheckedAt
+	if result.Latency > 0 {
+		if u.health.avgLatency == 0 {
+			u.health.avgLatency = result.Latency
+		} else {
+			u.health.avgLatency = (u.health.avgLatency*7 + result.Latency*3) / 10
+		}
+	}
+}
+
+// HealthSnapshot returns one locked sample of mutable health fields.
+func (u *Upstream) HealthSnapshot() HealthSnapshot {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	return HealthSnapshot{
+		Healthy:       u.health.healthy,
+		AvgLatency:    u.health.avgLatency,
+		SuccessRate:   u.health.successRate,
+		LastCheckedAt: u.health.lastCheckedAt,
+	}
 }
 
 // AvgLatency returns the current average latency.
 func (u *Upstream) AvgLatency() time.Duration {
-	u.mu.RLock()
-	defer u.mu.RUnlock()
-	return u.avgLatency
+	return u.HealthSnapshot().AvgLatency
 }
 
 // SuccessRate returns the current success rate.
 func (u *Upstream) SuccessRate() float64 {
-	u.mu.RLock()
-	defer u.mu.RUnlock()
-	return u.successRate
+	return u.HealthSnapshot().SuccessRate
 }
 
 // IsHealthy returns the current health status (thread-safe).
 func (u *Upstream) IsHealthy() bool {
-	u.mu.RLock()
-	defer u.mu.RUnlock()
-	return u.Healthy
+	return u.HealthSnapshot().Healthy
 }
 
 func buildClient(proxy string) (*http.Client, error) {

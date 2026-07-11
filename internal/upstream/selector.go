@@ -21,15 +21,14 @@ func NewPrioritySelector(pool *Pool) *PrioritySelector {
 }
 
 func (s *PrioritySelector) Select(_ context.Context) (*Upstream, error) {
-	ups := make([]*Upstream, len(s.pool.upstreams))
-	copy(ups, s.pool.upstreams)
+	ups := s.pool.Snapshot()
 
 	sort.Slice(ups, func(i, j int) bool {
 		return ups[i].Priority < ups[j].Priority
 	})
 
 	for _, u := range ups {
-		if u.Healthy {
+		if u.IsHealthy() {
 			return u, nil
 		}
 	}

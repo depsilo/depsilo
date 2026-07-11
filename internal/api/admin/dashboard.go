@@ -76,28 +76,21 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 			Scan(&dailyStats)
 	}
 
-	// Upstream status — batch-load IDs from DB
-	var upstreamRecords []db.UpstreamRecord
-	h.db.Find(&upstreamRecords)
-	idByName := make(map[string]uint, len(upstreamRecords))
-	for _, r := range upstreamRecords {
-		idByName[r.Name] = r.ID
-	}
-
 	upstreams := make([]gin.H, 0)
 	for _, name := range h.ecosystems {
 		pool := h.pools[name]
 		if pool == nil {
 			continue
 		}
-		for _, u := range pool.Upstreams() {
+		for _, u := range pool.Snapshot() {
+			health := u.HealthSnapshot()
 			upstreams = append(upstreams, gin.H{
-				"id":             idByName[u.Name],
+				"id":             u.ID,
 				"name":           u.Name,
 				"adapter":        name,
-				"healthy":        u.Healthy,
-				"avg_latency_ms": u.AvgLatency().Milliseconds(),
-				"success_rate":   u.SuccessRate(),
+				"healthy":        health.Healthy,
+				"avg_latency_ms": health.AvgLatency.Milliseconds(),
+				"success_rate":   health.SuccessRate,
 			})
 		}
 	}
