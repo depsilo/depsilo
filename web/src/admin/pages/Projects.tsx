@@ -14,6 +14,7 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
+import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
 
 const ECOSYSTEM_OPTIONS = [
   { value: '', label: 'All' },
@@ -66,14 +67,14 @@ export default function ProjectsV2() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const [selectedProject, setSelectedProject] = useState<any>(null)
+  const [selectedProject, setSelectedProject] = useState<ProjectSummary | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', description: '' })
   const [tokenData, setTokenData] = useState<{ token: string; proxy_url: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [pkgPage, setPkgPage] = useState(1)
   const [pkgEcosystem, setPkgEcosystem] = useState('')
-  const [sbomFormat, setSbomFormat] = useState('spdx')
+  const [sbomFormat, setSbomFormat] = useState<ProjectSBOMFormat>('spdx')
   const [sbomEcosystem, setSbomEcosystem] = useState('')
   const [sbomLoading, setSbomLoading] = useState(false)
 
@@ -82,33 +83,33 @@ export default function ProjectsV2() {
     queryFn: () => adminApi.listProjects(),
     retry: false,
   })
-  const projects: any[] = data?.data?.items || data?.data || []
+  const projects = data?.data.items ?? []
 
   const { data: detailData } = useQuery({
     queryKey: ['admin', 'projects', selectedProject?.id],
-    queryFn: () => adminApi.getProject(selectedProject.id),
+    queryFn: () => adminApi.getProject(selectedProject!.id),
     enabled: !!selectedProject,
   })
-  const projectDetail = detailData?.data || selectedProject
+  const projectDetail: ProjectDetail | ProjectSummary | null = detailData?.data ?? selectedProject
 
   const { data: pkgData, isLoading: pkgLoading } = useQuery({
     queryKey: ['admin', 'projects', selectedProject?.id, 'packages', pkgPage, pkgEcosystem],
-    queryFn: () => adminApi.listProjectPackages(selectedProject.id, { page: pkgPage, per_page: 20, ecosystem: pkgEcosystem || undefined }),
+    queryFn: () => adminApi.listProjectPackages(selectedProject!.id, { page: pkgPage, per_page: 20, ecosystem: pkgEcosystem || undefined }),
     enabled: !!selectedProject,
   })
-  const packages: any[] = pkgData?.data?.items || pkgData?.data || []
-  const pkgTotal = pkgData?.data?.total || 0
+  const packages = pkgData?.data.items ?? []
+  const pkgTotal = pkgData?.data.total ?? 0
   const pkgTotalPages = Math.max(1, Math.ceil(pkgTotal / 20))
 
   const createMutation = useMutation({
-    mutationFn: (d: any) => adminApi.createProject(d),
+    mutationFn: (input: CreateProjectRequest) => adminApi.createProject(input),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
       setCreateOpen(false)
       setCreateForm({ name: '', description: '' })
       const result = res.data
       if (result?.token) {
-        setTokenData({ token: result.token, proxy_url: result.proxy_url || `${window.location.origin}/projects/${result.slug || result.name}` })
+        setTokenData({ token: result.token, proxy_url: result.proxy_url || `${window.location.origin}/p/${result.slug}` })
       }
     },
   })
@@ -168,8 +169,8 @@ export default function ProjectsV2() {
 
   // ── Detail view ────────────────────────────────────────────────
   if (selectedProject) {
-    const proxyUrl = projectDetail?.proxy_url || `${window.location.origin}/projects/${projectDetail?.slug || projectDetail?.name}`
-    const ecosystems: Record<string, number> = projectDetail?.ecosystem_breakdown || {}
+    const proxyUrl = detailData?.data?.proxy_url ?? `${window.location.origin}/p/${projectDetail?.slug ?? ''}`
+    const ecosystems: Record<string, number> = detailData?.data?.ecosystem_breakdown ?? {}
 
     const pkgColumns = [
       {
@@ -182,11 +183,11 @@ export default function ProjectsV2() {
           </div>
         ),
       },
-      { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
+      { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
       { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) || '-'}</span> },
-      { key: 'first_seen', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
-      { key: 'last_seen', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
-      { key: 'downloads', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
+      { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
+      { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
+      { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
     ]
 
     return (
@@ -237,7 +238,7 @@ export default function ProjectsV2() {
         <section>
           <SectionHeader title={t('sbom.export')} />
           <div className="flex items-end gap-3 flex-wrap">
-            <SelectV2 label={t('sbom.format')} value={sbomFormat} onChange={(e) => setSbomFormat(e.target.value)}>
+            <SelectV2 label={t('sbom.format')} value={sbomFormat} onChange={(event) => setSbomFormat(event.target.value as ProjectSBOMFormat)}>
               <option value="spdx">{t('sbom.spdx')}</option>
               <option value="cyclonedx">{t('sbom.cyclonedx')}</option>
             </SelectV2>
@@ -271,7 +272,7 @@ export default function ProjectsV2() {
           ) : packages.length === 0 ? (
             <EmptyState icon="inventory_2" title={t('projects.noPackages')} minHeight={200} />
           ) : (
-            <DataTableV2 columns={pkgColumns} data={packages} />
+            <DataTableV2 columns={pkgColumns} data={packages.map((pkg) => ({ ...pkg }))} />
           )}
           {pkgTotalPages > 1 && (
             <div className="flex items-center justify-between text-[13px] mt-4" style={{ color: 'var(--text-soft)' }}>
@@ -291,11 +292,11 @@ export default function ProjectsV2() {
   const columns = [
     { key: 'name', label: t('projects.name'), render: (v: unknown) => <span className="font-[500] text-[14px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
     { key: 'package_count', label: t('projects.packageCount'), render: (v: unknown) => <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
-    { key: 'last_activity', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
+    { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     {
       key: 'id',
       label: t('actions'),
-      render: (_v: unknown, row: any) => (
+      render: (_v: unknown, row: ProjectSummary & Record<string, unknown>) => (
         <div className="flex gap-1">
           <button onClick={(e) => { e.stopPropagation(); setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }} className="bg-transparent cursor-pointer p-1.5 rounded-[4px]" style={{ color: 'var(--text-soft)' }}>
             <Icon name="visibility" size="sm" />
@@ -329,7 +330,7 @@ export default function ProjectsV2() {
       ) : (
         <DataTableV2
           columns={columns}
-          data={projects}
+          data={projects.map((project) => ({ ...project }))}
           onRowClick={(row) => { setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }}
         />
       )}

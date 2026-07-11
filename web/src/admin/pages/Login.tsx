@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import InputV2 from '@/components/Input'
 import ButtonV2 from '@/components/Button'
 import Logo from '@/components/Logo'
@@ -25,6 +25,7 @@ function formatRequests(n: number): string {
 export default function LoginV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -40,11 +41,11 @@ export default function LoginV2() {
     e.preventDefault()
     setError('')
     setLoading(true)
+    localStorage.removeItem('token')
+    queryClient.clear()
     try {
-      const res = await authApi.login({ username, password })
-      const { token, user } = res.data
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
+      const response = await authApi.login({ username, password })
+      localStorage.setItem('token', response.data.token)
       navigate('/admin', { replace: true })
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message

@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import Logo from '@/components/Logo'
@@ -10,6 +10,7 @@ import BadgeV2 from '@/components/Badge'
 import NowStrip from '@/admin/components/NowStrip'
 import { authApi, statsApi } from '@/lib/api'
 import { formatVersion } from '@/lib/utils'
+import { usePrincipal } from '@/hooks/usePrincipal'
 
 interface NavItem {
   label: string
@@ -43,18 +44,9 @@ export default function MainLayoutV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-
-  // Resilient localStorage parse: a corrupted "user" entry should not white-screen admin.
-  const user: { username: string; role: string } = (() => {
-    try {
-      const raw = localStorage.getItem('user')
-      if (raw) return JSON.parse(raw)
-    } catch {
-      // fall through to default
-    }
-    return { username: 'admin', role: 'admin' }
-  })()
+  const { principal } = usePrincipal()
 
   const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
     queryKey: ['stats-status'],
@@ -112,7 +104,7 @@ export default function MainLayoutV2() {
   const handleLogout = async () => {
     try { await authApi.logout() } catch { /* ignore */ }
     localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    queryClient.clear()
     navigate('/admin/login', { replace: true })
   }
 
@@ -158,12 +150,12 @@ export default function MainLayoutV2() {
             className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[600] shrink-0"
             style={{ background: 'var(--brand)', color: 'white' }}
           >
-            {user.username?.[0]?.toUpperCase() || 'A'}
+            {principal?.username?.[0]?.toUpperCase() || 'A'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-[500] truncate leading-tight" style={{ color: 'var(--text)' }}>{user.username}</p>
+            <p className="text-[13px] font-[500] truncate leading-tight" style={{ color: 'var(--text)' }}>{principal?.username}</p>
             <p className="text-[10px] leading-tight mt-0.5" style={{ color: 'var(--text-subtle)' }}>
-              {user.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
+              {principal?.role === 'admin' ? t('nav.admin') : t('nav.readonly')}
             </p>
           </div>
           <button

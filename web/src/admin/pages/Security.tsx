@@ -14,6 +14,13 @@ import EmptyState from '@/components/EmptyState'
 import DataTableV2 from '@/components/DataTable'
 import TabsV2 from '@/components/Tabs'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import type {
+  SecurityPolicy,
+  SecurityQuery,
+  SecuritySeverity,
+  SecurityVulnerability,
+  UpdateSecurityPolicyRequest,
+} from '@/lib/adminApi.types'
 
 const ECOSYSTEM_OPTIONS = [
   { value: '', label: 'All' },
@@ -66,8 +73,8 @@ function OverviewTab() {
     },
   })
 
-  const dashboard = data?.data || {}
-  const severityDist: { severity: string; count: number }[] = dashboard.severity_distribution || []
+  const dashboard = data?.data
+  const severityDist = Object.entries(dashboard?.by_severity ?? {}).map(([severity, count]) => ({ severity, count }))
   const maxCount = Math.max(...severityDist.map((s) => s.count), 1)
 
   if (isLoading) {
@@ -89,10 +96,10 @@ function OverviewTab() {
     <div className="space-y-12">
       {/* ── Metrics row ───────────────────────────── */}
       <div className="grid gap-8 grid-cols-4 py-2">
-        <Metric label={t('security.totalVulnerabilities')} value={String(dashboard.total_vulnerabilities || 0)} />
-        <Metric label={t('security.affectedPackages')} value={String(dashboard.affected_packages || 0)} />
-        <Metric label={t('security.criticalCount')} value={String(dashboard.critical_count || 0)} />
-        <Metric label={t('security.autoBlocked')} value={String(dashboard.auto_blocked_count || 0)} />
+        <Metric label={t('security.totalVulnerabilities')} value={String(dashboard?.total_vulnerabilities || 0)} />
+        <Metric label={t('security.affectedPackages')} value={String(dashboard?.affected_packages || 0)} />
+        <Metric label={t('security.criticalCount')} value={String(dashboard?.by_severity.critical || 0)} />
+        <Metric label={t('security.autoBlocked')} value={String(dashboard?.auto_blocked_count || 0)} />
       </div>
 
       {/* ── Scan status + action ───────────────────── */}
@@ -111,7 +118,7 @@ function OverviewTab() {
           }
         />
         <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-          {t('security.lastScan')}: {dashboard.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
+          {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
         </p>
       </section>
 
@@ -168,18 +175,18 @@ function VulnerabilitiesTab() {
   const [page, setPage] = useState(1)
   const perPage = 20
 
-  const params: Record<string, any> = { page, per_page: perPage }
+  const params: SecurityQuery = { page, per_page: perPage }
   if (ecosystem) params.ecosystem = ecosystem
-  if (severity) params.severity = severity
-  if (search) params.q = search
+  if (severity) params.severity = severity as SecuritySeverity
+  if (search) params.package = search
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'security', 'vulnerabilities', params],
     queryFn: () => adminApi.listVulnerabilities(params),
   })
 
-  const items: any[] = data?.data?.items || data?.data || []
-  const total: number = data?.data?.total || items.length
+  const items = data?.data.items ?? []
+  const total = data?.data.total ?? items.length
 
   const columns = [
     {
@@ -275,7 +282,7 @@ function VulnerabilitiesTab() {
       ) : items.length === 0 ? (
         <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={200} />
       ) : (
-        <DataTableV2 columns={columns} data={items} />
+        <DataTableV2 columns={columns} data={items.map((item) => ({ ...item }))} />
       )}
 
       {/* Pagination */}
@@ -313,7 +320,7 @@ function SuggestionsTab() {
     queryFn: () => adminApi.listSuggestions({ page, per_page: 20 }),
   })
 
-  const items: any[] = data?.data?.items || data?.data || []
+  const items = data?.data.items ?? []
 
   const approveMutation = useMutation({
     mutationFn: (vulnId: number) => adminApi.approveSuggestion(vulnId),
@@ -346,7 +353,7 @@ function SuggestionsTab() {
   return (
     <div>
       <div>
-        {items.map((item: any, idx: number) => {
+        {items.map((item: SecurityVulnerability, idx: number) => {
           const severityVariant = SEVERITY_BADGE_MAP[item.severity] || 'default'
           const isActing = (approveMutation.isPending && approveMutation.variables === item.id) ||
             (dismissMutation.isPending && dismissMutation.variables === item.id)
@@ -370,16 +377,11 @@ function SuggestionsTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 mb-1">
-                  {item.ecosystem && <EcosystemIcon type={item.ecosystem} size={14} />}
+                  {item.ecosystem && <EcosystemIcon type={item.ecosystem as any} size={14} />}
                   <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>
                     {item.package_name}
                   </span>
                 </div>
-                {item.proposed_version && (
-                  <p className="text-[12px] mt-1" style={{ color: 'var(--text-soft)' }}>
-                    {t('security.proposedVersion')}: <span className="font-mono">{item.proposed_version}</span>
-                  </p>
-                )}
               </div>
               <div className="flex gap-2 shrink-0">
                 <ButtonV2
@@ -434,14 +436,15 @@ function PoliciesTab() {
     queryFn: () => adminApi.listSecurityPolicies(),
   })
 
-  const policies: any[] = data?.data?.items || data?.data || []
+  const policies = data?.data ?? []
 
-  const [localPolicies, setLocalPolicies] = useState<Record<string, { auto_block: boolean; cvss_threshold: number }>>({})
+  type EditablePolicy = Pick<SecurityPolicy, 'auto_block_enabled' | 'min_cvss_score'>
+  const [localPolicies, setLocalPolicies] = useState<Record<string, EditablePolicy>>({})
   const [savingEco, setSavingEco] = useState<string | null>(null)
 
   const updateMutation = useMutation({
-    mutationFn: ({ ecosystem, data: d }: { ecosystem: string; data: any }) =>
-      adminApi.updateSecurityPolicy(ecosystem, d),
+    mutationFn: ({ ecosystem, data }: { ecosystem: string; data: UpdateSecurityPolicyRequest }) =>
+      adminApi.updateSecurityPolicy(ecosystem, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'security', 'policies'] })
       setSavingEco(null)
@@ -460,14 +463,14 @@ function PoliciesTab() {
 
   function getPolicy(ecosystem: string) {
     if (localPolicies[ecosystem]) return localPolicies[ecosystem]
-    const server = policies.find((p: any) => p.ecosystem === ecosystem)
+    const server = policies.find((policy) => policy.ecosystem === ecosystem)
     return {
-      auto_block: server?.auto_block ?? false,
-      cvss_threshold: server?.cvss_threshold ?? 7.0,
+      auto_block_enabled: server?.auto_block_enabled ?? false,
+      min_cvss_score: server?.min_cvss_score ?? 9.0,
     }
   }
 
-  function setPolicy(ecosystem: string, patch: Partial<{ auto_block: boolean; cvss_threshold: number }>) {
+  function setPolicy(ecosystem: string, patch: Partial<EditablePolicy>) {
     setLocalPolicies((prev) => ({
       ...prev,
       [ecosystem]: { ...getPolicy(ecosystem), ...patch },
@@ -528,10 +531,10 @@ function PoliciesTab() {
                   <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('security.autoBlock')}</span>
                   <button
                     type="button"
-                    onClick={() => setPolicy(eco, { auto_block: !policy.auto_block })}
+                    onClick={() => setPolicy(eco, { auto_block_enabled: !policy.auto_block_enabled })}
                     className="relative w-9 h-5 rounded-full cursor-pointer transition-colors duration-200"
                     style={{
-                      background: policy.auto_block ? 'var(--brand)' : 'var(--bg-soft)',
+                      background: policy.auto_block_enabled ? 'var(--brand)' : 'var(--bg-soft)',
                       border: 'none',
                     }}
                   >
@@ -539,7 +542,7 @@ function PoliciesTab() {
                       className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform duration-200"
                       style={{
                         background: 'white',
-                        transform: policy.auto_block ? 'translateX(16px)' : 'translateX(0)',
+                        transform: policy.auto_block_enabled ? 'translateX(16px)' : 'translateX(0)',
                       }}
                     />
                   </button>
@@ -553,8 +556,8 @@ function PoliciesTab() {
                     min={0}
                     max={10}
                     step={0.1}
-                    value={policy.cvss_threshold}
-                    onChange={(e) => setPolicy(eco, { cvss_threshold: parseFloat(e.target.value) || 0 })}
+                    value={policy.min_cvss_score}
+                    onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
                     className="w-16 rounded-[4px] px-2 py-1 text-[13px] font-mono text-center"
                     style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }}
                   />

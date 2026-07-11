@@ -8,6 +8,7 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
+import type { AccessLog, AccessLogQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
@@ -25,8 +26,8 @@ export default function AccessLogsV2() {
   const [page, setPage] = useState(1)
   const [appliedSearch, setAppliedSearch] = useState('')
 
-  const params: Record<string, any> = { page, page_size: 50 }
-  if (appliedSearch) params.search = appliedSearch
+  const params: AccessLogQuery = { page, page_size: 50 }
+  if (appliedSearch) Object.assign(params, { search: appliedSearch })
   if (adapterType !== 'all') params.adapter_type = adapterType
   if (hitFilter === 'hit') params.hit = true
   if (hitFilter === 'miss') params.hit = false
@@ -36,8 +37,8 @@ export default function AccessLogsV2() {
     queryFn: () => adminApi.listLogs(params),
   })
 
-  const items = data?.data?.items || []
-  const total = data?.data?.total || 0
+  const items: AccessLog[] = data?.data.items ?? []
+  const total = data?.data.total ?? 0
   const totalPages = Math.ceil(total / 50)
 
   function handleSearch() { setAppliedSearch(search); setPage(1) }
@@ -122,7 +123,7 @@ export default function AccessLogsV2() {
               </tr>
             </thead>
             <tbody>
-              {items.map((row: any, i: number) => (
+              {items.map((row: AccessLog, i: number) => (
                 <tr
                   key={i}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
@@ -136,7 +137,7 @@ export default function AccessLogsV2() {
                   {/* Ecosystem */}
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
-                      <EcosystemIcon type={row.adapter_type} size={13} />
+                      <EcosystemIcon type={row.adapter_type as any} size={13} />
                       <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.adapter_type}</span>
                     </div>
                   </td>

@@ -8,6 +8,7 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
+import type { AuditLogQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
@@ -44,8 +45,8 @@ export default function AuditLogsV2() {
   const [appliedTimeRange, setAppliedTimeRange] = useState('today')
 
   const range = getTimeRange(appliedTimeRange)
-  const params: Record<string, any> = { page, page_size: 50, start: range.start, end: range.end }
-  if (appliedSearch) params.search = appliedSearch
+  const params: AuditLogQuery = { page, page_size: 50, start: range.start, end: range.end }
+  if (appliedSearch) params.package = appliedSearch
   if (appliedEcosystem !== 'all') params.ecosystem = appliedEcosystem
   if (appliedResult === 'hit') params.result = 'hit'
   if (appliedResult === 'miss') params.result = 'miss'
@@ -57,8 +58,8 @@ export default function AuditLogsV2() {
     retry: false,
   })
 
-  const items = data?.data?.items || []
-  const total = data?.data?.total || 0
+  const items = data?.data.items ?? []
+  const total = data?.data.total ?? 0
   const totalPages = Math.ceil(total / 50)
 
   function handleSearch() {
@@ -194,7 +195,7 @@ export default function AuditLogsV2() {
                     <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.version || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
-                    {resultBadge(row.result || (row.cache_result === 'hit' ? 'hit' : row.cache_result === 'error' ? 'error' : 'miss'), t)}
+                    {resultBadge(row.cache_result, t)}
                   </td>
                   <td className="py-2 px-3 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>{row.latency_ms}ms</span>

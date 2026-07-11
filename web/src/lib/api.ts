@@ -1,4 +1,43 @@
 import axios from 'axios'
+import type {
+  AccessLogListResponse,
+  AccessLogQuery,
+  AdminUser,
+  APITokenSummary,
+  ApproveSuggestionRequest,
+  ApproveSuggestionResponse,
+  AuditLogListResponse,
+  AuditLogQuery,
+  CreateAPITokenRequest,
+  CreateAPITokenResponse,
+  CreateProjectRequest,
+  CreateProjectResponse,
+  CreateUserRequest,
+  DeleteProjectResponse,
+  DismissSuggestionResponse,
+  LoginResponse,
+  Principal,
+  Project,
+  ProjectDetail,
+  ProjectListResponse,
+  ProjectPackageQuery,
+  ProjectPackagesResponse,
+  ProjectSBOMQuery,
+  RefreshResponse,
+  RegenerateProjectTokenResponse,
+  SecurityBaseQuery,
+  SecurityDashboard,
+  SecurityImportResponse,
+  SecurityPackagePage,
+  SecurityPolicy,
+  SecurityQuery,
+  SecurityScanResponse,
+  SecuritySuggestionPage,
+  SecurityVulnerabilityPage,
+  UpdateProjectRequest,
+  UpdateSecurityPolicyRequest,
+  UpdateUserRequest,
+} from './adminApi.types'
 
 const api = axios.create({ baseURL: '/api/v1' })
 
@@ -41,9 +80,10 @@ export const packagesApi = {
 }
 
 export const authApi = {
-  login: (data: { username: string; password: string }) => api.post('/auth/login', data),
-  logout: () => api.post('/auth/logout'),
-  refresh: () => api.post('/auth/refresh'),
+  login: (data: { username: string; password: string }) => api.post<LoginResponse>('/auth/login', data),
+  logout: () => api.post<{ message: string }>('/auth/logout'),
+  me: () => api.get<Principal>('/auth/me'),
+  refresh: () => api.post<RefreshResponse>('/auth/refresh'),
 }
 
 export const adminApi = {
@@ -68,18 +108,18 @@ export const adminApi = {
     api.get(`/admin/upstreams/${id}/latency`, { params: { range: range_ } }),
 
   // Logs
-  listLogs: (params: Record<string, any>) => api.get('/admin/logs', { params }),
-  exportLogs: (params: Record<string, any>) => api.get('/admin/logs/export', { params, responseType: 'blob' }),
+  listLogs: (params: AccessLogQuery) => api.get<AccessLogListResponse>('/admin/logs', { params }),
+  exportLogs: (params: AccessLogQuery) => api.get<Blob>('/admin/logs/export', { params, responseType: 'blob' }),
 
   // Users
-  listUsers: () => api.get('/admin/users'),
-  createUser: (data: any) => api.post('/admin/users', data),
-  updateUser: (id: number, data: any) => api.put(`/admin/users/${id}`, data),
+  listUsers: () => api.get<AdminUser[]>('/admin/users'),
+  createUser: (data: CreateUserRequest) => api.post<AdminUser>('/admin/users', data),
+  updateUser: (id: number, data: UpdateUserRequest) => api.put<AdminUser>(`/admin/users/${id}`, data),
   deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
 
   // Tokens
-  listTokens: () => api.get('/admin/tokens'),
-  createToken: (data: any) => api.post('/admin/tokens', data),
+  listTokens: () => api.get<APITokenSummary[]>('/admin/tokens'),
+  createToken: (data: CreateAPITokenRequest) => api.post<CreateAPITokenResponse>('/admin/tokens', data),
   deleteToken: (id: number) => api.delete(`/admin/tokens/${id}`),
 
   // Settings
@@ -87,8 +127,8 @@ export const adminApi = {
   updateSettings: (data: any) => api.put('/admin/settings', data),
 
   // Audit Logs (Pro)
-  listAuditLogs: (params: Record<string, any>) => api.get('/admin/audit-logs', { params }),
-  exportAuditLogs: (params: Record<string, any>) => api.get('/admin/audit-logs/export', { params, responseType: 'blob' }),
+  listAuditLogs: (params: AuditLogQuery) => api.get<AuditLogListResponse>('/admin/audit-logs', { params }),
+  exportAuditLogs: (params: AuditLogQuery) => api.get<Blob>('/admin/audit-logs/export', { params, responseType: 'blob' }),
 
   // Package Rules (Pro)
   listRules: () => api.get('/admin/rules'),
@@ -102,16 +142,16 @@ export const adminApi = {
     api.get('/admin/bandwidth', { params }),
 
   // Package Security (Pro)
-  getSecurityDashboard: () => api.get('/admin/security/dashboard'),
-  listVulnerabilities: (params: Record<string, any>) => api.get('/admin/security/vulnerabilities', { params }),
-  listVulnerablePackages: (params: Record<string, any>) => api.get('/admin/security/packages', { params }),
-  listSuggestions: (params: Record<string, any>) => api.get('/admin/security/suggestions', { params }),
-  approveSuggestion: (vulnId: number, data?: any) => api.post(`/admin/security/suggestions/${vulnId}/approve`, data),
-  dismissSuggestion: (vulnId: number) => api.post(`/admin/security/suggestions/${vulnId}/dismiss`),
-  triggerSecurityScan: () => api.post('/admin/security/scan'),
-  importVulnerabilities: (formData: FormData) => api.post('/admin/security/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  listSecurityPolicies: () => api.get('/admin/security/policies'),
-  updateSecurityPolicy: (ecosystem: string, data: any) => api.put(`/admin/security/policies/${ecosystem}`, data),
+  getSecurityDashboard: () => api.get<SecurityDashboard>('/admin/security/dashboard'),
+  listVulnerabilities: (params: SecurityQuery) => api.get<SecurityVulnerabilityPage>('/admin/security/vulnerabilities', { params }),
+  listVulnerablePackages: (params: SecurityBaseQuery) => api.get<SecurityPackagePage>('/admin/security/packages', { params }),
+  listSuggestions: (params: SecurityBaseQuery) => api.get<SecuritySuggestionPage>('/admin/security/suggestions', { params }),
+  approveSuggestion: (vulnerabilityID: number, data: ApproveSuggestionRequest = {}) => api.post<ApproveSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/approve`, data),
+  dismissSuggestion: (vulnerabilityID: number) => api.post<DismissSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/dismiss`),
+  triggerSecurityScan: () => api.post<SecurityScanResponse>('/admin/security/scan'),
+  importVulnerabilities: (formData: FormData) => api.post<SecurityImportResponse>('/admin/security/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  listSecurityPolicies: () => api.get<SecurityPolicy[]>('/admin/security/policies'),
+  updateSecurityPolicy: (ecosystem: string, data: UpdateSecurityPolicyRequest) => api.put<SecurityPolicy>(`/admin/security/policies/${ecosystem}`, data),
 
   // Supply-chain quarantine (open-source wedge — NOT Pro)
   listQuarantineEvents: (params: Record<string, any>) => api.get('/admin/quarantine/events', { params }),
@@ -131,15 +171,14 @@ export const adminApi = {
     api.delete(`/admin/blocklist/overrides/${id}`, { data }),
 
   // Projects (Pro)
-  listProjects: () => api.get('/admin/projects'),
-  createProject: (data: any) => api.post('/admin/projects', data),
-  getProject: (id: number) => api.get(`/admin/projects/${id}`),
-  updateProject: (id: number, data: any) => api.put(`/admin/projects/${id}`, data),
-  deleteProject: (id: number) => api.delete(`/admin/projects/${id}`),
-  listProjectPackages: (id: number, params: Record<string, any>) => api.get(`/admin/projects/${id}/packages`, { params }),
-  regenerateProjectToken: (id: number) => api.post(`/admin/projects/${id}/token`),
-  exportSbom: (id: number, params: { format: string; ecosystem?: string }) =>
-    api.get(`/admin/projects/${id}/sbom`, { params, responseType: 'blob' }),
+  listProjects: () => api.get<ProjectListResponse>('/admin/projects'),
+  createProject: (data: CreateProjectRequest) => api.post<CreateProjectResponse>('/admin/projects', data),
+  getProject: (id: number) => api.get<ProjectDetail>(`/admin/projects/${id}`),
+  updateProject: (id: number, data: UpdateProjectRequest) => api.put<Project>(`/admin/projects/${id}`, data),
+  deleteProject: (id: number) => api.delete<DeleteProjectResponse>(`/admin/projects/${id}`),
+  listProjectPackages: (id: number, params: ProjectPackageQuery) => api.get<ProjectPackagesResponse>(`/admin/projects/${id}/packages`, { params }),
+  regenerateProjectToken: (id: number) => api.post<RegenerateProjectTokenResponse>(`/admin/projects/${id}/token`),
+  exportSbom: (id: number, params: ProjectSBOMQuery) => api.get<Blob>(`/admin/projects/${id}/sbom`, { params, responseType: 'blob' }),
 }
 
 // Setup wizard (no auth)
