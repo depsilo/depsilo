@@ -229,6 +229,9 @@ web/src/lib/api.ts	fix(admin): show truthful settings application state	mixed	35
 web/src/i18n/en.ts	fix(admin): show truthful settings application state	preserved	388553929351e6705db260f70891101442f7337bdf2a1704b36049fca694337c	i18n-current-product-copy	pending-review	2026-07-11T16:32:27Z
 web/src/i18n/zh.ts	fix(admin): show truthful settings application state	preserved	621198771ab030ad408f77218539540d23d9d5859a4e2aa931965612ecacb75c	i18n-current-product-copy	pending-review	2026-07-11T16:32:27Z
 web/src/lib/api.ts	refactor(web): type upstream registry API	mixed	8eeb989b51ed3a28b188cad85b0f7fb53806b7c74d14dc06a5a2bc052f503a4a	api-open-audit	pending-review	2026-07-11T16:54:48Z
+config.example.toml	fix(admin): reflect live upstream registry state	preserved	6f5fbd37f23bc18bfc084b0b31e7b135bbeac2f41a17afde6ed358c79acd913f	config-example-supply-chain	pending-review	2026-07-11T17:04:25Z
+README.md	fix(admin): reflect live upstream registry state	preserved	168601f2021e3f73e9e147e67d781730fe6658c871909e5a1d7ea7365475958b	readme-supply-chain	pending-review	2026-07-11T17:04:25Z
+docs/README_zh.md	fix(admin): reflect live upstream registry state	preserved	98c5fae8f7962112ea4684f248544d255eafa3ac268e01f549afadb8ef309bcd	zh-readme-supply-chain	pending-review	2026-07-11T17:04:25Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

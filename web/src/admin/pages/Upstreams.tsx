@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
@@ -8,20 +8,76 @@ import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
+import type { AdminUpstream, AdminUpstreamListResponse, UpstreamMutationRequest } from '@/lib/adminApi.types'
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker'] as const
+const runtimeEcosystemOrder = [
+  'pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems',
+  'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'huggingface',
+] as const
+const runtimeEcosystemRank = new Map<string, number>(runtimeEcosystemOrder.map((name, index) => [name, index] as const))
 
-interface UpstreamForm { name: string; url: string; priority: number; proxy: string; adapter_type: string; probe_mode: string; probe_interval: string }
-const emptyForm: UpstreamForm = { name: '', url: '', priority: 1, proxy: '', adapter_type: 'pypi', probe_mode: 'active', probe_interval: '30m' }
+function upsertRuntimeUpstream(current: AdminUpstreamListResponse | undefined, upstream: AdminUpstream): AdminUpstreamListResponse {
+  const items = current?.items ?? []
+  const index = items.findIndex((item) => item.id === upstream.id)
+  const next = index < 0 ? [...items, upstream] : items.map((item) => item.id === upstream.id ? upstream : item)
+  next.sort((a, b) => (runtimeEcosystemRank.get(a.adapter_type) ?? Number.MAX_SAFE_INTEGER) - (runtimeEcosystemRank.get(b.adapter_type) ?? Number.MAX_SAFE_INTEGER) || a.priority - b.priority || a.id - b.id)
+  return { items: next, total: next.length }
+}
+
+function removeRuntimeUpstream(current: AdminUpstreamListResponse | undefined, deletedID: number): AdminUpstreamListResponse {
+  const items = (current?.items ?? []).filter((item) => item.id !== deletedID)
+  return { items, total: items.length }
+}
+
+function replaceRuntimeList(current: AdminUpstreamListResponse | undefined, replacements: AdminUpstream[]): AdminUpstreamListResponse {
+  let next = current ?? { items: [], total: 0 }
+  for (const replacement of replacements) next = upsertRuntimeUpstream(next, replacement)
+  return next
+}
+
+interface RuntimeCheckBaseline {
+  generation: number
+  updatedAt: string
+}
+
+interface RuntimeCheckResponse {
+  upstream: AdminUpstream
+  baseline: RuntimeCheckBaseline
+}
+
+function mergeRuntimeChecks(
+  current: AdminUpstreamListResponse | undefined,
+  checks: RuntimeCheckResponse[],
+  generations: ReadonlyMap<number, number>,
+): AdminUpstreamListResponse | undefined {
+  if (!current) return current
+  const replacements = checks.flatMap(({ upstream, baseline }) => {
+    const currentUpstream = current.items.find((item) => item.id === upstream.id)
+    const currentGeneration = generations.get(upstream.id) ?? 0
+    return currentUpstream
+      && currentGeneration === baseline.generation
+      && currentUpstream.updated_at === baseline.updatedAt
+      ? [upstream]
+      : []
+  })
+  return replaceRuntimeList(current, replacements)
+}
+
+const emptyForm = (ecosystem: string): UpstreamMutationRequest => ({
+  adapter_type: ecosystem,
+  name: '', url: '', proxy: '', priority: 1,
+  probe_mode: 'active', probe_interval: '30m',
+})
 
 export default function UpstreamsV2() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const resourceGenerations = useRef(new Map<number, number>())
 
   // CRUD state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
-  const [form, setForm] = useState<UpstreamForm>(emptyForm)
+  const [form, setForm] = useState<UpstreamMutationRequest>(() => emptyForm(''))
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [urlError, setUrlError] = useState('')
 
@@ -30,68 +86,112 @@ export default function UpstreamsV2() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'upstreams'],
-    queryFn: () => adminApi.listUpstreams(),
+    queryFn: async () => (await adminApi.listUpstreams()).data,
   })
-  const allUpstreams = data?.data.items ?? []
+  const allUpstreams = data?.items ?? []
+  const activeEcosystems = Array.from(new Set(allUpstreams.map((item) => item.adapter_type)))
 
   // Map to UpstreamItem shape
-  const upstreamItems: UpstreamItem[] = allUpstreams.map((u: any) => ({
-    id: u.id,
-    name: u.name,
-    adapter: u.adapter_type,
-    healthy: u.healthy,
-    avg_latency_ms: u.avg_latency_ms || 0,
-    success_rate: u.success_rate || 0,
-    url: u.url,
-    proxy: u.proxy,
-    priority: u.priority,
+  const upstreamItems: UpstreamItem[] = allUpstreams.map((item) => ({
+    id: item.id,
+    name: item.name,
+    adapter: item.adapter_type,
+    healthy: item.healthy,
+    avg_latency_ms: item.avg_latency_ms,
+    success_rate: item.success_rate,
+    url: item.url,
+    proxy: item.proxy,
+    priority: item.priority,
   }))
 
   const createMutation = useMutation({
-    mutationFn: (d: any) => adminApi.createUpstream(d),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() },
+    mutationFn: (request: UpstreamMutationRequest) => adminApi.createUpstream(request),
+    onSuccess: ({ data: runtime }) => {
+      advanceResourceGeneration(runtime.id)
+      queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], (current) => upsertRuntimeUpstream(current, runtime))
+      closeDialog()
+    },
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, data: d }: { id: number; data: any }) => adminApi.updateUpstream(id, d),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); closeDialog() },
+    mutationFn: ({ id, request }: { id: number; request: UpstreamMutationRequest }) => adminApi.updateUpstream(id, request),
+    onSuccess: ({ data: runtime }) => {
+      advanceResourceGeneration(runtime.id)
+      queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], (current) => upsertRuntimeUpstream(current, runtime))
+      closeDialog()
+    },
   })
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminApi.deleteUpstream(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] }); setDeleteTarget(null) },
+    onSuccess: ({ data }) => {
+      advanceResourceGeneration(data.deleted_id)
+      queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], (current) => removeRuntimeUpstream(current, data.deleted_id))
+      setDeleteTarget(null)
+    },
   })
 
-  function closeDialog() { setDialogOpen(false); setEditId(null); setForm(emptyForm); setUrlError('') }
-  function openCreate() { setEditId(null); setForm({ ...emptyForm }); setDialogOpen(true) }
-  function openEdit(u: any) {
-    const orig = allUpstreams.find((x: any) => x.id === u.id || x.name === u.name)
-    if (!orig) return
-    setEditId(orig.id)
-    setForm({ name: orig.name, url: orig.url, priority: orig.priority, proxy: orig.proxy || '', adapter_type: orig.adapter_type, probe_mode: orig.probe_mode || 'active', probe_interval: orig.probe_interval || '30s' })
+  function advanceResourceGeneration(id: number) {
+    resourceGenerations.current.set(id, (resourceGenerations.current.get(id) ?? 0) + 1)
+  }
+
+  function captureCheckBaseline(upstream: AdminUpstream): RuntimeCheckBaseline {
+    return {
+      generation: resourceGenerations.current.get(upstream.id) ?? 0,
+      updatedAt: upstream.updated_at,
+    }
+  }
+
+  function closeDialog() { setDialogOpen(false); setEditId(null); setForm(emptyForm('')); setUrlError('') }
+  function openCreate() {
+    const ecosystem = activeEcosystems[0]
+    if (!ecosystem) return
+    setForm(emptyForm(ecosystem))
+    setEditId(null)
+    setDialogOpen(true)
+  }
+  function openEdit(item: UpstreamItem) {
+    const runtime = allUpstreams.find((candidate) => candidate.id === item.id)
+    if (!runtime) return
+    setEditId(runtime.id)
+    setForm({ adapter_type: runtime.adapter_type, name: runtime.name, url: runtime.url, proxy: runtime.proxy, priority: runtime.priority, probe_mode: runtime.probe_mode, probe_interval: runtime.probe_interval })
     setDialogOpen(true)
   }
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try { new URL(form.url) } catch { setUrlError(t('upstreams.invalidUrl')); return }
     setUrlError('')
-    if (editId) updateMutation.mutate({ id: editId, data: form })
+    if (editId !== null) updateMutation.mutate({ id: editId, request: form })
     else createMutation.mutate(form)
   }
 
   async function checkAll() {
     setChecking(true)
     try {
-      await Promise.allSettled(
-        allUpstreams.filter((u: any) => u.id).map((u: any) => adminApi.checkUpstream(u.id))
+      const checks = allUpstreams.map(async (upstream): Promise<RuntimeCheckResponse> => {
+        const baseline = captureCheckBaseline(upstream)
+        const { data } = await adminApi.checkUpstream(upstream.id)
+        return { upstream: data.upstream, baseline }
+      })
+      const settled = await Promise.allSettled(checks)
+      const fulfilled = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+      queryClient.setQueryData<AdminUpstreamListResponse>(
+        ['admin', 'upstreams'],
+        (current) => mergeRuntimeChecks(current, fulfilled, resourceGenerations.current),
       )
-      queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
     } finally {
       setChecking(false)
     }
   }
 
   async function checkOne(id: number) {
-    await adminApi.checkUpstream(id)
-    queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+    const current = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
+    const upstream = current?.items.find((item) => item.id === id)
+    if (!upstream) return
+    const baseline = captureCheckBaseline(upstream)
+    const { data: result } = await adminApi.checkUpstream(id)
+    queryClient.setQueryData<AdminUpstreamListResponse>(
+      ['admin', 'upstreams'],
+      (latest) => mergeRuntimeChecks(latest, [{ upstream: result.upstream, baseline }], resourceGenerations.current),
+    )
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending
@@ -144,7 +244,7 @@ export default function UpstreamsV2() {
                 </button>
               )}
               <button
-                onClick={() => openEdit(u as any)}
+                onClick={() => openEdit(u)}
                 className="bg-transparent cursor-pointer p-1.5 rounded-[3px] transition-[opacity,transform] duration-100 opacity-40 hover:opacity-100 active:scale-[0.96]"
                 style={{ color: 'var(--text-soft)' }}
               >
@@ -168,7 +268,7 @@ export default function UpstreamsV2() {
       <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <SelectV2 label={t('type')} value={form.adapter_type} onChange={(e) => setForm({ ...form, adapter_type: e.target.value })} disabled={!!editId}>
-            {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
+            {activeEcosystems.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
           </SelectV2>
           <InputV2 label={t('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. tuna" required />
           <div>
@@ -180,7 +280,7 @@ export default function UpstreamsV2() {
           <SelectV2
             label={t('upstreams.probeMode')}
             value={form.probe_mode}
-            onChange={(e) => setForm({ ...form, probe_mode: e.target.value })}
+            onChange={(e) => setForm({ ...form, probe_mode: e.target.value as UpstreamMutationRequest['probe_mode'] })}
           >
             <option value="active">{t('upstreams.probeModeActive')}</option>
             <option value="passive">{t('upstreams.probeModePassive')}</option>

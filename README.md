@@ -232,6 +232,8 @@ priority = 2
 proxy    = "http://127.0.0.1:7890"    # optional per-upstream proxy
 ```
 
+On the first start after upgrading, Depsilo imports ordinary ecosystem upstreams into the database and records the active ecosystems. After that seed, Admin and the database are authoritative: deleting or editing an upstream is not overwritten by later restarts. Adding upstreams in config for a previously inactive supported ecosystem activates that ecosystem on the next restart. Docker registries and extra indexes remain config-owned and are not managed by Admin Upstream CRUD.
+
 See [`config.example.toml`](config.example.toml) for the full reference,
 including the `[supply_chain]` quarantine block.
 

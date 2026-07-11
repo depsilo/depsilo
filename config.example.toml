@@ -46,6 +46,13 @@ token_ttl  = "168h"         # 7天
 [license]
 key = ""   # Leave empty for Community edition, set License Key for Pro
 
+# On the first start after upgrading, Depsilo imports ordinary ecosystem upstreams
+# into the database and records the active ecosystems. After that seed, Admin and
+# the database are authoritative: deleting or editing an upstream is not overwritten
+# by later restarts. Adding upstreams in config for a previously inactive supported
+# ecosystem activates it on the next restart. Docker registries and extra indexes
+# remain config-owned and are not managed by Admin Upstream CRUD.
+
 [[pypi.upstreams]]
 name     = "tuna"
 url      = "https://pypi.tuna.tsinghua.edu.cn"
