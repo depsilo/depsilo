@@ -1,214 +1,331 @@
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { adminApi } from '@/lib/api'
-import InputV2 from '@/components/Input'
-import SelectV2 from '@/components/Select'
+import WebhookTab from '@/admin/components/WebhookTab'
 import ButtonV2 from '@/components/Button'
 import Icon from '@/components/Icon'
+import InlineNotice from '@/components/InlineNotice'
+import InputV2 from '@/components/Input'
+import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
-import { useQueryClient } from '@tanstack/react-query'
-import WebhookTab from '@/admin/components/WebhookTab'
+import SelectV2 from '@/components/Select'
+import TabsV2 from '@/components/Tabs'
+import { useAppToast } from '@/components/Toast'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { usePrincipal } from '@/hooks/usePrincipal'
+import { adminApi } from '@/lib/api'
+import type {
+  AdminSettingsResponse,
+  AdminSettingsSnapshot,
+  EditableSettingPath,
+  SettingPath,
+  UpdateAdminSettingsRequest,
+  UpdateAdminSettingsResponse,
+} from '@/lib/adminApi.types'
 
 type TabKey = 'basic' | 'cache' | 'storage' | 'auth' | 'webhooks'
 
+interface SettingsDraft {
+  logLevel: AdminSettingsSnapshot['server']['log_level']
+  maxSizeGB: string
+  ttlIndex: string
+  ttlBlob: string
+  lruThreshold: string
+  tokenTTL: string
+}
+
+const draftFrom = (settings: AdminSettingsSnapshot): SettingsDraft => ({
+  logLevel: settings.server.log_level,
+  maxSizeGB: String(settings.cache.max_size_gb),
+  ttlIndex: settings.cache.ttl_index,
+  ttlBlob: settings.cache.ttl_blob,
+  lruThreshold: String(settings.cache.lru_threshold),
+  tokenTTL: settings.auth.token_ttl,
+})
+
+function rebaseDraft(
+  draft: SettingsDraft,
+  previous: AdminSettingsSnapshot,
+  next: AdminSettingsSnapshot,
+): SettingsDraft {
+  return {
+    logLevel: draft.logLevel !== previous.server.log_level ? draft.logLevel : next.server.log_level,
+    maxSizeGB: draft.maxSizeGB !== String(previous.cache.max_size_gb) ? draft.maxSizeGB : String(next.cache.max_size_gb),
+    ttlIndex: draft.ttlIndex !== previous.cache.ttl_index ? draft.ttlIndex : next.cache.ttl_index,
+    ttlBlob: draft.ttlBlob !== previous.cache.ttl_blob ? draft.ttlBlob : next.cache.ttl_blob,
+    lruThreshold: draft.lruThreshold !== String(previous.cache.lru_threshold) ? draft.lruThreshold : String(next.cache.lru_threshold),
+    tokenTTL: draft.tokenTTL !== previous.auth.token_ttl ? draft.tokenTTL : next.auth.token_ttl,
+  }
+}
+
+function buildPatch(draft: SettingsDraft, base: AdminSettingsSnapshot): UpdateAdminSettingsRequest | null {
+  const request: UpdateAdminSettingsRequest = {}
+  if (draft.logLevel !== base.server.log_level) request.server = { log_level: draft.logLevel }
+  const cache: NonNullable<UpdateAdminSettingsRequest['cache']> = {}
+  if (draft.maxSizeGB !== String(base.cache.max_size_gb)) cache.max_size_gb = Number(draft.maxSizeGB)
+  if (draft.ttlIndex !== base.cache.ttl_index) cache.ttl_index = draft.ttlIndex
+  if (draft.ttlBlob !== base.cache.ttl_blob) cache.ttl_blob = draft.ttlBlob
+  if (draft.lruThreshold !== String(base.cache.lru_threshold)) cache.lru_threshold = Number(draft.lruThreshold)
+  if (Object.keys(cache).length) request.cache = cache
+  if (draft.tokenTTL !== base.auth.token_ttl) request.auth = { token_ttl: draft.tokenTTL }
+  return Object.keys(request).length ? request : null
+}
+
+function valueAt(snapshot: AdminSettingsSnapshot, path: SettingPath): string {
+  switch (path) {
+    case 'server.host': return snapshot.server.host
+    case 'server.port': return String(snapshot.server.port)
+    case 'server.log_level': return snapshot.server.log_level
+    case 'database.driver': return snapshot.database.driver
+    case 'storage.type': return snapshot.storage.type
+    case 'storage.path': return snapshot.storage.path
+    case 'cache.max_size_gb': return String(snapshot.cache.max_size_gb)
+    case 'cache.ttl_index': return snapshot.cache.ttl_index
+    case 'cache.ttl_blob': return snapshot.cache.ttl_blob
+    case 'cache.lru_threshold': return String(snapshot.cache.lru_threshold)
+    case 'auth.token_ttl': return snapshot.auth.token_ttl
+  }
+}
+
+function mutationErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error !== 'object' || error === null || !('response' in error)) return fallback
+  const response = (error as { response?: { data?: { code?: string; message?: string } } }).response
+  const message = response?.data?.message
+  const code = response?.data?.code
+  if (message && code) return `${code}: ${message}`
+  return message ?? fallback
+}
+
 export default function SettingsV2() {
   const { t } = useTranslation()
-  const tabs = [
-    { key: 'basic' as const, label: t('settings.basic'), icon: 'tune' },
-    { key: 'cache' as const, label: t('settings.cachePolicy'), icon: 'cached' },
-    { key: 'storage' as const, label: t('settings.storageBackend'), icon: 'database' },
-    { key: 'auth' as const, label: t('settings.authSecurity'), icon: 'shield' },
-    { key: 'webhooks' as const, label: t('settings.webhooks'), icon: 'notifications' },
-  ]
+  const queryClient = useQueryClient()
+  const toast = useAppToast()
+  const desktopTabs = useMediaQuery('(min-width: 768px)')
+  const { canWrite } = usePrincipal()
   const [activeTab, setActiveTab] = useState<TabKey>('basic')
-  const [settings, setSettings] = useState<Record<string, any>>({})
+  const [draft, setDraft] = useState<SettingsDraft | null>(null)
+  const [inlineError, setInlineError] = useState<string | null>(null)
+  const [lastResult, setLastResult] = useState<UpdateAdminSettingsResponse | null>(null)
+  const configuredRef = useRef<AdminSettingsSnapshot | null>(null)
 
-  const { data, isLoading } = useQuery({ queryKey: ['admin', 'settings'], queryFn: () => adminApi.getSettings() })
+  const settingsQuery = useQuery<AdminSettingsResponse>({
+    queryKey: ['admin', 'settings'],
+    queryFn: async () => (await adminApi.getSettings()).data,
+  })
 
   useEffect(() => {
-    if (data?.data) {
-      const flat: Record<string, any> = {}; const d = data.data
-      if (d.server) { flat.host = d.server.host; flat.port = d.server.port; flat.log_level = d.server.log_level; flat.metrics_enabled = d.server.metrics_enabled; flat.access_log_persist = d.server.access_log_persist }
-      if (d.cache) { flat.max_size_gb = d.cache.max_size_gb; flat.lru_threshold = d.cache.lru_threshold; flat.ttl_index = d.cache.ttl_index; flat.ttl_blob = d.cache.ttl_blob; flat.lru_enabled = d.cache.lru_enabled }
-      if (d.storage) { flat.storage_type = d.storage.type; flat.storage_path = d.storage.path; flat.s3_endpoint = d.storage.endpoint; flat.s3_bucket = d.storage.bucket; flat.s3_access_key = d.storage.access_key; flat.s3_secret_key = d.storage.secret_key; flat.s3_region = d.storage.region }
-      if (d.database) { flat.db_driver = d.database.driver; flat.db_dsn = d.database.dsn }
-      if (d.auth) { flat.auth_enabled = d.auth.enabled; flat.anonymous_proxy = d.auth.anonymous_proxy; flat.jwt_secret = d.auth.jwt_secret; flat.token_ttl = d.auth.token_ttl }
-      setSettings(flat)
-    }
-  }, [data])
+    if (!settingsQuery.data) return
+    const previous = configuredRef.current
+    const next = settingsQuery.data.configured
+    setDraft(current => {
+      return current && previous
+        ? rebaseDraft(current, previous, next)
+        : draftFrom(next)
+    })
+    configuredRef.current = next
+  }, [settingsQuery.data])
 
-  const queryClient = useQueryClient()
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const updateMutation = useMutation({
+    mutationFn: async (request: UpdateAdminSettingsRequest) => (await adminApi.updateSettings(request)).data,
+    onSuccess: response => {
+      queryClient.setQueryData<AdminSettingsResponse>(['admin', 'settings'], response)
+      configuredRef.current = response.configured
+      setDraft(draftFrom(response.configured))
+      setInlineError(null)
+      setLastResult(response)
+      const tone = response.blocked_by_override.length || response.restart_required.length ? 'warning' : 'success'
+      const message = response.blocked_by_override.length
+        ? t('settings.blockedOverrideTitle')
+        : response.restart_required.length
+          ? t('settings.pendingRestartTitle')
+          : response.applied_now.length
+            ? t('settings.appliedNowTitle')
+            : t('settings.noChanges')
+      toast.show({ tone, message })
+    },
+    onError: error => {
+      setInlineError(mutationErrorMessage(error, t('settings.saveError')))
+      setLastResult(null)
+    },
+  })
 
-  const updateField = (key: string, value: any) => {
-    setSettings(prev => ({ ...prev, [key]: value }))
-    setSaved(false)
+  if (settingsQuery.isPending) {
+    return <div className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
   }
 
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await adminApi.updateSettings({
-        cache: {
-          max_size_gb: settings.max_size_gb,
-          ttl_index: settings.ttl_index,
-          ttl_blob: settings.ttl_blob,
-          lru_threshold: settings.lru_threshold,
-        },
-        server: {
-          log_level: settings.log_level,
-        },
-        auth: {
-          enabled: settings.auth_enabled,
-          token_ttl: settings.token_ttl,
-        },
-      })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-      queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
-    } finally {
-      setSaving(false)
-    }
+  if (settingsQuery.isError && !settingsQuery.data) {
+    return <QueryErrorState message={t('settings.loadError')} onRetry={() => { void settingsQuery.refetch() }} />
   }
 
-  if (isLoading) return <div className="h-40 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+  if (!settingsQuery.data || !draft) {
+    return <div className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
+  }
 
-  const roLabel = (text: string) => `${text} (${t('settings.requiresRestart')})`
+  const data = settingsQuery.data
+  const globallyReadOnly = !canWrite || !data.config_writable
+  const isDisabled = (path: EditableSettingPath) => (
+    globallyReadOnly || updateMutation.isPending || !data.editable.includes(path)
+  )
+  const fieldLabel = (path: SettingPath) => t(`settings.fields.${path}`)
+  const sourceLabel = (path: SettingPath) => t(`settings.source${data.sources[path][0].toUpperCase()}${data.sources[path].slice(1)}`)
+  const fieldHint = (path: SettingPath, extra?: string) => {
+    const parts = [sourceLabel(path)]
+    const variable = data.overrides[path]
+    if (variable) parts.push(t('settings.envOverride', { variable }))
+    const configuredValue = valueAt(data.configured, path)
+    const effectiveValue = valueAt(data.effective, path)
+    if (configuredValue !== effectiveValue) {
+      parts.push(t('settings.configuredValue', { value: configuredValue }))
+      parts.push(t('settings.effectiveValue', { value: effectiveValue }))
+    }
+    if (extra) parts.push(extra)
+    return parts.join(' · ')
+  }
+  const resultList = (title: string, paths: EditableSettingPath[], tone: 'success' | 'warning') => paths.length ? (
+    <InlineNotice tone={tone} title={title}>
+      {paths.map(path => fieldLabel(path)).join('、')}
+    </InlineNotice>
+  ) : null
+  const section = (title: string, children: ReactNode) => (
+    <section className="min-w-0 pt-5 md:pt-0">
+      <SectionHeader title={title} />
+      {children}
+    </section>
+  )
+  const updateDraft = <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]) => {
+    setDraft(current => current ? { ...current, [key]: value } : current)
+    setInlineError(null)
+    setLastResult(null)
+  }
+  const save = () => {
+    const request = buildPatch(draft, data.configured)
+    if (!request) {
+      setInlineError(null)
+      setLastResult(null)
+      toast.show({ tone: 'success', message: t('settings.noChanges') })
+      return
+    }
+    updateMutation.mutate(request)
+  }
 
-  const activeTabLabel = tabs.find(t => t.key === activeTab)?.label || ''
+  const tabs = [
+    {
+      key: 'basic',
+      label: t('settings.basic'),
+      icon: <Icon name="tune" size="sm" />,
+      content: section(t('settings.basic'), (
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} />
+            <InputV2 label={fieldLabel('server.port')} value={String(data.configured.server.port)} readOnly hint={fieldHint('server.port')} />
+          </div>
+          <SelectV2
+            label={fieldLabel('server.log_level')}
+            value={draft.logLevel}
+            onChange={event => updateDraft('logLevel', event.target.value as SettingsDraft['logLevel'])}
+            disabled={isDisabled('server.log_level')}
+            hint={fieldHint('server.log_level')}
+          >
+            <option value="debug">debug</option>
+            <option value="info">info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </SelectV2>
+        </div>
+      )),
+    },
+    {
+      key: 'cache',
+      label: t('settings.cachePolicy'),
+      icon: <Icon name="cached" size="sm" />,
+      content: section(t('settings.cachePolicy'), (
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <InputV2 label={fieldLabel('cache.max_size_gb')} type="number" value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} hint={fieldHint('cache.max_size_gb')} />
+            <InputV2 label={fieldLabel('cache.lru_threshold')} type="number" value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} hint={fieldHint('cache.lru_threshold')} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <InputV2 label={fieldLabel('cache.ttl_index')} mono value={draft.ttlIndex} onChange={event => updateDraft('ttlIndex', event.target.value)} disabled={isDisabled('cache.ttl_index')} hint={fieldHint('cache.ttl_index', t('settings.durationHint'))} />
+            <InputV2 label={fieldLabel('cache.ttl_blob')} mono value={draft.ttlBlob} onChange={event => updateDraft('ttlBlob', event.target.value)} disabled={isDisabled('cache.ttl_blob')} hint={fieldHint('cache.ttl_blob', t('settings.durationHint'))} />
+          </div>
+        </div>
+      )),
+    },
+    {
+      key: 'storage',
+      label: t('settings.storageBackend'),
+      icon: <Icon name="database" size="sm" />,
+      content: section(t('settings.storageBackend'), (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} />
+          <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} />
+          <InputV2 label={fieldLabel('database.driver')} value={data.configured.database.driver} readOnly hint={fieldHint('database.driver')} />
+        </div>
+      )),
+    },
+    {
+      key: 'auth',
+      label: t('settings.authSecurity'),
+      icon: <Icon name="shield" size="sm" />,
+      content: section(t('settings.authSecurity'), (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <InputV2 label={fieldLabel('auth.token_ttl')} mono value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} hint={fieldHint('auth.token_ttl', t('settings.durationHint'))} />
+        </div>
+      )),
+    },
+    {
+      key: 'webhooks',
+      label: t('settings.webhooks'),
+      icon: <Icon name="notifications" size="sm" />,
+      content: <div className="min-w-0 pt-5 md:pt-0"><WebhookTab /></div>,
+    },
+  ]
 
   return (
-    <div className="flex gap-8">
-      {/* ── Vertical tab nav ────────────────────────────────────── */}
-      <nav className="w-[180px] shrink-0 space-y-0.5">
-        {tabs.map(tab => {
-          const active = activeTab === tab.key
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-2 w-full px-3 py-2 text-[13px] font-[500] rounded-[4px] transition-[background,color,transform] duration-150 active:scale-[0.96] cursor-pointer bg-transparent text-left"
-              style={{
-                color: active ? 'var(--text)' : 'var(--text-soft)',
-                background: active ? 'var(--brand-soft)' : 'transparent',
-              }}
-            >
-              <Icon name={tab.icon} size="sm" />
-              {tab.label}
-            </button>
-          )
-        })}
-      </nav>
-
-      {/* ── Tab content ────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0">
-        {/* Save bar (only show for editable tabs) */}
-        {activeTab !== 'webhooks' && (
-          <div className="flex items-center justify-between mb-6 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-            <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--text-soft)' }}>
-              <Icon name="info" size="sm" />
-              {t('settings.hotReloadNote')}
-            </div>
-            <ButtonV2 size="sm" onClick={handleSave} disabled={saving}>
-              <Icon name={saved ? 'check' : 'save'} size="sm" />
-              {saving ? t('saving') : saved ? t('settings.saved') : t('save')}
-            </ButtonV2>
+    <div className="min-w-0 space-y-4">
+      {settingsQuery.isError && (
+        <InlineNotice tone="warning" title={t('settings.stale')}>
+          {mutationErrorMessage(settingsQuery.error, t('settings.stale'))}
+        </InlineNotice>
+      )}
+      {!canWrite && <InlineNotice tone="warning">{t('settings.readOnlyPrincipal')}</InlineNotice>}
+      {!data.config_writable && (
+        <InlineNotice tone="warning" title={t('settings.configReadOnlyTitle')}>
+          {t('settings.configReadOnlyBody')}
+        </InlineNotice>
+      )}
+      {data.pending_restart.length > 0 && (
+        <InlineNotice tone="warning" title={t('settings.pendingRestartTitle')}>
+          {t('settings.pendingRestartField', { fields: data.pending_restart.map(fieldLabel).join('、') })}
+        </InlineNotice>
+      )}
+      {inlineError && <InlineNotice tone="danger" title={t('settings.saveError')}>{inlineError}</InlineNotice>}
+      {lastResult && (
+        <div className="space-y-2">
+          {resultList(t('settings.appliedNowTitle'), lastResult.applied_now, 'success')}
+          {resultList(t('settings.restartRequiredTitle'), lastResult.restart_required, 'warning')}
+          {resultList(t('settings.blockedOverrideTitle'), lastResult.blocked_by_override, 'warning')}
+        </div>
+      )}
+      {activeTab !== 'webhooks' && (
+        <div className="flex flex-col items-stretch gap-3 border-b border-[var(--border)] pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-2 text-[12px] text-[var(--text-soft)]">
+            <Icon name="info" size="sm" className="mt-0.5 shrink-0" />
+            <span>{t('settings.hotReloadNote')}</span>
           </div>
-        )}
-
-        {activeTab === 'basic' && (
-          <section>
-            <SectionHeader title={activeTabLabel} />
-            <div className="space-y-5">
-              <div className="grid gap-4 grid-cols-2">
-                <InputV2 label={roLabel(t('settings.listenAddr'))} value={settings.host || '0.0.0.0'} disabled />
-                <InputV2 label={roLabel(t('settings.listenPort'))} type="number" value={settings.port || 8080} disabled />
-              </div>
-              <SelectV2 label={t('settings.logLevel')} value={settings.log_level || 'info'} onChange={(e) => updateField('log_level', e.target.value)} className="w-48">
-                <option value="debug">debug</option>
-                <option value="info">info</option>
-                <option value="warn">warn</option>
-                <option value="error">error</option>
-              </SelectV2>
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'cache' && (
-          <section>
-            <SectionHeader title={activeTabLabel} />
-            <div className="space-y-5">
-              <div className="grid gap-4 grid-cols-2">
-                <InputV2 label={t('settings.maxCacheSize')} type="number" value={settings.max_size_gb || 20} onChange={(e) => updateField('max_size_gb', parseInt(e.target.value) || 0)} />
-                <InputV2 label={t('settings.cleanThreshold')} type="number" value={settings.lru_threshold || 90} onChange={(e) => updateField('lru_threshold', parseInt(e.target.value) || 0)} />
-              </div>
-              <div className="grid gap-4 grid-cols-2">
-                <InputV2 label={t('settings.indexTTL')} mono value={settings.ttl_index || '1h'} onChange={(e) => updateField('ttl_index', e.target.value)} />
-                <InputV2 label={t('settings.fileTTL')} mono value={settings.ttl_blob || '72h'} onChange={(e) => updateField('ttl_blob', e.target.value)} />
-              </div>
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'storage' && (
-          <section>
-            <SectionHeader title={activeTabLabel} />
-            <div className="space-y-5">
-              <SelectV2 label={roLabel(t('settings.storageType'))} value={settings.storage_type || 'local'} disabled className="w-48">
-                <option value="local">{t('settings.localStorage')}</option>
-                <option value="s3">{t('settings.s3Storage')}</option>
-              </SelectV2>
-              {settings.storage_type === 's3' ? (
-                <div className="grid gap-4 grid-cols-2">
-                  <InputV2 label={roLabel('Endpoint')} mono value={settings.s3_endpoint || ''} disabled />
-                  <InputV2 label={roLabel('Bucket')} mono value={settings.s3_bucket || ''} disabled />
-                  <InputV2 label={roLabel('Access Key')} value={settings.s3_access_key || ''} disabled />
-                  <InputV2 label={roLabel('Secret Key')} type="password" value={settings.s3_secret_key || ''} disabled />
-                  <InputV2 label={roLabel('Region')} value={settings.s3_region || ''} disabled />
-                </div>
-              ) : (
-                <InputV2 label={roLabel(t('settings.cacheDir'))} mono value={settings.storage_path || './data/cache'} disabled />
-              )}
-              <SelectV2 label={roLabel(t('settings.dbType'))} value={settings.db_driver || 'sqlite'} disabled className="w-48">
-                <option value="sqlite">SQLite</option>
-                <option value="postgres">PostgreSQL</option>
-              </SelectV2>
-              {settings.db_driver === 'postgres' && <InputV2 label={roLabel('DSN')} mono value={settings.db_dsn || ''} disabled />}
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'auth' && (
-          <section>
-            <SectionHeader title={activeTabLabel} />
-            <div className="space-y-5">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.auth_enabled ?? true}
-                  onChange={(e) => updateField('auth_enabled', e.target.checked)}
-                  className="h-4 w-4 rounded"
-                  style={{ accentColor: 'var(--brand)' }}
-                />
-                <span className="text-[13px]" style={{ color: 'var(--text)' }}>{t('settings.enableAuth')}</span>
-              </label>
-              <div className="grid gap-4 grid-cols-2">
-                <InputV2 label={roLabel('JWT Secret')} type="password" value={settings.jwt_secret || ''} disabled />
-                <SelectV2 label={t('settings.tokenValidity')} value={settings.token_ttl || '168h'} onChange={(e) => updateField('token_ttl', e.target.value)}>
-                  <option value="168h">{t('users.days7')}</option>
-                  <option value="720h">{t('users.days30')}</option>
-                  <option value="2160h">{t('users.days90')}</option>
-                  <option value="never">{t('users.neverExpires')}</option>
-                </SelectV2>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'webhooks' && <WebhookTab />}
-      </div>
+          <ButtonV2 type="button" size="sm" onClick={save} disabled={globallyReadOnly || updateMutation.isPending}>
+            <Icon name="save" size="sm" />
+            {updateMutation.isPending ? t('saving') : t('save')}
+          </ButtonV2>
+        </div>
+      )}
+      <TabsV2
+        items={tabs}
+        value={activeTab}
+        onValueChange={value => setActiveTab(value as TabKey)}
+        ariaLabel={t('settings.tabsLabel')}
+        orientation={desktopTabs ? 'vertical' : 'horizontal'}
+      />
     </div>
   )
 }

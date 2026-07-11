@@ -99,9 +99,15 @@ export async function setUiPreferences(page: Page, theme: UiTheme, locale: UiLoc
   await page.addInitScript(({ theme, locale }) => {
     localStorage.setItem('lang', locale)
     localStorage.setItem('depsilo-theme', theme)
-    document.documentElement.dataset.theme = theme
-    document.documentElement.classList.remove('light', 'dark')
-    document.documentElement.classList.add(theme)
+    const applyTheme = () => {
+      const root = document.documentElement
+      if (!root) return false
+      root.dataset.theme = theme
+      root.classList.remove('light', 'dark')
+      root.classList.add(theme)
+      return true
+    }
+    if (!applyTheme()) window.addEventListener('DOMContentLoaded', applyTheme, { once: true })
   }, { theme, locale })
 }
 
@@ -148,9 +154,15 @@ export async function mockAdminApi(page: Page, overrides: AdminApiOverrides = {}
     if (!localStorage.getItem('lang')) localStorage.setItem('lang', 'zh')
     if (!localStorage.getItem('depsilo-theme')) localStorage.setItem('depsilo-theme', 'dark')
     const theme = localStorage.getItem('depsilo-theme') === 'light' ? 'light' : 'dark'
-    document.documentElement.dataset.theme = theme
-    document.documentElement.classList.remove('light', 'dark')
-    document.documentElement.classList.add(theme)
+    const applyTheme = () => {
+      const root = document.documentElement
+      if (!root) return false
+      root.dataset.theme = theme
+      root.classList.remove('light', 'dark')
+      root.classList.add(theme)
+      return true
+    }
+    if (!applyTheme()) window.addEventListener('DOMContentLoaded', applyTheme, { once: true })
   })
   await page.route('**/api/v1/**', async route => {
     const key = keyFor(route)

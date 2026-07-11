@@ -224,6 +224,10 @@ internal/api/router.go	feat(server): assemble active upstream registry routes	mi
 internal/server/server.go	feat(server): assemble active upstream registry routes	mixed	443df2d5941a56e301ebb755ec084448ad714bfcfdf81342dc27572ec4558d11	server-tamper-semantics	pending-review	2026-07-11T13:33:43Z
 web/src/i18n/en.ts	fix(admin): make shell status and navigation accessible	preserved	03493f1b6d71518db5ff6cf00065acef5406454ad618b611ae1e6beb7843253b	i18n-current-product-copy	pending-review	2026-07-11T16:14:59Z
 web/src/i18n/zh.ts	fix(admin): make shell status and navigation accessible	preserved	9363f7383f74d8de59cdb2bcf9fe72c0b33d342a96365cda8ca5d502cdd370ff	i18n-current-product-copy	pending-review	2026-07-11T16:14:59Z
+web/src/admin/pages/Settings.tsx	fix(admin): show truthful settings application state	adopted	05b82c0bf5d82158679351c54ad30c441c788d2005d6a1479f0686b0b3c0cf13	settings-no-postgres	pending-review	2026-07-11T16:32:27Z
+web/src/lib/api.ts	fix(admin): show truthful settings application state	mixed	35dbcc2adcd2b04af98c006196801afd8e478eb81b1ac15fe44a6eaab6439f03	api-open-audit	pending-review	2026-07-11T16:32:27Z
+web/src/i18n/en.ts	fix(admin): show truthful settings application state	preserved	388553929351e6705db260f70891101442f7337bdf2a1704b36049fca694337c	i18n-current-product-copy	pending-review	2026-07-11T16:32:27Z
+web/src/i18n/zh.ts	fix(admin): show truthful settings application state	preserved	621198771ab030ad408f77218539540d23d9d5859a4e2aa931965612ecacb75c	i18n-current-product-copy	pending-review	2026-07-11T16:32:27Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

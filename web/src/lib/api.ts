@@ -2,6 +2,7 @@ import axios from 'axios'
 import type {
   AccessLogListResponse,
   AccessLogQuery,
+  AdminSettingsResponse,
   AdminUser,
   APITokenSummary,
   ApproveSuggestionRequest,
@@ -35,6 +36,8 @@ import type {
   SecuritySuggestionPage,
   SecurityVulnerabilityPage,
   UpdateProjectRequest,
+  UpdateAdminSettingsRequest,
+  UpdateAdminSettingsResponse,
   UpdateSecurityPolicyRequest,
   UpdateUserRequest,
 } from './adminApi.types'
@@ -123,10 +126,10 @@ export const adminApi = {
   deleteToken: (id: number) => api.delete(`/admin/tokens/${id}`),
 
   // Settings
-  getSettings: () => api.get('/admin/settings'),
-  updateSettings: (data: any) => api.put('/admin/settings', data),
+  getSettings: () => api.get<AdminSettingsResponse>('/admin/settings'),
+  updateSettings: (data: UpdateAdminSettingsRequest) => api.put<UpdateAdminSettingsResponse>('/admin/settings', data),
 
-  // Audit Logs (Pro)
+  // Audit Logs (open source)
   listAuditLogs: (params: AuditLogQuery) => api.get<AuditLogListResponse>('/admin/audit-logs', { params }),
   exportAuditLogs: (params: AuditLogQuery) => api.get<Blob>('/admin/audit-logs/export', { params, responseType: 'blob' }),
 
@@ -200,7 +203,7 @@ export interface EntitlementStatus {
   license_key_masked?: string
   license_error?: string
   last_checked: string
-  // Deprecated aliases — to be removed in 0.5.0 per backend spec §16.2.
+  // Deprecated aliases retained for compatibility with older servers.
   key_masked?: string
   activated_at?: string
 }

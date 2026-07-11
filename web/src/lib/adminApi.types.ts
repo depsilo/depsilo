@@ -158,3 +158,40 @@ export interface UpdateUserRequest { password?: string; role?: UserRole; enabled
 export interface APITokenSummary { id: number; user_id: number; name: string; permissions: TokenPermissions; expires_at: string | null; last_used_at: string | null; created_at: string }
 export interface CreateAPITokenRequest { name: string; permissions: TokenPermissions; ttl: '7d' | '30d' | '90d' | 'never' }
 export interface CreateAPITokenResponse { id: number; name: string; token: string; permissions: TokenPermissions; expires_at: string | null; warning: string }
+
+export interface AdminSettingsSnapshot {
+  server: { host: string; port: number; log_level: 'debug' | 'info' | 'warn' | 'error' }
+  database: { driver: string }
+  storage: { type: string; path: string }
+  cache: { max_size_gb: number; ttl_index: string; ttl_blob: string; lru_threshold: number }
+  auth: { token_ttl: string }
+}
+export type SettingPath =
+  | 'server.host' | 'server.port' | 'server.log_level'
+  | 'database.driver' | 'storage.type' | 'storage.path'
+  | 'cache.max_size_gb' | 'cache.ttl_index' | 'cache.ttl_blob'
+  | 'cache.lru_threshold' | 'auth.token_ttl'
+export type EditableSettingPath =
+  | 'server.log_level' | 'cache.max_size_gb' | 'cache.ttl_index'
+  | 'cache.ttl_blob' | 'cache.lru_threshold' | 'auth.token_ttl'
+export type SettingSource = 'default' | 'file' | 'env'
+export interface AdminSettingsResponse {
+  configured: AdminSettingsSnapshot
+  effective: AdminSettingsSnapshot
+  pending_restart: EditableSettingPath[]
+  overrides: Partial<Record<SettingPath, string>>
+  sources: Record<SettingPath, SettingSource>
+  editable: EditableSettingPath[]
+  config_writable: boolean
+}
+export interface UpdateAdminSettingsRequest {
+  server?: { log_level?: AdminSettingsSnapshot['server']['log_level'] }
+  cache?: { max_size_gb?: number; ttl_index?: string; ttl_blob?: string; lru_threshold?: number }
+  auth?: { token_ttl?: string }
+}
+export interface UpdateAdminSettingsResponse extends AdminSettingsResponse {
+  changed: EditableSettingPath[]
+  applied_now: EditableSettingPath[]
+  restart_required: EditableSettingPath[]
+  blocked_by_override: EditableSettingPath[]
+}
