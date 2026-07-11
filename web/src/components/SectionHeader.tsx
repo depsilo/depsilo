@@ -1,8 +1,5 @@
 import { type ReactNode } from 'react'
 
-// Section divider for the no-card layout: confident heading + thin border-bottom
-// + optional right-aligned action (link, filter chips, etc.).
-
 interface SectionHeaderProps {
   title: string
   action?: ReactNode
@@ -12,24 +9,18 @@ interface SectionHeaderProps {
 
 export default function SectionHeader({ title, action, hint }: SectionHeaderProps) {
   return (
-    <header
-      className="flex items-baseline justify-between pb-2 mb-4"
-      style={{ borderBottom: '1px solid var(--border)' }}
-    >
-      <div className="flex items-baseline gap-3 min-w-0">
-        <h2
-          className="text-[13px] font-[600] tracking-[-0.005em] shrink-0"
-          style={{ color: 'var(--text)' }}
-        >
+    <header className="mb-4 flex flex-col gap-3 border-b border-[var(--border)] pb-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h2 className="text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
           {title}
         </h2>
         {hint && (
-          <span className="text-[11px] truncate" style={{ color: 'var(--text-soft)' }}>
+          <p className="mt-1 text-[11px]" style={{ color: 'var(--text-soft)' }}>
             {hint}
-          </span>
+          </p>
         )}
       </div>
-      {action}
+      {action && <div className="flex min-w-0 flex-wrap items-center gap-2">{action}</div>}
     </header>
   )
 }

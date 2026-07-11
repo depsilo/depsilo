@@ -8,6 +8,7 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
+import TableViewport from '@/components/TableViewport'
 import type { AccessLog, AccessLogQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
@@ -19,7 +20,7 @@ function latencyColor(ms: number): string {
 }
 
 export default function AccessLogsV2() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [search, setSearch] = useState('')
   const [adapterType, setAdapterType] = useState('all')
   const [hitFilter, setHitFilter] = useState('all')
@@ -106,7 +107,10 @@ export default function AccessLogsV2() {
       </div>
 
       {/* Table — bare */}
-      <div>
+      <TableViewport
+        label={i18n.resolvedLanguage?.startsWith('zh') ? '访问日志表格' : 'Access logs table'}
+        minWidth={860}
+      >
         {isLoading ? (
           <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
         ) : items.length === 0 ? (
@@ -123,9 +127,9 @@ export default function AccessLogsV2() {
               </tr>
             </thead>
             <tbody>
-              {items.map((row: AccessLog, i: number) => (
+              {items.map((row: AccessLog) => (
                 <tr
-                  key={i}
+                  key={row.id}
                   className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
@@ -176,7 +180,7 @@ export default function AccessLogsV2() {
             </tbody>
           </table>
         )}
-      </div>
+      </TableViewport>
 
       {/* Pagination */}
       {totalPages > 1 && (

@@ -33,7 +33,7 @@ test('field primitives compose native and local accessibility feedback', async (
 test('security policy controls have distinct ecosystem names and toggle with Space', async ({ page }) => {
   await page.goto('/admin/security')
   // TabsV2 receives tab semantics in Plan 04 Task 5; use its current button contract here.
-  await page.getByRole('button', { name: /策略/ }).click()
+  await page.getByRole('tab', { name: /策略/ }).click()
 
   const pypiSwitch = page.getByRole('switch', { name: 'PYPI 自动拦截' })
   const npmSwitch = page.getByRole('switch', { name: 'NPM 自动拦截' })

@@ -12,6 +12,7 @@ interface Props {
 export default function Segmented({ options, value, onChange }: Props) {
   return (
     <div
+      className="flex-wrap"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -30,7 +31,7 @@ export default function Segmented({ options, value, onChange }: Props) {
             type="button"
             key={opt.value}
             onClick={() => onChange(opt.value)}
-            className="active:scale-[0.96]"
+            className="min-h-10 whitespace-nowrap active:scale-[0.96]"
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 11,

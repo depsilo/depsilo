@@ -65,7 +65,12 @@ export default function RulesV2() {
       ) : items.length === 0 ? (
         <EmptyState icon="rule" title={t('rules.noRules')} minHeight={200} />
       ) : (
-        <DataTableV2 columns={columns} data={items} />
+        <DataTableV2
+          columns={columns}
+          data={items}
+          rowKey={(row) => row.id}
+          ariaLabel={t('rules.title')}
+        />
       )}
 
       <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('rules.editRule') : t('rules.addRule')}>

@@ -104,7 +104,12 @@ export default function UsersV2() {
         ) : users.length === 0 ? (
           <EmptyState icon="group" title={t('users.noUsers')} minHeight={180} />
         ) : (
-          <DataTableV2 columns={userColumns} data={users.map((user) => ({ ...user }))} />
+          <DataTableV2
+            columns={userColumns}
+            data={users.map((user) => ({ ...user }))}
+            rowKey={(row) => row.id as number}
+            ariaLabel={t('users.title')}
+          />
         )}
       </section>
 
@@ -119,7 +124,12 @@ export default function UsersV2() {
         ) : tokens.length === 0 ? (
           <EmptyState icon="key" title={t('users.noTokens')} minHeight={180} />
         ) : (
-          <DataTableV2 columns={tokenColumns} data={tokens.map((token) => ({ ...token }))} />
+          <DataTableV2
+            columns={tokenColumns}
+            data={tokens.map((token) => ({ ...token }))}
+            rowKey={(row) => row.id as number}
+            ariaLabel={`${t('users.title')} API Tokens`}
+          />
         )}
       </section>
 

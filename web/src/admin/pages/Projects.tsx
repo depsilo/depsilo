@@ -272,7 +272,12 @@ export default function ProjectsV2() {
           ) : packages.length === 0 ? (
             <EmptyState icon="inventory_2" title={t('projects.noPackages')} minHeight={200} />
           ) : (
-            <DataTableV2 columns={pkgColumns} data={packages.map((pkg) => ({ ...pkg }))} />
+            <DataTableV2
+              columns={pkgColumns}
+              data={packages.map((pkg) => ({ ...pkg }))}
+              rowKey={(row) => `${row.ecosystem}:${row.package_name}:${row.version}`}
+              ariaLabel={t('projects.packages')}
+            />
           )}
           {pkgTotalPages > 1 && (
             <div className="flex items-center justify-between text-[13px] mt-4" style={{ color: 'var(--text-soft)' }}>
@@ -298,7 +303,14 @@ export default function ProjectsV2() {
       label: t('actions'),
       render: (_v: unknown, row: ProjectSummary & Record<string, unknown>) => (
         <div className="flex gap-1">
-          <button onClick={(e) => { e.stopPropagation(); setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }} className="bg-transparent cursor-pointer p-1.5 rounded-[4px]" style={{ color: 'var(--text-soft)' }}>
+          <button
+            type="button"
+            aria-label={t('projects.detail')}
+            title={t('projects.detail')}
+            onClick={() => { setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }}
+            className="bg-transparent cursor-pointer p-1.5 rounded-[4px]"
+            style={{ color: 'var(--text-soft)' }}
+          >
             <Icon name="visibility" size="sm" />
           </button>
           <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }} className="bg-transparent cursor-pointer p-1.5 rounded-[4px]" style={{ color: 'var(--text-soft)' }}>
@@ -331,7 +343,8 @@ export default function ProjectsV2() {
         <DataTableV2
           columns={columns}
           data={projects.map((project) => ({ ...project }))}
-          onRowClick={(row) => { setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }}
+          rowKey={(row) => row.id as number}
+          ariaLabel={t('projects.title')}
         />
       )}
 

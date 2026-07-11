@@ -285,7 +285,12 @@ function VulnerabilitiesTab() {
       ) : items.length === 0 ? (
         <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={200} />
       ) : (
-        <DataTableV2 columns={columns} data={items.map((item) => ({ ...item }))} />
+        <DataTableV2
+          columns={columns}
+          data={items.map((item) => ({ ...item }))}
+          rowKey={(row) => row.osv_id as string}
+          ariaLabel={t('security.vulnerabilities')}
+        />
       )}
 
       {/* Pagination */}
@@ -633,20 +638,20 @@ export default function Security() {
   // the page no longer 402s, so there is no Pro paywall branch.
 
   const tabs = [
-    { key: 'overview', label: t('security.overview'), icon: <Icon name="dashboard" size="sm" /> },
-    { key: 'vulnerabilities', label: t('security.vulnerabilities'), icon: <Icon name="bug_report" size="sm" /> },
-    { key: 'suggestions', label: t('security.suggestions'), icon: <Icon name="lightbulb" size="sm" /> },
-    { key: 'policies', label: t('security.policies'), icon: <Icon name="policy" size="sm" /> },
+    { key: 'overview', label: t('security.overview'), icon: <Icon name="dashboard" size="sm" />, content: <OverviewTab /> },
+    { key: 'vulnerabilities', label: t('security.vulnerabilities'), icon: <Icon name="bug_report" size="sm" />, content: <VulnerabilitiesTab /> },
+    { key: 'suggestions', label: t('security.suggestions'), icon: <Icon name="lightbulb" size="sm" />, content: <SuggestionsTab /> },
+    { key: 'policies', label: t('security.policies'), icon: <Icon name="policy" size="sm" />, content: <PoliciesTab /> },
   ]
 
   return (
     <div className="space-y-6">
-      <TabsV2 items={tabs} active={tab} onChange={setTab} />
-
-      {tab === 'overview' && <OverviewTab />}
-      {tab === 'vulnerabilities' && <VulnerabilitiesTab />}
-      {tab === 'suggestions' && <SuggestionsTab />}
-      {tab === 'policies' && <PoliciesTab />}
+      <TabsV2
+        items={tabs}
+        value={tab}
+        onValueChange={setTab}
+        ariaLabel={t('security.title')}
+      />
     </div>
   )
 }
