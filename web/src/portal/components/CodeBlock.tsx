@@ -29,7 +29,7 @@ function highlightLine(line: string, lineIdx: number): ReactNode {
   while ((m = URL_RE.exec(line)) !== null) {
     if (m.index > last) parts.push(line.slice(last, m.index))
     parts.push(
-      <span key={`u${m.index}`} style={{ color: 'var(--brand)', fontWeight: 500 }}>
+      <span key={`u${m.index}`} style={{ color: 'var(--brand-text)', fontWeight: 500 }}>
         {m[0]}
       </span>
     )
@@ -159,6 +159,7 @@ export default function CodeBlock({ filename, code }: CodeBlockProps) {
         </button>
       </div>
       <pre
+        tabIndex={0}
         style={{
           margin: 0,
           padding: '12px 16px',

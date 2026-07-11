@@ -119,13 +119,13 @@ export default function AuditLogsV2() {
         </div>
 
         {/* Ecosystem */}
-        <select value={ecosystem} onChange={(e) => setEcosystem(e.target.value)} style={selStyle}>
+        <select aria-label={t('audit.ecosystem')} value={ecosystem} onChange={(e) => setEcosystem(e.target.value)} style={selStyle}>
           <option value="all">{t('all')}</option>
           {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
         </select>
 
         {/* Result */}
-        <select value={resultFilter} onChange={(e) => setResultFilter(e.target.value)} style={selStyle}>
+        <select aria-label={t('audit.result')} value={resultFilter} onChange={(e) => setResultFilter(e.target.value)} style={selStyle}>
           <option value="all">{t('all')}</option>
           <option value="hit">{t('audit.hit')}</option>
           <option value="miss">{t('audit.miss')}</option>
@@ -140,7 +140,7 @@ export default function AuditLogsV2() {
               onClick={() => setTimeRange(r)}
               className="px-2.5 py-1 text-[11px] rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
               style={{
-                background: timeRange === r ? 'var(--brand)' : 'transparent',
+                background: timeRange === r ? 'var(--btn-primary-bg)' : 'transparent',
                 color: timeRange === r ? 'white' : 'var(--text-soft)',
                 border: timeRange === r ? 'none' : '1px solid var(--border)',
               }}

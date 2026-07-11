@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, Request } from '@playwright/test'
 import type { WebhookConfig } from '../src/lib/api'
 import { test, expect, mockAdminApi } from './fixtures/admin-api'
 
@@ -116,7 +116,7 @@ test('does not infer wildcard from an explicit seven-item set with a custom memb
   const customWebhook = { ...webhookRows[1], enabled: true, events: 'tamper_detected,custom_specific' }
   await mockAdminApi(page, {
     'GET /api/v1/admin/webhooks': [customWebhook],
-    'PUT /api/v1/admin/webhooks/2': request => {
+    'PUT /api/v1/admin/webhooks/2': (request: Request) => {
       payload = request.postDataJSON()
       return customWebhook
     },
@@ -138,7 +138,7 @@ test('keeps an untouched server wildcard while saving another field', async ({ p
   let payload: unknown
   await mockAdminApi(page, {
     'GET /api/v1/admin/webhooks': [webhookRows[0]],
-    'PUT /api/v1/admin/webhooks/1': request => {
+    'PUT /api/v1/admin/webhooks/1': (request: Request) => {
       payload = request.postDataJSON()
       return webhookRows[0]
     },
@@ -155,7 +155,7 @@ test('serializes all seven explicitly selected events without wildcard', async (
   const specificWebhook = { ...webhookRows[1], enabled: true }
   await mockAdminApi(page, {
     'GET /api/v1/admin/webhooks': [specificWebhook],
-    'PUT /api/v1/admin/webhooks/2': request => {
+    'PUT /api/v1/admin/webhooks/2': (request: Request) => {
       payload = request.postDataJSON()
       return specificWebhook
     },
@@ -176,7 +176,7 @@ test('prevents an empty event selection from being saved as wildcard', async ({ 
   let updateRequests = 0
   await mockAdminApi(page, {
     'GET /api/v1/admin/webhooks': [webhookRows[1]],
-    'PUT /api/v1/admin/webhooks/2': request => {
+    'PUT /api/v1/admin/webhooks/2': (request: Request) => {
       updateRequests += 1
       return request.postDataJSON()
     },

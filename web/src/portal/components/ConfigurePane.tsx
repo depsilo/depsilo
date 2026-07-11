@@ -54,7 +54,7 @@ function ManagerTabs({
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 9,
-              color: isAI ? 'var(--brand)' : 'var(--text-subtle)',
+              color: isAI ? 'var(--brand-text)' : 'var(--text-subtle)',
               background: isAI ? 'var(--brand-soft)' : 'var(--bg-soft)',
               border: `0.5px solid ${isAI ? 'var(--brand-border)' : 'var(--border)'}`,
               borderRadius: 3,
@@ -68,14 +68,14 @@ function ManagerTabs({
             style={{
               fontSize: 14,
               fontWeight: 600,
-              color: isAI ? 'var(--brand)' : 'var(--text-muted)',
+              color: isAI ? 'var(--brand-text)' : 'var(--text-muted)',
               whiteSpace: 'nowrap',
             }}
           >
             {t('quickstart.aiTab')}
           </span>
         </span>
-        <span style={{ fontSize: 11.5, color: isAI ? 'var(--brand)' : 'var(--text-subtle)', whiteSpace: 'nowrap', opacity: 0.82 }}>
+        <span style={{ fontSize: 11.5, color: isAI ? 'var(--brand-text)' : 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
           {t('quickstart.aiTabHint')}
         </span>
       </button>

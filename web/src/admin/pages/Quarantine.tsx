@@ -325,6 +325,7 @@ function EventsTab(props: {
           style={{ maxWidth: 260 }}
         />
         <FilterSelect
+          label={t('quarantine.col.ecosystem')}
           value={props.ecoFilter}
           onChange={props.setEcoFilter}
           options={[
@@ -333,6 +334,7 @@ function EventsTab(props: {
           ]}
         />
         <FilterSelect
+          label={t('quarantine.col.action')}
           value={props.actionFilter}
           onChange={props.setActionFilter}
           options={[
@@ -696,6 +698,7 @@ function BlocklistTab() {
           </p>
           <div className="flex gap-2">
             <FilterSelect
+              label={t('quarantine.col.ecosystem')}
               value={form.ecosystem}
               onChange={(v) => setForm({ ...form, ecosystem: v })}
               options={ECOSYSTEMS.map((eco) => ({ value: eco, label: eco }))}
@@ -794,9 +797,10 @@ function Td({ children }: { children: React.ReactNode }) {
   return <td className="px-3 py-2 align-middle">{children}</td>
 }
 
-function FilterSelect(props: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+function FilterSelect(props: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   return (
     <select
+      aria-label={props.label}
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
       className="h-9 px-3 rounded-[6px] text-[12px] cursor-pointer"

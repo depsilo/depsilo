@@ -1,4 +1,16 @@
 import { test as base, expect, type Page, type Request, type Route } from '@playwright/test'
+import type {
+  AccessLogListResponse,
+  AdminSettingsResponse,
+  AdminSettingsSnapshot,
+  AdminUpstreamListResponse,
+  AuditLogListResponse,
+  ProjectListResponse,
+  SecurityDashboard,
+  SecurityPackagePage,
+  SecuritySuggestionPage,
+  SecurityVulnerabilityPage,
+} from '../../src/lib/adminApi.types'
 
 export type JsonValue = unknown
 export interface MockHttpResponse {
@@ -13,29 +25,29 @@ export type AdminApiOverrides = Record<string, AdminApiOverride>
 export type UiLocale = 'zh' | 'en'
 export type UiTheme = 'light' | 'dark'
 
-const configuredSettings = {
+const configuredSettings: AdminSettingsSnapshot = {
   server: { host: '127.0.0.1', port: 23333, log_level: 'info' },
   database: { driver: 'sqlite' },
   storage: { type: 'local', path: './data/cache' },
   cache: { max_size_gb: 20, ttl_index: '5m', ttl_blob: '96h', lru_threshold: 90 },
   auth: { token_ttl: '168h' },
 }
-const effectiveSettings = {
+const effectiveSettings: AdminSettingsSnapshot = {
   ...configuredSettings,
   cache: { ...configuredSettings.cache, ttl_blob: '72h' },
 }
-const settingSources = {
+const settingSources: AdminSettingsResponse['sources'] = {
   'server.host': 'file', 'server.port': 'file', 'server.log_level': 'file',
   'database.driver': 'file', 'storage.type': 'file', 'storage.path': 'file',
   'cache.max_size_gb': 'file', 'cache.ttl_index': 'file', 'cache.ttl_blob': 'file',
   'cache.lru_threshold': 'file', 'auth.token_ttl': 'file',
 }
-const editableSettings = [
+const editableSettings: AdminSettingsResponse['editable'] = [
   'server.log_level', 'cache.max_size_gb', 'cache.ttl_index',
   'cache.ttl_blob', 'cache.lru_threshold', 'auth.token_ttl',
 ]
 
-export const adminApiDefaults: Record<string, JsonValue> = {
+const existingAdminApiDefaults: Record<string, JsonValue> = {
   'GET /api/v1/setup/status': { needs_setup: false },
   'GET /api/v1/auth/me': { id: 1, username: 'admin', role: 'admin', enabled: true, auth_method: 'jwt', token_permissions: null, can_write: true },
   'GET /api/v1/integration-prompt': { status: 200, body: '# Depsilo project integration\nUse the configured Depsilo package mirror.', contentType: 'text/plain; charset=utf-8', serialize: 'text' },
@@ -81,6 +93,38 @@ export const adminApiDefaults: Record<string, JsonValue> = {
     config_writable: true,
   },
   'GET /api/v1/admin/webhooks': [],
+}
+
+const canonicalAdminApiDefaults = {
+  'GET /api/v1/admin/settings': {
+    configured: configuredSettings,
+    effective: effectiveSettings,
+    pending_restart: ['cache.ttl_blob'],
+    overrides: {},
+    sources: settingSources,
+    editable: editableSettings,
+    config_writable: true,
+  } satisfies AdminSettingsResponse,
+  'GET /api/v1/admin/upstreams': { items: [], total: 0 } satisfies AdminUpstreamListResponse,
+  'GET /api/v1/admin/logs': { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse,
+  'GET /api/v1/admin/audit-logs': { items: [], total: 0, page: 1 } satisfies AuditLogListResponse,
+  'GET /api/v1/admin/security/dashboard': {
+    total_vulnerabilities: 0,
+    affected_packages: 0,
+    by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
+    auto_blocked_count: 0,
+    last_scan_at: null,
+    scan_in_progress: false,
+  } satisfies SecurityDashboard,
+  'GET /api/v1/admin/security/vulnerabilities': { items: [], total: 0, page: 1 } satisfies SecurityVulnerabilityPage,
+  'GET /api/v1/admin/security/packages': { items: [], total: 0, page: 1 } satisfies SecurityPackagePage,
+  'GET /api/v1/admin/security/suggestions': { items: [], total: 0, page: 1 } satisfies SecuritySuggestionPage,
+  'GET /api/v1/admin/projects': { items: [], total: 0 } satisfies ProjectListResponse,
+}
+
+export const adminApiDefaults: Record<string, JsonValue> = {
+  ...existingAdminApiDefaults,
+  ...canonicalAdminApiDefaults,
 }
 
 const keyFor = (route: Route) => {
@@ -186,14 +230,11 @@ export async function mockAdminApi(page: Page, overrides: AdminApiOverrides = {}
 }
 
 export const test = base.extend<{ api: Awaited<ReturnType<typeof mockAdminApi>> }>({
-  api: async ({ page }, use) => {
+  api: [async ({ page }, use) => {
     const api = await mockAdminApi(page)
-    // Playwright fixture callback, not a React hook.
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     await use(api)
     api.assertMatched()
-  },
+  }, { auto: true }],
 })
 
-test.beforeEach(async ({ api }) => { void api })
 export { expect }

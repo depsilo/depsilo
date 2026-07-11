@@ -206,7 +206,7 @@ export default function MainLayoutV2() {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--bg-page)' }}>
+    <div data-admin-shell className="flex min-h-screen" style={{ background: 'var(--bg-page)' }}>
       <div className="page-wash" />
       <aside
         className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col lg:flex"

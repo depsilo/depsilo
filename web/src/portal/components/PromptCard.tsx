@@ -66,7 +66,7 @@ export default function PromptCard({
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
-              color: 'var(--brand)',
+              color: 'var(--brand-text)',
               padding: '1px 6px',
               background: 'var(--brand-soft)',
               borderRadius: 3,
@@ -79,7 +79,7 @@ export default function PromptCard({
         </div>
         <CopyButton text={prompt} />
       </div>
-      {mono ? <pre style={bodyStyle}>{prompt}</pre> : <div style={bodyStyle}>{prompt}</div>}
+      {mono ? <pre tabIndex={0} style={bodyStyle}>{prompt}</pre> : <div tabIndex={0} style={bodyStyle}>{prompt}</div>}
     </div>
   )
 }

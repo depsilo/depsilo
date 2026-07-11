@@ -224,7 +224,7 @@ export default function CacheManageV2() {
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           />
         </div>
-        <select value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
+        <select aria-label={t('audit.ecosystem')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
           {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
         </select>

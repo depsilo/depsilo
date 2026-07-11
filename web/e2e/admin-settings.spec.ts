@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, Request } from '@playwright/test'
 import { expect, mockAdminApi, test } from './fixtures/admin-api'
 
 interface ExpectedHttpFailure {
@@ -295,7 +295,7 @@ test('rebases untouched draft fields before building a patch after refetch', asy
             effective: { ...configured, cache: { ...configured.cache, max_size_gb: 30 } },
           }
     },
-    'PUT /api/v1/admin/settings': request => {
+    'PUT /api/v1/admin/settings': (request: Request) => {
       requestBody = request.postDataJSON()
       return updateResponse
     },

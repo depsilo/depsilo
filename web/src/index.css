@@ -519,6 +519,10 @@ pre, code, .code-mono {
   color: var(--text-subtle);
 }
 
+/* Admin is an operational surface: keep every label at neutral tracking so
+   locale and viewport changes cannot alter control geometry. */
+[data-admin-shell] * { letter-spacing: 0; }
+
 .grad-text {
   background: var(--grad-brand);
   -webkit-background-clip: text;

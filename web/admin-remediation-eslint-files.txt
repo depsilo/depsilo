@@ -62,3 +62,6 @@ src/admin/pages/Projects.tsx
 src/admin/pages/Upstreams.tsx
 src/admin/pages/Login.tsx
 src/admin/pages/Settings.tsx
+e2e/admin-contracts.spec.ts
+e2e/admin-axe.spec.ts
+e2e/admin-visual-matrix.spec.ts

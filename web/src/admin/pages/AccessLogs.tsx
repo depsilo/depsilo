@@ -80,13 +80,13 @@ export default function AccessLogsV2() {
         </div>
 
         {/* Ecosystem filter */}
-        <select value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
+        <select aria-label={t('audit.ecosystem')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
           {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
         </select>
 
         {/* Hit/Miss filter */}
-        <select value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }} style={selStyle}>
+        <select aria-label={t('audit.result')} value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }} style={selStyle}>
           <option value="all">{t('all')}</option>
           <option value="hit">{t('logs.hit')}</option>
           <option value="miss">{t('logs.miss')}</option>
