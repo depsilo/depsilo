@@ -1,6 +1,7 @@
 import { adminApiDefaults, test, expect, mockAdminApi } from './fixtures/admin-api'
 
 test('closed mobile drawer has no focusable offscreen links', async ({ page }) => {
+  await mockAdminApi(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/admin')
   await expect(page.getByRole('button', { name: /打开导航/ })).toBeVisible()

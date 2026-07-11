@@ -10,7 +10,11 @@ import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
 import TrendsCard, { type TrendsRange } from '@/admin/components/TrendsCard'
 import EmptyState from '@/components/EmptyState'
+import ButtonV2 from '@/components/Button'
+import InlineNotice from '@/components/InlineNotice'
+import QueryErrorState from '@/components/QueryErrorState'
 import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
+import { getApiError } from '@/lib/apiError'
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
 } from 'recharts'
@@ -79,29 +83,34 @@ export default function DashboardV2() {
   const { t } = useTranslation()
   const [range, setRange] = useState<TrendsRange>('1h')
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'dashboard'],
     queryFn: () => adminApi.getDashboard(),
     refetchInterval: 30000,
+    retry: false,
   })
 
-  const { data: trendsData } = useQuery({
+  const trendsQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'trends', range],
     queryFn: () => adminApi.getDashboardTrends(range),
     refetchInterval: 30000,
+    refetchOnWindowFocus: 'always',
+    retry: false,
   })
 
-  const { data: bwData } = useQuery({
+  const bandwidthQuery = useQuery({
     queryKey: ['admin', 'bandwidth', '7d'],
     queryFn: () => adminApi.getBandwidthReport({ range: '7d' }),
     refetchInterval: 60000,
+    retry: false,
   })
 
   const dashboard = data?.data
 
-  if (isLoading) {
+  if (isPending) {
     return (
-      <div className="space-y-12">
+      <div aria-busy="true" className="space-y-12">
+        <div aria-hidden="true">
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 py-2">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
@@ -111,37 +120,34 @@ export default function DashboardV2() {
           ))}
         </div>
         <div className="h-72 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+        </div>
       </div>
     )
   }
 
-  if (isError) {
-    return (
-      <EmptyState
-        icon="wifi_off"
-        title={t('common.loadFailed', 'Could not load dashboard')}
-        hint={t('dashboard.loadFailedHint', 'Check whether the Depsilo server is reachable, then retry.')}
-        tone="danger"
-        minHeight={360}
-        action={(
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="inline-flex min-h-10 items-center justify-center rounded-[6px] px-3 text-[12px] font-[600] transition-[background,color,transform] duration-150 active:scale-[0.96]"
-            style={{ background: 'var(--brand)', color: 'white' }}
-          >
-            {t('common.retry', 'Retry')}
-          </button>
-        )}
-      />
-    )
+  if (isError && !data) {
+    const normalized = getApiError(error)
+    return <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void refetch() }} />
   }
 
   const last24h = dashboard?.last_24h || {} as any
   const prev24h = dashboard?.prev_24h || {} as any
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
-  const rawTrendPoints = (trendsData?.data?.points || []) as any[]
+  const rawTrendPoints = (trendsQuery.data?.data?.points || []) as any[]
+  const bandwidthData = bandwidthQuery.data
+  const bandwidthSummary = bandwidthData?.data?.summary
+  const bandwidthDaily = bandwidthData?.data?.daily || []
+
+  function formatTimeSaved(ms: number) {
+    if (ms <= 0) return '0s'
+    const seconds = Math.floor(ms / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    if (hours > 0) return `${hours}${t('bandwidth.hours')} ${minutes % 60}${t('bandwidth.minutes')}`
+    if (minutes > 0) return `${minutes}${t('bandwidth.minutes')} ${seconds % 60}${t('bandwidth.seconds')}`
+    return `${seconds}${t('bandwidth.seconds')}`
+  }
 
   const metrics = [
     {
@@ -176,6 +182,9 @@ export default function DashboardV2() {
 
   return (
     <div className="space-y-12">
+      {data && isRefetchError && (
+        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+      )}
       {/* ── 24h metrics row ─────────────────────────── */}
       <section>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4 xl:gap-8 py-2">
@@ -201,7 +210,23 @@ export default function DashboardV2() {
       )}
 
       {/* ── Trends — 4 tabs × 4 ranges, browser-tz X axis ───── */}
-      <TrendsCard raw={rawTrendPoints} range={range} onRangeChange={setRange} />
+      <div data-query-key="dashboard-trends" className="space-y-3">
+        {trendsQuery.isPending ? (
+          <div aria-busy="true"><div aria-hidden="true" className="h-52 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" /></div>
+        ) : trendsQuery.isError && !trendsQuery.data ? (
+          <QueryErrorState
+            message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(trendsQuery.error).message}
+            onRetry={() => { void trendsQuery.refetch() }}
+          />
+        ) : (
+          <>
+            {trendsQuery.data && trendsQuery.isRefetchError && (
+              <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void trendsQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+            )}
+            <TrendsCard raw={rawTrendPoints} range={range} onRangeChange={setRange} />
+          </>
+        )}
+      </div>
 
 
       {/* ── Top packages — bare list ─────────────────── */}
@@ -211,52 +236,55 @@ export default function DashboardV2() {
       </section>
 
       {/* ── Bandwidth savings (no card) ──────────────── */}
-      {bwData?.data?.summary && (() => {
-        const bw = bwData.data.summary
-        const bwDaily = bwData.data.daily || []
-        const fmtTime = (ms: number) => {
-          if (ms <= 0) return '0s'
-          const s = Math.floor(ms / 1000); const m = Math.floor(s / 60); const h = Math.floor(m / 60)
-          if (h > 0) return `${h}${t('bandwidth.hours')} ${m % 60}${t('bandwidth.minutes')}`
-          if (m > 0) return `${m}${t('bandwidth.minutes')} ${s % 60}${t('bandwidth.seconds')}`
-          return `${s}${t('bandwidth.seconds')}`
-        }
-        return (
-          <section>
-            <SectionHeader
-              title={t('bandwidth.bandwidthSummary')}
-              action={
-                <Link
-                  to="/admin/bandwidth"
-                  className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-[500] no-underline transition-colors duration-150"
-                  style={{ color: 'var(--brand-text)' }}
-                >
-                  {t('bandwidth.viewFullReport')}
-                  <span aria-hidden>→</span>
-                </Link>
-              }
-            />
+      <section>
+        <SectionHeader
+          title={t('bandwidth.bandwidthSummary')}
+          action={
+            <Link
+              to="/admin/bandwidth"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-[500] no-underline transition-colors duration-150"
+              style={{ color: 'var(--brand-text)' }}
+            >
+              {t('bandwidth.viewFullReport')}
+              <span aria-hidden>→</span>
+            </Link>
+          }
+        />
+        {bandwidthQuery.isPending ? (
+          <div aria-busy="true"><div aria-hidden="true" className="h-32 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" /></div>
+        ) : bandwidthQuery.isError && !bandwidthData ? (
+          <QueryErrorState
+            message={getApiError(bandwidthQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(bandwidthQuery.error).message}
+            onRetry={() => { void bandwidthQuery.refetch() }}
+          />
+        ) : (
+          <div className="space-y-3">
+            {bandwidthData && bandwidthQuery.isRefetchError && (
+              <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void bandwidthQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+            )}
+            {bandwidthSummary ? (
+              <>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-10 gap-y-5 mb-6">
-              <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(bw.total_bytes || 0)} />
+              <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(bandwidthSummary.total_bytes || 0)} />
               <Metric
                 label={t('bandwidth.trafficSaved')}
-                value={formatBytes(bw.hit_bytes || 0)}
+                value={formatBytes(bandwidthSummary.hit_bytes || 0)}
                 valueTone="ok"
               />
               <Metric
                 label={t('bandwidth.savingsRate')}
-                value={bw.savings_rate != null ? `${(bw.savings_rate * 100).toFixed(1)}%` : '0%'}
-                valueTone={bw.savings_rate > 0.5 ? 'ok' : 'default'}
+                value={bandwidthSummary.savings_rate != null ? `${(bandwidthSummary.savings_rate * 100).toFixed(1)}%` : '0%'}
+                valueTone={bandwidthSummary.savings_rate > 0.5 ? 'ok' : 'default'}
               />
               <Metric
                 label={t('bandwidth.timeSaved')}
-                value={fmtTime(bw.time_saved_ms || 0)}
+                value={formatTimeSaved(bandwidthSummary.time_saved_ms || 0)}
                 valueTone="ok"
               />
             </div>
-            {bwDaily.length > 0 && (
+            {bandwidthDaily.length > 0 && (
               <ResponsiveContainer width="100%" height={84}>
-                <AreaChart data={bwDaily} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                <AreaChart data={bandwidthDaily} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                   <defs>
                     <linearGradient id="gradBwHit" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="var(--ok)" stopOpacity={0.3} />
@@ -269,9 +297,11 @@ export default function DashboardV2() {
                 </AreaChart>
               </ResponsiveContainer>
             )}
-          </section>
-        )
-      })()}
+              </>
+            ) : <EmptyState icon="bar_chart" title={t('bandwidth.emptyTitle')} hint={t('bandwidth.emptyHint')} minHeight={160} />}
+          </div>
+        )}
+      </section>
 
       {/* ── Upstream status (component still uses internal cards) ── */}
       <section>

@@ -18,9 +18,14 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
+import InlineNotice from '@/components/InlineNotice'
 import ModalV2 from '@/components/Modal'
 import InputV2 from '@/components/Input'
 import TableViewport from '@/components/TableViewport'
+import QueryErrorState from '@/components/QueryErrorState'
+import TabsV2 from '@/components/Tabs'
+import { usePrincipal } from '@/hooks/usePrincipal'
+import { getApiError } from '@/lib/apiError'
 
 // Backend mirrors db.QuarantineEvent + db.ApprovedVersion. We keep
 // the shape narrow to avoid leaking schema details into TS — extra
@@ -106,6 +111,7 @@ function actionBadge(action: string, t: (k: string) => string) {
 export default function Quarantine() {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { canWrite } = usePrincipal()
   const [tab, setTab] = useState<'events' | 'approvals' | 'blocklist'>('events')
 
   // Filters (events tab)
@@ -136,6 +142,7 @@ export default function Quarantine() {
     },
     enabled: tab === 'events',
     refetchInterval: 30_000,
+    retry: false,
   })
 
   const approvalsQ = useQuery({
@@ -146,6 +153,7 @@ export default function Quarantine() {
     },
     enabled: tab === 'approvals',
     refetchInterval: 30_000,
+    retry: false,
   })
 
   // ── Mutations ─────────────────────────────────────────────────
@@ -189,59 +197,44 @@ export default function Quarantine() {
         </p>
       </div>
 
-      <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border)' }}>
-        {[
-          { id: 'events' as const, label: t('quarantine.tab.events') },
-          { id: 'approvals' as const, label: t('quarantine.tab.approvals') },
-          { id: 'blocklist' as const, label: t('quarantine.tab.blocklist') },
-        ].map((x) => {
-          const active = tab === x.id
-          return (
-            <button
-              key={x.id}
-              type="button"
-              onClick={() => setTab(x.id)}
-              className="px-3 py-2 text-[13px] cursor-pointer transition-colors duration-150 bg-transparent"
-              style={{
-                color: active ? 'var(--text)' : 'var(--text-soft)',
-                fontWeight: active ? 600 : 500,
-                borderBottom: active ? '2px solid var(--brand)' : '2px solid transparent',
-                marginBottom: '-1px',
+      <TabsV2
+        value={tab}
+        onValueChange={(value) => setTab(value as typeof tab)}
+        ariaLabel={t('quarantine.title')}
+        items={[
+          {
+            key: 'events',
+            label: t('quarantine.tab.events'),
+            content: <EventsTab
+              eventsQ={eventsQ}
+              ecoFilter={ecoFilter}
+              setEcoFilter={setEcoFilter}
+              actionFilter={actionFilter}
+              setActionFilter={setActionFilter}
+              pkgSearch={pkgSearch}
+              setPkgSearch={setPkgSearch}
+              canWrite={canWrite}
+              onApprove={(ev) => {
+                approveM.reset()
+                setApproveTarget({ ecosystem: ev.ecosystem, package: ev.package, version: ev.version })
+                setApproveReason('')
+                setApproveOpen(true)
               }}
-            >
-              {x.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {tab === 'events' ? (
-        <EventsTab
-          eventsQ={eventsQ}
-          ecoFilter={ecoFilter}
-          setEcoFilter={setEcoFilter}
-          actionFilter={actionFilter}
-          setActionFilter={setActionFilter}
-          pkgSearch={pkgSearch}
-          setPkgSearch={setPkgSearch}
-          onApprove={(ev) => {
-            setApproveTarget({ ecosystem: ev.ecosystem, package: ev.package, version: ev.version })
-            setApproveReason('')
-            setApproveOpen(true)
-          }}
-        />
-      ) : tab === 'approvals' ? (
-        <ApprovalsTab
-          approvalsQ={approvalsQ}
-          onRevoke={(row) => {
-            setRevokeTarget(row)
-            setRevokeReason('')
-            setRevokeOpen(true)
-          }}
-        />
-      ) : (
-        <BlocklistTab />
-      )}
+            />,
+          },
+          {
+            key: 'approvals',
+            label: t('quarantine.tab.approvals'),
+            content: <ApprovalsTab approvalsQ={approvalsQ} canWrite={canWrite} onRevoke={(row) => {
+              revokeM.reset()
+              setRevokeTarget(row)
+              setRevokeReason('')
+              setRevokeOpen(true)
+            }} />,
+          },
+          { key: 'blocklist', label: t('quarantine.tab.blocklist'), content: <BlocklistTab /> },
+        ]}
+      />
 
       {/* Approve dialog */}
       <ModalV2 open={approveOpen} onClose={() => setApproveOpen(false)} title={t('quarantine.approve.title')}>
@@ -256,18 +249,15 @@ export default function Quarantine() {
               onChange={(e) => setApproveReason(e.target.value)}
               autoFocus
             />
-            {approveM.isError && (
-              <p className="text-[12px]" style={{ color: 'var(--danger-text)' }}>
-                {(approveM.error as any)?.response?.data?.message || t('quarantine.approve.error')}
-              </p>
-            )}
+            {approveM.isError && <InlineNotice tone="danger">{getApiError(approveM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
               <ButtonV2 variant="secondary" onClick={() => setApproveOpen(false)}>
                 {t('cancel')}
               </ButtonV2>
               <ButtonV2
                 onClick={() => approveM.mutate()}
-                disabled={approveReason.trim().length < 3 || approveM.isPending}
+                aria-busy={approveM.isPending || undefined}
+                disabled={approveReason.trim().length < 3 || approveM.isPending || !canWrite}
               >
                 {approveM.isPending ? t('quarantine.approve.submitting') : t('quarantine.approve.submit')}
               </ButtonV2>
@@ -289,11 +279,7 @@ export default function Quarantine() {
               onChange={(e) => setRevokeReason(e.target.value)}
               autoFocus
             />
-            {revokeM.isError && (
-              <p className="text-[12px]" style={{ color: 'var(--danger-text)' }}>
-                {(revokeM.error as any)?.response?.data?.message || t('quarantine.revoke.error')}
-              </p>
-            )}
+            {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
               <ButtonV2 variant="secondary" onClick={() => setRevokeOpen(false)}>
                 {t('cancel')}
@@ -301,7 +287,7 @@ export default function Quarantine() {
               <ButtonV2
                 variant="danger"
                 onClick={() => revokeM.mutate()}
-                disabled={revokeReason.trim().length < 3 || revokeM.isPending}
+                disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
               >
                 {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
               </ButtonV2>
@@ -320,6 +306,7 @@ function EventsTab(props: {
   ecoFilter: string; setEcoFilter: (v: string) => void
   actionFilter: string; setActionFilter: (v: string) => void
   pkgSearch: string; setPkgSearch: (v: string) => void
+  canWrite: boolean
   onApprove: (ev: QuarantineEvent) => void
 }) {
   const { t } = useTranslation()
@@ -355,15 +342,18 @@ function EventsTab(props: {
       </div>
 
       {/* Table */}
-      {props.eventsQ.isLoading ? (
-        <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</p>
-      ) : items.length === 0 ? (
-        <EmptyState
+      {props.eventsQ.isPending ? (
+        <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></p>
+      ) : props.eventsQ.isError && !props.eventsQ.data ? (
+        <QueryErrorState message={getApiError(props.eventsQ.error).status === 403 ? t('common.permissionDenied') : getApiError(props.eventsQ.error).message} onRetry={() => { void props.eventsQ.refetch() }} />
+      ) : (
+        <div className="space-y-3">
+        {Boolean(data) && props.eventsQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void props.eventsQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+        {items.length === 0 ? <EmptyState
           icon="policy"
           title={t('quarantine.events.empty_title')}
           hint={t('quarantine.events.empty_hint')}
-        />
-      ) : (
+        /> : (
         <TableViewport label={t('quarantine.events.table')} minWidth={920}>
           <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
             <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -399,7 +389,7 @@ function EventsTab(props: {
                     <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{ev.reason}</span>
                   </Td>
                   <Td>
-                    {ev.action === 'blocked' && (
+                    {props.canWrite && ev.action === 'blocked' && (
                       <ButtonV2 size="sm" variant="secondary" onClick={() => props.onApprove(ev)}>
                         <Icon name="check" size="sm" /> {t('quarantine.approve.cta')}
                       </ButtonV2>
@@ -411,6 +401,8 @@ function EventsTab(props: {
             </table>
           </div>
         </TableViewport>
+        )}
+        </div>
       )}
     </div>
   )
@@ -420,25 +412,30 @@ function EventsTab(props: {
 
 function ApprovalsTab(props: {
   approvalsQ: ReturnType<typeof useQuery>
+  canWrite: boolean
   onRevoke: (row: ApprovedVersion) => void
 }) {
   const { t } = useTranslation()
   const data = props.approvalsQ.data as { items: ApprovedVersion[]; total: number } | undefined
   const items = data?.items ?? []
 
-  if (props.approvalsQ.isLoading) {
-    return <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</p>
+  if (props.approvalsQ.isPending) {
+    return <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></p>
   }
-  if (items.length === 0) {
-    return (
+  if (props.approvalsQ.isError && !props.approvalsQ.data) {
+    const normalized = getApiError(props.approvalsQ.error)
+    return <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void props.approvalsQ.refetch() }} />
+  }
+  return (
+    <div className="space-y-3">
+    {Boolean(data) && props.approvalsQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void props.approvalsQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+    {items.length === 0 ? (
       <EmptyState
         icon="verified"
         title={t('quarantine.approvals.empty_title')}
         hint={t('quarantine.approvals.empty_hint')}
       />
-    )
-  }
-  return (
+    ) : (
     <TableViewport label={t('quarantine.approvals.table')} minWidth={820}>
       <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
         <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -470,9 +467,9 @@ function ApprovalsTab(props: {
               <Td><span className="text-[13px] font-mono" style={{ color: 'var(--text-soft)' }}>{row.version}</span></Td>
               <Td><span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{row.reason}</span></Td>
               <Td>
-                <ButtonV2 size="sm" variant="danger" onClick={() => props.onRevoke(row)}>
+                {props.canWrite && <ButtonV2 size="sm" variant="danger" onClick={() => props.onRevoke(row)}>
                   <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
-                </ButtonV2>
+                </ButtonV2>}
               </Td>
             </tr>
           ))}
@@ -480,6 +477,8 @@ function ApprovalsTab(props: {
         </table>
       </div>
     </TableViewport>
+    )}
+    </div>
   )
 }
 
@@ -493,6 +492,7 @@ function ApprovalsTab(props: {
 function BlocklistTab() {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const { canWrite } = usePrincipal()
 
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState({ ecosystem: 'npm', package: '', version: '', reason: '' })
@@ -503,11 +503,13 @@ function BlocklistTab() {
     queryKey: ['admin', 'blocklist', 'status'],
     queryFn: async () => (await adminApi.getBlocklistStatus()).data as BlocklistStatus,
     refetchInterval: 15_000,
+    retry: false,
   })
   const overridesQ = useQuery({
     queryKey: ['admin', 'blocklist', 'overrides'],
     queryFn: async () => (await adminApi.listBlocklistOverrides()).data as { items: MalwareOverride[]; now: string },
     refetchInterval: 30_000,
+    retry: false,
   })
 
   const syncM = useMutation({
@@ -519,9 +521,12 @@ function BlocklistTab() {
     },
   })
   const createM = useMutation({
-    mutationFn: () => adminApi.createBlocklistOverride(form),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'blocklist'] })
+    mutationFn: async () => (await adminApi.createBlocklistOverride(form)).data as MalwareOverride,
+    onSuccess: (created) => {
+      qc.setQueryData<{ items: MalwareOverride[]; now: string }>(['admin', 'blocklist', 'overrides'], (current) => current ? {
+        ...current,
+        items: [...current.items.filter((item) => item.id !== created.id), created],
+      } : { items: [created], now: created.created_at })
       qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
       setCreateOpen(false)
       setForm({ ecosystem: 'npm', package: '', version: '', reason: '' })
@@ -538,25 +543,26 @@ function BlocklistTab() {
   })
 
   const st = statusQ.data
-  if (statusQ.isLoading) {
-    return <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</p>
-  }
-  if (st && !st.enabled) {
-    return (
-      <EmptyState
-        icon="gpp_bad"
-        title={t('quarantine.blocklist.disabled_title')}
-        hint={t('quarantine.blocklist.disabled_hint')}
-      />
-    )
-  }
-
   const overrides = overridesQ.data?.items ?? []
   const now = overridesQ.data?.now ? new Date(overridesQ.data.now).getTime() : Date.now()
 
   return (
     <div className="space-y-5">
       {/* Status card */}
+      {statusQ.isPending ? (
+        <p aria-busy="true" className="text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></p>
+      ) : statusQ.isError && !statusQ.data ? (
+        <QueryErrorState message={getApiError(statusQ.error).status === 403 ? t('common.permissionDenied') : getApiError(statusQ.error).message} onRetry={() => { void statusQ.refetch() }} />
+      ) : (
+        <div className="space-y-3">
+          {statusQ.data && statusQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void statusQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+          {st && !st.enabled ? (
+            <EmptyState
+              icon="gpp_bad"
+              title={t('quarantine.blocklist.disabled_title')}
+              hint={t('quarantine.blocklist.disabled_hint')}
+            />
+          ) : st ? (
       <div className="rounded-[8px] border p-4 flex flex-wrap items-center gap-x-8 gap-y-3"
            style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
         <StatusItem label={t('quarantine.blocklist.entries')}>
@@ -586,15 +592,19 @@ function BlocklistTab() {
             <span className="text-[12px]" style={{ color: 'var(--danger-text)' }}>{st.last_error}</span>
           </StatusItem>
         )}
-        <div className="ml-auto flex gap-2">
-          <ButtonV2 variant="secondary" onClick={() => setCreateOpen(true)}>
+        {canWrite && <div className="ml-auto flex gap-2">
+          <ButtonV2 variant="secondary" onClick={() => { createM.reset(); setCreateOpen(true) }}>
             <Icon name="add" size="sm" /> {t('quarantine.blocklist.add_override')}
           </ButtonV2>
-          <ButtonV2 onClick={() => syncM.mutate()} disabled={syncM.isPending || !!st?.running}>
+          <ButtonV2 onClick={() => syncM.mutate()} aria-busy={syncM.isPending || undefined} disabled={syncM.isPending || !!st?.running}>
             <Icon name="sync" size="sm" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
           </ButtonV2>
-        </div>
+        </div>}
+        {syncM.isError && <div className="basis-full"><InlineNotice tone="danger">{getApiError(syncM.error).message}</InlineNotice></div>}
       </div>
+          ) : <EmptyState icon="gpp_bad" title={t('noData')} />}
+        </div>
+      )}
 
       {/* Overrides */}
       <div>
@@ -602,7 +612,14 @@ function BlocklistTab() {
         <p className="text-[12px] mb-3" style={{ color: 'var(--text-soft)' }}>
           {t('quarantine.blocklist.overrides_hint')}
         </p>
-        {overrides.length === 0 ? (
+        {overridesQ.isPending ? (
+          <p aria-busy="true" className="text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></p>
+        ) : overridesQ.isError && !overridesQ.data ? (
+          <QueryErrorState message={getApiError(overridesQ.error).status === 403 ? t('common.permissionDenied') : getApiError(overridesQ.error).message} onRetry={() => { void overridesQ.refetch() }} />
+        ) : (
+          <div className="space-y-3">
+          {overridesQ.data && overridesQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void overridesQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+          {overrides.length === 0 ? (
           <EmptyState
             icon="verified_user"
             title={t('quarantine.blocklist.no_overrides_title')}
@@ -651,8 +668,8 @@ function BlocklistTab() {
                         )}
                       </Td>
                       <Td>
-                        {!expired && (
-                          <ButtonV2 size="sm" variant="danger" onClick={() => { setRevokeTarget(row); setRevokeReason('') }}>
+                        {canWrite && !expired && (
+                          <ButtonV2 size="sm" variant="danger" onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}>
                             <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
                           </ButtonV2>
                         )}
@@ -664,6 +681,8 @@ function BlocklistTab() {
               </table>
             </div>
           </TableViewport>
+          )}
+          </div>
         )}
       </div>
 
@@ -696,16 +715,13 @@ function BlocklistTab() {
             value={form.reason}
             onChange={(e) => setForm({ ...form, reason: e.target.value })}
           />
-          {createM.isError && (
-            <p className="text-[12px]" style={{ color: 'var(--danger-text)' }}>
-              {(createM.error as any)?.response?.data?.message || t('quarantine.blocklist.create_error')}
-            </p>
-          )}
+          {createM.isError && <InlineNotice tone="danger">{getApiError(createM.error).message}</InlineNotice>}
           <div className="flex justify-end gap-2">
             <ButtonV2 variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
             <ButtonV2
               onClick={() => createM.mutate()}
-              disabled={!form.package.trim() || form.reason.trim().length < 3 || createM.isPending}
+              aria-busy={createM.isPending || undefined}
+              disabled={!form.package.trim() || form.reason.trim().length < 3 || createM.isPending || !canWrite}
             >
               {createM.isPending ? t('quarantine.approve.submitting') : t('quarantine.blocklist.create_submit')}
             </ButtonV2>
@@ -726,12 +742,13 @@ function BlocklistTab() {
               onChange={(e) => setRevokeReason(e.target.value)}
               autoFocus
             />
+            {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
               <ButtonV2 variant="secondary" onClick={() => setRevokeTarget(null)}>{t('cancel')}</ButtonV2>
               <ButtonV2
                 variant="danger"
                 onClick={() => revokeM.mutate()}
-                disabled={revokeReason.trim().length < 3 || revokeM.isPending}
+                disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
               >
                 {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
               </ButtonV2>

@@ -10,7 +10,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import ButtonV2 from '@/components/Button'
+import QueryErrorState from '@/components/QueryErrorState'
 import { statsApi } from '@/lib/api'
+import { getApiError } from '@/lib/apiError'
 import { formatBps } from '@/lib/utils'
 
 interface SparklinePoint {
@@ -155,6 +157,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
   const { t } = useTranslation()
   const {
     data,
+    error,
     isPending,
     isError,
     isRefetchError,
@@ -169,6 +172,8 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
     staleTime: 4000,
+    refetchOnWindowFocus: 'always',
+    retry: false,
   })
 
   // Empty / onboarding state: no traffic ever recorded.
@@ -217,7 +222,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
       }
 
   return (
-    <div data-query-key="now" style={containerStyle}>
+    <div data-query-key="now" aria-busy={isPending || undefined} style={containerStyle}>
       <style>{breathing}</style>
 
       {hasStaleData && (
@@ -257,7 +262,16 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
       </span>
 
       {hasInitialError ? (
-        <span className="min-w-0 flex-1" />
+        <div className="min-w-0 flex-1">
+          {isTopbar ? (
+            <div role="alert" className="flex h-10 min-w-0 items-center justify-end gap-2 text-[11px] text-[var(--danger-text)]">
+              <span className="min-w-0 truncate">{getApiError(error).status === 403 ? t('common.permissionDenied') : getApiError(error).message}</span>
+              <ButtonV2 type="button" variant="secondary" size="sm" className="h-10 shrink-0" onClick={() => { void refetch() }}>{t('common.retry')}</ButtonV2>
+            </div>
+          ) : (
+            <QueryErrorState message={getApiError(error).status === 403 ? t('common.permissionDenied') : getApiError(error).message} onRetry={() => { void refetch() }} />
+          )}
+        </div>
       ) : isEmpty ? (
         // Onboarding hint — replaces the metrics row when no traffic exists.
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -301,7 +315,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
 
           <span style={{ flex: 1 }} />
 
-          <Sparkline points={data.sparkline} />
+          <Sparkline points={data.sparkline ?? []} />
         </>
       ) : (
         // Initial fetch in flight — render the skeleton at the same height

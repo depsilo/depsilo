@@ -223,8 +223,10 @@ test('user toggles keep independent loading state when responses finish out of o
   })
   await page.goto('/admin/users')
 
-  const alphaToggle = page.getByRole('button', { name: /禁用 operator-alpha|Disable operator-alpha/ })
-  const betaToggle = page.getByRole('button', { name: /禁用 operator-beta|Disable operator-beta/ })
+  const alphaRow = page.getByRole('row', { name: /operator-alpha/ })
+  const betaRow = page.getByRole('row', { name: /operator-beta/ })
+  const alphaToggle = alphaRow.getByRole('button', { name: /禁用 operator-alpha|Disable operator-alpha/ })
+  const betaToggle = betaRow.getByRole('button', { name: /禁用 operator-beta|Disable operator-beta/ })
   await alphaToggle.click()
   await betaToggle.click()
   await Promise.all([alphaRequestStarted, betaRequestStarted])
@@ -232,11 +234,11 @@ test('user toggles keep independent loading state when responses finish out of o
   await expect(betaToggle).toHaveAttribute('aria-busy', 'true')
 
   releaseBeta()
-  await expect(betaToggle).not.toHaveAttribute('aria-busy', 'true')
+  await expect(betaRow.getByRole('button', { name: /启用 operator-beta|Enable operator-beta/ })).not.toHaveAttribute('aria-busy', 'true')
   await expect(alphaToggle).toHaveAttribute('aria-busy', 'true')
 
   releaseAlpha()
-  await expect(alphaToggle).not.toHaveAttribute('aria-busy', 'true')
+  await expect(alphaRow.getByRole('button', { name: /启用 operator-alpha|Enable operator-alpha/ })).not.toHaveAttribute('aria-busy', 'true')
 })
 
 test('quarantine secondary tables use their own named scroll regions', async ({ page }) => {
@@ -253,12 +255,12 @@ test('quarantine secondary tables use their own named scroll regions', async ({ 
   })
   await page.goto('/admin/quarantine')
 
-  await page.getByRole('button', { name: /已放行|Approvals/ }).click()
+  await page.getByRole('tab', { name: /已放行|Approvals/ }).click()
   const approvals = page.getByRole('region', { name: /供应链隔离放行表格|Quarantine approvals table/ })
   await expect(approvals).toBeVisible()
   expect(await approvals.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
 
-  await page.getByRole('button', { name: /恶意封锁|Malware blocklist/ }).click()
+  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
   const overrides = page.getByRole('region', { name: /恶意封锁豁免表格|Malware override table/ })
   await expect(overrides).toBeVisible()
   expect(await overrides.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)

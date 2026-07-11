@@ -8,7 +8,11 @@ import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
+import InlineNotice from '@/components/InlineNotice'
+import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
+import { usePrincipal } from '@/hooks/usePrincipal'
+import { getApiError } from '@/lib/apiError'
 
 // State panel — soft tinted background, no border / shadow.
 // Used to surface license/trial status with an icon + headline + body.
@@ -55,8 +59,9 @@ function StatePanel({
 export default function License() {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
+  const { canWrite } = usePrincipal()
 
-  const { data: statusData, isLoading } = useQuery({
+  const statusQuery = useQuery({
     queryKey: ['license', 'status'],
     queryFn: async () => {
       const res = await licenseApi.status()
@@ -64,17 +69,18 @@ export default function License() {
     },
     refetchOnWindowFocus: true,
     refetchInterval: 60_000,
+    retry: false,
   })
 
-  const status = statusData
+  const status = statusQuery.data
 
   const activateTrial = useMutation({
     mutationFn: async () => {
       const res = await licenseApi.activateTrial()
       return res.data as EntitlementStatus
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['license', 'status'] })
+    onSuccess: (nextStatus) => {
+      qc.setQueryData<EntitlementStatus>(['license', 'status'], nextStatus)
     },
   })
 
@@ -84,7 +90,7 @@ export default function License() {
       return res.data as EntitlementStatus
     },
     onSuccess: (s) => {
-      qc.invalidateQueries({ queryKey: ['license', 'status'] })
+      qc.setQueryData<EntitlementStatus>(['license', 'status'], s)
       if (s.source === 'paid') {
         setKeyInput('')
       }
@@ -96,8 +102,9 @@ export default function License() {
       const res = await licenseApi.clearKey()
       return res.data as EntitlementStatus
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['license', 'status'] })
+    onSuccess: (nextStatus) => {
+      qc.setQueryData<EntitlementStatus>(['license', 'status'], nextStatus)
+      setRemoveOpen(false)
     },
   })
 
@@ -110,13 +117,20 @@ export default function License() {
   const [removeOpen, setRemoveOpen] = useState(false)
   const [keyExpanded, setKeyExpanded] = useState(false)
 
-  if (isLoading || !status) {
+  if (statusQuery.isPending) {
     return (
-      <div className="py-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
-        {t('loading')}
+      <div aria-busy="true" className="py-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
+        <span aria-hidden="true">{t('loading')}</span>
       </div>
     )
   }
+
+  if (statusQuery.isError && !status) {
+    const normalized = getApiError(statusQuery.error)
+    return <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void statusQuery.refetch() }} />
+  }
+
+  if (!status) return null
 
   const source = status.source
   const trialUsed = status.trial_used
@@ -129,6 +143,9 @@ export default function License() {
 
   return (
     <div className="space-y-10 max-w-3xl">
+      {statusQuery.isRefetchError && (
+        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+      )}
       {/* ── Page heading ───────────────────────────── */}
       <div>
         <h2 className="text-[20px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--text)' }}>
@@ -151,9 +168,9 @@ export default function License() {
           description={t('license.trial.start_explainer')}
         >
           <div className="flex gap-2">
-            <ButtonV2 onClick={() => activateTrial.mutate()} disabled={activateTrial.isPending}>
+            {canWrite && <ButtonV2 onClick={() => activateTrial.mutate()} disabled={activateTrial.isPending}>
               {t('license.trial.start_button')}
-            </ButtonV2>
+            </ButtonV2>}
             <ButtonV2 variant="secondary" onClick={() => window.open(buyLifetimeUrl(), '_blank')}>
               {t('license.buy_lifetime', { price: LIFETIME_PRICE_LABEL })}
             </ButtonV2>
@@ -210,7 +227,7 @@ export default function License() {
               </div>
             ))}
           </div>
-          <ButtonV2
+          {canWrite && <ButtonV2
             variant="secondary"
             onClick={() => revalidate.mutate()}
             disabled={revalidate.isPending}
@@ -218,7 +235,7 @@ export default function License() {
           >
             <Icon name="refresh" size="sm" />
             {t('license.revalidate')}
-          </ButtonV2>
+          </ButtonV2>}
         </StatePanel>
       )}
 
@@ -237,7 +254,7 @@ export default function License() {
 
         {(keyExpanded || (source === 'none' && !trialUsed)) && (
           <div className="mt-4 space-y-3">
-            {source !== 'paid' && (
+            {source !== 'paid' && canWrite && (
               <>
                 <div className="flex gap-2">
                   <InputV2
@@ -249,6 +266,7 @@ export default function License() {
                   />
                   <ButtonV2
                     onClick={() => setKey.mutate(keyInput)}
+                    aria-busy={setKey.isPending || undefined}
                     disabled={setKey.isPending || keyInput.trim() === ''}
                   >
                     {t('license.key.activate_button')}
@@ -276,6 +294,7 @@ export default function License() {
                     </div>
                   </div>
                 )}
+                {setKey.isError && <InlineNotice tone="danger">{getApiError(setKey.error).message}</InlineNotice>}
               </>
             )}
             {status.license_key_masked && (
@@ -285,9 +304,9 @@ export default function License() {
                     {t('license.key.change_button')}
                   </ButtonV2>
                 )}
-                <ButtonV2 variant="danger" onClick={() => setRemoveOpen(true)}>
+                {canWrite && <ButtonV2 variant="danger" onClick={() => setRemoveOpen(true)}>
                   {t('license.key.remove_button')}
-                </ButtonV2>
+                </ButtonV2>}
               </div>
             )}
           </div>
@@ -340,8 +359,8 @@ export default function License() {
             variant="danger"
             onClick={() => {
               clearKey.mutate()
-              setRemoveOpen(false)
             }}
+            disabled={clearKey.isPending || !canWrite}
           >
             {t('license.key.remove_button')}
           </ButtonV2>

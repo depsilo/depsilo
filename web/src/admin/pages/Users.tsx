@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
@@ -13,8 +14,11 @@ import DataTableV2 from '@/components/DataTable'
 import ModalV2 from '@/components/Modal'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
+import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
+import QueryErrorState from '@/components/QueryErrorState'
 import { usePrincipal } from '@/hooks/usePrincipal'
+import { getApiError } from '@/lib/apiError'
 import type {
   AdminUser,
   CreateAPITokenRequest,
@@ -23,6 +27,16 @@ import type {
   UpdateUserRequest,
   UserRole,
 } from '@/lib/adminApi.types'
+
+function upsertUser(current: AxiosResponse<AdminUser[]> | undefined, response: AxiosResponse<AdminUser>): AxiosResponse<AdminUser[]> {
+  const user = response.data
+  if (!current) return { ...response, data: [user] }
+  const exists = current.data.some((item) => item.id === user.id)
+  return {
+    ...current,
+    data: exists ? current.data.map((item) => item.id === user.id ? user : item) : [...current.data, user],
+  }
+}
 
 export default function UsersV2() {
   const { t } = useTranslation()
@@ -38,18 +52,20 @@ export default function UsersV2() {
   const [copied, setCopied] = useState(false)
   const [togglingUserIds, setTogglingUserIds] = useState<ReadonlySet<number>>(() => new Set())
 
-  const { data: usersData, isLoading: usersLoading } = useQuery({ queryKey: ['admin', 'users'], queryFn: () => adminApi.listUsers() })
-  const { data: tokensData, isLoading: tokensLoading } = useQuery({ queryKey: ['admin', 'tokens'], queryFn: () => adminApi.listTokens() })
+  const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: () => adminApi.listUsers(), retry: false })
+  const tokensQuery = useQuery({ queryKey: ['admin', 'tokens'], queryFn: () => adminApi.listTokens(), retry: false })
+  const usersData = usersQuery.data
+  const tokensData = tokensQuery.data
   const users = usersData?.data ?? []
   const tokens = tokensData?.data ?? []
   const isSelf = (user: AdminUser) => user.id === principal?.id
 
-  const createUserMutation = useMutation({ mutationFn: (data: CreateUserRequest) => adminApi.createUser(data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }); closeUserDialog() } })
-  const updateUserMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: UpdateUserRequest }) => adminApi.updateUser(id, data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }); closeUserDialog() } })
+  const createUserMutation = useMutation({ mutationFn: (data: CreateUserRequest) => adminApi.createUser(data), onSuccess: (response) => { queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response)); closeUserDialog() } })
+  const updateUserMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: UpdateUserRequest }) => adminApi.updateUser(id, data), onSuccess: (response) => { queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response)); closeUserDialog() } })
   const toggleUserMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => adminApi.updateUser(id, { enabled }),
     onMutate: ({ id }) => setTogglingUserIds((current) => new Set(current).add(id)),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }) },
+    onSuccess: (response) => { queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response)) },
     onSettled: (_data, _error, { id }) => setTogglingUserIds((current) => {
       const next = new Set(current)
       next.delete(id)
@@ -60,8 +76,8 @@ export default function UsersV2() {
   const deleteTokenMutation = useMutation({ mutationFn: (id: number) => adminApi.deleteToken(id), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] }) } })
 
   function closeUserDialog() { setUserDialogOpen(false); setEditUserId(null); setUserForm({ username: '', password: '', role: 'readonly' }) }
-  function openCreateUser() { setEditUserId(null); setUserForm({ username: '', password: '', role: 'readonly' }); setUserDialogOpen(true) }
-  function openEditUser(user: AdminUser) { setEditUserId(user.id); setUserForm({ username: user.username, password: '', role: user.role }); setUserDialogOpen(true) }
+  function openCreateUser() { createUserMutation.reset(); setEditUserId(null); setUserForm({ username: '', password: '', role: 'readonly' }); setUserDialogOpen(true) }
+  function openEditUser(user: AdminUser) { updateUserMutation.reset(); setEditUserId(user.id); setUserForm({ username: user.username, password: '', role: user.role }); setUserDialogOpen(true) }
   function handleUserSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!canWrite) return
@@ -84,6 +100,9 @@ export default function UsersV2() {
   }
 
   const isUserSaving = createUserMutation.isPending || updateUserMutation.isPending
+  const userSaveError = editUserId ? updateUserMutation.error : createUserMutation.error
+  const usersApiError = getApiError(usersQuery.error)
+  const tokensApiError = getApiError(tokensQuery.error)
 
   const userColumns = [
     { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[500] shrink-0" style={{ background: 'var(--brand)', color: 'white' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
@@ -110,18 +129,25 @@ export default function UsersV2() {
           title={t('users.title')}
           action={canWrite ? <ButtonV2 onClick={openCreateUser} size="sm"><Icon name="person_add" size="sm" />{t('users.addUser')}</ButtonV2> : undefined}
         />
-        {usersLoading ? (
-          <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
-        ) : users.length === 0 ? (
-          <EmptyState icon="group" title={t('users.noUsers')} minHeight={180} />
+        {usersQuery.isPending ? (
+          <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+        ) : usersQuery.isError && !usersData ? (
+          <QueryErrorState message={usersApiError.status === 403 ? t('common.permissionDenied') : usersApiError.message} onRetry={() => { void usersQuery.refetch() }} />
         ) : (
-          <DataTableV2
-            columns={userColumns}
-            data={users.map((user) => ({ ...user }))}
-            rowKey={(row) => row.id as number}
-            ariaLabel={t('users.table')}
-            minWidth={900}
-          />
+          <div className="space-y-3">
+            {usersData && usersQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void usersQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+            {users.length === 0 ? (
+              <EmptyState icon="group" title={t('users.noUsers')} minHeight={180} />
+            ) : (
+              <DataTableV2
+                columns={userColumns}
+                data={users.map((user) => ({ ...user }))}
+                rowKey={(row) => row.id as number}
+                ariaLabel={t('users.table')}
+                minWidth={900}
+              />
+            )}
+          </div>
         )}
       </section>
 
@@ -129,20 +155,23 @@ export default function UsersV2() {
       <section>
         <SectionHeader
           title="API Tokens"
-          action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={() => setTokenDialogOpen(true)}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2> : undefined}
+          action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={() => { createTokenMutation.reset(); setTokenDialogOpen(true) }}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2> : undefined}
         />
-        {tokensLoading ? (
-          <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
-        ) : tokens.length === 0 ? (
-          <EmptyState icon="key" title={t('users.noTokens')} minHeight={180} />
+        {tokensQuery.isPending ? (
+          <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+        ) : tokensQuery.isError && !tokensData ? (
+          <QueryErrorState message={tokensApiError.status === 403 ? t('common.permissionDenied') : tokensApiError.message} onRetry={() => { void tokensQuery.refetch() }} />
         ) : (
-          <DataTableV2
+          <div className="space-y-3">
+          {tokensData && tokensQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void tokensQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+          {tokens.length === 0 ? <EmptyState icon="key" title={t('users.noTokens')} minHeight={180} /> : <DataTableV2
             columns={tokenColumns}
             data={tokens.map((token) => ({ ...token }))}
             rowKey={(row) => row.id as number}
             ariaLabel={t('users.tokensTable')}
             minWidth={760}
-          />
+          />}
+          </div>
         )}
       </section>
 
@@ -151,7 +180,8 @@ export default function UsersV2() {
           <InputV2 label={t('login.username')} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
           <InputV2 label={editUserId ? t('users.newPasswordHint') : t('login.password')} type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
           <SelectV2 label={t('users.role')} value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">admin</option><option value="readonly">readonly</option></SelectV2>
-          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" onClick={closeUserDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" disabled={isUserSaving}>{isUserSaving ? t('saving') : t('save')}</ButtonV2></div>
+          {userSaveError && <InlineNotice tone="danger">{getApiError(userSaveError).message}</InlineNotice>}
+          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" onClick={closeUserDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</ButtonV2></div>
         </form>
       </ModalV2>
 
@@ -160,7 +190,8 @@ export default function UsersV2() {
           <InputV2 label={t('name')} value={tokenForm.name} onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })} placeholder="e.g. CI/CD Pipeline" required />
           <SelectV2 label={t('users.permissions')} value={tokenForm.permissions} onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value as TokenPermissions })}><option value="readonly">{t('users.readonly')}</option><option value="readwrite">{t('users.readwrite')}</option></SelectV2>
           <SelectV2 label={t('users.validity')} value={tokenForm.ttl} onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value as CreateAPITokenRequest['ttl'] })}><option value="7d">{t('users.days7')}</option><option value="30d">{t('users.days30')}</option><option value="90d">{t('users.days90')}</option><option value="never">{t('users.neverExpires')}</option></SelectV2>
-          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" onClick={() => setTokenDialogOpen(false)}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" disabled={createTokenMutation.isPending}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</ButtonV2></div>
+          {createTokenMutation.isError && <InlineNotice tone="danger">{getApiError(createTokenMutation.error).message}</InlineNotice>}
+          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" onClick={() => setTokenDialogOpen(false)}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</ButtonV2></div>
         </form>
       </ModalV2>
 

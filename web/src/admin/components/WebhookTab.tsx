@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
 import EmptyState from '@/components/EmptyState'
+import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
 import InputV2 from '@/components/Input'
 import ModalV2 from '@/components/Modal'
@@ -12,6 +13,7 @@ import SelectV2 from '@/components/Select'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { webhookApi, type WebhookConfig } from '@/lib/api'
+import { getApiError } from '@/lib/apiError'
 
 const PLATFORM_OPTIONS = ['slack', 'dingtalk', 'wecom', 'feishu', 'generic'] as const
 const WEBHOOK_EVENTS = [
@@ -45,12 +47,6 @@ const emptyForm = (): WebhookForm => ({
   cooldown_minutes: 30,
 })
 
-function serviceError(error: unknown, fallback: string): string {
-  if (typeof error !== 'object' || error === null || !('response' in error)) return fallback
-  const response = (error as { response?: { data?: { message?: string } } }).response
-  return response?.data?.message ?? fallback
-}
-
 export default function WebhookTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -65,11 +61,12 @@ export default function WebhookTab() {
   const query = useQuery({
     queryKey: ['admin', 'webhooks'],
     queryFn: async () => (await webhookApi.list()).data,
+    retry: false,
   })
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'webhooks'] })
   const showFailure = (error: unknown, fallback: string) => {
-    toast.show({ tone: 'danger', message: serviceError(error, fallback) })
+    toast.show({ tone: 'danger', message: getApiError(error).message || fallback })
   }
 
   const createMutation = useMutation({
@@ -172,11 +169,11 @@ export default function WebhookTab() {
         {query.isPending ? (
           <div className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
         ) : query.isError && !query.data ? (
-          <QueryErrorState message={t('webhook.loadError')} onRetry={() => { void query.refetch() }} />
-        ) : !query.data?.length ? (
-          <EmptyState icon="notifications_off" title={t('webhook.noWebhooks')} minHeight={180} />
+          <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
         ) : (
-          <div className="divide-y divide-[var(--border)]">
+          <div>
+          {query.data && query.isRefetchError && <div className="mb-3"><InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice></div>}
+          {!query.data?.length ? <EmptyState icon="notifications_off" title={t('webhook.noWebhooks')} minHeight={180} /> : <div className="divide-y divide-[var(--border)]">
             {query.data.map(webhook => (
               <article key={webhook.id} className="flex min-w-0 flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
@@ -220,6 +217,7 @@ export default function WebhookTab() {
                 )}
               </article>
             ))}
+          </div>}
           </div>
         )}
       </div>

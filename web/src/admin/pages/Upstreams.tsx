@@ -7,8 +7,12 @@ import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
+import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
+import QueryErrorState from '@/components/QueryErrorState'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
+import { usePrincipal } from '@/hooks/usePrincipal'
+import { getApiError } from '@/lib/apiError'
 import type { AdminUpstream, AdminUpstreamListResponse, UpstreamMutationRequest } from '@/lib/adminApi.types'
 
 const runtimeEcosystemOrder = [
@@ -73,6 +77,7 @@ const emptyForm = (ecosystem: string): UpstreamMutationRequest => ({
 export default function UpstreamsV2() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { canWrite } = usePrincipal()
   const resourceGenerations = useRef(new Map<number, number>())
 
   // CRUD state
@@ -86,9 +91,10 @@ export default function UpstreamsV2() {
   const [checking, setChecking] = useState(false)
   const [checkingIds, setCheckingIds] = useState<ReadonlySet<number>>(() => new Set())
 
-  const { data, isLoading } = useQuery({
+  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'upstreams'],
     queryFn: async () => (await adminApi.listUpstreams()).data,
+    retry: false,
   })
   const allUpstreams = data?.items ?? []
   const activeEcosystems = Array.from(new Set(allUpstreams.map((item) => item.adapter_type)))
@@ -146,6 +152,7 @@ export default function UpstreamsV2() {
   function openCreate() {
     const ecosystem = activeEcosystems[0]
     if (!ecosystem) return
+    createMutation.reset()
     setForm(emptyForm(ecosystem))
     setEditId(null)
     setDialogOpen(true)
@@ -153,12 +160,14 @@ export default function UpstreamsV2() {
   function openEdit(item: UpstreamItem) {
     const runtime = allUpstreams.find((candidate) => candidate.id === item.id)
     if (!runtime) return
+    updateMutation.reset()
     setEditId(runtime.id)
     setForm({ adapter_type: runtime.adapter_type, name: runtime.name, url: runtime.url, proxy: runtime.proxy, priority: runtime.priority, probe_mode: runtime.probe_mode, probe_interval: runtime.probe_interval })
     setDialogOpen(true)
   }
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!canWrite) return
     try { new URL(form.url) } catch { setUrlError(t('upstreams.invalidUrl')); return }
     setUrlError('')
     if (editId !== null) updateMutation.mutate({ id: editId, request: form })
@@ -206,6 +215,9 @@ export default function UpstreamsV2() {
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending
+  const saveError = editId !== null ? updateMutation.error : createMutation.error
+  const apiError = getApiError(error)
+  const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
 
   return (
     <div className="space-y-6">
@@ -213,7 +225,7 @@ export default function UpstreamsV2() {
           per-upstream in the edit dialog (default: every 30m). */}
       <div className="flex items-center gap-3 flex-wrap">
         {/* Manual check */}
-        <ButtonV2
+        {canWrite && <ButtonV2
           variant="secondary"
           size="sm"
           onClick={checkAll}
@@ -221,28 +233,36 @@ export default function UpstreamsV2() {
         >
           <Icon name="refresh" size="sm" />
           {checking ? t('upstreams.checking') : t('upstreams.checkAll')}
-        </ButtonV2>
+        </ButtonV2>}
 
         <div className="flex-1" />
 
         {/* Add upstream */}
-        <ButtonV2 size="sm" onClick={openCreate}>
+        {canWrite && <ButtonV2 size="sm" onClick={openCreate}>
           <Icon name="add" size="sm" />
           {t('upstreams.addUpstream')}
-        </ButtonV2>
+        </ButtonV2>}
       </div>
 
       {/* Upstream grid with heartbeat bars */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {isPending ? (
+        <div aria-busy="true" className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div aria-hidden="true" className="contents">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
           ))}
+          </div>
         </div>
+      ) : isError && !data ? (
+        <QueryErrorState message={errorMessage} onRetry={() => { void refetch() }} />
       ) : (
+        <div className="space-y-3">
+        {data && isRefetchError && (
+          <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+        )}
         <UpstreamGroupedPanel
           upstreams={upstreamItems}
-          renderActions={(u) => (
+          renderActions={canWrite ? (u) => (
             <div className="flex gap-0.5 ml-1">
               {u.id && (
                 <IconButton
@@ -266,8 +286,9 @@ export default function UpstreamsV2() {
                 />
               )}
             </div>
-          )}
+          ) : undefined}
         />
+        </div>
       )}
 
       {/* Create/Edit Modal */}
@@ -306,9 +327,10 @@ export default function UpstreamsV2() {
               <option value="1h">1h</option>
             </SelectV2>
           )}
+          {saveError && <InlineNotice tone="danger">{getApiError(saveError).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2">
             <ButtonV2 type="button" variant="secondary" onClick={closeDialog}>{t('cancel')}</ButtonV2>
-            <ButtonV2 type="submit" disabled={isSaving}>{isSaving ? t('saving') : t('save')}</ButtonV2>
+            <ButtonV2 type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</ButtonV2>
           </div>
         </form>
       </ModalV2>

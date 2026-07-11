@@ -6,7 +6,11 @@ import { formatBytes } from '@/lib/utils'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
+import ButtonV2 from '@/components/Button'
+import InlineNotice from '@/components/InlineNotice'
+import QueryErrorState from '@/components/QueryErrorState'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import { getApiError } from '@/lib/apiError'
 import { getEcosystemColor } from '@/lib/ecosystemColors'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -60,12 +64,14 @@ export default function BandwidthReport() {
   const params = range === 'custom'
     ? { range: 'custom', start: customStart, end: customEnd }
     : { range }
+  const queryEnabled = range !== 'custom' || (!!customStart && !!customEnd)
 
-  const { data, isLoading } = useQuery({
+  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'bandwidth', params],
     queryFn: () => adminApi.getBandwidthReport(params),
-    enabled: range !== 'custom' || (!!customStart && !!customEnd),
+    enabled: queryEnabled,
     refetchInterval: 60000,
+    retry: false,
   })
 
   const report = data?.data
@@ -96,9 +102,10 @@ export default function BandwidthReport() {
     }))
     .sort((a: any, b: any) => b.miss - a.miss)
 
-  if (isLoading) {
+  if (queryEnabled && isPending) {
     return (
-      <div className="space-y-12">
+      <div aria-busy="true" className="space-y-12">
+        <div aria-hidden="true">
         <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
@@ -108,12 +115,21 @@ export default function BandwidthReport() {
           ))}
         </div>
         <div className="h-80 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+        </div>
       </div>
     )
   }
 
+  if (queryEnabled && isError && !data) {
+    const normalized = getApiError(error)
+    return <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void refetch() }} />
+  }
+
   return (
     <div className="space-y-12">
+      {data && isRefetchError && (
+        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+      )}
       {/* ── Range chips ──────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
         {ranges.map(r => {

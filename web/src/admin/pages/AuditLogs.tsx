@@ -8,7 +8,10 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
+import InlineNotice from '@/components/InlineNotice'
+import QueryErrorState from '@/components/QueryErrorState'
 import TableViewport from '@/components/TableViewport'
+import { getApiError } from '@/lib/apiError'
 import type { AuditLogQuery } from '@/lib/adminApi.types'
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
@@ -53,7 +56,7 @@ export default function AuditLogsV2() {
   if (appliedResult === 'miss') params.result = 'miss'
   if (appliedResult === 'error') params.result = 'error'
 
-  const { data, isLoading } = useQuery({
+  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'audit-logs', appliedSearch, appliedEcosystem, appliedResult, appliedTimeRange, page],
     queryFn: () => adminApi.listAuditLogs(params),
     retry: false,
@@ -62,6 +65,8 @@ export default function AuditLogsV2() {
   const items = data?.data.items ?? []
   const total = data?.data.total ?? 0
   const totalPages = Math.ceil(total / 50)
+  const apiError = getApiError(error)
+  const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
 
   function handleSearch() {
     setAppliedSearch(search); setAppliedEcosystem(ecosystem)
@@ -158,11 +163,18 @@ export default function AuditLogsV2() {
 
       {/* Table — bare */}
       <TableViewport label={t('audit.table')} minWidth={980}>
-        {isLoading ? (
-          <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
-        ) : items.length === 0 ? (
-          <EmptyState icon="receipt_long" title={t('audit.noLogs')} minHeight={200} />
+        {isPending ? (
+          <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+        ) : isError && !data ? (
+          <QueryErrorState message={errorMessage} onRetry={() => { void refetch() }} />
         ) : (
+          <div>
+          {data && isRefetchError && (
+            <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+          )}
+          {items.length === 0 ? (
+            <EmptyState icon="receipt_long" title={t('audit.noLogs')} minHeight={200} />
+          ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -211,6 +223,8 @@ export default function AuditLogsV2() {
               ))}
             </tbody>
           </table>
+          )}
+          </div>
         )}
       </TableViewport>
 

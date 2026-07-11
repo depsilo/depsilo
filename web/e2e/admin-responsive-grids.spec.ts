@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures/admin-api'
+import { expect, mockAdminApi, test } from './fixtures/admin-api'
 
 const widths = [320, 390, 768, 1024, 1440]
 const routes = ['/admin', '/admin/bandwidth', '/admin/cache', '/admin/security', '/admin/license']
@@ -7,6 +7,7 @@ const metricRoutes = new Set(['/admin', '/admin/bandwidth', '/admin/cache', '/ad
 for (const width of widths) {
   for (const route of routes) {
     test(`${route} fits ${width}px`, async ({ page }) => {
+      await mockAdminApi(page)
       await page.setViewportSize({ width, height: width < 700 ? 844 : 1000 })
       await page.goto(route)
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)

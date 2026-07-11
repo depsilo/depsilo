@@ -13,8 +13,12 @@ import SelectV2 from '@/components/Select'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
+import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
+import QueryErrorState from '@/components/QueryErrorState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
+import { usePrincipal } from '@/hooks/usePrincipal'
+import { getApiError } from '@/lib/apiError'
 import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
 
 const ECOSYSTEM_OPTIONS = [
@@ -65,6 +69,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 export default function ProjectsV2() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { canWrite } = usePrincipal()
 
   const [selectedProject, setSelectedProject] = useState<ProjectSummary | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -77,25 +82,30 @@ export default function ProjectsV2() {
   const [sbomEcosystem, setSbomEcosystem] = useState('')
   const [sbomLoading, setSbomLoading] = useState(false)
 
-  const { data, isLoading, error } = useQuery({
+  const query = useQuery({
     queryKey: ['admin', 'projects'],
     queryFn: () => adminApi.listProjects(),
     retry: false,
   })
+  const { data } = query
   const projects = data?.data.items ?? []
 
-  const { data: detailData } = useQuery({
+  const detailQuery = useQuery({
     queryKey: ['admin', 'projects', selectedProject?.id],
     queryFn: () => adminApi.getProject(selectedProject!.id),
     enabled: !!selectedProject,
+    retry: false,
   })
+  const detailData = detailQuery.data
   const projectDetail: ProjectDetail | ProjectSummary | null = detailData?.data ?? selectedProject
 
-  const { data: pkgData, isLoading: pkgLoading } = useQuery({
+  const packagesQuery = useQuery({
     queryKey: ['admin', 'projects', selectedProject?.id, 'packages', pkgPage, pkgEcosystem],
     queryFn: () => adminApi.listProjectPackages(selectedProject!.id, { page: pkgPage, per_page: 20, ecosystem: pkgEcosystem || undefined }),
     enabled: !!selectedProject,
+    retry: false,
   })
+  const pkgData = packagesQuery.data
   const packages = pkgData?.data.items ?? []
   const pkgTotal = pkgData?.data.total ?? 0
   const pkgTotalPages = Math.max(1, Math.ceil(pkgTotal / 20))
@@ -126,6 +136,7 @@ export default function ProjectsV2() {
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault()
+    if (!canWrite) return
     createMutation.mutate(createForm)
   }
 
@@ -154,8 +165,8 @@ export default function ProjectsV2() {
     }
   }
 
-  const axiosError = error as any
-  if (axiosError?.response?.status === 402) {
+  const apiError = getApiError(query.error)
+  if (query.isError && !data && apiError.status === 402) {
     return (
       <ProRequiredCallout
         icon="folder_managed"
@@ -164,6 +175,14 @@ export default function ProjectsV2() {
         upgradeLabel={t('projects.upgrade')}
       />
     )
+  }
+
+  if (query.isPending) {
+    return <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+  }
+
+  if (query.isError && !data) {
+    return <QueryErrorState message={apiError.status === 403 ? t('common.permissionDenied') : apiError.message} onRetry={() => { void query.refetch() }} />
   }
 
   // ── Detail view ────────────────────────────────────────────────
@@ -204,7 +223,16 @@ export default function ProjectsV2() {
         {/* Project info */}
         <section>
           <SectionHeader title={t('projects.overview')} />
+          {detailQuery.isPending ? (
+            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+          ) : detailQuery.isError && !detailData ? (
+            <QueryErrorState
+              message={getApiError(detailQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(detailQuery.error).message}
+              onRetry={() => { void detailQuery.refetch() }}
+            />
+          ) : detailData?.data ? (
           <div className="space-y-3">
+            {detailQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void detailQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
             <div className="flex items-center gap-3">
               <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.proxyUrl')}</span>
               <span className="font-mono text-[12px] px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}>{proxyUrl}</span>
@@ -229,6 +257,7 @@ export default function ProjectsV2() {
               </div>
             )}
           </div>
+          ) : <EmptyState icon="folder_managed" title={t('noData')} minHeight={180} />}
         </section>
 
         {/* SBOM export */}
@@ -264,18 +293,28 @@ export default function ProjectsV2() {
               </SelectV2>
             }
           />
-          {pkgLoading ? (
-            <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
-          ) : packages.length === 0 ? (
-            <EmptyState icon="inventory_2" title={t('projects.noPackages')} minHeight={200} />
-          ) : (
-            <DataTableV2
-              columns={pkgColumns}
-              data={packages.map((pkg) => ({ ...pkg }))}
-              rowKey={(row) => `${row.ecosystem}:${row.package_name}:${row.version}`}
-              ariaLabel={t('projects.packagesTable')}
-              minWidth={900}
+          {packagesQuery.isPending ? (
+            <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+          ) : packagesQuery.isError && !pkgData ? (
+            <QueryErrorState
+              message={getApiError(packagesQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(packagesQuery.error).message}
+              onRetry={() => { void packagesQuery.refetch() }}
             />
+          ) : (
+            <div className="space-y-3">
+              {pkgData && packagesQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void packagesQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+              {packages.length === 0 ? (
+                <EmptyState icon="inventory_2" title={t('projects.noPackages')} minHeight={200} />
+              ) : (
+                <DataTableV2
+                  columns={pkgColumns}
+                  data={packages.map((pkg) => ({ ...pkg }))}
+                  rowKey={(row) => `${row.ecosystem}:${row.package_name}:${row.version}`}
+                  ariaLabel={t('projects.packagesTable')}
+                  minWidth={900}
+                />
+              )}
+            </div>
           )}
           {pkgTotalPages > 1 && (
             <div className="flex items-center justify-between text-[13px] mt-4" style={{ color: 'var(--text-soft)' }}>
@@ -311,7 +350,7 @@ export default function ProjectsV2() {
             <Icon name="visibility" size="sm" />
             {t('projects.view')}
           </ButtonV2>
-          <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }} />
+          {canWrite && <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }} />}
         </div>
       ),
     },
@@ -319,20 +358,21 @@ export default function ProjectsV2() {
 
   return (
     <div className="space-y-6">
+      {data && query.isRefetchError && (
+        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+      )}
       <div className="flex items-center justify-end">
-        <ButtonV2 onClick={() => setCreateOpen(true)}>
+        {canWrite && <ButtonV2 onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
           <Icon name="add" size="sm" />{t('projects.create')}
-        </ButtonV2>
+        </ButtonV2>}
       </div>
 
-      {isLoading ? (
-        <div className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
-      ) : projects.length === 0 ? (
+      {projects.length === 0 ? (
         <EmptyState
           icon="folder_managed"
           title={t('projects.noProjects')}
           hint={t('projects.noProjectsHint')}
-          action={<ButtonV2 onClick={() => setCreateOpen(true)}><Icon name="add" size="sm" />{t('projects.create')}</ButtonV2>}
+          action={canWrite ? <ButtonV2 onClick={() => { createMutation.reset(); setCreateOpen(true) }}><Icon name="add" size="sm" />{t('projects.create')}</ButtonV2> : undefined}
           minHeight={240}
         />
       ) : (
@@ -361,9 +401,10 @@ export default function ProjectsV2() {
             onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
             placeholder={t('projects.descPlaceholder')}
           />
+          {createMutation.isError && <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2">
             <ButtonV2 type="button" variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
-            <ButtonV2 type="submit" disabled={createMutation.isPending}>
+            <ButtonV2 type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>
               {createMutation.isPending ? t('saving') : t('save')}
             </ButtonV2>
           </div>

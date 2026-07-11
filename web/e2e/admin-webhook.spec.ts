@@ -14,6 +14,7 @@ async function openWebhookTab(page: Page) {
 }
 
 test('webhook rows and actions fit 390px', async ({ page }) => {
+  await mockAdminApi(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/admin/settings')
   await page.getByRole('tab', { name: /Webhook/ }).click()
