@@ -195,7 +195,7 @@ internal/config/config.go	Plan03-T1	mixed	config-existing-semantics
 internal/api/router.go	Plan01-T6>Plan02-T5>Plan03-T7	mixed	router-existing-semantics
 internal/server/server.go	Plan02-T3>Plan02-T5>Plan03-T7	mixed	server-tamper-semantics
 web/src/admin/pages/Settings.tsx	Plan02-T6	adopted	settings-no-postgres
-web/src/lib/api.ts	Plan01-T8>Plan02-T6>Plan03-T8	mixed	api-open-audit
+web/src/lib/api.ts	Plan01-T8>Plan02-T6>Plan03-T8>Plan04-T7>Plan04-T11	mixed	api-open-audit
 web/src/i18n/en.ts	Plan04-T6>Plan02-T6>Plan04-T7>Plan04-T9>Plan04-T11-if-edited	preserved	i18n-current-product-copy
 web/src/i18n/zh.ts	Plan04-T6>Plan02-T6>Plan04-T7>Plan04-T9>Plan04-T11-if-edited	preserved	i18n-current-product-copy
 config.example.toml	Plan02-T1>Plan03-T9>Master-T8	preserved	config-example-supply-chain
@@ -232,6 +232,9 @@ web/src/lib/api.ts	refactor(web): type upstream registry API	mixed	8eeb989b51ed3
 config.example.toml	fix(admin): reflect live upstream registry state	preserved	6f5fbd37f23bc18bfc084b0b31e7b135bbeac2f41a17afde6ed358c79acd913f	config-example-supply-chain	pending-review	2026-07-11T17:04:25Z
 README.md	fix(admin): reflect live upstream registry state	preserved	168601f2021e3f73e9e147e67d781730fe6658c871909e5a1d7ea7365475958b	readme-supply-chain	pending-review	2026-07-11T17:04:25Z
 docs/README_zh.md	fix(admin): reflect live upstream registry state	preserved	98c5fae8f7962112ea4684f248544d255eafa3ac268e01f549afadb8ef309bcd	zh-readme-supply-chain	pending-review	2026-07-11T17:04:25Z
+web/src/i18n/en.ts	fix(admin): rebuild webhook workflow	preserved	c7581f1c802008f35293039b96ad389b9abe1ee83a38c8373d01022ce7a55ff4	i18n-current-product-copy	pending-review	2026-07-11T17:26:49Z
+web/src/i18n/zh.ts	fix(admin): rebuild webhook workflow	preserved	55580241153c788070ab750b8102ef9dbfd783e8d6192e88aec7e470647a5db2	i18n-current-product-copy	pending-review	2026-07-11T17:26:49Z
+web/src/lib/api.ts	fix(admin): rebuild webhook workflow	mixed	79deddd9d7ca0c0f1c3e91272bdd82f971dc1ecbb91bac37564be382a3e1c8d7	api-open-audit	pending-review	2026-07-11T17:26:49Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

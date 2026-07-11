@@ -230,7 +230,7 @@ export interface WebhookConfig {
   enabled: boolean
   events: string
   cooldown_minutes: number
-  last_sent_at?: string
+  last_sent_at: string | null
   created_at: string
   updated_at: string
 }
