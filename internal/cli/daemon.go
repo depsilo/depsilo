@@ -15,6 +15,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/logging"
 	"depsilo/internal/server"
 )
 
@@ -31,7 +32,7 @@ func runStart(args []string) int {
 
 	if !daemon {
 		// Foreground: start server directly
-		logger, err := zap.NewProduction()
+		logger, logLevel, err := logging.NewProduction()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
 			return 1
@@ -42,7 +43,7 @@ func runStart(args []string) int {
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 
-		srv, err := server.StartServer(ctx)
+		srv, err := server.StartServer(ctx, logLevel)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return 1
@@ -175,4 +176,3 @@ func readPID(path string) (int, error) {
 	}
 	return pid, nil
 }
-

@@ -19,12 +19,13 @@ import (
 	"fyne.io/systray"
 	"go.uber.org/zap"
 
+	"depsilo/internal/logging"
 	"depsilo/internal/server"
 	"depsilo/internal/tray"
 )
 
 func main() {
-	logger, err := zap.NewProduction()
+	logger, logLevel, err := logging.NewProduction()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
 		os.Exit(1)
@@ -35,7 +36,7 @@ func main() {
 	// Cancellable context drives the in-process HTTP server lifecycle.
 	ctx, cancel := context.WithCancel(context.Background())
 
-	srv, err := server.StartServer(ctx)
+	srv, err := server.StartServer(ctx, logLevel)
 	if err != nil {
 		zap.L().Fatal("failed to start server", zap.Error(err))
 	}

@@ -216,6 +216,7 @@ Before committing, each owner appends one row: path, exact subject, disposition,
 internal/api/router.go	fix(auth): enforce admin route capabilities	preserved	945ca5fe5abefe1289aa8a427afd70266de06b9e5de4a441d7855d5b8da2ddfa	router-existing-semantics	pending-review	2026-07-11T09:05:17Z
 web/src/lib/api.ts	fix(admin-ui): consume typed principal contracts	mixed	d1708fa0e3f9f6aa356282bee43f448ee9d80c0242166ece0bf7b07d0e095afb	api-open-audit	pending-review	2026-07-11T09:51:55Z
 config.example.toml	feat(config): define validated admin settings model	preserved	cec8205d2f614d89debf27bb10e18eae8e27aa22d3385fef368b9555ba285afa	config-example-supply-chain	pending-review	2026-07-11T10:10:14Z
+internal/server/server.go	feat(logging): share atomic server log level	preserved	a4b7cd06151936edf310a1d1048ebc2ccdbcfe07f0fcf44ae8bf226bc01d6329	server-tamper-semantics	pending-review	2026-07-11T10:50:29Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

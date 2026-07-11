@@ -9,12 +9,13 @@ import (
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/logging"
 	"depsilo/internal/server"
 )
 
 func main() {
 	// Initialize logger
-	logger, err := zap.NewProduction()
+	logger, logLevel, err := logging.NewProduction()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to init logger: %v\n", err)
 		os.Exit(1)
@@ -25,7 +26,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	srv, err := server.StartServer(ctx)
+	srv, err := server.StartServer(ctx, logLevel)
 	if err != nil {
 		zap.L().Fatal("failed to start server", zap.Error(err))
 	}

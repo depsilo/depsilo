@@ -53,12 +53,17 @@ import (
 // StartServer initializes all components and starts the HTTP server.
 // Returns the *http.Server for lifecycle control by the caller.
 // The provided context controls background goroutine shutdown.
-func StartServer(ctx context.Context) (*http.Server, error) {
+func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, error) {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
+	parsed, err := zap.ParseAtomicLevel(cfg.Server.LogLevel)
+	if err != nil {
+		return nil, fmt.Errorf("parse server.log_level: %w", err)
+	}
+	logLevel.SetLevel(parsed.Level())
 	zap.L().Info("config loaded",
 		zap.String("db_driver", cfg.Database.Driver),
 		zap.String("storage_type", cfg.Storage.Type),
