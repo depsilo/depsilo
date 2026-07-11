@@ -16,7 +16,7 @@ import (
 // Usage:
 //
 //	depsilo prompt                       # uses $DEPSILO_URL or http://localhost:23333
-//	depsilo prompt --url http://lan:8080
+//	depsilo prompt --url http://lan:23333
 //	depsilo prompt > integrate.md        # pipe into a file
 //	depsilo prompt | claude              # or directly into your agent
 func runPrompt(args []string) int {
@@ -56,8 +56,9 @@ the current project's Dockerfile / CI / build scripts to route package
 installs through this Depsilo mirror.
 
 The prompt is transparent by default: every generated config edit must name
-Depsilo, include the mirror URL, and preserve the public registry as a
-documented fallback unless the user explicitly asks for mirror-only mode.
+Depsilo, include the mirror URL, and preserve the original public registry as
+a documented rollback rather than an active parallel source, unless the user
+explicitly asks for mirror-only mode.
 
 Flags:
     --url <url>     mirror URL to embed (default: $DEPSILO_URL or

@@ -352,7 +352,7 @@ func embeddedAgentPrompt(base string) string {
 	// Mirrors internal/api/public/discover.go AgentPrompt() so users who
 	// run init-agent against a non-running server still get a usable file.
 	return fmt.Sprintf(`This workspace has a local dependency cache called Depsilo at %s.
-It caches packages from 13+ ecosystems and serves them at LAN speed.
+It proxies 14 package ecosystems plus Docker OCI and serves cached artifacts at LAN speed.
 
 Before running any package install in this workspace:
 
@@ -380,8 +380,10 @@ Before running any package install in this workspace:
 
 4. Run install commands normally — they auto-route through Depsilo.
 
-If Depsilo is down, tools fall back to public registries — installs still
-work, just not cached. Don't waste effort on retry logic for Depsilo itself.
+These settings do not provide reliable outage failover. Even Go's ",direct"
+suffix advances only after a 404/410 response, not when Depsilo is unreachable.
+Keep the original registry settings as documented rollback instructions; do
+not use GOPROXY "|direct", which would also bypass Depsilo's 451 enforcement.
 
 For machine-readable access:
   GET %s/api/v1/discover     - service catalog

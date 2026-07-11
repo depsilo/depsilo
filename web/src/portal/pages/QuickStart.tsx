@@ -46,7 +46,7 @@ export default function QuickStart() {
         }}
       >
         <EcosystemCatalog selected={language} onSelect={setLanguage} />
-        <ConfigurePane languageId={language} endpoint={endpoint} flush />
+        <ConfigurePane key={language} languageId={language} endpoint={endpoint} flush />
       </section>
     </div>
   )

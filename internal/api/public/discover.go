@@ -50,9 +50,10 @@ var ecosystemPurposes = map[string]struct {
 	"nuget":       {"/nuget/", ".NET — NuGet v3 protocol"},
 	"conda":       {"/conda/", "Conda channels"},
 	"cran":        {"/cran/", "R — CRAN packages"},
+	"alpine":      {"/alpine/", "Alpine Linux apk packages"},
 	"helm":        {"/helm/", "Kubernetes Helm charts"},
 	"huggingface": {"/huggingface/", "Hugging Face — models + datasets (huggingface-cli, transformers, datasets)"},
-	"docker":      {"/docker/", "OCI / Docker registry mirror"},
+	"docker":      {"/v2/", "OCI / Docker registry mirror (configure the service root)"},
 }
 
 // Discover returns the catalog. Stable JSON shape consumed by AI agents.
@@ -81,23 +82,24 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 		"service":     "depsilo",
 		"version":     version.Version,
 		"commit":      version.Commit,
-		"description": "Local dependency cache proxy gateway for 13+ package ecosystems",
+		"description": "Supply-chain enforcement proxy for 14 package ecosystems plus Docker OCI",
 		"homepage":    "https://depsilo.com",
 		"repository":  "https://github.com/depsilo/depsilo",
 		"ecosystems":  ecos,
 		"endpoints": gin.H{
-			"health":              "/health",
-			"metrics":             "/metrics",
-			"discover":            "/api/v1/discover",
-			"agent_prompt":        "/api/v1/agent-prompt",
-			"mcp":                 "/mcp",
-			"public_stats":        "/api/v1/stats",
-			"public_packages":     "/api/v1/packages",
-			"events_stream":       "/api/v1/events/stream",
-			"admin_login":         "/api/v1/auth/login",
-			"admin_dashboard":     "/api/v1/admin/dashboard",
-			"admin_license":       "/api/v1/admin/license/status",
-			"admin_trial":         "/api/v1/admin/license/trial/activate",
+			"health":             "/health",
+			"metrics":            "/metrics",
+			"discover":           "/api/v1/discover",
+			"agent_prompt":       "/api/v1/agent-prompt",
+			"integration_prompt": "/api/v1/integration-prompt",
+			"mcp":                "/mcp",
+			"public_stats":       "/api/v1/stats",
+			"public_packages":    "/api/v1/packages",
+			"events_stream":      "/api/v1/events/stream",
+			"admin_login":        "/api/v1/auth/login",
+			"admin_dashboard":    "/api/v1/admin/dashboard",
+			"admin_license":      "/api/v1/admin/license/status",
+			"admin_trial":        "/api/v1/admin/license/trial/activate",
 		},
 		"mcp": gin.H{
 			"url":       base + "/mcp",
@@ -106,22 +108,24 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 			"summary":   "POST initialize, then tools/list to discover what you can call. depsilo_status is a good first call.",
 		},
 		"agent_setup": gin.H{
-			"prompt_url":    base + "/api/v1/agent-prompt",
-			"portal_url":    base + "/",
-			"summary":       "Paste the contents of /api/v1/agent-prompt into any AI coding agent (Hermes, OpenClaw, Claude Code, Cursor). The agent will detect the project's package managers and configure them to route through this Depsilo instance.",
-			"readme_anchor": "https://github.com/depsilo/depsilo#use-with-ai-agents",
+			"prompt_url":                     base + "/api/v1/agent-prompt",
+			"local_bootstrap_prompt_url":     base + "/api/v1/agent-prompt",
+			"project_integration_prompt_url": base + "/api/v1/integration-prompt",
+			"portal_url":                     base + "/",
+			"summary":                        "Use the bootstrap prompt for local developer-machine settings or the Portal integration prompt for project build/CI edits.",
+			"readme_anchor":                  "https://github.com/depsilo/depsilo#use-with-ai-agents",
 		},
 	})
 }
 
-// AgentPrompt returns the same MEDIUM-granularity prompt that the Portal
-// renders, as plain text — so an AI agent can `curl -sf .../agent-prompt`
-// and consume it directly without needing to parse JSON or fetch the SPA.
+// AgentPrompt returns the local developer-machine bootstrap prompt as plain
+// text. It is distinct from /api/v1/integration-prompt, which is the Portal's
+// project build/CI integration prompt.
 //
-// The content here MUST stay in sync with web/src/lib/ecosystemData.ts
-// `buildAgentPrompt` and README "Use with AI agents". The
-// `endpoint`-bearing URLs are templated with the request host so deployments
-// behind LB/ingress get the correct URL.
+// The content here MUST stay in sync with embeddedAgentPrompt in
+// internal/cli/initagent.go and README's "Use with AI coding agents" section.
+// URLs are templated with the request host so deployments behind LB/ingress get
+// the correct URL.
 func (h *DiscoverHandler) AgentPrompt(c *gin.Context) {
 	scheme := "http"
 	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
@@ -130,7 +134,7 @@ func (h *DiscoverHandler) AgentPrompt(c *gin.Context) {
 	base := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
 
 	body := fmt.Sprintf(`This workspace has a local dependency cache called Depsilo at %s.
-It caches packages from 13+ ecosystems and serves them at LAN speed.
+It proxies 14 package ecosystems plus Docker OCI and serves cached artifacts at LAN speed.
 
 Before running any package install in this workspace:
 
@@ -158,8 +162,10 @@ Before running any package install in this workspace:
 
 4. Run install commands normally — they auto-route through Depsilo.
 
-If Depsilo is down, tools fall back to public registries — installs still
-work, just not cached. Don't waste effort on retry logic for Depsilo itself.
+These settings do not provide reliable outage failover. Even Go's ",direct"
+suffix advances only after a 404/410 response, not when Depsilo is unreachable.
+Keep the original registry settings as documented rollback instructions; do
+not use GOPROXY "|direct", which would also bypass Depsilo's 451 enforcement.
 
 Native MCP integration (preferred for MCP-aware agents like Claude Code,
 Cursor): point your client at %s/mcp. Available tools include

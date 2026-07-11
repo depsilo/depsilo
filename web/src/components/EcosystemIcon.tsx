@@ -16,7 +16,7 @@ import {
   siAlpinelinux,
 } from 'simple-icons'
 
-type EcosystemType =
+export type EcosystemType =
   | 'pip' | 'pypi'
   | 'apt'
   | 'npm'

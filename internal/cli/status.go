@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -177,8 +178,6 @@ func runStatus(args []string) int {
 
 func runActivate(args []string) int {
 	baseURL := getServerURL()
-	host := strings.TrimPrefix(baseURL, "http://")
-	host = strings.TrimPrefix(host, "https://")
 
 	// Parse flags
 	shell := "bash"
@@ -204,7 +203,9 @@ func runActivate(args []string) int {
 
 	if ecosystems == "" || contains(ecosystems, "pypi") {
 		envVars["PIP_INDEX_URL"] = baseURL + "/pypi/simple/"
-		envVars["PIP_TRUSTED_HOST"] = host
+		if host := trustedHostForPlainHTTP(baseURL); host != "" {
+			envVars["PIP_TRUSTED_HOST"] = host
+		}
 	}
 	if ecosystems == "" || contains(ecosystems, "npm") {
 		envVars["npm_config_registry"] = baseURL + "/npm/"
@@ -243,6 +244,14 @@ func runActivate(args []string) int {
 	}
 
 	return 0
+}
+
+func trustedHostForPlainHTTP(baseURL string) string {
+	parsed, err := url.Parse(baseURL)
+	if err != nil || !strings.EqualFold(parsed.Scheme, "http") {
+		return ""
+	}
+	return parsed.Host
 }
 
 func contains(list, item string) bool {

@@ -1,5 +1,5 @@
 // web/src/portal/components/ConfigurePane.tsx
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
 import PromptCard from '@/portal/components/PromptCard'
@@ -198,16 +198,22 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
   // manager tabs (pip / uv / Poetry / etc.) remain a click away.
   const [mgrId, setMgrId] = useState<string>('ai')
 
-  useEffect(() => {
-    setMgrId('ai')
-  }, [languageId])
-
   if (!lang) return null
 
   const m = lang.managers.find(x => x.id === mgrId) ?? lang.managers[0]
   const url = endpoint
   const host = url.replace(/^https?:\/\//, '')
-  const fill = (s: string) => s.replace(/\{URL\}/g, url).replace(/\{HOST\}/g, host)
+  const plainHTTP = /^http:\/\//i.test(url)
+  const fill = (s: string) => {
+    let value = s.replace(/\{URL\}/g, url).replace(/\{HOST\}/g, host)
+    if (!plainHTTP) {
+      value = value
+        .replace(/\ntrusted-host = [^\n]*/g, '')
+        .replace(/,\n\s*"insecure-registries": \[[^\n]*\]/g, '')
+        .replace(/\ninsecure = true/g, '')
+    }
+    return value
+  }
   const prompt = buildPrompt(endpoint, languageId)
 
   return (
@@ -240,7 +246,7 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
               justifyContent: 'center',
             }}
           >
-            <EcosystemIcon type={lang.iconAdapter as any} size={18} useColor={true} />
+            <EcosystemIcon type={lang.iconAdapter} size={18} useColor={true} />
           </span>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 25, fontWeight: 680, letterSpacing: '-0.035em' }}>
             {t('quickstart.configureTitle', { name: lang.name })}

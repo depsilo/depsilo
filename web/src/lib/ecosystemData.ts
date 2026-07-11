@@ -1,5 +1,7 @@
 // web/src/lib/ecosystemData.ts
 
+import type { EcosystemType } from '@/components/EcosystemIcon'
+
 // ── Seeded PRNG for decorative sparklines ──────────────────────────
 
 function seeded(seed: number): () => number {
@@ -120,7 +122,7 @@ export interface Language {
   id: string
   name: string
   glyph: string
-  iconAdapter: string
+  iconAdapter: EcosystemType
   group: LanguageGroup
   /** i18n key under `quickstart.subtitle` — short, direct ("Ruby 包" / "Ruby packages"). */
   subtitleKey: string
@@ -151,7 +153,7 @@ export const LANGUAGES: Language[] = [
         tutorial: [
           'Create the config directory if it does not exist: mkdir -p ~/.config/pip',
           'Open ~/.config/pip/pip.conf in your editor (or use the snippet above).',
-          'pip honors PIP_INDEX_URL and PIP_TRUSTED_HOST env vars too — useful in CI.',
+          'pip honors PIP_INDEX_URL in CI; set PIP_TRUSTED_HOST only for plain HTTP and omit it for HTTPS.',
           'Run pip config list to verify the index-url is picked up.',
         ],
       },
@@ -463,7 +465,7 @@ export const LANGUAGES: Language[] = [
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
         ],
         persistent: { file: 'go env -w', lang: 'sh',
-          body: 'go env -w GOPROXY={URL}/go/,direct\ngo env -w GOSUMDB=off' },
+          body: 'go env -w GOPROXY={URL}/go/,direct' },
         verify:     { lang: 'sh', body: 'go env GOPROXY' },
         paths: [
           { os: 'macOS / Linux', path: '~/.config/go/env' },
@@ -471,8 +473,8 @@ export const LANGUAGES: Language[] = [
         ],
         tutorial: [
           'go env -w writes to ~/.config/go/env, persisting across shells.',
-          'Use ,direct to fall back to the upstream when the cache misses.',
-          'Disable GOSUMDB only on private networks — it weakens supply-chain checks.',
+          ',direct is used only after a 404/410 response; it is not outage failover.',
+          'Keep GOSUMDB enabled so Go continues verifying public module checksums.',
         ],
       },
       {
@@ -482,7 +484,7 @@ export const LANGUAGES: Language[] = [
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go build ./...' },
         ],
         persistent: { file: '~/.zshrc · ~/.bashrc', lang: 'sh',
-          body: 'export GOPROXY={URL}/go/,direct\nexport GOSUMDB=off' },
+          body: 'export GOPROXY={URL}/go/,direct' },
         verify:     { lang: 'sh', body: 'echo $GOPROXY' },
         paths: [
           { os: 'zsh',  path: '~/.zshrc' },
@@ -704,22 +706,23 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'apk', name: 'apk', hint: 'Alpine Linux package manager',
-        quick:      { lang: 'sh', body: 'apk add --repository {URL}/alpine/v3.19/main curl' },
+        quick:      { lang: 'sh', body: '(\n  release="v$(cut -d. -f1,2 /etc/alpine-release)"\n  repos="$(mktemp)"\n  trap \'rm -f "$repos"\' 0\n  printf "%s\\n" "{URL}/alpine/${release}/main" "{URL}/alpine/${release}/community" > "$repos"\n  apk --repositories-file "$repos" add curl\n)' },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'apk add --repository {URL}/alpine/v3.19/main curl' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: '(\n  release="v$(cut -d. -f1,2 /etc/alpine-release)"\n  repos="$(mktemp)"\n  trap \'rm -f "$repos"\' 0\n  printf "%s\\n" "{URL}/alpine/${release}/main" "{URL}/alpine/${release}/community" > "$repos"\n  apk --repositories-file "$repos" add curl\n)' },
           { label: 'quickstart.method.dockerfile', lang: 'dockerfile',
             body: 'FROM alpine:3.19\n\nARG DEPSILO_URL={URL}\nRUN printf "%s\\n" \\\n  "${DEPSILO_URL}/alpine/v3.19/main" \\\n  "${DEPSILO_URL}/alpine/v3.19/community" \\\n  > /etc/apk/repositories \\\n  && apk add --no-cache curl ca-certificates' },
         ],
         persistent: { file: '/etc/apk/repositories', lang: 'conf',
-          body: '{URL}/alpine/v3.19/main\n{URL}/alpine/v3.19/community' },
-        verify:     { lang: 'sh', body: 'apk update' },
+          body: '{URL}/alpine/v<major.minor>/main\n{URL}/alpine/v<major.minor>/community' },
+        verify:     { lang: 'sh', body: '(\n  release="v$(cut -d. -f1,2 /etc/alpine-release)"\n  repos="$(mktemp)"\n  trap \'rm -f "$repos"\' 0\n  printf "%s\\n" "{URL}/alpine/${release}/main" "{URL}/alpine/${release}/community" > "$repos"\n  apk --repositories-file "$repos" update\n)' },
         paths: [
           { os: 'System',    path: '/etc/apk/repositories' },
-          { os: 'Per-call',  path: 'apk add --repository {URL}/alpine/v3.19/main …' },
+          { os: 'Per-call',  path: 'mktemp + apk --repositories-file …' },
         ],
         tutorial: [
           'Replace the lines in /etc/apk/repositories with the Depsilo URLs above (keep main + community).',
-          'Match the Alpine version in the path (v3.19, v3.20, edge…) to your release — check /etc/alpine-release.',
+          'Replace v<major.minor> with the branch for your release — check /etc/alpine-release.',
+          'Use --repositories-file for one-shot tests; --repository/-X is supplemental and would keep public repositories active.',
           'In Docker builds, override DEPSILO_URL when needed: localhost inside the build container is not your host machine.',
           'APKINDEX.tar.gz is signed; Depsilo passes it through untouched so signature verification still works.',
           'Run apk update to refresh the index, then apk add <pkg> to install through the cache.',
@@ -827,48 +830,13 @@ export const LANGUAGES: Language[] = [
 
 export function buildPrompt(endpoint: string, languageId: string): string {
   if (languageId === 'all') {
-    return `I have a local Depsilo cache proxy running at ${endpoint}. It mirrors all common package registries (pip, npm, Maven, Cargo, Go, Docker, Helm, etc).\n\nPlease detect every package manager used by my project and reconfigure each one to route through ${endpoint}. For each manager, edit the appropriate config file (~/.npmrc, ~/.cargo/config.toml, ~/.config/pip/pip.conf, ~/.m2/settings.xml, /etc/docker/daemon.json, etc) so all future installs use the cache. Show me each file you change, and run a verification install to confirm the cache is working.`
+    return `I have a local Depsilo supply-chain proxy running at ${endpoint}. Detect every package manager used by this project and route its project/build configuration through that URL. Keep every edit transparent: name Depsilo and the endpoint, preserve the original registry as a documented manual rollback rather than an active parallel source, show each diff, and keep signature/checksum verification enabled. Host-level Docker/container runtime settings must only be proposed for operator review; do not edit or restart the host runtime automatically. Run one verification install for each project-scoped manager you change.`
+  }
+  if (languageId === 'container') {
+    return `Prepare this project to use the Depsilo OCI proxy at ${endpoint}. Detect the container runtime and show the exact host-level mirror configuration for operator review. Use the service root because the runtime requests /v2/ itself. Do not edit daemon files or restart Docker, containerd, Podman, or k3s automatically. Keep the original configuration as a documented rollback and explain how the operator can verify the selected mirror.`
   }
   const lang = LANGUAGES.find(l => l.id === languageId)
   const langName = lang?.name ?? languageId
   const mgrList = lang ? lang.managers.map(m => m.name).join(', ') : ''
-  return `Configure my ${langName} project to use the local Depsilo cache proxy at ${endpoint}.\n\nDetect which package manager this project uses (${mgrList}) and edit its config file so installs route through ${endpoint}. Make the change persistent (not a one-shot env var). After editing, run a small test install to verify the cache is hit.`
-}
-
-export function buildAllScript(endpoint: string): string {
-  const host = endpoint.replace(/^https?:\/\//, '')
-  return `#!/usr/bin/env bash
-# Depsilo: configure every package manager on this machine
-set -euo pipefail
-DEPSILO="${endpoint}"
-
-# pip
-mkdir -p ~/.config/pip
-cat > ~/.config/pip/pip.conf <<EOF
-[global]
-index-url = $DEPSILO/pypi/simple/
-trusted-host = ${host}
-EOF
-
-# npm / pnpm / yarn
-echo "registry=$DEPSILO/npm/" >> ~/.npmrc
-
-# cargo (sparse+ prefix is required so Cargo uses the HTTP sparse protocol)
-mkdir -p ~/.cargo
-cat >> ~/.cargo/config.toml <<EOF
-[source.crates-io]
-replace-with = "depsilo"
-[source.depsilo]
-registry = "sparse+$DEPSILO/crates/"
-EOF
-
-# go
-go env -w GOPROXY="$DEPSILO/go/,direct" GOSUMDB=off
-
-# docker — registry-mirrors points at the service root; Depsilo serves the
-# OCI v2 API at /v2/, so do NOT append /docker/.
-# insecure-registries is required for plain-HTTP LAN deployments.
-echo "{ \"registry-mirrors\": [\"$DEPSILO\"], \"insecure-registries\": [\"${host}\"] }" | sudo tee /etc/docker/daemon.json
-
-echo "✓ All managers routed through $DEPSILO"`
+  return `Configure my ${langName} project to use the Depsilo supply-chain proxy at ${endpoint}. Detect which package manager this project uses (${mgrList}) and propose the persistent configuration needed to route it through that URL. Keep the change transparent: name Depsilo and the endpoint, do not add a parallel public source, preserve the original registry as a documented manual rollback, and keep signature/checksum verification enabled. Show the diff before applying it. If the change touches host-level files, needs elevated privileges, or restarts a service, only show the exact operator commands; do not execute them. After approved project/user changes, run a small verification install.`
 }

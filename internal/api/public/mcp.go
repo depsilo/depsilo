@@ -19,10 +19,10 @@ import (
 // HTTP transport). A single POST /mcp endpoint accepts JSON-RPC 2.0
 // requests and dispatches to:
 //
-//   initialize, notifications/initialized
-//   tools/list, tools/call
-//   resources/list, resources/read
-//   prompts/list, prompts/get
+//	initialize, notifications/initialized
+//	tools/list, tools/call
+//	resources/list, resources/read
+//	prompts/list, prompts/get
 //
 // Any MCP-aware client (Claude Code, Cursor, Hermes, OpenClaw,
 // modelcontextprotocol.io clients) can connect by pointing at the URL.
@@ -30,9 +30,8 @@ import (
 // translate into actions — MCP tools give the agent structured function
 // calls it can invoke directly.
 //
-// Auth: read-only tools are public. Mutating tools (warmup) require an
-// Authorization: Bearer header that resolves to an admin token, matching
-// the existing /api/v1/admin/* policy.
+// All current tools are read-only. depsilo_warmup returns a request template
+// for the authenticated Admin API; it does not execute the mutation itself.
 type MCPHandler struct {
 	DB         *gorm.DB
 	Ecosystems []string
@@ -135,7 +134,7 @@ func (h *MCPHandler) dispatch(c *gin.Context, req rpcRequest) (rpcResponse, bool
 				"name":    "depsilo",
 				"version": version.Version,
 			},
-			"instructions": "Depsilo is a local dependency proxy cache for 13+ package ecosystems. Call tools/list to see what you can do; depsilo_status is a good first call to verify connectivity. For human-readable bootstrap text, also fetch GET /api/v1/agent-prompt.",
+			"instructions": "Depsilo is a supply-chain enforcement proxy for 14 package ecosystems plus Docker OCI. Call tools/list to see what you can do; depsilo_status is a good first call to verify connectivity. For human-readable bootstrap text, also fetch GET /api/v1/agent-prompt.",
 		}), true
 
 	case "notifications/initialized", "notifications/cancelled":
@@ -243,9 +242,9 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 		},
 		{
 			"name":        "depsilo_configure",
-			"description": "Return the exact shell / config snippets needed to route a given ecosystem's package manager through this Depsilo instance. The AI agent should apply these to the project.",
+			"description": "Return shell / config snippets for a package manager. Apply project-scoped changes only after review; host-level Docker daemon settings must be shown to the operator, not edited automatically.",
 			"inputSchema": obj(map[string]any{
-				"ecosystem": str("Ecosystem name (pypi, npm, go, cargo, maven, rubygems, composer, nuget, conda, cran, helm, huggingface, apt)"),
+				"ecosystem": str("Ecosystem name (pypi, npm, go, cargo, maven, rubygems, composer, nuget, conda, cran, helm, huggingface, apt, alpine, docker)"),
 			}, "ecosystem"),
 		},
 		{
@@ -268,7 +267,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 		},
 		{
 			"name":        "depsilo_warmup",
-			"description": "Pre-fetch specific packages into the cache. Requires admin authorization (set the Authorization: Bearer header on the MCP HTTP connection). Returns once the warmup task is queued; check depsilo_status to see progress.",
+			"description": "Return the authenticated Admin API request needed to pre-fetch packages. The MCP tool does not execute or queue the warmup yet.",
 			"inputSchema": obj(map[string]any{
 				"ecosystem": str("Target ecosystem (pypi, npm, cargo, etc.)"),
 				"packages":  arr("string", "Package names to fetch"),
@@ -463,10 +462,10 @@ func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error
 	base := requestBase(c)
 	snippets := map[string]map[string]string{
 		"pypi": {
-			"shell":   fmt.Sprintf("pip config set global.index-url %s/pypi/simple/", base),
-			"env":     fmt.Sprintf("PIP_INDEX_URL=%s/pypi/simple/", base),
-			"config":  fmt.Sprintf("# ~/.config/pip/pip.conf\n[global]\nindex-url = %s/pypi/simple/", base),
-			"verify":  fmt.Sprintf("pip install -i %s/pypi/simple/ --dry-run six", base),
+			"shell":  fmt.Sprintf("pip config set global.index-url %s/pypi/simple/", base),
+			"env":    fmt.Sprintf("PIP_INDEX_URL=%s/pypi/simple/", base),
+			"config": fmt.Sprintf("# ~/.config/pip/pip.conf\n[global]\nindex-url = %s/pypi/simple/", base),
+			"verify": fmt.Sprintf("pip install -i %s/pypi/simple/ --dry-run six", base),
 		},
 		"npm": {
 			"shell":  fmt.Sprintf("npm config set registry %s/npm/", base),
@@ -510,10 +509,15 @@ func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error
 			"config": fmt.Sprintf(`# ~/.Rprofile\noptions(repos = c(CRAN = "%s/cran/"))`, base),
 		},
 		"apt": {
-			"note":   fmt.Sprintf("APT requires editing /etc/apt/sources.list; replace the host with %s/apt", base),
+			"note": fmt.Sprintf("APT requires editing /etc/apt/sources.list; replace the host with %s/apt", base),
+		},
+		"alpine": {
+			"shell":  fmt.Sprintf(`(release="v$(cut -d. -f1,2 /etc/alpine-release)"; repos="$(mktemp)"; trap 'rm -f "$repos"' 0; printf '%%s\n' "%s/alpine/${release}/main" "%s/alpine/${release}/community" > "$repos"; apk --repositories-file "$repos" add curl)`, base, base),
+			"config": fmt.Sprintf("# Replace /etc/apk/repositories; substitute the v<major.minor> from /etc/alpine-release.\n%s/alpine/v<major.minor>/main\n%s/alpine/v<major.minor>/community", base, base),
+			"verify": fmt.Sprintf(`(release="v$(cut -d. -f1,2 /etc/alpine-release)"; repos="$(mktemp)"; trap 'rm -f "$repos"' 0; printf '%%s\n' "%s/alpine/${release}/main" "%s/alpine/${release}/community" > "$repos"; apk --repositories-file "$repos" update)`, base, base),
 		},
 		"docker": {
-			"config": fmt.Sprintf("# /etc/docker/daemon.json\n{\"registry-mirrors\": [\"%s/docker/\"]}\n# Then: systemctl restart docker", base),
+			"config": fmt.Sprintf("# Host-level /etc/docker/daemon.json - show to the operator; do not edit automatically.\n# Use the service root; Docker requests /v2/ itself.\n{\"registry-mirrors\": [\"%s\"]}\n# For plain HTTP, also add the host to insecure-registries. Then restart Docker.", base),
 		},
 	}
 	s, ok := snippets[ecosystem]
@@ -599,28 +603,24 @@ func (h *MCPHandler) toolRecent(limit int, ecosystem string, onlyMiss bool) (any
 }
 
 func (h *MCPHandler) toolWarmup(c *gin.Context, ecosystem string, packages []string) (any, error) {
-	// Require admin auth (Authorization: Bearer ...) by matching against
-	// the JWT secret. Defer to existing /api/v1/admin/cache/warmup by
-	// recommending the user call it; in-process call would re-implement
-	// the warmup pipeline here. For v1, return a hint with curl.
 	if ecosystem == "" || len(packages) == 0 {
 		return jsonResult(map[string]any{"error": "ecosystem and packages are required"}), nil
 	}
-	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
-	if token == "" {
-		return jsonResult(map[string]any{
-			"error":     "warmup requires admin auth",
-			"hint":      "obtain a token via POST /api/v1/auth/login, then set Authorization: Bearer <token> on this MCP connection",
-			"alt_curl":  fmt.Sprintf("curl -X POST -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -d '{\"ecosystem\":\"%s\",\"packages\":%v}' %s/api/v1/admin/cache/warmup", ecosystem, packages, requestBase(c)),
-		}), nil
-	}
-	// Forward to existing admin endpoint to keep the actual fetch+store
-	// pipeline in one place.
 	return jsonResult(map[string]any{
-		"queued":    true,
-		"ecosystem": ecosystem,
-		"packages":  packages,
-		"hint":      "tracking the actual fetch progress is not yet wired into MCP; call depsilo_recent in a few seconds to verify",
+		"executed": false,
+		"request": map[string]any{
+			"method": "POST",
+			"url":    requestBase(c) + "/api/v1/admin/cache/warmup",
+			"headers": map[string]string{
+				"Authorization": "Bearer <admin-token>",
+				"Content-Type":  "application/json",
+			},
+			"body": map[string]any{
+				"ecosystem": ecosystem,
+				"packages":  packages,
+			},
+		},
+		"hint": "MCP warmup execution is not wired yet; send this request to the Admin API",
 	}), nil
 }
 

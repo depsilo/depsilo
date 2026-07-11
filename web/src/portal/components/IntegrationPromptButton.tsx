@@ -2,10 +2,8 @@
 // project-integration prompt. The user copies the prompt into their AI coding
 // agent (Claude Code / Cursor / Copilot Chat) and the agent edits Dockerfile /
 // CI / build scripts to route installs through this mirror with traceable
-// comments and public-registry fallback.
-//
-// Distinct from the "AI prompt" mode inside AllInOnePane, which configures the
-// developer's local machine. This one rewrites project source.
+// comments and a documented public-registry rollback. The per-ecosystem AI tab
+// in ConfigurePane covers narrower client setup; this prompt rewrites project source.
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'

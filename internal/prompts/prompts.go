@@ -9,7 +9,8 @@
 // configures the user's local DEVELOPER MACHINE (`pip config set`, `npm config
 // set`); this one rewrites the user's PROJECT SOURCE (Dockerfile / CI / build
 // scripts) and is intentionally transparent: generated edits should name
-// Depsilo, include the mirror URL, and preserve public-registry fallback.
+// Depsilo, include the mirror URL, and preserve an explicit public-registry
+// recovery path.
 package prompts
 
 import (

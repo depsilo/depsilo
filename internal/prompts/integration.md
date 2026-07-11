@@ -9,16 +9,16 @@
 > The text below `---` is what reaches the LLM. Keep it transparent,
 > security-tool-discipline, prescriptive. Edits here ship to every user
 > immediately. **Never re-introduce stealth/branding-discipline language** —
-> a self-hosted supply-chain control point must be honest about what it did
+> a self-hosted supply-chain enforcement layer must be honest about what it did
 > to a codebase. See `docs/adr/0003-supply-chain-control-point.md`.
 
 ---
 
 You are integrating **Depsilo**, a self-hosted package cache + supply-chain
-control point, into this project. Goal: route the project's dependency-install
+enforcement layer, into this project. Goal: route the project's dependency-install
 traffic through `{{MIRROR_URL}}` so cold builds hit a local cache instead of the
-public CDN every time, **while keeping the public registry available as a
-documented fallback**.
+public CDN every time, **while preserving the original public-registry setting
+as a documented rollback, not an active parallel source**.
 
 ## Identification — every change must be traceable
 
@@ -93,7 +93,7 @@ names verbatim, do not invent new ones.
 | Ecosystem                     | URL path                            | Native knob                                                                               |
 | ----------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------- |
 | npm / pnpm / yarn             | `/npm/`                             | env `npm_config_registry`; or `registry=` in `.npmrc`                                     |
-| Python (pip / uv / poetry)    | `/pypi/simple/`                     | env `PIP_INDEX_URL` (+ `PIP_TRUSTED_HOST=<host>`); or `[global] index-url = …` in `pip.conf` |
+| Python (pip / uv / poetry)    | `/pypi/simple/`                     | env `PIP_INDEX_URL`; add `PIP_TRUSTED_HOST=<host>` only for plain HTTP, never HTTPS; or `[global] index-url = …` in `pip.conf` |
 | Go modules                    | `/go`                               | env `GOPROXY="<URL>/go,direct"`                                                           |
 | Rust / Cargo                  | `/crates/`                          | `~/.cargo/config.toml` `[source.crates-io] replace-with = "depsilo"` + `[source.depsilo] registry = "sparse+<URL>/crates/"` |
 | Maven / Gradle                | `/maven/`                           | `~/.m2/settings.xml` `<mirrors><mirror><mirrorOf>*</mirrorOf><name>depsilo</name><url>…</url></mirror></mirrors>` |
@@ -105,29 +105,36 @@ names verbatim, do not invent new ones.
 | Helm                          | `/helm/`                            | `helm repo add depsilo <URL>`                                                             |
 | Debian / Ubuntu (apt)         | `/apt/<distro>` (e.g. `/apt/debian`) | rewrite `/etc/apt/sources.list` to point at the URL; do not disable signature checking    |
 | Alpine (apk)                  | `/alpine/<version>/<repo>`           | rewrite `/etc/apk/repositories`                                                           |
-| Docker registry mirror        | `/docker/`                          | `/etc/docker/daemon.json` `registry-mirrors` (host-level; only suggest, do not edit the user's daemon config) |
+| Docker registry mirror        | service root; Docker requests `/v2/` | `/etc/docker/daemon.json` `registry-mirrors` (host-level; only suggest, do not edit the user's daemon config) |
 | HuggingFace                   | `/huggingface/`                     | env `HF_ENDPOINT=<URL>/huggingface`                                                       |
 
-## Public-registry fallback — always preserved
+## Public-registry fallback / recovery path — always preserved
 
-The mirror is a **primary route**, never a sole route. Configure the public
-registry as a documented fallback so a Depsilo outage or a misconfigured URL
-cannot brick the build pipeline:
+The mirror is the **primary route**. Do not add a parallel index or all-error
+fallthrough that can bypass a Depsilo policy response. Preserve the original
+setting and a documented one-line rollback instead. Some clients have limited
+continuation semantics, described below, but an install can still fail while
+the client points at an unavailable Depsilo instance.
 
-- **Go modules.** `GOPROXY="{{MIRROR_URL}}/go,direct"` — the `,direct` suffix is
-  the fallback. Required, do not omit.
-- **Cargo.** Cargo's `[source.crates-io] replace-with = "depsilo"` only swaps
-  the registry, the original `crates-io` source remains available; nothing to
-  do beyond keeping the original `[source.crates-io]` block intact.
-- **Maven.** `<mirrorOf>*</mirrorOf>` routes everything via Depsilo, but Maven
-  falls back to the original `<repository>` if the mirror returns 404 — do not
-  set `<blocked>true</blocked>` on the mirror.
+- **Go modules.** `GOPROXY="{{MIRROR_URL}}/go,direct"` uses `direct` only after
+  a 404/410 response; it does not fail over when Depsilo is unreachable. Keep
+  the original `GOPROXY` as the documented rollback. Never use `|direct`: it
+  would also continue after Depsilo returns 451 and bypass enforcement.
+- **Cargo.** `[source.crates-io] replace-with = "depsilo"` does not provide
+  automatic outage failover. Keep the original `[source.crates-io]` block and
+  document removing `replace-with` as the rollback.
+- **Maven.** `<mirrorOf>*</mirrorOf>` routes matching repositories through
+  Depsilo and does not guarantee automatic fallthrough on mirror failure. Keep
+  the original repository settings and document disabling the mirror entry as
+  the rollback; do not set `<blocked>true</blocked>`.
 - **npm / pnpm / yarn.** The native registry knob takes a single URL, so the
   fallback lives at the CI level: in CI configs, set the mirror URL via env
   but leave a documented commented-out line restoring the public registry, so
   bringing the pipeline back up during an outage is a one-line revert.
-- **pip.** Keep `PIP_EXTRA_INDEX_URL=https://pypi.org/simple/` set alongside
-  `PIP_INDEX_URL` so pip falls back when the mirror cannot satisfy a request.
+- **pip.** Do not set `PIP_EXTRA_INDEX_URL` as fallback: pip considers all
+  configured indexes during normal resolution, which can bypass Depsilo policy
+  and creates dependency-confusion risk. Keep a commented
+  `PIP_INDEX_URL=https://pypi.org/simple/` rollback instead.
 - **apt / apk.** Leave the public mirror line commented in `sources.list` /
   `repositories` rather than deleted, with a comment pointing at this prompt.
 
@@ -179,14 +186,14 @@ per file you touched:
 | File | Ecosystem | Action | Why |
 |------|-----------|--------|-----|
 | `Dockerfile` | npm | Added `ENV NPM_REGISTRY={{MIRROR_URL}}/npm/` + Depsilo identification comment | route npm install through cache |
-| `pip.conf` | pip | Set `index-url` + kept public PyPI as `extra-index-url` | route pip with documented fallback |
+| `pip.conf` | pip | Set `index-url` + documented the original PyPI value for rollback | route pip through enforcement proxy |
 
 Then:
 
 1. Suggest one verification command per ecosystem touched, e.g.:
    - Docker: `docker build … && docker history <image> | grep -iE "registry|index_url|GOPROXY"` should show the Depsilo URL baked in.
-   - Local Python: `pip config list` should show the new `index-url` plus the
-     PyPI `extra-index-url`.
+   - Local Python: `pip config list` should show only the Depsilo `index-url`;
+     verify the public PyPI URL remains in a rollback comment or runbook.
    - npm: `npm config get registry` inside the container should print the
      Depsilo URL.
 2. Surface anything you skipped and why (e.g. "lockfile present, not touched";

@@ -23,7 +23,7 @@ func TestIntegration_RenderedPromptIsTransparent(t *testing.T) {
 		"You are integrating **Depsilo**",
 		"Routed via Depsilo cache: http://10.4.20.52:23333",
 		"Public-registry fallback",
-		"PIP_EXTRA_INDEX_URL=https://pypi.org/simple/",
+		"Do not set `PIP_EXTRA_INDEX_URL`",
 		"GOPROXY=\"http://10.4.20.52:23333/go,direct\"",
 	}
 	for _, s := range mustContain {
@@ -57,8 +57,8 @@ func TestIntegrationTemplate_HasMandatorySections(t *testing.T) {
 		"Identification",
 		"Depsilo",
 		// Public-registry fallback is non-negotiable — a self-hosted
-		// control point that brings the build down when it's offline is
-		// worse than no control point.
+		// enforcement layer that brings the build down when it's offline is
+		// worse than no recovery path.
 		"Public-registry fallback",
 		"Discover before editing",
 		"Hard constraints",
