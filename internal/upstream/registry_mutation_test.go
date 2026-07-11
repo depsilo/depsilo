@@ -512,3 +512,35 @@ func TestRegistryMutationAndLifecycleDoNotRace(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRegistryReadersAndMutationsAreRaceFree(t *testing.T) {
+	_, registry := registryFixture(t, "pypi", 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := 0; n < 500; n++ {
+				for _, pool := range registry.Pools() {
+					for _, u := range pool.Snapshot() {
+						_ = u.HealthSnapshot()
+					}
+				}
+				_ = registry.List()
+			}
+		}()
+	}
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			for n := 0; n < 50; n++ {
+				_, _ = registry.Create(context.Background(), MutationInput{AdapterType: "pypi", Name: fmt.Sprintf("r-%d-%d", i, n), URL: "https://example.invalid", Priority: n + 3, ProbeMode: "passive", ProbeInterval: "30m"})
+			}
+		}(i)
+	}
+	wg.Wait()
+	if err := registry.verify("pypi"); err != nil {
+		t.Fatal(err)
+	}
+}

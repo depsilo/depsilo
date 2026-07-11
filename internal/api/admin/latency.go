@@ -1,11 +1,13 @@
 package admin
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
@@ -47,7 +49,12 @@ func (h *LatencyHandler) GetLatencyHistory(c *gin.Context) {
 	// Get upstream name
 	var upstream db.UpstreamRecord
 	if err := h.db.First(&upstream, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "Upstream not found"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "Upstream not found"})
+			return
+		}
+		zap.L().Error("load upstream for latency history", zap.Uint64("upstream_id", id), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to load upstream"})
 		return
 	}
 
@@ -57,12 +64,17 @@ func (h *LatencyHandler) GetLatencyHistory(c *gin.Context) {
 		Healthy   bool      `json:"healthy"`
 	}
 
-	var points []LatencyPoint
-	h.db.Model(&db.UpstreamLatencyLog{}).
+	points := make([]LatencyPoint, 0)
+	result := h.db.Model(&db.UpstreamLatencyLog{}).
 		Select("created_at as time, latency_ms, healthy").
-		Where("name = ? AND created_at >= ?", upstream.Name, since).
+		Where("upstream_id = ? AND created_at >= ?", upstream.ID, since).
 		Order("datetime(created_at) ASC").
 		Find(&points)
+	if result.Error != nil {
+		zap.L().Error("load upstream latency history", zap.Uint("upstream_id", upstream.ID), zap.Error(result.Error))
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to load latency history"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"upstream_name": upstream.Name,

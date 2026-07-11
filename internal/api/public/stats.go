@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/cache"
@@ -117,41 +119,68 @@ const latencyIntervalMin = 16
 
 // allUpstreamLatencySeries runs a single query for ALL upstreams and returns
 // a map of name → 90-point series. This replaces N per-upstream queries.
-func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) map[string][]gin.H {
+func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]gin.H, error) {
 	type bucketRow struct {
-		Name     string
-		Bucket   int64
-		AvgLat   float64
-		AvgHP    float64
-		Requests int64
+		UpstreamID uint
+		Name       string
+		Bucket     int64
+		AvgLat     float64
+		AvgHP      float64
+		Requests   int64
 	}
 
 	var rows []bucketRow
-	h.db.Model(&db.UpstreamLatencyLog{}).
-		Select(fmt.Sprintf(`name,
-			(CAST(strftime('%%s', created_at) AS INTEGER) / %d) * %d AS bucket,
-			AVG(latency_ms) AS avg_lat,
-			AVG(CASE WHEN healthy = 1 THEN 1.0 ELSE 0.0 END) AS avg_hp,
+	query := h.db.Table("upstream_latency_logs AS l").
+		Select(fmt.Sprintf(`l.upstream_id,
+			COALESCE(NULLIF(u.name, ''), l.name) AS name,
+			(CAST(strftime('%%s', l.created_at) AS INTEGER) / %d) * %d AS bucket,
+			AVG(l.latency_ms) AS avg_lat,
+			AVG(CASE WHEN l.healthy = 1 THEN 1.0 ELSE 0.0 END) AS avg_hp,
 			COUNT(*) AS requests`,
 			latencyIntervalMin*60, latencyIntervalMin*60)).
-		Where("datetime(created_at) >= datetime(?)", since.UTC()).
-		Group("name, bucket").
-		Order("name, bucket ASC").
+		Joins("LEFT JOIN upstream_records AS u ON u.id = l.upstream_id").
+		Where("datetime(l.created_at) >= datetime(?)", since.UTC()).
+		Group("l.upstream_id, COALESCE(NULLIF(u.name, ''), l.name), bucket").
+		Order("name ASC, l.upstream_id ASC, bucket ASC").
 		Scan(&rows)
-
-	// Index by name+bucket
-	type key struct{ name string; bucket int64 }
-	lookup := make(map[key]*bucketRow, len(rows))
-	names := make(map[string]bool)
-	for i := range rows {
-		lookup[key{rows[i].Name, rows[i].Bucket}] = &rows[i]
-		names[rows[i].Name] = true
+	if query.Error != nil {
+		return nil, query.Error
 	}
+
+	type bucketKey struct {
+		name   string
+		bucket int64
+	}
+	type bucketAggregate struct {
+		latencyTotal float64
+		healthyTotal float64
+		requests     int64
+	}
+	lookup := make(map[bucketKey]*bucketAggregate, len(rows))
+	nameSet := make(map[string]struct{})
+	for i := range rows {
+		row := &rows[i]
+		key := bucketKey{name: row.Name, bucket: row.Bucket}
+		aggregate := lookup[key]
+		if aggregate == nil {
+			aggregate = &bucketAggregate{}
+			lookup[key] = aggregate
+		}
+		aggregate.latencyTotal += row.AvgLat * float64(row.Requests)
+		aggregate.healthyTotal += row.AvgHP * float64(row.Requests)
+		aggregate.requests += row.Requests
+		nameSet[row.Name] = struct{}{}
+	}
+	names := make([]string, 0, len(nameSet))
+	for name := range nameSet {
+		names = append(names, name)
+	}
+	sort.Strings(names)
 
 	startBucket := (since.Unix() / int64(latencyIntervalMin*60)) * int64(latencyIntervalMin*60)
 
 	result := make(map[string][]gin.H, len(names))
-	for name := range names {
+	for _, name := range names {
 		points := make([]gin.H, 0, latencyBuckets)
 		for i := 0; i < latencyBuckets; i++ {
 			ts := startBucket + int64(i*latencyIntervalMin*60)
@@ -162,21 +191,26 @@ func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) map[string][]gi
 				"healthy":    true,
 				"requests":   int64(0),
 			}
-			if r, ok := lookup[key{name, ts}]; ok {
-				p["latency_ms"] = int64(math.Round(r.AvgLat))
-				p["healthy"] = r.AvgHP > 0.5
-				p["requests"] = r.Requests
+			if aggregate, ok := lookup[bucketKey{name: name, bucket: ts}]; ok && aggregate.requests > 0 {
+				p["latency_ms"] = int64(math.Round(aggregate.latencyTotal / float64(aggregate.requests)))
+				p["healthy"] = aggregate.healthyTotal/float64(aggregate.requests) > 0.5
+				p["requests"] = aggregate.requests
 			}
 			points = append(points, p)
 		}
 		result[name] = points
 	}
-	return result
+	return result, nil
 }
 
 // GetLatencySeries returns all upstream latency series in one response (public, no auth).
 func (h *StatsHandler) GetLatencySeries(c *gin.Context) {
-	all := h.allUpstreamLatencySeries(time.Now().Add(-24 * time.Hour))
+	all, err := h.allUpstreamLatencySeries(time.Now().Add(-24 * time.Hour))
+	if err != nil {
+		zap.L().Error("load upstream latency series", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to load latency series"})
+		return
+	}
 	c.JSON(http.StatusOK, all)
 }
 
@@ -285,6 +319,7 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 		for _, u := range pool.Snapshot() {
 			health := u.HealthSnapshot()
 			upstreams = append(upstreams, gin.H{
+				"id":             u.ID,
 				"name":           u.Name,
 				"adapter":        name,
 				"url":            u.URL,
