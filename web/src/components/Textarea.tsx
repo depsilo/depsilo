@@ -1,4 +1,4 @@
-import { useId, type SelectHTMLAttributes } from 'react'
+import { useId, type TextareaHTMLAttributes } from 'react'
 import { mergeDescriptionIds } from './fieldFeedback'
 
 interface FeedbackProps {
@@ -7,31 +7,32 @@ interface FeedbackProps {
   error?: string
 }
 
-interface SelectV2Props extends SelectHTMLAttributes<HTMLSelectElement>, FeedbackProps {}
+interface TextareaV2Props extends TextareaHTMLAttributes<HTMLTextAreaElement>, FeedbackProps {}
 
-export default function SelectV2({
+export default function TextareaV2({
   className = '',
   label,
   hint,
   error,
-  children,
+  onFocus,
+  onBlur,
   style,
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
   ...rest
-}: SelectV2Props) {
+}: TextareaV2Props) {
   const generatedId = useId()
   const controlId = rest.id ?? generatedId
   const descriptionId = hint || error ? `${controlId}-description` : undefined
   const composedDescriptionIds = mergeDescriptionIds(ariaDescribedBy, descriptionId)
 
-  const select = (
-    <select
+  const textarea = (
+    <textarea
       {...rest}
       id={controlId}
       aria-invalid={error ? true : ariaInvalid}
       aria-describedby={composedDescriptionIds}
-      className={`w-full cursor-pointer rounded-[4px] px-3 py-2 text-[16px] md:text-[13px] transition-colors duration-150 stripe-focus-ring ${className}`}
+      className={`w-full rounded-[4px] px-3 py-2 text-[16px] md:text-[13px] transition-colors duration-150 stripe-focus-ring ${className}`}
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
@@ -39,12 +40,18 @@ export default function SelectV2({
         outline: 'none',
         ...style,
       }}
-    >
-      {children}
-    </select>
+      onFocus={(event) => {
+        event.currentTarget.style.borderColor = 'var(--brand)'
+        onFocus?.(event)
+      }}
+      onBlur={(event) => {
+        event.currentTarget.style.borderColor = 'var(--border)'
+        onBlur?.(event)
+      }}
+    />
   )
 
-  if (!label && !descriptionId) return select
+  if (!label && !descriptionId) return textarea
 
   return (
     <div>
@@ -53,7 +60,7 @@ export default function SelectV2({
           {label}
         </label>
       )}
-      {select}
+      {textarea}
       {(error || hint) && (
         <p
           id={descriptionId}

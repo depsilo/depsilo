@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
@@ -6,6 +6,7 @@ import { formatDate, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
+import SwitchV2 from '@/components/Switch'
 import Icon from '@/components/Icon'
 import BadgeV2 from '@/components/Badge'
 import Metric from '@/components/Metric'
@@ -53,6 +54,8 @@ const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'succ
   medium: 'default',
   low: 'success',
 }
+
+type EcosystemName = ComponentProps<typeof EcosystemIcon>['type']
 
 // ─── Overview Tab ────────────────────────────────────────────────────
 
@@ -201,7 +204,7 @@ function VulnerabilitiesTab() {
       label: t('security.ecosystem'),
       render: (v: unknown) => (
         <div className="flex items-center gap-1.5">
-          <EcosystemIcon type={v as any} size={14} />
+          <EcosystemIcon type={v as EcosystemName} size={14} />
           <BadgeV2 variant="ecosystem">{(v as string)?.toUpperCase()}</BadgeV2>
         </div>
       ),
@@ -377,7 +380,7 @@ function SuggestionsTab() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 mb-1">
-                  {item.ecosystem && <EcosystemIcon type={item.ecosystem as any} size={14} />}
+                  {item.ecosystem && <EcosystemIcon type={item.ecosystem as EcosystemName} size={14} />}
                   <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>
                     {item.package_name}
                   </span>
@@ -520,46 +523,34 @@ function PoliciesTab() {
                 style={{ borderBottom: idx < ecosystems.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
                 <div className="flex items-center gap-2 w-32 shrink-0">
-                  <EcosystemIcon type={eco as any} size={16} />
+                  <EcosystemIcon type={eco as EcosystemName} size={16} />
                   <span className="text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
                     {eco.toUpperCase()}
                   </span>
                 </div>
 
-                {/* Auto-block toggle */}
-                <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                  <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('security.autoBlock')}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPolicy(eco, { auto_block_enabled: !policy.auto_block_enabled })}
-                    className="relative w-9 h-5 rounded-full cursor-pointer transition-colors duration-200"
-                    style={{
-                      background: policy.auto_block_enabled ? 'var(--brand)' : 'var(--bg-soft)',
-                      border: 'none',
-                    }}
-                  >
-                    <span
-                      className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform duration-200"
-                      style={{
-                        background: 'white',
-                        transform: policy.auto_block_enabled ? 'translateX(16px)' : 'translateX(0)',
-                      }}
-                    />
-                  </button>
-                </label>
+                <div className="shrink-0 text-[var(--text-soft)]">
+                  <SwitchV2
+                    label={t('security.autoBlock')}
+                    aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
+                    checked={policy.auto_block_enabled}
+                    onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
+                  />
+                </div>
 
                 {/* CVSS threshold */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('security.cvssThreshold')}</span>
-                  <input
+                <div className="w-28 shrink-0">
+                  <InputV2
+                    label={t('security.cvssThreshold')}
+                    aria-label={`${eco.toUpperCase()} ${t('security.cvssThreshold')}`}
                     type="number"
                     min={0}
                     max={10}
                     step={0.1}
                     value={policy.min_cvss_score}
                     onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
-                    className="w-16 rounded-[4px] px-2 py-1 text-[13px] font-mono text-center"
-                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }}
+                    mono
+                    className="px-2 py-1 text-center"
                   />
                 </div>
 
@@ -578,12 +569,11 @@ function PoliciesTab() {
       <section>
         <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
         <div
-          className="rounded-[4px] p-6 text-center cursor-pointer transition-colors duration-150"
+          className="rounded-[4px] p-6 text-center transition-colors duration-150"
           style={{
             border: '2px dashed var(--border)',
             background: 'var(--bg-soft)',
           }}
-          onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
           onDrop={(e) => {
             e.preventDefault()
@@ -596,16 +586,26 @@ function PoliciesTab() {
             }
           }}
         >
-          <Icon name="upload_file" size="lg" style={{ color: 'var(--text-soft)' }} />
-          <p className="text-[13px] mt-2" style={{ color: 'var(--text-soft)' }}>
-            {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
-          </p>
+          <button
+            type="button"
+            className="inline-flex min-h-10 flex-col items-center justify-center rounded-[4px] bg-transparent px-4 py-2 text-[var(--text-soft)] stripe-focus-ring"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Icon name="upload_file" size="lg" />
+            <span className="mt-2 text-[13px]">
+              {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
+            </span>
+          </button>
+          <label htmlFor="security-vulnerability-import" className="sr-only">
+            {t('security.dropOrClick')}
+          </label>
           <input
+            id="security-vulnerability-import"
             ref={fileInputRef}
             type="file"
             accept=".json,.zip"
             onChange={handleImport}
-            className="hidden"
+            className="sr-only"
           />
         </div>
         {importMutation.isSuccess && (
