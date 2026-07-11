@@ -219,6 +219,7 @@ config.example.toml	feat(config): define validated admin settings model	preserve
 internal/server/server.go	feat(logging): share atomic server log level	preserved	a4b7cd06151936edf310a1d1048ebc2ccdbcfe07f0fcf44ae8bf226bc01d6329	server-tamper-semantics	pending-review	2026-07-11T10:50:29Z
 internal/api/router.go	feat(admin): expose truthful settings contract	preserved	5a9816c97114504eccf44e468c048e326973467b30f973a479bc2ebd31c05854	router-existing-semantics	pending-review	2026-07-11T11:07:39Z
 internal/server/server.go	feat(admin): expose truthful settings contract	preserved	307dbf2687b18998cb33f41962f2d39ea228039e5c42cd87486d4f6922062daa	server-tamper-semantics	pending-review	2026-07-11T11:07:39Z
+internal/config/config.go	feat(upstream): persist registry seed state	mixed	27bec5da0ffe1c0bf40e55fc0569ff8bb21cf53e5324e06e2f159dbec6c1fa1f	config-existing-semantics	pending-review	2026-07-11T11:28:21Z
 <!-- OVERLAP_PENDING_END -->
 ```
 

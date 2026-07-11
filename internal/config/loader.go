@@ -77,6 +77,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	cfg.ExplicitUpstreamEcosystems = explicitUpstreamEcosystems(v)
 	cfg.IsDefault = isDefault
 	cfg.ConfigPath = resolvedPath
 
@@ -95,6 +96,19 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func explicitUpstreamEcosystems(v *viper.Viper) map[string]bool {
+	out := make(map[string]bool)
+	for _, ecosystem := range []string{
+		"pypi", "apt", "npm", "go", "cargo", "maven", "rubygems",
+		"composer", "nuget", "conda", "cran", "alpine", "helm", "huggingface",
+	} {
+		if v.InConfig(ecosystem + ".upstreams") {
+			out[ecosystem] = true
+		}
+	}
+	return out
 }
 
 func decodeViper(v *viper.Viper) (*Config, error) {

@@ -78,6 +78,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&AccessLogDaily{},
 		&AccessLogPackageDaily{},
 		&UpstreamRecord{},
+		&ControlPlaneState{},
 		&User{},
 		&APIToken{},
 		&UpstreamLatencyLog{},
