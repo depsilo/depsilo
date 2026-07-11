@@ -37,6 +37,9 @@ for (const route of ['/', '/monitor']) for (const width of [390, 1440]) for (con
     await setUiPreferences(page, theme, 'zh')
     await page.goto(route)
     await expectResolvedUiPreferences(page, theme, 'zh')
+    await page.waitForFunction(() => [...document.querySelectorAll('.fade-up')].every(element =>
+      element.getAnimations().every(animation => animation.playState === 'finished'),
+    ))
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
     expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
     expect(consoleErrors).toEqual([])
