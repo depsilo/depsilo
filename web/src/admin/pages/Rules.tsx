@@ -81,7 +81,7 @@ export default function RulesV2() {
           <div>
             <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>{t('rules.action')}</label>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setForm({ ...form, action: 'allow' })} className="flex-1 py-2 text-[14px] font-[400] rounded-[4px] transition-colors cursor-pointer" style={{ background: form.action === 'allow' ? 'rgba(21,190,83,0.15)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid rgba(21,190,83,0.4)' : '1px solid var(--border)' }}>{t('rules.allow')}</button>
+              <button type="button" onClick={() => setForm({ ...form, action: 'allow' })} className="flex-1 py-2 text-[14px] font-[400] rounded-[4px] transition-colors cursor-pointer" style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}>{t('rules.allow')}</button>
               <button type="button" onClick={() => setForm({ ...form, action: 'deny' })} className="flex-1 py-2 text-[14px] font-[400] rounded-[4px] transition-colors cursor-pointer" style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}>{t('rules.deny')}</button>
             </div>
           </div>
@@ -102,8 +102,8 @@ export default function RulesV2() {
           <InputV2 label={t('rules.version')} mono value={testForm.version} onChange={(e) => setTestForm({ ...testForm, version: e.target.value })} placeholder={t('rules.versionPlaceholder')} />
           <ButtonV2 onClick={handleTest} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
           {testResult && !testResult.error && (
-            <div className="rounded-[4px] p-4" style={{ background: testResult.allowed ? 'rgba(21,190,83,0.1)' : 'var(--danger-fill)', border: `1px solid ${testResult.allowed ? 'rgba(21,190,83,0.3)' : 'var(--danger)'}` }}>
-              <div className="flex items-center gap-2 mb-2"><Icon name={testResult.allowed ? 'check_circle' : 'cancel'} size="sm" style={{ color: testResult.allowed ? 'var(--ok)' : 'var(--danger)' }} /><span className="font-[400] text-[14px]" style={{ color: testResult.allowed ? 'var(--ok-text)' : 'var(--danger)' }}>{testResult.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}</span></div>
+            <div className="rounded-[4px] p-4" style={{ background: testResult.allowed ? 'var(--ok-fill)' : 'var(--danger-fill)', border: `1px solid ${testResult.allowed ? 'var(--ok-border)' : 'var(--danger)'}` }}>
+              <div className="flex items-center gap-2 mb-2"><Icon name={testResult.allowed ? 'check_circle' : 'cancel'} size="sm" style={{ color: testResult.allowed ? 'var(--ok-text)' : 'var(--danger)' }} /><span className="font-[400] text-[14px]" style={{ color: testResult.allowed ? 'var(--ok-text)' : 'var(--danger)' }}>{testResult.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}</span></div>
               {testResult.matched_rule ? (<div className="text-[12px] space-y-1" style={{ color: 'var(--text-soft)' }}><p className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.matchedRule')}:</p><p className="font-mono">{testResult.matched_rule.ecosystem}/{testResult.matched_rule.package_name}@{testResult.matched_rule.version} → {testResult.matched_rule.action}</p>{testResult.matched_rule.reason && <p>{testResult.matched_rule.reason}</p>}</div>) : (<p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('rules.noMatch')}</p>)}
             </div>
           )}

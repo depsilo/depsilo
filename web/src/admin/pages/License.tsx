@@ -297,9 +297,9 @@ export default function License() {
       {/* ── Feature comparison ─────────────────────── */}
       <section>
         <SectionHeader title={t('license.features.heading')} />
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
           <div>
-            <p className="text-[13px] font-[600] mb-3" style={{ color: 'var(--text)' }}>
+            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
               {t('license.status.free')}
             </p>
             <ul className="space-y-2">
@@ -312,7 +312,7 @@ export default function License() {
             </ul>
           </div>
           <div>
-            <p className="text-[13px] font-[600] mb-3" style={{ color: 'var(--text)' }}>
+            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
               {t('license.status.pro')}
             </p>
             <ul className="space-y-2">

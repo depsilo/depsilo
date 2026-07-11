@@ -26,7 +26,8 @@ export default function Metric({
         {label}
       </span>
       <span
-        className="font-mono tabular-nums mt-2"
+        data-metric-value
+        className="mt-2 whitespace-nowrap font-mono tabular-nums"
         style={{
           fontSize: size,
           lineHeight: 1.05,

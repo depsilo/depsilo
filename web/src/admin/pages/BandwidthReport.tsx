@@ -99,7 +99,7 @@ export default function BandwidthReport() {
   if (isLoading) {
     return (
       <div className="space-y-12">
-        <div className="grid gap-8 grid-cols-4 py-2">
+        <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
               <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
@@ -122,7 +122,7 @@ export default function BandwidthReport() {
             <button
               key={r.value}
               onClick={() => setRange(r.value)}
-              className="px-3 py-1 text-[12px] font-[500] rounded-[4px] cursor-pointer transition-colors duration-150"
+              className="whitespace-nowrap rounded-[4px] px-3 py-1 text-[12px] font-[500] transition-colors duration-150 cursor-pointer"
               style={{
                 background: active ? 'var(--brand)' : 'transparent',
                 color: active ? 'white' : 'var(--text-soft)',
@@ -155,7 +155,7 @@ export default function BandwidthReport() {
       </div>
 
       {/* ── Summary metrics ──────────────────────────── */}
-      <div className="grid gap-8 grid-cols-4 py-2">
+      <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
         <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(summary.total_bytes || 0)} />
         <Metric label={t('bandwidth.trafficSaved')} value={formatBytes(summary.hit_bytes || 0)} valueTone="ok" />
         <Metric
@@ -206,7 +206,7 @@ export default function BandwidthReport() {
       </section>
 
       {/* ── Three side-by-side panels: ecosystem / top packages / upstream ── */}
-      <div className="grid gap-x-10 gap-y-12 grid-cols-3">
+      <div className="grid grid-cols-1 gap-y-12 xl:grid-cols-3 xl:gap-x-10">
         {/* Ecosystem donut */}
         <section>
           <SectionHeader title={t('bandwidth.byEcosystem')} />

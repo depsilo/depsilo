@@ -188,7 +188,7 @@ export default function DashboardV2() {
       {/* ── Storage alert (kept colored for emphasis) ── */}
       {dashboard?.cache_usage_percent > 80 && (
         <div
-          className="flex items-center gap-2 rounded-[5px] px-4 py-2.5 text-[13px]"
+          className="flex flex-wrap items-center gap-2 rounded-[5px] px-4 py-2.5 text-[13px]"
           style={{
             background: dashboard.cache_usage_percent > 95 ? 'var(--danger-fill)' : 'var(--warn-fill)',
             color: dashboard.cache_usage_percent > 95 ? 'var(--danger-text)' : 'var(--warn-text)',
@@ -228,7 +228,7 @@ export default function DashboardV2() {
               action={
                 <Link
                   to="/admin/bandwidth"
-                  className="text-[11px] font-[500] no-underline inline-flex items-center gap-1 transition-colors duration-150"
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-[500] no-underline transition-colors duration-150"
                   style={{ color: 'var(--brand-text)' }}
                 >
                   {t('bandwidth.viewFullReport')}

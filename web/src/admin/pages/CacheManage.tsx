@@ -69,11 +69,11 @@ export default function CacheManageV2() {
     <div className="space-y-12">
       {/* ── Storage overview + Treemap (no card wrappers) ─────────── */}
       {distribution && (
-        <div className="grid grid-cols-3 gap-x-10 gap-y-12">
+        <div className="grid grid-cols-1 gap-y-12 xl:grid-cols-3 xl:gap-x-10">
           {/* Left: usage + ecosystem breakdown */}
-          <section className="col-span-1">
+          <section>
             <SectionHeader title={t('cache.storageOverview')} />
-            <p className="font-mono tabular-nums mb-2" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>
+            <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.035em', lineHeight: 1.05 }}>
               {formatBytes(distribution.total_size)}
               <span className="text-[12px] font-[400] ml-2" style={{ color: 'var(--text-soft)' }}>
                 / {formatBytes(distribution.max_size)}
@@ -112,7 +112,7 @@ export default function CacheManageV2() {
           </section>
 
           {/* Right: Treemap */}
-          <section className="col-span-2">
+          <section className="xl:col-span-2">
             <SectionHeader title={t('cache.storageDistribution')} />
             {distribution.top_packages && distribution.top_packages.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
@@ -132,9 +132,11 @@ export default function CacheManageV2() {
                         />
                         {showLabel && (
                           <foreignObject x={x} y={y} width={width} height={height}>
-                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 3, boxSizing: 'border-box', overflow: 'hidden' }}>
-                              <span style={{ color: '#fff', fontSize: 11, fontWeight: 500, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
-                              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>{formatBytes(size)}</span>
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 3, boxSizing: 'border-box', overflow: 'hidden' }}>
+                              <div style={{ maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 4px', borderRadius: 3, background: 'var(--surface)', overflow: 'hidden' }}>
+                                <span style={{ color: 'var(--text)', fontSize: 11, fontWeight: 500, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
+                                <span style={{ color: 'var(--text-soft)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>{formatBytes(size)}</span>
+                              </div>
                             </div>
                           </foreignObject>
                         )}
