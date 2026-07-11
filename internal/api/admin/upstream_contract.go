@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -230,7 +229,7 @@ func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) ad
 }
 
 func readableMaskedURL(value string) string {
-	return strings.Replace(maskURLUserInfo(value), "://%2A%2A%2A:%2A%2A%2A@", "://***:***@", 1)
+	return maskCredentialURL(value)
 }
 
 func writeUpstreamError(c *gin.Context, err error) {

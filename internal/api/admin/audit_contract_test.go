@@ -28,7 +28,7 @@ func TestAuditPackageQueryAndDeprecatedSearchAlias(t *testing.T) {
 	if err := database.AutoMigrate(&db.AuditLog{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	const maskedUpstreamURL = "https://%2A%2A%2A:%2A%2A%2A@packages.example.test/simple"
+	const maskedUpstreamURL = "https://packages.example.test/***"
 	now := time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC)
 	items := []db.AuditLog{
 		{Ecosystem: "pypi", PackageName: "requests", Version: "2.32.0", Action: "download", CacheResult: "hit", ClientIP: "10.0.0.1", UpstreamURL: "https://alice:secret@packages.example.test/simple", LatencyMs: 8, BytesSent: 1200, StatusCode: 200, CreatedAt: now},
@@ -170,9 +170,9 @@ func TestAuditMalformedUpstreamURLFailsClosed(t *testing.T) {
 	r.GET("/audit-logs/export", h.Export)
 
 	t.Run("helper", func(t *testing.T) {
-		got := maskAuditURLUserInfo(rawURL)
+		got := maskAuditCredentialURL(rawURL)
 		if got != maskedURL || strings.Contains(got, "alice") || strings.Contains(got, "secret") {
-			t.Fatalf("maskAuditURLUserInfo = %q", got)
+			t.Fatalf("maskAuditCredentialURL = %q", got)
 		}
 	})
 

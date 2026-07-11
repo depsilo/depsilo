@@ -14,7 +14,41 @@ import (
 	"gorm.io/gorm/logger"
 
 	"depsilo/internal/db"
+	"depsilo/internal/upstream"
 )
+
+func TestStatsPublicUpstreamURLDoesNotExposeCredentials(t *testing.T) {
+	database := newStatsTestDB(t)
+	if err := database.AutoMigrate(&db.AccessLog{}, &db.CacheEntry{}); err != nil {
+		t.Fatal(err)
+	}
+	pool, err := upstream.NewPoolFromRecords([]db.UpstreamRecord{{
+		ID: 1, AdapterType: "pypi", Name: "private",
+		URL:      "https://alice:secret@packages.example.test:8443/signed/path?token=hidden#secret",
+		Priority: 1, Healthy: true,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/stats", NewStatsHandler(database, nil, map[string]*upstream.Pool{"pypi": pool}, []string{"pypi"}, nil, false).GetStats)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/stats", nil))
+
+	var body struct {
+		Upstreams []struct {
+			URL string `json:"url"`
+		} `json:"upstreams"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || len(body.Upstreams) != 1 {
+		t.Fatalf("decode: err=%v body=%s", err, recorder.Body.String())
+	}
+	if got := body.Upstreams[0].URL; got != "https://packages.example.test:8443" {
+		t.Fatalf("public upstream URL = %q", got)
+	}
+}
 
 func TestAllUpstreamLatencySeriesFoldsRowsByResponseName(t *testing.T) {
 	database := newStatsTestDB(t)

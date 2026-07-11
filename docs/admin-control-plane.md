@@ -21,8 +21,10 @@ Admin `GET` route, including CSV exports. Project list/detail/package and SBOM `
 routes additionally require an active Pro entitlement and otherwise return
 `402 PRO_REQUIRED`. `POST /api/v1/admin/rules/test` is also read-only. Every other Admin
 `POST`, `PUT`, `PATCH`, and `DELETE` requires a write-capable Principal. API tokens cannot
-call `/api/v1/auth/refresh`. Readonly responses mask Webhook URLs, URL userinfo, proxy
-credentials, secrets, keys, and every other credential-bearing response field.
+call `/api/v1/auth/refresh`. Readonly responses render credential-bearing URLs as
+`scheme://host[:port]/***`; userinfo, paths, queries, and fragments are never returned.
+Webhook URLs, proxy credentials, secrets, keys, and every other credential-bearing
+response field are masked by the server.
 
 The service rejects self-delete, self-disable, and self-demotion with `409 SELF_LOCKOUT`.
 It also rejects removing the final enabled administrator with `409 LAST_ADMIN`.
@@ -77,6 +79,10 @@ Upstream validation and lifecycle errors use `400 BAD_REQUEST`, `404 NOT_FOUND`,
 `422 INVALID_UPSTREAM`, `422 IMMUTABLE_ECOSYSTEM`, and
 `500 REGISTRY_RECONCILE_FAILED`. A successful response means the committed database
 records and the live Pool snapshot agree.
+
+The unauthenticated `GET /api/v1/stats` response exposes only
+`scheme://host[:port]` for each upstream. It never returns URL userinfo, paths, queries,
+or fragments.
 
 ## Verification
 

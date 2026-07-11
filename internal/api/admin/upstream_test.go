@@ -263,7 +263,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
-	if list.Items[0].URL != "http://***:***@source.example" || list.Items[0].Proxy != "http://***:***@proxy.example:8080" {
+	if list.Items[0].URL != "http://source.example/***" || list.Items[0].Proxy != "http://proxy.example:8080/***" {
 		t.Fatalf("readonly=%#v", list.Items[0])
 	}
 
@@ -273,7 +273,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.URL != "https://***:***@masked.example" || created.Proxy != "http://***:***@proxy.example" {
+	if created.URL != "https://masked.example/***" || created.Proxy != "http://proxy.example/***" {
 		t.Fatalf("created=%#v", created)
 	}
 
@@ -283,7 +283,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &updated); err != nil {
 		t.Fatal(err)
 	}
-	if updated.URL != "http://***:***@127.0.0.1:1" || updated.Proxy != "http://***:***@127.0.0.1:1" {
+	if updated.URL != "http://127.0.0.1:1/***" || updated.Proxy != "http://127.0.0.1:1/***" {
 		t.Fatalf("updated=%#v", updated)
 	}
 
@@ -292,7 +292,7 @@ func TestUpstreamHandlerMasksCredentialsForReadonlyResponses(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &checked); err != nil {
 		t.Fatal(err)
 	}
-	if checked.Upstream.URL != "http://***:***@127.0.0.1:1" || checked.Upstream.Proxy != "http://***:***@127.0.0.1:1" {
+	if checked.Upstream.URL != "http://127.0.0.1:1/***" || checked.Upstream.Proxy != "http://127.0.0.1:1/***" {
 		t.Fatalf("checked=%#v", checked.Upstream)
 	}
 	if checked.Check.Error == nil || *checked.Check.Error != "upstream check failed" || strings.Contains(w.Body.String(), "carol") || strings.Contains(w.Body.String(), "dave") || strings.Contains(w.Body.String(), "secret") {

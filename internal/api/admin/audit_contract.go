@@ -35,7 +35,7 @@ type auditListResponse struct {
 func toAuditLogResponse(item db.AuditLog, canViewCredentials bool) auditLogResponse {
 	upstreamURL := item.UpstreamURL
 	if !canViewCredentials {
-		upstreamURL = maskURLUserInfo(upstreamURL)
+		upstreamURL = maskCredentialURL(upstreamURL)
 	}
 	return auditLogResponse{
 		ID: item.ID, Ecosystem: item.Ecosystem, PackageName: item.PackageName,
@@ -46,8 +46,8 @@ func toAuditLogResponse(item db.AuditLog, canViewCredentials bool) auditLogRespo
 	}
 }
 
-func maskAuditURLUserInfo(raw string) string {
-	return maskURLUserInfo(raw)
+func maskAuditCredentialURL(raw string) string {
+	return maskCredentialURL(raw)
 }
 
 func toAuditLogResponses(rows []db.AuditLog, canViewCredentials bool) []auditLogResponse {

@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/api/credentialurl"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
@@ -322,7 +323,7 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 				"id":             u.ID,
 				"name":           u.Name,
 				"adapter":        name,
-				"url":            u.URL,
+				"url":            credentialurl.PublicOrigin(u.URL),
 				"healthy":        health.Healthy,
 				"avg_latency_ms": health.AvgLatency.Milliseconds(),
 				"success_rate":   health.SuccessRate,

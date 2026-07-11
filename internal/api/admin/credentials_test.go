@@ -27,11 +27,14 @@ func TestCredentialURLMasking(t *testing.T) {
 	if got := maskWebhookURL("not a URL"); got != "***" {
 		t.Fatalf("invalid maskWebhookURL = %q", got)
 	}
-	if got := maskURLUserInfo("http://alice:password@proxy.example.test:8080/path"); got != "http://%2A%2A%2A:%2A%2A%2A@proxy.example.test:8080/path" {
-		t.Fatalf("maskURLUserInfo = %q", got)
+	if got := maskCredentialURL("http://alice:password@proxy.example.test:8080/path?token=hidden#secret"); got != "http://proxy.example.test:8080/***" {
+		t.Fatalf("maskCredentialURL = %q", got)
 	}
-	if got := maskURLUserInfo("http://alice:%zz@proxy.example.test/path"); got != "***" {
-		t.Fatalf("malformed maskURLUserInfo = %q", got)
+	if got := maskCredentialURL("https://packages.example.test/signed/path?token=hidden"); got != "https://packages.example.test/***" {
+		t.Fatalf("query credential maskCredentialURL = %q", got)
+	}
+	if got := maskCredentialURL("http://alice:%zz@proxy.example.test/path"); got != "***" {
+		t.Fatalf("malformed maskCredentialURL = %q", got)
 	}
 }
 
@@ -68,7 +71,7 @@ func TestWebhookListMasksURLForReadonlyPrincipal(t *testing.T) {
 func TestUpstreamListMasksCredentialsForReadonlyPrincipal(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := openCredentialTestDB(t, "upstreams.db", &db.UpstreamRecord{})
-	record := db.UpstreamRecord{Name: "private", AdapterType: "pypi", URL: "https://alice:secret@packages.example.test/simple", Proxy: "http://proxy-user:proxy-pass@proxy.example.test:8080", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true}
+	record := db.UpstreamRecord{Name: "private", AdapterType: "pypi", URL: "https://alice:secret@packages.example.test/signed/path?token=hidden", Proxy: "http://proxy-user:proxy-pass@proxy.example.test:8080/private/path", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true}
 	if err := database.Create(&record).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -92,7 +95,7 @@ func TestUpstreamListMasksCredentialsForReadonlyPrincipal(t *testing.T) {
 		return response.Items[0]
 	}
 	readonly := request(false)
-	if readonly.URL != "https://***:***@packages.example.test/simple" || readonly.Proxy != "http://***:***@proxy.example.test:8080" {
+	if readonly.URL != "https://packages.example.test/***" || readonly.Proxy != "http://proxy.example.test:8080/***" {
 		t.Fatalf("readonly upstream = %#v", readonly)
 	}
 	writer := request(true)
@@ -108,7 +111,7 @@ func TestUpstreamListMasksCredentialsForReadonlyPrincipal(t *testing.T) {
 func TestAuditListAndExportMaskUpstreamCredentialsByPrincipal(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := openCredentialTestDB(t, "audit-credentials.db", &db.AuditLog{})
-	const rawURL = "https://alice:secret@packages.example.test/simple"
+	const rawURL = "https://alice:secret@packages.example.test/signed/path?token=hidden#secret"
 	entry := db.AuditLog{Ecosystem: "pypi", PackageName: "requests", Version: "2.32.0", Action: "download", CacheResult: "miss", ClientIP: "10.0.0.1", UpstreamURL: rawURL, StatusCode: 200, CreatedAt: time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC)}
 	if err := database.Create(&entry).Error; err != nil {
 		t.Fatalf("seed: %v", err)
@@ -142,7 +145,7 @@ func TestAuditListAndExportMaskUpstreamCredentialsByPrincipal(t *testing.T) {
 		t.Fatalf("writer list upstream_url = %q", got)
 	}
 	readonlyList := request(false, "/audit-logs")
-	if got := listURL(readonlyList); got != "https://%2A%2A%2A:%2A%2A%2A@packages.example.test/simple" {
+	if got := listURL(readonlyList); got != "https://packages.example.test/***" {
 		t.Fatalf("readonly list upstream_url = %q", got)
 	}
 	if strings.Contains(readonlyList.Body.String(), "alice") || strings.Contains(readonlyList.Body.String(), "secret") {
@@ -160,7 +163,7 @@ func TestAuditListAndExportMaskUpstreamCredentialsByPrincipal(t *testing.T) {
 		t.Fatalf("writer export upstream_url = %q", got)
 	}
 	readonlyExport := request(false, "/audit-logs/export")
-	if got := exportURL(readonlyExport); got != "https://%2A%2A%2A:%2A%2A%2A@packages.example.test/simple" {
+	if got := exportURL(readonlyExport); got != "https://packages.example.test/***" {
 		t.Fatalf("readonly export upstream_url = %q", got)
 	}
 	if strings.Contains(readonlyExport.Body.String(), "alice") || strings.Contains(readonlyExport.Body.String(), "secret") {
