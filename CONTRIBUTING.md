@@ -6,7 +6,7 @@ Contributions are welcome! Whether it's a bug fix, new feature, or documentation
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.25.6+
 - Node.js 20+
 - npm 9+
 - Make
@@ -37,14 +37,17 @@ make dev
 
 **Option 2: Separate terminals**
 ```bash
+# Build web/dist before starting the embedded backend
+cd web && npm run build && cd ..
+
 # Terminal 1 — Backend
-go run ./cmd/server
+go run ./cmd/depsilo serve
 
 # Terminal 2 — Frontend (hot reload)
 cd web && npm run dev
 ```
 
-The frontend dev server runs on `http://localhost:5173` and proxies API requests to the backend on `:8080`.
+The frontend dev server runs on `http://localhost:5173` and proxies API requests to the backend on `:23333`.
 
 ## Testing
 
@@ -54,18 +57,21 @@ Depsilo has three test tiers, each runnable independently:
 
 ```bash
 make test-unit              # go test ./tests/unit/...
-go test ./internal/security # the one in-package suite
+go test ./... -race         # all in-package and top-level tests
 ```
 
-Cover URL rewriting, cache keys, counting reader, rules engine, docker resolver, package-name extraction. Run on every commit.
+Cover URL rewriting, cache keys, streaming/hash invariants, quarantine, blocklist,
+tamper detection, access-log rollups, security, licensing, and package-name extraction.
 
 ### Integration tests (mock upstream, no network)
 
 ```bash
-make test-integration       # boots a mock upstream + Depsilo in-process
+make test-integration       # boots a mock upstream + a local Depsilo process
 ```
 
-Covers all 13 adapter routes against a mock server defined in `tests/mock/`. Fast (~1s total) and offline; this is the regression net for adapter-level changes.
+Covers 13 package ecosystems plus Docker Registry behavior against `tests/mock/`,
+including blocklist and tamper paths. It does not yet exercise the minimum-age
+gate over HTTP. The suite is offline and is the main HTTP-level regression net.
 
 ### End-to-end tests (real clients, real upstreams, Docker)
 
@@ -84,8 +90,9 @@ make test-docker-conda      # conda install requests
 make test-docker-cran       # R install.packages('jsonlite')
 make test-docker-helm       # helm repo add + index.yaml fetch
 make test-docker-apt        # apt install curl/wget/jq
+make test-docker-huggingface # huggingface_hub download through Depsilo
 
-make test-docker-all        # all 12 above, sequential, summarises pass/fail
+make test-docker-all        # 13 defined non-Docker targets; Alpine is not covered
 make test-e2e               # alias for test-docker-all
 ```
 
@@ -106,11 +113,14 @@ Adding a new ecosystem? One new `testground/docker-<eco>/Dockerfile` plus one `t
 
 ## Before pushing
 
-Always run the lint suite locally before `git push` — it's the same gate CI runs and it takes only a few seconds:
+Run the same gates as CI before `git push`:
 
 ```bash
-make lint        # go vet + i18n audit (missing keys, duplicates, placeholder drift)
-make test-unit   # fast unit tests, no network
+make lint
+go test ./... -race
+make test-integration
+cd web && npm run type-check && npm run build && cd ..
+go build -o bin/depsilo ./cmd/depsilo
 ```
 
 `make lint-i18n` alone catches the most common contributor mistake: adding a `t('...')` call without updating both `web/src/i18n/zh.ts` and `web/src/i18n/en.ts`, or letting a `{{var}}` placeholder drift between the two locales. Failing this check means the UI will render raw `ns.key` strings or have a missing variable in one language — both regressions that are easy to miss in manual review.
@@ -141,7 +151,7 @@ make test-unit   # fast unit tests, no network
 ### Bug Reports
 
 Please include:
-- Depsilo version (`depsilo --version` or Docker image tag)
+- Depsilo version (`depsilo version` or Docker image tag)
 - Deployment method (binary / Docker / docker-compose)
 - Operating system and architecture
 - Steps to reproduce
@@ -161,8 +171,9 @@ Describe the problem you're trying to solve, not just the solution you want. Thi
 - Error handling: never ignore errors
 
 ### Frontend (TypeScript/React)
-- TypeScript strict mode — no `any` types
-- ESLint must pass with no errors
+- TypeScript strict mode; do not add new explicit `any` types
+- `npm run type-check` and `npm run build` must pass. The repository has a known
+  ESLint baseline; fix errors in touched code and do not increase the count.
 - Use functional components with hooks
 - API calls go through `src/lib/api.ts`, not directly in components
 
@@ -173,39 +184,40 @@ subcommand, and `/api/v1/stats` all derive their value from
 `internal/version.Version`, populated at build time via `-ldflags`
 from `git describe`.
 
-**Release tags MUST use the `vX.Y.Z` semver form** (e.g. `v0.3.0`,
+**Release tags MUST use the `vX.Y.Z` semver form** (e.g. `v0.8.0`,
 `v1.2.3-rc1`). Two reasons:
 
 1. The Makefile runs `git describe --tags --match 'v*'` — any tag
    without a leading `v` is invisible to the version pipeline. Pushing
-   a `0.3.0` or `release-0.3.0` or `portal-redesign-complete` tag
+   a `0.8.0` or `release-0.8.0` or `portal-redesign-complete` tag
    silently falls back to the previous semver tag, so the UI keeps
    showing the old version until you re-tag.
 2. The frontend `formatVersion()` helper strips the leading `v` from
-   semver values and re-prepends it, normalizing the pill to `v0.3.0`.
+   semver values and re-prepends it, normalizing the pill to `v0.8.0`.
    Tags with non-numeric leading characters bypass this and render raw.
 
 ### Cutting a release
 
 ```bash
-# 1. Make sure you're on main with a clean tree.
-git checkout main && git pull && git status
+# 1. Make sure you're on master with a clean tree.
+git checkout master && git pull --ff-only && git status
 
 # 2. Tag with leading 'v'.
-git tag v0.3.0
-git push origin v0.3.0
+VERSION=vX.Y.Z
+git tag -a "$VERSION" -m "$VERSION"
+git push origin "$VERSION"
 
 # 3. Build — VERSION is auto-derived from the tag.
 make build
 
 # 4. Verify.
 ./bin/depsilo version
-# Depsilo 0.3.0 (commit: <hash>, built: <iso-date>)
+# Depsilo X.Y.Z (commit: <hash>, built: <iso-date>)
 ```
 
 Between releases, `git describe` outputs something like
-`v0.3.0-12-gabc1234-dirty` — the version pill displays this as
-`v0.3.0+dev` (hover for the full string). That is the intended
+`v0.8.0-12-gabc1234-dirty` — the version pill displays this as
+`v0.8.0+dev` (hover for the full string). That is the intended
 "in-progress build" indicator.
 
 ## Code of Conduct

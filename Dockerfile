@@ -12,7 +12,7 @@ WORKDIR /app
 
 # Version stamped into the binary so `depsilo version` / the topbar version
 # pill / Prometheus labels match the image tag. Pass at build time:
-#   docker build --build-arg VERSION=0.7.2 --build-arg COMMIT=$(git rev-parse --short HEAD) -t depsilo/depsilo:0.7.2 .
+#   docker build --build-arg VERSION=0.8.0 --build-arg COMMIT=$(git rev-parse --short HEAD) -t depsilo/depsilo:0.8.0 .
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown

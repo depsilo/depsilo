@@ -352,8 +352,9 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	}
 
 	// Tamper detection (DIRECTION T1): first-seen SHA-256 of immutable
-	// artifacts; a re-fetch whose hash differs keeps the trusted bytes
-	// and alerts. Enabled by default; nil recorder = fully off.
+	// artifacts. A background-refresh mismatch keeps cached bytes and
+	// alerts; an LRU miss can alert but cannot restore evicted bytes.
+	// Enabled by default; nil disables persistence, comparison, and alerts.
 	var tamperRecorder *tamper.Recorder
 	if cfg.SupplyChain.TamperDetection.IsEnabled() {
 		tamperRecorder = tamper.NewRecorder(database)

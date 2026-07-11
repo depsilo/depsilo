@@ -1,8 +1,9 @@
 # Depsilo
 
 A lightweight, single-binary supply-chain enforcement layer for package installs.
-It proxies 14 package ecosystems, caches artifacts locally, and refuses to serve
-packages that violate operator policy.
+It exposes 14 standard ecosystem routes plus the separate Docker OCI route (15
+install surfaces total), caches artifacts locally, and refuses to serve packages
+that violate operator policy.
 
 ## Language
 
@@ -26,21 +27,24 @@ _Avoid_: Client, customer (ambiguous with org-level "customer")
 ### Distribution posture
 
 User-facing documentation should describe Depsilo as MIT-licensed,
-self-hosted, and open-source. Do not introduce product-tier copy in docs. The
+self-hosted, and open-source. Do not invent product tiers; when a current
+entitlement boundary matters, state it precisely. The
 current product story is the enforcement layer itself: cache, upstream
-management, audit logs, package allow/deny rules, security intelligence, SBOM
-export, webhook alerts, Prometheus metrics, and supply-chain policy primitives
-such as minimum release age, malicious blocklist, freeze/snapshot, and tamper
-detection as they land.
+management, audit logs, package allow/deny rules, security intelligence, public
+release SBOMs (runtime per-project export is currently Pro), webhook alerts,
+Prometheus metrics, and supply-chain policy primitives.
+Minimum release age shipped in `v0.8.0`; malicious blocklist and tamper detection
+have landed on `master` but are not released yet. Freeze/snapshot and
+CRA-complete SBOM workflows remain planned.
 
 ### Product surface
 
 **Ecosystem**:
 A package manager protocol that Depsilo proxies — `pypi`, `apt`, `npm`, `go`,
 `cargo`, `maven`, `rubygems`, `composer`, `nuget`, `conda`, `cran`, `helm`,
-`alpine`, `docker`, and `huggingface`. 14 first-class install surfaces in the
-product copy today; Docker is served via the OCI `/v2/` route rather than the
-same adapter list used by the other HTTP path prefixes.
+`alpine`, `docker`, and `huggingface`. Product copy groups these as 14 standard
+path-prefixed ecosystems plus Docker's separate OCI `/v2/` route: 15 install
+surfaces in total.
 _Avoid_: Registry (overloaded with "Docker Registry"), Repo (overloaded with `apt` repo concept), Adapter (that's the code, not the product surface)
 
 **Adapter**:

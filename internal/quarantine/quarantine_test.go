@@ -32,9 +32,9 @@ func TestParseDuration(t *testing.T) {
 
 		// Invalid.
 		{"-1d", 0, true},
-		{"3", 0, true},          // no unit
+		{"3", 0, true}, // no unit
 		{"abc", 0, true},
-		{"3days", 0, true},      // unsupported suffix
+		{"3days", 0, true}, // unsupported suffix
 		{"-24h", 0, true},
 	}
 	for _, c := range cases {
@@ -152,7 +152,7 @@ func TestNewPolicy_InvalidValues(t *testing.T) {
 func TestPolicy_Enabled(t *testing.T) {
 	p, err := NewPolicy(Config{
 		MinReleaseAge: map[string]string{
-			"npm": "0",
+			"npm":  "0",
 			"pypi": "3d",
 		},
 	})
@@ -170,7 +170,7 @@ func TestPolicy_Enabled(t *testing.T) {
 func TestAllowList_Glob(t *testing.T) {
 	a, err := ParseAllowList([]string{
 		"npm:@scope/internal-*",
-		"pip:my-private-*",
+		"pypi:my-private-*",
 	})
 	if err != nil {
 		t.Fatalf("ParseAllowList: %v", err)
@@ -184,8 +184,8 @@ func TestAllowList_Glob(t *testing.T) {
 		{"npm", "@scope/internal-utils", "", true}, // glob works without version
 		{"npm", "@scope/external-utils", "1.0.0", false},
 		{"NPM", "@scope/internal-utils", "1.0.0", true}, // case-insensitive ecosystem
-		{"pip", "my-private-helper", "0.1", true},
-		{"pip", "requests", "2.32.3", false},
+		{"pypi", "my-private-helper", "0.1", true},
+		{"pypi", "requests", "2.32.3", false},
 	}
 	for _, c := range cases {
 		got := a.Match(c.eco, c.pkg, c.ver)
@@ -196,17 +196,17 @@ func TestAllowList_Glob(t *testing.T) {
 }
 
 func TestAllowList_Exact(t *testing.T) {
-	a, _ := ParseAllowList([]string{"pip:requests==2.32.3"})
+	a, _ := ParseAllowList([]string{"pypi:requests==2.32.3"})
 
 	cases := []struct {
 		eco, pkg, ver string
 		want          bool
 	}{
-		{"pip", "requests", "2.32.3", true},
-		{"pip", "requests", "2.32.4", false},   // wrong version
-		{"pip", "requests", "", false},          // exact needs a version
-		{"pip", "other", "2.32.3", false},       // wrong package
-		{"npm", "requests", "2.32.3", false},    // wrong ecosystem
+		{"pypi", "requests", "2.32.3", true},
+		{"pypi", "requests", "2.32.4", false}, // wrong version
+		{"pypi", "requests", "", false},       // exact needs a version
+		{"pypi", "other", "2.32.3", false},    // wrong package
+		{"npm", "requests", "2.32.3", false},  // wrong ecosystem
 	}
 	for _, c := range cases {
 		got := a.Match(c.eco, c.pkg, c.ver)
@@ -281,12 +281,12 @@ func TestCompareVersions(t *testing.T) {
 		{"1.0.0", "1.0.1", -1},
 		{"1.0.1", "1.0.0", 1},
 		{"2.0.0", "1.99.99", 1},
-		{"v2.0.0", "1.99.99", 1},     // "v" prefix stripped
-		{"10.0.0", "9.0.0", 1},        // numeric compare not lexical
-		{"1.0.0-rc.1", "1.0.0", -1},   // pre-release < release
+		{"v2.0.0", "1.99.99", 1},    // "v" prefix stripped
+		{"10.0.0", "9.0.0", 1},      // numeric compare not lexical
+		{"1.0.0-rc.1", "1.0.0", -1}, // pre-release < release
 		{"1.0.0", "1.0.0-rc.1", 1},
 		{"1.0.0-rc.1", "1.0.0-rc.2", -1},
-		{"1.0", "1.0.0", 0},           // 1.0 == 1.0 (missing third compares zero)
+		{"1.0", "1.0.0", 0}, // 1.0 == 1.0 (missing third compares zero)
 	}
 	for _, c := range cases {
 		t.Run(c.a+" vs "+c.b, func(t *testing.T) {

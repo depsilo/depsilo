@@ -31,7 +31,7 @@ type Status struct {
 	LicenseError     string     `json:"license_error,omitempty"`
 	LastChecked      time.Time  `json:"last_checked"`
 
-	// Deprecated aliases — to be removed in 0.5.0 (spec §16.2).
+	// Deprecated aliases retained for compatibility with older clients.
 	KeyMasked   string     `json:"key_masked,omitempty"`
 	ActivatedAt *time.Time `json:"activated_at,omitempty"`
 }

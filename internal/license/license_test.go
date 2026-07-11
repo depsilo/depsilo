@@ -31,9 +31,8 @@ func TestSetKey_PersistsAndUpdatesState(t *testing.T) {
 		t.Fatal("IsPro() = true on fresh manager, want false")
 	}
 
-	// SetKey will call doValidate which tries to reach Lemon Squeezy. Test
-	// environment typically has no internet — doValidate will fail. The key
-	// MUST be persisted regardless.
+	// Enterprise-contract keys are validated locally today: any non-empty key
+	// activates Pro and must be persisted with its audit actor.
 	_ = m.SetKey(context.Background(), "depsilo-test-key-1234", 7)
 
 	var stored db.LicenseStorage

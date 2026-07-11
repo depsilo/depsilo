@@ -7,8 +7,8 @@ import "time"
 // types live here, matching the quarantine convention.
 
 // MaliciousPackage is one (advisory, ecosystem, package) row imported
-// from the OSV malicious-packages dataset (MAL-* entries; GitHub's
-// GHSA-malware advisories are aliased into the same set). Package
+// from the OSV malicious-packages dataset (MAL-* entries, which may
+// carry GHSA aliases). Package
 // names are stored in their ecosystem-normalized form (npm lowercase,
 // PyPI PEP 503) so request-time lookups are a single indexed equality.
 type MaliciousPackage struct {

@@ -1,10 +1,57 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/viper"
 )
+
+func TestLoadEnvironmentOverridesWizardStoragePaths(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	contents := []byte(`[database]
+driver = "sqlite"
+dsn = "./data/depsilo.db"
+
+[storage]
+type = "local"
+path = "./data/cache"
+`)
+	if err := os.WriteFile(configPath, contents, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_DATABASE_DSN", "/root/.depsilo/data/depsilo.db")
+	t.Setenv("DEPSILO_STORAGE_PATH", "/root/.depsilo/data/cache")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got, want := cfg.Database.DSN, "/root/.depsilo/data/depsilo.db"; got != want {
+		t.Errorf("Database.DSN = %q, want %q", got, want)
+	}
+	if got, want := cfg.Storage.Path, "/root/.depsilo/data/cache"; got != want {
+		t.Errorf("Storage.Path = %q, want %q", got, want)
+	}
+}
+
+func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
+	t.Setenv("DEPSILO_CONFIG", filepath.Join("..", "..", "config.example.toml"))
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load config.example.toml: %v", err)
+	}
+	if cfg.Database.Driver != "sqlite" {
+		t.Fatalf("Database.Driver = %q, want sqlite", cfg.Database.Driver)
+	}
+	if cfg.Server.Port != 23333 {
+		t.Fatalf("Server.Port = %d, want 23333", cfg.Server.Port)
+	}
+}
 
 func TestSetDefaultsIncludesAlpineUpstreams(t *testing.T) {
 	v := viper.New()

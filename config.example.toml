@@ -4,7 +4,7 @@ port = 23333
 log_level = "info"
 
 [database]
-driver = "sqlite"           # sqlite | postgres
+driver = "sqlite"           # currently the only supported database driver
 dsn    = "./data/depsilo.db"
 
 [storage]
@@ -256,37 +256,44 @@ check_ttl = "24h"
 # and yank a poisoned version before it can enter a build.
 #
 # Threshold values accept "3d" / "7d" / "2w" / "24h" / "30m" / "0".
-# Set "0" or omit a key to disable quarantine for that ecosystem. The
-# defaults shown below match the locked-in DIRECTION.md values; you
-# only need to override what you want to change.
+# Set "0" explicitly to disable quarantine for a supported ecosystem.
+# Omitting a key retains its built-in value. The defaults shown below
+# match the current implementation; override only what you want to change.
 #
-# Mode:
-#   block               (default) — return 451 with a clear error
-#   serve_last_eligible           — fall back to the newest version
-#                                   that IS older than the threshold
+# Mode: only "block" is implemented. Other values fail at startup so a
+# configuration mistake cannot silently weaken enforcement.
 #
 # Allow rules bypass the check for trusted pins. Three syntaxes:
 #   npm:@scope/internal-*         — glob match on package name
-#   pip:requests==2.32.3          — exact pin on (name, version)
+#   pypi:requests==2.32.3         — exact pin on (name, version)
 #   npm:react>=18.0.0             — range comparator on a name
 #
 # Operators can also approve individual (package, version) pairs at
 # runtime via the admin UI — those approvals persist permanently.
 #
-# fail_closed controls behavior when the upstream timestamp can't be
-# determined (registry 404 / parsing failure / network error):
+# fail_closed controls not-found / unsupported timestamp results:
 #   true  (default) — treat as quarantined (safer)
 #   false           — allow through (legacy / opt-in)
+# A genuine upstream outage always allows with a warning; one registry
+# incident must not halt every build.
 
 [supply_chain]
 mode = "block"
 fail_closed = true
 
+# allow = [
+#   "npm:@your-org/internal-*",
+#   "pypi:requests==2.32.3",
+#   "npm:react>=18.0.0",
+# ]
+
 [supply_chain.min_release_age]
+# Fallback for unknown/future ecosystem keys only. Supported ecosystems use
+# their built-in threshold unless explicitly overridden below.
 default  = "0"
 pypi     = "3d"
 npm      = "7d"
-go       = "0"     # Go modules are immutable + checksum DB validated
+go       = "0"     # no publish-time resolver; keep zero (checksum DB protects Go modules)
 cargo    = "3d"
 maven    = "3d"
 rubygems = "3d"
@@ -298,17 +305,13 @@ helm     = "3d"
 alpine   = "3d"
 docker   = "3d"
 huggingface = "3d"
-apt      = "0"     # apt repos are curated upstream; quarantine adds noise
-
-# allow = [
-#   "npm:@your-org/internal-*",
-#   "pip:requests==2.32.3",
-#   "npm:react>=18.0.0",
-# ]
+apt      = "0"     # APT has no quarantine gate yet; keep this at zero
 
 # ── Known-malicious blocklist (hard block, 451 MALICIOUS_BLOCKED) ──
-# Syncs the OSV malicious-packages dataset (MAL-* advisories; GHSA
-# malware is aliased into it) and refuses matched versions outright.
+# Syncs OSV MAL-* records for npm, pypi, cargo, rubygems, composer, nuget,
+# go, and maven. Explicit version lists and all-version advisories are
+# imported; bounded ranges without a version list are skipped.
+# Records may carry GHSA aliases. Matched versions are refused outright.
 # The quarantine allow-list CANNOT bypass a malware match — the only
 # exemption is an audited admin override that expires after 24h.
 # Enabled by default; sync failures degrade (last good data keeps

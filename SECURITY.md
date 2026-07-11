@@ -4,7 +4,8 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.1.x   | :white_check_mark: |
+| 0.8.x   | :white_check_mark: |
+| < 0.8   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -29,8 +30,12 @@ The following are known limitations, not vulnerabilities:
 
 - Default admin credentials (`admin:admin`) created on first run — this is documented and intended for initial setup only. Users are expected to change the password immediately.
 - The `config.example.toml` contains placeholder values (`change-me-in-production`) — these are not real secrets.
-- SQLite database is not encrypted at rest — use PostgreSQL with TLS for sensitive deployments.
-- Proxy traffic between Depsilo and upstream sources is not independently verified beyond HTTPS — this is by design to preserve GPG signature chains (especially for APT).
+- SQLite data is not encrypted at rest. Depsilo does not currently support
+  PostgreSQL; use encrypted disks/filesystems and restrict access to the state directory.
+- Depsilo preserves package-manager signatures and checksums end to end.
+  `v0.8.x` otherwise relies on HTTPS for upstream transport. The tamper detector
+  on `master` compares immutable bytes with the first-seen digest, but that first
+  observation is not an independent proof of upstream authenticity.
 
 ## Security Best Practices
 
@@ -40,8 +45,10 @@ When deploying Depsilo in production:
 2. **Set a strong `jwt_secret`** in your configuration — never use the default
 3. **Use HTTPS** via a reverse proxy (nginx, Caddy, Traefik)
 4. **Restrict network access** to the admin API (`/api/v1/admin/*`)
-5. **Use PostgreSQL** instead of SQLite for multi-user deployments
-6. **Review access logs** regularly via the admin dashboard
+5. **Protect the SQLite state directory** with restrictive permissions,
+   encrypted storage, and host-level backups
+6. **Run a single Depsilo server per SQLite database**; multi-node/HA is not supported
+7. **Review access logs and supply-chain events** regularly via the admin dashboard
 
 ## Acknowledgments
 

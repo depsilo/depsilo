@@ -128,18 +128,15 @@ func TestLicenseTrial_FullLifecycle(t *testing.T) {
 // TestLicenseKey_SetThenClear verifies that PUT /license/key persists the key
 // (masked in the response) and DELETE /license/key clears it.
 //
-// WARNING: PUT /license/key calls license.Manager.SetKey() synchronously, which
-// contacts https://api.lemonsqueezy.com/v1/licenses/validate with a 10 s
-// timeout and up to 2 retries (~25 s worst case). The test is skipped when
-// -short is given, but runs by default in `make test-integration`.
+// Validation is local and offline: the current Enterprise-contract model accepts
+// any non-empty key. The test remains omitted from explicit short-mode runs.
 func TestLicenseKey_SetThenClear(t *testing.T) {
 	if testing.Short() {
-		t.Skip("slow: PUT /license/key triggers Lemon Squeezy network call (~25 s worst-case timeout)")
+		t.Skip("license mutation flow omitted in short mode")
 	}
 
-	// Set a fake key. The remote validation will fail (invalid key), but
-	// SetKey persists the key and returns 200 regardless — the frontend reads
-	// status.is_pro to determine whether validation succeeded.
+	// Set a non-empty contract key. SetKey persists it, activates Pro locally,
+	// and returns the masked value.
 	body := strings.NewReader(`{"key":"depsilo-integration-test-key-xxxx"}`)
 	resp := adminPut(t, depsiloURL+"/api/v1/admin/license/key", body)
 	defer resp.Body.Close()

@@ -1,64 +1,67 @@
 # Depsilo 自测前置清单
 
-> 部署前 / 部署后必跑的检查项。从"docker run"到"可以让团队真正用"之间的最小验证路径。
-> 命令默认假设端口 23333、docker-compose 部署。改成 binary 部署就把 `docker exec depsilo` 换成 `./depsilo`。
+> 部署前后可重复执行的最小验证路径。示例使用 `v0.8.0`、端口
+> `23333` 和单节点 SQLite。`master` 上尚未发布的 blocklist / tamper
+> detection 不包含在 `v0.8.0` 镜像中。
 
----
+## 0. 部署前
 
-## Phase 0 — 部署前准备
+- [ ] Docker 20.10+：`docker --version`
+- [ ] 端口可用：`ss -tlnp | grep :23333` 应无结果
+- [ ] 磁盘至少 30 GB：默认缓存上限 20 GB，另留数据库、日志和清理余量
+- [ ] 明确单节点边界：当前数据库只支持 SQLite；制品可存本地或 S3，
+      但 S3 不会把 SQLite 部署变成多实例/HA
+- [ ] 列出团队真实使用的生态。Depsilo 有 14 个常规生态路由，另有独立
+      Docker OCI `/v2/`，共 15 个 install surfaces
 
-- [ ] **Docker ≥ 20.10**（`docker --version`）。低于此版本的 buildkit / volume 行为有兼容问题。
-- [ ] **端口 23333 空闲**（`ss -tlnp | grep :23333` 应无结果）。如冲突改 `config.toml` 的 `[server] port` 或映射成 `-p 8080:23333`。
-- [ ] **磁盘空间 ≥ 30 GB**（`df -h .`）。默认 cache 上限 20 GB + 数据库 + 日志，留 50% 余量。
-- [ ] **决定存储后端**：
-  - 个人 / 单实例 → 本地文件系统 + SQLite（默认，零配置）
-  - 多实例 / 高可用 → S3 + PostgreSQL（[ADR-pending] 暂无官方多实例文档，自行验证）
-- [ ] **决定要测的生态**：列出你**真实用到**的包管理器，不要全测——Depsilo 支持 14 个生态，但 E2E 用的是 hello-world 级 package，**你自己依赖的真实包**才是回归基准。
+## 1. 首次部署
 
----
-
-## Phase 1 — 首次部署 + 健康检查
+空配置部署要同时固定配置、数据库和缓存路径。Setup Wizard 会把默认相对路径
+写回 `config.toml`；下面的环境变量将它们覆盖为 volume 内的绝对路径，避免
+容器重建后落到未挂载的 `/app/data`。
 
 ```bash
-# 1. 拉镜像 + 启动
+mkdir -p depsilo-state
 docker run -d --name depsilo \
   -p 23333:23333 \
-  -v "$PWD/data:/app/data" \
+  -v "$PWD/depsilo-state:/root/.depsilo" \
+  -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
+  -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
   --restart unless-stopped \
-  depsilo/depsilo:0.7.1
+  depsilo/depsilo:0.8.0
 ```
 
-- [ ] **健康检查返回 200**：`curl -sf http://localhost:23333/health | jq .` → `{"status":"healthy"}`
-- [ ] **Discover 端点工作**：`curl -sf http://localhost:23333/api/v1/discover | jq .ecosystems | length` → 应为 13+
-- [ ] **Portal 首页能开**：浏览器访问 `http://localhost:23333/`，看到 13-ecosystem logo wall + Quickstart
-- [ ] **Admin 能登录**：访问 `/admin`，首次会触发 Setup Wizard 创建管理员账号
-- [ ] **doctor 全绿**：
-  ```bash
-  docker exec depsilo /app/depsilo doctor --json | jq '.checks[] | select(.status != "ok")'
-  ```
-  输出应为空。如果有 `degraded` / `fail` 项，按提示先修。
-
----
-
-## Phase 2 — 逐生态烟测（只测你用到的）
-
-每个生态走"配置客户端 → 安装一个真实包 → 验证缓存写入"三步。
-
-### pip（PyPI）
+- [ ] `curl -sf http://localhost:23333/health | jq .` 返回 healthy
+- [ ] 首次打开 `http://localhost:23333/`，完成 Setup Wizard。向导配置端口、
+      存储和上游，不创建管理员
+- [ ] `/api/v1/discover` 的 `ecosystems` 长度为 14；Docker OCI 单独走 `/v2/`
+- [ ] 使用默认 `admin` / `admin` 登录 `/admin`，立即修改密码
+- [ ] 容器重启后配置、数据库和缓存目录仍存在
+- [ ] doctor 没有 fail：
 
 ```bash
-# 客户端配置
-pip config set global.index-url http://localhost:23333/pypi/simple/
-
-# 触发一次 miss + 一次 hit
-pip install --no-cache-dir requests
-pip uninstall -y requests
-pip install --no-cache-dir requests  # 这次应该秒装
+docker exec depsilo /app/depsilo doctor --json \
+  | jq '.checks[] | select(.level == "fail")'
 ```
 
-- [ ] 第二次 install 明显比第一次快（>3x）
-- [ ] Admin → Access Logs 能看到对应记录（一次 MISS 一次 HIT）
-- [ ] Admin → Cache 能看到 `pypi/files/...requests-*.whl`
+## 2. 客户端烟测
+
+每个实际使用的生态执行“配置客户端 -> 第一次 MISS -> 第二次 HIT ->
+Admin 核对日志/缓存”。不要把公网 hello-world 包当成唯一回归基准。
+
+### PyPI
+
+```bash
+pip config set global.index-url http://localhost:23333/pypi/simple/
+pip install --no-cache-dir requests
+pip uninstall -y requests
+pip install --no-cache-dir requests
+```
+
+- [ ] Access Logs 有 MISS 和 HIT
+- [ ] Cache 页面有对应 wheel/sdist
+- [ ] 不要配置 `extra-index-url` 作为自动 fallback；pip 会同时考虑多个源，
+      可能绕过 Depsilo 的 451 策略
 
 ### npm
 
@@ -67,29 +70,35 @@ npm config set registry http://localhost:23333/npm/
 npm install --no-save lodash
 ```
 
-- [ ] Admin 看到 `npm/lodash/-/lodash-*.tgz` 缓存条目
-- [ ] **没有客户端报"integrity mismatch"**——npm 对 tarball SHA 严格校验，URL 重写若漏一处会立即报错
+- [ ] Cache 页面有 tarball
+- [ ] 客户端没有 integrity mismatch
 
 ### Go modules
 
 ```bash
-GOPROXY=http://localhost:23333/go,direct go install github.com/spf13/cobra@latest
+GOPROXY=http://localhost:23333/go,direct \
+  go install github.com/spf13/cobra@latest
 ```
 
-- [ ] Admin 看到 `go/github.com/spf13/cobra/@v/v*.zip` 缓存
-- [ ] 再次 `go install` 走缓存（毫秒级返回）
+- [ ] Cache 页面有 `@v/*.zip`
+- [ ] 保持 GOSUMDB 开启
+- [ ] `,direct` 只在代理返回 404/410 时继续，不是 Depsilo 宕机 fallback；
+      不要改成会绕过 451 的 `|direct`
 
 ### 其他生态
 
-按需逐个走相同流程：cargo / maven / rubygems / composer / nuget / conda / cran / helm / huggingface / apt / docker。
-**docker registry**：`docker pull` 需要 `daemon.json` 加 `registry-mirrors`，验证用 `docker pull library/nginx:alpine`。
+按 Portal 给出的当前配置测试 cargo、maven、rubygems、composer、nuget、
+conda、cran、helm、huggingface、apt、alpine 和 Docker。Docker daemon 的
+`registry-mirrors` 必须指向服务根 URL，客户端会自行请求 `/v2/`；不要追加
+`/docker/`。
 
----
+Clean Setup Wizard 配置不会写入 `[[huggingface.upstreams]]` 或
+`[[docker.registries]]`。测试 Hugging Face / Docker 前先按
+`config.example.toml` 手工添加对应服务端配置并重启。
 
-## Phase 3 — 端到端验证（功能性）
+## 3. 功能验证
 
-- [ ] **命中率统计准确**：Phase 2 完成后，Admin Dashboard "命中率"应 > 0%
-- [ ] **带宽节省统计**：Bandwidth Report 显示"节省流量"和"节省时间"非零
+- [ ] Dashboard 命中率和带宽统计随 Phase 2 请求变化
 - [ ] 上游选择符合“最高优先级的健康源”。健康检查或一次请求结果把主源标记
       unhealthy 后，**后续请求**才会选择备用源；当前失败请求不会自动重试
 - [ ] Admin Upstream 新增、修改或删除成功后，下一次真实代理请求立即使用数据库中的新 Pool 快照；无需重启
@@ -102,121 +111,111 @@ GOPROXY=http://localhost:23333/go,direct go install github.com/spf13/cobra@lates
 - [ ] 将配置文件或其目录设为只读后保存，确认返回 `409 CONFIG_READ_ONLY`，运行中日志级别和页面草稿不变
 - [ ] 不存在 60 秒 circuit breaker。上游恢复依赖健康检查和后续请求结果；
       默认周期见 `internal/upstream/pool.go`
-- [ ] **MCP 端点**（可选，给 AI 客户端用）：
-  ```bash
-  curl -X POST http://localhost:23333/mcp \
-    -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
-  ```
-  应返回 `{"result":{"protocolVersion":...}}`
-
----
-
-## Phase 4 — 压力 / 边缘场景
-
-只测你 CI/CD 实际可能撞到的：
-
-- [ ] **并发同包请求**：两个客户端同时 install 同一个未缓存的大包（如 `torch`）
-  - 上游应只回源一次（singleflight）
-  - 两个客户端都收到完整文件
-  - Cache 只有一份
-- [ ] **大文件流式**：装一个 ≥ 1GB 的包（如 `tensorflow` 或 `torch`），观察 `docker stats depsilo`——内存应保持平稳（< 200MB），**不应**线性涨到包大小
-- [ ] **磁盘水位**：手动塞数据到接近 `lru_threshold`（默认 90%），观察是否自动 LRU 清理
-  ```bash
-  # 在 admin Settings 改 lru_threshold 到一个低值（如 50）做快速验证
-  ```
-- [ ] **客户端断开**：install 中途 Ctrl+C，重启 depsilo 看是否有遗留临时文件 / 数据库损坏
-
----
-
-## Phase 5 — 监控接入
-
-- [ ] **Prometheus 抓取**：`curl http://localhost:23333/metrics` 输出非空。挂到你的 Prometheus 上
-- [ ] **关键指标**：
-  - `depsilo_cache_hits_total{adapter="pypi"}` —— 命中数
-  - `depsilo_cache_misses_total{adapter="pypi"}` —— 未命中数
-  - `depsilo_upstream_latency_seconds_bucket{...}` —— 上游延迟分布
-  - `depsilo_storage_size_bytes` —— 缓存占用
-- [ ] **告警阈值**（建议）：
-  - 健康检查连续 3 次失败
-  - 任一上游连续 10 分钟 unhealthy
-  - 存储使用 > 85%
-  - 7 天滑动窗口命中率 < 50%（说明 cache 配置 / TTL 有问题）
-- [ ] **Webhook 通知**（可选）：Admin → Settings → Webhooks 加一个 Slack/钉钉 URL，测试推送
-
----
-
-## Phase 6 — 备份 / 恢复演练
-
-**没演练过的备份不是备份。**
+- [ ] MCP initialize 可用：
 
 ```bash
-# 备份当前状态
-docker exec depsilo /app/depsilo backup --out /tmp/depsilo-backup.tar.gz
-docker cp depsilo:/tmp/depsilo-backup.tar.gz ./
-
-# 模拟数据丢失
-docker rm -f depsilo
-rm -rf ./data
-
-# 用备份起一个新实例
-mkdir -p ./data
-docker run -d --name depsilo \
-  -p 23333:23333 \
-  -v "$PWD/data:/app/data" \
-  depsilo/depsilo:v0.7.1
-docker cp ./depsilo-backup.tar.gz depsilo:/tmp/
-docker exec depsilo /app/depsilo restore /tmp/depsilo-backup.tar.gz
-docker restart depsilo
+curl -sf -X POST http://localhost:23333/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
 ```
 
-- [ ] 恢复后 Admin / 上游配置 / 用户 / 缓存条目都在
-- [ ] Phase 2 装过的包不需要重装（缓存还在）
+## 4. 压力和边缘场景
 
----
+- [ ] 两个客户端同时请求同一个未缓存制品：自研 inflight 只回源一次，
+      两个客户端都收到完整内容，缓存只有一份
+- [ ] 下载 1 GB+ 制品时内存不随文件大小线性增长
+- [ ] 把 LRU 水位临时调低后，缓存使用量超过阈值会被后台清理
+- [ ] 客户端中途断开后，没有长期遗留临时文件，SQLite 仍可正常打开
 
-## Phase 7 — 7 天稳态观察
+## 5. Prometheus 和 Webhook
 
-部署后**至少跑一周**才能下"能用"的结论。每天检查：
+代码注册了五组 collector，但当前埋点并不完整：两个 cache gauge 尚未接入
+实时统计，通常只显示 `0`；三个带 label 的 counter/histogram 目前只有 Docker
+handler 会更新，普通 PyPI/npm 等请求不会生成对应 series。
 
-- [ ] `depsilo doctor` 全绿
-- [ ] 命中率持续上升（前 2 天会偏低，后续应 > 70%）
-- [ ] 没有 unhandled error 日志：`docker logs depsilo 2>&1 | grep -iE "panic|fatal|error" | head`
-- [ ] 内存稳定，没有泄漏（`docker stats depsilo` 看 mem 占用不应单调上涨）
-- [ ] 磁盘增长率匹配预期（按缓存 max_size 设定，应在阈值前止涨）
+- `depsilo_requests_total{adapter_type="docker",hit="true|false"}`
+- `depsilo_request_duration_seconds_bucket{adapter_type="docker",...}`
+- `depsilo_upstream_requests_total{upstream="...",success="true|false"}`
+- `depsilo_cache_size_bytes`
+- `depsilo_cache_files_total`
 
----
+建议基于这些真实指标告警，不要引用不存在的 `cache_hits_total`、
+`upstream_latency_seconds` 或 `storage_size_bytes`。在补齐全生态和 gauge 埋点前，
+也不要把当前 `/metrics` 当作缓存容量或全生态请求量的可靠告警源。
 
-## Phase 8 — 决定能否推给团队
+- [ ] Prometheus 能抓取 `/metrics`
+- [ ] 完成 Docker MISS/HIT 后能看到 `adapter_type="docker"` series；不要求
+      PyPI/npm 等 handler 产生同名 series
+- [ ] 在 Admin 配置 Webhook，并在测试环境触发一次 quarantine/malware block；
+      block 才会推送，approve/revoke/override 只写审计事件
 
-| 信号 | ✅ 推 | ⚠️ 缓 | ❌ 别推 |
-|---|---|---|---|
-| 7 天命中率 | > 60% | 30-60% | < 30%（配置有问题） |
-| 上游切换次数 | 0-2 次 | 3-10 次 | > 10 次（上游不稳） |
-| `depsilo doctor` | 一直 ok | 偶尔 degraded | 出现过 fail |
-| 内存峰值 | < 500MB | 500MB-2GB | > 2GB（流式有问题） |
-| panic / fatal 日志 | 0 | 偶发非崩溃 | 任何崩溃 |
+## 6. 备份和恢复演练
 
----
+CLI backup **只包含 `config.toml` 和 SQLite 数据库**，不包含本地/S3 缓存对象。
+恢复数据库中的缓存元数据不等于恢复制品字节；缓存需单独备份或重新回源。
+当前 backup 直接读取 SQLite 主文件，不使用 online-backup API，也不归档 WAL；
+生成一致备份前先停止 server。
 
-## 常见坑 / 翻车点
+```bash
+mkdir -p backups
+docker stop depsilo
+docker run --rm \
+  -e DEPSILO_CONFIG=/root/.depsilo/config.toml \
+  -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
+  -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
+  -v "$PWD/depsilo-state:/root/.depsilo" \
+  -v "$PWD/backups:/backup" \
+  depsilo/depsilo:0.8.0 \
+  backup --out /backup/depsilo-backup.tar.gz
+docker start depsilo
+tar -tzf backups/depsilo-backup.tar.gz
+```
 
-| 现象 | 大概率原因 |
-|---|---|
-| `npm install` 报 EINTEGRITY | URL 重写漏了某个 dist.tarball，**升 Depsilo 到最新 patch** |
-| `pip install` 总是 miss | `index-url` 没改成功，跑 `pip config list` 确认 |
-| `go install` 走了 direct | `GOPROXY` 没设或被 `GOPRIVATE` 覆盖，检查 `go env` |
-| Docker pull 401 | 上游需要登录，Depsilo 现在不缓存带 Authorization 的响应（设计如此，跨用户安全） |
-| 大包装到一半挂 | 客户端超时 < 上游下载时长，**不是 Depsilo 问题**，调客户端 timeout |
-| Admin 打不开但 `/health` 正常 | 前端构建产物有问题，重拉镜像 |
-| 命中率长期低于 30% | 多半是 cache TTL 太短 → Settings 把 `ttl_blob` 调到 168h+ |
+- [ ] 归档只有 manifest、config 和 database；不声称包含 cache
+- [ ] 备份期间没有 Depsilo server 进程写 SQLite
+- [ ] 在隔离目录执行恢复演练，不删除生产 `depsilo-state`
 
----
+下面的 disposable container 不启动服务器，因此满足“restore 时服务必须停止”：
+
+```bash
+rm -rf restore-drill
+mkdir -p restore-drill/data
+tar -xOf backups/depsilo-backup.tar.gz config.toml > restore-drill/config.toml
+cp backups/depsilo-backup.tar.gz restore-drill/
+
+docker run --rm \
+  -e DEPSILO_CONFIG=/state/config.toml \
+  -e DEPSILO_DATABASE_DSN=/state/data/depsilo.db \
+  -v "$PWD/restore-drill:/state" \
+  depsilo/depsilo:0.8.0 \
+  restore /state/depsilo-backup.tar.gz
+
+test -s restore-drill/config.toml
+test -s restore-drill/data/depsilo.db
+```
+
+- [ ] 实际恢复前停止 Depsilo；不要在运行中的 server 进程旁覆盖 SQLite
+- [ ] 恢复后核对用户、上游、规则和审计数据
+- [ ] 单独验证缓存对象备份，或接受首次安装重新回源
+
+## 7. 稳态观察
+
+至少观察一周：
+
+- [ ] `depsilo doctor` 持续无 fail
+- [ ] 没有 panic/fatal：`docker logs depsilo 2>&1 | grep -iE 'panic|fatal'`
+- [ ] 内存没有单调增长
+- [ ] 磁盘在 LRU 水位附近稳定
+- [ ] 命中率符合团队依赖重复度；不要把统一百分比当成发布门槛
+- [ ] 定期复核 default admin 已改密、JWT secret、HTTPS 和 Admin 网络边界
 
 ## 报问题
 
-走完清单后如果撞到 bug 或 unhandled case：
-1. 收集 `docker exec depsilo /app/depsilo doctor --json` 输出
-2. 收集 `docker logs depsilo --tail 200`
-3. 描述触发步骤
-4. 提 GitHub issue：https://github.com/depsilo/depsilo/issues
+提交 issue 前附上：
+
+1. `docker exec depsilo /app/depsilo doctor --json`
+2. `docker logs depsilo --tail 200`
+3. Depsilo image tag 和部署方式
+4. 可复现步骤及所用生态
+
+Issue tracker: <https://github.com/depsilo/depsilo/issues>

@@ -1,12 +1,21 @@
 # Tamper Detection Implementation Plan
 
+> **Status: completed and merged to `master@1259728` on 2026-07-10.** The
+> unchecked boxes below are retained as the historical execution plan, not a
+> live progress tracker. Final implementation deltas from the original plan:
+> the immutable threshold defaults to `cache.ttl_blob` rather than a fixed 1h;
+> cache misses call `Verify` so an LRU re-fetch cannot silently replace the
+> baseline; a refresh mismatch extends the cache TTL to throttle repeated
+> downloads/alerts; and disabling the recorder skips persistence and decisions
+> but the shared `countingReader` still computes its streaming hash.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Detect when an immutable artifact's upstream bytes change under the same version (silent registry swap / poisoned mirror / MITM) by recording a SHA-256 on first fetch and comparing on natural re-fetch, keeping the first-seen bytes and alerting instead of overwriting.
+**Goal:** Detect when an immutable artifact's upstream bytes change under the same version (silent registry swap / poisoned mirror / MITM) by recording a SHA-256 on first fetch and comparing on natural re-fetch, keeping the first-seen bytes on background refresh and alerting instead of overwriting.
 
 **Architecture:** The existing `countingReader` (already wrapping the byte stream in both the miss-store and background-refresh paths) gains a streaming SHA-256. A new `internal/tamper` package owns a `Recorder` (DB store + event + webhook hook), injected into the cache `Manager` via a setter (same package-level injection pattern as `SetSecurityScanner`). Immutability is inferred from the request TTL (`ttl >= immutableThreshold`) — no adapter changes. On background refresh of an immutable key with a recorded hash, the manager verifies **without** overwriting storage; a mismatch fires a critical webhook and a `tamper_detected` event and leaves the trusted first-seen bytes in place.
 
-**Tech Stack:** Go 1.25, GORM (SQLite/Postgres), Gin, zap, `crypto/sha256`, React 19 + i18next frontend.
+**Tech Stack:** Go 1.25.6, GORM + SQLite, Gin, zap, `crypto/sha256`, React 19 + i18next frontend.
 
 ## Global Constraints
 
@@ -15,7 +24,7 @@
 - All IO takes `context.Context`; background goroutines honor ctx cancellation.
 - Event timestamps use `now()` (never the zero value — a prior subsystem shipped year-0001 webhook stamps).
 - Frontend: `zh.ts` and `en.ts` leaf-key counts MUST stay equal (`python3 scripts/i18n-audit.py` gates it in CI).
-- Wedge posture: the feature ships enabled by default (`[supply_chain.tamper_detection] enabled` defaults true); a nil recorder = feature fully off with zero overhead.
+- Wedge posture: the feature ships enabled by default (`[supply_chain.tamper_detection] enabled` defaults true); a nil recorder disables persistence, comparison, and alerts.
 - Full local gate before any push: `go test ./... -race`, `go test -tags integration ./tests/integration/ -count=1`, `cd web && npm run type-check && npm run build`, `python3 scripts/i18n-audit.py`.
 - Verify each Go task with: `go build ./... && go test ./internal/<pkg>/...`.
 
@@ -823,8 +832,8 @@ func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus, immutabl
 }
 
 // SetTamperRecorder attaches the optional content-integrity recorder.
-// Pass nil to disable tamper detection entirely (zero overhead — the
-// hash is still computed by countingReader but never consulted).
+// Pass nil to disable tamper persistence, comparison, and alerts. The
+// hash is still computed by countingReader but never consulted.
 func (m *Manager) SetTamperRecorder(r TamperRecorder) { m.tamper = r }
 
 // isImmutable reports whether a TTL marks an artifact as immutable.
@@ -991,7 +1000,7 @@ In `internal/server/server.go`, immediately AFTER the blocklist wiring block (th
 ```go
 	// Tamper detection (DIRECTION T1): first-seen SHA-256 of immutable
 	// artifacts; a re-fetch whose hash differs keeps the trusted bytes
-	// and alerts. Enabled by default; nil recorder = fully off.
+	// and alerts. Enabled by default; nil disables recorder decisions.
 	var tamperRecorder *tamper.Recorder
 	if cfg.SupplyChain.TamperDetection.IsEnabled() {
 		tamperRecorder = tamper.NewRecorder(database)

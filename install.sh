@@ -42,7 +42,7 @@ if [ "$VERSION" = "latest" ]; then
     VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
         | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     if [ -z "$VERSION" ]; then
-        err "Could not determine latest version. Try setting DEPSILO_VERSION=v0.5.0"
+        err "Could not determine latest version. Try setting DEPSILO_VERSION=v0.8.0"
     fi
 fi
 

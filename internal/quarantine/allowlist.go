@@ -9,13 +9,13 @@ import (
 // AllowList matches package coordinates against the user-provided
 // bypass rules. Three syntaxes per the locked-in decisions:
 //
-//   "ecosystem:glob"           — glob match on package name
-//                                 e.g. "npm:@scope/internal-*"
-//   "ecosystem:name==version"  — exact pin on a single version
-//                                 e.g. "pip:requests==2.32.3"
-//   "ecosystem:name<OP>ver"    — version-range comparator on the
-//                                 package name; OP ∈ >= > <= < ==
-//                                 e.g. "npm:react>=18.0.0"
+//	"ecosystem:glob"           — glob match on package name
+//	                              e.g. "npm:@scope/internal-*"
+//	"ecosystem:name==version"  — exact pin on a single version
+//	                              e.g. "pypi:requests==2.32.3"
+//	"ecosystem:name<OP>ver"    — version-range comparator on the
+//	                              package name; OP ∈ >= > <= < ==
+//	                              e.g. "npm:react>=18.0.0"
 //
 // The "ecosystem:" prefix is required so the same rule file can carry
 // entries for every adapter without collisions. Match() is called on

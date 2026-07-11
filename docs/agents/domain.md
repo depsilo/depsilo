@@ -5,6 +5,7 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`CONTEXT.md`** at the repo root.
+- **`docs/DIRECTION.md`** for current product and engineering priorities.
 - **`docs/adr/`** — read ADRs that touch the area you're about to work in.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The producer skill (`/grill-with-docs`) creates them lazily when terms or decisions actually get resolved.
@@ -16,10 +17,15 @@ Single-context repo:
 ```
 /
 ├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
+├── docs/
+│   ├── DIRECTION.md
+│   └── adr/
+│       ├── 0001-pools-map.md
+│       ├── 0002-access-log-rollup.md
+│       ├── 0003-supply-chain-control-point.md
+│       └── 0004-supply-chain-enforcement-layer.md
+├── internal/
+└── web/src/
 ```
 
 ## Use the glossary's vocabulary

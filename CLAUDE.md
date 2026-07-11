@@ -11,11 +11,11 @@
 > 2026-06-30 战略转向（ADR-0004）：缓存是"楔子"（让代理被装进去的理由），执行层是核心价值。战略权威文档是 `docs/DIRECTION.md` + `docs/adr/0003`、`docs/adr/0004`，本文件侧重实现规范。
 
 ### 核心价值
-- **供应链强制执行**：最小发布年龄隔离（quarantine，HTTP 451 + 审批流 + 审计事件，见 4.21）、包 allow/deny 规则、Webhook 通知（Slack/钉钉/企微/飞书）——"组织级强制"是与客户端个人配置（pnpm minimumReleaseAge 等）的核心差异
-- 支持 15 个适配器（14 个生态 + Docker Registry），所有生态共享同一套缓存引擎、存储后端和 Web UI
+- **供应链强制执行**：最小发布年龄隔离、OSV MAL-* 已知恶意包 451 阻断、不可变制品篡改告警、包 allow/deny 规则与 Webhook 通知——"组织级强制"是与客户端个人配置的核心差异
+- 支持 14 个常规生态路由 + 独立 Docker OCI `/v2/`（共 15 个 install surfaces），共享缓存引擎、存储后端和 Web UI
 - 多上游源支持，自动健康检查；每个上游源可单独配置 HTTP 代理
 - 统一 Web 入口：用户门户（无需登录）+ 管理后台（需登录）
-- 新增生态通过 Adapter 插件实现，不影响核心逻辑
+- 新增生态通过 Adapter 实现接入，不影响核心逻辑（项目没有运行时插件系统）
 
 ### 已支持的生态
 
@@ -46,16 +46,15 @@
 
 | 组件       | 选型                                  | 说明                          |
 | ---------- | ------------------------------------- | ----------------------------- |
-| 语言       | Go 1.21+                              | 标准库优先                    |
+| 语言       | Go 1.25.6                             | 以 `go.mod` 为准，标准库优先 |
 | HTTP 框架  | **Gin** (`github.com/gin-gonic/gin`)  | v1.9+                         |
-| ORM        | **GORM** (`gorm.io/gorm`)             | 配套 SQLite/PostgreSQL driver |
+| ORM        | **GORM** (`gorm.io/gorm`)             | 当前仅接入 SQLite driver     |
 | DB 迁移    | GORM `AutoMigrate`                    | 启动时自动执行                |
 | S3 客户端  | `github.com/aws/aws-sdk-go-v2`        | 兼容 MinIO                    |
 | 配置       | `github.com/spf13/viper`              | 读取 TOML 配置文件            |
 | 日志       | `go.uber.org/zap`                     | 结构化日志                    |
-| 单飞       | `golang.org/x/sync/singleflight`      | 防并发回源                    |
-| 限流       | `golang.org/x/time/rate`              | 令牌桶，每上游独立限流        |
-| 熔断       | `github.com/sony/gobreaker`           | 上游请求熔断                  |
+| 并发合并   | 自研 inflight + `singleflight`        | miss 流式合并 + 后台刷新去重 |
+| 上游容错   | `net/http` + 健康检查                 | 按优先级选健康上游；状态影响后续请求 |
 | Metrics    | `github.com/prometheus/client_golang` | 暴露 `/metrics`               |
 | 前端       | React 19 + TypeScript + Vite          | 见第五节                      |
 | 前端样式   | Tailwind CSS v4 + 自研 "Instrument" 设计系统 | 见第五节（已不用 shadcn/ui） |
@@ -65,7 +64,8 @@
 
 ## 三、项目目录结构
 
-严格按照以下结构创建文件，不得随意新增顶层目录。
+以下是简化结构示意，不是完整文件清单；实际结构以工作树为准。新增代码应优先
+归入既有模块，不要无理由新增顶层目录。
 
 > 下面的树是 2026-05 的核心骨架，此后新增了这些包（放置新代码时优先归入既有包）：
 > `internal/`：`quarantine/`（供应链隔离，见 4.21）、`accesslog/`（rollup 聚合）、`audit/`、`rules/`、`security/`（OSV）、`notify/`（Webhook）、`license/` + `trial/` + `entitlement/`（Pro 门控）、`sbom/`、`cli/`（13 个命令）、`server/`（装配）、`tray/`、`prompts/`、`version/`；
@@ -76,7 +76,7 @@
 depsilo/
 ├── cmd/
 │   └── server/
-│       └── main.go                  # 旧入口（主入口已迁移至 cmd/depsilo）
+│       └── main_server.go           # 兼容服务器入口（主入口为 cmd/depsilo）
 ├── internal/
 │   ├── config/
 │   │   ├── config.go                # 配置结构体定义
@@ -131,7 +131,7 @@ depsilo/
 │   │   └── s3.go                    # S3 兼容存储实现
 │   ├── upstream/
 │   │   ├── pool.go                  # 上游连接池，持有 http.Client（含 proxy）
-│   │   ├── selector.go              # 选择策略：优先级 / 延迟优先
+│   │   ├── selector.go              # 当前仅按优先级选择健康上游
 │   │   └── health.go                # 后台健康检查（定时 HEAD 请求）
 │   ├── db/
 │   │   ├── models.go                # GORM 模型定义
@@ -156,8 +156,6 @@ depsilo/
 ├── web/                             # 前端源码
 │   ├── package.json
 │   ├── vite.config.ts
-│   ├── tailwind.config.js
-│   ├── components.json              # shadcn/ui 配置
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx                  # 路由：/ → Portal，/admin → AdminApp
@@ -165,10 +163,11 @@ depsilo/
 │       │   ├── PortalApp.tsx
 │       │   ├── pages/
 │       │   │   ├── QuickStart.tsx   # 快速开始（pip/apt 配置命令）
-│       │   │   └── ServiceStatus.tsx# 服务状态（统计/上游/Top包）
+│       │   │   └── Monitor.tsx      # 服务状态与上游健康
 │       │   └── components/
 │       │       ├── CodeBlock.tsx    # 带复制按钮的代码块
-│       │       └── ServiceUrlBar.tsx# 服务地址展示栏
+│       │       ├── ConfigurePane.tsx# 当前生态配置面板
+│       │       └── EcosystemCatalog.tsx # 左侧技术栈目录
 │       └── admin/                   # 管理后台（需登录）
 │           ├── AdminApp.tsx
 │           ├── pages/
@@ -180,9 +179,10 @@ depsilo/
 │           │   └── Settings.tsx
 │           └── components/
 │               ├── MainLayout.tsx   # 侧边栏 + topbar 布局
-│               ├── MetricCard.tsx
-│               ├── UpstreamRow.tsx
-│               └── TopPackageChart.tsx
+│               ├── NowStrip.tsx
+│               ├── TrendsCard.tsx
+│               ├── WebhookTab.tsx
+│               └── ProRequiredCallout.tsx
 ├── web/dist/                        # 前端构建产物（gitignore，由 make build 生成）
 ├── config.example.toml
 ├── Dockerfile
@@ -200,10 +200,10 @@ depsilo/
 ```toml
 [server]
 host = "0.0.0.0"
-port = 8080
+port = 23333
 
 [database]
-driver = "sqlite"           # sqlite | postgres
+driver = "sqlite"           # 当前版本仅支持 sqlite
 dsn    = "./data/depsilo.db"
 
 [storage]
@@ -219,7 +219,7 @@ path = "./data/cache"
 
 [cache]
 max_size_gb  = 20
-ttl_index    = "5m"         # PyPI simple / APT Release 等元数据
+ttl_index    = "1h"         # 示例配置；内置缺省值为 5m
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
@@ -287,13 +287,10 @@ type ObjectMeta struct {
 type Selector interface {
     // 从可用上游列表中选择一个
     Select(ctx context.Context) (*Upstream, error)
-    // 上报请求结果，用于更新延迟统计
-    Report(name string, latency time.Duration, success bool)
 }
 
-// 两种策略，通过配置选择：
-// - PrioritySelector：按 priority 字段顺序，健康则使用
-// - LatencySelector：并发探测，选最快的健康上游
+// 当前只实现 PrioritySelector：按 priority 字段顺序选择健康上游。
+// 延迟数据用于监控，不参与选择决策。
 ```
 
 ### 4.3 缓存核心流程（internal/cache/manager.go）
@@ -304,13 +301,13 @@ type Selector interface {
     ├─ cache.Get(key) 命中？
     │   ├─ 是：直接 stream 给客户端，记录 HIT 日志
     │   └─ 否：
-    │       └─ singleflight.Do(key, func() {
+    │       └─ 自研 inflight 合并同 key 的并发 miss：
     │               upstream := selector.Select()
-    │               resp := upstream.Fetch(req)   // 含 proxy、熔断、限流
+    │               resp := upstream.Fetch(req)   // 含 per-upstream proxy
     │               同时：stream 给第一个等待的客户端
     │                     写入 cache store
-    │           })
-    │           其余并发请求等待 singleflight 完成后从 cache 读取
+    │
+    │           其余并发请求等待 inflight owner 完成后从 cache 读取
     │
     └─ 写入 AccessLog（异步，不阻塞响应）
 ```
@@ -318,7 +315,7 @@ type Selector interface {
 **关键约束：**
 - 流式传输：不得将整个响应体 buffer 到内存，必须边读边写边转发
 - 写缓存失败不影响响应，记录 warn 日志即可
-- singleflight key 与 cache key 保持一致
+- inflight key 与 cache key 保持一致；后台刷新另用 singleflight 去重
 
 ### 4.4 PyPI 适配器要点（internal/adapter/pypi/）
 
@@ -581,7 +578,7 @@ PUT  /api/v1/admin/settings
 ```json
 {
   "service": {
-    "version": "0.1.0",
+    "version": "0.8.0",
     "uptime_seconds": 86400,
     "status": "healthy"
   },
@@ -627,29 +624,21 @@ PUT  /api/v1/admin/settings
 
 ### 4.19 错误处理规范
 
-```go
-// 统一错误响应格式
-type ErrorResponse struct {
-    Code    string `json:"code"`    // 业务错误码，如 "UPSTREAM_UNAVAILABLE"
-    Message string `json:"message"` // 人类可读描述
-}
+Adapter/API handler 目前直接用 `gin.H` 返回 JSON，没有集中式 error middleware。
+错误响应至少保留稳定的机器码 `code` 和人类可读 `message`；供应链 Gate 额外返回
+`ecosystem`、`package`、`version`。新增错误应复用相邻 handler 的状态码与格式，
+不要声明代码中不存在的全局 `ErrorResponse` 或自动映射层。
 
-// 使用 thiserror 风格定义，通过 gin middleware 统一转换为 HTTP 状态码
-// 404 → NotFound
-// 502 → UpstreamError
-// 503 → AllUpstreamsUnhealthy
-// 507 → StorageFull
-```
-
-### 4.20 embed 前端打包（cmd/server/main.go）
+### 4.20 embed 前端打包（web/embed.go + internal/server/server.go）
 
 ```go
-//go:embed all:web/dist
-var webFS embed.FS
+// web/embed.go
+//go:embed all:dist
+var DistFS embed.FS
 
-// 在 Gin 中挂载：
+// internal/server/server.go 使用 fs.Sub(DistFS, "dist")，通过 NoRoute：
 // - /assets/* → 静态文件
-// - / 和 /admin → 返回 index.html（SPA fallback）
+// - 其余前端路由 → /index.html（SPA fallback）
 ```
 
 ### 4.21 供应链隔离接入规范（internal/quarantine/ + internal/adapter/quarantine.go）
@@ -666,12 +655,13 @@ if pkg, version := packagekey.ParseXxxPath(path); pkg != "" && version != "" {
 }
 ```
 
-- 决策链（`internal/quarantine/checker.go`）：**第 0 步恶意封锁**（`internal/blocklist/`，OSV MAL-* 数据集，命中即 451 `MALICIOUS_BLOCKED`，阈值 0 生态和 allowlist 均不可绕过，唯一豁免是 24h 审计 override）→ 阈值 0 放行 → allow 规则放行 → 管理员批准放行 → 三级查发布时间（内存 → DB → 上游 registry API）→ 年龄不足则 451 `QUARANTINED` + 审计事件 + Webhook
-- **篡改检测（后台刷新时）**：不可变制品首次抓取记 SHA-256 基线（`internal/tamper/`）；
-  后台刷新时重抓字节比对基线，不匹配则保留首见字节、不覆盖缓存、写 `tamper_detected`
-  事件 + critical webhook（信任首见，告警不阻断）。不可变判定用 TTL 阈值（默认取 cache.ttl_blob）。
+- 决策链（`internal/quarantine/checker.go`）：**第 0 步恶意封锁**（`internal/blocklist/`；同步 npm/PyPI/Cargo/RubyGems/Composer/NuGet/Go/Maven 的 OSV MAL-* 精确版本或全版本记录，无显式版本的 bounded range 会跳过；命中即 451 `MALICIOUS_BLOCKED`，阈值 0 生态和 allowlist 均不可绕过，唯一豁免是 24h 审计 override）→ 阈值 0 放行 → allow 规则放行 → 管理员批准放行 → 三级查发布时间（内存 → DB → 上游 registry API）→ 年龄不足则 451 `QUARANTINED` + 审计事件 + Webhook
+- **篡改检测**：不可变制品 miss 路径调用 `Verify`，无基线则建立首见 SHA-256；
+  后台刷新不匹配时保留首见字节、不覆盖缓存、写 `tamper_detected` 事件 + critical
+  webhook，并延长 TTL 防告警风暴。LRU 淘汰后重取仍会告警，但旧字节已不存在，
+  无法恢复首见副本。不可变判定用 TTL 阈值（默认取 `cache.ttl_blob`）。
 - 每个生态需在 `internal/quarantine/resolvers/` 提供发布时间 resolver（真 API 或 Last-Modified 近似）
-- 默认阈值（`policy.go DefaultThresholds`）：npm 7d，多数生态 3d，go/apt 0（免检）；**空配置也生效**，fail-closed 默认开
+- 默认阈值（`policy.go DefaultThresholds`）：npm 7d，多数生态 3d，go/apt 0（免检）；**空配置也生效**。not-found/unsupported 默认 fail-closed，真实上游故障始终放行并告警
 - 元数据请求不 gate，只 gate 制品下载；版本字符串必须与 resolver 在上游元数据中能匹配到的形式一致（如 composer 用 pretty version 而非 normalized）
 - 集成测试注意：`tests/integration/main_test.go` 已把所有生态阈值归零（resolver 会查真实 registry，mock 包不存在会被 fail-closed 拦截）
 
@@ -696,7 +686,7 @@ recharts（图表）
 
 ### 5.2 基础组件
 
-**不使用 shadcn/ui**（历史文档遗留，已被自研组件替代）。基础组件在 `web/src/components/`（Button / Badge / Modal / DataTable / Tabs / Sparkline / StatusDot / EcosystemIcon / UpstreamCard 等 20 个），新 UI 优先复用这些组件，风格与 `src/index.css` 的 Instrument token 保持一致。
+**不使用 shadcn/ui**（历史文档遗留，已被自研组件替代）。基础组件在 `web/src/components/`（Button / Badge / Modal / DataTable / Tabs / StatusDot / EcosystemIcon / UpstreamCard 等 18 个），新 UI 优先复用这些组件，风格与 `src/index.css` 的 Instrument token 保持一致。
 
 ### 5.3 路由结构（src/App.tsx，2026-07 实况）
 
@@ -733,20 +723,18 @@ recharts（图表）
 
 #### QuickStart.tsx（快速开始页）
 **设计要求：**
-- 顶部展示服务地址栏（`ServiceUrlBar` 组件），从 `/api/v1/stats` 获取服务信息
-- 12 个包管理器 Tab（4 列网格布局），每个 Tab 包含对应生态的配置步骤
-- 覆盖：pip、apt、npm、Go、Cargo、Maven、RubyGems、Composer、NuGet、Conda、CRAN、Helm
+- 服务地址由 `PortalApp` 全局 header 展示；配置面板统一使用 `window.location.origin`
+- 左侧 14 个技术栈目录项，右侧展示所选项的配置步骤；Docker OCI 在 Container 分组
+- 覆盖 pip、apt、npm、Go、Cargo、Maven、RubyGems、Composer、NuGet、Conda、CRAN、Helm、Alpine、Hugging Face，以及 Docker OCI 配置
 - 每个代码块使用 `CodeBlock` 组件，支持一键复制
 - 底部 tip 提示（首次回源说明 / GPG 签名说明）
 - 服务地址从 `window.location.origin` 自动拼接，**不得写死**
 
-#### ServiceStatus.tsx（服务状态页）
+#### Monitor.tsx（服务状态页）
 **设计要求：**
-- 4 个 MetricCard：今日请求数、缓存命中率、节省流量（本月）、平均响应时间
-- 命中率环形图：PyPI 和 APT 分别展示（使用 recharts `RadialBarChart`）
-- 上游源健康状态列表：名称、URL、状态（健康/延迟高/异常）、延迟 ms
-- 热门包 Top 10：PyPI 和 APT 并排，横向进度条 + 请求次数
-- 数据来源：`GET /api/v1/stats`，每 30 秒自动刷新
+- 汇总上游总数、健康/降级/失败计数，并在有流量时展示 7 天命中率与节省流量
+- 可搜索的分组上游卡片：名称、URL、健康状态、成功率、延迟与 latency beats
+- 统计每 30 秒刷新；较重的 latency series 每 60 秒刷新
 
 #### CodeBlock 组件（portal/components/CodeBlock.tsx）
 ```tsx
@@ -756,14 +744,10 @@ interface CodeBlockProps {
   language?: string     // 语法高亮标识（展示用）
 }
 // 右上角复制按钮，点击后变为"已复制"并 2 秒后恢复
-// 使用 shadcn 的 pre/code 样式，monospace 字体
+// 使用项目自研 Instrument 样式和 monospace 字体
 ```
 
-#### ServiceUrlBar 组件（portal/components/ServiceUrlBar.tsx）
-```tsx
-// 展示：标签"服务地址" + URL 文本 + 复制按钮
-// URL 从 window.location.origin 读取，自动适配部署地址
-```
+`ServiceUrlBar.tsx` 仍在仓库中但当前路由未使用；不要把它写成 QuickStart 的现役依赖。
 
 ### 5.5 Admin 页面（管理后台）
 
@@ -784,13 +768,13 @@ interface CodeBlockProps {
 - 底部展示当前登录用户名和角色，点击可退出登录
 
 #### Dashboard.tsx
-- 顶部 4 个 MetricCard（同 Portal 统计页）
+- 顶部使用共享 `Metric` 组件展示关键指标
 - 请求量折线图（近 7 日，按天，PyPI/APT 两条线，使用 recharts LineChart）
 - 上游源状态卡片（同 Portal，但包含更多细节：可用率 %）
 - 热门包 Top10（PyPI + APT 并排）
 
 #### CacheManage.tsx
-- 顶部 3 个存储概览 MetricCard：PyPI 缓存大小/文件数、APT 缓存大小/文件数、总用量进度条
+- 顶部使用共享 `Metric` 组件展示存储概览和总用量
 - 搜索栏 + 类型筛选下拉（全部/PyPI/APT）+ "清理过期缓存"按钮（红色，需确认弹窗）
 - 表格列：包名/文件名、类型、大小、命中次数、最后访问、过期时间、操作（删除）
 - 分页（每页 20 条）
@@ -798,7 +782,7 @@ interface CodeBlockProps {
 
 #### Upstreams.tsx
 - 右上角"添加上游源"按钮
-- 12 个生态的 Pill 按钮筛选器（pypi / apt / npm / go / cargo / maven / rubygems / composer / nuget / conda / cran / helm）
+- 14 个类型选项（pypi / apt / npm / go / cargo / maven / rubygems / composer / nuget / conda / cran / alpine / helm / docker）
 - 新增/编辑弹窗包含类型选择器（新建时可选，编辑时置灰）
 - 每个上游源以卡片行展示：健康状态圆点、名称、URL（monospace）、延迟、可用率、操作按钮（编辑/删除）
 - 特殊展示：若配置了 proxy，在名称后以灰色小字展示 `· 代理: xxx`
@@ -841,7 +825,7 @@ interface CodeBlockProps {
 - 存储类型 select（本地/S3），切换时动态显示不同表单
 - 本地：缓存目录 path input
 - S3：Endpoint、Bucket、Access Key、Secret Key（password）、Region
-- 数据库类型 select（SQLite/PostgreSQL），选 PostgreSQL 展示 DSN input
+- 数据库类型只读展示；当前服务端仅支持 SQLite，PostgreSQL 选项不得作为可用能力宣传
 
 **认证安全 Tab：**
 - Toggle：启用登录认证
@@ -880,12 +864,13 @@ export const authApi = { login: (body) => ..., logout: () => ... }
 ```makefile
 .PHONY: dev build frontend test lint docker
 
-dev:           # 同时启动前端 dev server 和后端（go run，热重载用 air）
+dev:           # 构建后在后台启动 Depsilo，写 .dev.log / .server.pid
 frontend:      # cd web && npm run build → 产物在 web/dist
-build:         # make frontend && go build -o bin/depsilo ./cmd/server
-test:          # go test ./...
-lint:          # golangci-lint run && cd web && npm run type-check
-docker:        # docker build -t depsilo .
+build:         # make frontend && go build -o bin/depsilo ./cmd/depsilo
+test:          # go test ./tests/unit/...
+test-integration: # go test -tags integration ./tests/integration/...
+lint:          # i18n audit + go vet ./...
+docker-build:  # docker build -t depsilo/depsilo:local .
 ```
 
 ### Dockerfile
@@ -901,21 +886,22 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: 构建后端
-FROM golang:1.21-alpine AS backend
+FROM golang:alpine AS backend
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/web/dist ./web/dist
-RUN go build -o depsilo ./cmd/server
+RUN CGO_ENABLED=0 go build -o depsilo ./cmd/depsilo
 
 # Stage 3: 最终镜像
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=backend /app/depsilo .
-EXPOSE 8080
-CMD ["./depsilo"]
+EXPOSE 23333
+ENTRYPOINT ["./depsilo"]
+CMD ["serve"]
 ```
 
 ### docker-compose.yml
@@ -926,7 +912,7 @@ services:
   depsilo:
     build: .
     ports:
-      - "8080:8080"
+      - "23333:23333"
     volumes:
       - ./data:/app/data
       - ./config.toml:/app/config.toml
@@ -947,7 +933,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 3. 实现 `main.go`（初始化 Gin、注册 `/health` 路由）
 4. 实现 GORM 模型 + AutoMigrate（SQLite）
 5. 实现本地存储 `local.go`
-6. **验收：`go run ./cmd/server` 启动无报错，`GET /health` 返回 200**
+6. **验收：`go run ./cmd/depsilo serve` 启动无报错，`GET /health` 返回 200**
 
 ### Phase 2：PyPI 代理核心（已完成）
 1. 实现 upstream pool + priority selector
@@ -963,8 +949,8 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 3. 实现公开统计 `/api/v1/stats`
 
 ### Phase 5：前端（已完成）
-1. 初始化 React 项目，配置 shadcn/ui
-2. 实现 Portal（用户门户）：QuickStart + ServiceStatus + PackageBrowse + LiveStream
+1. 初始化 React 项目；当前已迁移为 Tailwind CSS v4 + 自研 Instrument 组件
+2. 实现 Portal（用户门户）：当前保留 QuickStart + Monitor；早期 PackageBrowse / LiveStream 页面已移除
 3. 实现 Admin（管理后台）：Dashboard（趋势图表 + 延迟 sparkline） → 缓存（Treemap 可视化） → 上游 → 日志 → 用户 → 设置
 
 ### Phase 6：收尾（已完成）
@@ -993,11 +979,14 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 6. CRAN — PACKAGES + 包文件 passthrough
 7. Helm — chart repository passthrough
 
-### 后续 Phase（待开发）
+### 后续 Phase（历史项，均已完成）
 - Docker Registry 代理
 - 审计日志
 - 包 allow/deny 规则
-- License Key 验证系统
+- 简化版 License Key + Trial 系统
+
+前瞻开发顺序以 `docs/DIRECTION.md` 为准；当前待开发重点是 Freeze / Golden
+Snapshot、CRA 完整 SBOM、签名发布和基础 Helm chart。
 
 ---
 
@@ -1044,7 +1033,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 | 把整个响应 body 读进内存再转发                               | **必须流式传输** `io.Copy` / `io.TeeReader`             | torch 包 2GB+，buffer 会 OOM        |
 | 前端改了文字但只改了 zh.ts                                   | **zh.ts 和 en.ts 必须同时更新**                         | 否则另一语言显示 key 而非文字       |
 | URL 重写时遗漏某些链接                                       | 用**正则/HTML parser 全量替换**，不要只替换"看到的那个" | 遗漏一个 href，pip/npm 就会绕过缓存 |
-| 在前端代码中硬编码 `localhost:8080`                          | 用 `window.location.origin`                             | 部署地址不是 localhost              |
+| 在前端代码中硬编码 `localhost:23333`                        | 用 `window.location.origin`                             | 部署地址不是 localhost              |
 | 忽略 Go error（`_ = xxx`）                                   | **所有 error 必须处理或传递**                           | 静默吞错导致难以排查的线上问题      |
 | 新增文件放在错误的目录                                       | 严格按照第三节目录结构                                  | 项目约定不可随意创建顶层目录        |
 | 新增/改造 adapter 忘接 QuarantineGate                        | 制品下载 handler 顶部必须过 Gate（见 4.21）             | 漏接 = 该生态供应链隔离整体失效     |
@@ -1080,7 +1069,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 1. **PyPI URL 重写是核心**：`/pypi/simple/:package/` 返回的 HTML 中，所有 `href` 属性指向外部的下载链接必须被重写为本服务地址，否则 pip 会绕过缓存
 2. **APT 不能修改响应**：任何对 Release/InRelease/Packages 文件的修改都会破坏 GPG 签名校验，apt 会报错拒绝安装
 3. **流式传输**：wheel 文件可能几百 MB（torch ~2GB），必须 stream，不能 buffer
-4. **singleflight 与流式的兼容**：第一个请求 stream 给客户端的同时写缓存，后续相同 key 的请求等待完成后从缓存读取（不复用第一个请求的 body）
+4. **inflight 与流式的兼容**：第一个 miss 请求 stream 给客户端的同时写缓存，后续相同 key 的请求等待完成后从缓存读取（不复用第一个请求的 body）；后台刷新由 singleflight 去重
 5. **服务地址动态化**：前端代码块中所有配置命令里的服务地址，必须用 `window.location.origin` 动态生成，不能写死
 6. **Token 安全**：数据库只存 token 的 hash（bcrypt 或 SHA-256），明文只在生成时展示一次
 7. **SQLite 并发**：开启 WAL 模式（`PRAGMA journal_mode=WAL`），避免写锁争用
@@ -1108,33 +1097,33 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 - [Gin 文档](https://gin-gonic.com/docs/)
 - [GORM 文档](https://gorm.io/docs/)
 - [TanStack Query 文档](https://tanstack.com/query/latest)
-- [shadcn/ui 文档](https://ui.shadcn.com/)
 
 ---
 
-## 十一、项目现状快照（2026-07-08 更新）
+## 十一、项目现状快照（2026-07-10 更新）
 
-> 本节记录项目深度审查的结论，供后续开发决策参考。上次更新：2026-07-08（战略与路线图以 `docs/DIRECTION.md` + ADR-0004 为权威）。
+> 本节记录项目深度审查的结论，供后续开发决策参考。上次更新：2026-07-10（战略与路线图以 `docs/DIRECTION.md` + ADR-0004 为权威）。
 
 ### 11.1 规模统计
 
-- ~28,500 行 Go 代码（含测试）；48 个 Go 测试文件
-- 前端 68 个 TSX/TS 文件，~12,800 行；i18n en/zh 各 621 键（同步）
-- **15 个适配器**已实现（14 生态 + Docker Registry + Hugging Face）
-- 23 个 GORM 模型（models.go 20 + quarantine.go 3）；CLI 13 个命令（serve/start/stop/status/doctor/init-agent/prompt/version/activate/warmup/flush/backup/restore）
+- ~31,800 行 Go 代码（含测试）；56 个 Go 测试文件、334 个 `Test*`
+- 前端 66 个 TSX/TS 文件，~13,200 行；i18n en/zh 各 655 键（同步）
+- **15 个 install surfaces**：14 个表驱动常规 adapter（含 Hugging Face）+ 独立 Docker OCI `/v2/`
+- 27 个 GORM 模型；CLI 13 个命令（serve/start/stop/status/doctor/init-agent/prompt/version/activate/warmup/flush/backup/restore）
 - **quarantine 子系统**（`internal/quarantine/`，~3,400 行含测试）：最小发布年龄隔离 + 审批流 + 审计事件 + Webhook，2026-07 上线（T1/1–T1/7 提交系列）
-- **每生态独立 Docker E2E**：`testground/docker-<eco>/Dockerfile`，`make test-docker-<eco>` 单独跑，`make test-docker-all` 串跑（Docker Registry 因需 dind 单独 opt-in：`make test-docker-docker`）
+- **blocklist + tamper detection** 已落到 `master`，列在 `CHANGELOG.md` 的 Unreleased
+- **真实客户端 Docker E2E**：`make test-docker-all` 覆盖 13 个非 Docker 生态（Alpine 尚缺）；Docker Registry 因需 dind 单独 opt-in
 - 设计 spec 文档（`docs/specs/`）+ 审查报告（`docs/reviews/`）+ 术语表（`CONTEXT.md`）+ ADR-0001~0004 + 战略文档 `docs/DIRECTION.md`
 
 ### 11.2 架构优势
 
 - **Adapter 模式**：接口只有 `Register()` + `Type()`，新增生态不碰核心代码
 - **Stale-While-Revalidate 缓存**：过期不删除、后台异步刷新、上游故障降级返回旧缓存
-- **Singleflight 防击穿**：同一 key 并发请求只回源一次
+- **并发 miss 防击穿**：自研 inflight 让同一 key 并发请求只回源一次；后台刷新用 singleflight
 - **流式传输**：上游响应通过 `countingReader` 直接流向 `storage.Put`，不做内存缓冲
 - **依赖注入**：`router.go` 的 `Deps` 结构体传递所有依赖，无全局变量
-- **表驱动初始化**：`server.go` 使用 `ecosystemDef` 表 + 循环注册 12 个生态
-- **前端完成度高**：React 19 + TanStack Query + i18n + 暗色主题 + Stripe 风格设计系统
+- **表驱动初始化**：`server.go` 使用 `ecosystemDef` 表 + 循环注册 14 个常规生态
+- **前端完成度高**：React 19 + TanStack Query + i18n + 暗色主题 + Instrument 设计系统
 
 ### 11.3 已修复的技术债
 
@@ -1162,8 +1151,8 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 | Selector 读 `u.Healthy` 未加锁    | 中     | `selector.go` 无锁读与 Report/health check 加锁写并存，存在数据竞争   |
 | apt handler 硬编码剥 `/apt` 前缀  | 中     | `/p/:slug/apt` 项目路由下疑似会算错上游路径（未验证）                 |
 | license 任意非空 key 即激活 Pro   | 中     | Lemon Squeezy 校验已随 Enterprise 合同制转向移除，无远端验证          |
-| i18n key 无编译时校验             | 低     | en.ts 与 zh.ts 目前同步（621 key），但缺少自动检查机制                |
-| quarantine Gate 层无 HTTP 级测试  | 低     | checker/resolver 单测充分，composer dist 有集成测试，其余 adapter 的 Gate 接线无 HTTP 级断言 |
+| 前端 ESLint 基线为红               | 中     | `npm run lint` 当前 137 errors / 1 warning；CI 只跑 type-check、build、i18n audit |
+| 年龄隔离 Gate 缺 HTTP 级测试       | 低     | checker/resolver 单测充分；blocklist/tamper 有集成测试，但年龄 gate 的 adapter 接线仍缺 HTTP 断言 |
 | 5 个生态发布时间用 Last-Modified 近似 | 低  | maven/helm/conda/alpine/docker 无发布时间 API，用制品 Last-Modified 兜底 |
 | Docker Registry E2E 需手动 opt-in | 低     | `test-docker-docker` 需 dind/特权，默认不进 all       |
 | Docker token 缓存非持久化         | 低     | 重启后丢失，影响首次请求延迟（~1s），非功能性问题                     |
@@ -1173,7 +1162,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 ### 11.5 定位（2026-06-30 ADR-0004 之后）
 
-不再按"更轻的 Nexus"做竞品对比。定位是**供应链执行层**：与 Artifact Keeper / Nexus 共存（README 甚至主动推荐它们做通用 registry），Depsilo 作为前置隔离墙串联部署（chainable proxy）。差异化 = 只做"唯有 serve-path 代理才能做"的事：最小发布年龄隔离（已上线）、恶意包封锁、CRA SBOM、freeze 快照、篡改检测；卖点是"组织级强制 + 审计"，而非生态数量或速度。GTM 姿态："honesty as positioning"（详见 `docs/DIRECTION.md`、`docs/research/2026-06-30-competitive-landscape.md`）。
+不再按"更轻的 Nexus"做竞品对比。定位是**供应链执行层**：与 Artifact Keeper / Nexus 共存（README 甚至主动推荐它们做通用 registry），Depsilo 作为前置隔离墙串联部署（chainable proxy）。差异化 = 只做"唯有 serve-path 代理才能做"的事：最小发布年龄隔离、恶意包封锁、篡改检测均已落地；下一步是 freeze 快照和 CRA 完整 SBOM。卖点是"组织级强制 + 审计"，而非生态数量或速度。GTM 姿态："honesty as positioning"（详见 `docs/DIRECTION.md`、`docs/research/2026-06-30-competitive-landscape.md`）。
 
 ### 11.6 路线图优先级
 
@@ -1181,14 +1170,14 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 1. ~~修复 cache manager 大文件内存问题~~ ✅ 已完成（`countingReader` 流式写入）
 2. ~~Docker Registry 代理完善~~ ✅ 已完成（`docker pull` 验证通过，修复 Cloudflare UA 拦截）
-3. ~~端到端测试~~ ✅ 已完成（**12 生态 Makefile-driven Docker E2E**，`make test-docker-all` 一键串跑；Docker Registry 单独 `make test-docker-docker` opt-in）
+3. ~~端到端测试~~ ✅ 已完成（**13 个非 Docker 生态**由 `make test-docker-all` 串跑，Alpine 尚缺；Docker Registry 单独 opt-in）
 4. ~~修复 fresh clone 不可 build 的 P0 bug~~ ✅ 已完成（commit a647104，rescue `internal/server/server.go` + 删 dead copy + 修 .gitignore 过宽规则）
 
 **P1（应该做）：**
 
 1. ~~带宽/流量统计仪表盘~~ ✅ 已完成（后端聚合 API + 前端 5 图表 + Dashboard 摘要，审查时发现已实现）
-2. 高可用部署文档（PostgreSQL + S3 + 多实例）
-3. ~~CLI 工具（`depsilo status` / `depsilo cache warmup` / `depsilo doctor`）~~ ✅ 已完成（`internal/cli/` 9 命令 + `doctor` 端到端自检带颜色 + JSON + 退出码）
+2. 高可用已降级：当前仅 SQLite；先实现 PostgreSQL 才能编写 PostgreSQL + S3 + 多实例指南
+3. ~~CLI 工具（`depsilo status` / `depsilo cache warmup` / `depsilo doctor`）~~ ✅ 已完成（`internal/cli/` 13 个命令 + `doctor` 端到端自检带颜色 + JSON + 退出码）
 4. ~~macOS menu-bar app~~ ✅ 已完成（`cmd/depsilo-tray/` + `internal/tray/` + `fyne.io/systray`；`make app-macos` 打 .app；LSUIElement 让 app 只在状态栏，无 Dock 图标；菜单含实时状态轮询、Open Admin / Portal、Run Doctor → osascript 通知、Quit）
 5. ~~Linux tray 桌面集成~~ ✅ 已完成（`make install-linux` 装到 `~/.local/bin` + `.desktop` 应用菜单 + 自动渲染 icon；`make autostart-linux` 开机自启 symlink；同一 tray 二进制跨平台。GNOME on Wayland 需装 [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/)）
 
@@ -1206,7 +1195,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 - Wails 桌面版：投入产出比低，维护成本高（已被 menu-bar app 路线覆盖，更轻量）
 - ~~License Key 系统~~ 已落地简化版（任意非空 key 激活 + 14 天试用，无远端校验）
 
-> **2026-06-30 起，前瞻路线图以 `docs/DIRECTION.md` 的 T1/T2 build order 为准**（恶意包 blocklist、CRA SBOM、freeze 快照、篡改检测等执行原语）；本节仅保留历史勾选记录。
+> **2026-06-30 起，前瞻路线图以 `docs/DIRECTION.md` 的 T1/T2 build order 为准**。恶意包 blocklist 与篡改检测已完成；当前剩余重点是签名发布、freeze 快照和 CRA 完整 SBOM。本节仅保留历史记录。
 
 ### 11.7 商业化现状（2026-06-28 定价重置后）
 
@@ -1214,7 +1203,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 | 开源版（免费）                               | Pro 版（付费，Enterprise 合同制）  |
 | -------------------------------------------- | ---------------------------------- |
-| 全部 15 个适配器代理 + 缓存                  | 多项目工作区（Projects）           |
+| 14 个常规 adapter + Docker OCI（15 个 install surfaces）+ 缓存 | 多项目工作区（Projects） |
 | 审计日志 / 包规则 / 安全扫描 / 隔离+审批流   | 每项目 SBOM 导出                   |
 | Webhook 通知、带宽报表、CLI、托盘应用        | 优先技术支持                       |
 
@@ -1230,7 +1219,7 @@ Claude Code 应按以下顺序实现，每完成一步确保可运行后再进�
 
 - README 需要 GIF/视频展示 "docker run → pip install 成功" 全流程（30 秒内）
 - 目标渠道：Awesome 列表、Hacker News、Reddit r/selfhosted
-- Docker Hub 一键部署：`docker run -p 8080:8080 depsilo/depsilo` 必须能直接跑
+- Docker Hub 一键部署：`docker run -p 23333:23333 depsilo/depsilo` 必须能直接跑
 
 ---
 

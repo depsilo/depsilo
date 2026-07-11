@@ -79,7 +79,7 @@ type Registry map[string]Resolver
 // so a hung upstream can't pin a goroutine forever.
 //
 // The User-Agent identifies "Depsilo/<version>" honestly — per
-// docs/adr/0003 the tool is a self-hosted supply-chain control point
+// docs/adr/0003 the tool is a self-hosted supply-chain enforcement layer
 // and that posture only works if we don't try to look like something
 // else when we phone home for metadata.
 func NewRegistry() Registry {

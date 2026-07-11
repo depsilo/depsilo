@@ -54,7 +54,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
           labels: |
             org.opencontainers.image.title=Depsilo
-            org.opencontainers.image.description=Lightweight self-hosted dependency cache for pip, apt, npm and more
+            org.opencontainers.image.description=Supply-chain enforcement proxy for 14 ecosystems and Docker OCI
             org.opencontainers.image.url=https://depsilo.com
             org.opencontainers.image.source=https://github.com/depsilo/depsilo
             org.opencontainers.image.licenses=MIT
@@ -91,7 +91,7 @@ jobs:
       # for, image SBOM = what ran. Both are attached to the GitHub
       # Release for the same tag.
       #
-      # Un-signed in v0.7.x; cosign-attest layers on top once T0 #2
+      # Currently unsigned; cosign-attest layers on top once T0 #2
       # (signed releases) lands. The image is scanned only once even
       # though the manifest is multi-arch — Syft resolves to a single
       # image reference here; per-arch SBOMs can come later if a

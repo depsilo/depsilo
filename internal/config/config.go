@@ -31,8 +31,8 @@ type Config struct {
 	Security                   SecurityConfig     `mapstructure:"security"`
 	ExtraIndexes               []ExtraIndexConfig `mapstructure:"extra_indexes"`
 	Webhooks                   []WebhookConfig    `mapstructure:"webhooks"`
-	// SupplyChain: minimum-release-age quarantine + (future) malicious
-	// blocklist. The struct itself lives in internal/quarantine to keep
+	// SupplyChain: minimum-release-age quarantine, malicious blocklist,
+	// and tamper detection. The policy struct lives in internal/quarantine to keep
 	// duration parsing + allow-list semantics next to the code that
 	// consumes them; this config carries the raw operator-facing shape.
 	SupplyChain SupplyChainConfig `mapstructure:"supply_chain"`
@@ -40,9 +40,9 @@ type Config struct {
 
 // SupplyChainConfig is the TOML/YAML shape the operator writes. It
 // intentionally mirrors quarantine.Config field-for-field — we don't
-// re-export it directly so that future supply-chain features (Task 2
-// blocklist, freeze, tamper detection) can grow their own sub-blocks
-// here without re-shaping the quarantine package's public API.
+// re-export it directly so blocklist, tamper detection, and future
+// freeze/snapshot features can own sub-blocks without reshaping the
+// quarantine package's public API.
 type SupplyChainConfig struct {
 	MinReleaseAge map[string]string `mapstructure:"min_release_age"`
 	Mode          string            `mapstructure:"mode"`
@@ -68,8 +68,8 @@ type BlocklistConfig struct {
 }
 
 // TamperConfig is [supply_chain.tamper_detection] (DIRECTION T1).
-// Enabled defaults to true; disabling detaches the recorder for zero
-// overhead.
+// Enabled defaults to true; disabling detaches persistence, comparison,
+// and alerting. The shared storage reader still computes its streaming hash.
 type TamperConfig struct {
 	Enabled *bool `mapstructure:"enabled"`
 	// ImmutableThresholdSeconds overrides the TTL at/above which an
@@ -110,7 +110,7 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Driver string `mapstructure:"driver"` // sqlite | postgres
+	Driver string `mapstructure:"driver"` // sqlite (the only implemented driver)
 	DSN    string `mapstructure:"dsn"`
 }
 

@@ -58,7 +58,7 @@ jobs:
       # Captures *intended* dependencies — for the actually-deployed
       # runtime image, see the image-level SBOM in docker-publish.yml.
       #
-      # SBOMs are released as un-signed artifacts in v0.7.x; cosign-attest
+      # SBOMs are currently released as unsigned artifacts; cosign-attest
       # layers on top once T0 #2 (signed releases) lands. See
       # docs/adr/0003-supply-chain-control-point.md.
       - name: Generate source SBOM (CycloneDX)

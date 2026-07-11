@@ -2,7 +2,7 @@
 // application. The tray polls the locally running Depsilo HTTP server and
 // exposes the minimal "control surface" a self-hosted user expects:
 //
-//	● Healthy · 87.3% hit · v0.6.0      (live status, refreshes every 5s)
+//	● Healthy · 87.3% hit · v0.8.0      (live status, refreshes every 5s)
 //	──────────────────────────────────
 //	Open Admin Panel
 //	Open Portal
@@ -37,9 +37,9 @@ type ShutdownFunc func()
 
 // Options configures the tray.
 type Options struct {
-	BaseURL  string        // e.g. http://localhost:23333
+	BaseURL   string        // e.g. http://localhost:23333
 	PollEvery time.Duration // status refresh interval (default 5s)
-	Shutdown ShutdownFunc  // called when user picks Quit (may be nil for remote-only trays)
+	Shutdown  ShutdownFunc  // called when user picks Quit (may be nil for remote-only trays)
 }
 
 // Setup wires the systray menu items and starts the background status

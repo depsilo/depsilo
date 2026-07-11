@@ -4,8 +4,9 @@
 
 ### Code Quality
 - [ ] `go vet ./...` passes
-- [ ] `go test ./...` all tests pass
-- [ ] `make test-unit` + `make test-integration` pass
+- [ ] `go test ./... -race` passes
+- [ ] `make test-integration` passes
+- [ ] `cd web && npm run type-check` succeeds
 - [ ] `cd web && npm run build` succeeds
 - [ ] i18n audit passes: `python3 scripts/i18n-audit.py`
 
@@ -34,16 +35,26 @@ git push origin vX.Y.Z
 - [ ] CLI archives uploaded (linux/darwin/windows × amd64/arm64)
 - [ ] Checksums uploaded
 - [ ] `install.sh` uploaded to release
-- [ ] Homebrew formula auto-updated in `depsilo/homebrew-tap`
-- [ ] Desktop builds: macOS (.app), Windows (NSIS installer), Linux (.tar.gz)
+- [ ] Source SBOMs uploaded: CycloneDX + SPDX
+- [ ] Container-image SBOMs uploaded: CycloneDX + SPDX
+- [ ] Tray builds uploaded: macOS (`.app` zip) and Linux amd64 (`.tar.gz`)
 
 ### Docker
 - [ ] Docker image pushed to Docker Hub (`depsilo/depsilo`)
 - [ ] Docker image pushed to GHCR (`ghcr.io/depsilo/depsilo`)
-- [ ] Tags: `latest`, `X.Y.Z`, `X.Y`, `X`
+- [ ] Stable release tags published: `X.Y.Z`, `X.Y`, `X`, and metadata-action's automatic `latest`
+- [ ] GHCR package is public and an anonymous `docker pull ghcr.io/depsilo/depsilo:X.Y.Z` succeeds
 
 ### Post-release
 - [ ] `curl -fsSL https://depsilo.com/install.sh | bash` works on clean machine
-- [ ] `brew install depsilo/tap/depsilo` works on macOS
 - [ ] `docker run depsilo/depsilo:latest` starts successfully
 - [ ] Release notes published on GitHub Releases
+
+## Known release gaps
+
+- Release binaries, checksums, container images, and SBOMs are currently unsigned;
+  cosign keyless signing and attestations are not automated yet.
+- Homebrew formula generation runs locally in GoReleaser, but tap publishing is
+  disabled with `skip_upload: true` until `depsilo/homebrew-tap` exists.
+- There is no Windows NSIS/tray installer job; Windows CLI zip archives are published.
+- The GHCR package currently requires authentication; Docker Hub is the anonymous pull path.

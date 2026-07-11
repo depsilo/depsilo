@@ -6,7 +6,7 @@ import (
 )
 
 // RewriteTarballURLs rewrites all dist.tarball URLs in npm packument JSON.
-// baseURL examples: "" (for caching), "http://localhost:8080" (for runtime).
+// baseURL examples: "" (for caching), "http://localhost:23333" (for runtime).
 func RewriteTarballURLs(data []byte, baseURL string) ([]byte, error) {
 	baseURL = strings.TrimRight(baseURL, "/")
 

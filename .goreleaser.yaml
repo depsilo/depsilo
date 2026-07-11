@@ -76,7 +76,7 @@ brews:
       owner: depsilo
       name: homebrew-tap
     homepage: "https://depsilo.com"
-    description: "Lightweight self-hosted dependency cache for 14 package managers"
+    description: "Supply-chain enforcement proxy for 14 ecosystems and Docker OCI"
     license: "MIT"
     install: |
       bin.install "depsilo"

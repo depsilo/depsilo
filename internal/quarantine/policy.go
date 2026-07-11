@@ -8,12 +8,13 @@
 // Strategic rationale: docs/adr/0003-supply-chain-control-point.md.
 //
 // Package layout:
-//   policy.go      — Config struct, mode enum, threshold defaults
-//   allowlist.go   — three-syntax pin matcher (glob / exact / range)
-//   store.go       — GORM models + persistence helpers
-//   timestamps.go  — per-package timestamp lookup cache
-//   resolvers/     — per-ecosystem upstream publish-time fetchers
-//   checker.go     — Decision engine: combines all of the above
+//
+//	policy.go      — Config struct, mode enum, threshold defaults
+//	allowlist.go   — three-syntax pin matcher (glob / exact / range)
+//	store.go       — GORM models + persistence helpers
+//	timestamps.go  — per-package timestamp lookup cache
+//	resolvers/     — per-ecosystem upstream publish-time fetchers
+//	checker.go     — Decision engine: combines all of the above
 package quarantine
 
 import (
@@ -55,7 +56,8 @@ type Policy struct {
 	// already mitigate Shai-Hulud-class poisoning).
 	Default time.Duration
 
-	// Block (default) vs serve_last_eligible.
+	// Block is the only runtime-supported mode. The legacy
+	// serve_last_eligible value is parsed so startup can reject it clearly.
 	Mode Mode
 
 	// Allow rules, parsed once into matcher entries. Applied
@@ -64,9 +66,9 @@ type Policy struct {
 	Allow *AllowList
 
 	// FailClosed controls what happens when the timestamp resolver
-	// cannot determine the package's publish time (upstream returned
-	// 404, parsing failed, network error). True = treat as blocked
-	// (the safer default per locked-in decisions). False = allow.
+	// cannot determine the package's publish time because it was not found
+	// or the resolver is unsupported. True = treat as blocked; false = allow.
+	// A genuine upstream outage always allows with a warning.
 	FailClosed bool
 }
 
@@ -81,15 +83,16 @@ type Config struct {
 	// — see ParseDuration below.
 	MinReleaseAge map[string]string `mapstructure:"min_release_age"`
 
-	// Mode: "block" (default) or "serve_last_eligible".
+	// Mode: only "block" is supported. "serve_last_eligible" is retained as
+	// a recognized legacy value so the checker can return an explicit error.
 	Mode string `mapstructure:"mode"`
 
 	// Allow rules — see AllowList for syntax. Each entry is a
 	// "<ecosystem>:<pattern>" string.
 	Allow []string `mapstructure:"allow"`
 
-	// FailClosed: true (default) → block on missing timestamp.
-	// false → allow.
+	// FailClosed: true (default) blocks not-found/unsupported timestamps;
+	// false allows them. Upstream outages always allow with a warning.
 	FailClosed *bool `mapstructure:"fail_closed"`
 }
 

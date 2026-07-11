@@ -17,15 +17,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   refresh) yields different upstream bytes under the same version,
   depsilo keeps the trusted first-seen copy, refuses to cache the new
   content, and fires a critical `tamper_detected` webhook + audit event.
-  Alert-only (never blocks); the hash is computed free in the existing
-  storage-pump reader; immutability inferred from TTL (no adapter
+  Alert-only (never blocks); the hash is computed in the existing storage-pump
+  reader without a second pass; immutability is inferred from TTL (no adapter
   changes). `[supply_chain.tamper_detection] enabled` (default true).
 - **Known-malicious blocklist (DIRECTION Task 2)**: syncs the OSV
-  malicious-packages dataset (MAL-* advisories) every 6h and refuses
-  matched versions with HTTP 451 `MALICIOUS_BLOCKED` as the quarantine
-  checker's step 0 — threshold-0 ecosystems (go) and the quarantine
+  malicious-packages dataset (MAL-* advisories) for eight ecosystems every 6h
+  and refuses matched versions with HTTP 451 `MALICIOUS_BLOCKED` as the
+  quarantine checker's step 0 — threshold-0 ecosystems (go) and the quarantine
   allow-list cannot bypass it. Audited operator overrides expire after
-  24h and cannot be extended. Critical-severity webhooks on every
+  24h and cannot be extended in place; continued access requires a new
+  audited override. Critical-severity webhooks on every
   block; admin tab (sync status / manual sync / overrides) on the
   Quarantine page; enabled by default with degrade-on-failure (sync
   errors keep blocking on the last good dataset). `mirror_url` +
@@ -40,8 +41,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   (fsevents, @solana/web3.js) are skipped instead of blocking every
   clean release; withdrawn advisories are never imported; NuGet names
   lowercase to match the flat-container protocol; a zero-entry archive
-  can no longer wipe a populated ecosystem; syncs are two-phase (no
-  partial cross-ecosystem commits) and re-entrancy guarded.
+  can no longer wipe a populated ecosystem; all downloads and parsing finish
+  before per-ecosystem transactional replacement, and sync is re-entrancy guarded.
 - Quarantine/malware webhook timestamps were the zero value (rendered
   as year 0001 in chat channels).
 
@@ -54,13 +55,13 @@ enforcement primitive.
 ### Added
 - **Supply-chain quarantine (minimum release age)**: package versions younger
   than a per-ecosystem threshold (npm 7d, most ecosystems 3d, go/apt exempt)
-  are refused with HTTP 451 `QUARANTINED`. Fail-closed by default when publish
-  time can't be determined; allowlist supports glob / exact pin / version
-  ranges; admin approval flow with audited revoke; every decision writes a
-  `QuarantineEvent`; block decisions fire webhooks (Slack / DingTalk / WeCom /
-  Feishu). Wired into 13 adapters via publish-time resolvers (8 real registry
-  APIs + Last-Modified approximation for the rest). Ships enabled with safe
-  defaults — an empty config is protected.
+  are refused with HTTP 451 `QUARANTINED`. Not-found and unsupported publish
+  timestamps fail closed by default; genuine upstream outages allow with a
+  warning. The allowlist supports glob / exact pin / version ranges; blocks,
+  bypasses, and admin approval/revoke actions are audited, while block decisions
+  fire webhooks (Slack / DingTalk / WeCom / Feishu). Wired into 13 adapters via
+  publish-time resolvers (8 real registry APIs + Last-Modified approximation for
+  the rest). Ships enabled with safe defaults — an empty config is protected.
 - **Composer dist mirroring**: `packages.json` now injects a preferred dist
   mirror so archives flow through the proxy — previously Composer downloads
   went straight to GitHub (no cache, no quarantine). Dist serving requires
@@ -90,7 +91,8 @@ enforcement primitive.
 - Heartbeat ticks: red now strictly means *down*; slow-but-alive upstreams
   paint amber, thresholds unified with status dots at 150ms.
 - Integration prompt rewritten for transparency (no hidden product naming);
-  release + image pipelines now dogfood CycloneDX + SPDX SBOMs.
+  release + image pipelines now dogfood CycloneDX + SPDX SBOMs. These artifacts
+  are currently unsigned; cosign keyless signing remains planned.
 
 ### Fixed
 - Integration test suite was fully red: quarantine's fail-closed default
@@ -164,7 +166,7 @@ enforcement primitive.
 
 ### Added
 - HuggingFace Hub adapter — proxies models + datasets via `/huggingface/*`. Supports the full huggingface_hub client surface (huggingface-cli, transformers, datasets) by honoring `HF_ENDPOINT`. Server-side 302 following streams LFS blobs from `cdn-lfs.huggingface.co` inline; clients never see the signed CDN URL.
-- New `[[huggingface.upstreams]]` config block with `hf-mirror.com` + `huggingface.co` defaults (LatencySelector picks the faster).
+- New `[[huggingface.upstreams]]` config block with `hf-mirror.com` + `huggingface.co` defaults; the priority selector uses the first healthy source.
 - Pass-through Authorization handling: gated models work when users provide their own `HF_TOKEN`, but auth'd responses are NOT cached (cross-user safety).
 - New unit tests: 4 keyer + 5 resolver. New integration tests: 7 covering metadata, tree listing, dataset metadata, resolve (200 + 302), HEAD-only, unknown path. New Docker E2E (`make test-docker-huggingface`) using `prajjwal1/bert-tiny`.
 - Portal QuickStart: "Hugging Face" entry with `huggingface-cli` and `transformers` setup snippets.

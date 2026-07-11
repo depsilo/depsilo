@@ -52,13 +52,15 @@ the natural place to enforce them:
 
 ## Where we are (honest)
 
-- **Pre-traction:** ~0 stars/forks, no published releases, `v0.7.1+dev`.
-- **Product surface is broad and well-built:** 14 ecosystems, SBOM, CVE/OSV scanning,
-  multi-upstream with health checks, local/S3 storage, Prometheus, a polished site.
+- **Early distribution:** `v0.8.0` is released; the malicious blocklist and tamper
+  detection have landed on `master` and remain unreleased.
+- **Product surface is broad and well-built:** 14 ecosystems, minimum-age quarantine,
+  malicious-package blocking, tamper alerts, SBOM, CVE/OSV scanning, multi-upstream
+  health checks, local/S3 artifact storage, Prometheus, and a polished site.
 - **The missing 90% is users, trust, and distribution — not features.**
 
 **Implication for engineering:** do **not** add breadth for its own sake. Add the few
-things that (a) make the *control-point* story real and (b) make the tool trustworthy
+things that (a) make the *enforcement-layer* story real and (b) make the tool trustworthy
 enough for a security-conscious buyer.
 
 ---
@@ -82,8 +84,9 @@ on the request path (refuses to serve based on policy — not just scans and rep
 **Security-tool discipline (non-negotiable — we sell trust):**
 - **Transparent by default.** Never ship a feature that hides what the tool did to a
   codebase. (This directly affects T0 below.)
-- **Sign releases. Dogfood** (publish Depsilo's own SBOM). **Always keep a public-registry
-  fallback available.**
+- **Sign releases. Dogfood** (publish Depsilo's own SBOM). **Always keep an explicit
+  public-registry recovery path:** preserve the original setting as a documented
+  rollback, without configuring a parallel source that can bypass a 451 decision.
 
 ---
 
@@ -95,23 +98,27 @@ on the request path (refuses to serve based on policy — not just scans and rep
       "one-prompt AI integration" currently tells the agent **not to write the product
       name/hostname** and to **drop the public-CDN fallback**. For a security-positioned
       tool this pattern-matches to the very attacks we defend against and will repel the
-      buyers we want. Replace with a **transparent** prompt: name Depsilo + the URL, keep
-      the public index as a fallback, make the change reviewable. *(Frontend Quick Start
-      page + the prompt generator; completed 2026-07-02.)*
-- [ ] **Ship real, signed releases.** CI to build, sign (cosign/sigstore), and publish
-      versioned binaries + checksums. There are no published releases today.
-- [ ] **Dogfood SBOM.** Generate + publish Depsilo's own CycloneDX + SPDX SBOM in CI.
+      buyers we want. Replace with a **transparent** prompt: name Depsilo + the URL,
+      preserve the public index as a documented rollback (not a parallel policy bypass),
+      and make the change reviewable. *(Frontend Quick Start page + the prompt generator;
+      completed 2026-07-02.)*
+- [ ] **Sign releases.** CI already publishes versioned binaries, checksums, container
+      images, and SBOMs; add cosign/sigstore signatures and attestations.
+- [x] **Dogfood SBOM.** Source and container-image CycloneDX + SPDX SBOMs are generated
+      and attached to tagged releases. *(Completed 2026-07-09.)*
 
-### T1 — The control-point wedge (the differentiator)
+### T1 — The enforcement-layer wedge (the differentiator)
 
-- [ ] **Minimum release age / quarantine** — flagship. See **Task 1**.
-- [ ] **Known-malicious blocklist** — hard-block malicious (not merely vulnerable)
-      versions. See **Task 2**.
+- [x] **Minimum release age / quarantine** — flagship. See **Task 1**.
+      *(Released in v0.8.0, 2026-07-09.)*
+- [x] **Known-malicious blocklist** — hard-block malicious (not merely vulnerable)
+      versions. See **Task 2**. *(Landed on master 2026-07-09; unreleased.)*
 - [ ] **Freeze / golden snapshot.** A mode that serves only versions in an approved
       snapshot; "promote current cache to snapshot," export/import. Enables reproducible /
       offline builds immune to upstream poisoning.
-- [ ] **Tamper detection.** Persist a content hash per `(package, version)` on first
-      fetch; alert if an already-seen *immutable* version's upstream content later changes.
+- [x] **Tamper detection.** Persist a content hash per immutable artifact on first
+      fetch; alert if its upstream content later changes. *(Landed on master
+      2026-07-10; unreleased.)*
 - [ ] **CRA-mode SBOM export.** Ensure output carries NTIA/CRA minimum elements
       (name+version, supplier, **purl**, **SHA-256** hash, license, dependency
       relationships), is signable, and has a "technical-file" export preset.
@@ -137,10 +144,10 @@ Rebuilding those is now a low-ROI use of time. Updated T2:
       building + maintaining yet another OIDC implementation.
 - [ ] ~~**Multi-node / HA made genuinely easy.**~~ **De-prioritized.** Single-
       node deployment is the realistic target for the enforcement-layer use
-      case (most teams gate behind one proxy). Document the
-      PostgreSQL + S3 + load-balancer pattern when an operator asks; do not
-      ship a managed HA solution until enforcement features are demonstrably
-      ahead of AK.
+      case (most teams gate behind one proxy). SQLite + local/S3 artifact
+      storage is the supported deployment today.
+      PostgreSQL support would need to land before documenting a multi-node
+      database + S3 + load-balancer pattern.
 
 ## First tasks, specced
 
@@ -150,19 +157,19 @@ Rebuilding those is now a low-ROI use of time. Updated T2:
 a configurable threshold, so a freshly-poisoned version cannot enter a build before the
 community catches it.
 
-**Config — per-ecosystem, global default + overrides:**
+**Config — built-in per-ecosystem defaults + explicit overrides:**
 
 ```yaml
 supply_chain:
   min_release_age:
-    default: 0
-    pip: 3d
+    default: 0             # fallback for unknown/future ecosystem keys only
+    pypi: 3d
     npm: 7d
     cargo: 3d
-  mode: block            # block | serve_last_eligible
+  mode: block            # the only implemented mode
   allow:                 # bypass quarantine for trusted pins
     - "npm:internal-*"
-    - "pip:requests==2.32.3"
+    - "pypi:requests==2.32.3"
 ```
 
 **Behavior:**
@@ -170,42 +177,48 @@ supply_chain:
   (npm registry `time[version]`; PyPI JSON `upload_time_iso_8601`; equivalent per
   ecosystem). **Cache the timestamps** — never hammer upstream per request.
 - If `now - publish_time < threshold` and not matched by `allow`:
-  - `block` mode → return a clear, actionable error (which package/version, its age, and
-    how to approve it).
-  - `serve_last_eligible` mode → resolve to the newest version that *is* older than the
-    threshold.
-- Record the event; surface it in the Monitor UI and fire a webhook.
+  - `block` mode → return a clear error with package/version, age, and threshold.
+  - `serve_last_eligible` remains a deferred design option. This build rejects it at
+    startup instead of silently behaving like `block`.
+- Record blocks in the Admin quarantine event stream and fire their webhook. Bypass,
+  approve, revoke, and override actions are audited and visible but do not fire webhooks.
 - **Manual approve:** UI button + API to release a quarantined `(pkg, version)` early
   (adds to the approved set). Audit who/when.
 
-**Edge cases:** missing upstream timestamp → configurable (fail-open, or treat as age 0);
-an exact-pinned lockfile version under quarantine → **fail closed** with an error that
-explains how to approve; pre-release / yanked versions.
+**Edge cases:** not-found/unsupported publish timestamps follow `fail_closed`; a true
+upstream outage always allows with a warning so a registry incident does not halt every
+build. An exact-pinned lockfile version under quarantine fails closed with the same error.
+Pre-release / yanked versions use the same decision path.
 
 **Acceptance:**
-- [ ] Configurable globally and per-ecosystem; `allow` overrides work.
-- [ ] A version published `< threshold` is blocked (or down-resolved) with a clear
+- [x] Configurable for the 13 resolver-backed ecosystems; `allow` overrides work.
+      APT has no gate and Go has no publish-time resolver, so both remain at zero.
+- [x] A version published `< threshold` is blocked with a clear
       message; one `≥ threshold` serves normally.
-- [ ] Approve action releases it immediately and is audited.
-- [ ] Quarantine events appear in Monitor **and** fire a webhook.
-- [ ] Timestamps are cached; no per-request upstream calls.
+- [x] Approve action releases it immediately and is audited.
+- [x] Quarantine decisions appear in the Admin event stream; block events fire a webhook.
+- [x] Timestamps are cached; no per-request upstream calls.
 
 ### Task 2 — Known-malicious blocklist
 
 **Goal:** hard-block versions known to be **malicious** (distinct from merely vulnerable).
 
-- Sync **OSV malicious-packages** + **GitHub Advisory (malware)** on a schedule into a
-  local store keyed by `(ecosystem, package, affected_range)`.
+- Sync the **OSV malicious-packages** dataset (MAL-* advisories, including any GHSA
+  aliases carried by those records) for npm, PyPI, Cargo, RubyGems, Composer, NuGet,
+  Go, and Maven. Store `(source_id, ecosystem, package)` rows with an explicit-version
+  list or all-version marker. Bounded ranges without explicit versions are skipped;
+  range evaluation is not implemented.
 - On request, if matched: refuse with a clear *"known-malicious, blocked"* error and an
   alert — **never serve.** Provide an explicit, **audited** admin override for false
   positives.
-- Surface in Monitor + webhook. Keep entirely separate from CVE handling (CVE =
-  warn/serve; malware = hard block).
+- Surface decisions in the Admin quarantine/blocklist views; block events fire a
+  webhook. Keep entirely separate from CVE handling (CVE = warn/serve; malware =
+  hard block).
 
 **Acceptance:**
-- [ ] Sync runs + refreshes on schedule.
-- [ ] A known-malicious version is blocked end-to-end.
-- [ ] Override is audited; block/override events are visible + alerted.
+- [x] Sync runs + refreshes on schedule.
+- [x] A known-malicious version is blocked end-to-end.
+- [x] Override is audited and visible; block events are visible and alerted.
 
 ---
 
@@ -216,43 +229,49 @@ written are captured here so future-you remembers the rationale. ADR-0003 captur
 the strategic shift itself; the items below are settings within it.
 
 **Integration prompt:** transparent by default (T0 #1). Every config edit names
-Depsilo + the mirror URL in a comment; public-registry fallback stays as a
-documented secondary; the agent must print a diff summary at the end.
+Depsilo + the mirror URL in a comment. Preserve a documented one-line rollback to the
+original registry, but do not configure parallel indexes or all-error fallthrough that
+can bypass enforcement. The agent must print a diff summary at the end.
 
-**Released artifacts (signing currently parked):** when signing returns, the target
-stack is **cosign keyless (OIDC via GitHub Actions)**, signing binaries + checksums
-+ container images + SBOM, distributed via GitHub Releases + GHCR + Docker Hub.
-First signed release will be **v0.8.0** preceded by `v0.8.0-rc.1` for a one-week soak.
+**Released artifacts (signing currently parked):** v0.8.0 shipped binaries, checksums,
+container images, and SBOM attachments without signatures. The target signing stack is
+**cosign keyless (OIDC via GitHub Actions)** for binaries, checksums, container images,
+and SBOMs, distributed via GitHub Releases + GHCR + Docker Hub. Use an RC soak before the
+first signed stable release.
 Reproducibility goal is **deterministic** (`-trimpath`, `-buildvcs=false`, locked
-versions); bit-for-bit reproducible is out of scope for v0.8.x.
+versions); bit-for-bit reproducible is out of scope for v0.x.
 
-**SBOM:** Syft generates **CycloneDX + SPDX** covering Go binary deps, `web/` npm
-deps, **and** the container image. Published as Release attachment **and** at
-`.well-known/sbom/{version}.cdx.json` on depsilo.com. Cosign-attest layered on
-top when signing lands.
+**SBOM:** Syft generates **CycloneDX + SPDX** covering Go module/source deps, `web/` npm
+deps, **and** the container image. Tagged-release workflows upload them as GitHub
+Release attachments. Publishing at `.well-known/sbom/{version}.cdx.json` and
+cosign attestations remain planned.
 
-**T1 Task 1 defaults:** `pip: 3d` · `npm: 7d` · `cargo: 3d` · `go: 0` (Go modules
+**T1 Task 1 defaults:** `pypi: 3d` · `npm: 7d` · `cargo: 3d` · `go: 0` (Go modules
 are immutable + checksum DB already mitigates) · `maven/nuget/rubygems: 3d`.
-Missing upstream timestamp → **fail-closed**. Allow-list supports glob
-(`npm:@scope/internal-*`), exact pin (`pip:requests==2.32.3`), and range
+Not-found/unsupported timestamp → **fail-closed**; upstream outage → allow + warning.
+Allow-list supports glob
+(`npm:@scope/internal-*`), exact pin (`pypi:requests==2.32.3`), and range
 (`npm:react>=18.0.0`). Default mode = `block`. Approve action is admin-only with
 mandatory reason text + audit log entry.
 
-**T1 Task 2 defaults:** data sources = **OSV malicious-packages + GHSA malware**
-(no paid third-party feeds). Sync every 6 hours. Override mechanism is admin-only,
+**T1 Task 2 defaults:** data source = **OSV malicious-packages** (MAL-* advisories;
+no paid third-party feeds or direct GitHub Advisory API sync). Sync every 6 hours.
+Override mechanism is admin-only,
 mandatory reason, **auto-expires in 24h by default** — no permanent whitelist.
 Block response = HTTP 451 with `code: MALICIOUS_BLOCKED`. Matched versions are
-never cached and any existing cache entry is evicted on first match.
+gated before cache lookup, so they are neither served nor newly cached. Existing cache
+bytes remain on disk until LRU or operator cleanup but are unreachable through the gate.
 
 **Governance features go in open-source.** Minimum release age, malicious blocklist,
-SBOM export, OSV scanning, the audit log, the package allow/deny rules engine, and
-the security intelligence dashboard are all open-source product wedges — they must
-be available to everyone running a self-hosted control point.
+OSV scanning, the audit log, the package allow/deny rules engine, and the security
+intelligence dashboard are open-source product wedges. Depsilo's own release SBOMs
+are public; the current runtime per-project SBOM endpoint remains part of the Pro
+multi-project surface. CRA-mode export must make that boundary explicit.
 
-**SSO / RBAC go in open-source.** Updated from the original direction. The "SSO tax"
-pattern damages trust and competitors give it free. Prefer documenting mature reverse
-proxy options over building a shallow in-product SSO layer. Commodity self-hosted
-infrastructure should not distract from enforcement primitives.
+**SSO / RBAC stay external.** This supersedes the original plan to build them in-product.
+The "SSO tax" pattern damages trust, but mature reverse proxies already solve the problem.
+Document oauth2-proxy / Authelia / Pomerium instead of building a shallow OIDC layer;
+commodity self-hosted infrastructure should not distract from enforcement primitives.
 
 **Versioning policy until v1.0:** breaking changes allowed across minor versions;
 config-file backwards compatibility guaranteed within each `v0.x` line.
@@ -280,15 +299,16 @@ feature" insufficient. Pivot:
 
 - Reposition from "lightweight multi-eco control point" → "**supply-chain
   enforcement layer**." Cap ecosystems at 14, focus on enforcement primitives
-  only a proxy on the request path can do: minimum release age (shipped),
-  malicious blocklist (in flight), freeze/snapshot, tamper detection, CRA SBOM,
+  only a proxy on the request path can do: minimum release age, malicious blocklist,
+  and tamper detection (all landed), followed by freeze/snapshot and CRA SBOM,
   SIEM-grade audit + webhook routing.
 - **Drop building SSO/RBAC ourselves.** Recommend operators front depsilo with
   oauth2-proxy / Authelia / Pomerium. "No SSO tax" preserved without
   re-implementing yet another OIDC stack.
 - **De-prioritize HA.** Single-node is the realistic enforcement-layer deploy.
-  Document PostgreSQL + S3 + LB pattern on request; don't ship managed HA until
-  enforcement features are demonstrably ahead of AK.
+  SQLite is the only database backend today. Add PostgreSQL support before documenting
+  a PostgreSQL + S3 + LB pattern; don't ship managed HA until enforcement features are
+  demonstrably ahead of AK.
 - **Coexistence over competition.** README + landing should acknowledge AK by
   name and recommend it for general artifact storage. Position depsilo as
   optionally deployable **in front of** AK / Nexus / Artifactory as a
@@ -303,6 +323,6 @@ feature" insufficient. Pivot:
 2. Order: **T0 first** (small, high trust-value) → **Task 1** → **Task 2**. Keep PRs small
    and reversible; show a short plan before any large change.
 3. Hold to the **security-tool discipline**: transparent by default, signed, dogfooded,
-   public fallback preserved.
+   and preserve an explicit public-registry recovery path.
 4. **Out of scope for you (founder TODOs):** getting the first 10 users, launch
    content, directory listings. Don't spend cycles here.
