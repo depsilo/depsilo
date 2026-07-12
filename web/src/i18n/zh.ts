@@ -596,6 +596,7 @@ const zh = {
       quickStart: '快速开始',
       monitor: '监控',
       adminPanel: '管理后台 →',
+      adminShort: '管理',
       backLink: '← 门户',
       online: '在线',
       offline: '离线',

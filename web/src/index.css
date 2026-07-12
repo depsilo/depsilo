@@ -954,6 +954,10 @@ a:focus:not(:focus-visible) {
   }
 }
 
+.portal-admin-mobile-label {
+  display: none;
+}
+
 @media (max-width: 560px) {
   .portal-theme-control,
   .portal-status-pill {
@@ -964,11 +968,18 @@ a:focus:not(:focus-visible) {
     display: none !important;
   }
   .portal-admin-link {
-    width: 40px;
+    width: auto;
+    min-width: 48px;
     height: 40px;
-    padding: 0 !important;
+    padding: 0 9px !important;
     justify-content: center;
     flex-shrink: 0;
+  }
+  .portal-admin-link .icon {
+    display: none;
+  }
+  .portal-admin-mobile-label {
+    display: inline;
   }
   .quickstart-hero {
     padding: 22px !important;

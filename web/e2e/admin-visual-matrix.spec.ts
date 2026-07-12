@@ -37,6 +37,7 @@ test('Portal mobile header keeps Admin navigation reachable', async ({ page }) =
 
   const adminLink = page.getByRole('link', { name: /管理后台/ })
   await expect(adminLink).toBeVisible()
+  await expect(adminLink.getByText('管理', { exact: true })).toBeVisible()
   const box = await adminLink.boundingBox()
   expect(box?.width).toBeGreaterThanOrEqual(40)
   expect(box?.height).toBeGreaterThanOrEqual(40)

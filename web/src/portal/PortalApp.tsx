@@ -309,6 +309,7 @@ export default function PortalAppV2() {
             >
               <Icon name="admin_panel_settings" size="sm" />
               <span className="portal-admin-label">{t('portal.adminPanel')}</span>
+              <span className="portal-admin-mobile-label">{t('portal.adminShort')}</span>
             </a>
           </div>
         </div>
