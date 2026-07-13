@@ -38,6 +38,23 @@ test('trend range exposes its selected state', async ({ page }) => {
   await expect(group.getByRole('button', { name: '1 小时' })).toHaveAttribute('aria-pressed', 'false')
 })
 
+test('trend metric selector exposes button and pressed semantics', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/admin')
+  const group = page.getByRole('group', { name: 'Trend metric' })
+  const metrics = ['Requests', 'Bandwidth', 'Latency', 'Errors'].map(name => (
+    group.getByRole('button', { name, exact: true })
+  ))
+  await expect(group).toBeVisible()
+  for (const metric of metrics) await expect(metric).toHaveAttribute('type', 'button')
+
+  await expect(metrics[0]).toHaveAttribute('aria-pressed', 'true')
+  await expect(metrics[2]).toHaveAttribute('aria-pressed', 'false')
+  await metrics[2].click()
+  await expect(metrics[0]).toHaveAttribute('aria-pressed', 'false')
+  await expect(metrics[2]).toHaveAttribute('aria-pressed', 'true')
+})
+
 test('trend series use linear paths', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints },

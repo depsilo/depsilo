@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { adminApi } from '@/lib/api'
@@ -91,6 +91,7 @@ const TREND_REFRESH_INTERVAL: Record<TrendsRange, number> = {
 export default function DashboardV2() {
   const { t } = useTranslation()
   const [range, setRange] = useState<TrendsRange>('1h')
+  const [retainedTrendPoints, setRetainedTrendPoints] = useState<RawTrendPoint[]>()
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'dashboard'],
@@ -102,6 +103,7 @@ export default function DashboardV2() {
   const trendsQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'trends', range],
     queryFn: () => adminApi.getDashboardTrends(range),
+    placeholderData: keepPreviousData,
     refetchInterval: TREND_REFRESH_INTERVAL[range],
     refetchOnWindowFocus: 'always',
     retry: false,
@@ -143,7 +145,8 @@ export default function DashboardV2() {
   const prev24h = dashboard?.prev_24h ?? { total_requests: 0, hit_count: 0, hit_rate: 0, bytes_served: 0, avg_latency_ms: 0 }
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
-  const rawTrendPoints: RawTrendPoint[] = trendsQuery.data?.data.points ?? []
+  const rawTrendPoints: RawTrendPoint[] = trendsQuery.data?.data.points ?? retainedTrendPoints ?? []
+  const hasTrendData = trendsQuery.data !== undefined || retainedTrendPoints !== undefined
   const bandwidthData = bandwidthQuery.data
   const bandwidthSummary = bandwidthData?.data?.summary
   const bandwidthDaily = bandwidthData?.data?.daily || []
@@ -157,6 +160,11 @@ export default function DashboardV2() {
     if (hours > 0) return `${hours}${t('bandwidth.hours')} ${minutes % 60}${t('bandwidth.minutes')}`
     if (minutes > 0) return `${minutes}${t('bandwidth.minutes')} ${seconds % 60}${t('bandwidth.seconds')}`
     return `${seconds}${t('bandwidth.seconds')}`
+  }
+
+  function handleTrendRangeChange(nextRange: TrendsRange) {
+    if (trendsQuery.data) setRetainedTrendPoints(trendsQuery.data.data.points)
+    setRange(nextRange)
   }
 
   const metrics = [
@@ -220,20 +228,20 @@ export default function DashboardV2() {
       )}
 
       {/* ── Trends — 4 tabs × 4 ranges, browser-tz X axis ───── */}
-      <div data-query-key="dashboard-trends" className="space-y-3">
-        {trendsQuery.isPending ? (
+      <div data-query-key="dashboard-trends" aria-busy={trendsQuery.isFetching} className="space-y-3">
+        {trendsQuery.isPending && !hasTrendData ? (
           <div aria-busy="true"><div aria-hidden="true" className="h-52 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" /></div>
-        ) : trendsQuery.isError && !trendsQuery.data ? (
+        ) : trendsQuery.isError && !hasTrendData ? (
           <QueryErrorState
             message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(trendsQuery.error).message}
             onRetry={() => { void trendsQuery.refetch() }}
           />
         ) : (
           <>
-            {trendsQuery.data && trendsQuery.isRefetchError && (
+            {hasTrendData && trendsQuery.isError && (
               <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void trendsQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
             )}
-            <TrendsCard raw={rawTrendPoints} range={range} onRangeChange={setRange} />
+            <TrendsCard raw={rawTrendPoints} range={range} onRangeChange={handleTrendRangeChange} />
           </>
         )}
       </div>

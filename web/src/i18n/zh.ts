@@ -108,6 +108,7 @@ const zh = {
       bytesMiss: '未命中流量',
       errorRate: '错误率',
       msUnit: '毫秒',
+      trendMetricGroup: '趋势指标',
       trendTabRequests: '请求量',
       trendTabBandwidth: '带宽',
       trendTabLatency: '延迟',

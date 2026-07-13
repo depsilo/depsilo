@@ -116,6 +116,101 @@ async function settlePausedApp(page: Page) {
   await page.clock.runFor(1_700)
 }
 
+function trendPoints(count: number, requestBase: number) {
+  return Array.from({ length: count }, (_, index) => {
+    const requests = requestBase + index
+    const misses = 2 + (index % 2)
+    const hits = requests - misses
+    return {
+      bucket: 1783641600 + index * 300,
+      date: '2026-07-10',
+      requests,
+      hits,
+      misses,
+      hit_rate: hits / requests,
+      bytes_served: requests * 128,
+      bytes_hit: hits * 128,
+      bytes_miss: misses * 128,
+      sum_latency_ms: requests * (10 + index),
+      avg_latency_ms: 10 + index,
+      errors: index % 2,
+    }
+  })
+}
+
+test('Dashboard trends keep the previous chart while an uncached range loads', async ({ page }) => {
+  const initialPoints = trendPoints(4, 12)
+  const nextPoints = trendPoints(6, 24)
+  const requestStarted = deferred<void>()
+  const response = deferred<{ points: typeof nextPoints }>()
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard/trends': (request: Request) => {
+      const range = new URL(request.url()).searchParams.get('range')
+      if (range !== '24h') return { points: initialPoints }
+      requestStarted.resolve()
+      return response.promise
+    },
+  })
+
+  await page.goto('/admin')
+  const trends = page.locator('[data-query-key="dashboard-trends"]')
+  const chart = trends.locator('.recharts-wrapper')
+  const ranges = page.getByRole('group', { name: /活动趋势|Activity Trend/ })
+  const nextRange = ranges.getByRole('button', { name: /24 小时|24h/i })
+  await expect(chart).toBeVisible()
+  await nextRange.click()
+  await requestStarted.promise
+
+  await expect(chart).toBeVisible()
+  await expect(ranges).toBeVisible()
+  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
+  await expect(trends).toHaveAttribute('aria-busy', 'true')
+  const previousPath = await chart.locator('.recharts-area-curve').first().getAttribute('d')
+  expect(previousPath?.match(/L/g) ?? []).toHaveLength(initialPoints.length - 1)
+
+  response.resolve({ points: nextPoints })
+  await expect(trends).toHaveAttribute('aria-busy', 'false')
+  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(async () => {
+    const path = await chart.locator('.recharts-area-curve').first().getAttribute('d')
+    return path?.match(/L/g)?.length ?? 0
+  }).toBe(nextPoints.length - 1)
+})
+
+test('Dashboard trends keep the previous chart and warn when an uncached range fails', async ({ page }) => {
+  const initialPoints = trendPoints(4, 12)
+  const requestStarted = deferred<void>()
+  const response = deferred<MockHttpResponse>()
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard/trends': (request: Request) => {
+      const range = new URL(request.url()).searchParams.get('range')
+      if (range !== '24h') return { points: initialPoints }
+      requestStarted.resolve()
+      return response.promise
+    },
+  })
+
+  await page.goto('/admin')
+  const trends = page.locator('[data-query-key="dashboard-trends"]')
+  const chart = trends.locator('.recharts-wrapper')
+  const ranges = page.getByRole('group', { name: /活动趋势|Activity Trend/ })
+  const nextRange = ranges.getByRole('button', { name: /24 小时|24h/i })
+  await expect(chart).toBeVisible()
+  await nextRange.click()
+  await requestStarted.promise
+  await expect(chart).toBeVisible()
+  await expect(trends).toHaveAttribute('aria-busy', 'true')
+
+  response.resolve({ status: 500, body: { code: 'FAILED', message: 'fixture range failure' } })
+  await expect(trends).toHaveAttribute('aria-busy', 'false')
+  await expect(chart).toBeVisible()
+  await expect(ranges).toBeVisible()
+  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
+  await expect(trends).toContainText(/陈旧|已过期|stale/i)
+  const retainedPath = await chart.locator('.recharts-area-curve').first().getAttribute('d')
+  expect(retainedPath?.match(/L/g) ?? []).toHaveLength(initialPoints.length - 1)
+})
+
 test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
   await pausePollingClock(page)
   const calls: Record<string, number> = {}

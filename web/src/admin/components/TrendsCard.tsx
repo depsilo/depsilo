@@ -171,13 +171,19 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
         action={
           <div className="flex flex-wrap items-center gap-4">
             {/* Tabs */}
-            <div className="flex flex-wrap items-center gap-1">
+            <div
+              className="flex flex-wrap items-center gap-1"
+              role="group"
+              aria-label={t('dashboard.trendMetricGroup')}
+            >
               {TABS.map(tb => {
                 const active = tab === tb.value
                 return (
                   <button
                     key={tb.value}
+                    type="button"
                     onClick={() => setTab(tb.value)}
+                    aria-pressed={active}
                     className="whitespace-nowrap rounded-[4px] px-2.5 py-1 text-[11px] font-[500] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] cursor-pointer"
                     style={{
                       background: active ? 'var(--bg-soft)' : 'transparent',

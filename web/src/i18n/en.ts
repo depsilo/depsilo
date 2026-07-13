@@ -108,6 +108,7 @@ const en = {
       bytesMiss: 'Miss Bytes',
       errorRate: 'Error Rate',
       msUnit: 'ms',
+      trendMetricGroup: 'Trend metric',
       trendTabRequests: 'Requests',
       trendTabBandwidth: 'Bandwidth',
       trendTabLatency: 'Latency',
