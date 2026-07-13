@@ -18,10 +18,18 @@ type DashboardHandler struct {
 	pools      map[string]*upstream.Pool
 	ecosystems []string
 	useRollup  bool
+	now        func() time.Time
 }
 
 func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pools map[string]*upstream.Pool, ecosystems []string, useRollup bool) *DashboardHandler {
-	return &DashboardHandler{db: database, storage: storage, pools: pools, ecosystems: ecosystems, useRollup: useRollup}
+	return &DashboardHandler{
+		db:         database,
+		storage:    storage,
+		pools:      pools,
+		ecosystems: ecosystems,
+		useRollup:  useRollup,
+		now:        time.Now,
+	}
 }
 
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
@@ -171,33 +179,45 @@ func (h *DashboardHandler) aggWindow(from, to time.Time) aggSnapshot {
 	return out
 }
 
-// GetTrends powers the dashboard's hit/miss chart. Four ranges, each backed
-// by the source that best fits its granularity:
-//
-//	1h   — 12 × 5-minute buckets, raw access_logs (sub-hour, can't use rollup)
-//	24h  — 24 × 1-hour buckets, access_log_hourly (live, includes "now" hour)
-//	7d   — 168 × 1-hour buckets, access_log_hourly (frontend re-buckets to days in browser TZ)
-//	30d  — 720 × 1-hour buckets, same
-//
-// The 7d/30d paths return hourly granularity rather than collapsing GROUP BY
-// date so the frontend can re-aggregate by the user's local-timezone day
-// boundaries. The response carries every dimension a tab could want
-// (hits / misses / bytes_hit / bytes_miss / sum_latency / errors) so tab
-// switching on the frontend is instant — no refetch.
+type trendSpec struct {
+	buckets  int
+	interval time.Duration
+}
+
+var trendSpecs = map[string]trendSpec{
+	"1h":  {buckets: 360, interval: 10 * time.Second},
+	"24h": {buckets: 288, interval: 5 * time.Minute},
+	"7d":  {buckets: 336, interval: 30 * time.Minute},
+	"30d": {buckets: 360, interval: 2 * time.Hour},
+}
+
+var sevenDayHourlyFallbackSpec = trendSpec{buckets: 168, interval: time.Hour}
+
+// GetTrends returns a fixed-size UTC-aligned series. The current unfinished
+// bucket is always the final point, and absent buckets are represented by
+// zero-valued points.
 func (h *DashboardHandler) GetTrends(c *gin.Context) {
 	rangeParam := c.DefaultQuery("range", "1h")
+	spec, ok := trendSpecs[rangeParam]
+	if !ok {
+		rangeParam = "7d"
+		spec = trendSpecs[rangeParam]
+	}
 
 	var points []trendPoint
-
-	switch rangeParam {
-	case "1h":
-		points = h.trends1h()
-	case "24h":
-		points = h.trendsHourly(24)
-	case "30d":
-		points = h.trendsHourly(24 * 30)
-	default: // "7d"
-		points = h.trendsHourly(24 * 7)
+	if !h.useRollup {
+		points = h.trendsRaw(spec)
+	} else {
+		switch rangeParam {
+		case "1h":
+			points = h.trendsRaw(spec)
+		case "24h":
+			points = h.trendsFiveMinutely(spec)
+		case "30d":
+			points = h.trendsHourlyGrouped(spec)
+		default: // "7d"
+			points = h.trendsSevenDays(spec)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"points": points})
@@ -222,9 +242,7 @@ type trendPoint struct {
 	Errors       int64   `json:"errors"`
 }
 
-// trendsHourBucket is the union row both 1h-resolution (5-min) and
-// hour-resolution paths Scan into. SQL projects every dimension the chart
-// tabs can render so tab switching is a frontend-only operation.
+// trendHourBucket is the common aggregate row all three sources produce.
 type trendHourBucket struct {
 	Bucket       int64
 	Requests     int64
@@ -234,6 +252,16 @@ type trendHourBucket struct {
 	BytesMiss    int64
 	SumLatencyMs int64
 	Errors       int64
+}
+
+func (b *trendHourBucket) add(other trendHourBucket) {
+	b.Requests += other.Requests
+	b.Hits += other.Hits
+	b.Misses += other.Misses
+	b.BytesHit += other.BytesHit
+	b.BytesMiss += other.BytesMiss
+	b.SumLatencyMs += other.SumLatencyMs
+	b.Errors += other.Errors
 }
 
 func (b trendHourBucket) toPoint(bucketStart time.Time) trendPoint {
@@ -256,16 +284,51 @@ func (b trendHourBucket) toPoint(bucketStart time.Time) trendPoint {
 	return p
 }
 
-// trends1h returns 12 five-minute buckets ending at the current minute,
-// scanned from raw access_logs. The rollup tables key at hour granularity
-// so they can't power this view; raw access_logs at ~5 minutes of data per
-// query is fast even on busy servers.
-func (h *DashboardHandler) trends1h() []trendPoint {
-	const buckets = 12
-	const intervalSec = 300
-	now := time.Now().UTC()
-	since := now.Add(-buckets * 5 * time.Minute)
+type trendWindow struct {
+	now   time.Time
+	start time.Time
+	end   time.Time
+	spec  trendSpec
+}
 
+func makeTrendWindow(now time.Time, spec trendSpec) trendWindow {
+	now = now.UTC()
+	end := now.Truncate(spec.interval)
+	return trendWindow{
+		now:   now,
+		start: end.Add(-time.Duration(spec.buckets-1) * spec.interval),
+		end:   end,
+		spec:  spec,
+	}
+}
+
+func (h *DashboardHandler) trendNow() time.Time {
+	if h.now == nil {
+		return time.Now().UTC()
+	}
+	return h.now().UTC()
+}
+
+func buildTrendPoints(window trendWindow, rows []trendHourBucket) []trendPoint {
+	lookup := make(map[int64]trendHourBucket, len(rows))
+	for _, row := range rows {
+		lookup[row.Bucket] = row
+	}
+
+	out := make([]trendPoint, 0, window.spec.buckets)
+	for i := 0; i < window.spec.buckets; i++ {
+		bucket := window.start.Add(time.Duration(i) * window.spec.interval)
+		out = append(out, lookup[bucket.Unix()].toPoint(bucket))
+	}
+	return out
+}
+
+func (h *DashboardHandler) trendsRaw(spec trendSpec) []trendPoint {
+	return h.trendsRawWindow(makeTrendWindow(h.trendNow(), spec))
+}
+
+func (h *DashboardHandler) trendsRawWindow(window trendWindow) []trendPoint {
+	intervalSec := int64(window.spec.interval / time.Second)
 	var rows []trendHourBucket
 	h.db.Model(&db.AccessLog{}).
 		Select(`(CAST(strftime('%s', created_at) AS INTEGER) / ?) * ? AS bucket,
@@ -277,36 +340,62 @@ func (h *DashboardHandler) trends1h() []trendPoint {
 			COALESCE(SUM(latency_ms), 0) AS sum_latency_ms,
 			COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`,
 			intervalSec, intervalSec).
-		Where("created_at >= ?", since).
+		Where("created_at >= ? AND created_at <= ?", window.start, window.now).
 		Group("bucket").Order("bucket ASC").Scan(&rows)
-
-	lookup := make(map[int64]trendHourBucket, len(rows))
-	for _, r := range rows {
-		lookup[r.Bucket] = r
-	}
-	startBucket := (since.Unix() / int64(intervalSec)) * int64(intervalSec)
-	out := make([]trendPoint, 0, buckets)
-	for i := 0; i < buckets; i++ {
-		ts := startBucket + int64(i*intervalSec)
-		bucket := time.Unix(ts, 0).UTC()
-		row := lookup[ts] // zero-value is fine for empty bucket
-		out = append(out, row.toPoint(bucket))
-	}
-	return out
+	return buildTrendPoints(window, rows)
 }
 
-// trendsHourly returns N consecutive one-hour buckets ending at the current
-// hour. Same shape regardless of whether N is 24, 168 (7d), or 720 (30d) —
-// the frontend re-aggregates 7d/30d into local-timezone days for display.
-//
-// Rollup-mode reads from access_log_hourly (live; updated by the recorder
-// every flush); raw mode falls back to a strftime-bucketed access_logs
-// scan, which only matters for operators who disabled rollup_enabled.
-func (h *DashboardHandler) trendsHourly(buckets int) []trendPoint {
-	now := time.Now().UTC()
-	since := now.Truncate(time.Hour).Add(-time.Duration(buckets-1) * time.Hour)
+func (h *DashboardHandler) trendsFiveMinutely(spec trendSpec) []trendPoint {
+	window := makeTrendWindow(h.trendNow(), spec)
+	if !h.hasFiveMinuteHistory(window) {
+		return h.trendsRawWindow(window)
+	}
+	return h.trendsFiveMinutelyWindow(window)
+}
 
-	type rawRow struct {
+func (h *DashboardHandler) trendsFiveMinutelyWindow(window trendWindow) []trendPoint {
+	intervalSec := int64(window.spec.interval / time.Second)
+	var rows []trendHourBucket
+	h.db.Table("access_log_five_minutely").
+		Select(`(bucket_start / ?) * ? AS bucket,
+			COALESCE(SUM(request_count), 0) AS requests,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
+			COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
+			COALESCE(SUM(error_count), 0) AS errors`,
+			intervalSec, intervalSec).
+		Where("bucket_start >= ? AND bucket_start <= ?", window.start.Unix(), window.now.Unix()).
+		Group("bucket").Order("bucket ASC").Scan(&rows)
+	return buildTrendPoints(window, rows)
+}
+
+func (h *DashboardHandler) hasFiveMinuteHistory(window trendWindow) bool {
+	var exists int
+	err := h.db.Table("access_log_five_minutely").
+		Select("1").
+		Where("bucket_start >= ? AND bucket_start <= ?", window.start.Unix(), window.now.Unix()).
+		Limit(1).
+		Scan(&exists).Error
+	return err == nil && exists == 1
+}
+
+func (h *DashboardHandler) trendsSevenDays(spec trendSpec) []trendPoint {
+	now := h.trendNow()
+	window := makeTrendWindow(now, spec)
+	if h.hasFiveMinuteHistory(window) {
+		return h.trendsFiveMinutelyWindow(window)
+	}
+	return h.trendsHourlyGroupedWindow(makeTrendWindow(now, sevenDayHourlyFallbackSpec))
+}
+
+func (h *DashboardHandler) trendsHourlyGrouped(spec trendSpec) []trendPoint {
+	return h.trendsHourlyGroupedWindow(makeTrendWindow(h.trendNow(), spec))
+}
+
+func (h *DashboardHandler) trendsHourlyGroupedWindow(window trendWindow) []trendPoint {
+	type hourlyRow struct {
 		Date         string
 		Hour         int
 		Requests     int64
@@ -317,58 +406,49 @@ func (h *DashboardHandler) trendsHourly(buckets int) []trendPoint {
 		SumLatencyMs int64
 		Errors       int64
 	}
-	var rows []rawRow
 
-	if h.useRollup {
-		startDate := since.Format("2006-01-02")
-		h.db.Table("access_log_hourly").
-			Select(`date, hour,
-				COALESCE(SUM(request_count), 0) AS requests,
-				COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
-				COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
-				COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
-				COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
-				COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
-				COALESCE(SUM(error_count), 0) AS errors`).
-			Where("date >= ?", startDate).
-			Group("date, hour").Order("date ASC, hour ASC").Scan(&rows)
-	} else {
-		h.db.Model(&db.AccessLog{}).
-			Select(`strftime('%Y-%m-%d', created_at) AS date,
-				CAST(strftime('%H', created_at) AS INTEGER) AS hour,
-				COUNT(*) AS requests,
-				COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
-				COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
-				COALESCE(SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END), 0) AS bytes_hit,
-				COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS bytes_miss,
-				COALESCE(SUM(latency_ms), 0) AS sum_latency_ms,
-				COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`).
-			Where("created_at >= ?", since).
-			Group("date, hour").Order("date ASC, hour ASC").Scan(&rows)
-	}
+	var rows []hourlyRow
+	h.db.Table("access_log_hourly").
+		Select(`date, hour,
+			COALESCE(SUM(request_count), 0) AS requests,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
+			COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
+			COALESCE(SUM(error_count), 0) AS errors`).
+		Where(`(date > ? OR (date = ? AND hour >= ?))
+			AND (date < ? OR (date = ? AND hour <= ?))`,
+			window.start.Format("2006-01-02"), window.start.Format("2006-01-02"), window.start.Hour(),
+			window.now.Format("2006-01-02"), window.now.Format("2006-01-02"), window.now.Hour()).
+		Group("date, hour").Order("date ASC, hour ASC").Scan(&rows)
 
-	type key struct {
-		date string
-		hour int
-	}
-	lookup := make(map[key]trendHourBucket, len(rows))
-	for _, r := range rows {
-		lookup[key{r.Date, r.Hour}] = trendHourBucket{
-			Requests:     r.Requests,
-			Hits:         r.Hits,
-			Misses:       r.Misses,
-			BytesHit:     r.BytesHit,
-			BytesMiss:    r.BytesMiss,
-			SumLatencyMs: r.SumLatencyMs,
-			Errors:       r.Errors,
+	intervalSec := int64(window.spec.interval / time.Second)
+	grouped := make(map[int64]trendHourBucket, len(rows))
+	for _, row := range rows {
+		date, err := time.Parse("2006-01-02", row.Date)
+		if err != nil {
+			continue
 		}
+		hourStart := time.Date(date.Year(), date.Month(), date.Day(), row.Hour, 0, 0, 0, time.UTC)
+		bucket := (hourStart.Unix() / intervalSec) * intervalSec
+		aggregate := grouped[bucket]
+		aggregate.Bucket = bucket
+		aggregate.add(trendHourBucket{
+			Requests:     row.Requests,
+			Hits:         row.Hits,
+			Misses:       row.Misses,
+			BytesHit:     row.BytesHit,
+			BytesMiss:    row.BytesMiss,
+			SumLatencyMs: row.SumLatencyMs,
+			Errors:       row.Errors,
+		})
+		grouped[bucket] = aggregate
 	}
 
-	out := make([]trendPoint, 0, buckets)
-	for i := 0; i < buckets; i++ {
-		bucket := since.Add(time.Duration(i) * time.Hour)
-		row := lookup[key{bucket.Format("2006-01-02"), bucket.Hour()}]
-		out = append(out, row.toPoint(bucket))
+	aggregates := make([]trendHourBucket, 0, len(grouped))
+	for _, aggregate := range grouped {
+		aggregates = append(aggregates, aggregate)
 	}
-	return out
+	return buildTrendPoints(window, aggregates)
 }

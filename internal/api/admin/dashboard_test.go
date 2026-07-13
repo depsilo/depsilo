@@ -2,10 +2,13 @@ package admin
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -15,6 +18,324 @@ import (
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
+
+var fixedTrendsNow = time.Date(2026, time.July, 12, 12, 34, 56, 0, time.UTC)
+
+func newTrendsTestHandler(t *testing.T) (*DashboardHandler, *gin.Engine) {
+	t.Helper()
+
+	gin.SetMode(gin.TestMode)
+	database, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "trends.db")), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("open trends db: %v", err)
+	}
+	if err := database.AutoMigrate(&db.AccessLog{}, &db.AccessLogFiveMinutely{}, &db.AccessLogHourly{}); err != nil {
+		t.Fatalf("migrate trends db: %v", err)
+	}
+
+	handler := NewDashboardHandler(database, nil, nil, nil, true)
+	handler.now = func() time.Time { return fixedTrendsNow }
+
+	// The normal 7d fixture advertises that fine-grained history is
+	// available without contributing any traffic to the response. Tests for
+	// the hourly fallback explicitly remove this row.
+	if err := database.Create(&db.AccessLogFiveMinutely{
+		BucketStart: fixedTrendsNow.Add(-6 * 24 * time.Hour).Truncate(5 * time.Minute).Unix(),
+		AdapterType: "availability-marker",
+		Upstream:    "test",
+	}).Error; err != nil {
+		t.Fatalf("create fine-history marker: %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/dashboard/trends", handler.GetTrends)
+	return handler, router
+}
+
+func getTrendPoints(t *testing.T, router http.Handler, rangeParam string) []trendPoint {
+	t.Helper()
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/dashboard/trends?range="+rangeParam, nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+
+	var body struct {
+		Points []trendPoint `json:"points"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode trends response: %v", err)
+	}
+	return body.Points
+}
+
+func assertTrendResolution(t *testing.T, points []trendPoint, wantPoints int, wantStep int64) {
+	t.Helper()
+	if len(points) != wantPoints {
+		t.Fatalf("points = %d, want %d", len(points), wantPoints)
+	}
+	for i := 1; i < len(points); i++ {
+		if step := points[i].Bucket - points[i-1].Bucket; step != wantStep {
+			t.Fatalf("step at %d = %d, want %d", i, step, wantStep)
+		}
+	}
+
+	wantEnd := fixedTrendsNow.Truncate(time.Duration(wantStep) * time.Second).Unix()
+	wantStart := wantEnd - int64(wantPoints-1)*wantStep
+	if points[0].Bucket != wantStart || points[len(points)-1].Bucket != wantEnd {
+		t.Fatalf("bounds = [%d, %d], want [%d, %d]", points[0].Bucket, points[len(points)-1].Bucket, wantStart, wantEnd)
+	}
+}
+
+func assertAggregatePoint(t *testing.T, point trendPoint) {
+	t.Helper()
+	if point.Requests != 5 || point.Hits != 2 || point.Misses != 3 {
+		t.Errorf("request dimensions = requests:%d hits:%d misses:%d, want 5/2/3", point.Requests, point.Hits, point.Misses)
+	}
+	if point.BytesHit != 300 || point.BytesMiss != 900 || point.BytesServed != 1200 {
+		t.Errorf("byte dimensions = hit:%d miss:%d served:%d, want 300/900/1200", point.BytesHit, point.BytesMiss, point.BytesServed)
+	}
+	if point.SumLatencyMs != 400 || math.Abs(point.AvgLatencyMs-80) > 1e-9 {
+		t.Errorf("latency = sum:%d avg:%f, want 400/80", point.SumLatencyMs, point.AvgLatencyMs)
+	}
+	if math.Abs(point.HitRate-0.4) > 1e-9 {
+		t.Errorf("hit rate = %f, want 0.4", point.HitRate)
+	}
+	if point.Errors != 2 {
+		t.Errorf("errors = %d, want 2", point.Errors)
+	}
+}
+
+func insertRawAggregate(t *testing.T, database *gorm.DB, bucket time.Time) {
+	t.Helper()
+	rows := []db.AccessLog{
+		{AdapterType: "pypi", Hit: true, BytesSent: 100, LatencyMs: 10, StatusCode: 200, CreatedAt: bucket.Add(time.Second)},
+		{AdapterType: "npm", Hit: true, BytesSent: 200, LatencyMs: 30, StatusCode: 200, CreatedAt: bucket.Add(2 * time.Second)},
+		{AdapterType: "pypi", Hit: false, BytesSent: 200, LatencyMs: 60, StatusCode: 500, CreatedAt: bucket.Add(3 * time.Second)},
+		{AdapterType: "npm", Hit: false, BytesSent: 300, LatencyMs: 100, StatusCode: 503, CreatedAt: bucket.Add(4 * time.Second)},
+		{AdapterType: "apt", Hit: false, BytesSent: 400, LatencyMs: 200, StatusCode: 404, CreatedAt: bucket.Add(5 * time.Second)},
+	}
+	if err := database.Create(&rows).Error; err != nil {
+		t.Fatalf("create raw aggregate: %v", err)
+	}
+}
+
+func insertFiveMinuteAggregate(t *testing.T, database *gorm.DB, bucket time.Time) {
+	t.Helper()
+	rows := []db.AccessLogFiveMinutely{
+		{BucketStart: bucket.Unix(), AdapterType: "pypi", Hit: true, Upstream: "cache", RequestCount: 2, TotalBytes: 300, SumLatencyMs: 40},
+		{BucketStart: bucket.Unix(), AdapterType: "pypi", Hit: false, Upstream: "origin", RequestCount: 3, TotalBytes: 900, SumLatencyMs: 360, ErrorCount: 2},
+	}
+	if err := database.Create(&rows).Error; err != nil {
+		t.Fatalf("create five-minute aggregate: %v", err)
+	}
+}
+
+func insertHourlyAggregate(t *testing.T, database *gorm.DB, bucket time.Time) {
+	t.Helper()
+	bucket = bucket.UTC()
+	rows := []db.AccessLogHourly{
+		{Date: bucket.Format("2006-01-02"), Hour: bucket.Hour(), AdapterType: "pypi", Hit: true, Upstream: "cache", RequestCount: 2, TotalBytes: 300, SumLatencyMs: 40},
+		{Date: bucket.Format("2006-01-02"), Hour: bucket.Hour(), AdapterType: "pypi", Hit: false, Upstream: "origin", RequestCount: 3, TotalBytes: 900, SumLatencyMs: 360, ErrorCount: 2},
+	}
+	if err := database.Create(&rows).Error; err != nil {
+		t.Fatalf("create hourly aggregate: %v", err)
+	}
+}
+
+func TestDashboardTrends_ReturnsExpectedResolutionForEveryRange(t *testing.T) {
+	tests := []struct {
+		rangeParam string
+		wantPoints int
+		wantStep   int64
+	}{
+		{"1h", 360, 10},
+		{"24h", 288, 300},
+		{"7d", 336, 1800},
+		{"30d", 360, 7200},
+	}
+	for _, tt := range tests {
+		t.Run(tt.rangeParam, func(t *testing.T) {
+			_, router := newTrendsTestHandler(t)
+			points := getTrendPoints(t, router, tt.rangeParam)
+			assertTrendResolution(t, points, tt.wantPoints, tt.wantStep)
+		})
+	}
+}
+
+func TestDashboardTrends_AggregatesCurrentPartialBucket(t *testing.T) {
+	tests := []struct {
+		name       string
+		rangeParam string
+		insert     func(*testing.T, *gorm.DB)
+	}{
+		{
+			name:       "one hour raw ten-second bucket",
+			rangeParam: "1h",
+			insert: func(t *testing.T, database *gorm.DB) {
+				insertRawAggregate(t, database, fixedTrendsNow.Truncate(10*time.Second))
+			},
+		},
+		{
+			name:       "twenty-four hour five-minute bucket",
+			rangeParam: "24h",
+			insert: func(t *testing.T, database *gorm.DB) {
+				insertFiveMinuteAggregate(t, database, fixedTrendsNow.Truncate(5*time.Minute))
+			},
+		},
+		{
+			name:       "seven day thirty-minute bucket",
+			rangeParam: "7d",
+			insert: func(t *testing.T, database *gorm.DB) {
+				insertFiveMinuteAggregate(t, database, fixedTrendsNow.Truncate(5*time.Minute))
+			},
+		},
+		{
+			name:       "thirty day two-hour bucket",
+			rangeParam: "30d",
+			insert: func(t *testing.T, database *gorm.DB) {
+				insertHourlyAggregate(t, database, fixedTrendsNow.Truncate(time.Hour))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, router := newTrendsTestHandler(t)
+			tt.insert(t, handler.db)
+			points := getTrendPoints(t, router, tt.rangeParam)
+			assertAggregatePoint(t, points[len(points)-1])
+		})
+	}
+}
+
+func TestDashboardTrends_FallsBackWhenFineHistoryIsUnavailable(t *testing.T) {
+	t.Run("24h groups indexed raw logs into five-minute buckets", func(t *testing.T) {
+		handler, router := newTrendsTestHandler(t)
+		if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
+			t.Fatalf("clear fine history: %v", err)
+		}
+		insertRawAggregate(t, handler.db, fixedTrendsNow.Truncate(5*time.Minute))
+
+		points := getTrendPoints(t, router, "24h")
+		assertTrendResolution(t, points, 288, 300)
+		assertAggregatePoint(t, points[len(points)-1])
+	})
+
+	t.Run("7d returns hourly rollup buckets", func(t *testing.T) {
+		handler, router := newTrendsTestHandler(t)
+		if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
+			t.Fatalf("clear fine history: %v", err)
+		}
+		insertHourlyAggregate(t, handler.db, fixedTrendsNow.Truncate(time.Hour))
+
+		points := getTrendPoints(t, router, "7d")
+		assertTrendResolution(t, points, 168, 3600)
+		assertAggregatePoint(t, points[len(points)-1])
+	})
+}
+
+func TestDashboardTrends_RollupDisabledUsesRawForEveryRange(t *testing.T) {
+	handler, router := newTrendsTestHandler(t)
+	handler.useRollup = false
+	insertRawAggregate(t, handler.db, fixedTrendsNow.Truncate(10*time.Second))
+	if err := handler.db.Create(&db.AccessLogFiveMinutely{
+		BucketStart:  fixedTrendsNow.Truncate(5 * time.Minute).Unix(),
+		AdapterType:  "fine-noise",
+		Upstream:     "test",
+		RequestCount: 99,
+	}).Error; err != nil {
+		t.Fatalf("create five-minute noise: %v", err)
+	}
+	if err := handler.db.Create(&db.AccessLogHourly{
+		Date:         fixedTrendsNow.Format("2006-01-02"),
+		Hour:         fixedTrendsNow.Hour(),
+		AdapterType:  "hourly-noise",
+		Upstream:     "test",
+		RequestCount: 101,
+	}).Error; err != nil {
+		t.Fatalf("create hourly noise: %v", err)
+	}
+
+	tests := []struct {
+		rangeParam string
+		wantPoints int
+		wantStep   int64
+	}{
+		{"1h", 360, 10},
+		{"24h", 288, 300},
+		{"7d", 336, 1800},
+		{"30d", 360, 7200},
+	}
+	for _, tt := range tests {
+		t.Run(tt.rangeParam, func(t *testing.T) {
+			points := getTrendPoints(t, router, tt.rangeParam)
+			assertTrendResolution(t, points, tt.wantPoints, tt.wantStep)
+			assertAggregatePoint(t, points[len(points)-1])
+		})
+	}
+}
+
+func TestDashboardTrends_InvalidRangeFallsBackToSevenDays(t *testing.T) {
+	_, router := newTrendsTestHandler(t)
+	want := getTrendPoints(t, router, "7d")
+	got := getTrendPoints(t, router, "not-a-range")
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("invalid range response differs from 7d response")
+	}
+}
+
+func TestDashboardTrends_HourlyGroupingUsesUTCAndCombinesPairs(t *testing.T) {
+	t.Setenv("TZ", "Asia/Hong_Kong")
+	handler, router := newTrendsTestHandler(t)
+	firstHour := time.Date(2026, time.July, 12, 10, 0, 0, 0, time.UTC)
+	insertFiveMinuteAggregate(t, handler.db, fixedTrendsNow.Truncate(5*time.Minute))
+	insertHourlyAggregate(t, handler.db, firstHour)
+	insertHourlyAggregate(t, handler.db, firstHour.Add(time.Hour))
+
+	points := getTrendPoints(t, router, "30d")
+	wantBucket := firstHour.Unix()
+	for _, point := range points {
+		if point.Bucket == wantBucket {
+			if point.Requests != 10 || point.Hits != 4 || point.Misses != 6 || point.SumLatencyMs != 800 {
+				t.Fatalf("paired UTC bucket = %+v, want doubled aggregate", point)
+			}
+			if point.Date != "2026-07-12 10:00" {
+				t.Fatalf("UTC date label = %q, want 2026-07-12 10:00", point.Date)
+			}
+			return
+		}
+	}
+	t.Fatalf("UTC bucket %d not found", wantBucket)
+}
+
+func TestDashboardTrends_RawQueryIsBoundedAndZeroFillsGaps(t *testing.T) {
+	handler, router := newTrendsTestHandler(t)
+	start := fixedTrendsNow.Truncate(10 * time.Second).Add(-359 * 10 * time.Second)
+	rows := []db.AccessLog{
+		{Hit: true, StatusCode: 200, CreatedAt: start.Add(-time.Second)},
+		{Hit: true, StatusCode: 200, CreatedAt: start},
+		{Hit: true, StatusCode: 200, CreatedAt: fixedTrendsNow.Add(-time.Second)},
+		{Hit: true, StatusCode: 200, CreatedAt: fixedTrendsNow.Add(time.Second)},
+	}
+	if err := handler.db.Create(&rows).Error; err != nil {
+		t.Fatalf("create bounded raw rows: %v", err)
+	}
+
+	points := getTrendPoints(t, router, "1h")
+	assertTrendResolution(t, points, 360, 10)
+	if points[0].Requests != 1 || points[len(points)-1].Requests != 1 {
+		t.Fatalf("edge requests = first:%d last:%d, want 1/1", points[0].Requests, points[len(points)-1].Requests)
+	}
+	for i := 1; i < len(points)-1; i++ {
+		if points[i].Requests != 0 {
+			t.Fatalf("gap bucket %d requests = %d, want 0", i, points[i].Requests)
+		}
+	}
+}
 
 func TestDashboardUsesSnapshotUpstreamIDs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
