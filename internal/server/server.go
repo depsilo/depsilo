@@ -220,24 +220,15 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 
 	// Access log rollup pipeline: one-shot backfill from access_logs into
 	// the rollup tables (no-op if already populated), then start the
-	// async batched recorder so future requests stream through it. The
-	// adapter's LogAccess switches to recorder.Record once SetRecorder
-	// runs; until then it writes raw rows synchronously.
+	// async batched recorder so future requests stream through it. Raw-only
+	// mode revokes fine-history readiness before the recorder starts.
 	if cfg.AccessLog.BackfillOnStart {
 		if err := accesslog.BackfillIfEmpty(serverCtx, database); err != nil {
 			zap.L().Warn("access log rollup backfill failed", zap.Error(err))
 		}
-		backfillStarted := time.Now()
-		zap.L().Info("starting access log five-minute backfill",
-			zap.Duration("window", 7*24*time.Hour))
-		if err := accesslog.BackfillFiveMinutely(serverCtx, database, backfillStarted.UTC()); err != nil {
-			zap.L().Warn("access log five-minute backfill failed",
-				zap.Error(err),
-				zap.Duration("took", time.Since(backfillStarted)))
-		} else {
-			zap.L().Info("access log five-minute backfill complete",
-				zap.Duration("took", time.Since(backfillStarted)))
-		}
+	}
+	if err := prepareFiveMinuteHistory(serverCtx, database, cfg.AccessLog); err != nil {
+		return nil, err
 	}
 	accessRecorder = accesslog.NewRecorder(database, accesslog.Config{
 		Enabled:       cfg.AccessLog.RollupEnabled,
@@ -591,6 +582,32 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	started = true
 
 	return srv, nil
+}
+
+func prepareFiveMinuteHistory(ctx context.Context, database *gorm.DB, cfg config.AccessLogConfig) error {
+	if !cfg.RollupEnabled {
+		if err := accesslog.InvalidateFiveMinuteBackfill(ctx, database); err != nil {
+			zap.L().Error("failed to invalidate access log five-minute backfill marker", zap.Error(err))
+			return fmt.Errorf("invalidate five-minute backfill marker: %w", err)
+		}
+		return nil
+	}
+	if !cfg.BackfillOnStart {
+		return nil
+	}
+
+	backfillStarted := time.Now()
+	zap.L().Info("starting access log five-minute backfill",
+		zap.Duration("window", 7*24*time.Hour))
+	if err := accesslog.BackfillFiveMinutely(ctx, database, backfillStarted.UTC()); err != nil {
+		zap.L().Warn("access log five-minute backfill failed",
+			zap.Error(err),
+			zap.Duration("took", time.Since(backfillStarted)))
+	} else {
+		zap.L().Info("access log five-minute backfill complete",
+			zap.Duration("took", time.Since(backfillStarted)))
+	}
+	return nil
 }
 
 // backfillPackageNames updates existing cache entries that have an empty PackageName.

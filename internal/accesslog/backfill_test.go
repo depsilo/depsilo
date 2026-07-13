@@ -162,6 +162,88 @@ func TestBackfillFiveMinutely_BackfillsSevenDaysAndRunsOnce(t *testing.T) {
 	}
 }
 
+func TestInvalidateFiveMinuteBackfill_AllowsLaterRebuildToIncludeRawOnlyInterval(t *testing.T) {
+	d := newTestDB(t)
+	ctx := context.Background()
+	now := mustParse(t, "2026-07-12T12:34:56Z")
+	initialAt := now.Add(-2 * time.Hour)
+
+	if err := d.Create(&db.AccessLog{
+		AdapterType: "pypi",
+		Hit:         true,
+		Upstream:    "cache",
+		BytesSent:   50,
+		LatencyMs:   10,
+		StatusCode:  200,
+		CreatedAt:   initialAt,
+	}).Error; err != nil {
+		t.Fatalf("create initial raw row: %v", err)
+	}
+	if err := BackfillFiveMinutely(ctx, d, now); err != nil {
+		t.Fatalf("initial BackfillFiveMinutely: %v", err)
+	}
+
+	if err := InvalidateFiveMinuteBackfill(ctx, d); err != nil {
+		t.Fatalf("InvalidateFiveMinuteBackfill: %v", err)
+	}
+	var markerCount int64
+	if err := d.Model(&db.ControlPlaneState{}).
+		Where("key = ?", FiveMinuteBackfillMarker).
+		Count(&markerCount).Error; err != nil {
+		t.Fatalf("count marker after invalidation: %v", err)
+	}
+	if markerCount != 0 {
+		t.Fatalf("markers after invalidation = %d, want 0", markerCount)
+	}
+	var fineCount int64
+	if err := d.Model(&db.AccessLogFiveMinutely{}).Count(&fineCount).Error; err != nil {
+		t.Fatalf("count fine rows after invalidation: %v", err)
+	}
+	if fineCount != 1 {
+		t.Fatalf("fine rows after invalidation = %d, want retained row", fineCount)
+	}
+
+	rawOnlyAt := now.Add(-30 * time.Minute).Truncate(5 * time.Minute).Add(10 * time.Second)
+	rawOnlyRows := []db.AccessLog{
+		{
+			AdapterType: "npm", Hit: false, Upstream: "registry",
+			BytesSent: 120, LatencyMs: 30, StatusCode: 503, CreatedAt: rawOnlyAt,
+		},
+		{
+			AdapterType: "npm", Hit: false, Upstream: "registry",
+			BytesSent: 80, LatencyMs: 70, StatusCode: 404, CreatedAt: rawOnlyAt.Add(20 * time.Second),
+		},
+	}
+	if err := d.Create(&rawOnlyRows).Error; err != nil {
+		t.Fatalf("create raw-only interval: %v", err)
+	}
+
+	if err := BackfillFiveMinutely(ctx, d, now.Add(time.Minute)); err != nil {
+		t.Fatalf("later BackfillFiveMinutely: %v", err)
+	}
+	if err := d.Model(&db.ControlPlaneState{}).
+		Where("key = ?", FiveMinuteBackfillMarker).
+		Count(&markerCount).Error; err != nil {
+		t.Fatalf("count rebuilt marker: %v", err)
+	}
+	if markerCount != 1 {
+		t.Fatalf("rebuilt markers = %d, want 1", markerCount)
+	}
+
+	wantBucket := Event{At: rawOnlyAt}.FiveMinuteKey().BucketStart
+	var rebuilt db.AccessLogFiveMinutely
+	if err := d.Where(
+		"bucket_start = ? AND adapter_type = ? AND hit = ? AND upstream = ?",
+		wantBucket, "npm", false, "registry",
+	).Take(&rebuilt).Error; err != nil {
+		t.Fatalf("query rebuilt raw-only interval: %v", err)
+	}
+	if rebuilt.RequestCount != 2 || rebuilt.TotalBytes != 200 ||
+		rebuilt.SumLatencyMs != 100 || rebuilt.ErrorCount != 1 {
+		t.Fatalf("rebuilt raw-only interval = %+v", rebuilt)
+	}
+}
+
 func TestBackfillFiveMinutely_MergesLegacyNullAndEmptyUpstreams(t *testing.T) {
 	d := newTestDB(t)
 	now := mustParse(t, "2026-07-12T12:34:56Z")

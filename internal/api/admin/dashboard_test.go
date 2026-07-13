@@ -333,6 +333,29 @@ func TestDashboardTrends_FallsBackWhenFineHistoryIsUnavailable(t *testing.T) {
 	})
 }
 
+func TestDashboardTrends_RebuiltMarkerIncludesRawOnlyInterval(t *testing.T) {
+	handler, router := newTrendsTestHandler(t)
+	initialBucket := fixedTrendsNow.Truncate(30 * time.Minute).Add(-4 * time.Hour)
+	rawOnlyBucket := fixedTrendsNow.Truncate(30 * time.Minute).Add(-2 * time.Hour)
+	insertRawAggregate(t, handler.db, initialBucket)
+	insertFiveMinuteAggregate(t, handler.db, initialBucket)
+
+	if err := accesslog.InvalidateFiveMinuteBackfill(context.Background(), handler.db); err != nil {
+		t.Fatalf("invalidate five-minute backfill: %v", err)
+	}
+	insertRawAggregate(t, handler.db, rawOnlyBucket)
+	if err := accesslog.BackfillFiveMinutely(context.Background(), handler.db, fixedTrendsNow); err != nil {
+		t.Fatalf("rebuild five-minute history: %v", err)
+	}
+
+	for _, rangeParam := range []string{"24h", "7d"} {
+		t.Run(rangeParam, func(t *testing.T) {
+			points := getTrendPoints(t, router, rangeParam)
+			assertAggregatePoint(t, trendPointAt(t, points, rawOnlyBucket))
+		})
+	}
+}
+
 func TestDashboardTrends_RollupDisabledUsesRawForEveryRange(t *testing.T) {
 	handler, router := newTrendsTestHandler(t)
 	handler.useRollup = false

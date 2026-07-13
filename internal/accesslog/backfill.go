@@ -14,6 +14,14 @@ import (
 // decide when five-minute history is authoritative for dashboard queries.
 const FiveMinuteBackfillMarker = "access_log_five_minutely_v1"
 
+// InvalidateFiveMinuteBackfill revokes fine-history readiness so the next
+// BackfillFiveMinutely call rebuilds the trailing window from raw logs.
+func InvalidateFiveMinuteBackfill(ctx context.Context, gdb *gorm.DB) error {
+	return gdb.WithContext(ctx).
+		Where("key = ?", FiveMinuteBackfillMarker).
+		Delete(&db.ControlPlaneState{}).Error
+}
+
 // BackfillIfEmpty fills the three rollup tables from the existing
 // access_logs table whenever access_log_hourly looks empty. It's safe
 // to call repeatedly — the emptiness check short-circuits subsequent
