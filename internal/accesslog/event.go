@@ -27,6 +27,23 @@ type Event struct {
 	At          time.Time
 }
 
+type fiveMinuteKey struct {
+	BucketStart int64
+	AdapterType string
+	Hit         bool
+	Upstream    string
+}
+
+func (e Event) FiveMinuteKey() fiveMinuteKey {
+	unix := e.At.UTC().Unix()
+	return fiveMinuteKey{
+		BucketStart: (unix / 300) * 300,
+		AdapterType: e.AdapterType,
+		Hit:         e.Hit,
+		Upstream:    e.Upstream,
+	}
+}
+
 // hourlyKey mirrors AccessLogHourly's composite primary key.
 type hourlyKey struct {
 	Date        string // "YYYY-MM-DD" in UTC

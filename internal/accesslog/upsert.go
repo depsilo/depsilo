@@ -10,6 +10,40 @@ import (
 	"depsilo/internal/db"
 )
 
+func upsertFiveMinutely(ctx context.Context, gdb *gorm.DB, m map[fiveMinuteKey]*counters) error {
+	if len(m) == 0 {
+		return nil
+	}
+	rows := make([]db.AccessLogFiveMinutely, 0, len(m))
+	now := time.Now().UTC()
+	for key, count := range m {
+		rows = append(rows, db.AccessLogFiveMinutely{
+			BucketStart:  key.BucketStart,
+			AdapterType:  key.AdapterType,
+			Hit:          key.Hit,
+			Upstream:     key.Upstream,
+			RequestCount: count.RequestCount,
+			TotalBytes:   count.TotalBytes,
+			SumLatencyMs: count.SumLatencyMs,
+			ErrorCount:   count.ErrorCount,
+			UpdatedAt:    now,
+		})
+	}
+	return gdb.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "bucket_start"}, {Name: "adapter_type"},
+			{Name: "hit"}, {Name: "upstream"},
+		},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"request_count":  gorm.Expr("access_log_five_minutely.request_count + excluded.request_count"),
+			"total_bytes":    gorm.Expr("access_log_five_minutely.total_bytes + excluded.total_bytes"),
+			"sum_latency_ms": gorm.Expr("access_log_five_minutely.sum_latency_ms + excluded.sum_latency_ms"),
+			"error_count":    gorm.Expr("access_log_five_minutely.error_count + excluded.error_count"),
+			"updated_at":     now,
+		}),
+	}).CreateInBatches(rows, 200).Error
+}
+
 // upsertHourly accumulates the in-memory hourly bucket map into
 // access_log_hourly via INSERT ... ON CONFLICT DO UPDATE. The DO UPDATE
 // clause adds the new value to the existing value so two consecutive

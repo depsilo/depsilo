@@ -46,15 +46,16 @@ func NewRecorder(database *gorm.DB, cfg Config) Recorder {
 		cfg.BatchInterval = 5 * time.Second
 	}
 	r := &batchedRecorder{
-		db:            database,
-		in:            make(chan Event, 4096),
-		batchSize:     cfg.BatchSize,
-		flushInterval: cfg.BatchInterval,
-		aggHourly:     make(map[hourlyKey]*counters),
-		aggPkg:        make(map[pkgDailyKey]*counters),
-		stop:          make(chan struct{}),
-		done:          make(chan struct{}),
-		flushReq:      make(chan chan struct{}),
+		db:              database,
+		in:              make(chan Event, 4096),
+		batchSize:       cfg.BatchSize,
+		flushInterval:   cfg.BatchInterval,
+		aggFiveMinutely: make(map[fiveMinuteKey]*counters),
+		aggHourly:       make(map[hourlyKey]*counters),
+		aggPkg:          make(map[pkgDailyKey]*counters),
+		stop:            make(chan struct{}),
+		done:            make(chan struct{}),
+		flushReq:        make(chan chan struct{}),
 	}
 	go r.loop()
 	return r
@@ -91,10 +92,11 @@ type batchedRecorder struct {
 
 	dropped atomic.Uint64
 
-	mu        sync.Mutex
-	rawBuf    []db.AccessLog
-	aggHourly map[hourlyKey]*counters
-	aggPkg    map[pkgDailyKey]*counters
+	mu              sync.Mutex
+	rawBuf          []db.AccessLog
+	aggFiveMinutely map[fiveMinuteKey]*counters
+	aggHourly       map[hourlyKey]*counters
+	aggPkg          map[pkgDailyKey]*counters
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -168,6 +170,11 @@ func (r *batchedRecorder) ingest(e Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.rawBuf = append(r.rawBuf, toAccessLog(e))
+	key := e.FiveMinuteKey()
+	if r.aggFiveMinutely[key] == nil {
+		r.aggFiveMinutely[key] = &counters{}
+	}
+	r.aggFiveMinutely[key].add(e)
 	h := e.HourlyKey()
 	if r.aggHourly[h] == nil {
 		r.aggHourly[h] = &counters{}
@@ -189,14 +196,16 @@ func (r *batchedRecorder) rawLen() int {
 
 // flushAll swaps the in-memory buffers out under the mutex (so ingest
 // doesn't block on disk I/O), then writes the snapshot to SQLite. A
-// failure in any of the three writes is warn-logged but doesn't abort
+// failure in any write is warn-logged but doesn't abort
 // the others — partial progress is preferable to "all or nothing".
 func (r *batchedRecorder) flushAll(ctx context.Context) {
 	r.mu.Lock()
 	rawBuf := r.rawBuf
+	aggFive := r.aggFiveMinutely
 	aggH := r.aggHourly
 	aggP := r.aggPkg
 	r.rawBuf = nil
+	r.aggFiveMinutely = make(map[fiveMinuteKey]*counters)
 	r.aggHourly = make(map[hourlyKey]*counters)
 	r.aggPkg = make(map[pkgDailyKey]*counters)
 	r.mu.Unlock()
@@ -206,6 +215,11 @@ func (r *batchedRecorder) flushAll(ctx context.Context) {
 			zap.L().Warn("failed to flush raw access logs",
 				zap.Error(err),
 				zap.Int("count", len(rawBuf)))
+		}
+	}
+	if len(aggFive) > 0 {
+		if err := upsertFiveMinutely(ctx, r.db, aggFive); err != nil {
+			zap.L().Warn("failed to upsert five-minute rollup", zap.Error(err))
 		}
 	}
 	if len(aggH) > 0 {

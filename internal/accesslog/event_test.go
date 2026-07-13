@@ -46,6 +46,23 @@ func TestEvent_HourlyKey_HourTransitionAtMidnightUTC(t *testing.T) {
 	}
 }
 
+func TestEvent_FiveMinuteKey_AlignsInUTC(t *testing.T) {
+	e := Event{AdapterType: "pypi", Hit: true, Upstream: "tuna", At: mustParse(t, "2026-07-12T18:27:49+08:00")}
+	got := e.FiveMinuteKey()
+	want := mustParse(t, "2026-07-12T10:25:00Z").Unix()
+	if got.BucketStart != want || got.AdapterType != "pypi" || !got.Hit || got.Upstream != "tuna" {
+		t.Fatalf("FiveMinuteKey() = %+v, want bucket=%d pypi hit tuna", got, want)
+	}
+}
+
+func TestEvent_FiveMinuteKey_SeparatesBoundary(t *testing.T) {
+	a := Event{At: mustParse(t, "2026-07-12T10:29:59Z")}.FiveMinuteKey()
+	b := Event{At: mustParse(t, "2026-07-12T10:30:00Z")}.FiveMinuteKey()
+	if b.BucketStart-a.BucketStart != 300 {
+		t.Fatalf("bucket delta = %d", b.BucketStart-a.BucketStart)
+	}
+}
+
 func TestEvent_PackageDailyKey_OmittedWhenPackageEmpty(t *testing.T) {
 	// Adapter logs an "index" hit with no extractable package name (e.g.
 	// /pypi/simple/ list). Package grain skips those events to avoid an

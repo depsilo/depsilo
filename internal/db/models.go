@@ -32,6 +32,18 @@ type AccessLog struct {
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 }
 
+type AccessLogFiveMinutely struct {
+	BucketStart  int64     `gorm:"primaryKey" json:"bucket_start"`
+	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	Hit          bool      `gorm:"primaryKey" json:"hit"`
+	Upstream     string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
+	RequestCount int64     `json:"request_count"`
+	TotalBytes   int64     `json:"total_bytes"`
+	SumLatencyMs int64     `json:"sum_latency_ms"`
+	ErrorCount   int64     `json:"error_count"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 // AccessLogHourly is the hourly rollup that powers today/recent dashboards.
 // (date, hour, adapter_type, hit, upstream) is the composite PK so UPSERT
 // can accumulate counters. PackageName is intentionally absent: combined
@@ -82,6 +94,7 @@ type AccessLogPackageDaily struct {
 // TableName overrides — GORM pluralizes by default and would turn these
 // into access_log_hourlies / access_log_dailies / access_log_package_dailies,
 // which break the raw SQL written against the singular form.
+func (AccessLogFiveMinutely) TableName() string { return "access_log_five_minutely" }
 func (AccessLogHourly) TableName() string       { return "access_log_hourly" }
 func (AccessLogDaily) TableName() string        { return "access_log_daily" }
 func (AccessLogPackageDaily) TableName() string { return "access_log_package_daily" }
@@ -240,7 +253,7 @@ type TrialRecord struct {
 	ID            uint      `gorm:"primarykey" json:"id"`
 	ActivatedAt   time.Time `gorm:"not null" json:"activated_at"`
 	ExpiresAt     time.Time `gorm:"not null" json:"expires_at"`
-	ActivatedBy   uint      `gorm:"index" json:"activated_by"` // FK to User.ID; admin who clicked
+	ActivatedBy   uint      `gorm:"index" json:"activated_by"`     // FK to User.ID; admin who clicked
 	ActivatedFrom string    `gorm:"size:64" json:"activated_from"` // client IP, reserved for future abuse analysis
 	CreatedAt     time.Time `json:"created_at"`
 }
@@ -261,10 +274,10 @@ type LicenseStorage struct {
 // payloads for a specific platform (Slack, DingTalk, WeCom, Feishu, or generic).
 type WebhookConfig struct {
 	ID              uint       `gorm:"primarykey" json:"id"`
-	Name            string     `gorm:"size:128" json:"name"`              // human label, e.g. "Ops DingTalk"
-	Platform        string     `gorm:"size:16" json:"platform"`           // slack | dingtalk | wecom | feishu | generic
-	URL             string     `gorm:"size:512" json:"url"`               // incoming webhook URL
-	Secret          string     `gorm:"size:256" json:"-"`                 // optional HMAC secret (reserved)
+	Name            string     `gorm:"size:128" json:"name"`    // human label, e.g. "Ops DingTalk"
+	Platform        string     `gorm:"size:16" json:"platform"` // slack | dingtalk | wecom | feishu | generic
+	URL             string     `gorm:"size:512" json:"url"`     // incoming webhook URL
+	Secret          string     `gorm:"size:256" json:"-"`       // optional HMAC secret (reserved)
 	Enabled         bool       `gorm:"default:true" json:"enabled"`
 	Events          string     `gorm:"size:256;default:'*'" json:"events"` // comma-separated or '*'
 	CooldownMinutes int        `gorm:"default:30" json:"cooldown_minutes"`

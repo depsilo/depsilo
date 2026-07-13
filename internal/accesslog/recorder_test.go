@@ -27,7 +27,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	if err := d.AutoMigrate(
-		&db.AccessLog{}, &db.AccessLogHourly{},
+		&db.AccessLog{}, &db.AccessLogFiveMinutely{}, &db.AccessLogHourly{},
 		&db.AccessLogDaily{}, &db.AccessLogPackageDaily{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -89,11 +89,52 @@ func TestRecorder_BatchedFlush_WritesRawAndRollup(t *testing.T) {
 		}
 	}
 
+	// FiveMinutely has the same adapter/hit/upstream dimensions as Hourly.
+	var fiveMinutely []db.AccessLogFiveMinutely
+	d.Find(&fiveMinutely)
+	if len(fiveMinutely) != 3 {
+		t.Fatalf("five-minute rows = %d, want 3 — got %+v", len(fiveMinutely), fiveMinutely)
+	}
+
 	// PackageDaily: numpy-hit (5), numpy-miss (1), react-hit (1) → 3 rows.
 	var pkg []db.AccessLogPackageDaily
 	d.Find(&pkg)
 	if len(pkg) != 3 {
 		t.Errorf("package daily rows = %d, want 3 — got %+v", len(pkg), pkg)
+	}
+}
+
+func TestRecorder_FiveMinuteUpsertAccumulatesAcrossFlushes(t *testing.T) {
+	d := newTestDB(t)
+	r := NewRecorder(d, Config{Enabled: true, BatchSize: 1000, BatchInterval: time.Hour})
+	t.Cleanup(func() { _ = r.Close(context.Background()) })
+
+	at := mustParse(t, "2026-07-12T10:02:00Z")
+	for i := 0; i < 3; i++ {
+		r.Record(mkEvent("pypi", "numpy", true, at))
+	}
+	if err := r.Flush(context.Background()); err != nil {
+		t.Fatalf("first flush: %v", err)
+	}
+
+	for i := 0; i < 4; i++ {
+		r.Record(mkEvent("pypi", "numpy", true, at))
+	}
+	if err := r.Flush(context.Background()); err != nil {
+		t.Fatalf("second flush: %v", err)
+	}
+
+	var rows []db.AccessLogFiveMinutely
+	if err := d.Find(&rows).Error; err != nil {
+		t.Fatalf("query five-minute rollup: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("five-minute rows = %d, want 1 — got %+v", len(rows), rows)
+	}
+	row := rows[0]
+	wantBucket := mustParse(t, "2026-07-12T10:00:00Z").Unix()
+	if row.RequestCount != 7 || row.TotalBytes != 700 || row.BucketStart != wantBucket {
+		t.Fatalf("five-minute row = %+v, want request_count=7 total_bytes=700 bucket_start=%d", row, wantBucket)
 	}
 }
 
@@ -180,15 +221,15 @@ func TestRecorder_DropsOnFullChannel(t *testing.T) {
 	// tiny channel.
 	d := newTestDB(t)
 	r := &batchedRecorder{
-		db:           d,
-		in:           make(chan Event, 1),
-		batchSize:    1000,
+		db:            d,
+		in:            make(chan Event, 1),
+		batchSize:     1000,
 		flushInterval: time.Hour,
-		aggHourly:    make(map[hourlyKey]*counters),
-		aggPkg:       make(map[pkgDailyKey]*counters),
-		stop:     make(chan struct{}),
-		done:     make(chan struct{}),
-		flushReq: make(chan chan struct{}),
+		aggHourly:     make(map[hourlyKey]*counters),
+		aggPkg:        make(map[pkgDailyKey]*counters),
+		stop:          make(chan struct{}),
+		done:          make(chan struct{}),
+		flushReq:      make(chan chan struct{}),
 	}
 	// Do NOT start r.loop() — we want events to pile up.
 
