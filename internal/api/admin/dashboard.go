@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/accesslog"
 	"depsilo/internal/cache"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
@@ -365,7 +366,7 @@ func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWind
 
 func (h *DashboardHandler) trendsFiveMinutely(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
 	window := makeTrendWindow(now, spec)
-	hasHistory, err := h.hasFiveMinuteHistory(ctx, window)
+	hasHistory, err := h.hasFiveMinuteHistory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -396,11 +397,11 @@ func (h *DashboardHandler) trendsFiveMinutelyWindow(ctx context.Context, window 
 	return buildTrendPoints(window, rows), nil
 }
 
-func (h *DashboardHandler) hasFiveMinuteHistory(ctx context.Context, window trendWindow) (bool, error) {
+func (h *DashboardHandler) hasFiveMinuteHistory(ctx context.Context) (bool, error) {
 	var exists int
-	result := h.db.WithContext(ctx).Table("access_log_five_minutely").
+	result := h.db.WithContext(ctx).Table("control_plane_states").
 		Select("1").
-		Where("bucket_start >= ? AND bucket_start <= ?", window.start.Unix(), window.now.Unix()).
+		Where("key = ?", accesslog.FiveMinuteBackfillMarker).
 		Limit(1).
 		Scan(&exists)
 	if result.Error != nil {
@@ -411,7 +412,7 @@ func (h *DashboardHandler) hasFiveMinuteHistory(ctx context.Context, window tren
 
 func (h *DashboardHandler) trendsSevenDays(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
 	window := makeTrendWindow(now, spec)
-	hasHistory, err := h.hasFiveMinuteHistory(ctx, window)
+	hasHistory, err := h.hasFiveMinuteHistory(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/accesslog"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
@@ -33,22 +34,25 @@ func newTrendsTestHandler(t *testing.T) (*DashboardHandler, *gin.Engine) {
 	if err != nil {
 		t.Fatalf("open trends db: %v", err)
 	}
-	if err := database.AutoMigrate(&db.AccessLog{}, &db.AccessLogFiveMinutely{}, &db.AccessLogHourly{}); err != nil {
+	if err := database.AutoMigrate(
+		&db.AccessLog{},
+		&db.AccessLogFiveMinutely{},
+		&db.AccessLogHourly{},
+		&db.ControlPlaneState{},
+	); err != nil {
 		t.Fatalf("migrate trends db: %v", err)
 	}
 
 	handler := NewDashboardHandler(database, nil, nil, nil, true)
 	handler.now = func() time.Time { return fixedTrendsNow }
 
-	// The normal 7d fixture advertises that fine-grained history is
-	// available without contributing any traffic to the response. Tests for
-	// the hourly fallback explicitly remove this row.
-	if err := database.Create(&db.AccessLogFiveMinutely{
-		BucketStart: fixedTrendsNow.Add(-6 * 24 * time.Hour).Truncate(5 * time.Minute).Unix(),
-		AdapterType: "availability-marker",
-		Upstream:    "test",
+	// Normal fixtures model a completed transactional backfill. Fallback
+	// tests explicitly remove this marker while retaining fine rows.
+	if err := database.Create(&db.ControlPlaneState{
+		Key:   accesslog.FiveMinuteBackfillMarker,
+		Value: "true",
 	}).Error; err != nil {
-		t.Fatalf("create fine-history marker: %v", err)
+		t.Fatalf("create five-minute backfill marker: %v", err)
 	}
 
 	router := gin.New()
@@ -109,6 +113,8 @@ func trendQueryTable(tx *gorm.DB) string {
 		return "access_log_five_minutely"
 	case *db.AccessLogHourly:
 		return "access_log_hourly"
+	case *db.ControlPlaneState:
+		return "control_plane_states"
 	default:
 		return ""
 	}
@@ -158,6 +164,18 @@ func assertAggregatePoint(t *testing.T, point trendPoint) {
 	if point.Errors != 2 {
 		t.Errorf("errors = %d, want 2", point.Errors)
 	}
+}
+
+func trendPointAt(t *testing.T, points []trendPoint, bucket time.Time) trendPoint {
+	t.Helper()
+	want := bucket.Unix()
+	for _, point := range points {
+		if point.Bucket == want {
+			return point
+		}
+	}
+	t.Fatalf("bucket %d not found", want)
+	return trendPoint{}
 }
 
 func insertRawAggregate(t *testing.T, database *gorm.DB, bucket time.Time) {
@@ -264,28 +282,54 @@ func TestDashboardTrends_AggregatesCurrentPartialBucket(t *testing.T) {
 }
 
 func TestDashboardTrends_FallsBackWhenFineHistoryIsUnavailable(t *testing.T) {
-	t.Run("24h groups indexed raw logs into five-minute buckets", func(t *testing.T) {
+	t.Run("24h keeps raw history authoritative when one fine row exists without marker", func(t *testing.T) {
 		handler, router := newTrendsTestHandler(t)
-		if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
-			t.Fatalf("clear fine history: %v", err)
+		if err := handler.db.Exec("DELETE FROM control_plane_states WHERE key = ?", accesslog.FiveMinuteBackfillMarker).Error; err != nil {
+			t.Fatalf("clear five-minute backfill marker: %v", err)
 		}
-		insertRawAggregate(t, handler.db, fixedTrendsNow.Truncate(5*time.Minute))
+		rawBucket := fixedTrendsNow.Truncate(5 * time.Minute).Add(-2 * time.Hour)
+		fineBucket := fixedTrendsNow.Truncate(5 * time.Minute)
+		insertRawAggregate(t, handler.db, rawBucket)
+		if err := handler.db.Create(&db.AccessLogFiveMinutely{
+			BucketStart:  fineBucket.Unix(),
+			AdapterType:  "partial-fine-history",
+			Upstream:     "test",
+			RequestCount: 99,
+		}).Error; err != nil {
+			t.Fatalf("create partial fine history: %v", err)
+		}
 
 		points := getTrendPoints(t, router, "24h")
 		assertTrendResolution(t, points, 288, 300)
-		assertAggregatePoint(t, points[len(points)-1])
+		assertAggregatePoint(t, trendPointAt(t, points, rawBucket))
+		if got := trendPointAt(t, points, fineBucket).Requests; got != 0 {
+			t.Fatalf("fine-only bucket requests = %d, want 0", got)
+		}
 	})
 
-	t.Run("7d returns hourly rollup buckets", func(t *testing.T) {
+	t.Run("7d keeps hourly history authoritative when one fine row exists without marker", func(t *testing.T) {
 		handler, router := newTrendsTestHandler(t)
-		if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
-			t.Fatalf("clear fine history: %v", err)
+		if err := handler.db.Exec("DELETE FROM control_plane_states WHERE key = ?", accesslog.FiveMinuteBackfillMarker).Error; err != nil {
+			t.Fatalf("clear five-minute backfill marker: %v", err)
 		}
-		insertHourlyAggregate(t, handler.db, fixedTrendsNow.Truncate(time.Hour))
+		hourlyBucket := fixedTrendsNow.Truncate(time.Hour).Add(-48 * time.Hour)
+		fineBucket := fixedTrendsNow.Truncate(5 * time.Minute)
+		insertHourlyAggregate(t, handler.db, hourlyBucket)
+		if err := handler.db.Create(&db.AccessLogFiveMinutely{
+			BucketStart:  fineBucket.Unix(),
+			AdapterType:  "partial-fine-history",
+			Upstream:     "test",
+			RequestCount: 99,
+		}).Error; err != nil {
+			t.Fatalf("create partial fine history: %v", err)
+		}
 
 		points := getTrendPoints(t, router, "7d")
 		assertTrendResolution(t, points, 168, 3600)
-		assertAggregatePoint(t, points[len(points)-1])
+		assertAggregatePoint(t, trendPointAt(t, points, hourlyBucket))
+		if got := trendPointAt(t, points, fixedTrendsNow.Truncate(time.Hour)).Requests; got != 0 {
+			t.Fatalf("fine-only bucket requests = %d, want 0", got)
+		}
 	})
 }
 
@@ -406,7 +450,7 @@ func TestDashboardTrends_ReturnsDatabaseErrorForSourceFailures(t *testing.T) {
 			name:       "fine aggregate",
 			rangeParam: "24h",
 			failTable:  "access_log_five_minutely",
-			occurrence: 2,
+			occurrence: 1,
 			setup: func(t *testing.T, handler *DashboardHandler) {
 				insertFiveMinuteAggregate(t, handler.db, fixedTrendsNow.Truncate(5*time.Minute))
 			},
@@ -445,17 +489,15 @@ func TestDashboardTrends_ReturnsDatabaseErrorForSourceFailures(t *testing.T) {
 	}
 }
 
-func TestDashboardTrends_AvailabilityFailureDoesNotFallBackToRaw(t *testing.T) {
+func TestDashboardTrends_MarkerQueryFailureReturnsDatabaseErrorWithoutFallback(t *testing.T) {
 	handler, router := newTrendsTestHandler(t)
-	fineQueries := 0
+	markerQueries := 0
 	rawQueries := 0
 	registerTrendRowCallback(t, handler.db, func(tx *gorm.DB) {
 		switch trendQueryTable(tx) {
-		case "access_log_five_minutely":
-			fineQueries++
-			if fineQueries == 1 {
-				tx.AddError(errors.New("forced fine availability failure"))
-			}
+		case "control_plane_states":
+			markerQueries++
+			tx.AddError(errors.New("forced five-minute marker query failure"))
 		case "access_logs":
 			rawQueries++
 		}
@@ -463,11 +505,11 @@ func TestDashboardTrends_AvailabilityFailureDoesNotFallBackToRaw(t *testing.T) {
 
 	recorder := performTrendRequest(router, "24h", nil)
 	assertTrendDatabaseError(t, recorder)
-	if fineQueries != 1 {
-		t.Fatalf("fine queries = %d, want 1", fineQueries)
+	if markerQueries != 1 {
+		t.Fatalf("marker queries = %d, want 1", markerQueries)
 	}
 	if rawQueries != 0 {
-		t.Fatalf("raw fallback queries = %d, want 0 after availability failure", rawQueries)
+		t.Fatalf("raw fallback queries = %d, want 0 after marker query failure", rawQueries)
 	}
 }
 
@@ -484,7 +526,7 @@ func TestDashboardTrends_PropagatesRequestContextToEverySourceQuery(t *testing.T
 	}{
 		{name: "raw", rangeParam: "1h", wantQueries: 1},
 		{
-			name:        "fine availability and aggregate",
+			name:        "marker readiness and fine aggregate",
 			rangeParam:  "24h",
 			wantQueries: 2,
 			setup: func(t *testing.T, handler *DashboardHandler) {
@@ -492,12 +534,12 @@ func TestDashboardTrends_PropagatesRequestContextToEverySourceQuery(t *testing.T
 			},
 		},
 		{
-			name:        "fine availability and hourly fallback",
+			name:        "marker readiness and hourly fallback",
 			rangeParam:  "7d",
 			wantQueries: 2,
 			setup: func(t *testing.T, handler *DashboardHandler) {
-				if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
-					t.Fatalf("clear fine history: %v", err)
+				if err := handler.db.Exec("DELETE FROM control_plane_states WHERE key = ?", accesslog.FiveMinuteBackfillMarker).Error; err != nil {
+					t.Fatalf("clear five-minute backfill marker: %v", err)
 				}
 			},
 		},
@@ -513,7 +555,8 @@ func TestDashboardTrends_PropagatesRequestContextToEverySourceQuery(t *testing.T
 			missingContext := false
 			registerTrendRowCallback(t, handler.db, func(tx *gorm.DB) {
 				table := trendQueryTable(tx)
-				if table != "access_logs" && table != "access_log_five_minutely" && table != "access_log_hourly" {
+				if table != "access_logs" && table != "access_log_five_minutely" &&
+					table != "access_log_hourly" && table != "control_plane_states" {
 					return
 				}
 				queries++
@@ -557,8 +600,8 @@ func TestDashboardTrends_ReadsClockOncePerRequest(t *testing.T) {
 			rangeParam: "7d",
 			wantStep:   time.Hour,
 			setup: func(t *testing.T, handler *DashboardHandler) {
-				if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
-					t.Fatalf("clear fine history: %v", err)
+				if err := handler.db.Exec("DELETE FROM control_plane_states WHERE key = ?", accesslog.FiveMinuteBackfillMarker).Error; err != nil {
+					t.Fatalf("clear five-minute backfill marker: %v", err)
 				}
 			},
 		},

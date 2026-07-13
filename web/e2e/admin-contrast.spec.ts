@@ -68,24 +68,73 @@ test('trend series use linear paths', async ({ page }) => {
   }
 })
 
-test('trend tooltip formats numeric buckets in local time', async ({ page }) => {
+async function exactTrendLabel(page: import('@playwright/test').Page, bucket: number, range: '1h' | '30d') {
+  return page.evaluate(({ value, showSeconds }) => {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return new Date(value * 1000).toLocaleString(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: showSeconds ? '2-digit' : undefined,
+      timeZoneName: 'short',
+      timeZone,
+    })
+  }, { value: bucket, showSeconds: range === '1h' })
+}
+
+async function hoverTrendEndpoint(
+  chart: import('@playwright/test').Locator,
+  endpoint: 'first' | 'last',
+) {
+  const box = await chart.boundingBox()
+  expect(box).not.toBeNull()
+  await chart.hover({ position: { x: endpoint === 'first' ? 50 : box!.width - 50, y: 80 } })
+  return chart.locator('.recharts-tooltip-wrapper p').first()
+}
+
+test('1h trend tooltips distinguish adjacent ten-second buckets in local time', async ({ page }) => {
+  const points = populatedTrendPoints.slice(0, 2).map((point, index) => ({
+    ...point,
+    bucket: populatedTrendPoints[0].bucket + index * 10,
+  }))
   await mockAdminApi(page, {
-    'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints },
+    'GET /api/v1/admin/dashboard/trends': { points },
   })
   await page.goto('/admin')
 
   const chart = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper')
   await expect(chart).toBeVisible()
-  await chart.hover({ position: { x: 40, y: 80 } })
-  const expectedLabel = await page.evaluate(bucket => {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    return new Date(bucket * 1000).toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone,
-    })
-  }, populatedTrendPoints[0].bucket)
-  await expect(page.locator('[data-query-key="dashboard-trends"] .recharts-tooltip-wrapper p').first()).toHaveText(expectedLabel)
+  const firstExpected = await exactTrendLabel(page, points[0].bucket, '1h')
+  const lastExpected = await exactTrendLabel(page, points[1].bucket, '1h')
+
+  expect(firstExpected).not.toBe(lastExpected)
+  await expect(await hoverTrendEndpoint(chart, 'first')).toHaveText(firstExpected)
+  await expect(await hoverTrendEndpoint(chart, 'last')).toHaveText(lastExpected)
+})
+
+test('30d trend tooltips distinguish same-day two-hour buckets in local time', async ({ page }) => {
+  const points = populatedTrendPoints.slice(0, 2).map((point, index) => ({
+    ...point,
+    bucket: populatedTrendPoints[0].bucket + index * 2 * 60 * 60,
+  }))
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard/trends': { points },
+  })
+  await page.goto('/admin')
+  await page.getByRole('group', { name: /活动趋势|Activity trends/ })
+    .getByRole('button', { name: /30 天|30d/i })
+    .click()
+
+  const chart = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper')
+  await expect(chart).toBeVisible()
+  const firstExpected = await exactTrendLabel(page, points[0].bucket, '30d')
+  const lastExpected = await exactTrendLabel(page, points[1].bucket, '30d')
+
+  expect(firstExpected).not.toBe(lastExpected)
+  await expect(await hoverTrendEndpoint(chart, 'first')).toHaveText(firstExpected)
+  await expect(await hoverTrendEndpoint(chart, 'last')).toHaveText(lastExpected)
 })
 
 test('primary command uses the semantic pressed color without a filter', async ({ page }) => {

@@ -10,7 +10,9 @@ import (
 	"depsilo/internal/db"
 )
 
-const fiveMinuteBackfillMarker = "access_log_five_minutely_v1"
+// FiveMinuteBackfillMarker is the transactional completion contract used to
+// decide when five-minute history is authoritative for dashboard queries.
+const FiveMinuteBackfillMarker = "access_log_five_minutely_v1"
 
 // BackfillIfEmpty fills the three rollup tables from the existing
 // access_logs table whenever access_log_hourly looks empty. It's safe
@@ -50,7 +52,7 @@ func BackfillFiveMinutely(ctx context.Context, gdb *gorm.DB, now time.Time) erro
 	var markerCount int64
 	if err := gdb.WithContext(ctx).
 		Model(&db.ControlPlaneState{}).
-		Where("key = ?", fiveMinuteBackfillMarker).
+		Where("key = ?", FiveMinuteBackfillMarker).
 		Count(&markerCount).Error; err != nil {
 		return err
 	}
@@ -76,13 +78,13 @@ SELECT
   COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0), datetime('now')
 FROM access_logs
 WHERE created_at >= ?
-GROUP BY 1, adapter_type, hit, upstream`
+GROUP BY 1, adapter_type, hit, COALESCE(upstream, '')`
 		if err := tx.Exec(sql, cutoff).Error; err != nil {
 			return err
 		}
 
 		return tx.Save(&db.ControlPlaneState{
-			Key:   fiveMinuteBackfillMarker,
+			Key:   FiveMinuteBackfillMarker,
 			Value: "true",
 		}).Error
 	})

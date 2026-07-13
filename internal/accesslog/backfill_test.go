@@ -137,7 +137,7 @@ func TestBackfillFiveMinutely_BackfillsSevenDaysAndRunsOnce(t *testing.T) {
 	}
 
 	var marker db.ControlPlaneState
-	if err := d.First(&marker, "key = ?", fiveMinuteBackfillMarker).Error; err != nil {
+	if err := d.First(&marker, "key = ?", FiveMinuteBackfillMarker).Error; err != nil {
 		t.Fatalf("query backfill marker: %v", err)
 	}
 
@@ -162,12 +162,52 @@ func TestBackfillFiveMinutely_BackfillsSevenDaysAndRunsOnce(t *testing.T) {
 	}
 }
 
+func TestBackfillFiveMinutely_MergesLegacyNullAndEmptyUpstreams(t *testing.T) {
+	d := newTestDB(t)
+	now := mustParse(t, "2026-07-12T12:34:56Z")
+	createdAt := now.Add(-time.Hour)
+
+	if err := d.Exec(`
+INSERT INTO access_logs
+  (adapter_type, hit, upstream, bytes_sent, latency_ms, status_code, created_at)
+VALUES
+  (?, ?, NULL, ?, ?, ?, ?),
+  (?, ?, '', ?, ?, ?, ?)`,
+		"pypi", true, 100, 10, 503, createdAt,
+		"pypi", true, 200, 20, 200, createdAt,
+	).Error; err != nil {
+		t.Fatalf("create legacy access logs: %v", err)
+	}
+
+	if err := BackfillFiveMinutely(context.Background(), d, now); err != nil {
+		t.Fatalf("BackfillFiveMinutely: %v", err)
+	}
+
+	var rows []db.AccessLogFiveMinutely
+	if err := d.Find(&rows).Error; err != nil {
+		t.Fatalf("query five-minute rows: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("five-minute rows = %d, want 1: %+v", len(rows), rows)
+	}
+	row := rows[0]
+	if row.Upstream != "" || row.RequestCount != 2 || row.TotalBytes != 300 ||
+		row.SumLatencyMs != 30 || row.ErrorCount != 1 {
+		t.Fatalf("merged five-minute row = %+v", row)
+	}
+
+	var marker db.ControlPlaneState
+	if err := d.First(&marker, "key = ?", FiveMinuteBackfillMarker).Error; err != nil {
+		t.Fatalf("query committed marker: %v", err)
+	}
+}
+
 func TestBackfillFiveMinutely_MarkerFailureRollsBackRows(t *testing.T) {
 	now := mustParse(t, "2026-07-12T12:34:56Z")
 	triggerSQL := `
 CREATE TRIGGER reject_five_minutely_marker
 BEFORE INSERT ON control_plane_states
-WHEN NEW.key = '` + fiveMinuteBackfillMarker + `'
+WHEN NEW.key = '` + FiveMinuteBackfillMarker + `'
 BEGIN
     SELECT RAISE(ABORT, 'reject five-minute marker');
 END`
@@ -219,7 +259,7 @@ END`
 
 			var markerCount int64
 			if err := d.Model(&db.ControlPlaneState{}).
-				Where("key = ?", fiveMinuteBackfillMarker).
+				Where("key = ?", FiveMinuteBackfillMarker).
 				Count(&markerCount).Error; err != nil {
 				t.Fatalf("count markers: %v", err)
 			}

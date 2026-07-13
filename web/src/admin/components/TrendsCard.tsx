@@ -59,7 +59,7 @@ interface ChartPoint {
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-function fmtTime(bucket: number, granularity: 'minute' | 'hour' | 'day'): string {
+function fmtAxisTime(bucket: number, granularity: 'minute' | 'hour' | 'day'): string {
   const d = new Date(bucket * 1000)
   if (granularity === 'minute') {
     return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: TZ })
@@ -72,10 +72,24 @@ function fmtTime(bucket: number, granularity: 'minute' | 'hour' | 'day'): string
   return d.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', timeZone: TZ })
 }
 
+function fmtTooltipTime(bucket: number, range: TrendsRange): string {
+  const d = new Date(bucket * 1000)
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: range === '1h' ? '2-digit' : undefined,
+    timeZoneName: 'short',
+    timeZone: TZ,
+  })
+}
+
 function toChartPoint(p: RawTrendPoint, granularity: 'minute' | 'hour' | 'day'): ChartPoint {
   return {
     bucket: p.bucket,
-    label: fmtTime(p.bucket, granularity),
+    label: fmtAxisTime(p.bucket, granularity),
     requests: p.requests,
     hits: p.hits,
     misses: p.misses,
@@ -111,13 +125,13 @@ const TABS: { value: TrendsTab; key: string }[] = [
 ]
 
 interface ChartTooltipProps extends TooltipContentProps<TooltipValueType, string | number> {
-  granularity: 'minute' | 'hour' | 'day'
+  dataRange: TrendsRange
 }
 
-function ChartTooltip({ active, payload, label, granularity }: ChartTooltipProps) {
+function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) {
   const { t } = useTranslation()
   if (!active || !payload?.length) return null
-  const formattedLabel = typeof label === 'number' ? fmtTime(label, granularity) : label
+  const formattedLabel = typeof label === 'number' ? fmtTooltipTime(label, dataRange) : label
   return (
     <div
       className="rounded-[4px] px-3 py-2 text-[12px]"
@@ -257,11 +271,11 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
               type="number"
               domain={['dataMin', 'dataMax']}
               tickCount={isMobile ? 4 : 8}
-              tickFormatter={(value: number) => fmtTime(value, granularity)}
+              tickFormatter={(value: number) => fmtAxisTime(value, granularity)}
               minTickGap={12}
               {...axisProps}
             />
-            <Tooltip content={props => <ChartTooltip {...props} granularity={granularity} />} />
+            <Tooltip content={props => <ChartTooltip {...props} dataRange={dataRange} />} />
             <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
 
             {tab === 'requests' && (

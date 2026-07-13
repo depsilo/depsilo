@@ -228,6 +228,8 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 			zap.L().Warn("access log rollup backfill failed", zap.Error(err))
 		}
 		backfillStarted := time.Now()
+		zap.L().Info("starting access log five-minute backfill",
+			zap.Duration("window", 7*24*time.Hour))
 		if err := accesslog.BackfillFiveMinutely(serverCtx, database, backfillStarted.UTC()); err != nil {
 			zap.L().Warn("access log five-minute backfill failed",
 				zap.Error(err),
