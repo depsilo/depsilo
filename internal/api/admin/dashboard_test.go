@@ -1,7 +1,9 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -70,6 +72,55 @@ func getTrendPoints(t *testing.T, router http.Handler, rangeParam string) []tren
 		t.Fatalf("decode trends response: %v", err)
 	}
 	return body.Points
+}
+
+func performTrendRequest(router http.Handler, rangeParam string, ctx context.Context) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/dashboard/trends?range="+rangeParam, nil)
+	if ctx != nil {
+		request = request.WithContext(ctx)
+	}
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func assertTrendDatabaseError(t *testing.T, recorder *httptest.ResponseRecorder) {
+	t.Helper()
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode database error: %v", err)
+	}
+	if len(body) != 2 || body["code"] != "DB_ERROR" || body["message"] != "failed to load dashboard trends" {
+		t.Fatalf("database error body = %#v", body)
+	}
+}
+
+func trendQueryTable(tx *gorm.DB) string {
+	if tx.Statement.Table != "" {
+		return tx.Statement.Table
+	}
+	switch tx.Statement.Model.(type) {
+	case *db.AccessLog:
+		return "access_logs"
+	case *db.AccessLogFiveMinutely:
+		return "access_log_five_minutely"
+	case *db.AccessLogHourly:
+		return "access_log_hourly"
+	default:
+		return ""
+	}
+}
+
+func registerTrendRowCallback(t *testing.T, database *gorm.DB, callback func(*gorm.DB)) {
+	t.Helper()
+	const callbackName = "test:dashboard_trends_row"
+	if err := database.Callback().Row().Before("gorm:row").Register(callbackName, callback); err != nil {
+		t.Fatalf("register row callback: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Callback().Row().Remove(callbackName) })
 }
 
 func assertTrendResolution(t *testing.T, points []trendPoint, wantPoints int, wantStep int64) {
@@ -334,6 +385,215 @@ func TestDashboardTrends_RawQueryIsBoundedAndZeroFillsGaps(t *testing.T) {
 		if points[i].Requests != 0 {
 			t.Fatalf("gap bucket %d requests = %d, want 0", i, points[i].Requests)
 		}
+	}
+}
+
+func TestDashboardTrends_ReturnsDatabaseErrorForSourceFailures(t *testing.T) {
+	tests := []struct {
+		name       string
+		rangeParam string
+		failTable  string
+		occurrence int
+		setup      func(*testing.T, *DashboardHandler)
+	}{
+		{
+			name:       "raw aggregate",
+			rangeParam: "1h",
+			failTable:  "access_logs",
+			occurrence: 1,
+		},
+		{
+			name:       "fine aggregate",
+			rangeParam: "24h",
+			failTable:  "access_log_five_minutely",
+			occurrence: 2,
+			setup: func(t *testing.T, handler *DashboardHandler) {
+				insertFiveMinuteAggregate(t, handler.db, fixedTrendsNow.Truncate(5*time.Minute))
+			},
+		},
+		{
+			name:       "hourly aggregate",
+			rangeParam: "30d",
+			failTable:  "access_log_hourly",
+			occurrence: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, router := newTrendsTestHandler(t)
+			if tt.setup != nil {
+				tt.setup(t, handler)
+			}
+			seen := 0
+			registerTrendRowCallback(t, handler.db, func(tx *gorm.DB) {
+				if trendQueryTable(tx) != tt.failTable {
+					return
+				}
+				seen++
+				if seen == tt.occurrence {
+					tx.AddError(errors.New("forced dashboard trends query failure"))
+				}
+			})
+
+			recorder := performTrendRequest(router, tt.rangeParam, nil)
+			assertTrendDatabaseError(t, recorder)
+			if seen != tt.occurrence {
+				t.Fatalf("matching queries = %d, want %d", seen, tt.occurrence)
+			}
+		})
+	}
+}
+
+func TestDashboardTrends_AvailabilityFailureDoesNotFallBackToRaw(t *testing.T) {
+	handler, router := newTrendsTestHandler(t)
+	fineQueries := 0
+	rawQueries := 0
+	registerTrendRowCallback(t, handler.db, func(tx *gorm.DB) {
+		switch trendQueryTable(tx) {
+		case "access_log_five_minutely":
+			fineQueries++
+			if fineQueries == 1 {
+				tx.AddError(errors.New("forced fine availability failure"))
+			}
+		case "access_logs":
+			rawQueries++
+		}
+	})
+
+	recorder := performTrendRequest(router, "24h", nil)
+	assertTrendDatabaseError(t, recorder)
+	if fineQueries != 1 {
+		t.Fatalf("fine queries = %d, want 1", fineQueries)
+	}
+	if rawQueries != 0 {
+		t.Fatalf("raw fallback queries = %d, want 0 after availability failure", rawQueries)
+	}
+}
+
+func TestDashboardTrends_PropagatesRequestContextToEverySourceQuery(t *testing.T) {
+	type contextKey struct{}
+	key := contextKey{}
+	const value = "dashboard-trends-request"
+
+	tests := []struct {
+		name        string
+		rangeParam  string
+		wantQueries int
+		setup       func(*testing.T, *DashboardHandler)
+	}{
+		{name: "raw", rangeParam: "1h", wantQueries: 1},
+		{
+			name:        "fine availability and aggregate",
+			rangeParam:  "24h",
+			wantQueries: 2,
+			setup: func(t *testing.T, handler *DashboardHandler) {
+				insertFiveMinuteAggregate(t, handler.db, fixedTrendsNow.Truncate(5*time.Minute))
+			},
+		},
+		{
+			name:        "fine availability and hourly fallback",
+			rangeParam:  "7d",
+			wantQueries: 2,
+			setup: func(t *testing.T, handler *DashboardHandler) {
+				if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
+					t.Fatalf("clear fine history: %v", err)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, router := newTrendsTestHandler(t)
+			if tt.setup != nil {
+				tt.setup(t, handler)
+			}
+			queries := 0
+			missingContext := false
+			registerTrendRowCallback(t, handler.db, func(tx *gorm.DB) {
+				table := trendQueryTable(tx)
+				if table != "access_logs" && table != "access_log_five_minutely" && table != "access_log_hourly" {
+					return
+				}
+				queries++
+				if tx.Statement.Context.Value(key) != value {
+					missingContext = true
+				}
+			})
+
+			ctx := context.WithValue(context.Background(), key, value)
+			recorder := performTrendRequest(router, tt.rangeParam, ctx)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if queries != tt.wantQueries {
+				t.Fatalf("queries = %d, want %d", queries, tt.wantQueries)
+			}
+			if missingContext {
+				t.Fatal("one or more trend queries did not receive the request context")
+			}
+		})
+	}
+}
+
+func TestDashboardTrends_ReadsClockOncePerRequest(t *testing.T) {
+	tests := []struct {
+		name       string
+		rangeParam string
+		wantStep   time.Duration
+		setup      func(*testing.T, *DashboardHandler)
+	}{
+		{
+			name:       "primary fine source",
+			rangeParam: "24h",
+			wantStep:   5 * time.Minute,
+			setup: func(t *testing.T, handler *DashboardHandler) {
+				insertFiveMinuteAggregate(t, handler.db, fixedTrendsNow.Truncate(5*time.Minute))
+			},
+		},
+		{
+			name:       "hourly fallback",
+			rangeParam: "7d",
+			wantStep:   time.Hour,
+			setup: func(t *testing.T, handler *DashboardHandler) {
+				if err := handler.db.Exec("DELETE FROM access_log_five_minutely").Error; err != nil {
+					t.Fatalf("clear fine history: %v", err)
+				}
+			},
+		},
+		{
+			name:       "rollup disabled",
+			rangeParam: "30d",
+			wantStep:   2 * time.Hour,
+			setup: func(_ *testing.T, handler *DashboardHandler) {
+				handler.useRollup = false
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, router := newTrendsTestHandler(t)
+			tt.setup(t, handler)
+			calls := 0
+			handler.now = func() time.Time {
+				calls++
+				if calls == 1 {
+					return fixedTrendsNow
+				}
+				return fixedTrendsNow.Add(24 * time.Hour)
+			}
+
+			points := getTrendPoints(t, router, tt.rangeParam)
+			if calls != 1 {
+				t.Fatalf("clock calls = %d, want 1", calls)
+			}
+			wantLast := fixedTrendsNow.Truncate(tt.wantStep).Unix()
+			if got := points[len(points)-1].Bucket; got != wantLast {
+				t.Fatalf("last bucket = %d, want %d", got, wantLast)
+			}
+		})
 	}
 }
 

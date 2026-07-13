@@ -1,10 +1,12 @@
 package admin
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/cache"
@@ -204,20 +206,33 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 		spec = trendSpecs[rangeParam]
 	}
 
-	var points []trendPoint
+	ctx := c.Request.Context()
+	now := h.trendNow()
+	var (
+		points []trendPoint
+		err    error
+	)
 	if !h.useRollup {
-		points = h.trendsRaw(spec)
+		points, err = h.trendsRaw(ctx, spec, now)
 	} else {
 		switch rangeParam {
 		case "1h":
-			points = h.trendsRaw(spec)
+			points, err = h.trendsRaw(ctx, spec, now)
 		case "24h":
-			points = h.trendsFiveMinutely(spec)
+			points, err = h.trendsFiveMinutely(ctx, spec, now)
 		case "30d":
-			points = h.trendsHourlyGrouped(spec)
+			points, err = h.trendsHourlyGrouped(ctx, spec, now)
 		default: // "7d"
-			points = h.trendsSevenDays(spec)
+			points, err = h.trendsSevenDays(ctx, spec, now)
 		}
+	}
+	if err != nil {
+		zap.L().Error("load dashboard trends", zap.String("range", rangeParam), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    "DB_ERROR",
+			"message": "failed to load dashboard trends",
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"points": points})
@@ -323,14 +338,14 @@ func buildTrendPoints(window trendWindow, rows []trendHourBucket) []trendPoint {
 	return out
 }
 
-func (h *DashboardHandler) trendsRaw(spec trendSpec) []trendPoint {
-	return h.trendsRawWindow(makeTrendWindow(h.trendNow(), spec))
+func (h *DashboardHandler) trendsRaw(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+	return h.trendsRawWindow(ctx, makeTrendWindow(now, spec))
 }
 
-func (h *DashboardHandler) trendsRawWindow(window trendWindow) []trendPoint {
+func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
 	intervalSec := int64(window.spec.interval / time.Second)
 	var rows []trendHourBucket
-	h.db.Model(&db.AccessLog{}).
+	result := h.db.WithContext(ctx).Model(&db.AccessLog{}).
 		Select(`(CAST(strftime('%s', created_at) AS INTEGER) / ?) * ? AS bucket,
 			COUNT(*) AS requests,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
@@ -342,21 +357,28 @@ func (h *DashboardHandler) trendsRawWindow(window trendWindow) []trendPoint {
 			intervalSec, intervalSec).
 		Where("created_at >= ? AND created_at <= ?", window.start, window.now).
 		Group("bucket").Order("bucket ASC").Scan(&rows)
-	return buildTrendPoints(window, rows)
-}
-
-func (h *DashboardHandler) trendsFiveMinutely(spec trendSpec) []trendPoint {
-	window := makeTrendWindow(h.trendNow(), spec)
-	if !h.hasFiveMinuteHistory(window) {
-		return h.trendsRawWindow(window)
+	if result.Error != nil {
+		return nil, result.Error
 	}
-	return h.trendsFiveMinutelyWindow(window)
+	return buildTrendPoints(window, rows), nil
 }
 
-func (h *DashboardHandler) trendsFiveMinutelyWindow(window trendWindow) []trendPoint {
+func (h *DashboardHandler) trendsFiveMinutely(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+	window := makeTrendWindow(now, spec)
+	hasHistory, err := h.hasFiveMinuteHistory(ctx, window)
+	if err != nil {
+		return nil, err
+	}
+	if !hasHistory {
+		return h.trendsRawWindow(ctx, window)
+	}
+	return h.trendsFiveMinutelyWindow(ctx, window)
+}
+
+func (h *DashboardHandler) trendsFiveMinutelyWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
 	intervalSec := int64(window.spec.interval / time.Second)
 	var rows []trendHourBucket
-	h.db.Table("access_log_five_minutely").
+	result := h.db.WithContext(ctx).Table("access_log_five_minutely").
 		Select(`(bucket_start / ?) * ? AS bucket,
 			COALESCE(SUM(request_count), 0) AS requests,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
@@ -368,33 +390,42 @@ func (h *DashboardHandler) trendsFiveMinutelyWindow(window trendWindow) []trendP
 			intervalSec, intervalSec).
 		Where("bucket_start >= ? AND bucket_start <= ?", window.start.Unix(), window.now.Unix()).
 		Group("bucket").Order("bucket ASC").Scan(&rows)
-	return buildTrendPoints(window, rows)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return buildTrendPoints(window, rows), nil
 }
 
-func (h *DashboardHandler) hasFiveMinuteHistory(window trendWindow) bool {
+func (h *DashboardHandler) hasFiveMinuteHistory(ctx context.Context, window trendWindow) (bool, error) {
 	var exists int
-	err := h.db.Table("access_log_five_minutely").
+	result := h.db.WithContext(ctx).Table("access_log_five_minutely").
 		Select("1").
 		Where("bucket_start >= ? AND bucket_start <= ?", window.start.Unix(), window.now.Unix()).
 		Limit(1).
-		Scan(&exists).Error
-	return err == nil && exists == 1
-}
-
-func (h *DashboardHandler) trendsSevenDays(spec trendSpec) []trendPoint {
-	now := h.trendNow()
-	window := makeTrendWindow(now, spec)
-	if h.hasFiveMinuteHistory(window) {
-		return h.trendsFiveMinutelyWindow(window)
+		Scan(&exists)
+	if result.Error != nil {
+		return false, result.Error
 	}
-	return h.trendsHourlyGroupedWindow(makeTrendWindow(now, sevenDayHourlyFallbackSpec))
+	return exists == 1, nil
 }
 
-func (h *DashboardHandler) trendsHourlyGrouped(spec trendSpec) []trendPoint {
-	return h.trendsHourlyGroupedWindow(makeTrendWindow(h.trendNow(), spec))
+func (h *DashboardHandler) trendsSevenDays(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+	window := makeTrendWindow(now, spec)
+	hasHistory, err := h.hasFiveMinuteHistory(ctx, window)
+	if err != nil {
+		return nil, err
+	}
+	if hasHistory {
+		return h.trendsFiveMinutelyWindow(ctx, window)
+	}
+	return h.trendsHourlyGroupedWindow(ctx, makeTrendWindow(now, sevenDayHourlyFallbackSpec))
 }
 
-func (h *DashboardHandler) trendsHourlyGroupedWindow(window trendWindow) []trendPoint {
+func (h *DashboardHandler) trendsHourlyGrouped(ctx context.Context, spec trendSpec, now time.Time) ([]trendPoint, error) {
+	return h.trendsHourlyGroupedWindow(ctx, makeTrendWindow(now, spec))
+}
+
+func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
 	type hourlyRow struct {
 		Date         string
 		Hour         int
@@ -408,7 +439,7 @@ func (h *DashboardHandler) trendsHourlyGroupedWindow(window trendWindow) []trend
 	}
 
 	var rows []hourlyRow
-	h.db.Table("access_log_hourly").
+	result := h.db.WithContext(ctx).Table("access_log_hourly").
 		Select(`date, hour,
 			COALESCE(SUM(request_count), 0) AS requests,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
@@ -422,6 +453,9 @@ func (h *DashboardHandler) trendsHourlyGroupedWindow(window trendWindow) []trend
 			window.start.Format("2006-01-02"), window.start.Format("2006-01-02"), window.start.Hour(),
 			window.now.Format("2006-01-02"), window.now.Format("2006-01-02"), window.now.Hour()).
 		Group("date, hour").Order("date ASC, hour ASC").Scan(&rows)
+	if result.Error != nil {
+		return nil, result.Error
+	}
 
 	intervalSec := int64(window.spec.interval / time.Second)
 	grouped := make(map[int64]trendHourBucket, len(rows))
@@ -450,5 +484,5 @@ func (h *DashboardHandler) trendsHourlyGroupedWindow(window trendWindow) []trend
 	for _, aggregate := range grouped {
 		aggregates = append(aggregates, aggregate)
 	}
-	return buildTrendPoints(window, aggregates)
+	return buildTrendPoints(window, aggregates), nil
 }
