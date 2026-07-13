@@ -10,11 +10,12 @@ import (
 	"depsilo/internal/db"
 )
 
-// RetentionConfig — both values are number-of-days. Zero means
+// RetentionConfig values are number-of-days. Zero means
 // "never sweep that table" so an operator can opt-in incrementally.
 type RetentionConfig struct {
-	RawDays    int
-	RollupDays int
+	RawDays        int
+	FiveMinuteDays int
+	RollupDays     int
 }
 
 // StartRetention runs forever until ctx cancellation. Sweeps once on
@@ -48,6 +49,19 @@ func RunRetention(ctx context.Context, gdb *gorm.DB, cfg RetentionConfig) {
 			zap.L().Warn("retention: access_logs delete failed", zap.Error(res.Error))
 		} else if res.RowsAffected > 0 {
 			zap.L().Info("retention: pruned access_logs",
+				zap.Int64("rows", res.RowsAffected),
+				zap.Time("before", cutoff))
+		}
+	}
+	if cfg.FiveMinuteDays > 0 {
+		cutoff := time.Now().UTC().AddDate(0, 0, -cfg.FiveMinuteDays)
+		res := gdb.WithContext(ctx).
+			Where("bucket_start < ?", cutoff.Unix()).
+			Delete(&db.AccessLogFiveMinutely{})
+		if res.Error != nil {
+			zap.L().Warn("retention: access_log_five_minutely delete failed", zap.Error(res.Error))
+		} else if res.RowsAffected > 0 {
+			zap.L().Info("retention: pruned access_log_five_minutely",
 				zap.Int64("rows", res.RowsAffected),
 				zap.Time("before", cutoff))
 		}

@@ -227,6 +227,15 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		if err := accesslog.BackfillIfEmpty(serverCtx, database); err != nil {
 			zap.L().Warn("access log rollup backfill failed", zap.Error(err))
 		}
+		backfillStarted := time.Now()
+		if err := accesslog.BackfillFiveMinutely(serverCtx, database, backfillStarted.UTC()); err != nil {
+			zap.L().Warn("access log five-minute backfill failed",
+				zap.Error(err),
+				zap.Duration("took", time.Since(backfillStarted)))
+		} else {
+			zap.L().Info("access log five-minute backfill complete",
+				zap.Duration("took", time.Since(backfillStarted)))
+		}
 	}
 	accessRecorder = accesslog.NewRecorder(database, accesslog.Config{
 		Enabled:       cfg.AccessLog.RollupEnabled,
@@ -236,8 +245,9 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	adapter.SetRecorder(accessRecorder)
 	go accesslog.StartCompactor(serverCtx, database)
 	go accesslog.StartRetention(serverCtx, database, accesslog.RetentionConfig{
-		RawDays:    cfg.AccessLog.RetentionDays,
-		RollupDays: cfg.AccessLog.RollupRetentionDays,
+		RawDays:        cfg.AccessLog.RetentionDays,
+		FiveMinuteDays: 8,
+		RollupDays:     cfg.AccessLog.RollupRetentionDays,
 	})
 
 	// Initialize storage

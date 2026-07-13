@@ -65,3 +65,33 @@ func TestRetention_PrunesOldRollupRows(t *testing.T) {
 		}
 	}
 }
+
+func TestRetention_PrunesFiveMinuteRowsAfterEightDays(t *testing.T) {
+	d := newTestDB(t)
+	now := time.Now().UTC()
+	if err := d.Create(&db.AccessLogFiveMinutely{
+		BucketStart: now.Add(-9 * 24 * time.Hour).Unix(),
+		AdapterType: "pypi",
+	}).Error; err != nil {
+		t.Fatalf("create old five-minute row: %v", err)
+	}
+	if err := d.Create(&db.AccessLogFiveMinutely{
+		BucketStart: now.Add(-7 * 24 * time.Hour).Unix(),
+		AdapterType: "npm",
+	}).Error; err != nil {
+		t.Fatalf("create recent five-minute row: %v", err)
+	}
+
+	RunRetention(context.Background(), d, RetentionConfig{
+		FiveMinuteDays: 8,
+		RollupDays:     365,
+	})
+
+	var rows []db.AccessLogFiveMinutely
+	if err := d.Find(&rows).Error; err != nil {
+		t.Fatalf("query five-minute rows: %v", err)
+	}
+	if len(rows) != 1 || rows[0].AdapterType != "npm" {
+		t.Fatalf("rows = %+v", rows)
+	}
+}
