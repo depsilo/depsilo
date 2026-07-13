@@ -1,8 +1,9 @@
 // Package accesslog implements the async batched recorder that rolls each
-// proxy request up into the access_log_hourly + access_log_package_daily
-// tables, plus the daily compactor (hourly → daily) and the retention
-// sweeper. The recorder is intentionally non-blocking — its channel will
-// drop events under back-pressure rather than slow the request path.
+// proxy request up into the access_log_five_minutely, access_log_hourly, and
+// access_log_package_daily tables, plus the daily compactor (hourly → daily)
+// and the retention sweeper. The recorder is intentionally non-blocking — its
+// channel will drop events under back-pressure rather than slow the request
+// path.
 //
 // See docs/specs/2026-06-26-access-log-rollup.md for the full design.
 package accesslog
