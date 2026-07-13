@@ -88,10 +88,15 @@ const TREND_REFRESH_INTERVAL: Record<TrendsRange, number> = {
   '30d': 60_000,
 }
 
+interface TrendQueryData {
+  response: Awaited<ReturnType<typeof adminApi.getDashboardTrends>>
+  range: TrendsRange
+}
+
 export default function DashboardV2() {
   const { t } = useTranslation()
   const [range, setRange] = useState<TrendsRange>('1h')
-  const [retainedTrendPoints, setRetainedTrendPoints] = useState<RawTrendPoint[]>()
+  const [retainedTrendData, setRetainedTrendData] = useState<TrendQueryData>()
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'dashboard'],
@@ -102,7 +107,10 @@ export default function DashboardV2() {
 
   const trendsQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'trends', range],
-    queryFn: () => adminApi.getDashboardTrends(range),
+    queryFn: async (): Promise<TrendQueryData> => ({
+      response: await adminApi.getDashboardTrends(range),
+      range,
+    }),
     placeholderData: keepPreviousData,
     refetchInterval: TREND_REFRESH_INTERVAL[range],
     refetchOnWindowFocus: 'always',
@@ -145,8 +153,10 @@ export default function DashboardV2() {
   const prev24h = dashboard?.prev_24h ?? { total_requests: 0, hit_count: 0, hit_rate: 0, bytes_served: 0, avg_latency_ms: 0 }
   const upstreams = dashboard?.upstreams || []
   const topPackages = dashboard?.top_packages || { pypi: [], apt: [] }
-  const rawTrendPoints: RawTrendPoint[] = trendsQuery.data?.data.points ?? retainedTrendPoints ?? []
-  const hasTrendData = trendsQuery.data !== undefined || retainedTrendPoints !== undefined
+  const activeTrendData = trendsQuery.data ?? retainedTrendData
+  const rawTrendPoints: RawTrendPoint[] = activeTrendData?.response.data.points ?? []
+  const dataRange = activeTrendData?.range ?? range
+  const hasTrendData = activeTrendData !== undefined
   const bandwidthData = bandwidthQuery.data
   const bandwidthSummary = bandwidthData?.data?.summary
   const bandwidthDaily = bandwidthData?.data?.daily || []
@@ -163,7 +173,7 @@ export default function DashboardV2() {
   }
 
   function handleTrendRangeChange(nextRange: TrendsRange) {
-    if (trendsQuery.data) setRetainedTrendPoints(trendsQuery.data.data.points)
+    if (trendsQuery.data) setRetainedTrendData(trendsQuery.data)
     setRange(nextRange)
   }
 
@@ -241,7 +251,7 @@ export default function DashboardV2() {
             {hasTrendData && trendsQuery.isError && (
               <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void trendsQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
             )}
-            <TrendsCard raw={rawTrendPoints} range={range} onRangeChange={handleTrendRangeChange} />
+            <TrendsCard raw={rawTrendPoints} range={range} dataRange={dataRange} onRangeChange={handleTrendRangeChange} />
           </>
         )}
       </div>

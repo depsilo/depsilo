@@ -92,6 +92,7 @@ function toChartPoint(p: RawTrendPoint, granularity: 'minute' | 'hour' | 'day'):
 interface Props {
   raw: RawTrendPoint[]
   range: TrendsRange
+  dataRange: TrendsRange
   onRangeChange: (r: TrendsRange) => void
 }
 
@@ -151,16 +152,16 @@ const axisProps = {
   tickLine: false as const,
 }
 
-export default function TrendsCard({ raw, range, onRangeChange }: Props) {
+export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Props) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<TrendsTab>('requests')
   const isMobile = useMediaQuery('(max-width: 640px)')
-  const granularity = range === '1h' ? 'minute' : range === '30d' ? 'day' : 'hour'
+  const granularity = dataRange === '1h' ? 'minute' : dataRange === '30d' ? 'day' : 'hour'
 
   const points = useMemo<ChartPoint[]>(() => {
-    const pointGranularity = range === '1h' ? 'minute' : range === '30d' ? 'day' : 'hour'
+    const pointGranularity = dataRange === '1h' ? 'minute' : dataRange === '30d' ? 'day' : 'hour'
     return raw.map(point => toChartPoint(point, pointGranularity))
-  }, [raw, range])
+  }, [raw, dataRange])
 
   const allEmpty = points.length === 0 || points.every(p => !p.hits && !p.misses)
 

@@ -116,13 +116,13 @@ async function settlePausedApp(page: Page) {
   await page.clock.runFor(1_700)
 }
 
-function trendPoints(count: number, requestBase: number) {
+function trendPoints(count: number, requestBase: number, bucketStep: number) {
   return Array.from({ length: count }, (_, index) => {
     const requests = requestBase + index
     const misses = 2 + (index % 2)
     const hits = requests - misses
     return {
-      bucket: 1783641600 + index * 300,
+      bucket: 1783641600 + index * bucketStep,
       date: '2026-07-10',
       requests,
       hits,
@@ -138,15 +138,33 @@ function trendPoints(count: number, requestBase: number) {
   })
 }
 
+async function trendBucketLabel(page: Page, bucket: number, granularity: 'minute' | 'day') {
+  return page.evaluate(({ value, unit }) => {
+    const date = new Date(value * 1000)
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return unit === 'minute'
+      ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone })
+      : date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', timeZone })
+  }, { value: bucket, unit: granularity })
+}
+
+async function expectTrendTooltipLabel(page: Page, chart: Locator, expected: string, unexpected: string) {
+  await page.mouse.move(0, 0)
+  await chart.hover({ position: { x: 40, y: 80 } })
+  const label = chart.locator('.recharts-tooltip-wrapper p').first()
+  await expect(label).toHaveText(expected)
+  await expect(label).not.toHaveText(unexpected)
+}
+
 test('Dashboard trends keep the previous chart while an uncached range loads', async ({ page }) => {
-  const initialPoints = trendPoints(4, 12)
-  const nextPoints = trendPoints(6, 24)
+  const initialPoints = trendPoints(4, 12, 10)
+  const nextPoints = trendPoints(6, 24, 2 * 60 * 60)
   const requestStarted = deferred<void>()
   const response = deferred<{ points: typeof nextPoints }>()
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': (request: Request) => {
       const range = new URL(request.url()).searchParams.get('range')
-      if (range !== '24h') return { points: initialPoints }
+      if (range !== '30d') return { points: initialPoints }
       requestStarted.resolve()
       return response.promise
     },
@@ -156,7 +174,9 @@ test('Dashboard trends keep the previous chart while an uncached range loads', a
   const trends = page.locator('[data-query-key="dashboard-trends"]')
   const chart = trends.locator('.recharts-wrapper')
   const ranges = page.getByRole('group', { name: /活动趋势|Activity Trend/ })
-  const nextRange = ranges.getByRole('button', { name: /24 小时|24h/i })
+  const nextRange = ranges.getByRole('button', { name: /30 天|30d/i })
+  const minuteLabel = await trendBucketLabel(page, initialPoints[0].bucket, 'minute')
+  const dayLabel = await trendBucketLabel(page, initialPoints[0].bucket, 'day')
   await expect(chart).toBeVisible()
   await nextRange.click()
   await requestStarted.promise
@@ -167,6 +187,7 @@ test('Dashboard trends keep the previous chart while an uncached range loads', a
   await expect(trends).toHaveAttribute('aria-busy', 'true')
   const previousPath = await chart.locator('.recharts-area-curve').first().getAttribute('d')
   expect(previousPath?.match(/L/g) ?? []).toHaveLength(initialPoints.length - 1)
+  await expectTrendTooltipLabel(page, chart, minuteLabel, dayLabel)
 
   response.resolve({ points: nextPoints })
   await expect(trends).toHaveAttribute('aria-busy', 'false')
@@ -175,16 +196,17 @@ test('Dashboard trends keep the previous chart while an uncached range loads', a
     const path = await chart.locator('.recharts-area-curve').first().getAttribute('d')
     return path?.match(/L/g)?.length ?? 0
   }).toBe(nextPoints.length - 1)
+  await expectTrendTooltipLabel(page, chart, dayLabel, minuteLabel)
 })
 
 test('Dashboard trends keep the previous chart and warn when an uncached range fails', async ({ page }) => {
-  const initialPoints = trendPoints(4, 12)
+  const initialPoints = trendPoints(4, 12, 10)
   const requestStarted = deferred<void>()
   const response = deferred<MockHttpResponse>()
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': (request: Request) => {
       const range = new URL(request.url()).searchParams.get('range')
-      if (range !== '24h') return { points: initialPoints }
+      if (range !== '30d') return { points: initialPoints }
       requestStarted.resolve()
       return response.promise
     },
@@ -194,7 +216,9 @@ test('Dashboard trends keep the previous chart and warn when an uncached range f
   const trends = page.locator('[data-query-key="dashboard-trends"]')
   const chart = trends.locator('.recharts-wrapper')
   const ranges = page.getByRole('group', { name: /活动趋势|Activity Trend/ })
-  const nextRange = ranges.getByRole('button', { name: /24 小时|24h/i })
+  const nextRange = ranges.getByRole('button', { name: /30 天|30d/i })
+  const minuteLabel = await trendBucketLabel(page, initialPoints[0].bucket, 'minute')
+  const dayLabel = await trendBucketLabel(page, initialPoints[0].bucket, 'day')
   await expect(chart).toBeVisible()
   await nextRange.click()
   await requestStarted.promise
@@ -209,6 +233,7 @@ test('Dashboard trends keep the previous chart and warn when an uncached range f
   await expect(trends).toContainText(/陈旧|已过期|stale/i)
   const retainedPath = await chart.locator('.recharts-area-curve').first().getAttribute('d')
   expect(retainedPath?.match(/L/g) ?? []).toHaveLength(initialPoints.length - 1)
+  await expectTrendTooltipLabel(page, chart, minuteLabel, dayLabel)
 })
 
 test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
