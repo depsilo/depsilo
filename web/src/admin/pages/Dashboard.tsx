@@ -81,6 +81,13 @@ function TopPackagesList({ topPackages }: { topPackages: DashboardResponse['top_
 
 // ── Main Dashboard ─────────────────────────────────────────────────
 
+const TREND_REFRESH_INTERVAL: Record<TrendsRange, number> = {
+  '1h': 5_000,
+  '24h': 15_000,
+  '7d': 30_000,
+  '30d': 60_000,
+}
+
 export default function DashboardV2() {
   const { t } = useTranslation()
   const [range, setRange] = useState<TrendsRange>('1h')
@@ -95,7 +102,7 @@ export default function DashboardV2() {
   const trendsQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'trends', range],
     queryFn: () => adminApi.getDashboardTrends(range),
-    refetchInterval: 30000,
+    refetchInterval: TREND_REFRESH_INTERVAL[range],
     refetchOnWindowFocus: 'always',
     retry: false,
   })

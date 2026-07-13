@@ -2,11 +2,8 @@
 // dimension a tab could render (requests / bandwidth / latency / errors),
 // so switching tabs is a pure re-render — no refetch, no jitter.
 //
-// Bucket timestamps are always rendered in the browser's timezone via
-// Intl.DateTimeFormat. The 7d/30d ranges arrive as hourly granularity and
-// are re-aggregated into days using local-tz boundaries (so a Beijing user
-// sees "周三 2026-06-26" rather than the UTC date the server happens to
-// hold the row under).
+// Every API bucket is preserved. Bucket timestamps are rendered in the
+// browser's timezone via Intl.DateTimeFormat.
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -24,6 +21,7 @@ import type { TooltipContentProps, TooltipValueType } from 'recharts'
 
 import EmptyState from '@/components/EmptyState'
 import SectionHeader from '@/components/SectionHeader'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { formatBytes } from '@/lib/utils'
 
 export type TrendsRange = '1h' | '24h' | '7d' | '30d'
@@ -74,20 +72,6 @@ function fmtTime(bucket: number, granularity: 'minute' | 'hour' | 'day'): string
   return d.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', timeZone: TZ })
 }
 
-// dayKey returns a stable YYYY-MM-DD string in the browser's local timezone.
-// Used for re-aggregating hourly buckets into local days.
-function dayKey(bucket: number): string {
-  const d = new Date(bucket * 1000)
-  return d.toLocaleDateString('en-CA', { timeZone: TZ }) // en-CA happens to give YYYY-MM-DD
-}
-
-function dayStartUnix(bucket: number): number {
-  // Bucket start in local-tz at 00:00. We reconstruct it via toLocaleDateString
-  // to avoid pulling in a date-fns dependency.
-  const k = dayKey(bucket)
-  return Math.floor(new Date(`${k}T00:00:00`).getTime() / 1000)
-}
-
 function toChartPoint(p: RawTrendPoint, granularity: 'minute' | 'hour' | 'day'): ChartPoint {
   return {
     bucket: p.bucket,
@@ -103,35 +87,6 @@ function toChartPoint(p: RawTrendPoint, granularity: 'minute' | 'hour' | 'day'):
     error_rate_pct: p.requests > 0 ? Math.round((p.errors / p.requests) * 1000) / 10 : 0,
     errors: p.errors,
   }
-}
-
-function rebucketDays(raw: RawTrendPoint[]): ChartPoint[] {
-  const byDay = new Map<string, RawTrendPoint>()
-  for (const p of raw) {
-    const k = dayKey(p.bucket)
-    const acc = byDay.get(k)
-    if (!acc) {
-      byDay.set(k, {
-        ...p,
-        bucket: dayStartUnix(p.bucket),
-      })
-      continue
-    }
-    acc.requests += p.requests
-    acc.hits += p.hits
-    acc.misses += p.misses
-    acc.bytes_hit += p.bytes_hit
-    acc.bytes_miss += p.bytes_miss
-    acc.bytes_served += p.bytes_served
-    acc.sum_latency_ms += p.sum_latency_ms
-    acc.errors += p.errors
-    if (acc.requests > 0) {
-      acc.hit_rate = acc.hits / acc.requests
-      acc.avg_latency_ms = acc.sum_latency_ms / acc.requests
-    }
-  }
-  const days = Array.from(byDay.values()).sort((a, b) => a.bucket - b.bucket)
-  return days.map(p => toChartPoint(p, 'day'))
 }
 
 interface Props {
@@ -154,15 +109,20 @@ const TABS: { value: TrendsTab; key: string }[] = [
   { value: 'errors', key: 'trendTabErrors' },
 ]
 
-function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
+interface ChartTooltipProps extends TooltipContentProps<TooltipValueType, string | number> {
+  granularity: 'minute' | 'hour' | 'day'
+}
+
+function ChartTooltip({ active, payload, label, granularity }: ChartTooltipProps) {
   const { t } = useTranslation()
   if (!active || !payload?.length) return null
+  const formattedLabel = typeof label === 'number' ? fmtTime(label, granularity) : label
   return (
     <div
       className="rounded-[4px] px-3 py-2 text-[12px]"
       style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
     >
-      <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
+      <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{formattedLabel}</p>
       {payload.map((entry) => {
         const v = entry.value
         let display: string
@@ -194,11 +154,12 @@ const axisProps = {
 export default function TrendsCard({ raw, range, onRangeChange }: Props) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<TrendsTab>('requests')
+  const isMobile = useMediaQuery('(max-width: 640px)')
+  const granularity = range === '1h' ? 'minute' : range === '30d' ? 'day' : 'hour'
 
   const points = useMemo<ChartPoint[]>(() => {
-    if (range === '1h') return raw.map(p => toChartPoint(p, 'minute'))
-    if (range === '24h') return raw.map(p => toChartPoint(p, 'hour'))
-    return rebucketDays(raw)
+    const pointGranularity = range === '1h' ? 'minute' : range === '30d' ? 'day' : 'hour'
+    return raw.map(point => toChartPoint(point, pointGranularity))
   }, [raw, range])
 
   const allEmpty = points.length === 0 || points.every(p => !p.hits && !p.misses)
@@ -267,7 +228,7 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
           minHeight={180}
         />
       ) : (
-        <ResponsiveContainer width="100%" height={180}>
+        <ResponsiveContainer width="100%" height={240}>
           <ComposedChart data={points} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="trBrand" x1="0" y1="0" x2="0" y2="1">
@@ -284,32 +245,40 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
               </linearGradient>
             </defs>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" {...axisProps} />
-            <Tooltip content={ChartTooltip} />
+            <XAxis
+              dataKey="bucket"
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              tickCount={isMobile ? 4 : 8}
+              tickFormatter={(value: number) => fmtTime(value, granularity)}
+              minTickGap={12}
+              {...axisProps}
+            />
+            <Tooltip content={props => <ChartTooltip {...props} granularity={granularity} />} />
             <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
 
             {tab === 'requests' && (
               <>
                 <YAxis yAxisId="count" {...axisProps} width={36} />
                 <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} {...axisProps} width={36} />
-                <Area yAxisId="count" type="monotone" dataKey="hits" stroke="var(--brand)" strokeWidth={1.5} fill="url(#trBrand)" name={t('dashboard.hits')} />
-                <Area yAxisId="count" type="monotone" dataKey="misses" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.misses')} />
-                <Line yAxisId="rate" type="monotone" dataKey="hit_rate_pct" stroke="var(--warn-text)" name={t('dashboard.hitRate2')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" />
+                <Area yAxisId="count" type="linear" dataKey="hits" stroke="var(--brand)" strokeWidth={1.5} fill="url(#trBrand)" name={t('dashboard.hits')} isAnimationActive={false} />
+                <Area yAxisId="count" type="linear" dataKey="misses" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.misses')} isAnimationActive={false} />
+                <Line yAxisId="rate" type="linear" dataKey="hit_rate_pct" stroke="var(--warn-text)" name={t('dashboard.hitRate2')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" isAnimationActive={false} />
               </>
             )}
 
             {tab === 'bandwidth' && (
               <>
                 <YAxis yAxisId="bytes" tickFormatter={(v: number) => formatBytes(v)} {...axisProps} width={56} />
-                <Area yAxisId="bytes" type="monotone" dataKey="bytes_hit" stroke="var(--ok)" strokeWidth={1.5} fill="url(#trOk)" name={t('dashboard.bytesHit')} stackId="bw" />
-                <Area yAxisId="bytes" type="monotone" dataKey="bytes_miss" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.bytesMiss')} stackId="bw" />
+                <Area yAxisId="bytes" type="linear" dataKey="bytes_hit" stroke="var(--ok)" strokeWidth={1.5} fill="url(#trOk)" name={t('dashboard.bytesHit')} stackId="bw" isAnimationActive={false} />
+                <Area yAxisId="bytes" type="linear" dataKey="bytes_miss" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.bytesMiss')} stackId="bw" isAnimationActive={false} />
               </>
             )}
 
             {tab === 'latency' && (
               <>
                 <YAxis yAxisId="ms" {...axisProps} width={48} tickFormatter={(v: number) => `${v}ms`} />
-                <Line yAxisId="ms" type="monotone" dataKey="avg_latency_ms" stroke="var(--brand)" strokeWidth={1.8} dot={false} name={t('dashboard.avgLatency')} />
+                <Line yAxisId="ms" type="linear" dataKey="avg_latency_ms" stroke="var(--brand)" strokeWidth={1.8} dot={false} name={t('dashboard.avgLatency')} isAnimationActive={false} />
               </>
             )}
 
@@ -317,8 +286,8 @@ export default function TrendsCard({ raw, range, onRangeChange }: Props) {
               <>
                 <YAxis yAxisId="count" {...axisProps} width={36} />
                 <YAxis yAxisId="rate" orientation="right" domain={[0, 'auto']} tickFormatter={(v: number) => `${v}%`} {...axisProps} width={42} />
-                <Area yAxisId="count" type="monotone" dataKey="errors" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.trendTabErrors')} />
-                <Line yAxisId="rate" type="monotone" dataKey="error_rate_pct" stroke="var(--warn-text)" name={t('dashboard.errorRate')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" />
+                <Area yAxisId="count" type="linear" dataKey="errors" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.trendTabErrors')} isAnimationActive={false} />
+                <Line yAxisId="rate" type="linear" dataKey="error_rate_pct" stroke="var(--warn-text)" name={t('dashboard.errorRate')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" isAnimationActive={false} />
               </>
             )}
           </ComposedChart>

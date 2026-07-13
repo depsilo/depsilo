@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test'
+import type { Locator, Page, Request } from '@playwright/test'
 import {
   adminApiDefaults,
   expect,
@@ -115,6 +115,56 @@ async function settlePausedApp(page: Page) {
   }
   await page.clock.runFor(1_700)
 }
+
+test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
+  await pausePollingClock(page)
+  const calls: Record<string, number> = {}
+  const point = {
+    bucket: 1783641600, date: '2026-07-10', requests: 12, hits: 10, misses: 2,
+    hit_rate: 0.8333, bytes_served: 1024, bytes_hit: 800, bytes_miss: 224,
+    sum_latency_ms: 120, avg_latency_ms: 10, errors: 1,
+  }
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard/trends': (request: Request) => {
+      const range = new URL(request.url()).searchParams.get('range') ?? ''
+      calls[range] = (calls[range] ?? 0) + 1
+      return { points: [point] }
+    },
+  })
+
+  await page.goto('/admin')
+  await settlePausedApp(page)
+  await expect.poll(() => calls['1h'] ?? 0).toBe(1)
+  const ranges = page.getByRole('group', { name: /活动趋势|Activity trends/ })
+  await expect(ranges).toBeVisible()
+
+  const oneHourRefetch = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/v1/admin/dashboard/trends' && url.searchParams.get('range') === '1h'
+  })
+  await refocus(page)
+  await (await oneHourRefetch).finished()
+  await page.clock.runFor(0)
+  await expect.poll(() => calls['1h'] ?? 0).toBe(2)
+
+  await page.clock.runFor(4_999)
+  expect(calls['1h']).toBe(2)
+  await page.clock.runFor(1)
+  await expect.poll(() => calls['1h'] ?? 0).toBe(3)
+
+  const twentyFourHourInitial = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/v1/admin/dashboard/trends' && url.searchParams.get('range') === '24h'
+  })
+  await ranges.getByRole('button', { name: /24 小时|24 hours/i }).click()
+  await (await twentyFourHourInitial).finished()
+  await page.clock.runFor(0)
+  await expect.poll(() => calls['24h'] ?? 0).toBe(1)
+  await page.clock.runFor(14_999)
+  expect(calls['24h']).toBe(1)
+  await page.clock.runFor(1)
+  await expect.poll(() => calls['24h'] ?? 0).toBe(2)
+})
 
 test('NowStrip keeps healthy cached data when its focus refetch fails', async ({ page }) => {
   await pausePollingClock(page)
