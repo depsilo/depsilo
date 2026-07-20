@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"depsilo/internal/ecosystem"
 	"depsilo/internal/version"
 )
 
@@ -33,27 +34,24 @@ type ecosystemInfo struct {
 	Purpose string `json:"purpose"`
 }
 
-// ecosystemPurposes is a static map from ecosystem name → short human/AI
-// description. Lives alongside the handler so the catalog stays self-contained.
-var ecosystemPurposes = map[string]struct {
-	Path    string
-	Purpose string
-}{
-	"pypi":        {"/pypi/", "Python — pip, uv, Poetry, PDM"},
-	"apt":         {"/apt/", "Debian / Ubuntu APT packages"},
-	"npm":         {"/npm/", "Node.js — npm, yarn, pnpm, bun"},
-	"go":          {"/go/", "Go modules (GOPROXY protocol)"},
-	"cargo":       {"/crates/", "Rust crates (sparse index)"},
-	"maven":       {"/maven/", "Java — Maven, Gradle, sbt"},
-	"rubygems":    {"/rubygems/", "Ruby — gem, bundler"},
-	"composer":    {"/composer/", "PHP — Composer"},
-	"nuget":       {"/nuget/", ".NET — NuGet v3 protocol"},
-	"conda":       {"/conda/", "Conda channels"},
-	"cran":        {"/cran/", "R — CRAN packages"},
-	"alpine":      {"/alpine/", "Alpine Linux apk packages"},
-	"helm":        {"/helm/", "Kubernetes Helm charts"},
-	"huggingface": {"/huggingface/", "Hugging Face — models + datasets (huggingface-cli, transformers, datasets)"},
-	"docker":      {"/v2/", "OCI / Docker registry mirror (configure the service root)"},
+// ecosystemPurposes adds human-facing copy to the canonical ecosystem
+// catalog; names and routes remain owned by internal/ecosystem.
+var ecosystemPurposes = map[string]string{
+	"pypi":        "Python — pip, uv, Poetry, PDM",
+	"apt":         "Debian / Ubuntu APT packages",
+	"npm":         "Node.js — npm, yarn, pnpm, bun",
+	"go":          "Go modules (GOPROXY protocol)",
+	"cargo":       "Rust crates (sparse index)",
+	"maven":       "Java — Maven, Gradle, sbt",
+	"rubygems":    "Ruby — gem, bundler",
+	"composer":    "PHP — Composer",
+	"nuget":       ".NET — NuGet v3 protocol",
+	"conda":       "Conda channels",
+	"cran":        "R — CRAN packages",
+	"alpine":      "Alpine Linux apk packages",
+	"helm":        "Kubernetes Helm charts",
+	"huggingface": "Hugging Face — models + datasets (huggingface-cli, transformers, datasets)",
+	"docker":      "OCI / Docker registry mirror (configure the service root)",
 }
 
 // Discover returns the catalog. Stable JSON shape consumed by AI agents.
@@ -66,15 +64,18 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 
 	ecos := make([]ecosystemInfo, 0, len(h.ecosystems))
 	for _, name := range h.ecosystems {
-		meta, ok := ecosystemPurposes[name]
+		path := "/" + name + "/"
+		if definition, ok := ecosystem.Lookup(name); ok {
+			path = definition.Route + "/"
+		}
+		purpose, ok := ecosystemPurposes[name]
 		if !ok {
-			meta.Path = "/" + name + "/"
-			meta.Purpose = name
+			purpose = name
 		}
 		ecos = append(ecos, ecosystemInfo{
 			Name:    name,
-			Path:    meta.Path,
-			Purpose: meta.Purpose,
+			Path:    path,
+			Purpose: purpose,
 		})
 	}
 

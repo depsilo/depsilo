@@ -20,6 +20,7 @@ import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { RuleListResponse, RuleRecord, RuleRequest, RuleTestResponse } from '@/lib/adminApi.types'
+import AdminPage from '@/admin/components/AdminPage'
 
 const ECOSYSTEM_OPTIONS = [{ value: '*', label: 'All (*)' }, { value: 'pypi', label: 'PyPI' }, { value: 'apt', label: 'APT' }, { value: 'npm', label: 'npm' }, { value: 'go', label: 'Go' }, { value: 'cargo', label: 'Cargo' }, { value: 'maven', label: 'Maven' }, { value: 'rubygems', label: 'RubyGems' }, { value: 'composer', label: 'Composer' }, { value: 'nuget', label: 'NuGet' }, { value: 'conda', label: 'Conda' }, { value: 'cran', label: 'CRAN' }, { value: 'alpine', label: 'Alpine' }, { value: 'helm', label: 'Helm' }]
 
@@ -87,14 +88,16 @@ export default function RulesV2() {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div />
-        {canWrite && <div className="flex gap-2">
+    <AdminPage
+      description={t('rules.subtitle')}
+      actions={canWrite ? (
+        <>
           <ButtonV2 variant="ghost" size="sm" onClick={() => { setTestOpen(true); setTestResult(null) }}><Icon name="science" size="sm" />{t('rules.testRule')}</ButtonV2>
           <ButtonV2 onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</ButtonV2>
-        </div>}
-      </div>
+        </>
+      ) : undefined}
+    >
+    <div className="space-y-6">
       {query.isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
       ) : query.isError && !data ? (
@@ -151,5 +154,6 @@ export default function RulesV2() {
         </div>
       </ModalV2>
     </div>
+    </AdminPage>
   )
 }

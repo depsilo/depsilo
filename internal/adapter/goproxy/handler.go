@@ -143,5 +143,5 @@ func (h *Handler) proxyWithCache(c *gin.Context, module, cacheKey, upstreamPath 
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "go", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(c.Request.Context(), h.db, "go", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }

@@ -1,10 +1,15 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 type Config struct {
 	IsDefault                  bool               `mapstructure:"-" json:"-"` // true when no config file found
 	ConfigPath                 string             `mapstructure:"-" json:"-"` // resolved path for config file
+	BootstrapToken             string             `mapstructure:"-" json:"-"` // ephemeral first-run authorization token
 	ExplicitUpstreamEcosystems map[string]bool    `mapstructure:"-" json:"-"`
 	Server                     ServerConfig       `mapstructure:"server"`
 	Database                   DatabaseConfig     `mapstructure:"database"`
@@ -31,6 +36,10 @@ type Config struct {
 	Security                   SecurityConfig     `mapstructure:"security"`
 	ExtraIndexes               []ExtraIndexConfig `mapstructure:"extra_indexes"`
 	Webhooks                   []WebhookConfig    `mapstructure:"webhooks"`
+	// UpstreamUpdates controls proactive conditional checks for validated
+	// PyPI-compatible metadata already in the local cache. It never prefetches
+	// artifacts or guesses at changes when an adapter lacks validators.
+	UpstreamUpdates UpstreamUpdatesConfig `mapstructure:"upstream_updates"`
 	// SupplyChain: minimum-release-age quarantine, malicious blocklist,
 	// and tamper detection. The policy struct lives in internal/quarantine to keep
 	// duration parsing + allow-list semantics next to the code that
@@ -104,9 +113,10 @@ type LicenseConfig struct {
 }
 
 type ServerConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	LogLevel string `mapstructure:"log_level"`
+	Host           string   `mapstructure:"host"`
+	Port           int      `mapstructure:"port"`
+	LogLevel       string   `mapstructure:"log_level"`
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
 }
 
 type DatabaseConfig struct {
@@ -181,6 +191,38 @@ type UpstreamConfig struct {
 	Proxy         string `mapstructure:"proxy"`
 	ProbeMode     string `mapstructure:"probe_mode"`
 	ProbeInterval string `mapstructure:"probe_interval"`
+}
+
+// UpstreamUpdatesConfig controls the optional package-metadata watcher.
+// CheckInterval is deliberately a string so "off" remains an operator-facing
+// value alongside normal Go durations such as "1h" and "30m".
+type UpstreamUpdatesConfig struct {
+	Enabled       *bool  `mapstructure:"enabled"`
+	CheckInterval string `mapstructure:"check_interval"`
+}
+
+// IsEnabled keeps proactive checks on by default, matching the other
+// supply-chain background jobs.
+func (c UpstreamUpdatesConfig) IsEnabled() bool { return c.Enabled == nil || *c.Enabled }
+
+// ParseUpdateCheckInterval accepts normal Go durations and the operator-facing
+// "off" / "0" values used to disable proactive metadata checks globally.
+func ParseUpdateCheckInterval(raw string) (interval time.Duration, enabled bool, err error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		raw = "1h"
+	}
+	if raw == "off" || raw == "0" {
+		return 0, false, nil
+	}
+	interval, err = time.ParseDuration(raw)
+	if err != nil || interval <= 0 {
+		if err == nil {
+			err = fmt.Errorf("must be greater than zero")
+		}
+		return 0, false, fmt.Errorf("invalid update check interval %q: %w", raw, err)
+	}
+	return interval, true, nil
 }
 
 type DockerConfig struct {

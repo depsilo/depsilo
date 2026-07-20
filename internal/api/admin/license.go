@@ -31,8 +31,19 @@ func (h *LicenseHandler) GetStatus(c *gin.Context) {
 
 // Revalidate triggers a paid-license re-validation in the background.
 func (h *LicenseHandler) Revalidate(c *gin.Context) {
-	h.lic.Revalidate()
-	c.JSON(http.StatusOK, gin.H{"message": "revalidation triggered"})
+	err := h.lic.Revalidate()
+	switch {
+	case err == nil:
+		c.JSON(http.StatusAccepted, gin.H{"message": "revalidation started"})
+	case errors.Is(err, license.ErrNoLicenseKey):
+		c.JSON(http.StatusConflict, gin.H{"code": "LICENSE_KEY_MISSING", "message": err.Error()})
+	case errors.Is(err, license.ErrRevalidationRunning):
+		c.JSON(http.StatusConflict, gin.H{"code": "REVALIDATION_RUNNING", "message": err.Error()})
+	case errors.Is(err, license.ErrRevalidationClosed):
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
+	}
 }
 
 // ActivateTrial creates the singleton TrialRecord. Refuses if a paid license
@@ -68,8 +79,6 @@ type SetKeyRequest struct {
 }
 
 // SetKey persists a license key and triggers a synchronous validation.
-// Always returns 200 with the updated Status; the frontend reads status.is_pro
-// to determine success vs saved-pending.
 func (h *LicenseHandler) SetKey(c *gin.Context) {
 	var req SetKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -89,9 +98,10 @@ func (h *LicenseHandler) SetKey(c *gin.Context) {
 		}
 	}
 
-	// Persist + synchronous validate. Validation network failures are NOT
-	// surfaced as 5xx; status.license_error captures them.
-	_ = h.lic.SetKey(c.Request.Context(), req.Key, userID)
+	if err := h.lic.SetKey(c.Request.Context(), req.Key, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, h.checker.Status())
 }
 

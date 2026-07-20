@@ -3,9 +3,11 @@ package admin
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -19,6 +21,13 @@ import (
 )
 
 func newSecurityContractRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
+	return newSecurityContractRouterWithInvalidator(t, nil)
+}
+
+func newSecurityContractRouterWithInvalidator(
+	t *testing.T,
+	invalidateRules func(),
+) (*gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	database, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "security.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -34,7 +43,7 @@ func newSecurityContractRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	h := NewSecurityHandler(database, security.NewScanner(database, nil, 0), nil)
+	h := NewSecurityHandler(database, security.NewScanner(database, nil, nil), nil, invalidateRules)
 	r := gin.New()
 	r.GET("/security/dashboard", h.Dashboard)
 	r.GET("/security/vulnerabilities", h.ListVulnerabilities)
@@ -44,6 +53,64 @@ func newSecurityContractRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	r.GET("/security/policies", h.ListPolicies)
 	r.PUT("/security/policies/:ecosystem", h.UpdatePolicy)
 	return r, database
+}
+
+func TestSecurityApproveSuggestionInvalidatesRulesAfterCreate(t *testing.T) {
+	invalidations := 0
+	r, database := newSecurityContractRouterWithInvalidator(t, func() { invalidations++ })
+	vulnerability := db.Vulnerability{
+		OSVID:       "OSV-APPROVE-CACHE",
+		Ecosystem:   "pypi",
+		PackageName: "approved-package",
+		CVSSScore:   8.4,
+	}
+	if err := database.Create(&vulnerability).Error; err != nil {
+		t.Fatalf("seed vulnerability: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	path := "/security/suggestions/" + strconv.FormatUint(uint64(vulnerability.ID), 10) + "/approve"
+	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("approve status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if invalidations != 1 {
+		t.Fatalf("rule cache invalidations = %d, want 1", invalidations)
+	}
+}
+
+func TestSecurityApproveSuggestionDoesNotInvalidateWhenCreateFails(t *testing.T) {
+	invalidations := 0
+	r, database := newSecurityContractRouterWithInvalidator(t, func() { invalidations++ })
+	vulnerability := db.Vulnerability{
+		OSVID:       "OSV-APPROVE-FAILURE",
+		Ecosystem:   "pypi",
+		PackageName: "failed-package",
+		CVSSScore:   8.4,
+	}
+	if err := database.Create(&vulnerability).Error; err != nil {
+		t.Fatalf("seed vulnerability: %v", err)
+	}
+	injected := errors.New("injected package rule create failure")
+	const callbackName = "test:fail_security_package_rule_create"
+	if err := database.Callback().Create().Before("gorm:create").Register(callbackName, func(tx *gorm.DB) {
+		if tx.Statement.Table == "package_rules" {
+			tx.AddError(injected)
+		}
+	}); err != nil {
+		t.Fatalf("register create callback: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Callback().Create().Remove(callbackName) })
+
+	recorder := httptest.NewRecorder()
+	path := "/security/suggestions/" + strconv.FormatUint(uint64(vulnerability.ID), 10) + "/approve"
+	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("approve status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if invalidations != 0 {
+		t.Fatalf("rule cache invalidations = %d, want 0", invalidations)
+	}
 }
 
 func TestSecurityVulnerabilityPackageQueryAndDeprecatedAlias(t *testing.T) {

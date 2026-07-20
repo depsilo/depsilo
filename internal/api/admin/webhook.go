@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,14 +11,20 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/asyncruntime"
 	"depsilo/internal/db"
 	"depsilo/internal/notify"
 )
 
 // WebhookHandler manages webhook configuration CRUD.
+type WebhookNotifier interface {
+	DispatchTo(config db.WebhookConfig, event notify.Event) error
+	LoadConfigs(ctx context.Context) error
+}
+
 type WebhookHandler struct {
 	DB       *gorm.DB
-	Notifier *notify.Notifier
+	Notifier WebhookNotifier
 }
 
 type webhookListResponse struct {
@@ -34,7 +41,7 @@ type webhookListResponse struct {
 }
 
 // NewWebhookHandler creates a new WebhookHandler.
-func NewWebhookHandler(database *gorm.DB, n *notify.Notifier) *WebhookHandler {
+func NewWebhookHandler(database *gorm.DB, n WebhookNotifier) *WebhookHandler {
 	return &WebhookHandler{DB: database, Notifier: n}
 }
 
@@ -101,7 +108,7 @@ func (h *WebhookHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	h.reloadNotifier()
+	h.reloadNotifier(c.Request.Context())
 	c.JSON(http.StatusCreated, cfg)
 }
 
@@ -155,7 +162,7 @@ func (h *WebhookHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	h.reloadNotifier()
+	h.reloadNotifier(c.Request.Context())
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
@@ -171,7 +178,7 @@ func (h *WebhookHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
-	h.reloadNotifier()
+	h.reloadNotifier(c.Request.Context())
 	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
 }
 
@@ -197,17 +204,33 @@ func (h *WebhookHandler) Test(c *gin.Context) {
 		Timestamp: time.Now(),
 	}
 
-	if h.Notifier != nil {
-		h.Notifier.Dispatch(context.Background(), testEvent)
+	if h.Notifier == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code":    "NOTIFIER_UNAVAILABLE",
+			"message": "webhook dispatcher is unavailable",
+		})
+		return
+	}
+	if err := h.Notifier.DispatchTo(cfg, testEvent); err != nil {
+		code := "NOTIFIER_UNAVAILABLE"
+		message := "webhook dispatcher is unavailable"
+		if errors.Is(err, asyncruntime.ErrClosed) {
+			code = "SERVER_SHUTTING_DOWN"
+			message = "server is shutting down"
+		} else {
+			zap.L().Warn("webhook test was not admitted", zap.Error(err))
+		}
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": code, "message": message})
+		return
 	}
 
-	zap.L().Info("webhook test triggered", zap.String("name", cfg.Name), zap.String("platform", cfg.Platform))
-	c.JSON(http.StatusOK, gin.H{"status": "test sent"})
+	zap.L().Info("webhook test queued", zap.String("name", cfg.Name), zap.String("platform", cfg.Platform))
+	c.JSON(http.StatusAccepted, gin.H{"status": "test queued"})
 }
 
-func (h *WebhookHandler) reloadNotifier() {
+func (h *WebhookHandler) reloadNotifier(ctx context.Context) {
 	if h.Notifier != nil {
-		if err := h.Notifier.LoadConfigs(); err != nil {
+		if err := h.Notifier.LoadConfigs(ctx); err != nil {
 			zap.L().Warn("failed to reload webhook configs", zap.Error(err))
 		}
 	}

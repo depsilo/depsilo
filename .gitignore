@@ -9,6 +9,8 @@ data/
 *.sqlite
 *.log
 .dev.log
+.dev-jwt-secret
+.dev-jwt-secret.tmp.*
 .server.pid
 
 # Config (real config — only config.example.toml is committed)

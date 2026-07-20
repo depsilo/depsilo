@@ -6,17 +6,47 @@ on:
       - 'v*.*.*'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  # Job 1: Cross-platform CLI binaries via GoReleaser (6 platforms)
-  # Also generates Homebrew formula + checksums + changelog
+  verify:
+    uses: ./.github/workflows/verify.yml
+
+  # Job 1: Cross-platform CLI binaries via GoReleaser (6 platforms), plus
+  # checksums, changelog, tray bundles, and source SBOMs.
   release:
+    needs: [verify, tray-macos, tray-linux]
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Generate the source inventory before npm ci/frontend/GoReleaser create
+      # node_modules or build artifacts, so Syft sees only declared sources.
+      - name: Generate source SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: ${{ runner.temp }}/depsilo-${{ github.ref_name }}-source.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate source SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: ${{ runner.temp }}/depsilo-${{ github.ref_name }}-source.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -34,69 +64,49 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - name: Stage source SBOMs
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p release-assets/source
+          cp "$RUNNER_TEMP/depsilo-${RELEASE_TAG}-source.cdx.json" release-assets/source/
+          cp "$RUNNER_TEMP/depsilo-${RELEASE_TAG}-source.spdx.json" release-assets/source/
+
+      - name: Download tray bundles
+        uses: actions/download-artifact@v4
         with:
-          version: '~> v2'
+          pattern: depsilo-tray-*
+          path: release-assets/tray
+          merge-multiple: true
+
+      # GoReleaser uploads CLI archives, checksums, and install.sh to a draft.
+      # A failed/retried job reuses that draft and replaces duplicate assets.
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: v2.15.4
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # For Homebrew tap push
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
-      - name: Upload install.sh to release
-        uses: softprops/action-gh-release@v2
+      # action-gh-release uploads every remaining asset before publishing the
+      # existing draft. If upload fails, users never see a partial release.
+      - name: Finalize release
+        uses: softprops/action-gh-release@v3
         with:
-          files: install.sh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ── SBOM: source-tree dependency manifest ─────────────────────
-      # Generates a CycloneDX + SPDX SBOM covering BOTH the Go modules
-      # (go.mod / go.sum) and the frontend npm deps (web/package-lock.json)
-      # by pointing Syft at the repo root after the frontend has been built.
-      # Captures *intended* dependencies — for the actually-deployed
-      # runtime image, see the image-level SBOM in docker-publish.yml.
-      #
-      # SBOMs are currently released as unsigned artifacts; cosign-attest
-      # layers on top once T0 #2 (signed releases) lands. See
-      # docs/adr/0003-supply-chain-control-point.md.
-      - name: Generate source SBOM (CycloneDX)
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: cyclonedx-json
-          output-file: depsilo-${{ github.ref_name }}-source.cdx.json
-          upload-artifact: false
-          upload-release-assets: false
-
-      - name: Generate source SBOM (SPDX)
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: depsilo-${{ github.ref_name }}-source.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
-
-      # sbom-action's upload-release-assets only fires on `release`
-      # events — on tag pushes it silently skips (v0.8.0 postmortem:
-      # green run, no assets). GoReleaser created the release earlier
-      # in this job, so a plain explicit upload works here.
-      - name: Upload source SBOMs to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.ref_name }}" \
-            "depsilo-${{ github.ref_name }}-source.cdx.json" \
-            "depsilo-${{ github.ref_name }}-source.spdx.json" \
-            --clobber -R "${{ github.repository }}"
+          files: |
+            release-assets/tray/*
+            release-assets/source/*
+          fail_on_unmatched_files: true
 
   # Job 2: macOS menu-bar app (.app bundle, unsigned)
   # Built on macOS via `make app-macos` which wraps `cmd/depsilo-tray` in
   # a proper bundle with Info.plist + .icns. Unsigned — users must
   # right-click → Open on first launch (Gatekeeper).
   tray-macos:
+    needs: verify
+    permissions:
+      contents: read
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -130,18 +140,22 @@ jobs:
           cd bin
           zip -r "depsilo-tray-macos.zip" Depsilo.app
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - name: Stage tray artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: bin/depsilo-tray-macos.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: depsilo-tray-macos
+          path: bin/depsilo-tray-macos.zip
+          if-no-files-found: error
+          retention-days: 7
 
   # Job 3: Linux menu-bar app (tar.gz with tray binary + .desktop launcher)
   # Built on Ubuntu LTS. Users untar + `bash install-linux.sh install`
   # to drop the binary into ~/.local/bin and register the .desktop file.
   # Needs GTK + AppIndicator headers at build time for fyne/systray.
   tray-linux:
+    needs: verify
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -182,9 +196,107 @@ jobs:
           chmod +x stage/install-linux.sh
           tar czf depsilo-tray-linux-amd64.tar.gz -C stage .
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - name: Stage tray artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: depsilo-tray-linux-amd64.tar.gz
+          name: depsilo-tray-linux
+          path: depsilo-tray-linux-amd64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # Publish the container only after the GitHub Release and all of its source
+  # artifacts exist. Keeping this in the same workflow removes the previous
+  # cross-workflow race between GoReleaser and image SBOM uploads.
+  container:
+    needs: release
+    permissions:
+      contents: write
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            depsilo/depsilo
+            ghcr.io/depsilo/depsilo
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
+          labels: |
+            org.opencontainers.image.title=Depsilo
+            org.opencontainers.image.description=Supply-chain enforcement proxy for 14 ecosystems and Docker OCI
+            org.opencontainers.image.url=https://depsilo.com
+            org.opencontainers.image.source=https://github.com/depsilo/depsilo
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build date
+        id: date
+        run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.date.outputs.date }}
+
+      - name: Generate image SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: depsilo/depsilo:${{ steps.meta.outputs.version }}
+          format: cyclonedx-json
+          output-file: depsilo-${{ github.ref_name }}-image.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate image SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: depsilo/depsilo:${{ steps.meta.outputs.version }}
+          format: spdx-json
+          output-file: depsilo-${{ github.ref_name }}-image.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Upload image SBOMs to release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "depsilo-${{ github.ref_name }}-image.cdx.json" \
+            "depsilo-${{ github.ref_name }}-image.spdx.json" \
+            --clobber -R "${{ github.repository }}"

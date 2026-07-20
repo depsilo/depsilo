@@ -1,4 +1,4 @@
-[![Go](https://img.shields.io/badge/Go-1.25.6+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.25.12+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/depsilo/depsilo)](https://hub.docker.com/r/depsilo/depsilo)
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
@@ -54,7 +54,8 @@ docker run -d \
 ```
 
 当前 GHCR package 需要登录后拉取；匿名部署请使用上面的 Docker Hub 镜像。
-首次打开 Portal 时先完成 Setup Wizard；上述 volume 持久化向导生成的配置，
+首次打开 Portal 时，先用 `docker logs depsilo` 取得启动日志中的一次性
+bootstrap token，再在 Setup Wizard 中设置管理员用户名和强密码。上述 volume 持久化向导生成的配置，
 两个绝对路径环境变量保证向导重写 `config.toml` 后，SQLite 数据库和本地缓存
 仍落在同一个 volume 中。
 
@@ -76,6 +77,9 @@ services:
       - ./config.toml:/app/config.toml
     environment:
       - DEPSILO_CONFIG=/app/config.toml
+      - DEPSILO_AUTH_JWT_SECRET=${DEPSILO_AUTH_JWT_SECRET:?set a random secret}
+      - DEPSILO_ADMIN_USERNAME=${DEPSILO_ADMIN_USERNAME:-admin}
+      - DEPSILO_ADMIN_PASSWORD=${DEPSILO_ADMIN_PASSWORD:?set a strong password}
     restart: unless-stopped
 ```
 
@@ -83,6 +87,8 @@ services:
 # 下载示例配置并启动
 curl -O https://raw.githubusercontent.com/depsilo/depsilo/master/config.example.toml
 mv config.example.toml config.toml
+export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
+export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
 docker-compose up -d
 ```
 
@@ -94,11 +100,21 @@ cd depsilo
 cd web && npm ci && cd ..
 make build
 cp config.example.toml config.toml
+export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
+export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
 ./bin/depsilo serve
 ```
 
 服务默认启动在 `http://localhost:23333`。
-默认管理员账号：`admin` / `admin` — 首次登录后请修改密码。
+不再提供预设管理员密码；互动安装由向导创建，无头部署则从
+`DEPSILO_ADMIN_*` 环境变量创建。
+
+本地开发也可以直接运行 `make run`，它会完成编译并启动服务。未设置
+`DEPSILO_AUTH_JWT_SECRET` 时，首次运行会生成权限为 0600 的
+`.dev-jwt-secret`，之后重启继续复用。项目根目录没有 `config.toml` 时不会
+再强制传入缺失路径，而是继续使用 CLI 的用户目录配置或内置默认配置。
+生产部署仍须显式提供自己的 JWT 密钥。需要强制使用自定义配置路径时，请运行
+`DEPSILO_CONFIG=/etc/depsilo.toml make run`。
 
 ### AI 工作负载说明
 
@@ -161,6 +177,7 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
 [auth]
 enabled    = true
+# 非 loopback 监听使用此占位值时将拒绝启动；推荐设置 DEPSILO_AUTH_JWT_SECRET。
 jwt_secret = "change-me-in-production"
 token_ttl  = "168h"         # 7 天
 

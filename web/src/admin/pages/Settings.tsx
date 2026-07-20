@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import AdminPage from '@/admin/components/AdminPage'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import WebhookTab from '@/admin/components/WebhookTab'
 import ButtonV2 from '@/components/Button'
 import Icon from '@/components/Icon'
@@ -97,7 +99,7 @@ function mutationErrorMessage(error: unknown, fallback: string): string {
 }
 
 export default function SettingsV2() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useAppToast()
   const desktopTabs = useMediaQuery('(min-width: 768px)')
@@ -150,15 +152,31 @@ export default function SettingsV2() {
   })
 
   if (settingsQuery.isPending) {
-    return <div className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
+    return (
+      <AdminPage description={t('settings.subtitle')}>
+        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]">
+          <span className="sr-only">{t('loading')}</span>
+        </div>
+      </AdminPage>
+    )
   }
 
   if (settingsQuery.isError && !settingsQuery.data) {
-    return <QueryErrorState message={t('settings.loadError')} onRetry={() => { void settingsQuery.refetch() }} />
+    return (
+      <AdminPage description={t('settings.subtitle')}>
+        <QueryErrorState message={t('settings.loadError')} onRetry={() => { void settingsQuery.refetch() }} />
+      </AdminPage>
+    )
   }
 
   if (!settingsQuery.data || !draft) {
-    return <div className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
+    return (
+      <AdminPage description={t('settings.subtitle')}>
+        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]">
+          <span className="sr-only">{t('loading')}</span>
+        </div>
+      </AdminPage>
+    )
   }
 
   const data = settingsQuery.data
@@ -167,6 +185,10 @@ export default function SettingsV2() {
     globallyReadOnly || updateMutation.isPending || !data.editable.includes(path)
   )
   const fieldLabel = (path: SettingPath) => t(`settings.fields.${path}`)
+  const formatFieldList = (paths: readonly SettingPath[]) => new Intl.ListFormat(
+    i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en-US',
+    { style: 'long', type: 'conjunction' },
+  ).format(paths.map(fieldLabel))
   const sourceLabel = (path: SettingPath) => t(`settings.source${data.sources[path][0].toUpperCase()}${data.sources[path].slice(1)}`)
   const fieldHint = (path: SettingPath, extra?: string) => {
     const parts = [sourceLabel(path)]
@@ -183,7 +205,7 @@ export default function SettingsV2() {
   }
   const resultList = (title: string, paths: EditableSettingPath[], tone: 'success' | 'warning') => paths.length ? (
     <InlineNotice tone={tone} title={title}>
-      {paths.map(path => fieldLabel(path)).join('、')}
+      {formatFieldList(paths)}
     </InlineNotice>
   ) : null
   const section = (title: string, children: ReactNode) => (
@@ -281,42 +303,51 @@ export default function SettingsV2() {
     },
   ]
 
+  const configurationTab = activeTab !== 'webhooks'
+
   return (
+    <AdminPage
+      description={t('settings.subtitle')}
+      actions={configurationTab ? (
+        <ButtonV2 type="button" size="sm" onClick={save} disabled={globallyReadOnly || updateMutation.isPending}>
+          <Icon name="save" size="sm" />
+          {updateMutation.isPending ? t('saving') : t('save')}
+        </ButtonV2>
+      ) : undefined}
+    >
     <div className="min-w-0 space-y-4">
-      {settingsQuery.isError && (
-        <InlineNotice tone="warning" title={t('settings.stale')}>
-          {mutationErrorMessage(settingsQuery.error, t('settings.stale'))}
+      {settingsQuery.isError && settingsQuery.data && (
+        <StaleDataNotice
+          message={`${t('settings.stale')} ${mutationErrorMessage(settingsQuery.error, t('settings.stale'))}`}
+          refreshing={settingsQuery.isFetching}
+          onRefresh={() => settingsQuery.refetch()}
+        />
+      )}
+      {configurationTab && inlineError && <InlineNotice tone="danger" title={t('settings.saveError')}>{inlineError}</InlineNotice>}
+      {configurationTab && lastResult && (
+        <div className="space-y-2">
+          {resultList(t('settings.appliedNowTitle'), lastResult.applied_now, 'success')}
+          {resultList(t('settings.blockedOverrideTitle'), lastResult.blocked_by_override, 'warning')}
+        </div>
+      )}
+      {data.pending_restart.length > 0 && (
+        <InlineNotice
+          tone="warning"
+          title={lastResult?.restart_required.length ? t('settings.restartRequiredTitle') : t('settings.pendingRestartTitle')}
+        >
+          {t('settings.pendingRestartField', { fields: formatFieldList(data.pending_restart) })}
         </InlineNotice>
       )}
       {!canWrite && <InlineNotice tone="warning">{t('settings.readOnlyPrincipal')}</InlineNotice>}
-      {!data.config_writable && (
+      {configurationTab && !data.config_writable && (
         <InlineNotice tone="warning" title={t('settings.configReadOnlyTitle')}>
           {t('settings.configReadOnlyBody')}
         </InlineNotice>
       )}
-      {data.pending_restart.length > 0 && (
-        <InlineNotice tone="warning" title={t('settings.pendingRestartTitle')}>
-          {t('settings.pendingRestartField', { fields: data.pending_restart.map(fieldLabel).join('、') })}
-        </InlineNotice>
-      )}
-      {inlineError && <InlineNotice tone="danger" title={t('settings.saveError')}>{inlineError}</InlineNotice>}
-      {lastResult && (
-        <div className="space-y-2">
-          {resultList(t('settings.appliedNowTitle'), lastResult.applied_now, 'success')}
-          {resultList(t('settings.restartRequiredTitle'), lastResult.restart_required, 'warning')}
-          {resultList(t('settings.blockedOverrideTitle'), lastResult.blocked_by_override, 'warning')}
-        </div>
-      )}
-      {activeTab !== 'webhooks' && (
-        <div className="flex flex-col items-stretch gap-3 border-b border-[var(--border)] pb-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-2 text-[12px] text-[var(--text-soft)]">
-            <Icon name="info" size="sm" className="mt-0.5 shrink-0" />
-            <span>{t('settings.hotReloadNote')}</span>
-          </div>
-          <ButtonV2 type="button" size="sm" onClick={save} disabled={globallyReadOnly || updateMutation.isPending}>
-            <Icon name="save" size="sm" />
-            {updateMutation.isPending ? t('saving') : t('save')}
-          </ButtonV2>
+      {configurationTab && (
+        <div className="flex min-w-0 items-start gap-2 border-b border-[var(--border)] pb-3 text-[12px] text-[var(--text-soft)]">
+          <Icon name="info" size="sm" className="mt-0.5 shrink-0" />
+          <span>{t('settings.hotReloadNote')}</span>
         </div>
       )}
       <TabsV2
@@ -327,5 +358,6 @@ export default function SettingsV2() {
         orientation={desktopTabs ? 'vertical' : 'horizontal'}
       />
     </div>
+    </AdminPage>
   )
 }

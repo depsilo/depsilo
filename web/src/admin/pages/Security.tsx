@@ -17,8 +17,11 @@ import InlineNotice from '@/components/InlineNotice'
 import DataTableV2 from '@/components/DataTable'
 import TabsV2 from '@/components/Tabs'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import IconButton from '@/components/IconButton'
 import QueryErrorState from '@/components/QueryErrorState'
+import AdminPage from '@/admin/components/AdminPage'
+import AdminPagination from '@/admin/components/AdminPagination'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import { securityEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import type {
@@ -28,31 +31,6 @@ import type {
   SecurityVulnerability,
   UpdateSecurityPolicyRequest,
 } from '@/lib/adminApi.types'
-
-const ECOSYSTEM_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'pypi', label: 'PyPI' },
-  { value: 'apt', label: 'APT' },
-  { value: 'npm', label: 'npm' },
-  { value: 'go', label: 'Go' },
-  { value: 'cargo', label: 'Cargo' },
-  { value: 'maven', label: 'Maven' },
-  { value: 'rubygems', label: 'RubyGems' },
-  { value: 'composer', label: 'Composer' },
-  { value: 'nuget', label: 'NuGet' },
-  { value: 'conda', label: 'Conda' },
-  { value: 'cran', label: 'CRAN' },
-  { value: 'alpine', label: 'Alpine' },
-  { value: 'helm', label: 'Helm' },
-]
-
-const SEVERITY_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-]
 
 const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'success'> = {
   critical: 'error',
@@ -86,6 +64,7 @@ function OverviewTab() {
   })
 
   const dashboard = data?.data
+  const scanInProgress = scanMutation.isPending || dashboard?.scan_in_progress === true
   const severityDist = Object.entries(dashboard?.by_severity ?? {}).map(([severity, count]) => ({ severity, count }))
   const maxCount = Math.max(...severityDist.map((s) => s.count), 1)
 
@@ -113,7 +92,7 @@ function OverviewTab() {
 
   return (
     <div className="space-y-12">
-      {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+      {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
       {/* ── Metrics row ───────────────────────────── */}
       <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
         <Metric label={t('security.totalVulnerabilities')} value={String(dashboard?.total_vulnerabilities || 0)} />
@@ -129,15 +108,17 @@ function OverviewTab() {
           action={canWrite ?
             <ButtonV2
               onClick={() => scanMutation.mutate()}
-              disabled={scanMutation.isPending}
+              aria-busy={scanInProgress || undefined}
+              disabled={scanInProgress}
               size="sm"
             >
               <Icon name="radar" size="sm" />
-              {scanMutation.isPending ? t('security.scanning') : t('security.scanNow')}
+              {scanInProgress ? t('security.scanning') : t('security.scanNow')}
             </ButtonV2>
           : undefined}
         />
-        {scanMutation.isError && <div className="mb-3"><InlineNotice tone="danger">{getApiError(scanMutation.error).message}</InlineNotice></div>}
+        {scanMutation.isSuccess && <div className="mb-3"><InlineNotice tone="success">{t('security.scanStarted')}</InlineNotice></div>}
+        {scanMutation.isError && <div className="mb-3"><InlineNotice tone="danger">{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</InlineNotice></div>}
         <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
           {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
         </p>
@@ -192,14 +173,15 @@ function VulnerabilitiesTab() {
   const { t } = useTranslation()
   const [ecosystem, setEcosystem] = useState('')
   const [severity, setSeverity] = useState('')
-  const [search, setSearch] = useState('')
+  const [draftSearch, setDraftSearch] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
   const [page, setPage] = useState(1)
   const perPage = 20
 
   const params: SecurityQuery = { page, per_page: perPage }
   if (ecosystem) params.ecosystem = ecosystem
   if (severity) params.severity = severity as SecuritySeverity
-  if (search) params.package = search
+  if (appliedSearch) params.package = appliedSearch
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'vulnerabilities', params],
@@ -263,50 +245,55 @@ function VulnerabilitiesTab() {
     },
   ]
 
-  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  function applySearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAppliedSearch(draftSearch.trim())
+    setPage(1)
+  }
 
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <div className="flex items-end gap-3 flex-wrap">
+      <form data-security-vulnerability-filters className="flex flex-wrap items-end gap-3" onSubmit={applySearch}>
         <div className="w-40">
           <SelectV2 label={t('security.ecosystem')} value={ecosystem} onChange={(e) => { setEcosystem(e.target.value); setPage(1) }}>
-            {ECOSYSTEM_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option value="">{t('all')}</option>
+            {securityEcosystems.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
             ))}
           </SelectV2>
         </div>
         <div className="w-36">
           <SelectV2 label={t('security.severity')} value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1) }}>
-            {SEVERITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option value="">{t('all')}</option>
+            {(['critical', 'high', 'medium', 'low', 'unknown'] satisfies SecuritySeverity[]).map((value) => (
+              <option key={value} value={value}>{t(`security.${value}`)}</option>
             ))}
           </SelectV2>
         </div>
         <div className="flex-1 min-w-[200px]">
           <InputV2
             label={t('security.packageSearch')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={draftSearch}
+            onChange={(e) => setDraftSearch(e.target.value)}
             placeholder={t('security.searchPlaceholder')}
             mono
-            onKeyDown={(e) => { if (e.key === 'Enter') setPage(1) }}
           />
         </div>
-        <ButtonV2 size="sm" onClick={() => setPage(1)}>
+        <ButtonV2 type="submit" size="sm">
           <Icon name="search" size="sm" />
           {t('search')}
         </ButtonV2>
-      </div>
+      </form>
 
       {/* Table — bare (no Card wrap) */}
       {query.isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+        <div role="status" aria-busy="true" className="py-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
       ) : query.isError && !data ? (
         <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
       ) : (
         <div className="space-y-3">
-        {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+        {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
         {items.length === 0 ? <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={200} /> : <DataTableV2
           columns={columns}
           data={items.map((item) => ({ ...item }))}
@@ -317,21 +304,7 @@ function VulnerabilitiesTab() {
         </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-            {t('security.showingResults', { from: (page - 1) * perPage + 1, to: Math.min(page * perPage, total), total })}
-          </span>
-          <div className="flex gap-1">
-            <IconButton icon="chevron_left" label={t('prevPage')} disabled={page <= 1} onClick={() => setPage(page - 1)} />
-            <span className="flex items-center px-2 text-[12px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>
-              {page} / {totalPages}
-            </span>
-            <IconButton icon="chevron_right" label={t('nextPage')} disabled={page >= totalPages} onClick={() => setPage(page + 1)} />
-          </div>
-        </div>
-      )}
+      <AdminPagination page={page} pageSize={perPage} total={total} onPageChange={setPage} />
     </div>
   )
 }
@@ -352,6 +325,7 @@ function SuggestionsTab() {
   const { data } = query
 
   const items = data?.data.items ?? []
+  const total = data?.data.total ?? items.length
 
   const approveMutation = useMutation({
     mutationFn: (vulnId: number) => adminApi.approveSuggestion(vulnId),
@@ -386,7 +360,7 @@ function SuggestionsTab() {
 
   return (
     <div className="space-y-3">
-      {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+      {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
       {items.length === 0 ? <EmptyState icon="verified" title={t('security.noSuggestions')} minHeight={240} /> : <>
       <div>
         {items.map((item: SecurityVulnerability, idx: number) => {
@@ -397,11 +371,11 @@ function SuggestionsTab() {
           return (
             <div
               key={item.id}
-              className="flex items-start justify-between gap-4 py-4"
+              className="flex min-w-0 flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
               style={{ borderBottom: idx < items.length - 1 ? '1px solid var(--border)' : 'none' }}
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
                   <span className="font-mono text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
                     {item.osv_id}
                   </span>
@@ -412,14 +386,14 @@ function SuggestionsTab() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
                   {item.ecosystem && <EcosystemIcon type={item.ecosystem as EcosystemName} size={14} />}
-                  <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>
+                  <span className="min-w-0 break-all font-mono text-[13px]" style={{ color: 'var(--text)' }}>
                     {item.package_name}
                   </span>
                 </div>
               </div>
-              {canWrite && <div className="flex gap-2 shrink-0">
+              {canWrite && <div className="flex shrink-0 flex-wrap gap-2 self-end sm:self-start">
                 <ButtonV2
                   variant="danger"
                   size="sm"
@@ -444,14 +418,7 @@ function SuggestionsTab() {
         })}
       </div>
 
-      {/* Simple page nav */}
-      <div className="flex justify-center gap-2 mt-6">
-        <IconButton icon="chevron_left" label={t('prevPage')} disabled={page <= 1} onClick={() => setPage(page - 1)} />
-        <span className="flex items-center text-[12px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>
-          {page}
-        </span>
-        <IconButton icon="chevron_right" label={t('nextPage')} disabled={items.length < 20} onClick={() => setPage(page + 1)} />
-      </div>
+      <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
       </>}
     </div>
   )
@@ -464,6 +431,7 @@ function PoliciesTab() {
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const importInFlightRef = useRef(false)
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'policies'],
@@ -482,8 +450,9 @@ function PoliciesTab() {
   const importMutation = useMutation({
     mutationFn: (formData: FormData) => adminApi.importVulnerabilities(formData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'security'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'security'] })
     },
+    onSettled: () => { importInFlightRef.current = false },
   })
 
   function getPolicy(ecosystem: string) {
@@ -525,16 +494,21 @@ function PoliciesTab() {
     }
   }
 
-  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  function submitImport(file: File) {
+    if (!canWrite || importInFlightRef.current) return
+    importInFlightRef.current = true
     const formData = new FormData()
     formData.append('file', file)
     importMutation.mutate(formData)
+  }
+
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) submitImport(file)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const ecosystems = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm']
+  const ecosystems = securityEcosystems.map(ecosystem => ecosystem.id)
 
   if (query.isPending) {
     return (
@@ -555,7 +529,7 @@ function PoliciesTab() {
 
   return (
     <div className="space-y-12">
-      {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+      {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
       {/* ── Per-ecosystem policies ───────────────────── */}
       <section>
         <SectionHeader title={t('security.ecosystemPolicies')} />
@@ -571,53 +545,56 @@ function PoliciesTab() {
                 className="py-3"
                 style={{ borderBottom: idx < ecosystems.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
-                <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 w-32 shrink-0">
-                  <EcosystemIcon type={eco as EcosystemName} size={16} />
-                  <span className="text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
-                    {eco.toUpperCase()}
-                  </span>
-                </div>
+                <div
+                  data-security-policy-layout
+                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:grid-cols-[8rem_auto_7rem_minmax(0,1fr)] sm:gap-4"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <EcosystemIcon type={eco as EcosystemName} size={16} />
+                    <span className="min-w-0 truncate text-[13px] font-[500]" title={eco.toUpperCase()} style={{ color: 'var(--text)' }}>
+                      {eco.toUpperCase()}
+                    </span>
+                  </div>
 
-                <div className="shrink-0 text-[var(--text-soft)]">
-                  <SwitchV2
-                    label={t('security.autoBlock')}
-                    aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
-                    checked={policy.auto_block_enabled}
-                    disabled={!canWrite || isSaving}
-                    onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
-                  />
-                </div>
+                  <div className="justify-self-end text-[var(--text-soft)] sm:justify-self-start">
+                    <SwitchV2
+                      label={t('security.autoBlock')}
+                      aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
+                      checked={policy.auto_block_enabled}
+                      disabled={!canWrite || isSaving}
+                      onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
+                    />
+                  </div>
 
-                {/* CVSS threshold */}
-                <div className="w-28 shrink-0">
-                  <InputV2
-                    label={t('security.cvssThreshold')}
-                    aria-label={`${eco.toUpperCase()} ${t('security.cvssThreshold')}`}
-                    type="number"
-                    min={0}
-                    max={10}
-                    step={0.1}
-                    value={policy.min_cvss_score}
-                    disabled={!canWrite || isSaving}
-                    onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
-                    mono
-                    className="px-2 py-1 text-center"
-                  />
-                </div>
+                  {/* CVSS threshold */}
+                  <div data-security-policy-score className="min-w-0 sm:w-28">
+                    <InputV2
+                      label={t('security.cvssThreshold')}
+                      aria-label={`${eco.toUpperCase()} ${t('security.cvssThreshold')}`}
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={0.1}
+                      value={policy.min_cvss_score}
+                      disabled={!canWrite || isSaving}
+                      onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
+                      mono
+                      className="px-2 py-1 text-center"
+                    />
+                  </div>
 
-                {canWrite && <div className="ml-auto">
-                  <ButtonV2
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`${eco.toUpperCase()} ${t('save')}`}
-                    aria-busy={isSaving || undefined}
-                    disabled={isSaving}
-                    onClick={() => { void handleSave(eco) }}
-                  >
-                    {isSaving ? t('saving') : t('save')}
-                  </ButtonV2>
-                </div>}
+                  {canWrite && <div data-security-policy-save className="justify-self-end">
+                    <ButtonV2
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`${eco.toUpperCase()} ${t('save')}`}
+                      aria-busy={isSaving || undefined}
+                      disabled={isSaving}
+                      onClick={() => { void handleSave(eco) }}
+                    >
+                      {isSaving ? t('saving') : t('save')}
+                    </ButtonV2>
+                  </div>}
                 </div>
                 {saveState?.error ? <div className="mt-2"><InlineNotice tone="danger">{getApiError(saveState.error).message}</InlineNotice></div> : null}
               </div>
@@ -630,6 +607,7 @@ function PoliciesTab() {
       <section>
         <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
         {canWrite && <div
+          data-security-import-dropzone
           className="rounded-[4px] p-6 text-center transition-colors duration-150"
           style={{
             border: '2px dashed var(--border)',
@@ -640,17 +618,15 @@ function PoliciesTab() {
             e.preventDefault()
             e.stopPropagation()
             const file = e.dataTransfer.files[0]
-            if (file) {
-              const formData = new FormData()
-              formData.append('file', file)
-              importMutation.mutate(formData)
-            }
+            if (file) submitImport(file)
           }}
+          aria-busy={importMutation.isPending || undefined}
         >
           <button
             type="button"
             className="inline-flex min-h-10 flex-col items-center justify-center rounded-[4px] bg-transparent px-4 py-2 text-[var(--text-soft)] stripe-focus-ring"
             onClick={() => fileInputRef.current?.click()}
+            disabled={importMutation.isPending}
           >
             <Icon name="upload_file" size="lg" />
             <span className="mt-2 text-[13px]">
@@ -664,16 +640,28 @@ function PoliciesTab() {
             id="security-vulnerability-import"
             ref={fileInputRef}
             type="file"
-            accept=".json,.zip"
+            accept=".json,application/json"
+            disabled={importMutation.isPending}
             onChange={handleImport}
             className="sr-only"
           />
         </div>}
         {importMutation.isSuccess && (
-          <p className="text-[12px] mt-2" style={{ color: 'var(--ok-text)' }}>{t('security.importSuccess')}</p>
+          <div className="mt-2"><InlineNotice tone="success">
+            <p>{t('security.importSuccess', { count: importMutation.data.data.imported })}</p>
+            <p className="mt-1 text-[12px]">
+              {t('security.importSummary', {
+                received: importMutation.data.data.received,
+                packages: importMutation.data.data.packages,
+                duplicates: importMutation.data.data.duplicates,
+                skipped: importMutation.data.data.skipped,
+                rulesCreated: importMutation.data.data.rules_created,
+              })}
+            </p>
+          </InlineNotice></div>
         )}
         {importMutation.isError && (
-          <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('security.importError')}</p>
+          <div className="mt-2"><InlineNotice tone="danger">{getApiError(importMutation.error).message}</InlineNotice></div>
         )}
       </section>
     </div>
@@ -701,6 +689,7 @@ export default function Security() {
   ]
 
   return (
+    <AdminPage description={t('security.subtitle')}>
     <div className="space-y-6">
       <TabsV2
         items={tabs}
@@ -709,5 +698,6 @@ export default function Security() {
         ariaLabel={t('security.title')}
       />
     </div>
+    </AdminPage>
   )
 }

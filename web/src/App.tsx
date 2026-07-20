@@ -1,10 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import PortalApp from '@/portal/PortalApp'
-import AdminApp from '@/admin/AdminApp'
-import { setupApi } from '@/lib/api'
-import SetupWizard from '@/setup/SetupWizard'
-import { ToastProvider } from '@/components/Toast'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { lazyRoute } from '@/routing/lazyRoute'
+import SetupGate from '@/setup/SetupGate'
+
+const PortalApp = lazyRoute(() => import('@/portal/PortalApp'), { surface: 'page' })
+const AdminApp = lazyRoute(() => import('@/admin/AdminApp'), { surface: 'page' })
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,26 +15,7 @@ const queryClient = new QueryClient({
   },
 })
 
-function AppRoutes() {
-  const { data: setupData, isLoading: setupLoading } = useQuery({
-    queryKey: ['setup-status'],
-    queryFn: () => setupApi.getStatus(),
-    retry: false,
-    staleTime: Infinity, // only check once per session
-  })
-
-  if (setupLoading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div style={{ color: 'var(--text-soft)' }}>Loading...</div>
-      </div>
-    )
-  }
-
-  if (setupData?.data?.needs_setup) {
-    return <SetupWizard />
-  }
-
+function ApplicationRoutes() {
   return (
     <Routes>
       <Route path="/admin/*" element={<AdminApp />} />
@@ -47,10 +28,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <ToastProvider>
-          <div className="page-wash" />
-          <AppRoutes />
-        </ToastProvider>
+        <div className="page-wash" />
+        <SetupGate>
+          <ApplicationRoutes />
+        </SetupGate>
       </BrowserRouter>
     </QueryClientProvider>
   )

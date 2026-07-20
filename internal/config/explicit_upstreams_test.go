@@ -10,6 +10,7 @@ import (
 )
 
 func TestLoadTracksOnlyFileExplicitOrdinaryUpstreams(t *testing.T) {
+	setTestJWTSecret(t)
 	path := filepath.Join(t.TempDir(), "config.toml")
 	document := []byte(`
 [[pypi.upstreams]]

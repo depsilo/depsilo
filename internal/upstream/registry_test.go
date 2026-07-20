@@ -229,6 +229,67 @@ func TestRegistryConcurrentClosesJoinTheRunningGeneration(t *testing.T) {
 	}
 }
 
+func TestRegistryCloseContextTimeoutCanRetry(t *testing.T) {
+	registry, handle, cancelObserved, allowFinish, cancelCalls := controlledRegistryWorker()
+	closeCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	if err := registry.CloseContext(closeCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("first CloseContext err=%v, want deadline exceeded", err)
+	}
+	waitDone(t, cancelObserved)
+	if got := cancelCalls.Load(); got != 1 {
+		t.Fatalf("worker generation canceled %d times after timeout, want 1", got)
+	}
+
+	retryReturned := make(chan error, 1)
+	go func() {
+		retryReturned <- registry.CloseContext(context.Background())
+	}()
+	select {
+	case err := <-retryReturned:
+		t.Fatalf("retry returned before worker finished: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(allowFinish)
+	if err := <-retryReturned; err != nil {
+		t.Fatalf("retry CloseContext: %v", err)
+	}
+	waitDone(t, handle.done)
+	if registry.WorkerRunning(1) {
+		t.Fatal("retried CloseContext left worker registered")
+	}
+	if got := cancelCalls.Load(); got != 1 {
+		t.Fatalf("worker generation canceled %d times after retry, want 1", got)
+	}
+}
+
+func TestRegistryCloseContextNilUsesBackground(t *testing.T) {
+	registry, handle, cancelObserved, allowFinish, _ := controlledRegistryWorker()
+	returned := make(chan error, 1)
+	go func() {
+		returned <- registry.CloseContext(nil)
+	}()
+	waitDone(t, cancelObserved)
+	close(allowFinish)
+	if err := <-returned; err != nil {
+		t.Fatalf("CloseContext(nil): %v", err)
+	}
+	waitDone(t, handle.done)
+}
+
+func TestWaitWorkerHandlesPrefersDoneOverCanceledContext(t *testing.T) {
+	done := make(chan struct{})
+	close(done)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := waitWorkerHandles(ctx, []workerHandle{{done: done}}); err != nil {
+		t.Fatalf("completed worker returned stale context error: %v", err)
+	}
+}
+
 func TestProbeUsesUpstreamProxy(t *testing.T) {
 	proxied := make(chan *http.Request, 1)
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -272,7 +333,7 @@ func TestPersistProbeRejectsMissingNonzeroUpstreamWithoutLog(t *testing.T) {
 	u := pool.Snapshot()[0]
 	result := ProbeResult{Healthy: false, Latency: time.Millisecond, CheckedAt: time.Now().UTC()}
 	u.applyProbe(result)
-	if err := persistProbe(database, u, result); err == nil {
+	if err := persistProbe(context.Background(), database, u, result); err == nil {
 		t.Fatal("missing upstream was accepted")
 	}
 	var count int64
@@ -296,7 +357,7 @@ func TestPersistProbeLogsConfigOwnedIDZeroUpstream(t *testing.T) {
 	u := pool.Snapshot()[0]
 	result := ProbeResult{Healthy: true, Latency: 7 * time.Millisecond, CheckedAt: time.Now().UTC()}
 	u.applyProbe(result)
-	if err := persistProbe(database, u, result); err != nil {
+	if err := persistProbe(context.Background(), database, u, result); err != nil {
 		t.Fatal(err)
 	}
 	var logs []db.UpstreamLatencyLog
@@ -422,7 +483,7 @@ func TestPersistProbeWritesHealthAndLatencyLogTogether(t *testing.T) {
 	checkedAt := time.Date(2026, time.July, 11, 2, 3, 4, 0, time.UTC)
 	result := ProbeResult{Healthy: false, Latency: 25 * time.Millisecond, CheckedAt: checkedAt}
 	u.applyProbe(result)
-	if err := persistProbe(database, u, result); err != nil {
+	if err := persistProbe(context.Background(), database, u, result); err != nil {
 		t.Fatal(err)
 	}
 	var stored db.UpstreamRecord
@@ -465,7 +526,7 @@ func TestPersistProbeRollsBackHealthWhenLatencyLogFails(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.Callback().Create().Remove(callbackName) })
 
-	if err := persistProbe(database, u, result); err == nil || err.Error() != "latency log unavailable" {
+	if err := persistProbe(context.Background(), database, u, result); err == nil || err.Error() != "latency log unavailable" {
 		t.Fatalf("err=%v", err)
 	}
 	var stored db.UpstreamRecord

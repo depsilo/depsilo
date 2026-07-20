@@ -4,7 +4,10 @@ import type {
   AccessLogQuery,
   AdminSettingsResponse,
   AdminUpstream,
+  AdminUpstreamLatenciesResponse,
   AdminUpstreamListResponse,
+  AdminUpstreamUpdateListResponse,
+  AdminUpstreamUpdateQuery,
   AdminUser,
   APITokenSummary,
   ApproveSuggestionRequest,
@@ -13,6 +16,11 @@ import type {
   AuditLogQuery,
   BandwidthReportResponse,
   CacheDistributionResponse,
+  CacheDeleteResponse,
+  CacheCleanupResponse,
+  CacheIndexListResponse,
+  CacheIndexQuery,
+  CacheIndexRefreshResponse,
   CacheListResponse,
   CacheQuery,
   CheckUpstreamResponse,
@@ -52,6 +60,7 @@ import type {
   SecuritySuggestionPage,
   SecurityVulnerabilityPage,
   SetupRequest,
+  SetupCompleteResponse,
   UpdateProjectRequest,
   UpdateAdminSettingsRequest,
   UpdateAdminSettingsResponse,
@@ -62,28 +71,45 @@ import type {
 
 const api = axios.create({ baseURL: '/api/v1' })
 
+export const AUTH_SESSION_EXPIRED_EVENT = 'depsilo:auth-session-expired'
+
+function isLoginRequest(url?: string) {
+  if (!url) return false
+  try {
+    return new URL(url, window.location.origin).pathname.endsWith('/auth/login')
+  } catch {
+    return url.endsWith('/auth/login')
+  }
+}
+
 // Request interceptor: attach JWT from localStorage
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
-  if (token) {
+  if (token && !isLoginRequest(config.url)) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
 
-// Response interceptor: 401 → redirect to /admin/login; 402 → dispatch pro-required event
+// Let React Router own navigation so the attempted deep link survives. Only a
+// request that actually carried the current session can expire it; a rejected
+// login attempt must remain on the form and display its API error.
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401 && window.location.pathname.startsWith('/admin')) {
-      localStorage.removeItem('token')
-      window.location.href = '/admin/login'
+  (error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401 && !isLoginRequest(error.config?.url)) {
+      const authorization = error.config?.headers?.get?.('Authorization')
+      const currentToken = localStorage.getItem('token')
+      if (currentToken && typeof authorization === 'string' && authorization === `Bearer ${currentToken}`) {
+        localStorage.removeItem('token')
+        window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT))
+      }
     }
     // 402 PRO_REQUIRED is left to each Pro-gated page to render an
     // inline ProRequiredCallout — the previous app-wide modal popup
     // proved too interruptive for users casually clicking around the
     // admin sidebar.
-    return Promise.reject(err)
+    return Promise.reject(error)
   }
 )
 
@@ -114,9 +140,11 @@ export const adminApi = {
 
   // Cache
   listCache: (params: CacheQuery) => api.get<CacheListResponse>('/admin/cache', { params }),
-  deleteCache: (id: number) => api.delete(`/admin/cache/${id}`),
-  cleanupCache: () => api.post('/admin/cache/cleanup'),
+  deleteCache: (id: number) => api.delete<CacheDeleteResponse>(`/admin/cache/${id}`),
+  cleanupCache: () => api.post<CacheCleanupResponse>('/admin/cache/cleanup'),
   getCacheDistribution: () => api.get<CacheDistributionResponse>('/admin/cache/distribution'),
+  listCacheIndexes: (params: CacheIndexQuery) => api.get<CacheIndexListResponse>('/admin/cache/indexes', { params }),
+  refreshCacheIndex: (id: number) => api.post<CacheIndexRefreshResponse>(`/admin/cache/indexes/${id}/refresh`),
   warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post('/admin/cache/warmup', data),
 
   // Upstreams
@@ -125,8 +153,10 @@ export const adminApi = {
   updateUpstream: (id: number, data: UpstreamMutationRequest) => api.put<AdminUpstream>(`/admin/upstreams/${id}`, data),
   deleteUpstream: (id: number) => api.delete<DeleteUpstreamResponse>(`/admin/upstreams/${id}`),
   checkUpstream: (id: number) => api.post<CheckUpstreamResponse>(`/admin/upstreams/${id}/check`),
-  getUpstreamLatency: (id: number, range_: string = '24h') =>
-    api.get(`/admin/upstreams/${id}/latency`, { params: { range: range_ } }),
+  getUpstreamLatencies: (range_: string = '24h') =>
+    api.get<AdminUpstreamLatenciesResponse>('/admin/upstreams/latency', { params: { range: range_ } }),
+  listUpstreamUpdates: (params: AdminUpstreamUpdateQuery) =>
+    api.get<AdminUpstreamUpdateListResponse>('/admin/upstream-updates', { params }),
 
   // Logs
   listLogs: (params: AccessLogQuery) => api.get<AccessLogListResponse>('/admin/logs', { params }),
@@ -203,9 +233,31 @@ export const adminApi = {
 }
 
 // Setup wizard (no auth)
+export type SetupDecision =
+  | { kind: 'configured' }
+  | { kind: 'setup-required'; tokenRequired: boolean }
+
+function decodeSetupStatus(value: unknown): SetupDecision {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError('Invalid setup status response')
+  }
+  const status = value as Record<string, unknown>
+  if (typeof status.needs_setup !== 'boolean' || typeof status.token_required !== 'boolean') {
+    throw new TypeError('Invalid setup status response')
+  }
+  return status.needs_setup
+    ? { kind: 'setup-required', tokenRequired: status.token_required }
+    : { kind: 'configured' }
+}
+
 export const setupApi = {
-  getStatus: () => api.get('/setup/status'),
-  complete: (data: SetupRequest) => api.post('/setup/complete', data),
+  getStatus: async (): Promise<SetupDecision> => {
+    const response = await api.get<unknown>('/setup/status')
+    return decodeSetupStatus(response.data)
+  },
+  complete: (data: SetupRequest, bootstrapToken?: string) => api.post<SetupCompleteResponse>('/setup/complete', data, {
+    headers: bootstrapToken ? { 'X-Depsilo-Bootstrap-Token': bootstrapToken } : undefined,
+  }),
 }
 
 // License / entitlement types

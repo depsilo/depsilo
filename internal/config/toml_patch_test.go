@@ -87,6 +87,7 @@ func TestLoadIgnoresQuotedLiteralDottedKeyAndPreservesEnvPrecedence(t *testing.T
 	}
 
 	t.Run("canonical file setting", func(t *testing.T) {
+		setTestJWTSecret(t)
 		t.Setenv("DEPSILO_CONFIG", path)
 		cfg, err := Load()
 		if err != nil {
@@ -98,6 +99,7 @@ func TestLoadIgnoresQuotedLiteralDottedKeyAndPreservesEnvPrecedence(t *testing.T
 	})
 
 	t.Run("environment override", func(t *testing.T) {
+		setTestJWTSecret(t)
 		t.Setenv("DEPSILO_CONFIG", path)
 		t.Setenv("DEPSILO_SERVER_LOG_LEVEL", "error")
 		cfg, err := Load()
@@ -180,6 +182,7 @@ func TestDecodeAndLoadIgnoreAllRootLiteralDottedKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("DEPSILO_CONFIG", path)
+	setTestJWTSecret(t)
 	loaded, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -222,6 +225,7 @@ func TestDecodeAndLoadIgnoreMultilineLiteralDottedRootValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			setTestJWTSecret(t)
 			document := []byte(tt.document)
 			cfg, err := decodeConfigDocument(document)
 			if err != nil {
@@ -236,6 +240,7 @@ func TestDecodeAndLoadIgnoreMultilineLiteralDottedRootValues(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Setenv("DEPSILO_CONFIG", path)
+			setTestJWTSecret(t)
 			loaded, err := Load()
 			if err != nil {
 				t.Fatal(err)
@@ -305,6 +310,7 @@ func TestPatchDecodeAndLoadIgnoreLiteralDottedTableBlocks(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Setenv("DEPSILO_CONFIG", path)
+			setTestJWTSecret(t)
 			loaded, err := Load()
 			if err != nil {
 				t.Fatal(err)

@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation, Link } from 'react-router-dom'
+import { Routes, Route, Link, NavLink } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -10,8 +10,11 @@ import LangToggle from '@/components/LangToggle'
 import ThemeToggle from '@/components/ThemeToggle'
 import StatusDot from '@/components/StatusDot'
 import Icon from '@/components/Icon'
-import QuickStart from '@/portal/pages/QuickStart'
-import MonitorV2 from '@/portal/pages/Monitor'
+import { lazyRoute } from '@/routing/lazyRoute'
+import RouteNotFound from '@/routing/RouteNotFound'
+
+const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
+const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
 
 // EndpointPill — small monospace pill in the header so operators can
 // copy the URL for sharing without exposing it as a giant hero element.
@@ -100,67 +103,60 @@ function EndpointPill() {
 interface NavTabProps {
   to: string
   label: string
-  isActive: boolean
 }
 
-function NavTab({ to, label, isActive }: NavTabProps) {
+function NavTab({ to, label }: NavTabProps) {
   return (
-    <Link
+    <NavLink
       to={to}
-      viewTransition
-      style={{ textDecoration: 'none' }}
+      end
+      className="hit-extend stripe-focus-ring"
+      style={({ isActive }) => ({
+        display: 'inline-flex',
+        alignItems: 'center',
+        textDecoration: 'none',
+        position: 'relative',
+        padding: '6px 10px',
+        fontSize: 13,
+        fontWeight: isActive ? 600 : 500,
+        letterSpacing: isActive ? '-0.005em' : '0',
+        color: isActive ? 'var(--text)' : 'var(--text-soft)',
+        borderRadius: 6,
+        whiteSpace: 'nowrap',
+        transition: 'color 120ms ease',
+      })}
+      onMouseEnter={event => { event.currentTarget.style.color = 'var(--text)' }}
+      onMouseLeave={event => {
+        event.currentTarget.style.color = event.currentTarget.getAttribute('aria-current') === 'page'
+          ? 'var(--text)'
+          : 'var(--text-soft)'
+      }}
     >
-      <button
-        className="hit-extend"
-        style={{
-          position: 'relative',
-          padding: '6px 10px',
-          fontSize: 13,
-          fontWeight: isActive ? 600 : 500,
-          letterSpacing: isActive ? '-0.005em' : '0',
-          color: isActive ? 'var(--text)' : 'var(--text-soft)',
-          borderRadius: 6,
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-          transition: 'color 120ms ease',
-        }}
-        onMouseEnter={e => {
-          if (!isActive) e.currentTarget.style.color = 'var(--text)'
-        }}
-        onMouseLeave={e => {
-          if (!isActive) e.currentTarget.style.color = 'var(--text-soft)'
-        }}
-      >
-        {label}
-        {isActive && (
-          <span
-            // The single shared name across both nav tabs lets the
-            // browser morph the underline from one tab position to the
-            // other instead of fading-out + fading-in. Only the active
-            // instance ever exists in the DOM at any time, so the name
-            // collision the API normally warns about can't happen.
-            style={{
-              position: 'absolute',
-              left: 10,
-              right: 10,
-              bottom: '-15px',
-              height: '1.5px',
-              background: 'var(--grad-brand)',
-              borderRadius: 1,
-              viewTransitionName: 'portal-nav-underline',
-            }}
-          />
-        )}
-      </button>
-    </Link>
+      {({ isActive }) => (
+        <>
+          {label}
+          {isActive && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: 10,
+                right: 10,
+                bottom: '-15px',
+                height: '1.5px',
+                background: 'var(--grad-brand)',
+                borderRadius: 1,
+              }}
+            />
+          )}
+        </>
+      )}
+    </NavLink>
   )
 }
 
 export default function PortalAppV2() {
   const { t } = useTranslation()
-  const location = useLocation()
 
   const { data } = useQuery<{ service: { status: string; version: string } }>({
     queryKey: ['stats-status'],
@@ -173,9 +169,6 @@ export default function PortalAppV2() {
 
   const serviceStatus = data?.service?.status ?? 'unknown'
   const dotStatus = serviceStatus === 'healthy' ? 'healthy' : serviceStatus === 'degraded' ? 'degraded' : 'failed'
-
-  const isQuickStart = location.pathname === '/' || location.pathname === ''
-  const isMonitor = location.pathname.startsWith('/monitor')
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
@@ -205,11 +198,7 @@ export default function PortalAppV2() {
             gap: 16,
           }}
         >
-          {/* Logo area. viewTransition + view-transition-name keep the
-              logo stable across QuickStart ↔ Monitor navigation — the
-              browser holds the element in place while the rest of the
-              page cross-fades and morphs around it. */}
-          <Link to="/" viewTransition style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0, viewTransitionName: 'portal-brand' }}>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
             <Logo size={28} />
             <span
               className="portal-brand-name"
@@ -240,9 +229,9 @@ export default function PortalAppV2() {
           </Link>
 
           {/* Nav tabs */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <NavTab to="/" label={t('portal.quickStart')} isActive={isQuickStart} />
-            <NavTab to="/monitor" label={t('portal.monitor')} isActive={isMonitor} />
+          <nav aria-label={t('portal.navigation')} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <NavTab to="/" label={t('portal.quickStart')} />
+            <NavTab to="/monitor" label={t('portal.monitor')} />
           </nav>
 
           {/* Spacer */}
@@ -319,6 +308,7 @@ export default function PortalAppV2() {
         <Routes>
           <Route index element={<QuickStart />} />
           <Route path="monitor" element={<MonitorV2 />} />
+          <Route path="*" element={<RouteNotFound area="portal" />} />
         </Routes>
       </main>
     </div>

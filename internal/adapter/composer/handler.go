@@ -106,7 +106,7 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 // handleDist serves a dist archive requested through the mirror
@@ -208,7 +208,7 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 // resolveDistEntry loads the p2 metadata for a package (through the
@@ -312,7 +312,7 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {

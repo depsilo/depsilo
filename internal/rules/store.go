@@ -42,5 +42,12 @@ func (s *Store) Update(id uint, updates map[string]interface{}) (*db.PackageRule
 
 // Delete removes a package rule by ID.
 func (s *Store) Delete(id uint) error {
-	return s.db.Delete(&db.PackageRule{}, id).Error
+	result := s.db.Delete(&db.PackageRule{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/asyncruntime"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 )
@@ -33,17 +34,38 @@ const licenseStorageSingletonID uint = 1
 
 // Manager handles license validation and status tracking.
 type Manager struct {
-	key      string
-	database *gorm.DB
-	mu       sync.RWMutex
-	status   LicenseStatus
+	key          string
+	database     *gorm.DB
+	tasks        asyncruntime.Submitter
+	mu           sync.RWMutex
+	status       LicenseStatus
+	revalidating bool
 }
+
+var (
+	ErrNoLicenseKey        = errors.New("no license key configured")
+	ErrRevalidationRunning = errors.New("license revalidation already running")
+	ErrRevalidationClosed  = errors.New("license revalidation is unavailable")
+)
 
 // NewManager creates a new license Manager from config + DB.
 // Key precedence: DB-stored key (set via UI) > config.toml key > none.
 // DEPSILO_DEV_PRO=1 bypasses everything per dev mode.
 func NewManager(cfg config.LicenseConfig, database *gorm.DB) *Manager {
-	m := &Manager{database: database}
+	return newManager(nil, cfg, database)
+}
+
+// NewManagerWithSubmitter creates a manager whose manual re-validations are
+// cancelled and joined with the owning async runtime.
+func NewManagerWithSubmitter(tasks asyncruntime.Submitter, cfg config.LicenseConfig, database *gorm.DB) *Manager {
+	return newManager(tasks, cfg, database)
+}
+
+func newManager(tasks asyncruntime.Submitter, cfg config.LicenseConfig, database *gorm.DB) *Manager {
+	m := &Manager{
+		database: database,
+		tasks:    tasks,
+	}
 
 	now := time.Now().UTC()
 
@@ -147,12 +169,45 @@ func (m *Manager) doValidate() {
 	)
 }
 
-// Revalidate triggers a manual re-validation in the background.
-func (m *Manager) Revalidate() {
+// Revalidate schedules a manual re-validation without blocking the caller.
+// Its reservation is rolled back synchronously if the owning runtime rejects
+// the task, so callers never report a validation that cannot start.
+func (m *Manager) Revalidate() error {
+	m.mu.Lock()
 	if m.key == "" {
-		return
+		m.mu.Unlock()
+		return ErrNoLicenseKey
 	}
-	go m.doValidate()
+	if m.revalidating {
+		m.mu.Unlock()
+		return ErrRevalidationRunning
+	}
+	m.revalidating = true
+	tasks := m.tasks
+	m.mu.Unlock()
+
+	release := func() {
+		m.mu.Lock()
+		m.revalidating = false
+		m.mu.Unlock()
+	}
+	if tasks == nil {
+		release()
+		return ErrRevalidationClosed
+	}
+	if err := tasks.Submit(func(ctx context.Context) {
+		defer release()
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			m.doValidate()
+		}
+	}); err != nil {
+		release()
+		return errors.Join(ErrRevalidationClosed, err)
+	}
+	return nil
 }
 
 // SetKey persists a new license key (DB), updates manager state,
@@ -244,4 +299,3 @@ func MaskKey(key string) string {
 	}
 	return key[:8] + "-***"
 }
-

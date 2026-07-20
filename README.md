@@ -8,7 +8,7 @@
 block known-malicious packages,
 detect silent republishing, and serve installs at LAN speed. Single binary, ~50 MB memory.
 
-[![Go 1.25.6+](https://img.shields.io/badge/Go-1.25.6+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go 1.25.12+](https://img.shields.io/badge/Go-1.25.12+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/depsilo/depsilo)](https://hub.docker.com/r/depsilo/depsilo)
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
@@ -67,6 +67,11 @@ per-package overrides via the allow list (glob / pin / range syntax).
 
 ## Quick start
 
+Every interactive first run requires the one-time bootstrap token printed in
+the server startup log, including requests from localhost. This keeps setup
+protected when Depsilo sits behind a local reverse proxy. The wizard then asks
+you to create the initial administrator; there is no default password.
+
 ### One-liner (Linux / macOS)
 
 ```bash
@@ -84,11 +89,11 @@ docker run -d --name depsilo -p 23333:23333 \
 ```
 
 Open `http://localhost:23333` for the portal — it ships copy-paste config
-for all 14 ecosystems. On first run, complete the setup wizard; then sign in at
-`/admin` with `admin` / `admin` and change the password immediately. The named
-volume persists the generated config; the two absolute path overrides keep the
-SQLite database and local cache in that same volume after the wizard rewrites
-`config.toml`.
+for all 14 ecosystems. On first run, copy the one-time bootstrap token from
+`docker logs depsilo`, enter it when the wizard asks, and choose the initial
+administrator username and a strong password. The named volume persists the
+generated config; the two absolute path overrides keep the SQLite database and
+local cache in that same volume after the wizard rewrites `config.toml`.
 
 The current wizard does not generate a Docker registry block or a Hugging Face
 upstream. Add those sections from `config.example.toml` and restart Depsilo
@@ -100,8 +105,16 @@ before testing those two install surfaces.
 # Grab the binary archive for your platform from GitHub Releases
 tar xzf depsilo_*_linux_amd64.tar.gz
 cp config.example.toml config.toml
+export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
+export DEPSILO_ADMIN_PASSWORD='choose-a-strong-initial-password'
 ./depsilo serve --port 23333
 ```
+
+Configured/headless deployments create the initial administrator from
+`DEPSILO_ADMIN_USERNAME` (default `admin`) and `DEPSILO_ADMIN_PASSWORD`. If the
+password variable is omitted, Depsilo generates a one-time random password and
+prints it once to the server log. A non-loopback listener will not start with
+the example JWT placeholder.
 
 ### Build from source
 
@@ -113,7 +126,15 @@ make build
 ./bin/depsilo serve
 ```
 
-Requires Go 1.25.6 or newer and Node.js 20+.
+Requires Go 1.25.12 or newer and Node.js 20+.
+
+For local development, `make run` performs the build and starts the server. If
+`DEPSILO_AUTH_JWT_SECRET` is unset, it creates `.dev-jwt-secret` with mode 0600
+on the first run and reuses it on later restarts. A missing project
+`config.toml` is not forced: the CLI continues through its normal home-config
+and built-in-default search order. Production deployments must still provide
+their own JWT secret. To require a custom config path, pass it explicitly, for
+example `DEPSILO_CONFIG=/etc/depsilo.toml make run`.
 
 ## Supply-chain enforcement
 
@@ -323,9 +344,14 @@ What's happening under the hood when a `pip install` lands on Depsilo:
 
 - **Request coalescing** — 100 concurrent requests for the same package = 1
   upstream fetch. The other 99 wait on the first.
-- **Stale-while-revalidate** — expired cache is served immediately while
-  refreshed in the background. No `pip install` ever blocks waiting for
-  a metadata refresh.
+- **Fresh package indexes** — indexes within their local TTL are served without
+  contacting upstream. Expired indexes (or an operator-triggered refresh) are
+  refreshed before serving; PyPI uses `ETag` / `Last-Modified` when available.
+  If an automatic refresh cannot reach upstream, Depsilo falls back to stale
+  data. Cached index state and per-index manual refresh are available under
+  **Admin → Index Cache**.
+- **Stale-while-revalidate artifacts** — immutable package files can be served
+  immediately while their integrity is verified in the background.
 - **Offline fallback for cached artifacts** — if all configured upstreams are
   down, existing stale entries can still be served; uncached requests fail.
 - **Streaming** — large packages (torch ~2 GB) are piped through

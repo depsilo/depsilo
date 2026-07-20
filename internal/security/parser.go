@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"depsilo/internal/db"
+	"depsilo/internal/ecosystem"
 )
 
 // ParseVulnerability converts an OSV vulnerability into a DB model.
@@ -98,12 +99,7 @@ func extractReferences(refs []osvRef) string {
 }
 
 func reverseEcosystem(osvEco string) string {
-	for k, v := range ecosystemMap {
-		if v == osvEco {
-			return k
-		}
-	}
-	return ""
+	return ecosystem.NameForOSV(osvEco)
 }
 
 // ExtractFixedVersion extracts the "fixed" version from affected ranges JSON.

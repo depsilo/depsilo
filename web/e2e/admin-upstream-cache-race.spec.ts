@@ -51,8 +51,6 @@ test('late batch checks cannot roll back an edit or resurrect a deletion', async
 
   await mockAdminApi(page, {
     'GET /api/v1/admin/upstreams': { items: [originalAlpha, originalBeta], total: 2 },
-    'GET /api/v1/admin/upstreams/1/latency': { points: [] },
-    'GET /api/v1/admin/upstreams/2/latency': { points: [] },
     'POST /api/v1/admin/upstreams/1/check': delayedCheck(originalAlpha),
     'POST /api/v1/admin/upstreams/2/check': delayedCheck(originalBeta),
     'PUT /api/v1/admin/upstreams/1': editedAlpha,
@@ -97,7 +95,6 @@ test('a late single check cannot overwrite an edit', async ({ page }) => {
 
   await mockAdminApi(page, {
     'GET /api/v1/admin/upstreams': { items: [originalAlpha], total: 1 },
-    'GET /api/v1/admin/upstreams/1/latency': { points: [] },
     'POST /api/v1/admin/upstreams/1/check': async () => {
       markCheckStarted?.()
       await checkReleased

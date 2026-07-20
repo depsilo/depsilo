@@ -32,15 +32,15 @@ func TTLForRef(ref string) time.Duration {
 type PathKind int
 
 const (
-	PathUnknown PathKind = iota
-	PathResolve              // /<repo>/resolve/<ref>/<subpath> — file download (LFS-aware)
-	PathRaw                  // /<repo>/raw/<ref>/<subpath> — small file inline content
-	PathAPIModelInfo         // /api/models/<repo>
-	PathAPIModelRevision     // /api/models/<repo>/revision/<rev>
-	PathAPIModelTree         // /api/models/<repo>/tree/<rev>
-	PathAPIDatasetInfo       // /api/datasets/<repo>
-	PathAPIDatasetRevision   // /api/datasets/<repo>/revision/<rev>
-	PathAPIDatasetTree       // /api/datasets/<repo>/tree/<rev>
+	PathUnknown            PathKind = iota
+	PathResolve                     // /<repo>/resolve/<ref>/<subpath> — file download (LFS-aware)
+	PathRaw                         // /<repo>/raw/<ref>/<subpath> — small file inline content
+	PathAPIModelInfo                // /api/models/<repo>
+	PathAPIModelRevision            // /api/models/<repo>/revision/<rev>
+	PathAPIModelTree                // /api/models/<repo>/tree/<rev>
+	PathAPIDatasetInfo              // /api/datasets/<repo>
+	PathAPIDatasetRevision          // /api/datasets/<repo>/revision/<rev>
+	PathAPIDatasetTree              // /api/datasets/<repo>/tree/<rev>
 )
 
 // Parsed holds the structured pieces of a HuggingFace request path.

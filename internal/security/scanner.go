@@ -2,32 +2,48 @@ package security
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"depsilo/internal/db"
+)
+
+var (
+	ErrScanInProgress    = errors.New("scan already in progress")
+	ErrScannerClosed     = errors.New("security scanner is closed")
+	errNoAdvisoryCatalog = errors.New("security scanner has no advisory catalog")
 )
 
 // Scanner coordinates vulnerability scanning.
 type Scanner struct {
 	db       *gorm.DB
 	fetcher  *Fetcher
-	checkTTL time.Duration
+	catalog  *AdvisoryCatalog
 	scanning atomic.Bool
-	lastScan time.Time
+	lastScan atomic.Pointer[time.Time]
+
+	lifecycleMu sync.Mutex
+	lifecycleWG sync.WaitGroup
+	closed      bool
+	stopCtx     context.Context
+	stop        context.CancelFunc
 }
 
 // NewScanner creates a new vulnerability scanner.
-func NewScanner(database *gorm.DB, fetcher *Fetcher, checkTTL time.Duration) *Scanner {
+func NewScanner(database *gorm.DB, fetcher *Fetcher, catalog *AdvisoryCatalog) *Scanner {
+	stopCtx, stop := context.WithCancel(context.Background())
 	return &Scanner{
-		db:       database,
-		fetcher:  fetcher,
-		checkTTL: checkTTL,
+		db:      database,
+		fetcher: fetcher,
+		catalog: catalog,
+		stopCtx: stopCtx,
+		stop:    stop,
 	}
 }
 
@@ -38,15 +54,106 @@ func (s *Scanner) IsScanning() bool {
 
 // LastScanTime returns when the last full scan completed.
 func (s *Scanner) LastScanTime() time.Time {
-	return s.lastScan
+	lastScan := s.lastScan.Load()
+	if lastScan == nil {
+		return time.Time{}
+	}
+	return *lastScan
 }
 
 // ScanAll scans all cached packages that need a vulnerability check refresh.
 func (s *Scanner) ScanAll(ctx context.Context) error {
-	if !s.scanning.CompareAndSwap(false, true) {
-		return fmt.Errorf("scan already in progress")
+	scanCtx, finish, err := s.beginScan(ctx, 0)
+	if err != nil {
+		return err
 	}
-	defer s.scanning.Store(false)
+	defer finish()
+	return s.scanAll(scanCtx)
+}
+
+// StartScan atomically reserves the scanner before starting an asynchronous
+// scan. The returned nil guarantees IsScanning is already true, so an HTTP
+// handler can safely acknowledge the job without a check-then-start race.
+func (s *Scanner) StartScan(ctx context.Context, timeout time.Duration) error {
+	scanCtx, finish, err := s.beginScan(ctx, timeout)
+	if err != nil {
+		return err
+	}
+	go func() {
+		defer finish()
+		if err := s.scanAll(scanCtx); err != nil && !errors.Is(err, context.Canceled) {
+			zap.L().Error("manual security scan failed", zap.Error(err))
+		}
+	}()
+	return nil
+}
+
+func (s *Scanner) beginScan(parent context.Context, timeout time.Duration) (context.Context, func(), error) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	if err := parent.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	if s.closed {
+		return nil, nil, ErrScannerClosed
+	}
+	if !s.scanning.CompareAndSwap(false, true) {
+		return nil, nil, ErrScanInProgress
+	}
+
+	var scanCtx context.Context
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		scanCtx, cancel = context.WithTimeout(parent, timeout)
+	} else {
+		scanCtx, cancel = context.WithCancel(parent)
+	}
+	stopLink := context.AfterFunc(s.stopCtx, cancel)
+	s.lifecycleWG.Add(1)
+
+	var finishOnce sync.Once
+	finish := func() {
+		finishOnce.Do(func() {
+			stopLink()
+			cancel()
+			s.scanning.Store(false)
+			s.lifecycleWG.Done()
+		})
+	}
+	return scanCtx, finish, nil
+}
+
+// Close prevents new scans, cancels active scans, and waits until they no
+// longer use the database. It is safe to call more than once.
+func (s *Scanner) Close(ctx context.Context) error {
+	s.lifecycleMu.Lock()
+	if !s.closed {
+		s.closed = true
+		s.stop()
+	}
+	s.lifecycleMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.lifecycleWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Scanner) scanAll(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	zap.L().Info("security scan started")
 	start := time.Now()
@@ -57,7 +164,7 @@ func (s *Scanner) ScanAll(ctx context.Context) error {
 		PackageName string
 	}
 	var packages []pkgRow
-	if err := s.db.Model(&db.CacheEntry{}).
+	if err := s.db.WithContext(ctx).Model(&db.CacheEntry{}).
 		Select("DISTINCT adapter_type, package_name").
 		Where("package_name != ''").
 		Find(&packages).Error; err != nil {
@@ -72,17 +179,28 @@ func (s *Scanner) ScanAll(ctx context.Context) error {
 			continue
 		}
 		var check db.VulnerabilityCheck
-		err := s.db.Where("ecosystem = ? AND package_name = ?", pkg.AdapterType, pkg.PackageName).First(&check).Error
+		err := s.db.WithContext(ctx).
+			Where("ecosystem = ? AND package_name = ?", pkg.AdapterType, pkg.PackageName).
+			First(&check).Error
 		if err == nil && check.NextFetchAt.After(now) {
 			continue
+		}
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("query vulnerability check for %s/%s: %w", pkg.AdapterType, pkg.PackageName, err)
 		}
 		toScan = append(toScan, PackageRef{Ecosystem: pkg.AdapterType, Name: pkg.PackageName})
 	}
 
 	if len(toScan) == 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		zap.L().Info("security scan complete, all packages up to date")
-		s.lastScan = time.Now()
+		s.storeLastScan(time.Now())
 		return nil
+	}
+	if s.fetcher == nil {
+		return fmt.Errorf("security scanner has no OSV fetcher")
 	}
 
 	zap.L().Info("scanning packages", zap.Int("count", len(toScan)))
@@ -94,8 +212,15 @@ func (s *Scanner) ScanAll(ctx context.Context) error {
 	}
 
 	totalVulns := 0
+	var scanErrors []error
+
+scanBatches:
 	for eco, pkgs := range byEcosystem {
 		for i := 0; i < len(pkgs); i += 1000 {
+			if err := ctx.Err(); err != nil {
+				scanErrors = append(scanErrors, err)
+				break scanBatches
+			}
 			end := i + 1000
 			if end > len(pkgs) {
 				end = len(pkgs)
@@ -105,18 +230,50 @@ func (s *Scanner) ScanAll(ctx context.Context) error {
 			results, err := s.fetcher.QueryBatch(ctx, batch)
 			if err != nil {
 				zap.L().Error("batch query failed", zap.String("ecosystem", eco), zap.Error(err))
+				scanErrors = append(scanErrors, fmt.Errorf("query OSV batch for %s: %w", eco, err))
+				if ctx.Err() != nil {
+					break scanBatches
+				}
 				continue
 			}
 
-			for j, vulns := range results {
+			if len(results) != len(batch) {
+				scanErrors = append(scanErrors, fmt.Errorf(
+					"query OSV batch for %s: result count %d does not match package count %d",
+					eco, len(results), len(batch),
+				))
+			}
+			resultCount := len(results)
+			if resultCount > len(batch) {
+				resultCount = len(batch)
+			}
+			for j := 0; j < resultCount; j++ {
 				pkg := batch[j]
-				count := s.processResults(pkg.Ecosystem, pkg.Name, vulns)
+				count, err := s.recordScan(ctx, pkg, results[j])
+				if err != nil {
+					zap.L().Error("store scan results failed",
+						zap.String("ecosystem", pkg.Ecosystem),
+						zap.String("package", pkg.Name),
+						zap.Error(err),
+					)
+					scanErrors = append(scanErrors, fmt.Errorf(
+						"store scan results for %s/%s: %w", pkg.Ecosystem, pkg.Name, err,
+					))
+					continue
+				}
 				totalVulns += count
 			}
 		}
 	}
 
-	s.lastScan = time.Now()
+	if len(scanErrors) > 0 {
+		return errors.Join(scanErrors...)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.storeLastScan(time.Now())
 	zap.L().Info("security scan complete",
 		zap.Int("packages", len(toScan)),
 		zap.Int("vulnerabilities", totalVulns),
@@ -125,104 +282,50 @@ func (s *Scanner) ScanAll(ctx context.Context) error {
 	return nil
 }
 
+func (s *Scanner) storeLastScan(scanTime time.Time) {
+	s.lastScan.Store(&scanTime)
+}
+
 // ScanPackage scans a single package for vulnerabilities.
 func (s *Scanner) ScanPackage(ctx context.Context, ecosystem, packageName string) error {
 	if OSVEcosystem(ecosystem) == "" || packageName == "" {
 		return nil
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	var check db.VulnerabilityCheck
-	err := s.db.Where("ecosystem = ? AND package_name = ?", ecosystem, packageName).First(&check).Error
+	err := s.db.WithContext(ctx).
+		Where("ecosystem = ? AND package_name = ?", ecosystem, packageName).
+		First(&check).Error
 	if err == nil && check.NextFetchAt.After(time.Now()) {
 		return nil // still fresh
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("query vulnerability check for %s/%s: %w", ecosystem, packageName, err)
+	}
+	if s.fetcher == nil {
+		return fmt.Errorf("security scanner has no OSV fetcher")
 	}
 
 	vulns, err := s.fetcher.Query(ctx, ecosystem, packageName)
 	if err != nil {
 		return fmt.Errorf("query OSV for %s/%s: %w", ecosystem, packageName, err)
 	}
-
-	s.processResults(ecosystem, packageName, vulns)
+	_, err = s.recordScan(ctx, PackageRef{Ecosystem: ecosystem, Name: packageName}, vulns)
+	if err != nil {
+		return fmt.Errorf("store scan results for %s/%s: %w", ecosystem, packageName, err)
+	}
 	return nil
 }
 
-// processResults stores vulnerabilities and updates the check record.
-func (s *Scanner) processResults(ecosystem, packageName string, vulns []OSVVulnerability) int {
-	now := time.Now()
-
-	for _, v := range vulns {
-		parsed := ParseVulnerability(v, ecosystem)
-		if parsed.PackageName == "" {
-			parsed.PackageName = packageName
-		}
-		if parsed.Ecosystem == "" {
-			parsed.Ecosystem = ecosystem
-		}
-		s.db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "osv_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"affected_ranges", "severity", "cvss_score", "summary", "details", "aliases", "references", "modified_at", "updated_at"}),
-		}).Create(parsed)
+func (s *Scanner) recordScan(ctx context.Context, pkg PackageRef, advisories []OSVVulnerability) (int, error) {
+	if s.catalog == nil {
+		return 0, errNoAdvisoryCatalog
 	}
-
-	s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "ecosystem"}, {Name: "package_name"}},
-		DoUpdates: clause.AssignmentColumns([]string{"has_vulnerabilities", "vulnerability_count", "last_fetched_at", "next_fetch_at", "updated_at"}),
-	}).Create(&db.VulnerabilityCheck{
-		Ecosystem:          ecosystem,
-		PackageName:        packageName,
-		HasVulnerabilities: len(vulns) > 0,
-		VulnerabilityCount: len(vulns),
-		LastFetchedAt:      now,
-		NextFetchAt:        now.Add(s.checkTTL),
-	})
-
-	if len(vulns) > 0 {
-		s.checkAutoBlock(ecosystem, packageName, vulns)
-	}
-
-	return len(vulns)
-}
-
-// checkAutoBlock creates deny rules for vulnerabilities exceeding the CVSS threshold.
-func (s *Scanner) checkAutoBlock(ecosystem, packageName string, vulns []OSVVulnerability) {
-	var policy db.SecurityPolicy
-	if err := s.db.Where("ecosystem = ? AND auto_block_enabled = ?", ecosystem, true).First(&policy).Error; err != nil {
-		return
-	}
-
-	for _, v := range vulns {
-		parsed := ParseVulnerability(v, ecosystem)
-		if parsed.CVSSScore < policy.MinCVSSScore {
-			continue
-		}
-
-		var count int64
-		s.db.Model(&db.PackageRule{}).Where(
-			"ecosystem = ? AND package_name = ? AND created_by = 'security-scanner' AND reason LIKE ?",
-			ecosystem, packageName, "%"+v.ID+"%",
-		).Count(&count)
-		if count > 0 {
-			continue
-		}
-
-		constraint := FormatVersionConstraint(parsed)
-		rule := db.PackageRule{
-			Ecosystem:   ecosystem,
-			PackageName: packageName,
-			Version:     constraint,
-			Action:      "deny",
-			Reason:      fmt.Sprintf("Auto-blocked: %s (CVSS %.1f)", v.ID, parsed.CVSSScore),
-			CreatedBy:   "security-scanner",
-		}
-		if err := s.db.Create(&rule).Error; err != nil {
-			zap.L().Warn("failed to create auto-block rule",
-				zap.String("package", packageName), zap.String("vuln", v.ID), zap.Error(err))
-		} else {
-			zap.L().Info("auto-blocked vulnerable package",
-				zap.String("ecosystem", ecosystem), zap.String("package", packageName),
-				zap.String("vuln", v.ID), zap.Float32("cvss", parsed.CVSSScore))
-		}
-	}
+	receipt, err := s.catalog.RecordScan(ctx, pkg, advisories)
+	return receipt.Advisories, err
 }
 
 // StartBackgroundScan runs periodic full scans.

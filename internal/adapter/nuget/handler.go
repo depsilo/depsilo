@@ -111,7 +111,7 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "nuget", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 // handlePassthrough proxies all other NuGet requests (registration, package download, search).
@@ -159,7 +159,7 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "nuget", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {

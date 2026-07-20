@@ -9,4 +9,7 @@ services:
       - ./config.toml:/app/config.toml
     environment:
       - DEPSILO_CONFIG=/app/config.toml
+      - DEPSILO_AUTH_JWT_SECRET=${DEPSILO_AUTH_JWT_SECRET:?set a random DEPSILO_AUTH_JWT_SECRET}
+      - DEPSILO_ADMIN_USERNAME=${DEPSILO_ADMIN_USERNAME:-admin}
+      - DEPSILO_ADMIN_PASSWORD=${DEPSILO_ADMIN_PASSWORD:?set a strong DEPSILO_ADMIN_PASSWORD}
     restart: unless-stopped

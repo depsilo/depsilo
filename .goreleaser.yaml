@@ -1,9 +1,5 @@
 version: 2
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - id: depsilo
     main: ./cmd/depsilo
@@ -31,10 +27,12 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - config.example.toml
       - docker-compose.yml
@@ -59,26 +57,8 @@ release:
     owner: depsilo
     name: depsilo
   prerelease: auto
-  draft: false
+  draft: true
+  use_existing_draft: true
+  replace_existing_artifacts: true
   extra_files:
     - glob: ./install.sh
-
-# Homebrew tap formula generation.
-#
-# `skip_upload: true` because depsilo/homebrew-tap doesn't exist yet — goreleaser
-# still writes the formula to dist/homebrew/ as a build artifact, but won't try
-# to push it. Remove this flag (and ensure HOMEBREW_TAP_GITHUB_TOKEN is set)
-# once the tap repository is created.
-brews:
-  - name: depsilo
-    skip_upload: true
-    repository:
-      owner: depsilo
-      name: homebrew-tap
-    homepage: "https://depsilo.com"
-    description: "Supply-chain enforcement proxy for 14 ecosystems and Docker OCI"
-    license: "MIT"
-    install: |
-      bin.install "depsilo"
-    test: |
-      system "#{bin}/depsilo", "version"

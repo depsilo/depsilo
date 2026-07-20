@@ -19,5 +19,19 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      'react-refresh/only-export-components': ['error', {
+        allowConstantExport: true,
+        extraHOCs: ['lazyRoute'],
+      }],
+    },
+  },
+  {
+    // The route factory intentionally keeps its private fallback components
+    // beside the exported HOC so loading and failure policy stay local.
+    files: ['src/routing/lazyRoute.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
   },
 ])

@@ -52,7 +52,6 @@ for (const routeCase of cases) {
     await mockAdminApi(page, {
       [routeCase.endpoint]: populated[routeCase.endpoint],
       'GET /api/v1/admin/tokens': populated['GET /api/v1/admin/tokens'],
-      'GET /api/v1/admin/upstreams/1/latency': { points: [] },
     })
     await page.goto(routeCase.path)
 
@@ -164,8 +163,6 @@ test('upstream row checks keep independent loading state when responses finish o
 
   await mockAdminApi(page, {
     'GET /api/v1/admin/upstreams': { items: [alpha, beta], total: 2 },
-    'GET /api/v1/admin/upstreams/1/latency': { points: [] },
-    'GET /api/v1/admin/upstreams/2/latency': { points: [] },
     'POST /api/v1/admin/upstreams/1/check': async () => {
       alphaStarted()
       await alphaResponse

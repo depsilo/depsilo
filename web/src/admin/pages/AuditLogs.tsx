@@ -8,14 +8,16 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
+import SelectV2 from '@/components/Select'
 import TableViewport from '@/components/TableViewport'
+import AdminPage from '@/admin/components/AdminPage'
+import AdminPagination from '@/admin/components/AdminPagination'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AuditLog, AuditLogQuery } from '@/lib/adminApi.types'
-
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
 function latencyColor(ms: number): string {
   if (ms < 100) return 'var(--ok)'
@@ -65,7 +67,6 @@ export default function AuditLogsV2() {
 
   const items = data?.data.items ?? []
   const total = data?.data.total ?? 0
-  const totalPages = Math.ceil(total / 50)
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
 
@@ -83,17 +84,6 @@ export default function AuditLogsV2() {
     })
   }
 
-  const selStyle: React.CSSProperties = {
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    color: 'var(--text)',
-    borderRadius: 4,
-    padding: '4px 8px',
-    fontSize: 12,
-    outline: 'none',
-    cursor: 'pointer',
-  }
-
   // Audit logs moved to open-source on 2026-06-28 — the page no longer
   // 402s, so there is no Pro paywall branch to render.
 
@@ -103,41 +93,55 @@ export default function AuditLogsV2() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Filter bar — bare row, only the search input gets a border */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-1 min-w-[240px] rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+    <AdminPage
+      description={t('audit.subtitle')}
+      actions={(
+        <ButtonV2 type="button" variant="secondary" size="sm" onClick={handleExport}>
+          <Icon name="download" size="sm" />
+          {t('audit.exportCsv')}
+        </ButtonV2>
+      )}
+    >
+      <div className="space-y-6">
+      <form
+        data-admin-filters
+        className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+        onSubmit={(event) => { event.preventDefault(); handleSearch() }}
+      >
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
-            className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
+            aria-label={t('audit.searchLabel')}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
             style={{ color: 'var(--text)' }}
             placeholder={t('audit.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
 
-        {/* Ecosystem */}
-        <select aria-label={t('audit.ecosystem')} value={ecosystem} onChange={(e) => setEcosystem(e.target.value)} style={selStyle}>
-          <option value="all">{t('all')}</option>
-          {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
-        </select>
+        <div className="grid grid-cols-2 gap-3 sm:contents">
+          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.ecosystem')} value={ecosystem} onChange={(e) => setEcosystem(e.target.value)}>
+            <option value="all">{t('all')}</option>
+            {operatorEcosystems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </SelectV2>
 
-        {/* Result */}
-        <select aria-label={t('audit.result')} value={resultFilter} onChange={(e) => setResultFilter(e.target.value)} style={selStyle}>
-          <option value="all">{t('all')}</option>
-          <option value="hit">{t('audit.hit')}</option>
-          <option value="miss">{t('audit.miss')}</option>
-          <option value="error">{t('audit.error')}</option>
-        </select>
+          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.result')} value={resultFilter} onChange={(e) => setResultFilter(e.target.value)}>
+            <option value="all">{t('all')}</option>
+            <option value="hit">{t('audit.hit')}</option>
+            <option value="miss">{t('audit.miss')}</option>
+            <option value="error">{t('audit.error')}</option>
+          </SelectV2>
+        </div>
 
-        {/* Time range pills */}
-        <div className="flex gap-1">
+        <fieldset className="flex min-h-10 items-center gap-1" aria-label={t('audit.timeRange')}>
+          <legend className="sr-only">{t('audit.timeRange')}</legend>
           {(['today', '7d', '30d'] as const).map(r => (
             <button
+              type="button"
               key={r}
               onClick={() => setTimeRange(r)}
+              aria-pressed={timeRange === r}
               className="px-2.5 py-1 text-[11px] rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
               style={{
                 background: timeRange === r ? 'var(--btn-primary-bg)' : 'transparent',
@@ -148,19 +152,12 @@ export default function AuditLogsV2() {
               {r === 'today' ? t('audit.today') : r === '7d' ? t('audit.days7') : t('audit.days30')}
             </button>
           ))}
-        </div>
+        </fieldset>
 
-        {/* Export */}
-        <ButtonV2 variant="ghost" size="sm" onClick={handleExport}>
-          <Icon name="download" size="sm" />
-          {t('audit.exportCsv')}
-        </ButtonV2>
-
-        {/* Search */}
-        <ButtonV2 variant="primary" size="sm" onClick={handleSearch}>
+        <ButtonV2 type="submit" variant="primary" size="sm" className="min-h-10 self-start sm:min-h-0">
           {t('search')}
         </ButtonV2>
-      </div>
+      </form>
 
       {/* Table — bare */}
       <TableViewport label={t('audit.table')} minWidth={980}>
@@ -171,7 +168,7 @@ export default function AuditLogsV2() {
         ) : (
           <div>
           {data && isRefetchError && (
-            <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+            <StaleDataNotice onRefresh={() => { void refetch() }} />
           )}
           {items.length === 0 ? (
             <EmptyState icon="receipt_long" title={t('audit.noLogs')} minHeight={200} />
@@ -180,7 +177,7 @@ export default function AuditLogsV2() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {headers.map(h => (
-                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <th key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </th>
                 ))}
@@ -230,24 +227,8 @@ export default function AuditLogsV2() {
       </TableViewport>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-            {t('totalItems', { total, page, totalPages })}
-          </span>
-          <div className="flex items-center gap-1">
-            <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-              {t('prevPage')}
-            </ButtonV2>
-            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--text-soft)' }}>
-              {page}/{totalPages}
-            </span>
-            <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-              {t('nextPage')}
-            </ButtonV2>
-          </div>
-        </div>
-      )}
-    </div>
+      <AdminPagination page={page} pageSize={50} total={total} onPageChange={setPage} />
+      </div>
+    </AdminPage>
   )
 }

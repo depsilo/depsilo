@@ -137,15 +137,15 @@ func NewChecker(p *Policy, l *Lookup, s *Store) (*Checker, error) {
 //     No event written here — the approval itself was recorded
 //     when the admin created it (see Store.Approve).
 //  4. Lookup publish time:
-//       - ErrUpstreamUnavailable → Allow + log warn. We will NOT
-//         block a build because some upstream registry is having
-//         a bad day. An operator can't distinguish "malicious" from
-//         "registry 503'd this hour"; serving stays safer than
-//         silently breaking every CI run.
-//       - ErrNotFound + FailClosed → Block.
-//       - ErrUnsupported + FailClosed → Block (we don't have a
-//         resolver, can't make the decision, fail-closed says block).
-//       - Either of the above + !FailClosed → Allow + log warn.
+//     - ErrUpstreamUnavailable → Allow + log warn. We will NOT
+//     block a build because some upstream registry is having
+//     a bad day. An operator can't distinguish "malicious" from
+//     "registry 503'd this hour"; serving stays safer than
+//     silently breaking every CI run.
+//     - ErrNotFound + FailClosed → Block.
+//     - ErrUnsupported + FailClosed → Block (we don't have a
+//     resolver, can't make the decision, fail-closed says block).
+//     - Either of the above + !FailClosed → Allow + log warn.
 //  5. now - publishAt < threshold → Block + record ActionBlocked.
 //  6. Otherwise → Allow.
 func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP string) Decision {

@@ -69,7 +69,7 @@ test('renders enabled and disabled webhooks with shared actions', async ({ page 
   expect(colors.color).not.toBe('')
 })
 
-test('keeps Test stable while pending and announces success', async ({ page }) => {
+test('keeps Test stable while pending and announces queued delivery', async ({ page }) => {
   let release!: (value: { status: string }) => void
   const response = new Promise<{ status: string }>(resolve => { release = resolve })
   await mockAdminApi(page, {
@@ -83,8 +83,8 @@ test('keeps Test stable while pending and announces success', async ({ page }) =
   await expect(button).toBeDisabled()
   await expect(button).toHaveAttribute('aria-busy', 'true')
   expect(await button.boundingBox()).toEqual(before)
-  release({ status: 'test sent' })
-  await expect(page.locator('[data-toast-tone="success"]')).toContainText(/测试通知已发送/)
+  release({ status: 'test queued' })
+  await expect(page.locator('[data-toast-tone="success"]')).toContainText(/测试通知已加入发送队列/)
 })
 
 test('shows the service error and no success Toast when Test fails', async ({ page }) => {

@@ -4,11 +4,18 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"depsilo/internal/asyncruntime"
 )
+
+type submitterFunc func(asyncruntime.Task) error
+
+func (submit submitterFunc) Submit(task asyncruntime.Task) error { return submit(task) }
 
 // buildZip assembles an in-memory OSV-style archive: name → JSON body.
 func buildZip(t *testing.T, files map[string]string) []byte {
@@ -306,10 +313,62 @@ func TestSyncer_ConcurrencyGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	syncer.running.Store(true) // simulate an in-flight run
-	if syncer.TriggerSync(context.Background()) {
-		t.Error("TriggerSync must refuse while a sync is running")
+	if err := syncer.TryStartSync(submitterFunc(func(asyncruntime.Task) error {
+		t.Fatal("running sync must not submit another task")
+		return nil
+	})); !errors.Is(err, ErrSyncInProgress) {
+		t.Fatalf("TryStartSync error = %v, want ErrSyncInProgress", err)
 	}
 	if !syncer.Running() {
 		t.Error("Running() should reflect the in-flight state")
+	}
+}
+
+func TestTryStartSyncReservesBeforeScheduling(t *testing.T) {
+	store := testStore(t)
+	syncer, err := NewSyncer(store, Config{MirrorURL: "http://127.0.0.1:1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var scheduled asyncruntime.Task
+	submitter := submitterFunc(func(task asyncruntime.Task) error {
+		scheduled = task
+		return nil
+	})
+	if err := syncer.TryStartSync(submitter); err != nil {
+		t.Fatalf("first sync was not accepted: %v", err)
+	}
+	if scheduled == nil || !syncer.Running() {
+		t.Fatal("accepted sync was not reserved and scheduled")
+	}
+	if err := syncer.TryStartSync(submitterFunc(func(asyncruntime.Task) error {
+		t.Fatal("second sync must not be scheduled")
+		return nil
+	})); !errors.Is(err, ErrSyncInProgress) {
+		t.Fatalf("second sync error = %v, want ErrSyncInProgress", err)
+	}
+
+	cancel()
+	scheduled(ctx)
+	if syncer.Running() {
+		t.Fatal("sync reservation was not released after task exit")
+	}
+}
+
+func TestTryStartSyncRollsBackWhenRuntimeRejects(t *testing.T) {
+	store := testStore(t)
+	syncer, err := NewSyncer(store, Config{MirrorURL: "http://127.0.0.1:1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejecting := submitterFunc(func(asyncruntime.Task) error { return asyncruntime.ErrClosed })
+	err = syncer.TryStartSync(rejecting)
+	if !errors.Is(err, ErrSyncUnavailable) || !errors.Is(err, asyncruntime.ErrClosed) {
+		t.Fatalf("TryStartSync error = %v, want unavailable/closed", err)
+	}
+	if syncer.Running() {
+		t.Fatal("rejected submission retained running reservation")
 	}
 }

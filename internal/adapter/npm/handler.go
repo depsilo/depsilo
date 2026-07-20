@@ -124,7 +124,7 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 	c.Header("Content-Type", ct)
 	c.String(http.StatusOK, content)
 
-	adapter.LogAccess(h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
+	adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
 
 func (h *Handler) handleTarball(c *gin.Context) {
@@ -194,7 +194,7 @@ func (h *Handler) proxyTarball(c *gin.Context, fullName, filename, cacheKey, ups
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func getBaseURL(c *gin.Context) string {

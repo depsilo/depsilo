@@ -15,6 +15,8 @@ package blocklist
 import (
 	"strings"
 	"time"
+
+	ecosystemcatalog "depsilo/internal/ecosystem"
 )
 
 // OverrideTTL is how long an operator override stays valid. Locked-in
@@ -62,25 +64,15 @@ const DefaultMirrorURL = "https://osv-vulnerabilities.storage.googleapis.com"
 // DefaultSyncInterval between refreshes.
 const DefaultSyncInterval = 6 * time.Hour
 
-// osvEcosystem maps depsilo adapter names to the OSV dataset's
-// ecosystem directory names. Ecosystems missing here have no
-// malicious-packages coverage and are skipped by the sync (docker,
-// huggingface, helm, apt, conda, cran, alpine).
-var osvEcosystem = map[string]string{
-	"npm":      "npm",
-	"pypi":     "PyPI",
-	"cargo":    "crates.io",
-	"rubygems": "RubyGems",
-	"composer": "Packagist",
-	"nuget":    "NuGet",
-	"go":       "Go",
-	"maven":    "Maven",
-}
-
 // SyncedEcosystems returns the depsilo ecosystem names the dataset
 // covers, in stable order (for status displays and tests).
 func SyncedEcosystems() []string {
-	return []string{"npm", "pypi", "cargo", "rubygems", "composer", "nuget", "go", "maven"}
+	definitions := ecosystemcatalog.MaliciousDatasetDefinitions()
+	names := make([]string, 0, len(definitions))
+	for _, definition := range definitions {
+		names = append(names, definition.Name)
+	}
+	return names
 }
 
 // NormalizeName maps a package name to the canonical form both the
@@ -145,6 +137,6 @@ func CanonicalEcosystem(ecosystem string) string {
 // IsSyncedEcosystem reports whether the dataset covers the ecosystem —
 // used by the admin API to reject overrides that could never match.
 func IsSyncedEcosystem(ecosystem string) bool {
-	_, ok := osvEcosystem[ecosystem]
-	return ok
+	definition, ok := ecosystemcatalog.Lookup(ecosystem)
+	return ok && definition.MaliciousDataset
 }

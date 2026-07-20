@@ -59,7 +59,7 @@ export default function EcosystemLogoWall({ selected, onSelect }: Props) {
               e.currentTarget.style.transform = 'translateY(0)'
             }}
           >
-            <EcosystemIcon type={lang.iconAdapter as any} size={22} useColor />
+            <EcosystemIcon type={lang.iconAdapter} size={22} useColor />
           </button>
         )
       })}

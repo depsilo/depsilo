@@ -23,23 +23,6 @@
         document.documentElement.setAttribute('data-theme', resolved);
       })();
 
-      // Font-load gate. CSS .icon entries (Material Symbols) stay
-      // visibility: hidden until this class lands, so the brief
-      // window between first paint and Material Symbols loading
-      // doesn't render the literal ligature text inside icon slots.
-      // document.fonts.ready resolves when all CSS-declared fonts
-      // the document has triggered finish loading; layout space
-      // is already reserved by .icon's 1em × 1em box so toggling
-      // visibility produces zero shift.
-      if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(function(){
-          document.documentElement.classList.add('fonts-ready');
-        });
-      } else {
-        // Ancient browser fallback — just show icons immediately,
-        // they'll FOUC but won't be invisible forever.
-        document.documentElement.classList.add('fonts-ready');
-      }
     </script>
   </head>
   <body>

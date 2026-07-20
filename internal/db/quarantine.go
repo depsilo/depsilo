@@ -61,12 +61,12 @@ type QuarantineEvent struct {
 	Ecosystem string    `gorm:"size:32;index:idx_qevent_eco_created,priority:1" json:"ecosystem"`
 	Package   string    `gorm:"size:256;index" json:"package"`
 	Version   string    `gorm:"size:128" json:"version"`
-	Action    string    `gorm:"size:32;index" json:"action"`     // see quarantine.ActionXxx constants
-	Reason    string    `gorm:"size:512" json:"reason"`           // human-readable detail
-	Threshold int64     `json:"threshold_seconds"`                // policy threshold in effect at the time
-	AgeAtCall int64     `json:"age_at_call_seconds"`              // observed age when the call was made
-	ActorID   uint      `gorm:"index" json:"actor_id"`            // 0 for system events, db.User.ID for admin actions
-	ClientIP  string    `gorm:"size:64" json:"client_ip"`         // requesting client's IP (system events only)
+	Action    string    `gorm:"size:32;index" json:"action"` // see quarantine.ActionXxx constants
+	Reason    string    `gorm:"size:512" json:"reason"`      // human-readable detail
+	Threshold int64     `json:"threshold_seconds"`           // policy threshold in effect at the time
+	AgeAtCall int64     `json:"age_at_call_seconds"`         // observed age when the call was made
+	ActorID   uint      `gorm:"index" json:"actor_id"`       // 0 for system events, db.User.ID for admin actions
+	ClientIP  string    `gorm:"size:64" json:"client_ip"`    // requesting client's IP (system events only)
 	CreatedAt time.Time `gorm:"index:idx_qevent_eco_created,priority:2" json:"created_at"`
 }
 

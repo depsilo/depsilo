@@ -17,37 +17,14 @@ import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
 import QueryErrorState from '@/components/QueryErrorState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
+import AdminPage from '@/admin/components/AdminPage'
+import AdminPagination from '@/admin/components/AdminPagination'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
-
-const ECOSYSTEM_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'pypi', label: 'PyPI' },
-  { value: 'apt', label: 'APT' },
-  { value: 'npm', label: 'npm' },
-  { value: 'go', label: 'Go' },
-  { value: 'cargo', label: 'Cargo' },
-  { value: 'maven', label: 'Maven' },
-  { value: 'rubygems', label: 'RubyGems' },
-  { value: 'composer', label: 'Composer' },
-  { value: 'nuget', label: 'NuGet' },
-  { value: 'conda', label: 'Conda' },
-  { value: 'cran', label: 'CRAN' },
-  { value: 'alpine', label: 'Alpine' },
-  { value: 'helm', label: 'Helm' },
-]
-
-function formatTime(t: string): string {
-  if (!t) return '-'
-  const d = new Date(t)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
-  if (diff === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  if (diff < 30) return `${diff}d ago`
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false)
@@ -68,7 +45,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 export default function ProjectsV2() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
 
@@ -82,6 +59,20 @@ export default function ProjectsV2() {
   const [sbomFormat, setSbomFormat] = useState<ProjectSBOMFormat>('spdx')
   const [sbomEcosystem, setSbomEcosystem] = useState('')
   const [sbomLoading, setSbomLoading] = useState(false)
+
+  const locale = i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en-US'
+  const formatProjectTime = (value: string) => {
+    if (!value) return '-'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '-'
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+    const daysAgo = Math.round((startOfToday - startOfDate) / 86_400_000)
+    if (daysAgo === 0) return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+    if (daysAgo > 0 && daysAgo < 30) return t('now.daysAgo', { count: daysAgo })
+    return date.toLocaleDateString(locale, { month: '2-digit', day: '2-digit' })
+  }
 
   const query = useQuery({
     queryKey: ['admin', 'projects'],
@@ -109,7 +100,6 @@ export default function ProjectsV2() {
   const pkgData = packagesQuery.data
   const packages = pkgData?.data.items ?? []
   const pkgTotal = pkgData?.data.total ?? 0
-  const pkgTotalPages = Math.max(1, Math.ceil(pkgTotal / 20))
 
   const createMutation = useMutation({
     mutationFn: (input: CreateProjectRequest) => adminApi.createProject(input),
@@ -169,21 +159,31 @@ export default function ProjectsV2() {
   const apiError = getApiError(query.error)
   if (query.isError && !data && apiError.status === 402) {
     return (
-      <ProRequiredCallout
-        icon="folder_managed"
-        title={t('projects.proRequired')}
-        description={t('projects.proDesc')}
-        upgradeLabel={t('projects.upgrade')}
-      />
+      <AdminPage description={t('projects.subtitle')}>
+        <ProRequiredCallout
+          icon="folder_managed"
+          title={t('projects.proRequired')}
+          description={t('projects.proDesc')}
+          upgradeLabel={t('projects.upgrade')}
+        />
+      </AdminPage>
     )
   }
 
   if (query.isPending) {
-    return <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+    return (
+      <AdminPage description={t('projects.subtitle')}>
+        <div role="status" aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">{t('loading')}</div>
+      </AdminPage>
+    )
   }
 
   if (query.isError && !data) {
-    return <QueryErrorState message={apiError.status === 403 ? t('common.permissionDenied') : apiError.message} onRetry={() => { void query.refetch() }} />
+    return (
+      <AdminPage description={t('projects.subtitle')}>
+        <QueryErrorState message={apiError.status === 403 ? t('common.permissionDenied') : apiError.message} onRetry={() => { void query.refetch() }} />
+      </AdminPage>
+    )
   }
 
   // ── Detail view ────────────────────────────────────────────────
@@ -204,21 +204,22 @@ export default function ProjectsV2() {
       },
       { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
       { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) || '-'}</span> },
-      { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
-      { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
+      { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
+      { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
       { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
     ]
 
     return (
+      <AdminPage description={t('projects.subtitle')}>
       <div className="space-y-12">
         {/* Detail header */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <IconButton
             icon="arrow_back"
             label={t('projects.backToList')}
             onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
           />
-          <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
+          <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
         </div>
 
         {/* Project info */}
@@ -233,11 +234,24 @@ export default function ProjectsV2() {
             />
           ) : detailData?.data ? (
           <div className="space-y-3">
-            {detailQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void detailQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
-            <div className="flex items-center gap-3">
-              <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.proxyUrl')}</span>
-              <span className="font-mono text-[12px] px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}>{proxyUrl}</span>
-              <CopyButton text={proxyUrl} label={t('projects.copyProxyUrl')} />
+            {detailQuery.isRefetchError && <StaleDataNotice refreshing={detailQuery.isFetching} onRefresh={() => detailQuery.refetch()} />}
+            <div
+              data-project-proxy-row
+              className="grid min-w-0 gap-2 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center sm:gap-3"
+            >
+              <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('projects.proxyUrl')}</span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  data-project-proxy-value
+                  className="min-w-0 flex-1 break-all rounded-[4px] px-2 py-1 font-mono text-[12px] leading-5"
+                  style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}
+                >
+                  {proxyUrl}
+                </span>
+                <div data-project-proxy-copy className="shrink-0">
+                  <CopyButton text={proxyUrl} label={t('projects.copyProxyUrl')} />
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.packageCount')}</span>
@@ -264,18 +278,18 @@ export default function ProjectsV2() {
         {/* SBOM export */}
         <section>
           <SectionHeader title={t('sbom.export')} />
-          <div className="flex items-end gap-3 flex-wrap">
+          <div data-project-sbom-controls className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,14rem)_auto] sm:items-end">
             <SelectV2 label={t('sbom.format')} value={sbomFormat} onChange={(event) => setSbomFormat(event.target.value as ProjectSBOMFormat)}>
               <option value="spdx">{t('sbom.spdx')}</option>
               <option value="cyclonedx">{t('sbom.cyclonedx')}</option>
             </SelectV2>
             <SelectV2 label={t('sbom.filterEcosystem')} value={sbomEcosystem} onChange={(e) => setSbomEcosystem(e.target.value)}>
               <option value="">{t('sbom.allEcosystems')}</option>
-              {ECOSYSTEM_OPTIONS.filter(o => o.value !== '').map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              {operatorEcosystems.map(ecosystem => (
+                <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
               ))}
             </SelectV2>
-            <ButtonV2 onClick={handleSbomDownload} disabled={sbomLoading}>
+            <ButtonV2 className="w-full sm:w-auto" onClick={handleSbomDownload} disabled={sbomLoading}>
               <Icon name="download" size="sm" />
               {sbomLoading ? t('sbom.generating') : t('sbom.download')}
             </ButtonV2>
@@ -287,9 +301,10 @@ export default function ProjectsV2() {
           <SectionHeader
             title={t('projects.packages')}
             action={
-              <SelectV2 value={pkgEcosystem} onChange={(e) => { setPkgEcosystem(e.target.value); setPkgPage(1) }}>
-                {ECOSYSTEM_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.value === '' ? t('all') : opt.label}</option>
+              <SelectV2 aria-label={t('sbom.filterEcosystem')} value={pkgEcosystem} onChange={(e) => { setPkgEcosystem(e.target.value); setPkgPage(1) }}>
+                <option value="">{t('all')}</option>
+                {operatorEcosystems.map(ecosystem => (
+                  <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
                 ))}
               </SelectV2>
             }
@@ -303,7 +318,7 @@ export default function ProjectsV2() {
             />
           ) : (
             <div className="space-y-3">
-              {pkgData && packagesQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void packagesQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+              {pkgData && packagesQuery.isRefetchError && <StaleDataNotice refreshing={packagesQuery.isFetching} onRefresh={() => packagesQuery.refetch()} />}
               {packages.length === 0 ? (
                 <EmptyState icon="inventory_2" title={t('projects.noPackages')} minHeight={200} />
               ) : (
@@ -317,17 +332,12 @@ export default function ProjectsV2() {
               )}
             </div>
           )}
-          {pkgTotalPages > 1 && (
-            <div className="flex items-center justify-between text-[13px] mt-4" style={{ color: 'var(--text-soft)' }}>
-              <span>{t('totalItems', { total: pkgTotal, page: pkgPage, totalPages: pkgTotalPages })}</span>
-              <div className="flex gap-2">
-                <ButtonV2 variant="ghost" size="sm" disabled={pkgPage <= 1} onClick={() => setPkgPage(p => p - 1)}>{t('prevPage')}</ButtonV2>
-                <ButtonV2 variant="ghost" size="sm" disabled={pkgPage >= pkgTotalPages} onClick={() => setPkgPage(p => p + 1)}>{t('nextPage')}</ButtonV2>
-              </div>
-            </div>
-          )}
+          <div className="mt-4">
+            <AdminPagination page={pkgPage} pageSize={20} total={pkgTotal} onPageChange={setPkgPage} />
+          </div>
         </section>
       </div>
+      </AdminPage>
     )
   }
 
@@ -335,7 +345,7 @@ export default function ProjectsV2() {
   const columns = [
     { key: 'name', label: t('projects.name'), render: (v: unknown) => <span className="font-[500] text-[14px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
     { key: 'package_count', label: t('projects.packageCount'), render: (v: unknown) => <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
-    { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
+    { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
     {
       key: 'id',
       label: t('actions'),
@@ -358,22 +368,24 @@ export default function ProjectsV2() {
   ]
 
   return (
+    <AdminPage
+      description={t('projects.subtitle')}
+      actions={canWrite ? (
+        <ButtonV2 onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
+          <Icon name="add" size="sm" />{t('projects.create')}
+        </ButtonV2>
+      ) : undefined}
+    >
     <div className="space-y-6">
       {data && query.isRefetchError && (
-        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+        <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />
       )}
-      <div className="flex items-center justify-end">
-        {canWrite && <ButtonV2 onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
-          <Icon name="add" size="sm" />{t('projects.create')}
-        </ButtonV2>}
-      </div>
 
       {projects.length === 0 ? (
         <EmptyState
           icon="folder_managed"
           title={t('projects.noProjects')}
           hint={t('projects.noProjectsHint')}
-          action={canWrite ? <ButtonV2 onClick={() => { createMutation.reset(); setCreateOpen(true) }}><Icon name="add" size="sm" />{t('projects.create')}</ButtonV2> : undefined}
           minHeight={240}
         />
       ) : (
@@ -458,5 +470,6 @@ export default function ProjectsV2() {
         </div>
       </ModalV2>
     </div>
+    </AdminPage>
   )
 }

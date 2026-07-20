@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
-import IconButton from './IconButton'
+import Icon from './Icon'
+import IconButtonControl from './IconButtonControl'
 
 type Theme = 'light' | 'dark' | 'system'
 // Storage key matches the Instrument brief. The legacy "theme" key
@@ -75,7 +76,11 @@ const ICONS: Record<Theme, string> = {
   system: 'computer',
 }
 
-export default function ThemeToggle() {
+interface ThemeToggleProps {
+  labeled?: boolean
+}
+
+export default function ThemeToggle({ labeled = false }: ThemeToggleProps) {
   const { t } = useTranslation()
   const [theme, setTheme] = useTheme()
 
@@ -90,10 +95,34 @@ export default function ThemeToggle() {
     setTheme(CYCLE[(idx + 1) % CYCLE.length])
   }
 
+  const label = t('theme.changeNamed', { theme: LABELS[theme] })
+  const visibleLabel = t('theme.controlNamed', { theme: LABELS[theme] })
+
+  if (labeled) {
+    return (
+      <button
+        type="button"
+        data-theme-toggle="labeled"
+        aria-label={visibleLabel}
+        title={label}
+        onClick={cycle}
+        className="stripe-focus-ring inline-flex h-[41px] min-w-[41px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] border border-[var(--border-strong)] bg-[var(--bg-card)] px-2.5 text-[var(--text-soft)] transition-[background,color,border-color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.98]"
+      >
+        <Icon name={ICONS[theme]} size="sm" />
+        <span className="text-[11px] font-[600] sm:hidden">{LABELS[theme]}</span>
+        <span className="hidden text-[11px] font-[600] sm:inline">
+          {visibleLabel}
+        </span>
+      </button>
+    )
+  }
+
   return (
-    <IconButton
+    <IconButtonControl
+      data-theme-toggle="icon"
       icon={ICONS[theme]}
-      label={t('theme.changeNamed', { theme: LABELS[theme] })}
+      label={label}
+      title={label}
       onClick={cycle}
       style={{ border: '0.5px solid var(--border)', background: 'var(--bg-soft)' }}
     />

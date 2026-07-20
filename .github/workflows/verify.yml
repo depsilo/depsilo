@@ -1,0 +1,138 @@
+name: Verify
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  release-tag:
+    name: Release tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate SemVer tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: bash scripts/validate-release-tag.sh "$GITHUB_REF_NAME"
+
+  backend:
+    name: Backend
+    needs: release-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Check module files
+        run: go mod tidy -diff
+
+      - name: Embed placeholder
+        # cmd/server embeds web/dist, while the real frontend build is
+        # independently verified by the frontend job below.
+        run: mkdir -p web/dist && echo '<!doctype html><title>ci</title>' > web/dist/index.html
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          unformatted="$(git ls-files -z -- '*.go' | xargs -0 gofmt -l)"
+          if [ -n "$unformatted" ]; then
+            echo "The following Go files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - name: Installer checksum tests
+        run: |
+          bash -n install.sh scripts/*.sh
+          bash scripts/test-install-checksum.sh
+          bash scripts/test-make-dev-run.sh
+          bash scripts/test-release-tag.sh
+
+      - name: Unit tests (race)
+        run: go test ./... -race -count=1
+
+      - name: Integration tests
+        run: go test -tags integration ./tests/integration/ -count=1
+
+      - name: Build binary
+        run: go build -o bin/depsilo ./cmd/depsilo
+
+  frontend:
+    name: Frontend
+    needs: release-tag
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: |
+          npm audit --omit=dev
+          npm audit --audit-level=moderate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Type check browser contracts
+        run: npm run type-check:e2e
+
+      - name: Build
+        run: npm run build
+
+      - name: Check bundle budget
+        run: npm run check:bundle
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npm run test:e2e
+
+      - name: i18n audit
+        working-directory: .
+        run: python3 scripts/i18n-audit.py
+
+      - name: Upload browser test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          if-no-files-found: ignore
+          retention-days: 14

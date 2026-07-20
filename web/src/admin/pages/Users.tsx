@@ -17,6 +17,7 @@ import EmptyState from '@/components/EmptyState'
 import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
 import QueryErrorState from '@/components/QueryErrorState'
+import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import type {
@@ -122,6 +123,7 @@ export default function UsersV2() {
   ]
 
   return (
+    <AdminPage description={t('users.subtitle')}>
     <div className="space-y-12">
       {/* ── Users ─────────────────────────────────────── */}
       <section>
@@ -205,5 +207,6 @@ export default function UsersV2() {
         <div className="flex justify-end mt-4"><ButtonV2 onClick={() => setTokenResultOpen(false)}>{t('confirm')}</ButtonV2></div>
       </ModalV2>
     </div>
+    </AdminPage>
   )
 }

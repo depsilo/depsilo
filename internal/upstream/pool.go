@@ -68,10 +68,12 @@ type ProbeResult struct {
 
 // FetchResult holds the response from an upstream fetch.
 type FetchResult struct {
-	Body        io.ReadCloser
-	ContentType string
-	Size        int64
-	StatusCode  int
+	Body         io.ReadCloser
+	ContentType  string
+	Size         int64
+	StatusCode   int
+	ETag         string
+	LastModified string
 }
 
 // Pool manages a set of upstreams for a given adapter type.
@@ -101,9 +103,9 @@ func NewPool(cfgs []config.UpstreamConfig) (*Pool, error) {
 	for _, u := range pool.Snapshot() {
 		zap.L().Info("registered upstream",
 			zap.String("name", u.Name),
-			zap.String("url", u.URL),
+			zap.String("url", safeURLOrigin(u.URL)),
 			zap.Int("priority", u.Priority),
-			zap.String("proxy", u.Proxy),
+			zap.String("proxy", safeURLOrigin(u.Proxy)),
 			zap.String("probe_mode", u.ProbeMode),
 			zap.Duration("probe_interval", u.ProbeInterval),
 		)
@@ -240,7 +242,7 @@ func (u *Upstream) FetchURL(ctx context.Context, reqURL string) (*FetchResult, e
 func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("create request for %s: invalid URL", safeURLOrigin(reqURL))
 	}
 	req.Header.Set("User-Agent", "depsilo/0.1")
 
@@ -252,7 +254,7 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 		if report {
 			u.Report(latency, false)
 		}
-		return nil, fmt.Errorf("fetch %s: %w", reqURL, err)
+		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), redactedTransportError{cause: err})
 	}
 
 	if resp.StatusCode >= 400 {
@@ -260,7 +262,7 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 		if report {
 			u.Report(latency, resp.StatusCode < 500)
 		}
-		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, reqURL)
+		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
 	}
 
 	if report {
@@ -268,10 +270,12 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 	}
 
 	return &FetchResult{
-		Body:        resp.Body,
-		ContentType: resp.Header.Get("Content-Type"),
-		Size:        resp.ContentLength,
-		StatusCode:  resp.StatusCode,
+		Body:         resp.Body,
+		ContentType:  resp.Header.Get("Content-Type"),
+		Size:         resp.ContentLength,
+		StatusCode:   resp.StatusCode,
+		ETag:         resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified"),
 	}, nil
 }
 
@@ -281,7 +285,7 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("create request for %s: invalid URL", safeURLOrigin(reqURL))
 	}
 	req.Header.Set("User-Agent", "depsilo/0.1")
 
@@ -297,22 +301,24 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 
 	if err != nil {
 		u.Report(latency, false)
-		return nil, fmt.Errorf("fetch %s: %w", reqURL, err)
+		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), redactedTransportError{cause: err})
 	}
 
 	if resp.StatusCode >= 400 {
 		resp.Body.Close()
 		u.Report(latency, resp.StatusCode < 500)
-		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, path)
+		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
 	}
 
 	u.Report(latency, true)
 
 	return &FetchResult{
-		Body:        resp.Body,
-		ContentType: resp.Header.Get("Content-Type"),
-		Size:        resp.ContentLength,
-		StatusCode:  resp.StatusCode,
+		Body:         resp.Body,
+		ContentType:  resp.Header.Get("Content-Type"),
+		Size:         resp.ContentLength,
+		StatusCode:   resp.StatusCode,
+		ETag:         resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified"),
 	}, nil
 }
 
@@ -396,10 +402,10 @@ func buildClient(proxy string) (*http.Client, error) {
 	if proxy != "" {
 		proxyURL, err := url.Parse(proxy)
 		if err != nil {
-			return nil, fmt.Errorf("parse proxy url: %w", err)
+			return nil, fmt.Errorf("parse proxy URL %s: invalid URL", safeURLOrigin(proxy))
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
-		zap.L().Info("using proxy", zap.String("proxy", proxy))
+		zap.L().Info("using proxy", zap.String("proxy", safeURLOrigin(proxy)))
 	}
 
 	return &http.Client{

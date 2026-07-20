@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -33,6 +35,99 @@ func newAPIAuthTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("migrate: %v", err)
 	}
 	return database
+}
+
+func TestValidateInitialAdminCredentials(t *testing.T) {
+	tests := []struct {
+		name     string
+		username string
+		password string
+		wantErr  bool
+	}{
+		{name: "strong password", username: "operator", password: "Tr0ub4dor&Correct"},
+		{name: "long passphrase", username: "operator", password: "correct horse battery staple"},
+		{name: "short password", username: "operator", password: "S3cure!", wantErr: true},
+		{name: "low diversity", username: "operator", password: "abcdefghijkl", wantErr: true},
+		{name: "contains username", username: "operator", password: "Operator-Is-Safe-123!", wantErr: true},
+		{name: "bad username", username: "../operator", password: "Tr0ub4dor&Correct", wantErr: true},
+		{name: "bcrypt byte limit", username: "operator", password: "密密密密密密密密密密密密密密密密密密密密密密密密密", wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateInitialAdminCredentials(test.username, test.password)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("ValidateInitialAdminCredentials() error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestCreateInitialAdminUsesProvidedCredentialsOnlyOnce(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	const username = "operator"
+	const password = "Tr0ub4dor&Correct"
+	if err := CreateInitialAdmin(database, username, password); err != nil {
+		t.Fatalf("CreateInitialAdmin: %v", err)
+	}
+	var user db.User
+	if err := database.Where("username = ?", username).First(&user).Error; err != nil {
+		t.Fatalf("load user: %v", err)
+	}
+	if user.Role != "admin" || !user.Enabled {
+		t.Fatalf("created user = %#v", user)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		t.Fatalf("provided password does not match stored hash: %v", err)
+	}
+	if err := CreateInitialAdmin(database, "second", "An0ther&SecurePassword"); !errors.Is(err, ErrInitialAdminExists) {
+		t.Fatalf("second CreateInitialAdmin error = %v, want ErrInitialAdminExists", err)
+	}
+}
+
+func TestVerifyExistingAdminCredentials(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	if err := CreateInitialAdmin(database, "operator", "Tr0ub4dor&Correct"); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyExistingAdminCredentials(database, "operator", "Tr0ub4dor&Correct"); err != nil {
+		t.Fatalf("VerifyExistingAdminCredentials: %v", err)
+	}
+	if err := VerifyExistingAdminCredentials(database, "operator", "Wr0ng&Password!"); !errors.Is(err, ErrExistingAdminCredentialMismatch) {
+		t.Fatalf("wrong password error = %v", err)
+	}
+}
+
+func TestEnsureInitialAdminDoesNotCreateAdminAdmin(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
+	if err := EnsureInitialAdmin(database, false); err != nil {
+		t.Fatalf("EnsureInitialAdmin: %v", err)
+	}
+	var user db.User
+	if err := database.Where("role = ?", "admin").First(&user).Error; err != nil {
+		t.Fatalf("load initial administrator: %v", err)
+	}
+	if user.Username != "admin" {
+		t.Fatalf("initial username = %q, want admin", user.Username)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("admin")); err == nil {
+		t.Fatal("initial administrator still accepts the predictable admin password")
+	}
+}
+
+func TestEnsureInitialAdminSkipsInteractiveSetup(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	if err := EnsureInitialAdmin(database, true); err != nil {
+		t.Fatalf("EnsureInitialAdmin: %v", err)
+	}
+	var count int64
+	if err := database.Model(&db.User{}).Count(&count).Error; err != nil {
+		t.Fatalf("count users: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("user count = %d, want 0 while setup is pending", count)
+	}
 }
 
 func apiAuthRequest(r *gin.Engine, method, path, token string) *httptest.ResponseRecorder {

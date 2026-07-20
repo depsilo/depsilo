@@ -38,3 +38,13 @@ for (const width of widths) {
     })
   }
 }
+
+test('Dashboard keeps its primary metrics in a compact mobile 2 by 2 grid', async ({ page }) => {
+  await mockAdminApi(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/admin')
+
+  const grid = page.locator('[data-dashboard-kpis]')
+  await expect(grid.locator(':scope > *')).toHaveCount(4)
+  expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(2)
+})

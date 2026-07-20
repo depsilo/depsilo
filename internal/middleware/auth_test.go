@@ -64,6 +64,16 @@ func authRequest(r *gin.Engine, method, path, token string) *httptest.ResponseRe
 	return rec
 }
 
+func queryAuthRequest(r *gin.Engine, method, path, token string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, nil)
+	query := req.URL.Query()
+	query.Set("token", token)
+	req.URL.RawQuery = query.Encode()
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	return rec
+}
+
 func assertGenericUnauthorized(t *testing.T, rec *httptest.ResponseRecorder, token string) {
 	t.Helper()
 	if rec.Code != http.StatusUnauthorized {
@@ -182,6 +192,41 @@ func TestJWTOnlyRejectsAPIToken(t *testing.T) {
 	r.POST("/refresh", JWTOnly(authTestSecret, database), func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	if rec := authRequest(r, http.MethodPost, "/refresh", "readwrite-api-token"); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("API token refresh status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAuthenticationAcceptsTokensOnlyFromBearerHeader(t *testing.T) {
+	database := newAuthTestDB(t)
+	admin := createAuthTestUser(t, database, "admin", "admin", true)
+	jwtToken, err := GenerateJWT(authTestSecret, admin.ID, admin.Username, admin.Role, time.Hour)
+	if err != nil {
+		t.Fatalf("generate JWT: %v", err)
+	}
+	apiToken := "readwrite-api-token"
+	createAuthTestAPIToken(t, database, admin.ID, apiToken, "readwrite")
+
+	r := gin.New()
+	r.GET("/authenticate", Authenticate(authTestSecret, database), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	r.GET("/jwt-only", JWTOnly(authTestSecret, database), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	tests := []struct {
+		name  string
+		path  string
+		token string
+	}{
+		{name: "authenticate JWT", path: "/authenticate", token: jwtToken},
+		{name: "authenticate API token", path: "/authenticate", token: apiToken},
+		{name: "JWT-only JWT", path: "/jwt-only", token: jwtToken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if rec := queryAuthRequest(r, http.MethodGet, tt.path, tt.token); rec.Code != http.StatusUnauthorized {
+				t.Fatalf("query token status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+			if rec := authRequest(r, http.MethodGet, tt.path, tt.token); rec.Code != http.StatusNoContent {
+				t.Fatalf("Bearer token status = %d, body = %s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 

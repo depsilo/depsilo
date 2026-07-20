@@ -2,6 +2,7 @@ package accesslog
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -244,25 +245,19 @@ func TestRecorder_DropsOnFullChannel(t *testing.T) {
 }
 
 func TestRecorder_NullVariant_WritesRawOnly(t *testing.T) {
-	// Enabled=false short-circuits to nullRecorder: legacy behavior of
-	// "write raw row per request, no rollup". Used as the rollback path.
+	// Enabled=false writes raw rows but skips every rollup table. Close is the
+	// persistence barrier, so callers never need to poll the database.
 	d := newTestDB(t)
 	r := NewRecorder(d, Config{Enabled: false})
-	t.Cleanup(func() { _ = r.Close(context.Background()) })
 
 	at := mustParse(t, "2026-06-26T10:00:00Z")
 	r.Record(mkEvent("pypi", "numpy", true, at))
-
-	// nullRecorder writes asynchronously via goroutine — give it a moment.
-	deadline := time.Now().Add(time.Second)
-	var raw int64
-	for time.Now().Before(deadline) {
-		d.Model(&db.AccessLog{}).Count(&raw)
-		if raw == 1 {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	if err := r.Close(context.Background()); err != nil {
+		t.Fatalf("close: %v", err)
 	}
+
+	var raw int64
+	d.Model(&db.AccessLog{}).Count(&raw)
 	if raw != 1 {
 		t.Errorf("raw rows = %d, want 1", raw)
 	}
@@ -270,5 +265,210 @@ func TestRecorder_NullVariant_WritesRawOnly(t *testing.T) {
 	d.Model(&db.AccessLogHourly{}).Count(&h)
 	if h != 0 {
 		t.Errorf("hourly rows = %d, want 0 (rollup disabled)", h)
+	}
+	var fiveMinutely, packageDaily int64
+	d.Model(&db.AccessLogFiveMinutely{}).Count(&fiveMinutely)
+	d.Model(&db.AccessLogPackageDaily{}).Count(&packageDaily)
+	if fiveMinutely != 0 || packageDaily != 0 {
+		t.Errorf("disabled recorder wrote rollups: five_minutely=%d package_daily=%d", fiveMinutely, packageDaily)
+	}
+}
+
+func TestRecorder_NullVariant_FlushIsPersistenceBarrier(t *testing.T) {
+	d := newTestDB(t)
+	r := NewRecorder(d, Config{Enabled: false, BatchSize: 1000, BatchInterval: time.Hour})
+	t.Cleanup(func() { _ = r.Close(context.Background()) })
+
+	at := mustParse(t, "2026-06-26T10:00:00Z")
+	for range 8 {
+		r.Record(mkEvent("pypi", "numpy", true, at))
+	}
+	if err := r.Flush(context.Background()); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+
+	var raw int64
+	d.Model(&db.AccessLog{}).Count(&raw)
+	if raw != 8 {
+		t.Errorf("raw rows after Flush = %d, want 8", raw)
+	}
+}
+
+func TestRecorder_NullVariant_ConcurrentRecordAndClose(t *testing.T) {
+	d := newTestDB(t)
+	r := NewRecorder(d, Config{Enabled: false, BatchSize: 1000, BatchInterval: time.Hour}).(*nullRecorder)
+
+	const (
+		records = 512
+		closers = 8
+	)
+	start := make(chan struct{})
+	var recordWG sync.WaitGroup
+	recordWG.Add(records)
+	at := mustParse(t, "2026-06-26T10:00:00Z")
+	for range records {
+		go func() {
+			defer recordWG.Done()
+			<-start
+			r.Record(mkEvent("pypi", "numpy", true, at))
+		}()
+	}
+
+	errCh := make(chan error, closers)
+	var closeWG sync.WaitGroup
+	closeWG.Add(closers)
+	for range closers {
+		go func() {
+			defer closeWG.Done()
+			<-start
+			errCh <- r.Close(context.Background())
+		}()
+	}
+
+	close(start)
+	recordWG.Wait()
+	closeWG.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent Close: %v", err)
+		}
+	}
+
+	var raw int64
+	d.Model(&db.AccessLog{}).Count(&raw)
+	if got := raw + int64(r.Dropped()); got != records {
+		t.Errorf("persisted + rejected = %d + %d = %d, want %d", raw, r.Dropped(), got, records)
+	}
+
+	dropped := r.Dropped()
+	r.Record(mkEvent("pypi", "after-close", true, at))
+	if got := r.Dropped(); got != dropped+1 {
+		t.Errorf("Dropped after Record on closed recorder = %d, want %d", got, dropped+1)
+	}
+	if err := r.Close(context.Background()); err != nil {
+		t.Fatalf("idempotent Close: %v", err)
+	}
+}
+
+func TestRecorder_NullVariant_CanceledCloseDoesNotAbandonDrain(t *testing.T) {
+	d := newTestDB(t)
+
+	// MaxOpenConns=1 lets this transaction hold the only connection, making
+	// the worker's write wait until we release it below.
+	tx := d.Begin()
+	if tx.Error != nil {
+		t.Fatalf("begin blocking transaction: %v", tx.Error)
+	}
+	r := NewRecorder(d, Config{Enabled: false, BatchSize: 1000, BatchInterval: time.Hour})
+	r.Record(mkEvent("pypi", "numpy", true, mustParse(t, "2026-06-26T10:00:00Z")))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := r.Close(ctx); err != context.Canceled {
+		t.Fatalf("Close with canceled context = %v, want context.Canceled", err)
+	}
+	if err := tx.Rollback().Error; err != nil {
+		t.Fatalf("release blocking transaction: %v", err)
+	}
+	if err := r.Close(context.Background()); err != nil {
+		t.Fatalf("second Close after releasing DB: %v", err)
+	}
+
+	var raw int64
+	d.Model(&db.AccessLog{}).Count(&raw)
+	if raw != 1 {
+		t.Errorf("raw rows after canceled then completed Close = %d, want 1", raw)
+	}
+}
+
+func TestRecorder_BatchedVariant_ConcurrentRecordAndClose(t *testing.T) {
+	d := newTestDB(t)
+	r := NewRecorder(d, Config{Enabled: true, BatchSize: 1000, BatchInterval: time.Hour}).(*batchedRecorder)
+
+	const (
+		records = 512
+		closers = 8
+	)
+	start := make(chan struct{})
+	var recordWG sync.WaitGroup
+	recordWG.Add(records)
+	at := mustParse(t, "2026-06-26T10:00:00Z")
+	for range records {
+		go func() {
+			defer recordWG.Done()
+			<-start
+			r.Record(mkEvent("pypi", "numpy", true, at))
+		}()
+	}
+
+	errCh := make(chan error, closers)
+	var closeWG sync.WaitGroup
+	closeWG.Add(closers)
+	for range closers {
+		go func() {
+			defer closeWG.Done()
+			<-start
+			errCh <- r.Close(context.Background())
+		}()
+	}
+
+	close(start)
+	recordWG.Wait()
+	closeWG.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent Close: %v", err)
+		}
+	}
+
+	var raw int64
+	d.Model(&db.AccessLog{}).Count(&raw)
+	if got := raw + int64(r.Dropped()); got != records {
+		t.Errorf("persisted + rejected = %d + %d = %d, want %d", raw, r.Dropped(), got, records)
+	}
+
+	dropped := r.Dropped()
+	r.Record(mkEvent("pypi", "after-close", true, at))
+	if got := r.Dropped(); got != dropped+1 {
+		t.Errorf("Dropped after Record on closed recorder = %d, want %d", got, dropped+1)
+	}
+	if err := r.Flush(context.Background()); err != nil {
+		t.Fatalf("Flush after Close: %v", err)
+	}
+	if err := r.Close(context.Background()); err != nil {
+		t.Fatalf("idempotent Close: %v", err)
+	}
+}
+
+func TestRecorder_BatchedVariant_CanceledCloseDoesNotAbandonDrain(t *testing.T) {
+	d := newTestDB(t)
+
+	// Hold the only database connection so the recorder's final flush cannot
+	// finish until after the first, already-canceled Close returns.
+	tx := d.Begin()
+	if tx.Error != nil {
+		t.Fatalf("begin blocking transaction: %v", tx.Error)
+	}
+	r := NewRecorder(d, Config{Enabled: true, BatchSize: 1000, BatchInterval: time.Hour})
+	r.Record(mkEvent("pypi", "numpy", true, mustParse(t, "2026-06-26T10:00:00Z")))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := r.Close(ctx); err != context.Canceled {
+		t.Fatalf("Close with canceled context = %v, want context.Canceled", err)
+	}
+	if err := tx.Rollback().Error; err != nil {
+		t.Fatalf("release blocking transaction: %v", err)
+	}
+	if err := r.Close(context.Background()); err != nil {
+		t.Fatalf("second Close after releasing DB: %v", err)
+	}
+
+	var raw int64
+	d.Model(&db.AccessLog{}).Count(&raw)
+	if raw != 1 {
+		t.Errorf("raw rows after canceled then completed Close = %d, want 1", raw)
 	}
 }

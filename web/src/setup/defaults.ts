@@ -115,9 +115,4 @@ export const ecosystemDefaults: EcosystemDefault[] = [
       { name: 'bitnami', url: 'https://charts.bitnami.com/bitnami', priority: 2 },
     ],
   },
-  {
-    key: 'docker',
-    label: 'Docker',
-    upstreams: [],
-  },
 ]

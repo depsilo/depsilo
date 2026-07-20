@@ -2,86 +2,18 @@ name: CI
 
 # Runs on every push and PR to the default branch. The repo's default
 # branch is `master` — the previous `main` filter meant CI never fired
-# on ordinary pushes (v0.8.0 blind spot). Image publishing lives in
-# docker-publish.yml (tag-triggered); this workflow is tests only.
+# on ordinary pushes (v0.8.0 blind spot). Tag publishing lives in the
+# separately gated release workflow; this workflow is verification only.
 on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test-backend:
-    name: Backend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          # Follow go.mod's toolchain directive — a hard-coded older
-          # version (was '1.21') can't build a newer `go x.y` module.
-          go-version-file: go.mod
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Embed placeholder
-        # cmd/server embeds web/dist (a gitignored build artifact), so
-        # vet/test/build fail to compile without it. The REAL frontend
-        # build is validated by the test-frontend job; here a stub is
-        # enough to satisfy the //go:embed all:dist directive.
-        run: mkdir -p web/dist && echo '<!doctype html><title>ci</title>' > web/dist/index.html
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Unit tests (race)
-        run: go test ./... -race
-
-      - name: Integration tests
-        # Build-tagged suite: spawns the server against a mock upstream
-        # and exercises the proxy/quarantine/blocklist paths end-to-end.
-        run: go test -tags integration ./tests/integration/ -count=1
-
-      - name: Build binary
-        run: go build -o bin/depsilo ./cmd/depsilo
-
-  test-frontend:
-    name: Frontend Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run type-check
-
-      - name: Type check browser contracts
-        run: npm run type-check:e2e
-
-      - name: Build
-        run: npm run build
-
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Browser tests
-        run: npm run test:e2e
-
-      - name: i18n audit
-        working-directory: .
-        run: python3 scripts/i18n-audit.py
+  verify:
+    uses: ./.github/workflows/verify.yml

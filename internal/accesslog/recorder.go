@@ -13,9 +13,8 @@ import (
 )
 
 // Recorder is the seam the adapter layer drives. Production gets a
-// batched implementation; tests can also use the null variant which
-// just falls back to writing raw rows synchronously through Go's
-// scheduler (one go-per-event, no batching, no rollup).
+// batched implementation; disabling rollups gets a raw-only recorder
+// with the same bounded, drainable lifecycle.
 type Recorder interface {
 	Record(e Event)
 	Flush(ctx context.Context) error
@@ -36,14 +35,24 @@ type Config struct {
 // rows to access_logs so the admin logs page keeps working; it just
 // skips the rollup tables.
 func NewRecorder(database *gorm.DB, cfg Config) Recorder {
-	if !cfg.Enabled {
-		return &nullRecorder{db: database}
-	}
 	if cfg.BatchSize <= 0 {
 		cfg.BatchSize = 100
 	}
 	if cfg.BatchInterval <= 0 {
 		cfg.BatchInterval = 5 * time.Second
+	}
+	if !cfg.Enabled {
+		r := &nullRecorder{
+			db:            database,
+			in:            make(chan Event, 4096),
+			batchSize:     cfg.BatchSize,
+			flushInterval: cfg.BatchInterval,
+			stop:          make(chan struct{}),
+			done:          make(chan struct{}),
+			flushReq:      make(chan chan struct{}),
+		}
+		go r.loop()
+		return r
 	}
 	r := &batchedRecorder{
 		db:              database,
@@ -61,23 +70,157 @@ func NewRecorder(database *gorm.DB, cfg Config) Recorder {
 	return r
 }
 
-// nullRecorder is the rollup-disabled fallback. It writes raw access_log
-// rows asynchronously (one goroutine per event), matching the legacy
-// behavior in adapter/accesslog.go pre-rollup.
+// nullRecorder is the rollup-disabled fallback. It uses one worker and a
+// bounded queue to write raw access_log rows without ever touching the rollup
+// tables. The queue keeps Record non-blocking without creating an unbounded
+// number of goroutines when SQLite is slow.
 type nullRecorder struct {
-	db *gorm.DB
+	db            *gorm.DB
+	in            chan Event
+	batchSize     int
+	flushInterval time.Duration
+
+	dropped atomic.Uint64
+
+	// stateMu establishes the Close/Record boundary. Close takes the write
+	// lock before marking the recorder closed, so every Record holding the
+	// read lock has either enqueued or rejected its event before draining
+	// starts. The input channel itself stays open, avoiding send/close races.
+	stateMu sync.RWMutex
+	closed  bool
+
+	stopOnce sync.Once
+	stop     chan struct{}
+	done     chan struct{}
+	flushReq chan chan struct{}
 }
 
 func (n *nullRecorder) Record(e Event) {
-	entry := toAccessLog(e)
-	go func() {
-		if err := n.db.Create(&entry).Error; err != nil {
-			zap.L().Warn("failed to write access log", zap.Error(err))
-		}
-	}()
+	n.stateMu.RLock()
+	defer n.stateMu.RUnlock()
+
+	if n.closed {
+		n.dropped.Add(1)
+		return
+	}
+	select {
+	case n.in <- e:
+	default:
+		n.dropped.Add(1)
+		zap.L().Warn("raw access log recorder channel full, dropping event",
+			zap.Uint64("total_dropped", n.dropped.Load()))
+	}
 }
-func (n *nullRecorder) Flush(_ context.Context) error { return nil }
-func (n *nullRecorder) Close(_ context.Context) error { return nil }
+
+// Dropped exposes events rejected because the queue was full or the recorder
+// was already closing. It is intentionally not part of Recorder: callers use
+// it only for diagnostics and tests.
+func (n *nullRecorder) Dropped() uint64 { return n.dropped.Load() }
+
+func (n *nullRecorder) loop() {
+	defer close(n.done)
+	ticker := time.NewTicker(n.flushInterval)
+	defer ticker.Stop()
+
+	buf := make([]db.AccessLog, 0, n.batchSize)
+	flush := func(ctx context.Context) {
+		if len(buf) == 0 {
+			return
+		}
+		batch := buf
+		buf = make([]db.AccessLog, 0, n.batchSize)
+		if err := n.db.WithContext(ctx).CreateInBatches(batch, 200).Error; err != nil {
+			zap.L().Warn("failed to flush raw access logs",
+				zap.Error(err),
+				zap.Int("count", len(batch)))
+		}
+	}
+	drain := func(ctx context.Context) {
+		for {
+			select {
+			case e := <-n.in:
+				buf = append(buf, toAccessLog(e))
+			default:
+				flush(ctx)
+				return
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-n.stop:
+			drain(context.Background())
+			return
+		case e := <-n.in:
+			buf = append(buf, toAccessLog(e))
+			if len(buf) >= n.batchSize {
+				flush(context.Background())
+			}
+		case done := <-n.flushReq:
+			drain(context.Background())
+			close(done)
+		case <-ticker.C:
+			flush(context.Background())
+		}
+	}
+}
+
+// Flush is a synchronous barrier for events accepted before the worker handles
+// the request. If Close wins the race, worker completion provides the same
+// guarantee because Close drains the entire accepted queue.
+func (n *nullRecorder) Flush(ctx context.Context) error {
+	n.stateMu.RLock()
+	if n.closed {
+		n.stateMu.RUnlock()
+		select {
+		case <-n.done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	done := make(chan struct{})
+	select {
+	case n.flushReq <- done:
+		n.stateMu.RUnlock()
+	case <-n.done:
+		n.stateMu.RUnlock()
+		return nil
+	case <-ctx.Done():
+		n.stateMu.RUnlock()
+		return ctx.Err()
+	}
+
+	select {
+	case <-done:
+		return nil
+	case <-n.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// Close atomically stops new Record calls, asks the worker to drain everything
+// accepted before that boundary, and waits for completion. A canceled context
+// only bounds the caller's wait; the worker keeps draining so a later Close can
+// still observe successful completion.
+func (n *nullRecorder) Close(ctx context.Context) error {
+	n.stopOnce.Do(func() {
+		n.stateMu.Lock()
+		n.closed = true
+		close(n.stop)
+		n.stateMu.Unlock()
+	})
+	select {
+	case <-n.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
 // batchedRecorder is the production implementation: events arrive over a
 // bounded channel, get folded into in-memory counter maps, and flush to
@@ -91,6 +234,12 @@ type batchedRecorder struct {
 	flushInterval time.Duration
 
 	dropped atomic.Uint64
+
+	// stateMu establishes the same strict Close/Record boundary as the
+	// raw-only recorder. Events accepted while holding the read lock are
+	// guaranteed to be visible to the worker before Close begins draining.
+	stateMu sync.RWMutex
+	closed  bool
 
 	mu              sync.Mutex
 	rawBuf          []db.AccessLog
@@ -117,6 +266,13 @@ func (r *batchedRecorder) Dropped() uint64 { return r.dropped.Load() }
 // the counter; the loss is observable but not fatal (access logs aren't
 // billing data — see ADR-0002 §Consequences).
 func (r *batchedRecorder) Record(e Event) {
+	r.stateMu.RLock()
+	defer r.stateMu.RUnlock()
+
+	if r.closed {
+		r.dropped.Add(1)
+		return
+	}
 	select {
 	case r.in <- e:
 	default:
@@ -242,18 +398,32 @@ func (r *batchedRecorder) flushAll(ctx context.Context) {
 // Used by graceful shutdown and by tests that want a strict happens-before
 // barrier ("Record … Flush … assert DB row count").
 func (r *batchedRecorder) Flush(ctx context.Context) error {
+	r.stateMu.RLock()
+	if r.closed {
+		r.stateMu.RUnlock()
+		select {
+		case <-r.done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	done := make(chan struct{})
 	select {
 	case r.flushReq <- done:
-	case <-r.stop:
-		// Loop already exiting; do a best-effort sync flush instead.
-		r.flushAll(ctx)
+		r.stateMu.RUnlock()
+	case <-r.done:
+		r.stateMu.RUnlock()
 		return nil
 	case <-ctx.Done():
+		r.stateMu.RUnlock()
 		return ctx.Err()
 	}
 	select {
 	case <-done:
+		return nil
+	case <-r.done:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -264,7 +434,12 @@ func (r *batchedRecorder) Flush(ctx context.Context) error {
 // ctx.Done() for it. Returns ctx.Err() on timeout so a stuck flush
 // surfaces to the caller instead of hanging shutdown.
 func (r *batchedRecorder) Close(ctx context.Context) error {
-	r.stopOnce.Do(func() { close(r.stop) })
+	r.stopOnce.Do(func() {
+		r.stateMu.Lock()
+		r.closed = true
+		close(r.stop)
+		r.stateMu.Unlock()
+	})
 	select {
 	case <-r.done:
 		return nil

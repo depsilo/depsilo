@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next'
 import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
 import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
 import InputV2 from '@/components/Input'
 import ModalV2 from '@/components/Modal'
 import QueryErrorState from '@/components/QueryErrorState'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import SelectV2 from '@/components/Select'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
@@ -172,7 +172,11 @@ export default function WebhookTab() {
           <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
         ) : (
           <div>
-          {query.data && query.isRefetchError && <div className="mb-3"><InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice></div>}
+          {query.data && query.isRefetchError && (
+            <div className="mb-3">
+              <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />
+            </div>
+          )}
           {!query.data?.length ? <EmptyState icon="notifications_off" title={t('webhook.noWebhooks')} minHeight={180} /> : <div className="divide-y divide-[var(--border)]">
             {query.data.map(webhook => (
               <article key={webhook.id} className="flex min-w-0 flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between">
@@ -184,9 +188,9 @@ export default function WebhookTab() {
                   </div>
                   <p className="break-all font-mono text-[12px] leading-5 text-[var(--text-soft)]">{webhook.url}</p>
                   <dl className="mt-2 flex min-w-0 flex-col gap-1 text-[12px] text-[var(--text-muted)] sm:flex-row sm:flex-wrap sm:gap-x-4">
-                    <div className="flex gap-1"><dt>{t('webhook.events')}:</dt><dd>{webhook.events === '*' ? t('webhook.eventsAll') : webhook.events}</dd></div>
-                    <div className="flex gap-1"><dt>{t('webhook.cooldown')}:</dt><dd>{t('webhook.minutes', { count: webhook.cooldown_minutes })}</dd></div>
-                    <div className="flex gap-1"><dt>{t('webhook.lastSent')}:</dt><dd>{formatLastSent(webhook.last_sent_at)}</dd></div>
+                    <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.events')}:</dt><dd className="min-w-0 break-words">{webhook.events === '*' ? t('webhook.eventsAll') : webhook.events}</dd></div>
+                    <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.cooldown')}:</dt><dd className="min-w-0 break-words">{t('webhook.minutes', { count: webhook.cooldown_minutes })}</dd></div>
+                    <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.lastSent')}:</dt><dd className="min-w-0 break-words">{formatLastSent(webhook.last_sent_at)}</dd></div>
                   </dl>
                 </div>
                 {canWrite && (

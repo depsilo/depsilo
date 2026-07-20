@@ -18,7 +18,7 @@ func TestIsCommitSHA(t *testing.T) {
 		{"v1.0", false},
 		{"refs/heads/feature", false},
 		{"", false},
-		{"a1b2c3", false},                                    // too short
+		{"a1b2c3", false}, // too short
 		{"a1b2c3d4e5f60718293a4b5c6d7e8f90123456789", false}, // 41 chars
 	}
 	for _, tc := range cases {

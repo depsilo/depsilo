@@ -6,7 +6,7 @@ Contributions are welcome! Whether it's a bug fix, new feature, or documentation
 
 ### Prerequisites
 
-- Go 1.25.6+
+- Go 1.25.12+
 - Node.js 20+
 - npm 9+
 - Make

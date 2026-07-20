@@ -1,8 +1,8 @@
 package admin
 
 import (
+	"context"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,13 +16,52 @@ import (
 )
 
 type SecurityHandler struct {
-	db       *gorm.DB
-	scanner  *security.Scanner
-	importer *security.Importer
+	db              *gorm.DB
+	scanner         *security.Scanner
+	catalog         *security.AdvisoryCatalog
+	invalidateRules func()
+	scanContext     context.Context
+	scanTimeout     time.Duration
 }
 
-func NewSecurityHandler(database *gorm.DB, scanner *security.Scanner, importer *security.Importer) *SecurityHandler {
-	return &SecurityHandler{db: database, scanner: scanner, importer: importer}
+const maxAdvisoryImportRequestBytes = 33 << 20
+
+// NewSecurityHandler creates the package-security admin handler. A nil
+// invalidateRules callback is accepted; a non-nil callback runs after a
+// manually approved package rule has committed successfully.
+func NewSecurityHandler(
+	database *gorm.DB,
+	scanner *security.Scanner,
+	catalog *security.AdvisoryCatalog,
+	invalidateRules func(),
+) *SecurityHandler {
+	return NewSecurityHandlerWithContext(context.Background(), database, scanner, catalog, invalidateRules)
+}
+
+// NewSecurityHandlerWithContext binds manually-triggered scans to the server
+// lifecycle instead of the request context, which is canceled as soon as the
+// 202 response is returned.
+func NewSecurityHandlerWithContext(
+	scanContext context.Context,
+	database *gorm.DB,
+	scanner *security.Scanner,
+	catalog *security.AdvisoryCatalog,
+	invalidateRules func(),
+) *SecurityHandler {
+	if scanContext == nil {
+		scanContext = context.Background()
+	}
+	if invalidateRules == nil {
+		invalidateRules = func() {}
+	}
+	return &SecurityHandler{
+		db:              database,
+		scanner:         scanner,
+		catalog:         catalog,
+		invalidateRules: invalidateRules,
+		scanContext:     scanContext,
+		scanTimeout:     15 * time.Minute,
+	}
 }
 
 func (h *SecurityHandler) Dashboard(c *gin.Context) {
@@ -222,6 +261,7 @@ func (h *SecurityHandler) ApproveSuggestion(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "message": err.Error()})
 		return
 	}
+	h.invalidateRules()
 	c.JSON(http.StatusOK, gin.H{"rule_id": rule.ID})
 }
 
@@ -236,36 +276,70 @@ func (h *SecurityHandler) DismissSuggestion(c *gin.Context) {
 }
 
 func (h *SecurityHandler) TriggerScan(c *gin.Context) {
-	if h.scanner.IsScanning() {
+	err := h.scanner.StartScan(h.scanContext, h.scanTimeout)
+	if errors.Is(err, security.ErrScanInProgress) {
 		c.JSON(http.StatusConflict, gin.H{"code": "SCAN_IN_PROGRESS", "message": "scan already in progress"})
 		return
 	}
-	go func() {
-		h.scanner.ScanAll(c.Request.Context())
-	}()
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SCAN_UNAVAILABLE", "message": err.Error()})
+		return
+	}
 	c.JSON(http.StatusAccepted, gin.H{"status": "scan_started"})
 }
 
 func (h *SecurityHandler) ImportData(c *gin.Context) {
+	if h.catalog == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code": "IMPORT_UNAVAILABLE", "message": "advisory import is unavailable",
+		})
+		return
+	}
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAdvisoryImportRequestBytes)
 	file, _, err := c.Request.FormFile("file")
 	if err != nil {
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+				"code": "IMPORT_TOO_LARGE", "message": "advisory import exceeds the size limit",
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"code": "NO_FILE", "message": "no file uploaded"})
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			zap.L().Warn("close security advisory upload", zap.Error(err))
+		}
+	}()
 
-	data, err := io.ReadAll(file)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "READ_ERROR", "message": err.Error()})
-		return
+	receipt, err := h.catalog.Import(c.Request.Context(), file)
+	switch {
+	case err == nil:
+		c.JSON(http.StatusOK, gin.H{
+			"imported":      receipt.Advisories,
+			"received":      receipt.Received,
+			"packages":      receipt.Packages,
+			"duplicates":    receipt.Duplicates,
+			"skipped":       receipt.Skipped,
+			"rules_created": receipt.RulesCreated,
+		})
+	case errors.Is(err, security.ErrInvalidAdvisoryImport):
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code": "INVALID_IMPORT", "message": "invalid advisory import",
+		})
+	case errors.Is(err, security.ErrAdvisoryImportTooLarge):
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"code": "IMPORT_TOO_LARGE", "message": "advisory import exceeds the size limit",
+		})
+	default:
+		zap.L().Error("import security advisories", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": "IMPORT_FAILED", "message": "advisory import failed",
+		})
 	}
-
-	count, err := h.importer.Import(data)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "IMPORT_ERROR", "message": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"imported": count})
 }
 
 func (h *SecurityHandler) ListPolicies(c *gin.Context) {

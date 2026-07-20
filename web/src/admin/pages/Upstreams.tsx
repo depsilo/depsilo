@@ -11,14 +11,14 @@ import InlineNotice from '@/components/InlineNotice'
 import IconButton from '@/components/IconButton'
 import QueryErrorState from '@/components/QueryErrorState'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
+import AdminPage from '@/admin/components/AdminPage'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import { standardUpstreamEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import type { AdminUpstream, AdminUpstreamListResponse, UpstreamMutationRequest } from '@/lib/adminApi.types'
 
-const runtimeEcosystemOrder = [
-  'pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems',
-  'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'huggingface',
-] as const
+const runtimeEcosystemOrder = standardUpstreamEcosystems.map(ecosystem => ecosystem.id)
 const runtimeEcosystemRank = new Map<string, number>(runtimeEcosystemOrder.map((name, index) => [name, index] as const))
 
 function upsertRuntimeUpstream(current: AdminUpstreamListResponse | undefined, upstream: AdminUpstream): AdminUpstreamListResponse {
@@ -97,7 +97,6 @@ export default function UpstreamsV2() {
     retry: false,
   })
   const allUpstreams = data?.items ?? []
-  const activeEcosystems = Array.from(new Set(allUpstreams.map((item) => item.adapter_type)))
 
   // Map to UpstreamItem shape
   const upstreamItems: UpstreamItem[] = allUpstreams.map((item) => ({
@@ -150,8 +149,7 @@ export default function UpstreamsV2() {
 
   function closeDialog() { setDialogOpen(false); setEditId(null); setForm(emptyForm('')); setUrlError('') }
   function openCreate() {
-    const ecosystem = activeEcosystems[0]
-    if (!ecosystem) return
+    const ecosystem = standardUpstreamEcosystems[0].id
     createMutation.reset()
     setForm(emptyForm(ecosystem))
     setEditId(null)
@@ -188,6 +186,7 @@ export default function UpstreamsV2() {
         ['admin', 'upstreams'],
         (current) => mergeRuntimeChecks(current, fulfilled, resourceGenerations.current),
       )
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams', 'latencies', '24h'] })
     } finally {
       setChecking(false)
     }
@@ -205,6 +204,7 @@ export default function UpstreamsV2() {
         ['admin', 'upstreams'],
         (latest) => mergeRuntimeChecks(latest, [{ upstream: result.upstream, baseline }], resourceGenerations.current),
       )
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams', 'latencies', '24h'] })
     } finally {
       setCheckingIds((current) => {
         const next = new Set(current)
@@ -220,30 +220,22 @@ export default function UpstreamsV2() {
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
 
   return (
-    <div className="space-y-6">
-      {/* Toolbar: manual check + add button. Periodic probing is configured
-          per-upstream in the edit dialog (default: every 30m). */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Manual check */}
-        {canWrite && <ButtonV2
-          variant="secondary"
-          size="sm"
-          onClick={checkAll}
-          disabled={checking}
-        >
-          <Icon name="refresh" size="sm" />
-          {checking ? t('upstreams.checking') : t('upstreams.checkAll')}
-        </ButtonV2>}
-
-        <div className="flex-1" />
-
-        {/* Add upstream */}
-        {canWrite && <ButtonV2 size="sm" onClick={openCreate}>
-          <Icon name="add" size="sm" />
-          {t('upstreams.addUpstream')}
-        </ButtonV2>}
-      </div>
-
+    <AdminPage
+      description={t('upstreams.subtitle')}
+      actions={canWrite ? (
+        <>
+          <ButtonV2 type="button" variant="secondary" size="sm" onClick={checkAll} disabled={checking || allUpstreams.length === 0}>
+            <Icon name="refresh" size="sm" />
+            {checking ? t('upstreams.checking') : t('upstreams.checkAll')}
+          </ButtonV2>
+          <ButtonV2 type="button" size="sm" onClick={openCreate}>
+            <Icon name="add" size="sm" />
+            {t('upstreams.addUpstream')}
+          </ButtonV2>
+        </>
+      ) : undefined}
+    >
+      <div className="space-y-6">
       {/* Upstream grid with heartbeat bars */}
       {isPending ? (
         <div aria-busy="true" className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -258,7 +250,7 @@ export default function UpstreamsV2() {
       ) : (
         <div className="space-y-3">
         {data && isRefetchError && (
-          <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+          <StaleDataNotice onRefresh={() => { void refetch() }} />
         )}
         <UpstreamGroupedPanel
           upstreams={upstreamItems}
@@ -295,7 +287,7 @@ export default function UpstreamsV2() {
       <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <SelectV2 label={t('type')} value={form.adapter_type} onChange={(e) => setForm({ ...form, adapter_type: e.target.value })} disabled={!!editId}>
-            {activeEcosystems.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
+            {standardUpstreamEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
           </SelectV2>
           <InputV2 label={t('name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. tuna" required />
           <div>
@@ -345,6 +337,7 @@ export default function UpstreamsV2() {
           </ButtonV2>
         </div>
       </ModalV2>
-    </div>
+      </div>
+    </AdminPage>
   )
 }

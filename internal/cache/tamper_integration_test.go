@@ -61,6 +61,7 @@ func newTamperTestManager(t *testing.T) (*Manager, *fakeRecorder) {
 	// immutableThreshold = 1h; storage is the in-memory test double
 	// already used by cache tests.
 	m := NewManager(newMemStorage(), d, NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTestManager(t, m) })
 	rec := &fakeRecorder{}
 	m.SetTamperRecorder(rec)
 	return m, rec
@@ -167,6 +168,7 @@ func TestManager_MetadataNotImmutableUnderBlobThreshold(t *testing.T) {
 	const ttlBlob = 72 * time.Hour
 	const ttlIndex = time.Hour // matches shipped config.example.toml
 	m := NewManager(newMemStorage(), d, NewEventBus(), ttlBlob)
+	t.Cleanup(func() { closeTestManager(t, m) })
 	rec := &fakeRecorder{}
 	m.SetTamperRecorder(rec)
 

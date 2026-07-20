@@ -18,13 +18,17 @@ import IconButton from '@/components/IconButton'
 import QueryErrorState from '@/components/QueryErrorState'
 import TableViewport from '@/components/TableViewport'
 import { useAppToast } from '@/components/Toast'
+import AdminPage from '@/admin/components/AdminPage'
+import AdminPagination from '@/admin/components/AdminPagination'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CacheQuery } from '@/lib/adminApi.types'
 
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
+const WARMUP_ECOSYSTEMS = ['pypi', 'npm']
 
 interface CacheTreemapItem { name: string; size: number; type: string; hits: number }
 
@@ -74,33 +78,43 @@ export default function CacheManageV2() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminApi.deleteCache(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }); setDeleteTarget(null) },
+    onSuccess: () => { setDeleteTarget(null) },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }) },
   })
 
   const cleanupMutation = useMutation({
-    mutationFn: async () => (await adminApi.cleanupCache()).data as { message: string; deleted: number },
+    mutationFn: async () => (await adminApi.cleanupCache()).data,
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] })
       setCleanupOpen(false)
       toast.show({ tone: 'success', message: result.message })
     },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }) },
   })
 
   const items = data?.data?.items || []
   const total = data?.data?.total || 0
-  const totalPages = Math.ceil(total / 20)
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
   const distributionApiError = getApiError(distributionQuery.error)
   const distributionErrorMessage = distributionApiError.status === 403 ? t('common.permissionDenied') : distributionApiError.message
 
-  const selStyle: React.CSSProperties = {
-    background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)',
-    borderRadius: 4, padding: '4px 8px', fontSize: 12, outline: 'none', cursor: 'pointer',
-  }
-
   return (
-    <div className="space-y-12">
+    <AdminPage
+      description={t('cache.subtitle')}
+      actions={canWrite ? (
+        <>
+          <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupResult(null) }}>
+            <Icon name="download" size="sm" />
+            {t('cache.warmup')}
+          </ButtonV2>
+          <ButtonV2 type="button" variant="danger" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupOpen(true) }}>
+            <Icon name="delete_sweep" size="sm" />
+            {t('cache.cleanExpired')}
+          </ButtonV2>
+        </>
+      ) : undefined}
+    >
+      <div className="space-y-12">
       {/* ── Storage overview + Treemap (no card wrappers) ─────────── */}
       {distributionQuery.isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
@@ -109,7 +123,7 @@ export default function CacheManageV2() {
       ) : (
         <div className="space-y-3">
           {distData && distributionQuery.isRefetchError && (
-            <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void distributionQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+            <StaleDataNotice onRefresh={() => { void distributionQuery.refetch() }} />
           )}
           {distribution ? (
         <div className="grid grid-cols-1 gap-y-12 xl:grid-cols-3 xl:gap-x-10">
@@ -212,30 +226,22 @@ export default function CacheManageV2() {
         </div>
       )}
 
-      {/* ── Filter row + actions ─────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-1 min-w-[240px] rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+      <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
-            className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
+            aria-label={t('cache.searchLabel')}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
             style={{ color: 'var(--text)' }}
             placeholder={t('cache.searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           />
         </div>
-        <select aria-label={t('audit.ecosystem')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
+        <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('cache.ecosystemFilter')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
           <option value="all">{t('all')}</option>
-          {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
-        </select>
-        {canWrite && <ButtonV2 variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupResult(null) }}>
-          <Icon name="download" size="sm" />
-          {t('cache.warmup')}
-        </ButtonV2>}
-        {canWrite && <ButtonV2 variant="danger" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupOpen(true) }}>
-          <Icon name="delete_sweep" size="sm" />
-          {t('cache.cleanExpired')}
-        </ButtonV2>}
+          {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
+        </SelectV2>
       </div>
 
       {/* ── Cache entries table (bare) ───────────────────────────── */}
@@ -247,7 +253,7 @@ export default function CacheManageV2() {
         ) : (
           <div className="space-y-3">
             {data && isRefetchError && (
-              <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+              <StaleDataNotice onRefresh={() => { void refetch() }} />
             )}
             {items.length === 0 ? (
             <EmptyState icon="inbox" title={t('cache.noCache')} minHeight={200} />
@@ -256,7 +262,7 @@ export default function CacheManageV2() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {['Key', t('type'), t('cache.size'), t('cache.hitCount'), t('cache.lastAccessed'), t('actions')].map(h => (
-                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</th>
+                  <th key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -290,7 +296,7 @@ export default function CacheManageV2() {
                       icon="delete"
                       label={t('cache.deleteNamed', { key: row.key })}
                       tone="danger"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }}
+                      onClick={(e) => { e.stopPropagation(); deleteMutation.reset(); setDeleteTarget(row.id) }}
                     />}
                   </td>
                 </tr>
@@ -303,36 +309,40 @@ export default function CacheManageV2() {
       </TableViewport>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-            {t('totalItems', { total, page, totalPages })}
-          </span>
-          <div className="flex items-center gap-1">
-            <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('prevPage')}</ButtonV2>
-            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--text-soft)' }}>{page}/{totalPages}</span>
-            <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>{t('nextPage')}</ButtonV2>
-          </div>
-        </div>
-      )}
+      <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
 
       {/* Delete Modal */}
-      <ModalV2 open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('cache.confirmDelete')}>
+      <ModalV2 open={deleteTarget !== null} onClose={() => {
+        if (deleteMutation.isPending) return
+        deleteMutation.reset()
+        setDeleteTarget(null)
+      }} title={t('cache.confirmDelete')}>
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p>
+        {deleteMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(deleteMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
-          <ButtonV2 variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" disabled={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
+          <ButtonV2 variant="secondary" disabled={deleteMutation.isPending} onClick={() => {
+            deleteMutation.reset()
+            setDeleteTarget(null)
+          }}>{t('cancel')}</ButtonV2>
+          <ButtonV2 variant="danger" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending || !canWrite} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
             {deleteMutation.isPending ? t('deleting') : t('delete')}
           </ButtonV2>
         </div>
       </ModalV2>
 
       {/* Cleanup Modal */}
-      <ModalV2 open={cleanupOpen} onClose={() => setCleanupOpen(false)} title={t('cache.cleanExpiredTitle')}>
+      <ModalV2 open={cleanupOpen} onClose={() => {
+        if (cleanupMutation.isPending) return
+        cleanupMutation.reset()
+        setCleanupOpen(false)
+      }} title={t('cache.cleanExpiredTitle')}>
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
         {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
-          <ButtonV2 variant="secondary" onClick={() => setCleanupOpen(false)}>{t('cancel')}</ButtonV2>
+          <ButtonV2 variant="secondary" disabled={cleanupMutation.isPending} onClick={() => {
+            cleanupMutation.reset()
+            setCleanupOpen(false)
+          }}>{t('cancel')}</ButtonV2>
           <ButtonV2 variant="danger" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !canWrite} onClick={() => cleanupMutation.mutate()}>
             {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
           </ButtonV2>
@@ -343,16 +353,16 @@ export default function CacheManageV2() {
       <ModalV2 open={warmupOpen} onClose={() => setWarmupOpen(false)} title={t('cache.warmupTitle')}>
         <div className="space-y-4">
           <SelectV2 label={t('cache.warmupEcosystem')} value={warmupEco} onChange={(e) => setWarmupEco(e.target.value)}>
-            {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
+            {WARMUP_ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
           </SelectV2>
           <div>
             <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>
-              {t('cache.warmupPackages')}
+              {t(warmupEco === 'npm' ? 'cache.warmupPackagesNpm' : 'cache.warmupPackages')}
             </label>
             <textarea
               className="w-full rounded-[4px] px-3 py-2 text-[13px] font-mono resize-none"
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none', height: 160 }}
-              placeholder={t('cache.warmupPlaceholder')}
+              placeholder={t(warmupEco === 'npm' ? 'cache.warmupPlaceholderNpm' : 'cache.warmupPlaceholder')}
               value={warmupText}
               onChange={(e) => setWarmupText(e.target.value)}
             />
@@ -383,6 +393,7 @@ export default function CacheManageV2() {
           </div>
         </div>
       </ModalV2>
-    </div>
+      </div>
+    </AdminPage>
   )
 }

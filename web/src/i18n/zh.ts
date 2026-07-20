@@ -4,8 +4,9 @@ const zh = {
     theme: {
       light: '浅色',
       dark: '深色',
-      auto: '自动',
+      auto: '跟随系统',
       changeNamed: '切换主题；当前主题：{{theme}}',
+      controlNamed: '外观：{{theme}}',
     },
     language: {
       switchToEnglish: '切换到英文',
@@ -33,15 +34,28 @@ const zh = {
     // Pagination
     prevPage: '上一页',
     nextPage: '下一页',
+    pagination: {
+      label: '分页',
+      summary: '第 {{from}}–{{to}} 条，共 {{total}} 条',
+      page: '第 {{page}} / {{totalPages}} 页',
+    },
 
     // Nav
     nav: {
       monitor: '监控',
       manage: '管理',
+      groups: {
+        operations: '运行',
+        cacheUpstreams: '缓存与上游',
+        supplyChain: '供应链',
+        system: '系统',
+      },
       dashboard: '总览',
       accessLogs: '访问日志',
       cacheManage: '缓存管理',
+      cacheIndexes: '索引缓存',
       upstreams: '上游源',
+      upstreamUpdates: '上游更新记录',
       userManage: '用户管理',
       settings: '系统设置',
       auditLogs: '审计日志',
@@ -87,6 +101,24 @@ const zh = {
       retry: '重试',
       permissionDenied: '权限不足',
       close: '关闭',
+    },
+    routeError: {
+      title: '页面无法加载',
+      hint: '页面资源可能已更新或暂时不可用，请刷新页面后重试。',
+      reload: '刷新页面',
+    },
+    setupGate: {
+      checking: '正在检查初始化状态...',
+      title: '无法确认 Depsilo 是否已完成初始化',
+      hint: 'Portal 和管理后台暂未加载。请确认 Depsilo 服务可达后重试。',
+      retry: '重试检查',
+      retrying: '检查中...',
+    },
+    notFound: {
+      title: '页面不存在',
+      hint: '当前地址没有对应页面，请返回有效入口。',
+      portalAction: '返回快速开始',
+      adminAction: '返回管理总览',
     },
     dashboard: {
       loadFailedHint: '请确认 Depsilo 服务可达后重试。',
@@ -184,7 +216,10 @@ const zh = {
 
     // Cache
     cache: {
+      subtitle: '查看存储占用与缓存条目，并在需要时执行预热或过期清理。',
       table: '缓存条目表格',
+      searchLabel: '搜索缓存条目',
+      ecosystemFilter: '按软件生态筛选缓存条目',
       deleteNamed: '删除缓存条目 {{key}}',
       searchPlaceholder: '搜索缓存 key...',
       cleanExpired: '清理过期',
@@ -205,13 +240,91 @@ const zh = {
       warmupEcosystem: '生态',
       warmupPackages: '包名列表（每行一个，支持 requirements.txt 格式）',
       warmupPlaceholder: 'numpy\nrequests>=2.0\ntorch\npandas',
+      warmupPackagesNpm: '包名列表（每行一个，支持 package@version）',
+      warmupPlaceholderNpm: 'react\n@scope/widget@1.2.3\nvite',
       warmupStart: '开始预热',
       warmupLoading: '预热中...',
       warmupStarted: '已启动预热 {{count}} 个包',
     },
 
+    // 软件包索引缓存
+    cacheIndexes: {
+      subtitle: '检查已缓存包元数据的新鲜度、验证器与刷新状态。',
+      loadError: '无法加载索引缓存信息。',
+      staleNotice: '刷新失败，当前显示的是上次成功加载的索引数据。',
+      refresh: '刷新',
+      summaryTitle: '索引概览',
+      summaryHint: '按软件生态汇总已缓存的包元数据，包括有效状态和最近更新时间。',
+      noSummaryTitle: '暂无索引汇总',
+      noSummaryHint: '通过本服务请求并缓存包索引后，各包管理器的汇总会显示在这里。',
+      total: '索引总数',
+      freshCount: '有效 {{count}}',
+      staleCount: '已过期 {{count}}',
+      lastUpdated: '最近更新',
+      neverUpdated: '从未更新',
+      searchLabel: '搜索索引缓存',
+      searchPlaceholder: '搜索包名或索引键...',
+      ecosystemFilter: '按软件生态筛选',
+      allEcosystems: '全部软件生态',
+      statusFilter: '按有效状态筛选',
+      allStatuses: '全部状态',
+      statusFresh: '有效',
+      statusStale: '已过期',
+      tableLabel: '软件包索引缓存表格',
+      emptyTitle: '没有符合条件的索引缓存',
+      emptyHint: '请调整筛选条件，或先通过本服务请求一个软件包索引。',
+      key: '索引键',
+      ecosystem: '软件生态',
+      packageName: '包名',
+      status: '状态',
+      size: '大小',
+      hitCount: '命中次数',
+      validator: '上游验证器',
+      noValidator: '不支持',
+      lastAccessed: '最近访问',
+      expiresAt: '过期时间',
+      updatedAt: '更新时间',
+      actions: '操作',
+      refreshNamed: '手动刷新 {{name}} 的索引',
+      refreshSuccess: '已刷新 {{name}} 的索引。',
+      refreshFailed: '刷新 {{name}} 的索引失败：{{reason}}',
+      pagination: '共 {{total}} 条索引 · 第 {{page}} / {{totalPages}} 页',
+    },
+
+    upstreamUpdates: {
+      subtitle: '已缓存且具备上游验证器的元数据主动检查结果',
+      loadError: '无法加载上游更新记录。',
+      staleNotice: '刷新失败，当前显示的是上次成功加载的记录。',
+      nextPageError: '加载后续记录失败，请重试“加载更多”。',
+      tableLabel: '上游更新记录表',
+      time: '观察区间',
+      ecosystem: '生态',
+      upstream: '上游',
+      package: '包',
+      result: '结果',
+      detail: '详情',
+      latency: '耗时',
+      checks: '检查次数',
+      checkCount: '检查次数：{{count}}',
+      firstSeen: '首次记录：{{time}}',
+      loadMore: '加载更多',
+      loadingMore: '正在加载...',
+      empty: '暂无更新探测记录',
+      results: {
+        updated: '已更新',
+        unchanged: '无变化',
+        error: '失败',
+      },
+      details: {
+        refreshed: '已刷新缓存元数据。',
+        notModified: '上游元数据未发生变化。',
+        failed: '元数据刷新失败。',
+      },
+    },
+
     // Upstreams
     upstreams: {
+      subtitle: '管理各软件生态的上游源、优先级、代理与健康探测。',
       addUpstream: '添加上游源',
       editUpstream: '编辑上游源',
       url: 'URL',
@@ -235,7 +348,9 @@ const zh = {
 
     // Access Logs
     logs: {
+      subtitle: '查看包请求、缓存结果、延迟与来源，用于定位安装性能和上游问题。',
       table: '访问日志表格',
+      searchLabel: '按包名搜索访问日志',
       searchPlaceholder: '搜索包名...',
       hit: '命中',
       miss: '未命中',
@@ -344,7 +459,10 @@ const zh = {
     // Audit Logs
     audit: {
       title: '审计日志',
+      subtitle: '追溯包访问结果与客户端来源，并按时间、生态和包名筛选或导出。',
       table: '审计日志表格',
+      searchLabel: '按包名搜索审计日志',
+      timeRange: '审计日志时间范围',
       searchPlaceholder: '搜索包名...',
       ecosystem: '生态',
       result: '结果',
@@ -367,6 +485,7 @@ const zh = {
     // Rules
     rules: {
       title: '包治理规则',
+      subtitle: '定义软件包允许与拒绝规则，并在保存前验证匹配结果。',
       table: '包治理规则表格',
       editNamed: '编辑 {{name}} 的规则',
       deleteNamed: '删除 {{name}} 的规则',
@@ -400,6 +519,7 @@ const zh = {
     // Security
     security: {
       title: '包安全',
+      subtitle: '查看漏洞情报与拦截建议，并管理各软件生态的安全策略。',
       vulnerabilitiesTable: '安全漏洞表格',
       overview: '总览',
       vulnerabilities: '漏洞列表',
@@ -450,7 +570,8 @@ const zh = {
 
       importFile: '导入漏洞数据',
       importDesc: '上传 OSV JSON 文件',
-      importSuccess: '条漏洞已导入',
+      importSuccess: '已导入 {{count}} 条漏洞',
+      importSummary: '接收 {{received}} · 涉及包 {{packages}} · 重复 {{duplicates}} · 跳过 {{skipped}} · 新建规则 {{rulesCreated}}',
       importFormat: 'OSV JSON 格式',
 
       // Suggestions tab
@@ -478,6 +599,7 @@ const zh = {
     // Users
     users: {
       title: '用户',
+      subtitle: '管理运维账号与 API Token。',
       table: '用户表格',
       tokensTable: 'API Token 表格',
       editNamed: '编辑 {{name}}',
@@ -516,6 +638,7 @@ const zh = {
 
     // Settings
     settings: {
+      subtitle: '查看配置来源与实际生效值，修改可写的运行设置并管理 Webhook 通知。',
       basic: '基础配置',
       cachePolicy: '缓存策略',
       storageBackend: '存储后端',
@@ -594,11 +717,12 @@ const zh = {
 
     // Portal
     portal: {
+      navigation: '门户导航',
       quickStart: '快速开始',
       monitor: '监控',
       adminPanel: '管理后台 →',
       adminShort: '管理',
-      backLink: '← 门户',
+      backLink: '返回门户',
       online: '在线',
       offline: '离线',
     },
@@ -674,6 +798,7 @@ const zh = {
     // Projects
     projects: {
       title: '项目管理',
+      subtitle: '按项目归集依赖活动，查看独立代理访问，并导出项目级 SBOM。',
       table: '项目表格',
       packagesTable: '项目包表格',
       view: '查看',
@@ -737,6 +862,7 @@ const zh = {
       degraded: '性能下降',
       failed: '故障',
       historySummary: '近 24 小时 · {{count}} 次探测',
+      historyUnavailable: '延迟历史暂时无法加载，当前上游状态仍可正常查看。',
     },
 
     // Setup Wizard
@@ -746,6 +872,14 @@ const zh = {
       basic_settings: '基础设置',
       port: '端口',
       storage_path: '存储路径',
+      admin_account: '管理员账号',
+      admin_username: '管理员用户名',
+      admin_password: '管理员密码',
+      admin_password_hint: '至少 12 个字符；使用三类字符，或使用至少 20 个字符的长口令。',
+      confirm_password: '确认密码',
+      password_mismatch: '两次输入的密码不一致。',
+      bootstrap_token: '首启验证令牌',
+      bootstrap_token_hint: '从服务器或容器首次启动日志中复制一次性令牌。',
       select_ecosystems: '选择生态',
       select_ecosystems_hint: '选择你要通过 Depsilo 代理的包管理生态。',
       configure_upstreams: '配置上游源',
@@ -754,12 +888,24 @@ const zh = {
       upstream_url: '上游 URL',
       priority: '优先级',
       add_upstream: '添加上游',
+      remove_upstream: '删除上游源 {{name}}',
       restarting: '正在重启服务',
-      restarting_hint: '页面将在几秒钟后自动刷新。',
+      restarting_hint: '正在等待 {{url}} 就绪，成功后将自动跳转。',
+      ready: '服务已就绪',
+      ready_hint: '正在跳转到新服务地址…',
+      restart_failed_title: '无法连接重启后的服务',
+      save_failed_title: '无法完成初始设置',
+      restart_timeout: '等待服务重启超时。请检查运行日志，然后重试连接。',
+      restart_failed: '检查服务状态时出错，请重试。',
+      supervisor_required: '配置已保存。请先手动重启 Depsilo 进程，再重试连接。',
+      reconnect_target: '目标地址：{{url}}',
+      retry_connection: '重试连接',
+      return_to_settings: '返回检查设置',
       complete: '完成',
       enabled_ecosystems: '已启用的生态',
       saving: '保存中...',
       save_and_start: '保存并启动',
+      save_failed: '无法保存配置，请检查输入后重试。',
       step_of: '第 {{current}} / {{total}} 步',
       next: '下一步',
       prev: '上一步',
@@ -864,7 +1010,7 @@ const zh = {
       editNamed: '编辑 {{name}}',
       deleteNamed: '删除 {{name}}',
       disabled: '已禁用',
-      testSent: '测试通知已发送，请检查对应平台。',
+      testSent: '测试通知已加入发送队列，请检查对应平台。',
       created: 'Webhook 已创建。',
       updated: 'Webhook 已更新。',
       deleted: 'Webhook 已删除。',

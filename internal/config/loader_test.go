@@ -8,7 +8,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+func setTestJWTSecret(t *testing.T) {
+	t.Helper()
+	t.Setenv("DEPSILO_AUTH_JWT_SECRET", "test-only-0123456789abcdef0123456789abcdef")
+}
+
 func TestLoadEnvironmentOverridesWizardStoragePaths(t *testing.T) {
+	setTestJWTSecret(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	contents := []byte(`[database]
 driver = "sqlite"
@@ -40,6 +46,7 @@ path = "./data/cache"
 
 func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
 	t.Setenv("DEPSILO_CONFIG", filepath.Join("..", "..", "config.example.toml"))
+	t.Setenv("DEPSILO_AUTH_JWT_SECRET", "test-only-0123456789abcdef0123456789abcdef")
 
 	cfg, err := Load()
 	if err != nil {
@@ -50,6 +57,62 @@ func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
 	}
 	if cfg.Server.Port != 23333 {
 		t.Fatalf("Server.Port = %d, want 23333", cfg.Server.Port)
+	}
+}
+
+func TestLoadRejectsPlaceholderJWTSecretOnRemoteListener(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte(`[server]
+host = "0.0.0.0"
+
+[auth]
+jwt_secret = "change-me-in-production"
+`)
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	if _, err := Load(); err == nil {
+		t.Fatal("Load accepted a known JWT secret on a remote listener")
+	}
+}
+
+func TestLoadAllowsPlaceholderJWTSecretForLoopbackDevelopment(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte(`[server]
+host = "127.0.0.1"
+
+[auth]
+jwt_secret = "change-me-in-production"
+`)
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	if _, err := Load(); err != nil {
+		t.Fatalf("Load loopback config: %v", err)
+	}
+}
+
+func TestLoadAllowsRemoteListenerWithJWTSecretEnvironmentOverride(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte(`[server]
+host = "0.0.0.0"
+
+[auth]
+jwt_secret = "change-me-in-production"
+`)
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_AUTH_JWT_SECRET", "test-only-0123456789abcdef0123456789abcdef")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.JWTSecret != "test-only-0123456789abcdef0123456789abcdef" {
+		t.Fatalf("JWT secret environment override was not applied")
 	}
 }
 

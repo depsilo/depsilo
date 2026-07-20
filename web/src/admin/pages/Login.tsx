@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import InputV2 from '@/components/Input'
@@ -23,9 +23,25 @@ function formatRequests(n: number): string {
   return String(n)
 }
 
+function loginDestination(state: unknown) {
+  if (!state || typeof state !== 'object' || !('from' in state)) return '/admin'
+  const from = (state as { from?: unknown }).from
+  if (!from || typeof from !== 'object') return '/admin'
+  const candidate = from as { pathname?: unknown; search?: unknown; hash?: unknown }
+  if (typeof candidate.pathname !== 'string' ||
+      (candidate.pathname !== '/admin' && !candidate.pathname.startsWith('/admin/')) ||
+      candidate.pathname === '/admin/login') {
+    return '/admin'
+  }
+  const search = typeof candidate.search === 'string' ? candidate.search : ''
+  const hash = typeof candidate.hash === 'string' ? candidate.hash : ''
+  return `${candidate.pathname}${search}${hash}`
+}
+
 export default function LoginV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -42,12 +58,11 @@ export default function LoginV2() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    localStorage.removeItem('token')
-    queryClient.clear()
     try {
       const response = await authApi.login({ username, password })
       localStorage.setItem('token', response.data.token)
-      navigate('/admin', { replace: true })
+      queryClient.clear()
+      navigate(loginDestination(location.state), { replace: true })
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       setError(message || t('login.failed'))

@@ -8,14 +8,16 @@ import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
-import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
+import SelectV2 from '@/components/Select'
 import TableViewport from '@/components/TableViewport'
+import AdminPage from '@/admin/components/AdminPage'
+import AdminPagination from '@/admin/components/AdminPagination'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AccessLog, AccessLogQuery } from '@/lib/adminApi.types'
-
-const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker']
 
 function latencyColor(ms: number): string {
   if (ms < 100) return 'var(--ok)'
@@ -45,73 +47,70 @@ export default function AccessLogsV2() {
 
   const items: AccessLog[] = data?.data.items ?? []
   const total = data?.data.total ?? 0
-  const totalPages = Math.ceil(total / 50)
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
 
-  function handleSearch() { setAppliedSearch(search); setPage(1) }
+  function handleSearch() {
+    setAppliedSearch(search)
+    setPage(1)
+  }
 
-  // Inline select style
-  const selStyle: React.CSSProperties = {
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    color: 'var(--text)',
-    borderRadius: 4,
-    padding: '4px 8px',
-    fontSize: 12,
-    outline: 'none',
-    cursor: 'pointer',
+  function handleExport() {
+    void adminApi.exportLogs(params).then(res => {
+      const url = URL.createObjectURL(new Blob([res.data]))
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `depsilo-access-logs-${new Date().toISOString().slice(0, 10)}.csv`
+      anchor.click()
+      URL.revokeObjectURL(url)
+    })
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filter bar — bare row, only the search input gets a border */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-1 min-w-[240px] rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+    <AdminPage
+      description={t('logs.subtitle')}
+      actions={(
+        <ButtonV2 type="button" variant="secondary" size="sm" onClick={handleExport}>
+          <Icon name="download" size="sm" />
+          {t('logs.export')}
+        </ButtonV2>
+      )}
+    >
+      <div className="space-y-6">
+      <form
+        data-admin-filters
+        className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+        onSubmit={(event) => { event.preventDefault(); handleSearch() }}
+      >
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
-            className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
+            aria-label={t('logs.searchLabel')}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
             style={{ color: 'var(--text)' }}
             placeholder={t('logs.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
 
-        {/* Ecosystem filter */}
-        <select aria-label={t('audit.ecosystem')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }} style={selStyle}>
-          <option value="all">{t('all')}</option>
-          {ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
-        </select>
+        <div className="grid grid-cols-2 gap-3 sm:contents">
+          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.ecosystem')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
+            <option value="all">{t('all')}</option>
+            {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
+          </SelectV2>
 
-        {/* Hit/Miss filter */}
-        <select aria-label={t('audit.result')} value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }} style={selStyle}>
-          <option value="all">{t('all')}</option>
-          <option value="hit">{t('logs.hit')}</option>
-          <option value="miss">{t('logs.miss')}</option>
-        </select>
+          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.result')} value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }}>
+            <option value="all">{t('all')}</option>
+            <option value="hit">{t('logs.hit')}</option>
+            <option value="miss">{t('logs.miss')}</option>
+          </SelectV2>
+        </div>
 
-        {/* Export button */}
-        <ButtonV2 variant="ghost" size="sm" onClick={() => {
-          adminApi.exportLogs(params).then(res => {
-            const url = URL.createObjectURL(new Blob([res.data]))
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `depsilo-access-logs-${new Date().toISOString().slice(0, 10)}.csv`
-            a.click()
-            URL.revokeObjectURL(url)
-          })
-        }}>
-          <Icon name="download" size="sm" />
-          {t('logs.export')}
-        </ButtonV2>
-
-        {/* Search button */}
-        <ButtonV2 variant="primary" size="sm" onClick={handleSearch}>
+        <ButtonV2 type="submit" variant="primary" size="sm" className="min-h-10 self-start sm:min-h-0">
           {t('search')}
         </ButtonV2>
-      </div>
+      </form>
 
       {/* Table — bare */}
       <TableViewport
@@ -125,7 +124,7 @@ export default function AccessLogsV2() {
         ) : (
           <div>
           {data && isRefetchError && (
-            <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+            <StaleDataNotice onRefresh={() => { void refetch() }} />
           )}
           {items.length === 0 ? (
             <EmptyState icon="receipt_long" title={t('logs.noLogs')} minHeight={200} />
@@ -134,7 +133,7 @@ export default function AccessLogsV2() {
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp')].map(h => (
-                  <th key={h} className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <th key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </th>
                 ))}
@@ -198,25 +197,8 @@ export default function AccessLogsV2() {
         )}
       </TableViewport>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
-            {t('totalItems', { total, page, totalPages })}
-          </span>
-          <div className="flex items-center gap-1">
-            <ButtonV2 variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-              {t('prevPage')}
-            </ButtonV2>
-            <span className="text-[12px] font-mono tabular-nums px-2" style={{ color: 'var(--text-soft)' }}>
-              {page}/{totalPages}
-            </span>
-            <ButtonV2 variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-              {t('nextPage')}
-            </ButtonV2>
-          </div>
-        </div>
-      )}
-    </div>
+      <AdminPagination page={page} pageSize={50} total={total} onPageChange={setPage} />
+      </div>
+    </AdminPage>
   )
 }

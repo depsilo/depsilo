@@ -9,6 +9,7 @@ import Icon from '@/components/Icon'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
 import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/components/TrendsCard'
+import NowStrip from '@/admin/components/NowStrip'
 import EmptyState from '@/components/EmptyState'
 import ButtonV2 from '@/components/Button'
 import InlineNotice from '@/components/InlineNotice'
@@ -17,6 +18,7 @@ import { UpstreamGroupedPanel } from '@/components/UpstreamCard'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { DashboardResponse } from '@/lib/adminApi.types'
+import { getAdminRouteHref } from '@/admin/routes'
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
 } from 'recharts'
@@ -130,7 +132,7 @@ export default function DashboardV2() {
     return (
       <div aria-busy="true" className="space-y-12">
         <div aria-hidden="true">
-        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 py-2">
+        <div className="grid grid-cols-2 gap-6 xl:grid-cols-4 py-2">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
               <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
@@ -213,11 +215,12 @@ export default function DashboardV2() {
       {data && isRefetchError && (
         <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
       )}
+      <NowStrip />
       {/* ── 24h metrics row ─────────────────────────── */}
       <section>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4 xl:gap-8 py-2">
+        <div data-dashboard-kpis className="grid grid-cols-2 gap-x-4 gap-y-8 py-2 xl:grid-cols-4 xl:gap-8">
           {metrics.map((m) => (
-            <Metric key={m.label} label={m.label} value={m.value} change={m.change} />
+            <Metric key={m.label} label={m.label} value={m.value} change={m.change} size="clamp(28px, 7vw, 40px)" />
           ))}
         </div>
       </section>
@@ -269,7 +272,7 @@ export default function DashboardV2() {
           title={t('bandwidth.bandwidthSummary')}
           action={
             <Link
-              to="/admin/bandwidth"
+              to={getAdminRouteHref('bandwidth')}
               className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-[500] no-underline transition-colors duration-150"
               style={{ color: 'var(--brand-text)' }}
             >
@@ -292,7 +295,7 @@ export default function DashboardV2() {
             )}
             {bandwidthSummary ? (
               <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-10 gap-y-5 mb-6">
+            <div className="mb-6 grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-10 xl:grid-cols-4 xl:gap-y-5">
               <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(bandwidthSummary.total_bytes || 0)} />
               <Metric
                 label={t('bandwidth.trafficSaved')}

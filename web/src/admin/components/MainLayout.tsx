@@ -9,26 +9,32 @@ import Icon from '@/components/Icon'
 import LangToggle from '@/components/LangToggle'
 import Logo from '@/components/Logo'
 import ThemeToggle from '@/components/ThemeToggle'
-import NowStrip from '@/admin/components/NowStrip'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { authApi, statsApi } from '@/lib/api'
 import { formatVersion } from '@/lib/utils'
+import { adminNavigationGroups, resolveAdminRoute } from '../routes'
 
 interface NavItem {
   label: string
   to: string
   icon: string
-  end?: boolean
   pro?: boolean
 }
 
+interface NavSection {
+  id: string
+  label: string
+  items: NavItem[]
+}
+
 interface SidebarContentProps {
-  monitorItems: NavItem[]
-  manageItems: NavItem[]
+  sections: NavSection[]
+  surface: 'sidebar' | 'drawer'
   username?: string
   canWrite: boolean
   version?: string
   firstNavigationRef?: RefObject<HTMLAnchorElement | null>
+  reserveCloseSpace?: boolean
   onNavigate?: () => void
   onLogout: () => void
 }
@@ -46,7 +52,7 @@ function SidebarNavItem({
     <NavLink
       ref={linkRef}
       to={item.to}
-      end={item.end}
+      end
       onClick={onNavigate}
       className="mx-2 flex items-center gap-2.5 rounded-[6px] px-3 py-2 text-[13px] no-underline transition-colors duration-150"
       style={({ isActive }) => ({
@@ -63,21 +69,31 @@ function SidebarNavItem({
 }
 
 function SidebarContent({
-  monitorItems,
-  manageItems,
+  sections,
+  surface,
   username,
   canWrite,
   version,
   firstNavigationRef,
+  reserveCloseSpace = false,
   onNavigate,
   onLogout,
 }: SidebarContentProps) {
   const { t } = useTranslation()
   return (
     <>
-      <div className="flex items-center gap-2.5 px-5 py-5">
-        <Logo size={26} />
-        <span className="text-[15px] font-[700]" style={{ color: 'var(--text)' }}>depsilo</span>
+      <div data-admin-sidebar-header className={`flex items-center gap-2.5 py-5 pl-5 ${reserveCloseSpace ? 'pr-16' : 'pr-5'}`}>
+        <Link
+          data-admin-brand-link
+          to="/"
+          onClick={onNavigate}
+          aria-label={t('portal.backLink')}
+          title={t('portal.backLink')}
+          className="stripe-focus-ring flex min-w-0 items-center gap-2.5 rounded-[6px] no-underline transition-opacity duration-150 hover:opacity-75"
+        >
+          <Logo size={26} />
+          <span className="text-[15px] font-[700]" style={{ color: 'var(--text)' }}>depsilo</span>
+        </Link>
         <span
           className="ml-auto inline-flex min-w-16 items-center justify-center rounded-[4px] border px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
           title={version}
@@ -87,34 +103,33 @@ function SidebarContent({
         </span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-2">
-        <p
-          className="mt-2 mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase"
-          style={{ color: 'var(--text-subtle)' }}
-        >
-          {t('nav.monitor')}
-        </p>
-        {monitorItems.map((item, index) => (
-          <SidebarNavItem
-            key={item.to}
-            item={item}
-            linkRef={index === 0 ? firstNavigationRef : undefined}
-            onNavigate={onNavigate}
-          />
-        ))}
-
-        <p
-          className="mt-6 mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase"
-          style={{ color: 'var(--text-subtle)' }}
-        >
-          {t('nav.manage')}
-        </p>
-        {manageItems.map(item => (
-          <SidebarNavItem key={item.to} item={item} onNavigate={onNavigate} />
+      <nav
+        data-admin-nav-scroll
+        data-admin-nav-surface={surface}
+        aria-label={t('nav.adminNavigation')}
+        className="flex-1 overflow-y-auto py-2"
+      >
+        {sections.map((section, sectionIndex) => (
+          <div key={section.id} data-admin-nav-group={section.id}>
+            <p
+              className={`${sectionIndex === 0 ? 'mt-2' : 'mt-4'} mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase`}
+              style={{ color: 'var(--text-subtle)' }}
+            >
+              {section.label}
+            </p>
+            {section.items.map((item, itemIndex) => (
+              <SidebarNavItem
+                key={item.to}
+                item={item}
+                linkRef={sectionIndex === 0 && itemIndex === 0 ? firstNavigationRef : undefined}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
         ))}
       </nav>
 
-      <div className="px-3 py-3" style={{ borderTop: '0.5px solid var(--border)' }}>
+      <div data-admin-sidebar-footer className="px-3 py-3" style={{ borderTop: '0.5px solid var(--border)' }}>
         <div className="group flex cursor-default items-center gap-2.5 rounded-[6px] px-2 py-2 transition-colors duration-150 hover:bg-[var(--bg-hover)]">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-[13px] font-[600]"
@@ -158,41 +173,20 @@ export default function MainLayoutV2() {
     staleTime: 30000,
   })
 
-  const monitorItems: NavItem[] = [
-    { label: t('nav.dashboard'), to: '/admin', icon: 'dashboard', end: true },
-    { label: t('bandwidth.title'), to: '/admin/bandwidth', icon: 'bar_chart' },
-    { label: t('nav.accessLogs'), to: '/admin/logs', icon: 'receipt_long' },
-    { label: t('nav.auditLogs'), to: '/admin/audit', icon: 'policy' },
-    { label: t('nav.quarantine'), to: '/admin/quarantine', icon: 'shield_lock' },
-  ]
-  const manageItems: NavItem[] = [
-    { label: t('nav.cacheManage'), to: '/admin/cache', icon: 'storage' },
-    { label: t('nav.upstreams'), to: '/admin/upstreams', icon: 'cloud_sync' },
-    { label: t('nav.userManage'), to: '/admin/users', icon: 'group' },
-    { label: t('license.title'), to: '/admin/license', icon: 'key' },
-    { label: t('nav.rules'), to: '/admin/rules', icon: 'shield' },
-    { label: t('nav.security'), to: '/admin/security', icon: 'security' },
-    { label: t('nav.projects'), to: '/admin/projects', icon: 'folder_managed', pro: true },
-    { label: t('nav.settings'), to: '/admin/settings', icon: 'settings' },
-  ]
-  const pageTitles: Record<string, string> = {
-    '/admin': t('nav.dashboard'),
-    '/admin/bandwidth': t('bandwidth.title'),
-    '/admin/logs': t('nav.accessLogs'),
-    '/admin/audit': t('nav.auditLogs'),
-    '/admin/quarantine': t('nav.quarantine'),
-    '/admin/cache': t('nav.cacheManage'),
-    '/admin/upstreams': t('nav.upstreams'),
-    '/admin/users': t('nav.userManage'),
-    '/admin/license': t('license.title'),
-    '/admin/rules': t('nav.rules'),
-    '/admin/security': t('nav.security'),
-    '/admin/projects': t('nav.projects'),
-    '/admin/settings': t('nav.settings'),
-  }
+  const sections: NavSection[] = adminNavigationGroups.map(group => ({
+    id: group.id,
+    label: t(group.titleKey),
+    items: group.routes.map(route => ({
+      label: t(route.titleKey),
+      to: route.href,
+      icon: route.icon,
+      pro: route.pro,
+    })),
+  }))
+  const activeRoute = resolveAdminRoute(location.pathname)
+  const pageTitle = activeRoute ? t(activeRoute.titleKey) : t('notFound.title')
   const sidebarProps = {
-    monitorItems,
-    manageItems,
+    sections,
     username: principal?.username,
     canWrite,
     version: stats?.service?.version,
@@ -206,13 +200,12 @@ export default function MainLayoutV2() {
   }
 
   return (
-    <div data-admin-shell className="flex min-h-screen" style={{ background: 'var(--bg-page)' }}>
-      <div className="page-wash" />
+    <div data-admin-shell className="relative z-[1] flex min-h-screen" style={{ background: 'var(--admin-canvas)' }}>
       <aside
         className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col lg:flex"
         style={{ background: 'var(--bg-card)', borderRight: '0.5px solid var(--border)' }}
       >
-        <SidebarContent {...sidebarProps} onLogout={() => { void handleLogout() }} />
+        <SidebarContent {...sidebarProps} surface="sidebar" onLogout={() => { void handleLogout() }} />
       </aside>
 
       <DrawerV2
@@ -224,21 +217,20 @@ export default function MainLayoutV2() {
         <div id="admin-mobile-navigation" className="flex h-full flex-col">
           <SidebarContent
             {...sidebarProps}
+            surface="drawer"
             firstNavigationRef={firstMobileNavigationRef}
+            reserveCloseSpace
             onNavigate={() => setMobileNavOpen(false)}
             onLogout={() => { void handleLogout() }}
           />
         </div>
       </DrawerV2>
 
-      <div data-admin-main className="min-w-0 flex-1 lg:ml-[220px]">
+      <div data-admin-main className="min-w-0 flex-1 lg:ml-[220px]" style={{ background: 'var(--admin-canvas)' }}>
         <header
-          className="aurora-rim-bottom fixed top-0 right-0 left-0 z-20 flex h-24 flex-wrap items-center gap-x-2.5 px-4 sm:px-6 md:h-12 md:flex-nowrap lg:left-[220px] lg:px-8"
-          style={{
-            background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
-            backdropFilter: 'saturate(180%) blur(8px)',
-            WebkitBackdropFilter: 'saturate(180%) blur(8px)',
-          }}
+          data-admin-topbar
+          className="aurora-rim-bottom fixed top-0 right-0 left-0 z-20 flex h-12 items-center gap-x-2.5 px-4 sm:px-6 lg:left-[220px] lg:px-8"
+          style={{ background: 'var(--admin-canvas)' }}
         >
           <button
             type="button"
@@ -250,26 +242,16 @@ export default function MainLayoutV2() {
           >
             <Icon name="menu" size="sm" />
           </button>
-          <h1 className="min-w-0 flex-1 truncate text-[17px] font-[600] md:flex-none md:shrink" style={{ color: 'var(--text)' }}>
-            {pageTitles[location.pathname] || t('nav.dashboard')}
+          <h1 className="min-w-0 flex-1 truncate text-[17px] font-[600]" style={{ color: 'var(--text)' }}>
+            {pageTitle}
           </h1>
-          <div className="order-last min-w-0 basis-full overflow-hidden md:order-none md:flex-1 md:basis-auto md:px-3 lg:px-5">
-            <NowStrip variant="topbar" />
-          </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
-            <Link
-              to="/"
-              className="hidden items-center gap-1 text-[12px] font-[500] text-[var(--text-soft)] no-underline transition-colors duration-150 hover:text-[var(--text)] sm:inline-flex"
-              title={t('portal.backLink')}
-            >
-              {t('portal.backLink')}
-            </Link>
             <LangToggle />
-            <ThemeToggle />
+            <ThemeToggle labeled />
           </div>
         </header>
 
-        <main className="min-h-screen bg-[var(--bg-page)] pt-28 pb-6 md:pt-20">
+        <main className="min-h-screen pt-16 pb-6 md:pt-20" style={{ background: 'var(--admin-canvas)' }}>
           <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
             <Outlet />
           </div>

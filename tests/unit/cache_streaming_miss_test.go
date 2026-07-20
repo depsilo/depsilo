@@ -43,6 +43,19 @@ func newTestDB(t *testing.T) *gorm.DB {
 	return d
 }
 
+func newTestCacheManager(t *testing.T, store cache.Storage, database *gorm.DB) *cache.Manager {
+	t.Helper()
+	manager := cache.NewManager(store, database, nil, time.Hour)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Close(ctx); err != nil {
+			t.Errorf("close cache manager: %v", err)
+		}
+	})
+	return manager
+}
+
 // trackingStorage wraps fakeStorage with hooks for observing Put lifecycle and
 // optional slow-write simulation.
 type trackingStorage struct {
@@ -196,7 +209,7 @@ func makeFetchFn(body []byte, chunk int, pause time.Duration) cache.FetchFunc {
 func TestMissPath_FirstByteIsFast(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil, time.Hour)
+	mgr := newTestCacheManager(t, store, d)
 
 	// 1 MB body in 16 KB chunks, 50 ms between chunks → ~3.2 s total.
 	const total = 1 << 20
@@ -230,7 +243,7 @@ func TestMissPath_FirstByteIsFast(t *testing.T) {
 func TestMissPath_ClientDisconnect_StorageStillCompletes(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil, time.Hour)
+	mgr := newTestCacheManager(t, store, d)
 
 	const total = 256 << 10 // 256 KB
 	const chunk = 16 << 10
@@ -281,7 +294,7 @@ func TestMissPath_ClientDisconnect_StorageStillCompletes(t *testing.T) {
 func TestMissPath_UpstreamErrorMidStream_NoOrphan(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil, time.Hour)
+	mgr := newTestCacheManager(t, store, d)
 
 	const total = 128 << 10
 	const chunk = 8 << 10
@@ -334,7 +347,7 @@ func TestMissPath_UpstreamErrorMidStream_NoOrphan(t *testing.T) {
 func TestMissPath_Singleflight_ConcurrentSameKey(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil, time.Hour)
+	mgr := newTestCacheManager(t, store, d)
 
 	const total = 64 << 10
 	const chunk = 8 << 10
@@ -397,7 +410,7 @@ func TestMissPath_Singleflight_ConcurrentSameKey(t *testing.T) {
 func TestMissPath_FullBodyRelayedToClient(t *testing.T) {
 	d := newTestDB(t)
 	store := newTrackingStorage()
-	mgr := cache.NewManager(store, d, nil, time.Hour)
+	mgr := newTestCacheManager(t, store, d)
 
 	const total = 200 << 10
 	const chunk = 4 << 10

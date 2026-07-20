@@ -2,6 +2,9 @@
 host = "0.0.0.0"
 port = 23333
 log_level = "info"
+# Empty means X-Forwarded-For / X-Real-IP are ignored. Add only the CIDRs of
+# reverse proxies you operate, for example ["127.0.0.1/32", "10.0.0.0/8"].
+trusted_proxies = []
 
 [database]
 driver = "sqlite"           # currently the only supported database driver
@@ -20,9 +23,15 @@ path = "./data/cache"
 
 [cache]
 max_size_gb  = 20
-ttl_index    = "1h"         # 索引元数据刷新间隔（过期后后台静默刷新，不影响服务）
+ttl_index    = "1h"         # 索引元数据刷新间隔（过期后同步刷新；上游失败时返回旧索引）
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
+
+# 对已缓存且具备 HTTP 验证器的 PyPI 兼容元数据主动执行条件检查。
+# 不支持可靠变更判定的生态继续依赖正常 TTL 刷新；此任务绝不预拉取制品。
+[upstream_updates]
+enabled = true
+check_interval = "1h"
 
 [access_log]
 # Async rollup pipeline for the access_logs table. See
@@ -40,7 +49,9 @@ rollup_retention_days = 365    # rollup tables sweep horizon (0 = never sweep)
 
 [auth]
 enabled    = true
-jwt_secret = "change-me-in-production"   # ⚠ MUST change before production deployment!
+# Startup refuses this placeholder while listening on a non-loopback address.
+# Prefer an environment secret: DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
+jwt_secret = "change-me-in-production"
 token_ttl  = "168h"         # 7天
 
 [license]

@@ -46,7 +46,7 @@
 
 | 组件       | 选型                                  | 说明                          |
 | ---------- | ------------------------------------- | ----------------------------- |
-| 语言       | Go 1.25.6                             | 以 `go.mod` 为准，标准库优先 |
+| 语言       | Go 1.25.12                            | 以 `go.mod` 为准，标准库优先 |
 | HTTP 框架  | **Gin** (`github.com/gin-gonic/gin`)  | v1.9+                         |
 | ORM        | **GORM** (`gorm.io/gorm`)             | 当前仅接入 SQLite driver     |
 | DB 迁移    | GORM `AutoMigrate`                    | 启动时自动执行                |
@@ -323,6 +323,7 @@ type Selector interface {
 - `GET /pypi/simple/:package/` → 代理并缓存，**必须重写响应 HTML 中所有下载 URL**
   - 将 `https://files.pythonhosted.org/packages/...` 重写为 `http://<本服务地址>/pypi/files/...`
   - 这是 PyPI 代理的关键步骤，遗漏则客户端会绕过缓存直接回源
+  - TTL 未过期时直接返回本地索引；TTL 过期或管理员手动刷新时，使用缓存的 `ETag` / `Last-Modified` 条件回源验证。304 延长 TTL 并复用缓存，200 在当前请求返回新索引，自动刷新失败时降级旧索引
 - `GET /pypi/files/*filepath` → 下载包文件（wheel/sdist），走缓存流程
 - Cache key 规范：`pypi/simple/{package}/index.html`、`pypi/files/{path}`
 
@@ -1118,7 +1119,7 @@ Snapshot、CRA 完整 SBOM、签名发布和基础 Helm chart。
 ### 11.2 架构优势
 
 - **Adapter 模式**：接口只有 `Register()` + `Type()`，新增生态不碰核心代码
-- **Stale-While-Revalidate 缓存**：过期不删除、后台异步刷新、上游故障降级返回旧缓存
+- **分类型缓存刷新**：可变索引过期后先同步刷新，确保新版本首次请求可见；不可变制品后台校验，上游故障均可降级返回旧缓存
 - **并发 miss 防击穿**：自研 inflight 让同一 key 并发请求只回源一次；后台刷新用 singleflight
 - **流式传输**：上游响应通过 `countingReader` 直接流向 `storage.Put`，不做内存缓冲
 - **依赖注入**：`router.go` 的 `Deps` 结构体传递所有依赖，无全局变量

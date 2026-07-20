@@ -1,26 +1,65 @@
+import { useEffect, useReducer, type ReactElement } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import MainLayoutV2 from './components/MainLayout'
-import LoginV2 from './pages/Login'
-import DashboardV2 from './pages/Dashboard'
-import BandwidthReportV2 from './pages/BandwidthReport'
-import CacheManageV2 from './pages/CacheManage'
-import UpstreamsV2 from './pages/Upstreams'
-import AccessLogsV2 from './pages/AccessLogs'
-import UsersV2 from './pages/Users'
-import SettingsV2 from './pages/Settings'
-import AuditLogsV2 from './pages/AuditLogs'
-import RulesV2 from './pages/Rules'
-import Security from './pages/Security'
-import Projects from './pages/Projects'
-import Quarantine from './pages/Quarantine'
-import License from './pages/License'
+import { useQueryClient } from '@tanstack/react-query'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import QueryErrorState from '@/components/QueryErrorState'
 import { useTranslation } from 'react-i18next'
+import { AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api'
+import { lazyRoute } from '@/routing/lazyRoute'
+import RouteNotFound from '@/routing/RouteNotFound'
+import { adminRouteManifest, type AdminRouteId } from './routes'
+
+const LoginV2 = lazyRoute(() => import('./pages/Login'), { surface: 'page' })
+const AdminShell = lazyRoute(() => import('./AdminShell'), { surface: 'page' })
+const DashboardV2 = lazyRoute(() => import('./pages/Dashboard'))
+const BandwidthReportV2 = lazyRoute(() => import('./pages/BandwidthReport'))
+const CacheManageV2 = lazyRoute(() => import('./pages/CacheManage'))
+const CacheIndexes = lazyRoute(() => import('./pages/CacheIndexes'))
+const UpstreamsV2 = lazyRoute(() => import('./pages/Upstreams'))
+const UpstreamUpdates = lazyRoute(() => import('./pages/UpstreamUpdates'))
+const AccessLogsV2 = lazyRoute(() => import('./pages/AccessLogs'))
+const AuditLogsV2 = lazyRoute(() => import('./pages/AuditLogs'))
+const Quarantine = lazyRoute(() => import('./pages/Quarantine'))
+const RulesV2 = lazyRoute(() => import('./pages/Rules'))
+const Security = lazyRoute(() => import('./pages/Security'))
+const Projects = lazyRoute(() => import('./pages/Projects'))
+const UsersV2 = lazyRoute(() => import('./pages/Users'))
+const License = lazyRoute(() => import('./pages/License'))
+const SettingsV2 = lazyRoute(() => import('./pages/Settings'))
+
+const routeElements = {
+  dashboard: <DashboardV2 />,
+  bandwidth: <BandwidthReportV2 />,
+  cache: <CacheManageV2 />,
+  cacheIndexes: <CacheIndexes />,
+  upstreams: <UpstreamsV2 />,
+  upstreamUpdates: <UpstreamUpdates />,
+  accessLogs: <AccessLogsV2 />,
+  auditLogs: <AuditLogsV2 />,
+  quarantine: <Quarantine />,
+  rules: <RulesV2 />,
+  security: <Security />,
+  projects: <Projects />,
+  users: <UsersV2 />,
+  license: <License />,
+  settings: <SettingsV2 />,
+} satisfies Readonly<Record<AdminRouteId, ReactElement>>
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation()
   const location = useLocation()
+  const queryClient = useQueryClient()
+  const [, sessionChanged] = useReducer((revision: number) => revision + 1, 0)
+
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      queryClient.clear()
+      sessionChanged()
+    }
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpiredSession)
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpiredSession)
+  }, [queryClient])
+
   const token = localStorage.getItem('token')
   const { principal, isPending, isError, refetch } = usePrincipal(Boolean(token))
 
@@ -38,31 +77,20 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export default function AdminAppV2() {
   return (
-    <>
-      <Routes>
+    <Routes>
       <Route path="login" element={<LoginV2 />} />
       <Route
         element={
           <RequireAuth>
-            <MainLayoutV2 />
+            <AdminShell />
           </RequireAuth>
         }
       >
-        <Route index element={<DashboardV2 />} />
-        <Route path="bandwidth" element={<BandwidthReportV2 />} />
-        <Route path="cache" element={<CacheManageV2 />} />
-        <Route path="upstreams" element={<UpstreamsV2 />} />
-        <Route path="logs" element={<AccessLogsV2 />} />
-        <Route path="audit" element={<AuditLogsV2 />} />
-        <Route path="quarantine" element={<Quarantine />} />
-        <Route path="rules" element={<RulesV2 />} />
-        <Route path="security" element={<Security />} />
-        <Route path="projects" element={<Projects />} />
-        <Route path="users" element={<UsersV2 />} />
-        <Route path="license" element={<License />} />
-        <Route path="settings" element={<SettingsV2 />} />
+        {adminRouteManifest.map(route => route.index
+          ? <Route key={route.id} index element={routeElements[route.id]} />
+          : <Route key={route.id} path={route.path} element={routeElements[route.id]} />)}
+        <Route path="*" element={<RouteNotFound area="admin" />} />
       </Route>
     </Routes>
-    </>
   )
 }

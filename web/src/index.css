@@ -1,9 +1,35 @@
 @import "tailwindcss";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/inter-tight";
-@import "@fontsource-variable/jetbrains-mono";
-@import "@fontsource-variable/noto-sans-sc";
-@import "material-symbols/outlined.css";
+
+/* The UI ships Chinese and English locales. Load only each typeface's Latin
+ * variable subset; CJK and any other scripts deliberately fall through to
+ * the platform font stack below. Importing Fontsource's package root emitted
+ * 19 Greek/Cyrillic/Vietnamese/Latin-ext files that these locales never use. */
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter Tight Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter-tight/files/inter-tight-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
 
 /* ── Tailwind v4 @theme — turns CSS vars into utility classes ──
  *  These are the LIGHT mode values for the "Instrument" system.
@@ -60,8 +86,8 @@
 
   /* Inter Variable for UI text, Inter Tight only for display headings.
      CJK prefers platform fonts first for a lighter, more native read. */
-  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', sans-serif;
+  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --spacing-1:  4px;
@@ -89,8 +115,8 @@
    --surface, --hit, --btn, ...) are added alongside so new
    code can use the role-based vocabulary the brief prescribes. */
 :root {
-  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC Variable', sans-serif;
+  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Surfaces — old names */
@@ -99,6 +125,7 @@
   --bg-card:   #FFFFFF;
   --bg-soft:   #F1F3F2;
   --bg-hover:  #ECEFEE;
+  --admin-canvas: #FFFFFF;
 
   --border:        rgba(12, 22, 17, 0.10);
   --border-soft:   rgba(12, 22, 17, 0.05);
@@ -215,6 +242,7 @@ html.dark,
   --bg-card:   #14181C;
   --bg-soft:   #1A1F24;
   --bg-hover:  #20262C;
+  --admin-canvas: #0B0D0F;
 
   --border:        rgba(255, 255, 255, 0.08);
   --border-soft:   rgba(255, 255, 255, 0.04);
@@ -310,6 +338,7 @@ html.dark,
     --bg-card:   #14181C;
     --bg-soft:   #1A1F24;
     --bg-hover:  #20262C;
+    --admin-canvas: #0B0D0F;
 
     --border:        rgba(255, 255, 255, 0.08);
     --border-soft:   rgba(255, 255, 255, 0.04);
@@ -459,52 +488,17 @@ pre, code, .code-mono {
   letter-spacing: 0;
 }
 
-/* ── Material Symbols ──────────────────────────────────────
- *  Each <Icon name="dashboard" /> renders as literal text
- *  ("dashboard") in the DOM; Material Symbols' OpenType `liga`
- *  feature shapes that text into the icon glyph at render time.
- *
- *  Before the font has loaded — i.e. the moment after a hard
- *  refresh — the literal text renders in whatever sans fallback
- *  the browser picks (Inter Tight / system-ui), at the natural
- *  text width (~90px for "dashboard"). When the font lands, the
- *  ligature collapses that to a single 1em-wide glyph. Without
- *  intervention, every sidebar nav row pre-shifts horizontally
- *  by ~70px during the FOUT window and the label text snaps left
- *  when the font arrives — the layout jump the user reported on
- *  2026-06-29.
- *
- *  Fix: reserve the eventual glyph box (1em × 1em) and clip the
- *  pre-font text overflow. Brief glyph-area glitch during the
- *  font-load window, zero layout shift. */
+/* ── Inline SVG icons ──
+ *  Inline SVGs keep the same fixed box before and after render, avoiding
+ *  both font downloads and icon-driven layout shifts. */
 .icon {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
   font-size: 20px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
   display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
-  /* Pre-allocate the rendered glyph bounding box so the literal
-     ligature text cannot push surrounding content while the font
-     is still in flight. The icon stays invisible until the
-     Material Symbols font has actually loaded (gated by the
-     :root.fonts-ready class set by an inline script in index.html
-     via document.fonts.ready) — visibility: hidden preserves
-     layout, so no shift, but the ugly fallback text fragment we
-     would otherwise see inside each icon slot is suppressed. */
   width: 1em;
   height: 1em;
+  flex-shrink: 0;
   vertical-align: middle;
-  visibility: hidden;
 }
-:root.fonts-ready .icon { visibility: visible; }
 .icon-sm { font-size: 18px; }
 .icon-lg { font-size: 24px; }
 
@@ -1009,45 +1003,6 @@ a:focus:not(:focus-visible) {
     padding-inline: 8px !important;
   }
 }
-
-/* ── View Transitions (in-page navigation morph) ─────────
-   React Router v7's `viewTransition` prop on <Link> hands the
-   browser a chance to play the View Transitions API between
-   route swaps. The default behavior cross-fades the entire root
-   snapshot; we tune two pieces:
-
-   1. `portal-brand` (the logo Link) holds in place across the
-      transition — the browser detects the same view-transition-name
-      on the source and target pages and morphs position/size
-      instead of fading.
-   2. `portal-nav-underline` (the active tab's underline span) is
-      shared between the two tab variants. The browser slides the
-      underline from /quickstart's position to /monitor's instead
-      of fading-out then fading-in.
-
-   ::view-transition-group(*) speed pulls the overall fade in from
-   the default 250ms to 200ms so it never feels sluggish on slow
-   machines. */
-@view-transition {
-  navigation: auto;
-}
-::view-transition-group(*) {
-  animation-duration: 200ms;
-}
-::view-transition-old(portal-brand),
-::view-transition-new(portal-brand) {
-  /* The logo isn't redrawn — it's the same DOM element. Cancel the
-     cross-fade so it stays fully opaque the whole time. */
-  animation: none;
-  mix-blend-mode: normal;
-}
-::view-transition-group(portal-nav-underline) {
-  /* Faster + slightly bouncy easing for the underline morph so the
-     "this is what changed" signal arrives quickly. */
-  animation-duration: 260ms;
-  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
 
 /* ── QuickStart hero backdrop ─────────────────────────────
    Brand glow rising from the hero card's lower-left corner. The dark

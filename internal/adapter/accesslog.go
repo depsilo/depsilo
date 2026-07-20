@@ -1,7 +1,10 @@
 package adapter
 
 import (
+	"context"
+	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -12,35 +15,93 @@ import (
 	"depsilo/internal/db"
 )
 
-// auditLogger is the optional Pro audit logger, set via SetAuditLogger.
-var auditLogger interface {
+// AuditLogger is the audit half of the access hook snapshot.
+type AuditLogger interface {
 	Log(entry db.AuditLog)
 }
 
-// recorder is the optional rollup recorder, set via SetRecorder. When
-// nil, LogAccess writes raw rows synchronously through a goroutine
-// (legacy behavior). When set, the recorder owns both the raw write
-// and the hourly/package-daily rollup aggregation.
-var recorder accesslog.Recorder
+// accessHookSnapshot is immutable after publication. RequestScope stores one
+// by value; the atomic pointer below exists only for unscoped compatibility
+// callers.
+type accessHookSnapshot struct {
+	recorder accesslog.Recorder
+	audit    AuditLogger
+}
+
+var accessHooks atomic.Pointer[accessHookSnapshot]
+
+type suppressAccessLoggingContextKey struct{}
+
+// SuppressAccessLogging marks requests initiated by an internal maintenance
+// task. The marker is private to this package, so an external HTTP header
+// cannot suppress End User access or audit records.
+func SuppressAccessLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		ctx := context.WithValue(request.Context(), suppressAccessLoggingContextKey{}, true)
+		next.ServeHTTP(writer, request.WithContext(ctx))
+	})
+}
+
+// InstallAccessHooks atomically installs compatibility hooks for unscoped
+// callers and returns an idempotent release function. Releasing an older owner
+// cannot clear a snapshot installed by a newer owner.
+func InstallAccessHooks(recorder accesslog.Recorder, audit AuditLogger) func() {
+	owned := &accessHookSnapshot{recorder: recorder, audit: audit}
+	accessHooks.Store(owned)
+	return func() {
+		accessHooks.CompareAndSwap(owned, nil)
+	}
+}
 
 // SetAuditLogger sets the audit logger used by LogAccess.
-func SetAuditLogger(l interface{ Log(entry db.AuditLog) }) {
-	auditLogger = l
+// Deprecated: production servers should bind both hooks with NewRequestScope.
+// This compatibility setter remains concurrency-safe.
+func SetAuditLogger(l AuditLogger) {
+	updateAccessHooks(func(next *accessHookSnapshot) { next.audit = l })
 }
 
 // SetRecorder wires the rollup recorder. Pass nil to fall back to the
 // raw-only legacy path (useful for tests and emergency disable).
+// Deprecated: production servers should use NewRequestScope.
 func SetRecorder(r accesslog.Recorder) {
-	recorder = r
+	updateAccessHooks(func(next *accessHookSnapshot) { next.recorder = r })
 }
 
-// LogAccess asynchronously writes an access log entry.
-func LogAccess(database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
+func updateAccessHooks(update func(*accessHookSnapshot)) {
+	for {
+		current := accessHooks.Load()
+		next := &accessHookSnapshot{}
+		if current != nil {
+			*next = *current
+		}
+		update(next)
+		if next.recorder == nil && next.audit == nil {
+			next = nil
+		}
+		if accessHooks.CompareAndSwap(current, next) {
+			return
+		}
+	}
+}
+
+// LogAccess submits an access log entry to the request's recorder snapshot.
+// When ctx has no RequestScope, the process-wide compatibility hooks are used.
+func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
+	if ctx != nil {
+		if suppressed, _ := ctx.Value(suppressAccessLoggingContextKey{}).(bool); suppressed {
+			return
+		}
+	}
 	pkgName := packagekey.ExtractName(adapterType, cacheKey)
 	now := time.Now().UTC()
+	hooks := accessHooks.Load()
+	if scope, ok := requestScopeFromContext(ctx); ok {
+		// A scoped nil recorder/audit pair is intentional and authoritative.
+		hooks = &scope.access
+	}
 
-	if recorder != nil {
-		recorder.Record(accesslog.Event{
+	if hooks != nil && hooks.recorder != nil {
+		hooks.recorder.Record(accesslog.Event{
 			AdapterType: adapterType,
 			Method:      method,
 			CacheKey:    cacheKey,
@@ -54,9 +115,9 @@ func LogAccess(database *gorm.DB, adapterType, method, cacheKey string, hit bool
 			At:          now,
 		})
 	} else {
-		// Fallback: recorder not initialized yet (e.g. server bootstrap or
-		// tests). Write raw row synchronously through a goroutine, matching
-		// the pre-rollup behavior.
+		// Fallback: recorder not initialized yet (e.g. isolated adapter tests).
+		// Keep this synchronous: spawning an unowned database goroutine here can
+		// outlive the test/server resource that supplied database.
 		entry := db.AccessLog{
 			AdapterType: adapterType,
 			Method:      method,
@@ -70,14 +131,12 @@ func LogAccess(database *gorm.DB, adapterType, method, cacheKey string, hit bool
 			BytesSent:   bytesSent,
 			CreatedAt:   now,
 		}
-		go func() {
-			if err := database.Create(&entry).Error; err != nil {
-				zap.L().Warn("failed to write access log", zap.Error(err))
-			}
-		}()
+		if err := database.Create(&entry).Error; err != nil {
+			zap.L().Warn("failed to write access log", zap.Error(err))
+		}
 	}
 
-	if auditLogger != nil {
+	if hooks != nil && hooks.audit != nil {
 		action := "download"
 		if strings.HasSuffix(cacheKey, ".json") || strings.HasSuffix(cacheKey, ".html") ||
 			strings.HasSuffix(cacheKey, ".xml") || strings.Contains(cacheKey, "metadata") ||
@@ -92,7 +151,7 @@ func LogAccess(database *gorm.DB, adapterType, method, cacheKey string, hit bool
 		if statusCode >= 500 {
 			cacheResult = "error"
 		}
-		auditLogger.Log(db.AuditLog{
+		hooks.audit.Log(db.AuditLog{
 			Ecosystem:   adapterType,
 			PackageName: pkgName,
 			Version:     packagekey.ExtractVersion(adapterType, cacheKey),

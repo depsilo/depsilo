@@ -11,7 +11,7 @@ package integration
 //   subtests within one function guarantee intra-test ordering).
 //
 // All admin endpoints require JWT auth. The helpers adminGet / adminPost /
-// adminPut / adminDelete (from helper.go) log in once as admin/admin and
+// adminPut / adminDelete (from helper.go) log in once as the test administrator and
 // cache the token for the rest of the test run.
 
 import (

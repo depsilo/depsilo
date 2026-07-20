@@ -92,7 +92,14 @@ export interface ApproveSuggestionRequest { version?: string; reason?: string }
 export interface ApproveSuggestionResponse { rule_id: number }
 export interface DismissSuggestionResponse { status: 'dismissed' }
 export interface SecurityScanResponse { status: 'scan_started' }
-export interface SecurityImportResponse { imported: number }
+export interface SecurityImportResponse {
+  imported: number
+  received: number
+  packages: number
+  duplicates: number
+  skipped: number
+  rules_created: number
+}
 
 export interface AccessLog {
   id: number
@@ -115,6 +122,22 @@ export interface AccessLogListResponse { items: AccessLog[]; total: number; page
 export interface CacheQuery { page?: number; page_size?: number; search?: string; adapter_type?: string }
 export interface CacheEntry { id: number; key: string; adapter_type: string; package_name: string; size: number; hit_count: number; last_accessed: string; expires_at: string }
 export interface CacheListResponse { items: CacheEntry[]; total: number; page: number; page_size: number }
+export interface CacheDeleteResponse {
+  message: string
+  deleted: number
+  reclaimed_bytes: number
+}
+export interface CacheCleanupResponse {
+  message: string
+  deleted: number
+  failed: number
+  reclaimed_bytes: number
+  examined: number
+  expired_removed: number
+  lru_removed: number
+  usage_before: number
+  usage_after: number
+}
 export interface CacheTypeBreakdown { type: string; size: number; file_count: number }
 export interface CachePackageSize { name: string; type: string; size: number; hit_count: number }
 export interface CacheDistributionResponse {
@@ -123,6 +146,48 @@ export interface CacheDistributionResponse {
   usage_percent: number
   by_type: CacheTypeBreakdown[]
   top_packages: CachePackageSize[]
+}
+
+export type CacheIndexStatus = 'fresh' | 'stale'
+export interface CacheIndexQuery {
+  page?: number
+  page_size?: number
+  search?: string
+  adapter_type?: string
+  status?: CacheIndexStatus
+}
+export interface CacheIndexEntry {
+  id: number
+  key: string
+  adapter_type: string
+  package_name: string
+  size: number
+  hit_count: number
+  etag: string
+  last_modified: string
+  last_accessed: string
+  expires_at: string
+  updated_at: string
+  status: CacheIndexStatus
+}
+export interface CacheIndexSummary {
+  adapter_type: string
+  total: number
+  fresh: number
+  stale: number
+  last_updated: string | null
+}
+export interface CacheIndexListResponse {
+  items: CacheIndexEntry[]
+  total: number
+  page: number
+  page_size: number
+  summary: CacheIndexSummary[]
+}
+export interface CacheIndexRefreshResponse {
+  message: string
+  id: number
+  item?: CacheIndexEntry
 }
 
 export interface AuditLog {
@@ -293,10 +358,71 @@ export interface AdminUpstream extends UpstreamMutationRequest {
   updated_at: string
 }
 
+export interface AdminUpstreamLatencyPoint {
+  time: string
+  latency_ms: number
+  healthy: boolean
+}
+
+export interface AdminUpstreamLatencySeries {
+  upstream_id: number
+  points: AdminUpstreamLatencyPoint[]
+}
+
+export interface AdminUpstreamLatenciesResponse {
+  series: AdminUpstreamLatencySeries[]
+}
+
+export type UpstreamUpdateResult = 'updated' | 'unchanged' | 'error'
+
+export interface AdminUpstreamUpdateEvent {
+  id: number
+  cache_entry_id?: number
+  ecosystem: string
+  upstream: string
+  package: string
+  result: UpstreamUpdateResult
+  detail: string
+  latency_ms: number
+  occurrence_count?: number
+  first_seen_at?: string
+  last_seen_at?: string
+  created_at: string
+}
+
+export interface AdminUpstreamUpdateListResponse {
+  items: AdminUpstreamUpdateEvent[]
+  total: number
+  next_cursor?: string | null
+}
+
+export interface AdminUpstreamUpdateQuery {
+  limit?: number
+  offset?: number
+  cursor?: string
+  ecosystem?: string
+  upstream?: string
+  result?: UpstreamUpdateResult
+  package?: string
+}
+
 export interface SetupRequest {
   server: { port: number }
   storage: { path: string }
+  admin: { username: string; password: string }
   ecosystems: Record<string, { enabled: boolean; upstreams: Array<{ name: string; url: string; priority: number }> }>
+}
+
+export interface SetupStatusResponse {
+  needs_setup: boolean
+  token_required: boolean
+}
+
+export interface SetupCompleteResponse {
+  status: 'ok'
+  message: string
+  reconnect_url: string
+  restart_strategy: 'exec' | 'supervisor_required'
 }
 
 export interface AdminUpstreamListResponse { items: AdminUpstream[]; total: number }

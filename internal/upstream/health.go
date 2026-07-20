@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -54,9 +55,10 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 	}
 }
 
-// StartHealthCheck launches one goroutine per active-mode upstream in the pool.
-// Passive-mode upstreams are skipped — they rely on request-time Report() calls.
+// StartHealthCheck runs one goroutine per active-mode upstream and blocks until
+// they all stop. Passive-mode upstreams rely on request-time Report() calls.
 func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, defaultInterval time.Duration) {
+	var workers sync.WaitGroup
 	for _, u := range pool.Snapshot() {
 		if u.ProbeMode != "active" {
 			zap.L().Info("upstream in passive probe mode, skipping health check",
@@ -67,8 +69,13 @@ func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, defaul
 		if interval <= 0 {
 			interval = defaultInterval
 		}
-		go runUpstreamHealthCheck(ctx, u, database, interval)
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			runUpstreamHealthCheck(ctx, u, database, interval)
+		}()
 	}
+	workers.Wait()
 }
 
 func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB, interval time.Duration) {
@@ -85,7 +92,7 @@ func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB,
 		case <-ticker.C:
 			result := probe(ctx, u)
 			u.applyProbe(result)
-			if err := persistProbe(database, u, result); err != nil {
+			if err := persistProbe(ctx, database, u, result); err != nil {
 				zap.L().Warn("persist upstream probe", zap.Uint("upstream_id", u.ID), zap.Error(err))
 			}
 		}
@@ -115,12 +122,12 @@ func probe(ctx context.Context, u *Upstream) ProbeResult {
 	return result
 }
 
-func persistProbe(database *gorm.DB, u *Upstream, result ProbeResult) error {
+func persistProbe(ctx context.Context, database *gorm.DB, u *Upstream, result ProbeResult) error {
 	if database == nil {
 		return nil
 	}
 	health := u.HealthSnapshot()
-	return database.Transaction(func(tx *gorm.DB) error {
+	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if u.ID != 0 {
 			updated := tx.Model(&db.UpstreamRecord{}).Where("id = ?", u.ID).Updates(map[string]any{
 				"healthy":         health.Healthy,

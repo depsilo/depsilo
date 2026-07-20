@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 // Bare KPI primitive — centered label + tabular value (+ optional delta).
 // Use it inline on the page (no Card / Box wrapper); group with a parent grid.
 
@@ -7,7 +9,7 @@ interface MetricProps {
   change?: number | null
   valueTone?: 'default' | 'ok'
   /** Override default 40 (top-row KPI) — pass 28 for "secondary" metric rows. */
-  size?: number
+  size?: CSSProperties['fontSize']
 }
 
 export default function Metric({

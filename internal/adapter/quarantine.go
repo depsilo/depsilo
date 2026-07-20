@@ -3,17 +3,16 @@ package adapter
 import (
 	"context"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Quarantine gate is plugged into the adapter package via a setter
-// rather than constructor-threaded through every adapter, matching
-// the existing SetAuditLogger / SetRecorder pattern. Adapters call
-// QuarantineGate(c, ecosystem, pkg, version) at the top of their
-// artifact-fetch handler; the helper returns true=blocked-and-
-// responded (handler must return immediately), false=allowed
-// (handler proceeds).
+// QuarantineGate reads its checker from the immutable RequestScope attached by
+// the owning server, avoiding constructor-threading through every adapter.
+// Adapters call QuarantineGate(c, ecosystem, pkg, version) at the top of their
+// artifact-fetch handler; the helper returns true=blocked-and-responded
+// (handler must return immediately), false=allowed (handler proceeds).
 //
 // The interface is minimal so the adapter package never imports
 // internal/quarantine — that would create a back-edge in the
@@ -40,14 +39,36 @@ type QuarantineDecision struct {
 	Reason string
 }
 
-var quarantineChecker QuarantineChecker
+// quarantineCheckerSnapshot is the compatibility representation for unscoped
+// callers. Scoped production requests never consult this process-global value.
+type quarantineCheckerSnapshot struct {
+	checker QuarantineChecker
+}
+
+var quarantineHooks atomic.Pointer[quarantineCheckerSnapshot]
+
+// InstallQuarantineChecker atomically installs a compatibility checker for
+// unscoped callers and returns an idempotent release function. A replaced
+// owner's release cannot clear the checker installed by a newer owner.
+func InstallQuarantineChecker(checker QuarantineChecker) func() {
+	owned := &quarantineCheckerSnapshot{checker: checker}
+	quarantineHooks.Store(owned)
+	return func() {
+		quarantineHooks.CompareAndSwap(owned, nil)
+	}
+}
 
 // SetQuarantineChecker installs (or replaces) the checker the
 // adapter helper uses. Pass nil to disable quarantine entirely
 // (useful in tests; the default state is nil so unit tests that
 // don't wire one get pass-through behavior).
+// Deprecated: production servers should use NewRequestScope.
 func SetQuarantineChecker(c QuarantineChecker) {
-	quarantineChecker = c
+	if c == nil {
+		quarantineHooks.Store(nil)
+		return
+	}
+	quarantineHooks.Store(&quarantineCheckerSnapshot{checker: c})
 }
 
 // QuarantineGate evaluates the configured policy for
@@ -73,13 +94,22 @@ func SetQuarantineChecker(c QuarantineChecker) {
 // says so. It's also visible enough in client error output that
 // CI logs make the cause obvious.
 func QuarantineGate(c *gin.Context, ecosystem, pkg, version string) bool {
-	if quarantineChecker == nil {
+	var checker QuarantineChecker
+	if hooks := quarantineHooks.Load(); hooks != nil {
+		checker = hooks.checker
+	}
+	if scope, ok := requestScopeFromContext(c.Request.Context()); ok {
+		// A scoped nil checker explicitly disables quarantine for this owner; it
+		// must never inherit another server's process-wide compatibility hook.
+		checker = scope.checker
+	}
+	if checker == nil {
 		return false
 	}
 	if pkg == "" || version == "" {
 		return false
 	}
-	d := quarantineChecker.Check(
+	d := checker.Check(
 		c.Request.Context(),
 		ecosystem,
 		pkg,

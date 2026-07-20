@@ -149,7 +149,7 @@ export default function EcosystemCatalog({ selected, onSelect }: Props) {
                         }}
                       >
                         <EcosystemIcon
-                          type={lang.iconAdapter as any}
+                          type={lang.iconAdapter}
                           size={17}
                           useColor
                         />

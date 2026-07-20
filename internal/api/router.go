@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -9,7 +10,7 @@ import (
 
 	"depsilo/internal/api/admin"
 	"depsilo/internal/api/public"
-	"depsilo/internal/audit"
+	"depsilo/internal/asyncruntime"
 	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -22,6 +23,7 @@ import (
 	"depsilo/internal/security"
 	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
+	"depsilo/internal/upstreamupdates"
 	"depsilo/internal/version"
 )
 
@@ -33,6 +35,7 @@ var startTime = time.Now()
 // is the ordered list used by UIs to render upstreams deterministically.
 // See docs/adr/0001-pools-map.md.
 type Deps struct {
+	LifecycleContext context.Context
 	DB               *gorm.DB
 	Storage          cache.Storage
 	Config           *config.Config
@@ -41,27 +44,28 @@ type Deps struct {
 	UpstreamRegistry *upstream.Registry
 	Ecosystems       []string
 	CacheMgr         *cache.Manager
+	CacheRetention   *cache.Retention
+	IndexRefresher   upstreamupdates.Refresher
 	EventBus         *cache.EventBus
 	LicenseManager   *license.Manager
 	TrialManager     *trial.Manager       // NEW
 	Entitlement      *entitlement.Checker // NEW
-	AuditLogger      *audit.Logger
 	RulesStore       *rules.Store
 	RulesEngine      *rules.Engine
 	SecurityScanner  *security.Scanner
-	SecurityImporter *security.Importer
+	SecurityCatalog  *security.AdvisoryCatalog
 	WebhookNotifier  *notify.Notifier
 	// QuarantineStore is the supply-chain quarantine helper exposed via
 	// admin endpoints for events / approvals. Separate from the
-	// adapter-side gate which goes through internal/adapter's
-	// package-level SetQuarantineChecker; this is the admin-control-
-	// plane access path.
+	// adapter-side gate bound to each request by the server's adapter
+	// RequestScope; this is the admin-control-plane access path.
 	QuarantineStore *quarantine.Store
 	// BlocklistStore / BlocklistSyncer power the known-malicious
 	// blocklist admin endpoints (status / manual sync / overrides).
 	// Both nil when [supply_chain.blocklist] enabled = false.
 	BlocklistStore  *blocklist.Store
 	BlocklistSyncer *blocklist.Syncer
+	Tasks           asyncruntime.Submitter
 }
 
 func RegisterRoutes(r *gin.Engine, deps Deps) {
@@ -111,7 +115,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	apiV1.GET("/events/stream", eventsHandler.Stream)
 
 	// Setup wizard (no auth required)
-	setupHandler := NewSetupHandler(deps.Config)
+	setupHandler := NewSetupHandler(deps.Config, deps.DB)
 	apiV1.GET("/setup/status", setupHandler.Status)
 	apiV1.POST("/setup/complete", setupHandler.Complete)
 
@@ -141,14 +145,17 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.GET("/bandwidth", bandwidthHandler.GetReport)
 
 	// Cache management
-	cacheHandler := admin.NewCacheHandler(deps.DB, deps.Storage, deps.Config.Cache.MaxSizeGB)
+	cacheHandler := admin.NewCacheHandler(deps.DB, deps.CacheRetention, deps.Config.Cache.MaxSizeGB)
+	cacheHandler.SetIndexRefresher(deps.IndexRefresher)
 	adminRead.GET("/cache", cacheHandler.List)
+	adminRead.GET("/cache/indexes", cacheHandler.ListIndexes)
 	adminRead.GET("/cache/distribution", cacheHandler.GetDistribution)
 	adminWrite.DELETE("/cache/:id", cacheHandler.Delete)
 	adminWrite.POST("/cache/cleanup", cacheHandler.Cleanup)
+	adminWrite.POST("/cache/indexes/:id/refresh", cacheHandler.RefreshIndex)
 
 	// Cache warmup
-	warmupHandler := admin.NewWarmupHandler(deps.CacheMgr, deps.Pools, deps.Config)
+	warmupHandler := admin.NewWarmupHandler(deps.Tasks, deps.CacheMgr, deps.Pools, deps.Config)
 	adminWrite.POST("/cache/warmup", warmupHandler.Warmup)
 
 	// Upstream management
@@ -161,6 +168,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 
 	// Upstream latency history
 	latencyHandler := admin.NewLatencyHandler(deps.DB)
+	adminRead.GET("/upstreams/latency", latencyHandler.GetLatencySeries)
 	adminRead.GET("/upstreams/:id/latency", latencyHandler.GetLatencyHistory)
 
 	// Access logs
@@ -211,15 +219,27 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	auditHandler := admin.NewAuditHandler(deps.DB)
 	adminRead.GET("/audit-logs", auditHandler.List)
 	adminRead.GET("/audit-logs/export", auditHandler.Export)
+	upstreamUpdateHandler := admin.NewUpstreamUpdateHandler(deps.DB)
+	adminRead.GET("/upstream-updates", upstreamUpdateHandler.List)
 
-	rulesHandler := admin.NewRulesHandler(deps.DB, deps.RulesStore, deps.RulesEngine)
+	rulesHandler := admin.NewRulesHandler(deps.RulesStore, deps.RulesEngine)
 	adminRead.GET("/rules", rulesHandler.List)
 	adminRead.POST("/rules/test", rulesHandler.Test)
 	adminWrite.POST("/rules", rulesHandler.Create)
 	adminWrite.PUT("/rules/:id", rulesHandler.Update)
 	adminWrite.DELETE("/rules/:id", rulesHandler.Delete)
 
-	securityHandler := admin.NewSecurityHandler(deps.DB, deps.SecurityScanner, deps.SecurityImporter)
+	var invalidateSecurityRules func()
+	if deps.RulesEngine != nil {
+		invalidateSecurityRules = deps.RulesEngine.InvalidateCache
+	}
+	securityHandler := admin.NewSecurityHandlerWithContext(
+		deps.LifecycleContext,
+		deps.DB,
+		deps.SecurityScanner,
+		deps.SecurityCatalog,
+		invalidateSecurityRules,
+	)
 	adminRead.GET("/security/dashboard", securityHandler.Dashboard)
 	adminRead.GET("/security/vulnerabilities", securityHandler.ListVulnerabilities)
 	adminRead.GET("/security/packages", securityHandler.ListPackages)
@@ -245,7 +265,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// manual refresh, and 24h-expiring false-positive overrides.
 	// Open-source like quarantine; blocked-request events surface via
 	// /quarantine/events (action = malware_blocked).
-	blocklistHandler := admin.NewBlocklistHandler(deps.BlocklistStore, deps.BlocklistSyncer)
+	blocklistHandler := admin.NewBlocklistHandler(deps.Tasks, deps.BlocklistStore, deps.BlocklistSyncer)
 	adminRead.GET("/blocklist/status", blocklistHandler.Status)
 	adminRead.GET("/blocklist/overrides", blocklistHandler.ListOverrides)
 	adminWrite.POST("/blocklist/sync", blocklistHandler.TriggerSync)
@@ -277,6 +297,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 }
 
 func healthHandler(c *gin.Context) {
+	// Setup may move the service to a different port. Allow the setup page on
+	// the old origin to inspect the status code instead of relying on an opaque
+	// no-cors response, which cannot distinguish a healthy 200 from a 503.
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "healthy",
 		"version": version.Version,

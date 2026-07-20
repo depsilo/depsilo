@@ -3,13 +3,16 @@ import type {
   AccessLogListResponse,
   AdminSettingsResponse,
   AdminSettingsSnapshot,
+  AdminUpstreamLatenciesResponse,
   AdminUpstreamListResponse,
+  AdminUpstreamUpdateListResponse,
   AuditLogListResponse,
   ProjectListResponse,
   SecurityDashboard,
   SecurityPackagePage,
   SecuritySuggestionPage,
   SecurityVulnerabilityPage,
+  SetupStatusResponse,
 } from '../../src/lib/adminApi.types'
 
 export type JsonValue = unknown
@@ -48,7 +51,6 @@ const editableSettings: AdminSettingsResponse['editable'] = [
 ]
 
 const existingAdminApiDefaults: Record<string, JsonValue> = {
-  'GET /api/v1/setup/status': { needs_setup: false },
   'GET /api/v1/auth/me': { id: 1, username: 'admin', role: 'admin', enabled: true, auth_method: 'jwt', token_permissions: null, can_write: true },
   'GET /api/v1/integration-prompt': { status: 200, body: '# Depsilo project integration\nUse the configured Depsilo package mirror.', contentType: 'text/plain; charset=utf-8', serialize: 'text' },
   'GET /api/v1/stats': { service: { version: 'dev', status: 'healthy' }, week: {}, upstreams: [] },
@@ -65,6 +67,7 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
   'GET /api/v1/admin/blocklist/overrides': { items: [] },
   'GET /api/v1/admin/cache/distribution': { total_size: 0, max_size: 1, by_type: [], top_packages: [] },
   'GET /api/v1/admin/cache': { items: [], total: 0 },
+  'GET /api/v1/admin/cache/indexes': { items: [], summary: [], total: 0, page: 1, page_size: 25 },
   'GET /api/v1/admin/upstreams': { items: [], total: 0 },
   'GET /api/v1/admin/users': [{ id: 1, username: 'admin', role: 'admin', enabled: true }],
   'GET /api/v1/admin/tokens': [],
@@ -96,6 +99,10 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
 }
 
 const canonicalAdminApiDefaults = {
+  'GET /api/v1/setup/status': {
+    needs_setup: false,
+    token_required: false,
+  } satisfies SetupStatusResponse,
   'GET /api/v1/admin/settings': {
     configured: configuredSettings,
     effective: effectiveSettings,
@@ -106,6 +113,8 @@ const canonicalAdminApiDefaults = {
     config_writable: true,
   } satisfies AdminSettingsResponse,
   'GET /api/v1/admin/upstreams': { items: [], total: 0 } satisfies AdminUpstreamListResponse,
+  'GET /api/v1/admin/upstreams/latency': { series: [] } satisfies AdminUpstreamLatenciesResponse,
+  'GET /api/v1/admin/upstream-updates': { items: [], total: 0, next_cursor: null } satisfies AdminUpstreamUpdateListResponse,
   'GET /api/v1/admin/logs': { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse,
   'GET /api/v1/admin/audit-logs': { items: [], total: 0, page: 1 } satisfies AuditLogListResponse,
   'GET /api/v1/admin/security/dashboard': {
@@ -179,7 +188,15 @@ interface AdminApiFixtureState {
 
 const adminApiFixtureStates = new WeakMap<Page, AdminApiFixtureState>()
 
-export async function mockAdminApi(page: Page, overrides: AdminApiOverrides = {}) {
+interface AdminApiFixtureOptions {
+  initialToken?: string | null
+}
+
+export async function mockAdminApi(
+  page: Page,
+  overrides: AdminApiOverrides = {},
+  options: AdminApiFixtureOptions = {},
+) {
   const existing = adminApiFixtureStates.get(page)
   if (existing) {
     Object.assign(existing.overrides, overrides)
@@ -193,8 +210,10 @@ export async function mockAdminApi(page: Page, overrides: AdminApiOverrides = {}
     assertMatched: () => expect(unmatched, `unmatched API requests: ${unmatched.join(', ')}`).toEqual([]),
   }
   adminApiFixtureStates.set(page, state)
-  await page.addInitScript(() => {
-    localStorage.setItem('token', 'e2e-token')
+  const initialToken = options.initialToken === undefined ? 'e2e-token' : options.initialToken
+  await page.addInitScript((token) => {
+    if (token === null) localStorage.removeItem('token')
+    else localStorage.setItem('token', token)
     if (!localStorage.getItem('lang')) localStorage.setItem('lang', 'zh')
     if (!localStorage.getItem('depsilo-theme')) localStorage.setItem('depsilo-theme', 'dark')
     const theme = localStorage.getItem('depsilo-theme') === 'light' ? 'light' : 'dark'
@@ -207,7 +226,7 @@ export async function mockAdminApi(page: Page, overrides: AdminApiOverrides = {}
       return true
     }
     if (!applyTheme()) window.addEventListener('DOMContentLoaded', applyTheme, { once: true })
-  })
+  }, initialToken)
   await page.route('**/api/v1/**', async route => {
     const key = keyFor(route)
     const selected = Object.prototype.hasOwnProperty.call(state.overrides, key) ? state.overrides[key] : adminApiDefaults[key]
@@ -229,9 +248,13 @@ export async function mockAdminApi(page: Page, overrides: AdminApiOverrides = {}
   return state
 }
 
-export const test = base.extend<{ api: Awaited<ReturnType<typeof mockAdminApi>> }>({
-  api: [async ({ page }, use) => {
-    const api = await mockAdminApi(page)
+export const test = base.extend<{
+  api: Awaited<ReturnType<typeof mockAdminApi>>
+  initialToken: string | null
+}>({
+  initialToken: ['e2e-token', { option: true }],
+  api: [async ({ page, initialToken }, use) => {
+    const api = await mockAdminApi(page, {}, { initialToken })
     await use(api)
     api.assertMatched()
   }, { auto: true }],

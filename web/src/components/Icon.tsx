@@ -1,11 +1,175 @@
+import type { CSSProperties } from 'react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Award,
+  BadgeCheck,
+  Ban,
+  BarChart3,
+  Bell,
+  BellOff,
+  Bug,
+  ChartNoAxesCombined,
+  ChartPie,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  CircleCheck,
+  CircleHelp,
+  CircleX,
+  CloudSync,
+  Copy,
+  Database,
+  Download,
+  Eye,
+  FlaskConical,
+  FolderCog,
+  Gauge,
+  HardDrive,
+  History,
+  Inbox,
+  Info,
+  KeyRound,
+  LayoutDashboard,
+  LayoutGrid,
+  Lightbulb,
+  ListChecks,
+  LoaderCircle,
+  LogOut,
+  Menu,
+  Monitor,
+  Moon,
+  Package,
+  Pencil,
+  Plus,
+  Radar,
+  ReceiptText,
+  RefreshCcw,
+  RefreshCw,
+  Save,
+  Search,
+  Server,
+  Settings,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldUser,
+  ShieldX,
+  SlidersHorizontal,
+  Star,
+  Sun,
+  Trash2,
+  TriangleAlert,
+  Undo2,
+  Upload,
+  User,
+  UserPlus,
+  UserRoundX,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
+
+/**
+ * Keep the existing Material-style string API at call sites while rendering
+ * tree-shakeable inline SVGs. Unknown names intentionally get a visible,
+ * fixed-size fallback instead of leaking the icon name as text.
+ */
+const ICONS: Readonly<Record<string, LucideIcon>> = {
+  add: Plus,
+  admin_panel_settings: ShieldUser,
+  arrow_back: ArrowLeft,
+  arrow_forward: ArrowRight,
+  bar_chart: BarChart3,
+  block: Ban,
+  bug_report: Bug,
+  cached: RefreshCcw,
+  cancel: CircleX,
+  check: Check,
+  check_circle: CircleCheck,
+  chevron_left: ChevronLeft,
+  chevron_right: ChevronRight,
+  close: X,
+  cloud_sync: CloudSync,
+  computer: Monitor,
+  content_copy: Copy,
+  dark_mode: Moon,
+  dashboard: LayoutDashboard,
+  database: Database,
+  delete: Trash2,
+  delete_sweep: Trash2,
+  dns: Server,
+  donut_large: ChartPie,
+  download: Download,
+  edit: Pencil,
+  expand_less: ChevronUp,
+  expand_more: ChevronDown,
+  folder_managed: FolderCog,
+  gpp_bad: ShieldX,
+  grid_view: LayoutGrid,
+  group: Users,
+  inbox: Inbox,
+  info: Info,
+  inventory_2: Package,
+  key: KeyRound,
+  light_mode: Sun,
+  lightbulb: Lightbulb,
+  logout: LogOut,
+  menu: Menu,
+  notifications: Bell,
+  notifications_off: BellOff,
+  person: User,
+  person_add: UserPlus,
+  person_off: UserRoundX,
+  policy: ShieldCheck,
+  progress_activity: LoaderCircle,
+  radar: Radar,
+  receipt_long: ReceiptText,
+  refresh: RefreshCw,
+  rule: ListChecks,
+  save: Save,
+  science: FlaskConical,
+  search: Search,
+  security: ShieldCheck,
+  settings: Settings,
+  shield: Shield,
+  shield_lock: ShieldAlert,
+  show_chart: ChartNoAxesCombined,
+  speed: Gauge,
+  star: Star,
+  storage: HardDrive,
+  sync: RefreshCw,
+  tune: SlidersHorizontal,
+  undo: Undo2,
+  update: History,
+  upload_file: Upload,
+  verified: BadgeCheck,
+  verified_user: ShieldUser,
+  visibility: Eye,
+  warning: TriangleAlert,
+  workspace_premium: Award,
+}
+
 interface IconProps {
   name: string
   className?: string
   size?: 'sm' | 'md' | 'lg'
-  style?: React.CSSProperties
+  style?: CSSProperties
 }
 
 export default function Icon({ name, className = '', size = 'md', style }: IconProps) {
+  const Glyph = ICONS[name] ?? CircleHelp
   const sizeClass = size === 'sm' ? 'icon-sm' : size === 'lg' ? 'icon-lg' : ''
-  return <span aria-hidden="true" className={`icon ${sizeClass} ${className}`} style={style}>{name}</span>
+
+  return (
+    <Glyph
+      aria-hidden="true"
+      focusable="false"
+      data-icon={name}
+      className={`icon ${sizeClass} ${className}`}
+      style={style}
+    />
+  )
 }

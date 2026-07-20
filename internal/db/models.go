@@ -2,19 +2,44 @@ package db
 
 import "time"
 
+const (
+	CacheKindMetadata = "metadata"
+	CacheKindArtifact = "artifact"
+)
+
 type CacheEntry struct {
 	ID           uint      `gorm:"primarykey" json:"id"`
 	Key          string    `gorm:"uniqueIndex;size:512" json:"key"`
 	AdapterType  string    `gorm:"size:16;index" json:"adapter_type"`
+	CacheKind    string    `gorm:"size:16;index" json:"cache_kind"` // CacheKindMetadata | CacheKindArtifact
 	PackageName  string    `gorm:"size:256;index" json:"package_name"`
 	StoragePath  string    `gorm:"size:512" json:"storage_path"`
 	Size         int64     `json:"size"`
 	HitCount     int64     `gorm:"default:0" json:"hit_count"`
 	ContentType  string    `gorm:"size:128" json:"content_type"`
+	ETag         string    `gorm:"column:etag;size:512" json:"etag"`
+	LastModified string    `gorm:"size:128" json:"last_modified"`
 	ExpiresAt    time.Time `gorm:"index" json:"expires_at"`
 	LastAccessed time.Time `gorm:"index" json:"last_accessed"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// UpstreamUpdateEvent records proactive metadata checks for cached packages.
+// It is intentionally separate from access/audit logs: the actor is the
+// scheduler, not an end user.
+type UpstreamUpdateEvent struct {
+	ID              uint      `gorm:"primarykey;index:idx_upstream_update_subject_order,priority:2,sort:desc;index:idx_upstream_update_order,priority:2,sort:desc" json:"id"`
+	CacheEntryID    uint      `gorm:"index:idx_upstream_update_subject_order,priority:1" json:"cache_entry_id"`
+	Ecosystem       string    `gorm:"size:32;index" json:"ecosystem"`
+	Upstream        string    `gorm:"size:128;index" json:"upstream"`
+	Package         string    `gorm:"size:256" json:"package"`
+	Result          string    `gorm:"size:24;index" json:"result"`
+	Detail          string    `gorm:"size:512" json:"detail"`
+	LatencyMs       int64     `json:"latency_ms"`
+	OccurrenceCount uint64    `gorm:"not null;default:1" json:"occurrence_count"`
+	LastSeenAt      time.Time `json:"last_seen_at"`
+	CreatedAt       time.Time `gorm:"index:idx_upstream_update_order,priority:1,sort:desc" json:"created_at"`
 }
 
 type AccessLog struct {
@@ -140,11 +165,11 @@ type APIToken struct {
 
 type UpstreamLatencyLog struct {
 	ID         uint      `gorm:"primarykey" json:"id"`
-	UpstreamID uint      `gorm:"index" json:"upstream_id"`
+	UpstreamID uint      `gorm:"index:idx_upstream_latency_upstream_created,priority:1" json:"upstream_id"`
 	Name       string    `gorm:"size:128;index" json:"name"`
 	LatencyMs  int64     `json:"latency_ms"`
 	Healthy    bool      `json:"healthy"`
-	CreatedAt  time.Time `gorm:"index" json:"created_at"`
+	CreatedAt  time.Time `gorm:"index;index:idx_upstream_latency_upstream_created,priority:2" json:"created_at"`
 }
 
 type PackageRule struct {
@@ -177,9 +202,9 @@ type AuditLog struct {
 
 type Vulnerability struct {
 	ID             uint      `gorm:"primarykey" json:"id"`
-	OSVID          string    `gorm:"size:64;uniqueIndex" json:"osv_id"`
-	Ecosystem      string    `gorm:"size:16;index" json:"ecosystem"`
-	PackageName    string    `gorm:"size:256;index" json:"package_name"`
+	OSVID          string    `gorm:"size:64;uniqueIndex:idx_vuln_osv_eco_pkg,priority:1" json:"osv_id"`
+	Ecosystem      string    `gorm:"size:16;index;uniqueIndex:idx_vuln_osv_eco_pkg,priority:2" json:"ecosystem"`
+	PackageName    string    `gorm:"size:256;index;uniqueIndex:idx_vuln_osv_eco_pkg,priority:3" json:"package_name"`
 	AffectedRanges string    `gorm:"type:text" json:"affected_ranges"`
 	Severity       string    `gorm:"size:16;index" json:"severity"`
 	CVSSScore      float32   `gorm:"default:0" json:"cvss_score"`

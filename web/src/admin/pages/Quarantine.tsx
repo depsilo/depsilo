@@ -24,6 +24,7 @@ import InputV2 from '@/components/Input'
 import TableViewport from '@/components/TableViewport'
 import QueryErrorState from '@/components/QueryErrorState'
 import TabsV2 from '@/components/Tabs'
+import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
@@ -187,17 +188,8 @@ export default function Quarantine() {
 
   // ── Render ────────────────────────────────────────────────────
   return (
+    <AdminPage description={t('quarantine.subtitle')}>
     <div className="space-y-6">
-      {/* Header + tabs */}
-      <div>
-        <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>
-          {t('quarantine.title')}
-        </h2>
-        <p className="text-[13px] mt-1 max-w-2xl" style={{ color: 'var(--text-soft)' }}>
-          {t('quarantine.subtitle')}
-        </p>
-      </div>
-
       <TabsV2
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
@@ -297,6 +289,7 @@ export default function Quarantine() {
         )}
       </ModalV2>
     </div>
+    </AdminPage>
   )
 }
 

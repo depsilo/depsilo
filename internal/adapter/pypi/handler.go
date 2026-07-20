@@ -17,6 +17,7 @@ import (
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
@@ -101,6 +102,13 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	baseURL := getBaseURL(c)
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+		// This closure only runs after TTL expiry, on a miss, or for an
+		// operator-triggered refresh. Fresh hits therefore do not even query
+		// validators locally, let alone contact upstream.
+		var cachedValidators db.CacheEntry
+		_ = h.db.WithContext(ctx).Select("etag", "last_modified").
+			Where("key = ?", cacheKey).Find(&cachedValidators).Error
+
 		ups, err := h.selector.Select(ctx)
 		if err != nil {
 			return nil, "", 0, "", err
@@ -111,23 +119,31 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 			zap.String("upstream", ups.Name),
 		)
 
-		fetchResult, err := ups.Fetch(ctx, "/simple/"+pkg+"/")
+		fetchResult, err := ups.FetchWithHeaders(ctx, "/simple/"+pkg+"/", map[string]string{
+			"If-None-Match":     cachedValidators.ETag,
+			"If-Modified-Since": cachedValidators.LastModified,
+		})
 		if err != nil {
-			return nil, "", 0, "", err
+			return nil, "", 0, ups.Name, err
+		}
+		if fetchResult.StatusCode == http.StatusNotModified {
+			fetchResult.Body.Close()
+			return nil, "", 0, ups.Name, cache.ErrNotModified
 		}
 
 		// Read the HTML to rewrite URLs
 		body, err := io.ReadAll(fetchResult.Body)
 		fetchResult.Body.Close()
 		if err != nil {
-			return nil, "", 0, "", err
+			return nil, "", 0, ups.Name, err
 		}
 
 		html := string(body)
 		// Rewrite all download URLs to point through our proxy (stored with empty base)
 		html = RewriteURLs(html, "", h.pathPrefix)
 
-		return io.NopCloser(strings.NewReader(html)), fetchResult.ContentType, int64(len(html)), ups.Name, nil
+		bodyReader := io.NopCloser(strings.NewReader(html))
+		return cache.WithResponseValidators(bodyReader, fetchResult.ETag, fetchResult.LastModified), fetchResult.ContentType, int64(len(html)), ups.Name, nil
 	})
 
 	if err != nil {
@@ -162,7 +178,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	c.Header("Content-Type", ct)
 	c.String(http.StatusOK, html)
 
-	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
+	adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
 }
 
 // handleFileDownload proxies and caches package file downloads.
@@ -233,7 +249,7 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 // getBaseURL extracts the base URL from the request (scheme + host).

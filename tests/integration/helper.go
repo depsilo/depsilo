@@ -97,19 +97,21 @@ func httpPost(t *testing.T, url string, body io.Reader) *http.Response {
 	return resp
 }
 
-// adminToken is the cached JWT for the default admin user.
+// adminToken is the cached JWT for the test administrator.
 // It is populated lazily by loginAdmin() on first call.
 var (
 	adminTokenOnce  sync.Once
 	adminTokenValue string
 )
 
-// loginAdmin logs in as the default admin (admin/admin) and caches the token.
+const integrationAdminPassword = "Test&Credential-2026!"
+
+// loginAdmin logs in as the test administrator and caches the token.
 // Subsequent calls return the cached token.
 func loginAdmin(t *testing.T) string {
 	t.Helper()
 	adminTokenOnce.Do(func() {
-		body := strings.NewReader(`{"username":"admin","password":"admin"}`)
+		body := strings.NewReader(`{"username":"admin","password":"` + integrationAdminPassword + `"}`)
 		req, err := http.NewRequest(http.MethodPost, depsiloURL+"/api/v1/auth/login", body)
 		if err != nil {
 			t.Errorf("create login request: %v", err)
@@ -140,7 +142,7 @@ func loginAdmin(t *testing.T) string {
 	return adminTokenValue
 }
 
-// adminGet sends an authenticated GET request using the default admin token.
+// adminGet sends an authenticated GET request using the test administrator token.
 func adminGet(t *testing.T, url string) *http.Response {
 	t.Helper()
 	token := loginAdmin(t)
@@ -156,7 +158,7 @@ func adminGet(t *testing.T, url string) *http.Response {
 	return resp
 }
 
-// adminPost sends an authenticated POST request using the default admin token.
+// adminPost sends an authenticated POST request using the test administrator token.
 func adminPost(t *testing.T, url string, body io.Reader) *http.Response {
 	t.Helper()
 	token := loginAdmin(t)
@@ -175,7 +177,7 @@ func adminPost(t *testing.T, url string, body io.Reader) *http.Response {
 	return resp
 }
 
-// adminPut sends an authenticated PUT request using the default admin token.
+// adminPut sends an authenticated PUT request using the test administrator token.
 func adminPut(t *testing.T, url string, body io.Reader) *http.Response {
 	t.Helper()
 	token := loginAdmin(t)
@@ -194,7 +196,7 @@ func adminPut(t *testing.T, url string, body io.Reader) *http.Response {
 	return resp
 }
 
-// adminDelete sends an authenticated DELETE request using the default admin token.
+// adminDelete sends an authenticated DELETE request using the test administrator token.
 func adminDelete(t *testing.T, url string) *http.Response {
 	t.Helper()
 	token := loginAdmin(t)

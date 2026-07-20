@@ -1,7 +1,7 @@
 package admin
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"depsilo/internal/asyncruntime"
 	"depsilo/internal/blocklist"
 )
 
@@ -22,10 +23,16 @@ import (
 type BlocklistHandler struct {
 	store  *blocklist.Store
 	syncer *blocklist.Syncer
+	tasks  asyncruntime.Submitter
 }
 
-func NewBlocklistHandler(store *blocklist.Store, syncer *blocklist.Syncer) *BlocklistHandler {
-	return &BlocklistHandler{store: store, syncer: syncer}
+// NewBlocklistHandler binds manual syncs to the server's async runtime.
+func NewBlocklistHandler(tasks asyncruntime.Submitter, store *blocklist.Store, syncer *blocklist.Syncer) *BlocklistHandler {
+	return &BlocklistHandler{
+		store:  store,
+		syncer: syncer,
+		tasks:  tasks,
+	}
 }
 
 // disabled guards the read endpoints: when [supply_chain.blocklist]
@@ -89,10 +96,10 @@ func (h *BlocklistHandler) Status(c *gin.Context) {
 
 // ── POST /admin/blocklist/sync ────────────────────────────────────
 //
-// Kicks a sync on its own goroutine and returns immediately — a full
+// Kicks a server-owned task and returns immediately — a full
 // refresh downloads several archives and can take minutes; the UI
-// polls /status for the outcome. Uses a background context: the sync
-// must not die with the triggering HTTP request.
+// polls /status for the outcome. It outlives the triggering HTTP request but
+// is cancelled and joined during server shutdown.
 
 func (h *BlocklistHandler) TriggerSync(c *gin.Context) {
 	if h.disabledMutation(c) {
@@ -102,8 +109,17 @@ func (h *BlocklistHandler) TriggerSync(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"code": "NO_SYNCER", "message": "blocklist syncer not running"})
 		return
 	}
-	if !h.syncer.TriggerSync(context.Background()) {
+	err := h.syncer.TryStartSync(h.tasks)
+	switch {
+	case err == nil:
+	case errors.Is(err, blocklist.ErrSyncInProgress):
 		c.JSON(http.StatusConflict, gin.H{"code": "SYNC_RUNNING", "message": "a sync is already in progress"})
+		return
+	case errors.Is(err, blocklist.ErrSyncUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "blocklist sync is unavailable"})
+		return
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
 	zap.L().Info("blocklist: manual sync triggered", zap.Uint("actor", userIDFromContext(c)))

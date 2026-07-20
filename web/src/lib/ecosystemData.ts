@@ -1,6 +1,6 @@
 // web/src/lib/ecosystemData.ts
 
-import type { EcosystemType } from '@/components/EcosystemIcon'
+import type { EcosystemType } from '@/lib/ecosystemTypes'
 
 // ── Seeded PRNG for decorative sparklines ──────────────────────────
 

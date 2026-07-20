@@ -11,15 +11,15 @@ import (
 // reporting, and resume support. Anything outside this list is treated
 // as opaque metadata and dropped at the proxy boundary.
 var hfPassthroughHeaders = []string{
-	"X-Linked-Etag",      // SHA256 of the LFS blob — client compares against received bytes
-	"X-Linked-Size",      // expected byte count
-	"X-Repo-Commit",      // resolved commit SHA the ref pointed to
-	"ETag",               // standard HTTP ETag
-	"Content-Length",     // standard
-	"Content-Type",       // standard
-	"Accept-Ranges",      // tells clients resume is supported
-	"Last-Modified",      // standard
-	"Cache-Control",      // upstream's caching hint (we honor it for metadata)
+	"X-Linked-Etag",  // SHA256 of the LFS blob — client compares against received bytes
+	"X-Linked-Size",  // expected byte count
+	"X-Repo-Commit",  // resolved commit SHA the ref pointed to
+	"ETag",           // standard HTTP ETag
+	"Content-Length", // standard
+	"Content-Type",   // standard
+	"Accept-Ranges",  // tells clients resume is supported
+	"Last-Modified",  // standard
+	"Cache-Control",  // upstream's caching hint (we honor it for metadata)
 }
 
 // AuthBypass reports whether the incoming request carries an Authorization

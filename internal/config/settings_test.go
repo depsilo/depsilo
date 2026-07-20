@@ -147,6 +147,7 @@ func TestLoadAcceptsMixedHourMinuteDurations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			setTestJWTSecret(t)
 			path := filepath.Join(t.TempDir(), "config.toml")
 			contents := []byte("[cache]\nttl_index = \"" + tt.raw + "\"\n")
 			if err := os.WriteFile(path, contents, 0o600); err != nil {
@@ -195,6 +196,7 @@ func TestValidateSettingsSnapshotRejectsInvalidEditableValues(t *testing.T) {
 }
 
 func TestLoadReadsSettingsWrittenToDisk(t *testing.T) {
+	setTestJWTSecret(t)
 	path := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(path, []byte("[server]\nlog_level = \"warn\"\n[cache]\nmax_size_gb = 8\nttl_index = \"10m\"\nttl_blob = \"96h\"\nlru_threshold = 80\n[auth]\ntoken_ttl = \"24h\"\n"), 0o600); err != nil {
 		t.Fatal(err)

@@ -2,36 +2,90 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 )
+
+// ErrInvalidStorageKey is returned when a local-storage key is not a
+// canonical, slash-separated relative path.
+var ErrInvalidStorageKey = errors.New("invalid local storage key")
 
 type LocalStorage struct {
 	basePath string
 }
 
 func NewLocalStorage(basePath string) (*LocalStorage, error) {
-	if err := os.MkdirAll(basePath, 0755); err != nil {
+	absPath, err := filepath.Abs(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve storage directory: %w", err)
+	}
+	if err := os.MkdirAll(absPath, 0755); err != nil {
 		return nil, fmt.Errorf("create storage directory: %w", err)
 	}
-	return &LocalStorage{basePath: basePath}, nil
+	root, err := os.OpenRoot(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("open storage directory: %w", err)
+	}
+	if err := root.Close(); err != nil {
+		return nil, fmt.Errorf("close storage directory: %w", err)
+	}
+	return &LocalStorage{basePath: absPath}, nil
 }
 
-func (s *LocalStorage) fullPath(key string) string {
-	// Sanitize key to prevent path traversal
-	clean := filepath.Clean(key)
-	clean = strings.TrimPrefix(clean, "/")
-	return filepath.Join(s.basePath, clean)
+func validateStorageKey(key string, allowRoot bool) (string, error) {
+	if allowRoot && (key == "" || key == ".") {
+		return ".", nil
+	}
+	if key == "" || key == "." {
+		return "", fmt.Errorf("%w: key must name an object", ErrInvalidStorageKey)
+	}
+	// io/fs paths always use '/'. Rejecting '\\' keeps validation identical
+	// on Unix and Windows instead of letting a key change meaning by platform.
+	if strings.ContainsRune(key, '\\') {
+		return "", fmt.Errorf("%w %q: backslashes are not allowed", ErrInvalidStorageKey, key)
+	}
+	// fs.ValidPath deliberately accepts colons. Reject a Windows drive prefix
+	// explicitly so C:/... cannot be relative on Unix and absolute on Windows.
+	if len(key) >= 2 && isASCIILetter(key[0]) && key[1] == ':' {
+		return "", fmt.Errorf("%w %q: volume-qualified paths are not allowed", ErrInvalidStorageKey, key)
+	}
+	if !fs.ValidPath(key) {
+		return "", fmt.Errorf("%w %q: use a canonical relative path", ErrInvalidStorageKey, key)
+	}
+	return key, nil
+}
+
+func isASCIILetter(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+}
+
+func (s *LocalStorage) openRoot() (*os.Root, error) {
+	root, err := os.OpenRoot(s.basePath)
+	if err != nil {
+		return nil, fmt.Errorf("open storage directory: %w", err)
+	}
+	return root, nil
 }
 
 func (s *LocalStorage) Exists(_ context.Context, key string) (bool, error) {
-	_, err := os.Stat(s.fullPath(key))
+	name, err := validateStorageKey(key, false)
+	if err != nil {
+		return false, err
+	}
+	root, err := s.openRoot()
+	if err != nil {
+		return false, err
+	}
+	defer root.Close()
+
+	_, err = root.Stat(name)
 	if err == nil {
 		return true, nil
 	}
@@ -42,13 +96,26 @@ func (s *LocalStorage) Exists(_ context.Context, key string) (bool, error) {
 }
 
 func (s *LocalStorage) Get(_ context.Context, key string) (io.ReadCloser, int64, error) {
-	p := s.fullPath(key)
-	f, err := os.Open(p)
+	name, err := validateStorageKey(key, false)
 	if err != nil {
+		return nil, 0, err
+	}
+	root, err := s.openRoot()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	f, err := root.Open(name)
+	if err != nil {
+		root.Close()
 		if os.IsNotExist(err) {
 			return nil, 0, fmt.Errorf("key not found: %s", key)
 		}
 		return nil, 0, err
+	}
+	if err := root.Close(); err != nil {
+		f.Close()
+		return nil, 0, fmt.Errorf("close storage directory: %w", err)
 	}
 	info, err := f.Stat()
 	if err != nil {
@@ -59,30 +126,39 @@ func (s *LocalStorage) Get(_ context.Context, key string) (io.ReadCloser, int64,
 }
 
 func (s *LocalStorage) Put(_ context.Context, key string, r io.Reader, _ int64, _ string) error {
-	p := s.fullPath(key)
-	dir := filepath.Dir(p)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	name, err := validateStorageKey(key, false)
+	if err != nil {
+		return err
+	}
+	root, err := s.openRoot()
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	dir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(name)))
+	if err := root.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("create directory: %w", err)
 	}
 
-	tmp := p + ".tmp"
-	f, err := os.Create(tmp)
+	tmp := name + ".tmp"
+	f, err := root.Create(tmp)
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
 
 	if _, err := io.Copy(f, r); err != nil {
 		f.Close()
-		os.Remove(tmp)
+		root.Remove(tmp)
 		return fmt.Errorf("write file: %w", err)
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		root.Remove(tmp)
 		return fmt.Errorf("close file: %w", err)
 	}
 
-	if err := os.Rename(tmp, p); err != nil {
-		os.Remove(tmp)
+	if err := root.Rename(tmp, name); err != nil {
+		root.Remove(tmp)
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 
@@ -91,16 +167,34 @@ func (s *LocalStorage) Put(_ context.Context, key string, r io.Reader, _ int64, 
 }
 
 func (s *LocalStorage) Delete(_ context.Context, key string) error {
-	p := s.fullPath(key)
-	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+	name, err := validateStorageKey(key, false)
+	if err != nil {
+		return err
+	}
+	root, err := s.openRoot()
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	if err := root.Remove(name); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
 }
 
 func (s *LocalStorage) Stat(_ context.Context, key string) (*ObjectMeta, error) {
-	p := s.fullPath(key)
-	info, err := os.Stat(p)
+	name, err := validateStorageKey(key, false)
+	if err != nil {
+		return nil, err
+	}
+	root, err := s.openRoot()
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	info, err := root.Stat(name)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("key not found: %s", key)
@@ -116,24 +210,32 @@ func (s *LocalStorage) Stat(_ context.Context, key string) (*ObjectMeta, error) 
 
 func (s *LocalStorage) List(_ context.Context, prefix string) ([]ObjectMeta, error) {
 	var results []ObjectMeta
-	root := s.fullPath(prefix)
+	name, err := validateStorageKey(prefix, true)
+	if err != nil {
+		return nil, err
+	}
+	root, err := s.openRoot()
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = fs.WalkDir(root.FS(), name, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil
 			}
 			return err
 		}
-		if info.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(s.basePath, path)
+		info, err := entry.Info()
 		if err != nil {
 			return err
 		}
 		results = append(results, ObjectMeta{
-			Key:          rel,
+			Key:          path,
 			Size:         info.Size(),
 			LastModified: info.ModTime(),
 		})
@@ -146,12 +248,22 @@ func (s *LocalStorage) List(_ context.Context, prefix string) ([]ObjectMeta, err
 }
 
 func (s *LocalStorage) TotalSize(_ context.Context) (int64, error) {
+	root, err := s.openRoot()
+	if err != nil {
+		return 0, err
+	}
+	defer root.Close()
+
 	var total int64
-	err := filepath.Walk(s.basePath, func(_ string, info os.FileInfo, err error) error {
+	err = fs.WalkDir(root.FS(), ".", func(_ string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() {
+		if !entry.IsDir() {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
 			total += info.Size()
 		}
 		return nil
@@ -161,16 +273,3 @@ func (s *LocalStorage) TotalSize(_ context.Context) (int64, error) {
 
 // Ensure interface compliance at compile time.
 var _ Storage = (*LocalStorage)(nil)
-
-// metaPath returns the path for storing content-type metadata.
-// Not used yet but reserved for future metadata storage.
-func (s *LocalStorage) metaPath(key string) string {
-	return s.fullPath(key) + ".meta"
-}
-
-// TouchLastModified updates the modification time to track access for LRU.
-func (s *LocalStorage) TouchLastModified(key string) error {
-	p := s.fullPath(key)
-	now := time.Now()
-	return os.Chtimes(p, now, now)
-}

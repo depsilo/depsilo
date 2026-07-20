@@ -96,7 +96,9 @@ func startLifecycleTestServer(t *testing.T, handler http.Handler, cleanup func()
 		t.Fatal(err)
 	}
 	srv := &http.Server{}
-	lifecycle := registerServerLifecycle(srv, cleanup)
+	resources := newServerResources(nil, nil)
+	resources.closeDatabase = newAsyncCloseAdapter(cleanup)
+	lifecycle := registerServerLifecycle(srv, resources)
 	srv.Handler = lifecycle.track(handler)
 	go serveHTTP(srv, listener)
 	return srv, "http://" + listener.Addr().String()
@@ -220,11 +222,20 @@ func (addr staticAddr) String() string  { return string(addr) }
 func TestUnexpectedServeExitRunsCleanupAndDeletesLifecycle(t *testing.T) {
 	srv := &http.Server{}
 	cleanupCalled := make(chan struct{})
-	registerServerLifecycle(srv, func() error { close(cleanupCalled); return nil })
+	resources := newServerResources(nil, nil)
+	resources.closeDatabase = newAsyncCloseAdapter(func() error { close(cleanupCalled); return nil })
+	registerServerLifecycle(srv, resources)
 	serveHTTP(srv, failingListener{err: errors.New("accept failed")})
 	<-cleanupCalled
-	if _, ok := serverLifecycles.Load(srv); ok {
-		t.Fatal("unexpected Serve exit retained lifecycle entry")
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, ok := serverLifecycles.Load(srv); !ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("unexpected Serve exit retained lifecycle entry")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -258,45 +269,38 @@ func TestConcurrentAndRepeatedShutdownCleansUpExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestCleanupErrorIsStableAcrossConcurrentAndSequentialShutdown(t *testing.T) {
+func TestCleanupErrorDoesNotPoisonLaterShutdown(t *testing.T) {
 	sentinel := errors.New("cleanup sentinel")
 	var cleanupCalls atomic.Int64
 	srv, _ := startLifecycleTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}), func() error {
-		cleanupCalls.Add(1)
-		return sentinel
-	})
-	wrapper := srv.Handler.(*lifecycleHandler)
-
-	const callers = 16
-	errorsOut := make(chan error, callers)
-	var group sync.WaitGroup
-	for range callers {
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			errorsOut <- Shutdown(context.Background(), srv)
-		}()
-	}
-	group.Wait()
-	close(errorsOut)
-	for err := range errorsOut {
-		if !errors.Is(err, sentinel) {
-			t.Fatalf("concurrent Shutdown error=%v", err)
+		if cleanupCalls.Add(1) == 1 {
+			return sentinel
 		}
-	}
+		return nil
+	})
+
 	if err := Shutdown(context.Background(), srv); !errors.Is(err, sentinel) {
-		t.Fatalf("sequential Shutdown error=%v", err)
+		t.Fatalf("first Shutdown error=%v", err)
 	}
-	if got := cleanupCalls.Load(); got != 1 {
-		t.Fatalf("cleanup calls=%d want=1", got)
+	if _, ok := serverLifecycles.Load(srv); !ok {
+		t.Fatal("failed cleanup deleted lifecycle entry")
+	}
+	if err := Shutdown(context.Background(), srv); err != nil {
+		t.Fatalf("retry Shutdown error=%v", err)
+	}
+	if got := cleanupCalls.Load(); got != 2 {
+		t.Fatalf("cleanup calls=%d want=2", got)
 	}
 	if _, ok := serverLifecycles.Load(srv); ok {
 		t.Fatal("completed lifecycle retained sync.Map entry")
 	}
-	if wrapper.lifecycle.cleanup != nil {
-		t.Fatal("completed lifecycle retained cleanup closure")
+	if err := Shutdown(context.Background(), srv); err != nil {
+		t.Fatalf("completed Shutdown error=%v", err)
+	}
+	if got := cleanupCalls.Load(); got != 2 {
+		t.Fatalf("completed cleanup calls=%d want=2", got)
 	}
 }
 
@@ -347,8 +351,8 @@ func TestShutdownTimeoutDefersCleanupUntilIgnoringHandlerEventuallyExits(t *test
 		}
 		time.Sleep(time.Millisecond)
 	}
-	if err := Shutdown(context.Background(), srv); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("later Shutdown error=%v want original deadline", err)
+	if err := Shutdown(context.Background(), srv); err != nil {
+		t.Fatalf("later Shutdown error=%v want nil after deferred cleanup", err)
 	}
 	if got := cleanupCalls.Load(); got != 1 {
 		t.Fatalf("cleanup calls=%d want=1", got)
@@ -432,7 +436,15 @@ func testCacheManager(t *testing.T, database *gorm.DB) *cache.Manager {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), time.Hour)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Close(ctx); err != nil {
+			t.Errorf("close cache manager: %v", err)
+		}
+	})
+	return manager
 }
 
 func requestUniquePyPIPath(t *testing.T, handler http.Handler, path string) {

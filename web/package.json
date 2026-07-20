@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "type-check": "tsc -b --pretty false",
     "type-check:e2e": "tsc -p tsconfig.e2e.json --noEmit",
+    "check:bundle": "node scripts/check-bundle-budget.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "playwright test",
@@ -19,18 +20,16 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/inter-tight": "^5.2.7",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
-    "@fontsource-variable/noto-sans-sc": "^5.2.10",
     "@tanstack/react-query": "^5.95.2",
-    "axios": "^1.14.0",
+    "axios": "^1.16.0",
     "clsx": "^2.1.1",
     "i18next": "^26.0.1",
-    "material-symbols": "^0.43.0",
+    "lucide-react": "^1.24.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-i18next": "^17.0.1",
-    "react-router-dom": "^7.13.2",
+    "react-router-dom": "^7.15.1",
     "recharts": "^3.8.0",
-    "shadcn": "^4.1.1",
     "simple-icons": "^16.15.0",
     "tailwind-merge": "^3.5.0"
   },
@@ -50,6 +49,6 @@
     "tailwindcss": "^4.2.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
-    "vite": "^8.0.1"
+    "vite": "^8.0.16"
   }
 }

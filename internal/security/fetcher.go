@@ -4,32 +4,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
+	"depsilo/internal/ecosystem"
 	"go.uber.org/zap"
 )
 
-// ecosystemMap converts Depsilo adapter types to OSV ecosystem names.
-var ecosystemMap = map[string]string{
-	"pypi":     "PyPI",
-	"npm":      "npm",
-	"go":       "Go",
-	"cargo":    "crates.io",
-	"maven":    "Maven",
-	"nuget":    "NuGet",
-	"composer": "Packagist",
-	"rubygems": "RubyGems",
-	"cran":     "CRAN",
-	"apt":      "Debian",
-}
+var ErrFetcherClosed = errors.New("OSV fetcher is closed")
 
 // OSVEcosystem returns the OSV ecosystem name for a Depsilo adapter type.
 func OSVEcosystem(depsiloType string) string {
-	return ecosystemMap[depsiloType]
+	return ecosystem.OSVNameFor(depsiloType)
 }
 
 // Fetcher queries the OSV.dev API for vulnerability data.
@@ -37,6 +28,8 @@ type Fetcher struct {
 	client  *http.Client
 	baseURL string
 	limiter *time.Ticker
+	closed  chan struct{}
+	close   sync.Once
 }
 
 // NewFetcher creates a new OSV.dev API client.
@@ -51,11 +44,46 @@ func NewFetcher(baseURL, proxy string) *Fetcher {
 		client:  &http.Client{Timeout: 30 * time.Second, Transport: transport},
 		baseURL: baseURL,
 		limiter: time.NewTicker(time.Second),
+		closed:  make(chan struct{}),
 	}
 }
 
 // Close releases resources.
-func (f *Fetcher) Close() { f.limiter.Stop() }
+func (f *Fetcher) Close() {
+	f.close.Do(func() {
+		if f.closed != nil {
+			close(f.closed)
+		}
+		if f.limiter != nil {
+			f.limiter.Stop()
+		}
+		if f.client != nil {
+			f.client.CloseIdleConnections()
+		}
+	})
+}
+
+func (f *Fetcher) waitForRateLimit(ctx context.Context) error {
+	if f.limiter == nil {
+		return nil
+	}
+	if f.closed == nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-f.limiter.C:
+			return nil
+		}
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-f.closed:
+		return ErrFetcherClosed
+	case <-f.limiter.C:
+		return nil
+	}
+}
 
 type osvQueryRequest struct {
 	Package *osvPackage `json:"package"`
@@ -129,7 +157,9 @@ func (f *Fetcher) Query(ctx context.Context, ecosystem, packageName string) ([]O
 	if osvEco == "" {
 		return nil, nil
 	}
-	<-f.limiter.C
+	if err := f.waitForRateLimit(ctx); err != nil {
+		return nil, err
+	}
 	body := osvQueryRequest{Package: &osvPackage{Name: packageName, Ecosystem: osvEco}}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -147,7 +177,9 @@ func (f *Fetcher) QueryBatch(ctx context.Context, packages []PackageRef) ([][]OS
 	if len(packages) == 0 {
 		return nil, nil
 	}
-	<-f.limiter.C
+	if err := f.waitForRateLimit(ctx); err != nil {
+		return nil, err
+	}
 	queries := make([]osvQueryRequest, len(packages))
 	for i, pkg := range packages {
 		osvEco := OSVEcosystem(pkg.Ecosystem)

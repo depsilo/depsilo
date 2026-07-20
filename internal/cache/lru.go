@@ -2,26 +2,35 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"go.uber.org/zap"
-	"gorm.io/gorm"
-
-	"depsilo/internal/db"
 )
 
-// StartLRUCleanup runs a background goroutine that periodically checks cache usage
-// and evicts least-recently-accessed entries when usage exceeds the threshold.
-func StartLRUCleanup(ctx context.Context, storage Storage, database *gorm.DB, maxSizeGB int, thresholdPct int, interval time.Duration) {
+// StartLRUCleanup periodically asks Retention to enforce its capacity policy.
+// Retention owns candidate selection, mutation serialization and failure
+// aggregation; this function owns scheduling and operational logging only.
+func StartLRUCleanup(ctx context.Context, retention *Retention, interval time.Duration) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if retention == nil {
+		zap.L().Error("LRU cleanup is unavailable", zap.Error(errors.New("nil cache retention")))
+		return
+	}
+	if interval <= 0 {
+		zap.L().Error("LRU cleanup is unavailable", zap.Duration("interval", interval))
+		return
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	maxBytes := int64(maxSizeGB) * 1024 * 1024 * 1024
-	threshold := int64(float64(maxBytes) * float64(thresholdPct) / 100.0)
-
 	zap.L().Info("LRU cleanup started",
-		zap.Int("max_size_gb", maxSizeGB),
-		zap.Int("threshold_pct", thresholdPct),
+		zap.Int64("max_bytes", retention.policy.MaxBytes),
+		zap.Int("threshold_percent", retention.policy.ThresholdPercent),
+		zap.Int("target_percent", retention.policy.TargetPercent),
 		zap.Duration("interval", interval),
 	)
 
@@ -31,71 +40,15 @@ func StartLRUCleanup(ctx context.Context, storage Storage, database *gorm.DB, ma
 			zap.L().Info("LRU cleanup stopped")
 			return
 		case <-ticker.C:
-			runLRU(ctx, storage, database, maxBytes, threshold)
+			report, err := retention.Reclaim(ctx, ReclaimModeCapacity)
+			if err != nil && ctx.Err() == nil {
+				zap.L().Warn("LRU cleanup incomplete",
+					zap.Int("removed", report.Removed),
+					zap.Int("failed", report.Failed),
+					zap.Int64("reclaimed_bytes", report.ReclaimedBytes),
+					zap.Error(err),
+				)
+			}
 		}
-	}
-}
-
-func runLRU(ctx context.Context, storage Storage, database *gorm.DB, maxBytes, threshold int64) {
-	// Check current usage
-	totalSize, err := storage.TotalSize(ctx)
-	if err != nil {
-		zap.L().Warn("LRU: failed to get total size", zap.Error(err))
-		return
-	}
-
-	if totalSize < threshold {
-		return
-	}
-
-	zap.L().Info("LRU: usage above threshold, starting eviction",
-		zap.Int64("total_bytes", totalSize),
-		zap.Int64("threshold_bytes", threshold),
-	)
-
-	// Also clean expired entries first
-	var expired []db.CacheEntry
-	database.Where("datetime(expires_at) < datetime(?)", time.Now().UTC()).Find(&expired)
-	for _, entry := range expired {
-		if err := storage.Delete(ctx, entry.StoragePath); err != nil {
-			zap.L().Warn("LRU: failed to delete expired file", zap.String("key", entry.Key), zap.Error(err))
-		}
-		database.Delete(&entry)
-	}
-	if len(expired) > 0 {
-		zap.L().Info("LRU: cleaned expired entries", zap.Int("count", len(expired)))
-	}
-
-	// Re-check after expiry cleanup
-	totalSize, err = storage.TotalSize(ctx)
-	if err != nil || totalSize < threshold {
-		return
-	}
-
-	// Evict LRU entries until below 80% of max
-	target := int64(float64(maxBytes) * 0.8)
-	var entries []db.CacheEntry
-	database.Order("last_accessed ASC").Find(&entries)
-
-	evicted := 0
-	for _, entry := range entries {
-		if totalSize <= target {
-			break
-		}
-
-		if err := storage.Delete(ctx, entry.StoragePath); err != nil {
-			zap.L().Warn("LRU: failed to delete file", zap.String("key", entry.Key), zap.Error(err))
-			continue
-		}
-		database.Delete(&entry)
-		totalSize -= entry.Size
-		evicted++
-	}
-
-	if evicted > 0 {
-		zap.L().Info("LRU: eviction completed",
-			zap.Int("evicted", evicted),
-			zap.Int64("new_total_bytes", totalSize),
-		)
 	}
 }

@@ -37,11 +37,24 @@ func (l *Logger) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Flush remaining
-			if len(batch) > 0 {
-				l.flush(batch)
+			// HTTP requests are drained before the server cancels this context.
+			// Consume everything accepted by Log before returning so cleanup can
+			// safely close the database without losing the tail of the audit log.
+			for {
+				select {
+				case entry := <-l.queue:
+					batch = append(batch, entry)
+					if len(batch) >= 100 {
+						l.flush(batch)
+						batch = make([]db.AuditLog, 0, 100)
+					}
+				default:
+					if len(batch) > 0 {
+						l.flush(batch)
+					}
+					return
+				}
 			}
-			return
 		case entry := <-l.queue:
 			batch = append(batch, entry)
 			if len(batch) >= 100 {

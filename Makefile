@@ -1,4 +1,4 @@
-.PHONY: build run run-pro dev stop test test-unit test-integration test-http test-all test-pypi test-apt test-e2e test-clean clean lint lint-i18n frontend help \
+.PHONY: build run run-pro dev stop test test-unit test-race test-integration test-http test-all test-pypi test-apt test-e2e test-clean clean lint lint-go lint-web lint-i18n verify verify-modules verify-build verify-web verify-e2e verify-security verify-installer frontend help \
 	test-docker-pypi test-docker-apt test-docker-npm test-docker-go test-docker-cargo \
 	test-docker-maven test-docker-rubygems test-docker-composer test-docker-nuget \
 	test-docker-conda test-docker-cran test-docker-helm test-docker-docker \
@@ -11,6 +11,7 @@
 APP        := depsilo
 BIN        := bin/$(APP)
 CONFIG     := config.toml
+DEV_JWT_SECRET ?= .dev-jwt-secret
 PID_FILE   := .server.pid
 PORT       := 23333
 TEST_DIR   := testground
@@ -57,15 +58,15 @@ unautostart-linux:              ## Linux：关闭开机自启
 	@bash scripts/install-linux.sh autostart-disable
 
 # ─── 运行 ─────────────────────────────────────
-run: build                      ## 编译并前台运行
-	DEPSILO_CONFIG=$(CONFIG) ./$(BIN) serve
+run: build                      ## 编译并前台运行（自动复用本地开发 JWT）
+	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/run-dev.sh "./$(BIN)" "$(CONFIG)"
 
 run-pro: build                  ## 编译并前台运行（开启全部 Pro 功能）
-	DEPSILO_DEV_PRO=1 DEPSILO_CONFIG=$(CONFIG) ./$(BIN) serve
+	@DEPSILO_DEV_PRO=1 DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/run-dev.sh "./$(BIN)" "$(CONFIG)"
 
 dev: build stop                 ## 编译并后台运行（dev 模式）
 	@echo ">>> starting $(APP) on :$(PORT) ..."
-	@DEPSILO_CONFIG=$(CONFIG) ./$(BIN) serve > .dev.log 2>&1 & echo $$! > $(PID_FILE)
+	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/run-dev.sh "./$(BIN)" "$(CONFIG)" > .dev.log 2>&1 & echo $$! > $(PID_FILE)
 	@sleep 3
 	@if curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1; then \
 		echo ">>> $(APP) running  pid=$$(cat $(PID_FILE))  http://localhost:$(PORT)"; \
@@ -117,8 +118,11 @@ sbom:                           ## 生成 SBOM (CycloneDX + SPDX)
 # ─── 测试 ─────────────────────────────────────
 test: test-unit                 ## 运行 Go 单元测试
 
-test-unit:                      ## 运行单元测试
-	go test ./tests/unit/... -v -count=1
+test-unit:                      ## 运行全部非 integration-tag Go 测试
+	go test ./... -count=1
+
+test-race:                      ## 使用 race detector 运行 Go 测试
+	go test ./... -race -count=1
 
 test-integration:               ## 运行集成测试（启动服务 + mock 上游）
 	go test ./tests/integration/... -v -count=1 -timeout 300s -tags integration
@@ -127,8 +131,7 @@ test-http:                      ## 运行集成测试（仅 HTTP 端点）
 	go test ./tests/integration/... -v -count=1 -timeout 120s -tags integration \
 		-run "Test[^_]+_(SimpleIndex|Metadata|Download|CacheHit|Release|Packages|ConfigJson|ModuleList|ArtifactDownload|Specs|PackagesJson|ServiceIndex|RepoData|IndexYaml)"
 
-test-all:                       ## 运行全部测试（单元 + 集成）
-	go test ./... -v -count=1
+test-all: test-unit test-integration  ## 运行全部测试（单元 + integration tag）
 
 $(TEST_DIR)/.venv:              ## 初始化测试用 Python 虚拟环境（uv）
 	@mkdir -p $(TEST_DIR)
@@ -386,14 +389,51 @@ release-check: frontend          ## 检查 goreleaser 配置是否正确
 
 # ─── 清理 ─────────────────────────────────────
 clean: stop docker-stop         ## 清理所有构建产物、容器和缓存数据
-	rm -rf bin/ data/ .dev.log $(PID_FILE)
+	rm -rf bin/ data/ .dev.log $(PID_FILE) $(DEV_JWT_SECRET) $(DEV_JWT_SECRET).tmp.*
 	@echo ">>> clean done"
 
-lint: lint-i18n                 ## 代码检查 (go vet + i18n audit)
+lint: lint-go lint-web lint-i18n  ## Go/前端/i18n 静态检查
+
+lint-go:                        ## 检查 gofmt + go vet
+	@unformatted="$$(git ls-files --cached --others --exclude-standard -z -- '*.go' | xargs -0 gofmt -l)"; \
+		test -z "$$unformatted" || { echo "gofmt required:"; echo "$$unformatted"; exit 1; }
 	go vet ./...
+
+lint-web:                       ## 检查前端 ESLint
+	cd web && npm run lint
 
 lint-i18n:                      ## 检查 zh.ts/en.ts 与 t() 调用是否一致
 	@python3 scripts/i18n-audit.py
+
+verify-web:                     ## 前端类型、浏览器契约与生产构建
+	cd web && npm run type-check
+	cd web && npm run type-check:e2e
+	cd web && npm run build
+	cd web && npm run check:bundle
+
+verify-modules:                 ## 校验 Go 模块完整性与 tidy 状态
+	go mod verify
+	go mod tidy -diff
+
+verify-build:                   ## 编译正式 CLI 入口
+	@output="$$(mktemp)"; trap 'rm -f "$$output"' EXIT; go build -o "$$output" ./cmd/depsilo
+
+verify-e2e:                     ## 运行 Playwright 浏览器测试（需已安装 Chromium）
+	cd web && npx playwright install chromium
+	cd web && npm run test:e2e
+
+verify-security:               ## 扫描 Go、前端运行时与构建依赖漏洞
+	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+	cd web && npm audit --omit=dev
+	cd web && npm audit --audit-level=moderate
+
+verify-installer:              ## 安装脚本语法与校验和回归测试
+	bash -n install.sh scripts/*.sh
+	bash scripts/test-install-checksum.sh
+	bash scripts/test-make-dev-run.sh
+	bash scripts/test-release-tag.sh
+
+verify: lint verify-modules test-race test-integration verify-web verify-build verify-e2e verify-security verify-installer  ## 与 CI 一致的完整本地验证入口
 
 # ─── 帮助 ─────────────────────────────────────
 help:                           ## 显示帮助

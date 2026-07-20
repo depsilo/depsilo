@@ -103,17 +103,46 @@ async function refocus(page: Page) {
   await other.close()
 }
 
-async function pausePollingClock(page: Page) {
-  await page.clock.install({ time: new Date('2026-07-10T00:00:00Z') })
-  await page.clock.pauseAt(new Date('2026-07-10T00:00:01Z'))
+async function navigateClient(page: Page, path: string) {
+  await page.evaluate((nextPath) => {
+    window.history.pushState({}, '', nextPath)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, path)
 }
 
-async function settlePausedApp(page: Page) {
+async function pausePollingClock(page: Page) {
+  // Resolve both lazy route trees with the default fixtures, then unmount the
+  // admin tree before replacing browser timers. Client-side navigation keeps
+  // those modules resolved in this document while disposing Dashboard and
+  // NowStrip's real-time polling observers. The test mounts them again after
+  // installing its API overrides, so every observed timer belongs to the
+  // paused Playwright clock rather than to a Suspense fallback or old query.
+  await page.goto('/')
+  await navigateClient(page, '/admin')
+  await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
+  await expect(page.locator('[data-query-key="now"]')).toBeVisible()
+  await navigateClient(page, '/')
+  await expect(page.locator('[data-admin-outlet]')).toHaveCount(0)
+  // Move forward so the warm-up queries are stale on remount; moving the fake
+  // clock behind their real dataUpdatedAt would make React Query treat the
+  // cached defaults as fresh and skip the test-specific first request.
+  await page.clock.install({ time: new Date('2099-01-01T00:00:00Z') })
+  await page.clock.pauseAt(new Date('2099-01-01T00:00:01Z'))
+}
+
+async function settlePausedApp(page: Page, initialCalls: () => number) {
   for (let phase = 0; phase < 3; phase += 1) {
     await page.waitForLoadState('networkidle')
     await page.clock.runFor(100)
   }
   await page.clock.runFor(1_700)
+  // Client navigation and React's concurrent scheduler can start the request
+  // just after the last fixed clock advance. Wait for the test-specific
+  // responder (rather than a same-URL warm-up response), then for its network
+  // work to finish, before giving React/Recharts an explicit render window.
+  await expect.poll(initialCalls).toBe(1)
+  await page.waitForLoadState('networkidle')
+  await page.clock.runFor(100)
 }
 
 function trendPoints(count: number, requestBase: number, bucketStep: number) {
@@ -259,8 +288,8 @@ test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
     },
   })
 
-  await page.goto('/admin')
-  await settlePausedApp(page)
+  await navigateClient(page, '/admin')
+  await settlePausedApp(page, () => calls['1h'] ?? 0)
   await expect.poll(() => calls['1h'] ?? 0).toBe(1)
   const ranges = page.getByRole('group', { name: /活动趋势|Activity trends/ })
   await expect(ranges).toBeVisible()
@@ -304,8 +333,8 @@ test('NowStrip keeps healthy cached data when its focus refetch fails', async ({
         : { status: 500, body: { code: 'FAILED', message: 'now refetch failed' } }
     },
   })
-  await page.goto('/admin')
-  await settlePausedApp(page)
+  await navigateClient(page, '/admin')
+  await settlePausedApp(page, () => calls)
   const now = page.locator('[data-query-key="now"]')
   await expect(now).toContainText(/健康|healthy/i)
   await refocus(page)
@@ -333,8 +362,8 @@ test('Dashboard trends keeps its rendered chart when its focus refetch fails', a
         : { status: 500, body: { code: 'FAILED', message: 'trends refetch failed' } }
     },
   })
-  await page.goto('/admin')
-  await settlePausedApp(page)
+  await navigateClient(page, '/admin')
+  await settlePausedApp(page, () => calls)
   const trends = page.locator('[data-query-key="dashboard-trends"]')
   await expect(trends.locator('.recharts-wrapper')).toBeVisible()
   await refocus(page)
@@ -458,6 +487,23 @@ const webhook = {
 
 const mutationCases: MutationCase[] = [
   {
+    name: 'Cache delete', path: '/admin/cache', endpoint: 'DELETE /api/v1/admin/cache/41', status: 500,
+    fixtures: {
+      'GET /api/v1/admin/cache': {
+        items: [{
+          id: 41, key: 'pypi/simple/fixture/index.html', adapter_type: 'pypi', package_name: 'fixture',
+          size: 512, hit_count: 3, last_accessed: '2026-07-10T00:00:00Z', expires_at: '2026-07-11T00:00:00Z',
+        }],
+        total: 1, page: 1, page_size: 20,
+      },
+    },
+    submit: async page => {
+      await page.getByRole('button', { name: /删除缓存条目 pypi\/simple\/fixture\/index\.html|Delete cache entry pypi\/simple\/fixture\/index\.html/ }).click()
+      await page.getByRole('dialog').getByRole('button', { name: /^删除$|^Delete$/ }).click()
+    },
+    retained: page => page.getByRole('dialog', { name: /确认删除|Confirm Delete/ }),
+  },
+  {
     name: 'Cache cleanup', path: '/admin/cache', endpoint: 'POST /api/v1/admin/cache/cleanup', status: 500,
     submit: async page => {
       await page.getByRole('button', { name: /清理过期/ }).click()
@@ -468,7 +514,6 @@ const mutationCases: MutationCase[] = [
   {
     name: 'Upstream save', path: '/admin/upstreams', endpoint: 'POST /api/v1/admin/upstreams', status: 422,
     fixtures: {
-      'GET /api/v1/admin/upstreams/1/latency': { points: [] },
       'GET /api/v1/admin/upstreams': {
         items: [{
           id: 1, adapter_type: 'pypi', name: 'tuna', url: 'https://pypi.example/simple', proxy: '', priority: 1,
@@ -625,6 +670,57 @@ test('Cache cleanup stays busy until success then closes and toasts the service 
   cleanup.resolve()
   await expect(page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })).toHaveCount(0)
   await expect(page.locator('[data-toast-tone="success"]')).toContainText('fixture cleanup completed')
+})
+
+test('Cache delete clears an old failure before the confirmation dialog is reopened', async ({ page }) => {
+  const entry = {
+    id: 41, key: 'pypi/simple/fixture/index.html', adapter_type: 'pypi', package_name: 'fixture',
+    size: 512, hit_count: 3, last_accessed: '2026-07-10T00:00:00Z', expires_at: '2026-07-11T00:00:00Z',
+  }
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/cache': { items: [entry], total: 1, page: 1, page_size: 20 },
+    'DELETE /api/v1/admin/cache/41': {
+      status: 500,
+      body: { code: 'CACHE_REMOVE_INCOMPLETE', message: 'fixture delete failure' },
+    },
+  })
+  await page.goto('/admin/cache')
+
+  const openDelete = page.getByRole('button', { name: /删除缓存条目 pypi\/simple\/fixture\/index\.html|Delete cache entry pypi\/simple\/fixture\/index\.html/ })
+  await openDelete.click()
+  let dialog = page.getByRole('dialog', { name: /确认删除|Confirm Delete/ })
+  await dialog.getByRole('button', { name: /^删除$|^Delete$/ }).click()
+  await expect(dialog.getByRole('alert')).toContainText('fixture delete failure')
+  await dialog.getByRole('button', { name: /取消|Cancel/ }).click()
+  await expect(dialog).toHaveCount(0)
+
+  await openDelete.click()
+  dialog = page.getByRole('dialog', { name: /确认删除|Confirm Delete/ })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('alert')).toHaveCount(0)
+})
+
+test('Cache cleanup clears an old failure before the confirmation dialog is reopened', async ({ page }) => {
+  await mockAdminApi(page, {
+    'POST /api/v1/admin/cache/cleanup': {
+      status: 500,
+      body: { code: 'CACHE_CLEANUP_PARTIAL', message: 'fixture cleanup failure', deleted: 1, failed: 1, reclaimed_bytes: 512 },
+    },
+  })
+  await page.goto('/admin/cache')
+
+  const openCleanup = page.getByRole('button', { name: /清理过期|Clean Expired/ })
+  await openCleanup.click()
+  let dialog = page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })
+  await dialog.getByRole('button', { name: /确认清理|Confirm/ }).click()
+  await expect(dialog.getByRole('alert')).toContainText('fixture cleanup failure')
+  await dialog.getByRole('button', { name: /取消|Cancel/ }).click()
+  await expect(dialog).toHaveCount(0)
+
+  await openCleanup.click()
+  dialog = page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('alert')).toHaveCount(0)
 })
 
 test('Rule create inserts the returned entity before closing', async ({ page }) => {

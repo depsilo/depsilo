@@ -149,9 +149,5 @@ func extractToken(c *gin.Context) string {
 	if strings.HasPrefix(auth, "Bearer ") {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
-	// Query param fallback
-	if t := c.Query("token"); t != "" {
-		return t
-	}
 	return ""
 }

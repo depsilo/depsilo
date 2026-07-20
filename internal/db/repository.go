@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -71,8 +72,9 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 
 func AutoMigrate(db *gorm.DB) error {
 	zap.L().Info("running database auto-migration")
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&CacheEntry{},
+		&UpstreamUpdateEvent{},
 		&AccessLog{},
 		&AccessLogFiveMinutely{},
 		&AccessLogHourly{},
@@ -109,5 +111,55 @@ func AutoMigrate(db *gorm.DB) error {
 		// Tamper detection (DIRECTION T1). Defined in db/tamper.go;
 		// helper in internal/tamper.
 		&TamperRecord{},
+	); err != nil {
+		return err
+	}
+	if err := migrateVulnerabilityIdentityIndex(db); err != nil {
+		return err
+	}
+	return backfillCacheKinds(db)
+}
+
+func migrateVulnerabilityIdentityIndex(database *gorm.DB) error {
+	const (
+		legacyIndex      = "idx_vulnerabilities_osv_id"
+		replacementIndex = "idx_vuln_osv_eco_pkg"
 	)
+	wantColumns := []string{"osv_id", "ecosystem", "package_name"}
+
+	return database.Transaction(func(tx *gorm.DB) error {
+		indexes, err := tx.Migrator().GetIndexes(&Vulnerability{})
+		if err != nil {
+			return fmt.Errorf("read vulnerability indexes: %w", err)
+		}
+
+		var replacement gorm.Index
+		for _, index := range indexes {
+			if index.Name() == replacementIndex {
+				replacement = index
+				break
+			}
+		}
+		if replacement == nil {
+			return fmt.Errorf("replacement vulnerability index %q is missing", replacementIndex)
+		}
+		unique, known := replacement.Unique()
+		if !known || !unique || !slices.Equal(replacement.Columns(), wantColumns) {
+			return fmt.Errorf(
+				"replacement vulnerability index %q has unique=%v columns=%v, want unique=true columns=%v",
+				replacementIndex,
+				unique,
+				replacement.Columns(),
+				wantColumns,
+			)
+		}
+
+		if !tx.Migrator().HasIndex(&Vulnerability{}, legacyIndex) {
+			return nil
+		}
+		if err := tx.Migrator().DropIndex(&Vulnerability{}, legacyIndex); err != nil {
+			return fmt.Errorf("drop legacy vulnerability index %q: %w", legacyIndex, err)
+		}
+		return nil
+	})
 }

@@ -13,6 +13,7 @@ import (
 
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
+	ecosystemcatalog "depsilo/internal/ecosystem"
 )
 
 const ProjectIDKey = "project_id"
@@ -106,56 +107,42 @@ func recordProjectDownload(database *gorm.DB, projectID uint, c *gin.Context) {
 		return
 	}
 
+	// This runs after the response has been produced, but remains inside the
+	// request handler. Keeping the upsert synchronous here bounds concurrency
+	// to the HTTP server and lets graceful shutdown wait before closing the DB.
 	now := time.Now()
-	go func() {
-		result := database.Clauses(clause.OnConflict{
-			Columns: []clause.Column{
-				{Name: "project_id"}, {Name: "ecosystem"},
-				{Name: "package_name"}, {Name: "version"},
-			},
-			DoUpdates: clause.Assignments(map[string]interface{}{
-				"last_seen_at":   now,
-				"download_count": gorm.Expr("download_count + 1"),
-				"updated_at":     now,
-			}),
-		}).Create(&db.ProjectPackage{
-			ProjectID:     projectID,
-			Ecosystem:     ecosystem,
-			PackageName:   name,
-			Version:       version,
-			FirstSeenAt:   now,
-			LastSeenAt:    now,
-			DownloadCount: 1,
-		})
-		if result.Error != nil {
-			zap.L().Debug("failed to record project download", zap.Error(result.Error))
-		}
-	}()
+	result := database.Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "project_id"}, {Name: "ecosystem"},
+			{Name: "package_name"}, {Name: "version"},
+		},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"last_seen_at":   now,
+			"download_count": gorm.Expr("download_count + 1"),
+			"updated_at":     now,
+		}),
+	}).Create(&db.ProjectPackage{
+		ProjectID:     projectID,
+		Ecosystem:     ecosystem,
+		PackageName:   name,
+		Version:       version,
+		FirstSeenAt:   now,
+		LastSeenAt:    now,
+		DownloadCount: 1,
+	})
+	if result.Error != nil {
+		zap.L().Debug("failed to record project download", zap.Error(result.Error))
+	}
 }
 
 // inferEcosystemAndKey derives the ecosystem type and a pseudo cache key from a request path.
 func inferEcosystemAndKey(path string) (string, string) {
-	prefixes := map[string]string{
-		"/pypi/":     "pypi",
-		"/npm/":      "npm",
-		"/apt/":      "apt",
-		"/go/":       "go",
-		"/crates/":   "cargo",
-		"/maven/":    "maven",
-		"/rubygems/": "rubygems",
-		"/composer/": "composer",
-		"/nuget/":    "nuget",
-		"/conda/":    "conda",
-		"/cran/":     "cran",
-		"/helm/":     "helm",
-		"/v2/":       "docker",
-	}
-
-	for prefix, eco := range prefixes {
+	for _, definition := range ecosystemcatalog.All() {
+		prefix := definition.Route + "/"
 		if strings.HasPrefix(path, prefix) {
 			// Build a cache key similar to what the adapter would produce
 			rest := strings.TrimPrefix(path, prefix)
-			return eco, eco + "/" + rest
+			return definition.Name, definition.Name + "/" + rest
 		}
 	}
 	return "", ""

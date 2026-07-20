@@ -4,35 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
 	"depsilo/internal/accesslog"
 	"depsilo/internal/adapter"
-	"depsilo/internal/adapter/alpine"
-	"depsilo/internal/adapter/apt"
-	"depsilo/internal/adapter/cargo"
-	"depsilo/internal/adapter/composer"
-	"depsilo/internal/adapter/conda"
-	"depsilo/internal/adapter/cran"
 	dockeradapter "depsilo/internal/adapter/docker"
-	"depsilo/internal/adapter/goproxy"
-	"depsilo/internal/adapter/helm"
-	"depsilo/internal/adapter/huggingface"
-	"depsilo/internal/adapter/maven"
-	"depsilo/internal/adapter/npm"
-	"depsilo/internal/adapter/nuget"
-	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/adapter/pypi"
-	"depsilo/internal/adapter/rubygems"
 	"depsilo/internal/api"
+	"depsilo/internal/asyncruntime"
 	"depsilo/internal/audit"
 	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
@@ -49,110 +33,22 @@ import (
 	"depsilo/internal/tamper"
 	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
-	web "depsilo/web"
+	"depsilo/internal/upstreamupdates"
 )
-
-type adapterFactory func(*cache.Manager, upstream.Selector, config.CacheConfig, *gorm.DB) adapter.Adapter
-
-type ecosystemDef struct {
-	name      string
-	route     string
-	upstreams []config.UpstreamConfig
-	explicit  bool
-	factory   adapterFactory
-}
-
-func standardEcosystemDefinitions(cfg *config.Config) []ecosystemDef {
-	explicit := cfg.ExplicitUpstreamEcosystems
-	return []ecosystemDef{
-		{"pypi", "/pypi", cfg.PyPI.Upstreams, explicit["pypi"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return pypi.New(cm, s, cc, database)
-		}},
-		{"apt", "/apt", cfg.APT.Upstreams, explicit["apt"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return apt.New(cm, s, cc, database)
-		}},
-		{"npm", "/npm", cfg.NPM.Upstreams, explicit["npm"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return npm.New(cm, s, cc, database)
-		}},
-		{"go", "/go", cfg.Go.Upstreams, explicit["go"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return goproxy.New(cm, s, cc, database)
-		}},
-		{"cargo", "/crates", cfg.Cargo.Upstreams, explicit["cargo"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return cargo.New(cm, s, cc, database)
-		}},
-		{"maven", "/maven", cfg.Maven.Upstreams, explicit["maven"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return maven.New(cm, s, cc, database)
-		}},
-		{"rubygems", "/rubygems", cfg.RubyGems.Upstreams, explicit["rubygems"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return rubygems.New(cm, s, cc, database)
-		}},
-		{"composer", "/composer", cfg.Composer.Upstreams, explicit["composer"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return composer.New(cm, s, cc, database)
-		}},
-		{"nuget", "/nuget", cfg.NuGet.Upstreams, explicit["nuget"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return nuget.New(cm, s, cc, database)
-		}},
-		{"conda", "/conda", cfg.Conda.Upstreams, explicit["conda"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return conda.New(cm, s, cc, database)
-		}},
-		{"cran", "/cran", cfg.CRAN.Upstreams, explicit["cran"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return cran.New(cm, s, cc, database)
-		}},
-		{"alpine", "/alpine", cfg.Alpine.Upstreams, explicit["alpine"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return alpine.New(cm, s, cc, database)
-		}},
-		{"helm", "/helm", cfg.Helm.Upstreams, explicit["helm"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return helm.New(cm, s, cc, database)
-		}},
-		{"huggingface", "/huggingface", cfg.HuggingFace.Upstreams, explicit["huggingface"], func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return huggingface.New(cm, s, cc, database)
-		}},
-	}
-}
-
-func seedSources(definitions []ecosystemDef) []upstream.SeedSource {
-	sources := make([]upstream.SeedSource, 0, len(definitions))
-	for _, definition := range definitions {
-		if definition.explicit {
-			sources = append(sources, upstream.SeedSource{Ecosystem: definition.name, Upstreams: definition.upstreams})
-		}
-	}
-	return sources
-}
-
-func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystemDef, error) {
-	byName := make(map[string]ecosystemDef, len(definitions))
-	for _, definition := range definitions {
-		byName[definition.name] = definition
-	}
-	result := make([]ecosystemDef, 0, len(active))
-	for _, ecosystem := range active {
-		definition, ok := byName[ecosystem]
-		if !ok {
-			return nil, fmt.Errorf("active ecosystem %q has no compiled adapter", ecosystem)
-		}
-		result = append(result, definition)
-	}
-	return result, nil
-}
-
-func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB) error {
-	for _, definition := range definitions {
-		pool := pools[definition.name]
-		if pool == nil {
-			return fmt.Errorf("active ecosystem %s has no pool", definition.name)
-		}
-		handler := definition.factory(cacheMgr, upstream.NewPrioritySelector(pool), cacheConfig, database)
-		handler.Register(root.Group(definition.route))
-		handler.Register(project.Group(definition.route))
-	}
-	return nil
-}
 
 // StartServer initializes all components and starts the HTTP server.
 // Returns the *http.Server for lifecycle control by the caller.
-// The provided context controls background goroutine shutdown.
-func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, error) {
+// Cancelling the provided context requests an orderly server shutdown. The
+// server owns a detached runtime context so HTTP handlers drain before their
+// background dependencies are cancelled.
+func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server, resultErr error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("start server: %w", err)
+	}
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -164,25 +60,46 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	}
 	logLevel.SetLevel(parsed.Level())
 	settingsStore := config.NewStore(cfg.ConfigPath, cfg, logLevel)
+	r := gin.New()
+	if err := configureTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
+		return nil, fmt.Errorf("configure server.trusted_proxies: %w", err)
+	}
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", addr, err)
 	}
-	serverCtx, cancelServer := context.WithCancel(ctx)
+	shutdownTrigger := ctx
+	serverCtx, cancelServer := newServerRuntimeContext(ctx)
 	started := false
 	var accessRecorder accesslog.Recorder
+	var registry *upstream.Registry
+	var cacheMgr *cache.Manager
+	var securityScanner *security.Scanner
+	var osvFetcher *security.Fetcher
+	background := asyncruntime.New(serverCtx)
+	resources := newServerResources(cancelServer, listener.Close)
+	resources.background = background
+	submitBackground := func(name string, task asyncruntime.Task) error {
+		if err := background.Submit(task); err != nil {
+			return fmt.Errorf("start %s: %w", name, err)
+		}
+		return nil
+	}
 	defer func() {
 		if started {
 			return
 		}
-		cancelServer()
-		_ = listener.Close()
-		if accessRecorder != nil {
-			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = accessRecorder.Close(closeCtx)
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), 35*time.Second)
+		cleanupErr := resources.Close(cleanupCtx)
+		cancelCleanup()
+		if cleanupErr == nil {
+			return
 		}
+		resultErr = errors.Join(resultErr, fmt.Errorf("clean up failed server startup: %w", cleanupErr))
+		go closeResourcesWithRetry(resources, func(err error) {
+			zap.L().Warn("failed server startup cleanup attempt; retrying", zap.Error(err))
+		})
 	}()
 	zap.L().Info("config loaded",
 		zap.String("db_driver", cfg.Database.Driver),
@@ -194,6 +111,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
+	sqlDatabase, err := database.DB()
+	if err != nil {
+		return nil, fmt.Errorf("access database pool: %w", err)
+	}
+	resources.closeDatabase = newAsyncCloseAdapter(sqlDatabase.Close)
 	if err := db.AutoMigrate(database); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
@@ -202,18 +124,23 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	if err != nil {
 		return nil, fmt.Errorf("reconcile upstream control plane: %w", err)
 	}
-	registry, err := upstream.NewRegistry(database, bootstrap.ActiveEcosystems)
+	registry, err = upstream.NewRegistry(database, bootstrap.ActiveEcosystems)
 	if err != nil {
 		return nil, fmt.Errorf("build upstream registry: %w", err)
 	}
+	resources.closeRegistry = resourceCloseFunc(registry.CloseContext)
 	pools := registry.Pools()
 	activeDefs, err := activeDefinitions(definitions, bootstrap.ActiveEcosystems)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create default admin user if none exists
-	api.EnsureDefaultAdmin(database)
+	// Interactive first-run setup creates the administrator from wizard input.
+	// Configured/headless deployments use environment credentials or a random
+	// one-time password emitted to the server log.
+	if err := api.EnsureInitialAdmin(database, cfg.IsDefault); err != nil {
+		return nil, fmt.Errorf("ensure initial administrator: %w", err)
+	}
 
 	// Backfill PackageName for existing cache entries
 	backfillPackageNames(database)
@@ -235,13 +162,21 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		BatchSize:     cfg.AccessLog.BatchSize,
 		BatchInterval: cfg.AccessLog.BatchInterval,
 	})
-	adapter.SetRecorder(accessRecorder)
-	go accesslog.StartCompactor(serverCtx, database)
-	go accesslog.StartRetention(serverCtx, database, accesslog.RetentionConfig{
-		RawDays:        cfg.AccessLog.RetentionDays,
-		FiveMinuteDays: 8,
-		RollupDays:     cfg.AccessLog.RollupRetentionDays,
-	})
+	resources.accessRecorder = accessRecorder
+	if err := submitBackground("access log compactor", func(ctx context.Context) {
+		accesslog.StartCompactor(ctx, database)
+	}); err != nil {
+		return nil, err
+	}
+	if err := submitBackground("access log retention", func(ctx context.Context) {
+		accesslog.StartRetention(ctx, database, accesslog.RetentionConfig{
+			RawDays:        cfg.AccessLog.RetentionDays,
+			FiveMinuteDays: 8,
+			RollupDays:     cfg.AccessLog.RollupRetentionDays,
+		})
+	}); err != nil {
+		return nil, err
+	}
 
 	// Initialize storage
 	var storage cache.Storage
@@ -270,26 +205,34 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	eventBus := cache.NewEventBus()
 	// Immutable-artifact threshold for tamper detection: artifacts are
 	// fetched with ttl=ttl_blob and metadata with ttl=ttl_index, so
-	// ttl >= ttl_blob selects exactly the blobs. Deriving from ttl_blob
-	// (rather than a fixed 1h) keeps metadata OUT of tamper tracking for
-	// any ttl_index < ttl_blob. An explicit config override wins.
+	// ttl >= ttl_blob selects long-lived artifacts. Metadata is independently
+	// excluded by its adapter cache-key shape, so unusual ttl_index values do
+	// not turn mutable indexes into immutable content. An explicit config
+	// override still wins for artifact verification policy.
 	immutableThreshold := cfg.SupplyChain.TamperDetection.ImmutableThresholdOverride()
 	if immutableThreshold <= 0 {
 		immutableThreshold = cfg.Cache.TTLBlob
 	}
-	if cfg.SupplyChain.TamperDetection.IsEnabled() && cfg.Cache.TTLIndex >= immutableThreshold {
-		zap.L().Warn("tamper detection: ttl_index >= immutable threshold — index metadata may be misclassified as immutable and false-alarm; lower ttl_index or raise the threshold",
-			zap.Duration("ttl_index", cfg.Cache.TTLIndex),
-			zap.Duration("immutable_threshold", immutableThreshold))
+	cacheMgr = cache.NewManager(storage, database, eventBus, immutableThreshold)
+	resources.cacheManager = cacheMgr
+	cacheRetention, err := cache.NewRetention(cacheMgr, cache.DefaultRetentionPolicy(
+		int64(cfg.Cache.MaxSizeGB)*1024*1024*1024,
+		cfg.Cache.LRUThreshold,
+	))
+	if err != nil {
+		return nil, fmt.Errorf("configure cache retention: %w", err)
 	}
-	cacheMgr := cache.NewManager(storage, database, eventBus, immutableThreshold)
 
 	// Sync webhook configs from config.toml to DB
 	syncWebhookConfigs(database, cfg.Webhooks)
 
 	// Initialize license manager
-	licenseManager := license.NewManager(cfg.License, database)
-	go licenseManager.Start(serverCtx)
+	licenseManager := license.NewManagerWithSubmitter(background, cfg.License, database)
+	if err := submitBackground("license validator", func(ctx context.Context) {
+		licenseManager.Start(ctx)
+	}); err != nil {
+		return nil, err
+	}
 
 	// Phase 5: construct trial + checker BEFORE audit and rules
 	// (these modules query IsPro to decide whether to record entries / enforce rules)
@@ -304,8 +247,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	rulesEngine := rules.NewEngine(rulesStore, checker)
 
 	auditLogger := audit.NewLogger(database, checker)
-	go auditLogger.Start(serverCtx)
-	adapter.SetAuditLogger(auditLogger)
+	if err := submitBackground("audit logger", func(ctx context.Context) {
+		auditLogger.Start(ctx)
+	}); err != nil {
+		return nil, err
+	}
 
 	// Supply-chain quarantine (T1 Task 1 — minimum release age). Built
 	// from cfg.SupplyChain; nil-safe if the operator hasn't configured
@@ -328,7 +274,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	if err != nil {
 		return nil, fmt.Errorf("quarantine checker: %w", err)
 	}
-	adapter.SetQuarantineChecker(quarantine.Wrap(quarantineChecker))
+	requestScope := adapter.NewRequestScope(
+		accessRecorder,
+		auditLogger,
+		quarantine.Wrap(quarantineChecker),
+	)
 
 	// Known-malicious blocklist (DIRECTION Task 2) — wired in as the
 	// checker's step 0. Enabled by default; the sync scheduler degrades
@@ -349,7 +299,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 			return nil, fmt.Errorf("blocklist: %w", err)
 		}
 		quarantineChecker.SetBlocklist(blocklistStore.QuarantineBridge())
-		go blocklistSyncer.Start(serverCtx)
+		if err := submitBackground("blocklist synchronizer", func(ctx context.Context) {
+			blocklistSyncer.Start(ctx)
+		}); err != nil {
+			return nil, err
+		}
 	} else {
 		zap.L().Info("malicious-package blocklist disabled by config")
 	}
@@ -367,20 +321,32 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	}
 
 	// Webhook notification engine
-	webhookNotifier := notify.New(database)
-	if err := webhookNotifier.LoadConfigs(); err != nil {
+	webhookNotifier := notify.New(database, background)
+	if err := webhookNotifier.LoadConfigs(serverCtx); err != nil {
 		zap.L().Warn("failed to load webhook configs", zap.Error(err))
 	}
-	go notify.StartScheduler(serverCtx, webhookNotifier, notify.SchedulerConfig{
-		Pools:   pools,
-		Checker: checker,
-	})
+	if err := submitBackground("webhook scheduler", func(ctx context.Context) {
+		notify.StartScheduler(ctx, webhookNotifier, notify.SchedulerConfig{
+			Pools:   pools,
+			Checker: checker,
+		})
+	}); err != nil {
+		return nil, err
+	}
+	dispatchWebhook := func(event notify.Event) {
+		if err := webhookNotifier.Dispatch(event); err != nil &&
+			serverCtx.Err() == nil && !errors.Is(err, asyncruntime.ErrClosed) {
+			zap.L().Warn("webhook dispatch was not admitted",
+				zap.String("event_type", event.Type),
+				zap.Error(err),
+			)
+		}
+	}
 
 	// Quarantine → webhook bridge. Installed AFTER the notifier exists
 	// so the closure can capture it directly. Done via a setter on the
 	// checker so the quarantine package never imports notify — kept
-	// loosely coupled per the layering elsewhere (adapter.SetAuditLogger
-	// follows the same pattern). Dispatch is fire-and-forget so the
+	// loosely coupled per the layering elsewhere. Dispatch is fire-and-forget so the
 	// gating decision returns without waiting on webhook delivery; a
 	// panicking dispatcher is recovered inside the Checker so misbehaving
 	// channels can't cascade into request failures.
@@ -389,7 +355,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		// org just tried to install known malware. Age quarantines
 		// stay warnings: a too-young version is an inconvenience.
 		if ev.Action == quarantine.ActionMalwareBlocked {
-			webhookNotifier.Dispatch(serverCtx, notify.Event{
+			dispatchWebhook(notify.Event{
 				Type:      notify.EventMalwareBlocked,
 				Severity:  "critical",
 				Title:     fmt.Sprintf("MALWARE blocked: %s %s on %s", ev.Package, ev.Version, ev.Ecosystem),
@@ -401,7 +367,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		}
 		ageStr := formatSeconds(ev.AgeAtCall)
 		thresholdStr := formatSeconds(ev.Threshold)
-		webhookNotifier.Dispatch(serverCtx, notify.Event{
+		dispatchWebhook(notify.Event{
 			Type:     notify.EventQuarantineBlocked,
 			Severity: "warning",
 			Title:    fmt.Sprintf("Quarantine: %s %s on %s blocked", ev.Package, ev.Version, ev.Ecosystem),
@@ -420,7 +386,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	// compromise signal.
 	if tamperRecorder != nil {
 		tamperRecorder.SetOnTamper(func(ev db.QuarantineEvent) {
-			webhookNotifier.Dispatch(serverCtx, notify.Event{
+			dispatchWebhook(notify.Event{
 				Type:      notify.EventTamperDetected,
 				Severity:  "critical",
 				Title:     fmt.Sprintf("Tamper: %s %s on %s changed upstream", ev.Package, ev.Version, ev.Ecosystem),
@@ -443,12 +409,21 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		secCfg.CheckTTL = 24 * time.Hour
 	}
 
-	osvFetcher := security.NewFetcher(secCfg.OSVURL, secCfg.Proxy)
-	securityScanner := security.NewScanner(database, osvFetcher, secCfg.CheckTTL)
-	securityImporter := security.NewImporter(database)
+	osvFetcher = security.NewFetcher(secCfg.OSVURL, secCfg.Proxy)
+	securityCatalog, err := security.NewAdvisoryCatalog(database, secCfg.CheckTTL, rulesEngine.InvalidateCache)
+	if err != nil {
+		return nil, fmt.Errorf("configure security intelligence catalog: %w", err)
+	}
+	securityScanner = security.NewScanner(database, osvFetcher, securityCatalog)
+	resources.closeFetcher = osvFetcher.Close
+	resources.securityScanner = securityScanner
 
 	if secCfg.Enabled {
-		go security.StartBackgroundScan(serverCtx, securityScanner, secCfg.ScanInterval)
+		if err := submitBackground("security scanner", func(ctx context.Context) {
+			security.StartBackgroundScan(ctx, securityScanner, secCfg.ScanInterval)
+		}); err != nil {
+			return nil, err
+		}
 		zap.L().Info("security vulnerability scanner enabled",
 			zap.Duration("scan_interval", secCfg.ScanInterval),
 			zap.Duration("check_ttl", secCfg.CheckTTL),
@@ -463,11 +438,18 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		zap.L().Info("license key configured, validation in progress")
 	}
 
-	go upstream.StartLatencyLogCleanup(serverCtx, database)
-	go cache.StartLRUCleanup(serverCtx, storage, database, cfg.Cache.MaxSizeGB, cfg.Cache.LRUThreshold, 5*time.Minute)
+	if err := submitBackground("upstream latency cleanup", func(ctx context.Context) {
+		upstream.StartLatencyLogCleanup(ctx, database)
+	}); err != nil {
+		return nil, err
+	}
+	if err := submitBackground("cache LRU cleanup", func(ctx context.Context) {
+		cache.StartLRUCleanup(ctx, cacheRetention, 5*time.Minute)
+	}); err != nil {
+		return nil, err
+	}
 
 	// Setup Gin
-	r := gin.New()
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
 	r.Use(rules.Middleware(rulesEngine))
@@ -478,9 +460,14 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 	for _, eco := range activeDefs {
 		ecosystemNames = append(ecosystemNames, eco.name)
 	}
+	if len(cfg.Docker.Registries) > 0 {
+		ecosystemNames = append(ecosystemNames, "docker")
+	}
 
 	// Register all API routes
+	indexRefresher := api.NewCacheIndexRefresher(r, cfg.ExtraIndexes, cfg.Docker)
 	api.RegisterRoutes(r, api.Deps{
+		LifecycleContext: serverCtx,
 		DB:               database,
 		Storage:          storage,
 		Config:           cfg,
@@ -489,19 +476,21 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		UpstreamRegistry: registry,
 		Ecosystems:       ecosystemNames,
 		CacheMgr:         cacheMgr,
+		CacheRetention:   cacheRetention,
+		IndexRefresher:   indexRefresher,
 		EventBus:         eventBus,
 		LicenseManager:   licenseManager,
 		TrialManager:     trialManager,
 		Entitlement:      checker,
-		AuditLogger:      auditLogger,
 		RulesStore:       rulesStore,
 		RulesEngine:      rulesEngine,
 		SecurityScanner:  securityScanner,
-		SecurityImporter: securityImporter,
+		SecurityCatalog:  securityCatalog,
 		WebhookNotifier:  webhookNotifier,
 		QuarantineStore:  quarantineStore,
 		BlocklistStore:   blocklistStore,
 		BlocklistSyncer:  blocklistSyncer,
+		Tasks:            background,
 	})
 
 	// Project-scoped proxy routes (/p/:slug/...) share Registry-owned Pools
@@ -530,7 +519,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		}
 		syncConfigOwnedUpstreams(database, "extra:"+idx.Name, idx.Upstreams)
 		upstream.RestoreFromDB(idxPool, database)
-		go upstream.StartHealthCheck(serverCtx, idxPool, database, upstream.DefaultProbeInterval)
+		if err := submitBackground("extra index "+idx.Name+" health check", func(ctx context.Context) {
+			upstream.StartHealthCheck(ctx, idxPool, database, upstream.DefaultProbeInterval)
+		}); err != nil {
+			return nil, err
+		}
 
 		idxHandler := pypi.NewWithPrefix(cacheMgr, upstream.NewPrioritySelector(idxPool), cfg.Cache, database, "/"+idx.Path, "extra:"+idx.Name)
 		idxHandler.Register(r.Group("/" + idx.Path))
@@ -543,36 +536,42 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		)
 	}
 
-	// Serve embedded frontend (SPA fallback)
-	distFS, err := fs.Sub(web.DistFS, "dist")
-	if err != nil {
-		return nil, fmt.Errorf("load embedded frontend: %w", err)
+	// Serve embedded frontend (SPA fallback).
+	if err := registerFrontend(r); err != nil {
+		return nil, err
 	}
-	staticHandler := http.FileServer(http.FS(distFS))
 
-	r.NoRoute(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		if path == "/" || strings.HasPrefix(path, "/assets") {
-			staticHandler.ServeHTTP(c.Writer, c.Request)
-			return
+	// Start router-driven maintenance only after every API, proxy and frontend
+	// route has been registered. Gin's route tree is not safe to mutate while
+	// the producer is already serving internal refresh requests.
+	if cfg.UpstreamUpdates.IsEnabled() {
+		interval, enabled, err := config.ParseUpdateCheckInterval(cfg.UpstreamUpdates.CheckInterval)
+		if err != nil {
+			return nil, fmt.Errorf("configure upstream metadata updates: %w", err)
 		}
-		c.Request.URL.Path = "/"
-		staticHandler.ServeHTTP(c.Writer, c.Request)
-	})
+		if enabled {
+			producer, err := upstreamupdates.New(database, interval, indexRefresher)
+			if err != nil {
+				return nil, fmt.Errorf("build upstream metadata producer: %w", err)
+			}
+			if err := submitBackground("upstream metadata producer", producer.Run); err != nil {
+				return nil, err
+			}
+			zap.L().Info("proactive upstream metadata updates enabled", zap.Duration("check_interval", interval))
+		}
+	} else {
+		zap.L().Info("proactive upstream metadata updates disabled by config")
+	}
 
 	// Create and start HTTP server
 	srv := &http.Server{
 		Addr: addr,
 	}
-	lifecycle := registerServerLifecycle(srv, func() error {
-		cancelServer()
-		_ = listener.Close()
-		registry.Close()
-		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return accessRecorder.Close(flushCtx)
-	})
-	srv.Handler = lifecycle.track(r)
+	lifecycle := registerServerLifecycle(srv, resources)
+	srv.Handler = lifecycle.track(requestScope.Wrap(r))
+	if err := shutdownTrigger.Err(); err != nil {
+		return nil, fmt.Errorf("start server: %w", err)
+	}
 	registry.Start(serverCtx)
 
 	go func() {
@@ -580,68 +579,25 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (*http.Server, e
 		serveHTTP(srv, listener)
 	}()
 	started = true
+	if shutdownTrigger.Done() != nil {
+		go shutdownWhenContextEnds(shutdownTrigger, serverCtx, srv)
+	}
 
 	return srv, nil
 }
 
-func prepareFiveMinuteHistory(ctx context.Context, database *gorm.DB, cfg config.AccessLogConfig) error {
-	if !cfg.RollupEnabled {
-		if err := accesslog.InvalidateFiveMinuteBackfill(ctx, database); err != nil {
-			zap.L().Error("failed to invalidate access log five-minute backfill marker", zap.Error(err))
-			return fmt.Errorf("invalidate five-minute backfill marker: %w", err)
-		}
-		return nil
-	}
-	if !cfg.BackfillOnStart {
-		return nil
-	}
-
-	backfillStarted := time.Now()
-	zap.L().Info("starting access log five-minute backfill",
-		zap.Duration("window", 7*24*time.Hour))
-	if err := accesslog.BackfillFiveMinutely(ctx, database, backfillStarted.UTC()); err != nil {
-		zap.L().Warn("access log five-minute backfill failed",
-			zap.Error(err),
-			zap.Duration("took", time.Since(backfillStarted)))
-	} else {
-		zap.L().Info("access log five-minute backfill complete",
-			zap.Duration("took", time.Since(backfillStarted)))
-	}
-	return nil
+func newServerRuntimeContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithCancel(context.WithoutCancel(parent))
 }
 
-// backfillPackageNames updates existing cache entries that have an empty PackageName.
-func backfillPackageNames(database *gorm.DB) {
-	var entries []db.CacheEntry
-	database.Where("package_name = '' OR package_name IS NULL").Find(&entries)
-	if len(entries) == 0 {
-		return
-	}
-	zap.L().Info("backfilling package names", zap.Int("count", len(entries)))
-	for _, e := range entries {
-		name := packagekey.ExtractName(e.AdapterType, e.Key)
-		if name != "" {
-			database.Model(&e).Update("package_name", name)
+func shutdownWhenContextEnds(trigger, serverCtx context.Context, srv *http.Server) {
+	select {
+	case <-trigger.Done():
+		if err := Shutdown(context.Background(), srv); err != nil {
+			zap.L().Error("server shutdown after context cancellation failed", zap.Error(err))
 		}
-	}
-	zap.L().Info("package name backfill complete")
-}
-
-// syncWebhookConfigs ensures configured webhooks from config.toml exist in the database.
-func syncWebhookConfigs(database *gorm.DB, webhooks []config.WebhookConfig) {
-	for _, w := range webhooks {
-		var record db.WebhookConfig
-		result := database.Where("url = ? AND platform = ?", w.URL, w.Platform).First(&record)
-		if result.Error == gorm.ErrRecordNotFound {
-			database.Create(&db.WebhookConfig{
-				Name:     w.Name,
-				Platform: w.Platform,
-				URL:      w.URL,
-				Events:   w.Events,
-				Enabled:  w.Enabled,
-			})
-			zap.L().Info("synced webhook config from config.toml", zap.String("name", w.Name))
-		}
+	case <-serverCtx.Done():
+		// An explicit Shutdown already reached the resource owner.
 	}
 }
 
@@ -676,47 +632,3 @@ func formatSeconds(secs int64) string {
 
 // syncConfigOwnedUpstreams persists extra-index sources, which remain outside
 // the dynamic standard-ecosystem Registry.
-func syncConfigOwnedUpstreams(database *gorm.DB, adapterType string, upstreams []config.UpstreamConfig) {
-	for _, item := range upstreams {
-		mode := item.ProbeMode
-		if mode == "" {
-			mode = "active"
-		}
-		interval := item.ProbeInterval
-		if interval == "" {
-			interval = upstream.DefaultProbeInterval.String()
-		}
-		var record db.UpstreamRecord
-		result := database.Where("name = ? AND adapter_type = ?", item.Name, adapterType).First(&record)
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			record = db.UpstreamRecord{
-				AdapterType:   adapterType,
-				Name:          item.Name,
-				URL:           item.URL,
-				Proxy:         item.Proxy,
-				Priority:      item.Priority,
-				ProbeMode:     mode,
-				ProbeInterval: interval,
-				Healthy:       true,
-				SuccessRate:   1,
-			}
-			if err := database.Create(&record).Error; err != nil {
-				zap.L().Warn("failed to sync config-owned upstream", zap.String("name", item.Name), zap.Error(err))
-			}
-			continue
-		}
-		if result.Error != nil {
-			zap.L().Warn("failed to read config-owned upstream", zap.String("name", item.Name), zap.Error(result.Error))
-			continue
-		}
-		if err := database.Model(&record).Updates(map[string]any{
-			"url":            item.URL,
-			"proxy":          item.Proxy,
-			"priority":       item.Priority,
-			"probe_mode":     mode,
-			"probe_interval": interval,
-		}).Error; err != nil {
-			zap.L().Warn("failed to update config-owned upstream", zap.String("name", item.Name), zap.Error(err))
-		}
-	}
-}

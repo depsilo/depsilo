@@ -11,6 +11,7 @@ import (
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/ecosystem"
 	"gorm.io/gorm"
 )
 
@@ -19,10 +20,7 @@ const (
 	ActiveEcosystemsKey = "upstreams_active_ecosystems_v1"
 )
 
-var supportedEcosystems = [...]string{
-	"pypi", "apt", "npm", "go", "cargo", "maven", "rubygems",
-	"composer", "nuget", "conda", "cran", "alpine", "helm", "huggingface",
-}
+var supportedEcosystems = standardUpstreamNames()
 
 var bootstrapMu sync.Mutex
 
@@ -255,4 +253,13 @@ func insertMissingConfigRows(tx *gorm.DB, src SeedSource) error {
 		}
 	}
 	return nil
+}
+
+func standardUpstreamNames() []string {
+	definitions := ecosystem.StandardUpstreamDefinitions()
+	names := make([]string, 0, len(definitions))
+	for _, definition := range definitions {
+		names = append(names, definition.Name)
+	}
+	return names
 }

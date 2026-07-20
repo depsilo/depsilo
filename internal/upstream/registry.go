@@ -54,6 +54,8 @@ type Registry struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	started        bool
+	closeDone      chan struct{}
+	closingWorkers []workerHandle
 
 	degradedMu sync.RWMutex
 	degraded   map[string]error
@@ -92,26 +94,52 @@ func NewRegistry(database *gorm.DB, active []string) (*Registry, error) {
 }
 
 func (r *Registry) Start(parent context.Context) {
-	r.lifecycleMu.Lock()
-	defer r.lifecycleMu.Unlock()
-
-	r.workersMu.Lock()
-	defer r.workersMu.Unlock()
-	if r.started {
-		return
-	}
-	r.ctx, r.cancel = context.WithCancel(parent)
-	r.started = true
-	for _, pool := range r.pools {
-		for _, u := range pool.Snapshot() {
-			r.startWorkerLocked(u)
+	for {
+		r.lifecycleMu.Lock()
+		if r.closeDone != nil {
+			closeDone := r.closeDone
+			r.lifecycleMu.Unlock()
+			<-closeDone
+			continue
 		}
+
+		r.workersMu.Lock()
+		if r.started {
+			r.workersMu.Unlock()
+			r.lifecycleMu.Unlock()
+			return
+		}
+		r.ctx, r.cancel = context.WithCancel(parent)
+		r.started = true
+		for _, pool := range r.pools {
+			for _, u := range pool.Snapshot() {
+				r.startWorkerLocked(u)
+			}
+		}
+		r.workersMu.Unlock()
+		r.lifecycleMu.Unlock()
+		return
 	}
 }
 
+// Close cancels all health workers and waits without a deadline.
 func (r *Registry) Close() {
+	_ = r.CloseContext(context.Background())
+}
+
+// CloseContext cancels all health workers and waits for the current generation.
+// A caller timeout only stops that caller's wait; a later call can join the same
+// close transition and finish waiting for the workers.
+func (r *Registry) CloseContext(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	r.lifecycleMu.Lock()
-	defer r.lifecycleMu.Unlock()
+	if r.closeDone != nil {
+		handles := append([]workerHandle(nil), r.closingWorkers...)
+		r.lifecycleMu.Unlock()
+		return waitWorkerHandles(ctx, handles)
+	}
 
 	r.workersMu.Lock()
 	if r.cancel != nil {
@@ -126,10 +154,51 @@ func (r *Registry) Close() {
 		handles = append(handles, handle)
 	}
 	r.workersMu.Unlock()
-
-	for _, handle := range handles {
-		<-handle.done
+	if len(handles) == 0 {
+		r.lifecycleMu.Unlock()
+		return nil
 	}
+
+	closeDone := make(chan struct{})
+	r.closeDone = closeDone
+	r.closingWorkers = append([]workerHandle(nil), handles...)
+	r.lifecycleMu.Unlock()
+
+	go r.completeClose(handles, closeDone)
+	return waitWorkerHandles(ctx, handles)
+}
+
+func waitWorkerHandles(ctx context.Context, handles []workerHandle) error {
+	for _, handle := range handles {
+		select {
+		case <-handle.done:
+			continue
+		default:
+		}
+		select {
+		case <-handle.done:
+		case <-ctx.Done():
+			select {
+			case <-handle.done:
+				continue
+			default:
+				return ctx.Err()
+			}
+		}
+	}
+	return nil
+}
+
+func (r *Registry) completeClose(handles []workerHandle, closeDone chan struct{}) {
+	_ = waitWorkerHandles(context.Background(), handles)
+
+	r.lifecycleMu.Lock()
+	if r.closeDone == closeDone {
+		r.closeDone = nil
+		r.closingWorkers = nil
+		close(closeDone)
+	}
+	r.lifecycleMu.Unlock()
 }
 
 func (r *Registry) startWorkerLocked(u *Upstream) {

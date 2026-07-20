@@ -2,13 +2,16 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"depsilo/internal/ecosystem"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -80,15 +83,43 @@ func Load() (*Config, error) {
 	cfg.ExplicitUpstreamEcosystems = explicitUpstreamEcosystems(v)
 	cfg.IsDefault = isDefault
 	cfg.ConfigPath = resolvedPath
+	if isDefault {
+		bootstrapToken, generated, err := resolveBootstrapToken()
+		if err != nil {
+			return nil, err
+		}
+		cfg.BootstrapToken = bootstrapToken
+
+		// The placeholder must never become a usable signing key, even during
+		// setup or when an existing database survives a lost config file.
+		if cfg.Auth.JWTSecret == "change-me-in-production" {
+			cfg.Auth.JWTSecret, err = NewSecureToken()
+			if err != nil {
+				return nil, fmt.Errorf("generate temporary JWT secret: %w", err)
+			}
+		}
+
+		if generated {
+			zap.L().Warn("initial setup requires this one-time bootstrap token",
+				zap.String("bootstrap_token", bootstrapToken))
+		} else {
+			zap.L().Info("initial setup is protected by DEPSILO_BOOTSTRAP_TOKEN")
+		}
+	}
 
 	// License key from env (overrides config file)
 	if envKey := os.Getenv("DEPSILO_LICENSE_KEY"); envKey != "" {
 		cfg.License.Key = envKey
 	}
 
-	// Warn if JWT secret is still the default placeholder
+	// A known signing key on a remotely reachable listener allows forged admin
+	// JWTs. Keep loopback-only development compatible, but fail closed anywhere
+	// the listener can accept remote traffic.
 	if cfg.Auth.JWTSecret == "change-me-in-production" {
-		zap.L().Warn("⚠ auth.jwt_secret is using the default value — this is INSECURE for production. Please set a strong secret in your config file or via DEPSILO_AUTH_JWT_SECRET environment variable.")
+		if !isLoopbackHost(cfg.Server.Host) {
+			return nil, errors.New("auth.jwt_secret must be changed before listening on a non-loopback address; set DEPSILO_AUTH_JWT_SECRET to a cryptographically random value")
+		}
+		zap.L().Warn("auth.jwt_secret is using the development placeholder; the server is restricted to loopback")
 	}
 
 	if err := ValidateSettingsSnapshot(SettingsSnapshotFromConfig(cfg)); err != nil {
@@ -98,14 +129,34 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+func isLoopbackHost(host string) bool {
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func resolveBootstrapToken() (token string, generated bool, err error) {
+	if configured := os.Getenv("DEPSILO_BOOTSTRAP_TOKEN"); configured != "" {
+		if configured != strings.TrimSpace(configured) || len(configured) < 24 {
+			return "", false, fmt.Errorf("DEPSILO_BOOTSTRAP_TOKEN must be at least 24 characters and have no leading or trailing whitespace")
+		}
+		return configured, false, nil
+	}
+	token, err = NewSecureToken()
+	if err != nil {
+		return "", false, fmt.Errorf("generate bootstrap token: %w", err)
+	}
+	return token, true, nil
+}
+
 func explicitUpstreamEcosystems(v *viper.Viper) map[string]bool {
 	out := make(map[string]bool)
-	for _, ecosystem := range []string{
-		"pypi", "apt", "npm", "go", "cargo", "maven", "rubygems",
-		"composer", "nuget", "conda", "cran", "alpine", "helm", "huggingface",
-	} {
-		if v.InConfig(ecosystem + ".upstreams") {
-			out[ecosystem] = true
+	for _, definition := range ecosystem.StandardUpstreamDefinitions() {
+		if v.InConfig(definition.Name + ".upstreams") {
+			out[definition.Name] = true
 		}
 	}
 	return out
@@ -188,6 +239,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 23333)
 	v.SetDefault("server.log_level", "info")
+	v.SetDefault("server.trusted_proxies", []string{})
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.dsn", "./data/depsilo.db")
 	v.SetDefault("storage.type", "local")
@@ -196,6 +248,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cache.ttl_index", "5m")
 	v.SetDefault("cache.ttl_blob", "72h")
 	v.SetDefault("cache.lru_threshold", 90)
+	v.SetDefault("upstream_updates.enabled", true)
+	v.SetDefault("upstream_updates.check_interval", "1h")
 	v.SetDefault("auth.enabled", true)
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")

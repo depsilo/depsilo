@@ -11,6 +11,7 @@ import ModalV2 from '@/components/Modal'
 import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
+import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 
@@ -119,18 +120,24 @@ export default function License() {
 
   if (statusQuery.isPending) {
     return (
-      <div aria-busy="true" className="py-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
-        <span aria-hidden="true">{t('loading')}</span>
-      </div>
+      <AdminPage width="readable" description={t('license.subtitle')}>
+        <div aria-busy="true" className="py-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
+          <span aria-hidden="true">{t('loading')}</span>
+        </div>
+      </AdminPage>
     )
   }
 
   if (statusQuery.isError && !status) {
     const normalized = getApiError(statusQuery.error)
-    return <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void statusQuery.refetch() }} />
+    return (
+      <AdminPage width="readable" description={t('license.subtitle')}>
+        <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void statusQuery.refetch() }} />
+      </AdminPage>
+    )
   }
 
-  if (!status) return null
+  if (!status) return <AdminPage width="readable" description={t('license.subtitle')}>{null}</AdminPage>
 
   const source = status.source
   const trialUsed = status.trial_used
@@ -142,20 +149,11 @@ export default function License() {
     iso ? new Date(iso).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US') : ''
 
   return (
-    <div className="space-y-10 max-w-3xl">
+    <AdminPage width="readable" description={t('license.subtitle')}>
+    <div className="space-y-10">
       {statusQuery.isRefetchError && (
         <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
       )}
-      {/* ── Page heading ───────────────────────────── */}
-      <div>
-        <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>
-          {t('license.title')}
-        </h2>
-        <p className="text-[13px] mt-1" style={{ color: 'var(--text-soft)' }}>
-          {t('license.subtitle')}
-        </p>
-      </div>
-
       {/* ── State panel ────────────────────────────── */}
       {/* No payment-provider integration yet — every Buy CTA opens an
           email order via lib/buy.ts. The label includes the lifetime
@@ -367,5 +365,6 @@ export default function License() {
         </div>
       </ModalV2>
     </div>
+    </AdminPage>
   )
 }

@@ -143,15 +143,13 @@ const sepStyle: React.CSSProperties = {
 interface NowStripProps {
   /**
    * 'card' (default) — original full-page-card chrome with border + radius.
-   * 'topbar'         — single-row, no chrome, no second-row context. Sized
-   *                    to fit inside the 48px MainLayout topbar between the
-   *                    page title and the language/theme controls.
+   * 'compact'        — status-only shell signal. Detailed traffic and retry
+   *                    controls remain in the Dashboard card.
    */
-  variant?: 'card' | 'topbar'
+  variant?: 'card' | 'compact'
 }
 
 export default function NowStrip({ variant = 'card' }: NowStripProps) {
-  const isTopbar = variant === 'topbar'
   const { t } = useTranslation()
   const {
     data,
@@ -193,31 +191,50 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
       ? 'var(--text-subtle)'
       : statusColor(data?.status ?? 'down')
 
-  const containerStyle: React.CSSProperties = isTopbar
-    ? {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: 0,
-        background: 'transparent',
-        border: 'none',
-        borderRadius: 0,
-        flexWrap: 'nowrap',
-        // The topbar is 48px; line-height has to fit cleanly.
-        height: 40,
-        minWidth: 0,
-        overflow: 'hidden',
-      }
-    : {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        padding: '10px 14px',
-        background: 'var(--bg-card)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 'var(--r-card)',
-        flexWrap: 'wrap',
-      }
+  if (variant === 'compact') {
+    const compactLabel = hasStaleData ? t('now.staleData') : statusLabel
+    const compactDotColor = hasStaleData ? 'var(--warn-text)' : dotColor
+    const errorMessage = hasInitialError ? getApiError(error).message : undefined
+    const accessibleLabel = errorMessage ? `${compactLabel}: ${errorMessage}` : compactLabel
+
+    return (
+      <div
+        data-admin-service-status
+        role="status"
+        aria-busy={isPending || undefined}
+        aria-label={accessibleLabel}
+        title={accessibleLabel}
+        className="inline-flex h-10 min-w-0 items-center gap-2 whitespace-nowrap text-[11px] text-[var(--text-soft)]"
+      >
+        <style>{breathing}</style>
+        <span
+          className={!hasInitialError && !(isPending && !data) && !hasStaleData ? 'now-pulse' : undefined}
+          aria-hidden
+          style={{
+            display: 'inline-block',
+            width: 8,
+            height: 8,
+            flexShrink: 0,
+            borderRadius: '50%',
+            background: compactDotColor,
+            boxShadow: `0 0 0 3px ${compactDotColor}22`,
+          }}
+        />
+        <span className="hidden sm:inline">{compactLabel}</span>
+      </div>
+    )
+  }
+
+  const containerStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '10px 14px',
+    background: 'var(--bg-card)',
+    border: '0.5px solid var(--border)',
+    borderRadius: 'var(--r-card)',
+    flexWrap: 'wrap',
+  }
 
   return (
     <div data-query-key="now" aria-busy={isPending || undefined} style={containerStyle}>
@@ -261,14 +278,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
 
       {hasInitialError ? (
         <div className="min-w-0 flex-1">
-          {isTopbar ? (
-            <div role="alert" className="flex h-10 min-w-0 items-center justify-end gap-2 text-[11px] text-[var(--danger-text)]">
-              <span className="min-w-0 truncate">{getApiError(error).status === 403 ? t('common.permissionDenied') : getApiError(error).message}</span>
-              <ButtonV2 type="button" variant="secondary" size="sm" className="h-10 shrink-0" onClick={() => { void refetch() }}>{t('common.retry')}</ButtonV2>
-            </div>
-          ) : (
-            <QueryErrorState message={getApiError(error).status === 403 ? t('common.permissionDenied') : getApiError(error).message} onRetry={() => { void refetch() }} />
-          )}
+          <QueryErrorState message={getApiError(error).status === 403 ? t('common.permissionDenied') : getApiError(error).message} onRetry={() => { void refetch() }} />
         </div>
       ) : isEmpty ? (
         // Onboarding hint — replaces the metrics row when no traffic exists.
@@ -321,7 +331,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
         <span style={{ height: 28, flex: 1 }} aria-hidden />
       )}
 
-      {!isTopbar && !isEmpty && data?.last_activity && (
+      {!isEmpty && data?.last_activity && (
         <div
           style={{
             width: '100%',

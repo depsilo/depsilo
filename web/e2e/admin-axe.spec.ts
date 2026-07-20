@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import {
   expect,
   expectResolvedUiPreferences,
+  mockAdminApi,
   setUiPreferences,
   test,
   type UiLocale,
@@ -11,7 +12,7 @@ import {
 
 test.describe.configure({ mode: 'parallel' })
 
-const routes = ['/admin', '/admin/bandwidth', '/admin/logs', '/admin/audit', '/admin/quarantine', '/admin/cache', '/admin/upstreams', '/admin/users', '/admin/license', '/admin/rules', '/admin/security', '/admin/projects', '/admin/settings'] as const
+const routes = ['/admin', '/admin/bandwidth', '/admin/logs', '/admin/audit', '/admin/quarantine', '/admin/cache', '/admin/indexes', '/admin/upstreams', '/admin/upstream-updates', '/admin/users', '/admin/license', '/admin/rules', '/admin/security', '/admin/projects', '/admin/settings'] as const
 const themes = ['light', 'dark'] as const satisfies readonly UiTheme[]
 const locales = ['zh', 'en'] as const satisfies readonly UiLocale[]
 
@@ -49,3 +50,54 @@ for (const width of [320, 768, 1024]) for (const theme of themes) for (const loc
     })
   }
 }
+
+test('/admin/upstream-updates populated table is keyboard-scrollable and passes axe', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/upstream-updates': {
+      items: [{
+        id: 1,
+        cache_entry_id: 42,
+        ecosystem: 'npm',
+        upstream: 'npmjs',
+        package: '@depsilo/example-package-with-a-long-name',
+        result: 'updated',
+        detail: 'cached metadata refreshed',
+        latency_ms: 123,
+        occurrence_count: 1,
+        first_seen_at: '2026-07-17T08:00:00Z',
+        last_seen_at: '2026-07-17T08:00:00Z',
+        created_at: '2026-07-17T08:00:00Z',
+      }],
+      total: 1,
+      next_cursor: null,
+    },
+  })
+
+  await page.goto('/admin/upstream-updates')
+
+  const viewport = page.getByRole('region', { name: /上游更新记录/ })
+  await expect(viewport).toBeVisible()
+  await expect(page.getByRole('cell', { name: '已更新', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '已刷新缓存元数据。', exact: true })).toBeVisible()
+  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+  await viewport.focus()
+  await expect(viewport).toBeFocused()
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+})
+
+test('opened mobile Admin drawer passes axe and restores trigger focus', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await mockAdminApi(page)
+  await page.goto('/admin')
+
+  const trigger = page.getByRole('button', { name: /打开导航/ })
+  await trigger.click()
+  const drawer = page.getByRole('dialog', { name: /管理导航/ })
+  await expect(drawer).toBeVisible()
+  await expect(drawer.getByRole('link', { name: '总览', exact: true })).toBeFocused()
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+})

@@ -62,6 +62,8 @@ for (const width of [1920, 2560]) {
     await setUiPreferences(page, 'light', 'en')
     await page.goto('/admin')
     await expectResolvedUiPreferences(page, 'light', 'en')
+    await expect(page.locator('[data-admin-main]')).toBeVisible()
+    await expect(page.locator('[data-admin-outlet]')).toBeVisible()
     const metrics = await page.evaluate(() => {
       const main = document.querySelector<HTMLElement>('[data-admin-main]')
       const outlet = document.querySelector<HTMLElement>('[data-admin-outlet]')
@@ -108,9 +110,12 @@ for (const route of ['/', '/monitor']) for (const width of [390, 1440]) for (con
     await setUiPreferences(page, theme, 'zh')
     await page.goto(route)
     await expectResolvedUiPreferences(page, theme, 'zh')
-    await page.waitForFunction(() => [...document.querySelectorAll('.fade-up')].every(element =>
-      element.getAnimations().every(animation => animation.playState === 'finished'),
-    ))
+    await page.waitForFunction(() => {
+      const animatedElements = [...document.querySelectorAll('.fade-up')]
+      return animatedElements.length > 0 && animatedElements.every(element =>
+        element.getAnimations().every(animation => animation.playState === 'finished'),
+      )
+    })
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
     expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
     expect(consoleErrors).toEqual([])

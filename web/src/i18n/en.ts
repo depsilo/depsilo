@@ -4,8 +4,9 @@ const en = {
     theme: {
       light: 'Light',
       dark: 'Dark',
-      auto: 'Auto',
+      auto: 'System',
       changeNamed: 'Change theme; current theme: {{theme}}',
+      controlNamed: 'Appearance: {{theme}}',
     },
     language: {
       switchToEnglish: 'Switch to English',
@@ -33,15 +34,28 @@ const en = {
     // Pagination
     prevPage: 'Previous',
     nextPage: 'Next',
+    pagination: {
+      label: 'Pagination',
+      summary: '{{from}}–{{to}} of {{total}} items',
+      page: 'Page {{page}} of {{totalPages}}',
+    },
 
     // Nav
     nav: {
       monitor: 'Monitor',
       manage: 'Manage',
+      groups: {
+        operations: 'Operations',
+        cacheUpstreams: 'Cache & Upstreams',
+        supplyChain: 'Supply Chain',
+        system: 'System',
+      },
       dashboard: 'Dashboard',
       accessLogs: 'Access Logs',
       cacheManage: 'Cache',
+      cacheIndexes: 'Index Cache',
       upstreams: 'Upstreams',
+      upstreamUpdates: 'Upstream Updates',
       userManage: 'Users',
       settings: 'Settings',
       auditLogs: 'Audit Logs',
@@ -87,6 +101,24 @@ const en = {
       retry: 'Retry',
       permissionDenied: 'Permission denied',
       close: 'Close',
+    },
+    routeError: {
+      title: 'Could not load this page',
+      hint: 'The page resources may have changed or be temporarily unavailable. Refresh to try again.',
+      reload: 'Refresh page',
+    },
+    setupGate: {
+      checking: 'Checking setup status...',
+      title: 'Unable to confirm whether Depsilo is initialized',
+      hint: 'The Portal and Admin are not loaded yet. Check that the Depsilo server is reachable, then try again.',
+      retry: 'Check again',
+      retrying: 'Checking...',
+    },
+    notFound: {
+      title: 'Page not found',
+      hint: 'There is no page at this address. Return to a valid entry point.',
+      portalAction: 'Back to Quick Start',
+      adminAction: 'Back to Admin overview',
     },
     dashboard: {
       loadFailedHint: 'Check whether the Depsilo server is reachable, then retry.',
@@ -184,7 +216,10 @@ const en = {
 
     // Cache
     cache: {
+      subtitle: 'Review storage usage and cached artifacts, then run warmup or expired-entry cleanup when needed.',
       table: 'Cache entries table',
+      searchLabel: 'Search cached artifacts',
+      ecosystemFilter: 'Filter cached artifacts by ecosystem',
       deleteNamed: 'Delete cache entry {{key}}',
       searchPlaceholder: 'Search cache key...',
       cleanExpired: 'Clean Expired',
@@ -205,13 +240,91 @@ const en = {
       warmupEcosystem: 'Ecosystem',
       warmupPackages: 'Package list (one per line, supports requirements.txt format)',
       warmupPlaceholder: 'numpy\nrequests>=2.0\ntorch\npandas',
+      warmupPackagesNpm: 'Package list (one per line, package@version is accepted)',
+      warmupPlaceholderNpm: 'react\n@scope/widget@1.2.3\nvite',
       warmupStart: 'Start Warmup',
       warmupLoading: 'Warming up...',
       warmupStarted: 'Started warming up {{count}} packages',
     },
 
+    // Cached package indexes
+    cacheIndexes: {
+      subtitle: 'Inspect cached package metadata freshness, validators, and refresh status.',
+      loadError: 'Unable to load cached index information.',
+      staleNotice: 'The refresh failed. Showing index data from the last successful load.',
+      refresh: 'Refresh',
+      summaryTitle: 'Index overview',
+      summaryHint: 'Cached package metadata grouped by ecosystem, including freshness and the latest update time.',
+      noSummaryTitle: 'No index summary yet',
+      noSummaryHint: 'Package manager summaries will appear after an index has been requested and cached.',
+      total: 'Total indexes',
+      freshCount: '{{count}} fresh',
+      staleCount: '{{count}} stale',
+      lastUpdated: 'Last updated',
+      neverUpdated: 'Never',
+      searchLabel: 'Search cached indexes',
+      searchPlaceholder: 'Search package name or index key...',
+      ecosystemFilter: 'Filter by ecosystem',
+      allEcosystems: 'All ecosystems',
+      statusFilter: 'Filter by freshness',
+      allStatuses: 'All statuses',
+      statusFresh: 'Fresh',
+      statusStale: 'Stale',
+      tableLabel: 'Cached package indexes table',
+      emptyTitle: 'No matching cached indexes',
+      emptyHint: 'Try changing the filters, or request a package index through Depsilo first.',
+      key: 'Index key',
+      ecosystem: 'Ecosystem',
+      packageName: 'Package',
+      status: 'Status',
+      size: 'Size',
+      hitCount: 'Hits',
+      validator: 'Upstream validator',
+      noValidator: 'Unavailable',
+      lastAccessed: 'Last accessed',
+      expiresAt: 'Expires at',
+      updatedAt: 'Updated at',
+      actions: 'Actions',
+      refreshNamed: 'Manually refresh the index for {{name}}',
+      refreshSuccess: 'Refreshed the index for {{name}}.',
+      refreshFailed: 'Could not refresh the index for {{name}}: {{reason}}',
+      pagination: '{{total}} indexes · page {{page}} of {{totalPages}}',
+    },
+
+    upstreamUpdates: {
+      subtitle: 'Conditional checks for cached metadata with reliable upstream validators.',
+      loadError: 'Unable to load upstream update records.',
+      staleNotice: 'Refresh failed. Showing records from the last successful load.',
+      nextPageError: 'Unable to load more records. Try “Load more” again.',
+      tableLabel: 'Upstream update records',
+      time: 'Observation window',
+      ecosystem: 'Ecosystem',
+      upstream: 'Upstream',
+      package: 'Package',
+      result: 'Result',
+      detail: 'Details',
+      latency: 'Latency',
+      checks: 'Checks',
+      checkCount: 'Checks: {{count}}',
+      firstSeen: 'First seen: {{time}}',
+      loadMore: 'Load more',
+      loadingMore: 'Loading more...',
+      empty: 'No update probe records yet.',
+      results: {
+        updated: 'Updated',
+        unchanged: 'No change',
+        error: 'Failed',
+      },
+      details: {
+        refreshed: 'Refreshed the cached metadata.',
+        notModified: 'The upstream metadata has not changed.',
+        failed: 'Metadata refresh failed.',
+      },
+    },
+
     // Upstreams
     upstreams: {
+      subtitle: 'Manage upstreams, priority, proxies, and health probes for each package ecosystem.',
       addUpstream: 'Add Upstream',
       editUpstream: 'Edit Upstream',
       url: 'URL',
@@ -235,7 +348,9 @@ const en = {
 
     // Access Logs
     logs: {
+      subtitle: 'Review package requests, cache results, latency, and origin to diagnose install and upstream issues.',
       table: 'Access logs table',
+      searchLabel: 'Search access logs by package',
       searchPlaceholder: 'Search package...',
       hit: 'Hit',
       miss: 'Miss',
@@ -344,7 +459,10 @@ const en = {
     // Audit Logs
     audit: {
       title: 'Audit Logs',
+      subtitle: 'Trace package access outcomes and clients, then filter or export them by time, ecosystem, and package.',
       table: 'Audit logs table',
+      searchLabel: 'Search audit logs by package',
+      timeRange: 'Audit log time range',
       searchPlaceholder: 'Search package...',
       ecosystem: 'Ecosystem',
       result: 'Result',
@@ -367,6 +485,7 @@ const en = {
     // Rules
     rules: {
       title: 'Package Rules',
+      subtitle: 'Define allow and deny rules, then verify matching behavior before saving.',
       table: 'Package rules table',
       editNamed: 'Edit rule for {{name}}',
       deleteNamed: 'Delete rule for {{name}}',
@@ -400,6 +519,7 @@ const en = {
     // Security
     security: {
       title: 'Package Security',
+      subtitle: 'Review vulnerability intelligence, suggested blocks, and per-ecosystem security policies.',
       vulnerabilitiesTable: 'Security vulnerabilities table',
       overview: 'Overview',
       vulnerabilities: 'Vulnerabilities',
@@ -450,7 +570,8 @@ const en = {
 
       importFile: 'Import Vulnerabilities',
       importDesc: 'Upload OSV JSON file',
-      importSuccess: 'vulnerabilities imported',
+      importSuccess: '{{count}} vulnerabilities imported',
+      importSummary: 'Received {{received}} · Packages {{packages}} · Duplicates {{duplicates}} · Skipped {{skipped}} · Rules created {{rulesCreated}}',
       importFormat: 'OSV JSON format',
 
       // Suggestions tab
@@ -478,6 +599,7 @@ const en = {
     // Users
     users: {
       title: 'Users',
+      subtitle: 'Manage Operator accounts and API tokens.',
       table: 'Users table',
       tokensTable: 'API tokens table',
       editNamed: 'Edit {{name}}',
@@ -516,6 +638,7 @@ const en = {
 
     // Settings
     settings: {
+      subtitle: 'Review configuration sources and effective values, update writable runtime settings, and manage webhook notifications.',
       basic: 'General',
       cachePolicy: 'Cache Policy',
       storageBackend: 'Storage',
@@ -594,11 +717,12 @@ const en = {
 
     // Portal
     portal: {
+      navigation: 'Portal navigation',
       quickStart: 'Quick Start',
       monitor: 'Monitor',
       adminPanel: 'Admin →',
       adminShort: 'Admin',
-      backLink: '← Portal',
+      backLink: 'Back to Portal',
       online: 'Online',
       offline: 'Offline',
     },
@@ -674,6 +798,7 @@ const en = {
     // Projects
     projects: {
       title: 'Projects',
+      subtitle: 'Organize dependency activity by project, inspect scoped proxy access, and export project SBOMs.',
       table: 'Projects table',
       packagesTable: 'Project packages table',
       view: 'View',
@@ -737,6 +862,7 @@ const en = {
       degraded: 'degraded',
       failed: 'failed',
       historySummary: 'Last 24h · {{count}} checks',
+      historyUnavailable: 'Latency history is temporarily unavailable. Current upstream status is still shown.',
     },
 
     // Setup Wizard
@@ -746,6 +872,14 @@ const en = {
       basic_settings: 'Basic settings',
       port: 'Port',
       storage_path: 'Storage path',
+      admin_account: 'Administrator account',
+      admin_username: 'Administrator username',
+      admin_password: 'Administrator password',
+      admin_password_hint: 'Use at least 12 characters with three character classes, or a passphrase of at least 20 characters.',
+      confirm_password: 'Confirm password',
+      password_mismatch: 'The passwords do not match.',
+      bootstrap_token: 'Bootstrap token',
+      bootstrap_token_hint: 'Copy the one-time token from the initial server or container log.',
       select_ecosystems: 'Select ecosystems',
       select_ecosystems_hint: 'Choose which package ecosystems Depsilo should proxy.',
       configure_upstreams: 'Configure upstreams',
@@ -754,12 +888,24 @@ const en = {
       upstream_url: 'Upstream URL',
       priority: 'Priority',
       add_upstream: 'Add upstream',
+      remove_upstream: 'Remove upstream {{name}}',
       restarting: 'Restarting service',
-      restarting_hint: 'The page will reload automatically in a few seconds.',
+      restarting_hint: 'Waiting for {{url}} to become ready. You will be redirected automatically.',
+      ready: 'Service is ready',
+      ready_hint: 'Redirecting to the new service address…',
+      restart_failed_title: 'Could not reach the restarted service',
+      save_failed_title: 'Could not complete initial setup',
+      restart_timeout: 'Timed out waiting for the service to restart. Check the runtime logs, then retry the connection.',
+      restart_failed: 'An error occurred while checking the service. Try again.',
+      supervisor_required: 'Configuration was saved. Restart the Depsilo process manually, then retry the connection.',
+      reconnect_target: 'Target: {{url}}',
+      retry_connection: 'Retry connection',
+      return_to_settings: 'Review settings',
       complete: 'Complete',
       enabled_ecosystems: 'Enabled ecosystems',
       saving: 'Saving...',
       save_and_start: 'Save and start',
+      save_failed: 'Could not save the configuration. Check your input and try again.',
       step_of: 'Step {{current}} of {{total}}',
       next: 'Next',
       prev: 'Previous',
@@ -864,7 +1010,7 @@ const en = {
       editNamed: 'Edit {{name}}',
       deleteNamed: 'Delete {{name}}',
       disabled: 'Disabled',
-      testSent: 'Test notification sent. Check your platform.',
+      testSent: 'Test notification queued. Check your platform.',
       created: 'Webhook created.',
       updated: 'Webhook updated.',
       deleted: 'Webhook deleted.',

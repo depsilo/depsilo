@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"depsilo/internal/ecosystem"
 )
 
 // SetupRequest is the request body from the setup wizard.
@@ -15,6 +17,10 @@ type SetupRequest struct {
 	Storage struct {
 		Path string `json:"path"`
 	} `json:"storage"`
+	Admin struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	} `json:"admin"`
 	Ecosystems map[string]EcosystemSetup `json:"ecosystems"`
 }
 
@@ -36,8 +42,12 @@ type UpstreamSetup struct {
 func WriteConfig(path string, req SetupRequest) error {
 	// Ensure parent directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := ensureConfigDirectory(dir); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
+	}
+	jwtSecret, err := NewSecureToken()
+	if err != nil {
+		return fmt.Errorf("generate JWT secret: %w", err)
 	}
 
 	var b strings.Builder
@@ -80,28 +90,25 @@ func WriteConfig(path string, req SetupRequest) error {
 	// Auth section
 	b.WriteString("[auth]\n")
 	b.WriteString("enabled = true\n")
-	b.WriteString("jwt_secret = \"change-me-in-production\"\n")
+	b.WriteString(fmt.Sprintf("jwt_secret = %q\n", jwtSecret))
 	b.WriteString("token_ttl = \"168h\"\n")
 	b.WriteString("\n")
 
-	// Ecosystem sections
-	ecosystemTomlKey := map[string]string{
-		"pypi": "pypi", "apt": "apt", "npm": "npm", "go": "go",
-		"cargo": "cargo", "maven": "maven", "rubygems": "rubygems",
-		"composer": "composer", "nuget": "nuget", "conda": "conda",
-		"cran": "cran", "alpine": "alpine", "helm": "helm",
-	}
-
-	for eco, setup := range req.Ecosystems {
-		if !setup.Enabled {
+	// Ecosystem sections. Iterate the catalog rather than the request map so
+	// repeated setup submissions produce a stable, reviewable document.
+	for _, definition := range ecosystem.SetupDefinitions() {
+		if !definition.StandardUpstreams {
 			continue
 		}
-		tomlKey, ok := ecosystemTomlKey[eco]
+		setup, ok := req.Ecosystems[definition.Name]
 		if !ok {
 			continue
 		}
+		if !setup.Enabled {
+			continue
+		}
 		for _, u := range setup.Upstreams {
-			b.WriteString(fmt.Sprintf("[[%s.upstreams]]\n", tomlKey))
+			b.WriteString(fmt.Sprintf("[[%s.upstreams]]\n", definition.Name))
 			b.WriteString(fmt.Sprintf("name = %q\n", u.Name))
 			b.WriteString(fmt.Sprintf("url = %q\n", u.URL))
 			b.WriteString(fmt.Sprintf("priority = %d\n", u.Priority))
@@ -122,9 +129,34 @@ func WriteConfig(path string, req SetupRequest) error {
 	b.WriteString("scan_interval = \"24h\"\n")
 	b.WriteString("check_ttl = \"24h\"\n")
 
-	if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
+	outcome, err := (osAtomicFileWriter{}).Write(path, []byte(b.String()), 0600)
+	if err != nil {
 		return fmt.Errorf("write config file: %w", err)
+	}
+	if outcome.durabilityErr != nil {
+		return fmt.Errorf("sync config directory: %w", outcome.durabilityErr)
 	}
 
 	return nil
+}
+
+func ensureConfigDirectory(dir string) error {
+	info, err := os.Stat(dir)
+	switch {
+	case os.IsNotExist(err):
+		return os.MkdirAll(dir, 0700)
+	case err != nil:
+		return err
+	case !info.IsDir():
+		return fmt.Errorf("%s is not a directory", dir)
+	case filepath.Base(filepath.Clean(dir)) == ".depsilo":
+		// This is Depsilo's dedicated default state/config directory, so it is
+		// safe to tighten an older installation that was created as 0755.
+		return os.Chmod(dir, 0700)
+	default:
+		// ConfigPath may point at an arbitrary project or system directory. Do
+		// not change that directory's operator-managed permissions; the config
+		// file itself is still atomically replaced with mode 0600.
+		return nil
+	}
 }

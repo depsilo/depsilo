@@ -4,8 +4,9 @@ import "strings"
 
 // CacheKey returns the cache key for an Alpine Linux repository path.
 // The path mirrors the upstream layout, e.g.
-//   v3.19/main/x86_64/APKINDEX.tar.gz
-//   v3.19/main/x86_64/bash-5.2.21-r0.apk
+//
+//	v3.19/main/x86_64/APKINDEX.tar.gz
+//	v3.19/main/x86_64/bash-5.2.21-r0.apk
 func CacheKey(path string) string {
 	return "alpine/" + strings.TrimPrefix(path, "/")
 }

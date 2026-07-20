@@ -7,13 +7,12 @@ import (
 )
 
 // AdapterChecker is the bridge between *Checker and the
-// adapter.QuarantineChecker interface. Lets server.go register the
-// checker with the adapter package without making the adapter package
+// adapter.QuarantineChecker interface. It lets server.go bind the checker to
+// an adapter.RequestScope without making the adapter package
 // import internal/quarantine (which would create a cycle:
 // adapter → quarantine → db ← adapter via models).
 //
-// Wrap returns a value usable directly as
-// adapter.SetQuarantineChecker(quarantine.Wrap(c)).
+// Wrap returns a value usable directly with adapter.NewRequestScope.
 type AdapterChecker struct {
 	inner *Checker
 }

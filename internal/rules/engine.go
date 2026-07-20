@@ -123,16 +123,37 @@ func matchScore(r *db.PackageRule, ecosystem, packageName, version string) int {
 		return -1
 	}
 
-	// Version match
-	if r.Version == "*" || version == "" {
+	// Version match. An absent actual version means the request is package
+	// metadata whose URL does not identify a release. It may only match a
+	// package-wide rule; treating it as a match for "< fixed" or an exact
+	// version would incorrectly expand that rule to every package release.
+	ruleVersion := strings.TrimSpace(r.Version)
+	actualVersion := strings.TrimSpace(version)
+	if actualVersion == "" {
+		if ruleVersion != "" && ruleVersion != "*" {
+			return -1
+		}
 		score += 0
-	} else if matchVersion(r.Version, version) {
+	} else if ruleVersion == "" || ruleVersion == "*" {
+		score += 0
+	} else if !isVersionRange(ruleVersion) && strings.EqualFold(ruleVersion, actualVersion) {
+		score += 2
+	} else if matchVersion(ruleVersion, actualVersion) {
 		score += 1
 	} else {
 		return -1
 	}
 
 	return score
+}
+
+func isVersionRange(version string) bool {
+	for _, prefix := range []string{"<=", ">=", "<", ">"} {
+		if strings.HasPrefix(version, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // matchVersion handles version comparison.

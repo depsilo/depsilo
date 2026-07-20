@@ -2,10 +2,13 @@ import { adminApi, authApi } from './api'
 import type {
   AccessLogListResponse,
   AdminUpstream,
+  AdminUpstreamLatenciesResponse,
   AdminUpstreamListResponse,
   ApproveSuggestionRequest,
   ApproveSuggestionResponse,
   AuditLogListResponse,
+  CacheCleanupResponse,
+  CacheDeleteResponse,
   CheckUpstreamResponse,
   CreateProjectRequest,
   CreateProjectResponse,
@@ -46,6 +49,8 @@ export type SecondArg<T extends (...args: never[]) => unknown> = Parameters<T>[1
 export type PrincipalContract = Assert<Equal<ResponseData<typeof authApi.me>, Principal>>
 export type LogsContract = Assert<Equal<ResponseData<typeof adminApi.listLogs>, AccessLogListResponse>>
 export type AuditContract = Assert<Equal<ResponseData<typeof adminApi.listAuditLogs>, AuditLogListResponse>>
+export type CacheDeleteContract = Assert<Equal<ResponseData<typeof adminApi.deleteCache>, CacheDeleteResponse>>
+export type CacheCleanupContract = Assert<Equal<ResponseData<typeof adminApi.cleanupCache>, CacheCleanupResponse>>
 export type SecurityDashboardContract = Assert<Equal<ResponseData<typeof adminApi.getSecurityDashboard>, SecurityDashboard>>
 export type VulnerabilityContract = Assert<Equal<ResponseData<typeof adminApi.listVulnerabilities>, SecurityVulnerabilityPage>>
 export type VulnerablePackagesContract = Assert<Equal<ResponseData<typeof adminApi.listVulnerablePackages>, SecurityPackagePage>>
@@ -79,6 +84,7 @@ export type ExportProjectSBOMInputContract = Assert<Equal<SecondArg<typeof admin
 type UpstreamIsAny<T> = 0 extends (1 & T) ? true : false
 
 export type UpstreamListContract = Assert<Equal<ResponseData<typeof adminApi.listUpstreams>, AdminUpstreamListResponse>>
+export type UpstreamLatenciesContract = Assert<Equal<ResponseData<typeof adminApi.getUpstreamLatencies>, AdminUpstreamLatenciesResponse>>
 export type UpstreamCreateContract = Assert<Equal<ResponseData<typeof adminApi.createUpstream>, AdminUpstream>>
 export type UpstreamUpdateContract = Assert<Equal<ResponseData<typeof adminApi.updateUpstream>, AdminUpstream>>
 export type UpstreamDeleteContract = Assert<Equal<ResponseData<typeof adminApi.deleteUpstream>, DeleteUpstreamResponse>>

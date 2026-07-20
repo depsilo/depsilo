@@ -220,7 +220,12 @@ func startDepsilo(ctx context.Context, dir string) {
 
 	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/server")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "DEPSILO_CONFIG="+dir+"/config.toml")
+	cmd.Env = append(os.Environ(),
+		"DEPSILO_CONFIG="+dir+"/config.toml",
+		"DEPSILO_AUTH_JWT_SECRET=test-only-0123456789abcdef0123456789abcdef",
+		"DEPSILO_ADMIN_USERNAME=admin",
+		"DEPSILO_ADMIN_PASSWORD="+integrationAdminPassword,
+	)
 	// Discard output to avoid "I/O incomplete" on test exit
 	devNull, _ := os.Open(os.DevNull)
 	cmd.Stdout = devNull

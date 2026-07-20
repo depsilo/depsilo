@@ -2,10 +2,12 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/asyncruntime"
 	"depsilo/internal/entitlement"
 	"depsilo/internal/upstream"
 )
@@ -60,7 +62,14 @@ func StartScheduler(ctx context.Context, n *Notifier, cfg SchedulerConfig) {
 }
 
 func runChecks(ctx context.Context, n *Notifier, cfg SchedulerConfig) {
-	n.LoadConfigs()
+	if err := n.LoadConfigs(ctx); err != nil {
+		if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+			return
+		}
+		// Keep checking against the last successfully loaded snapshot. A
+		// transient database failure should not erase known notification routes.
+		zap.L().Warn("failed to reload webhook configs", zap.Error(err))
+	}
 	checkUpstreamHealth(ctx, n, cfg.Pools)
 	checkLicense(ctx, n, cfg.Checker, cfg.LicenseWarnDays)
 }
@@ -84,13 +93,14 @@ func checkUpstreamHealth(ctx context.Context, n *Notifier, pools map[string]*ups
 			}
 		}
 		if allDown {
-			n.Dispatch(ctx, Event{
+			event := Event{
 				Type:      EventUpstreamDown,
 				Severity:  "critical",
 				Title:     "All " + eco + " upstreams are down",
 				Message:   "All upstream mirrors for " + eco + " are unreachable. Depsilo will serve stale cache if available.",
 				Timestamp: time.Now(),
-			})
+			}
+			logDispatchAdmission(ctx, event, n.Dispatch(event))
 			zap.L().Warn("webhook: all upstreams down", zap.String("ecosystem", eco))
 		}
 	}
@@ -110,23 +120,35 @@ func checkLicense(ctx context.Context, n *Notifier, checker *entitlement.Checker
 	}
 	daysLeft := int(time.Until(*status.ExpiresAt).Hours() / 24)
 	if daysLeft <= 0 {
-		n.Dispatch(ctx, Event{
+		event := Event{
 			Type:      EventLicenseExpiring,
 			Severity:  "critical",
 			Title:     "Depsilo Pro license has expired",
 			Message:   "Your Pro license expired. Pro features (audit logs, SBOM, security scanning, rules) are now locked.",
 			Timestamp: time.Now(),
-		})
+		}
+		logDispatchAdmission(ctx, event, n.Dispatch(event))
 	} else if daysLeft <= warnDays {
-		n.Dispatch(ctx, Event{
+		event := Event{
 			Type:      EventLicenseExpiring,
 			Severity:  "warning",
 			Title:     "Depsilo Pro license expiring soon",
 			Message:   "Your Pro license expires in " + itoa(daysLeft) + " day(s). Renew to keep Pro features.",
 			Detail:    "Expires: " + status.ExpiresAt.Format("2006-01-02"),
 			Timestamp: time.Now(),
-		})
+		}
+		logDispatchAdmission(ctx, event, n.Dispatch(event))
 	}
+}
+
+func logDispatchAdmission(ctx context.Context, event Event, err error) {
+	if err == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, asyncruntime.ErrClosed) {
+		return
+	}
+	zap.L().Warn("webhook dispatch was not admitted",
+		zap.String("event_type", event.Type),
+		zap.Error(err),
+	)
 }
 
 func itoa(n int) string {

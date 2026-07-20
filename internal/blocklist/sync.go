@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +16,9 @@ import (
 
 	"go.uber.org/zap"
 
+	"depsilo/internal/asyncruntime"
 	"depsilo/internal/db"
+	"depsilo/internal/ecosystem"
 )
 
 // Syncer downloads the OSV bulk dataset per ecosystem, keeps only the
@@ -32,6 +35,11 @@ type Syncer struct {
 	// ReplaceEcosystem transactions (v0.8.0 review finding).
 	running atomic.Bool
 }
+
+var (
+	ErrSyncInProgress  = errors.New("blocklist sync already running")
+	ErrSyncUnavailable = errors.New("blocklist sync is unavailable")
+)
 
 func NewSyncer(store *Store, cfg Config) (*Syncer, error) {
 	mirror := strings.TrimRight(cfg.MirrorURL, "/")
@@ -96,6 +104,12 @@ func (s *Syncer) runOnce(ctx context.Context) {
 		zap.L().Info("blocklist: sync already running, skipping")
 		return
 	}
+	s.runReserved(ctx)
+}
+
+// runReserved executes a sync after the caller has atomically reserved the
+// single in-flight slot.
+func (s *Syncer) runReserved(ctx context.Context) {
 	defer s.running.Store(false)
 	start := s.now()
 	count, err := s.SyncOnce(ctx)
@@ -112,15 +126,22 @@ func (s *Syncer) runOnce(ctx context.Context) {
 		zap.Int64("entries", count), zap.Duration("took", took))
 }
 
-// TriggerSync starts one sync on a fresh goroutine and reports
-// whether it actually started (false = one is already running). The
-// admin "sync now" endpoint surfaces false as 409.
-func (s *Syncer) TriggerSync(ctx context.Context) bool {
-	if s.running.Load() {
-		return false
+// TryStartSync reserves the single in-flight slot before submitting the work.
+// A rejected submission releases the reservation synchronously, so shutdown
+// cannot leave the status permanently stuck at running.
+func (s *Syncer) TryStartSync(tasks asyncruntime.Submitter) error {
+	if !s.running.CompareAndSwap(false, true) {
+		return ErrSyncInProgress
 	}
-	go s.runOnce(ctx)
-	return true
+	if tasks == nil {
+		s.running.Store(false)
+		return ErrSyncUnavailable
+	}
+	if err := tasks.Submit(func(ctx context.Context) { s.runReserved(ctx) }); err != nil {
+		s.running.Store(false)
+		return errors.Join(ErrSyncUnavailable, err)
+	}
+	return nil
 }
 
 // Running reports whether a sync is currently in flight (admin status).
@@ -178,7 +199,7 @@ func (s *Syncer) SyncOnce(ctx context.Context) (int64, error) {
 // skipped without parsing their JSON — the npm archive holds tens of
 // thousands of GHSA entries we never open.
 func (s *Syncer) fetchEcosystem(ctx context.Context, eco string) ([]db.MaliciousPackage, error) {
-	osvName := osvEcosystem[eco]
+	osvName := ecosystem.OSVNameFor(eco)
 	reqURL := fmt.Sprintf("%s/%s/all.zip", s.mirror, url.PathEscape(osvName))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
