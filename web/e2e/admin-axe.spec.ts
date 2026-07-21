@@ -42,7 +42,7 @@ for (const width of [390, 1440]) for (const theme of themes) for (const locale o
   }
 }
 
-const targetedRoutes = ['/admin/settings', '/admin/bandwidth', '/admin/cache', '/admin/logs', '/admin/security', '/admin/quarantine'] as const
+const targetedRoutes = ['/admin', '/admin/settings', '/admin/bandwidth', '/admin/cache', '/admin/logs', '/admin/security', '/admin/quarantine'] as const
 for (const width of [320, 768, 1024]) for (const theme of themes) for (const locale of locales) {
   for (const route of targetedRoutes) {
     test(`${route} targeted ${width} ${theme} ${locale} passes axe`, async ({ page }) => {

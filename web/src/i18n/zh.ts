@@ -154,6 +154,27 @@ const zh = {
       emptyTopPackagesHint: '一旦有包被请求和缓存，最热门的会出现在这里。',
     },
 
+    recentDownloads: {
+      title: '实时下载',
+      liveRefresh: '实时 · 每 5 秒更新',
+      retrying: '更新中断 · 自动重试中',
+      viewAudit: '查看审计日志',
+      listLabel: '最近下载记录',
+      cacheHit: '缓存命中',
+      upstreamFetch: '上游拉取',
+      completed: '已完成',
+      failed: '下载失败',
+      httpError: 'HTTP {{status}}',
+      empty: '等待首次下载，依赖制品请求会显示在这里。',
+      unavailable: '暂时无法读取下载状态。',
+      stale: '实时更新暂时中断，将自动重试；正在保留最近的数据。',
+      retry: '重试',
+      unknownPackage: '未识别包',
+      unknownEcosystem: '其他',
+      unknownTime: '时间未知',
+      itemLabel: '{{ecosystem}} {{package}}，{{status}}，{{size}}，耗时 {{latency}} 毫秒，{{time}}',
+    },
+
     // Now strip — 仪表盘顶部的实时状态条
     now: {
       statusHealthy: '运行中',

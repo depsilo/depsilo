@@ -185,11 +185,11 @@ type PackageRule struct {
 }
 
 type AuditLog struct {
-	ID          uint      `gorm:"primarykey" json:"id"`
+	ID          uint      `gorm:"primarykey;index:idx_audit_action_order,priority:2,sort:desc" json:"id"`
 	Ecosystem   string    `gorm:"size:16;index" json:"ecosystem"`
 	PackageName string    `gorm:"size:256;index" json:"package_name"`
 	Version     string    `gorm:"size:128" json:"version"`
-	Action      string    `gorm:"size:16" json:"action"`
+	Action      string    `gorm:"size:16;index:idx_audit_action_order,priority:1" json:"action"`
 	CacheResult string    `gorm:"size:8" json:"cache_result"`
 	ClientIP    string    `gorm:"size:64;index" json:"client_ip"`
 	UserAgent   string    `gorm:"size:256" json:"user_agent"`

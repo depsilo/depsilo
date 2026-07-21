@@ -138,6 +138,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Dashboard
 	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled)
 	adminRead.GET("/dashboard", dashHandler.GetDashboard)
+	adminRead.GET("/dashboard/recent-downloads", dashHandler.GetRecentDownloads)
 	adminRead.GET("/dashboard/trends", dashHandler.GetTrends)
 
 	// Bandwidth report

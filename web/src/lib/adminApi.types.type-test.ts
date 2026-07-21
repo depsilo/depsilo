@@ -23,6 +23,7 @@ import type {
   ProjectPackagesResponse,
   ProjectSBOMQuery,
   RegenerateProjectTokenResponse,
+  RecentDownloadsResponse,
   SecurityDashboard,
   SecurityBaseQuery,
   SecurityImportResponse,
@@ -48,6 +49,7 @@ export type SecondArg<T extends (...args: never[]) => unknown> = Parameters<T>[1
 
 export type PrincipalContract = Assert<Equal<ResponseData<typeof authApi.me>, Principal>>
 export type LogsContract = Assert<Equal<ResponseData<typeof adminApi.listLogs>, AccessLogListResponse>>
+export type RecentDownloadsContract = Assert<Equal<ResponseData<typeof adminApi.getRecentDownloads>, RecentDownloadsResponse>>
 export type AuditContract = Assert<Equal<ResponseData<typeof adminApi.listAuditLogs>, AuditLogListResponse>>
 export type CacheDeleteContract = Assert<Equal<ResponseData<typeof adminApi.deleteCache>, CacheDeleteResponse>>
 export type CacheCleanupContract = Assert<Equal<ResponseData<typeof adminApi.cleanupCache>, CacheCleanupResponse>>

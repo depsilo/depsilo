@@ -154,6 +154,27 @@ const en = {
       emptyTopPackagesHint: 'Once packages get requested and cached, the most popular ones will surface here.',
     },
 
+    recentDownloads: {
+      title: 'Live downloads',
+      liveRefresh: 'Live · updates every 5s',
+      retrying: 'Interrupted · retrying automatically',
+      viewAudit: 'View audit log',
+      listLabel: 'Recent downloads',
+      cacheHit: 'Cache hit',
+      upstreamFetch: 'Upstream fetch',
+      completed: 'Completed',
+      failed: 'Download failed',
+      httpError: 'HTTP {{status}}',
+      empty: 'Waiting for the first download. Artifact requests will appear here.',
+      unavailable: 'Download activity is temporarily unavailable.',
+      stale: 'Live updates were interrupted. Retrying automatically and keeping the most recent data.',
+      retry: 'Retry',
+      unknownPackage: 'Unknown package',
+      unknownEcosystem: 'other',
+      unknownTime: 'unknown time',
+      itemLabel: '{{ecosystem}} {{package}}, {{status}}, {{size}}, {{latency}} milliseconds, {{time}}',
+    },
+
     // Now strip — live liveness signal at the top of the dashboard
     now: {
       statusHealthy: 'Healthy',

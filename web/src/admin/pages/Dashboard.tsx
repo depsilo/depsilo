@@ -10,6 +10,7 @@ import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
 import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/components/TrendsCard'
 import NowStrip from '@/admin/components/NowStrip'
+import RecentDownloads from '@/admin/components/RecentDownloads'
 import EmptyState from '@/components/EmptyState'
 import ButtonV2 from '@/components/Button'
 import InlineNotice from '@/components/InlineNotice'
@@ -215,7 +216,10 @@ export default function DashboardV2() {
       {data && isRefetchError && (
         <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
       )}
-      <NowStrip />
+      <div className="space-y-3">
+        <NowStrip />
+        <RecentDownloads limit={3} />
+      </div>
       {/* ── 24h metrics row ─────────────────────────── */}
       <section>
         <div data-dashboard-kpis className="grid grid-cols-2 gap-x-4 gap-y-8 py-2 xl:grid-cols-4 xl:gap-8">

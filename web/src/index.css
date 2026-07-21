@@ -1159,6 +1159,71 @@ html.dark .quickstart-hero-wash,
   .fade-up { animation: none; }
 }
 
+/* ── Dashboard live download rail ──────────────────────────
+   The data itself stays still and readable. A quiet signal line plus a short
+   entrance on newly keyed rows provides motion without turning the feed into
+   a marquee. */
+@keyframes liveDownloadEnter {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes liveDownloadSweep {
+  from { transform: translateX(-140%); }
+  to { transform: translateX(440%); }
+}
+@keyframes liveDownloadPulse {
+  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 color-mix(in oklab, var(--live) 28%, transparent); }
+  50% { opacity: 1; box-shadow: 0 0 0 4px color-mix(in oklab, var(--live) 0%, transparent); }
+}
+.live-download-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.live-download-item + .live-download-item {
+  border-top: 0.5px solid var(--border-soft, var(--border));
+}
+.live-download-row {
+  animation: liveDownloadEnter 180ms ease-out both;
+}
+.live-download-pulse {
+  animation: liveDownloadPulse 2.4s ease-in-out infinite;
+}
+.live-download-flow {
+  position: relative;
+  height: 1px;
+  overflow: hidden;
+  background: var(--border-soft, var(--border));
+}
+.live-download-flow::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, var(--live), transparent);
+  animation: liveDownloadSweep 3.2s linear infinite;
+}
+.live-download-flow-paused::after {
+  animation: none;
+  opacity: 0;
+}
+@media (min-width: 640px) {
+  .live-download-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .live-download-item + .live-download-item {
+    border-top: 0;
+    border-left: 0.5px solid var(--border-soft, var(--border));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-download-row,
+  .live-download-pulse,
+  .live-download-flow::after {
+    animation: none !important;
+  }
+}
+
 /* ── Reusable chip / pill ── */
 .chip {
   display: inline-flex;

@@ -45,6 +45,7 @@ import type {
   QuarantineQuery,
   RefreshResponse,
   RegenerateProjectTokenResponse,
+  RecentDownloadsResponse,
   RuleListResponse,
   RuleRecord,
   RuleRequest,
@@ -135,6 +136,8 @@ export const authApi = {
 
 export const adminApi = {
   getDashboard: () => api.get<DashboardResponse>('/admin/dashboard'),
+  getRecentDownloads: (limit: number = 3) =>
+    api.get<RecentDownloadsResponse>('/admin/dashboard/recent-downloads', { params: { limit } }),
   getDashboardTrends: (range_: string = '7d') =>
     api.get<DashboardTrendsResponse>('/admin/dashboard/trends', { params: { range: range_ } }),
 

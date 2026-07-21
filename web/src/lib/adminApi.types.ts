@@ -119,6 +119,20 @@ export interface AccessLog {
 export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean }
 export interface AccessLogListResponse { items: AccessLog[]; total: number; page: number; page_size: number }
 
+export interface RecentDownload {
+  id: number
+  ecosystem: string
+  package_name: string
+  version: string
+  cache_result: string
+  latency_ms: number
+  bytes_sent: number
+  status_code: number
+  created_at: string
+}
+
+export interface RecentDownloadsResponse { items: RecentDownload[] }
+
 export interface CacheQuery { page?: number; page_size?: number; search?: string; adapter_type?: string }
 export interface CacheEntry { id: number; key: string; adapter_type: string; package_name: string; size: number; hit_count: number; last_accessed: string; expires_at: string }
 export interface CacheListResponse { items: CacheEntry[]; total: number; page: number; page_size: number }

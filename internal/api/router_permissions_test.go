@@ -19,6 +19,7 @@ func TestAdminRoutesUseExplicitCapabilityGroups(t *testing.T) {
 	writeCount := 0
 	seenRulesTest := false
 	seenLogExport := false
+	seenRecentDownloads := false
 
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -52,6 +53,7 @@ func TestAdminRoutesUseExplicitCapabilityGroups(t *testing.T) {
 			}
 			seenRulesTest = seenRulesTest || (method == "POST" && path == "/rules/test")
 			seenLogExport = seenLogExport || (method == "GET" && path == "/logs/export")
+			seenRecentDownloads = seenRecentDownloads || (method == "GET" && path == "/dashboard/recent-downloads")
 		case "adminWrite", "proWrite":
 			writeCount++
 			if method == "GET" {
@@ -68,5 +70,8 @@ func TestAdminRoutesUseExplicitCapabilityGroups(t *testing.T) {
 	}
 	if !seenLogExport {
 		t.Fatal("GET /logs/export is not registered on adminRead")
+	}
+	if !seenRecentDownloads {
+		t.Fatal("GET /dashboard/recent-downloads is not registered on adminRead")
 	}
 }

@@ -8,6 +8,7 @@ import type {
   AdminUpstreamUpdateListResponse,
   AuditLogListResponse,
   ProjectListResponse,
+  RecentDownloadsResponse,
   SecurityDashboard,
   SecurityPackagePage,
   SecuritySuggestionPage,
@@ -115,6 +116,7 @@ const canonicalAdminApiDefaults = {
   'GET /api/v1/admin/upstreams': { items: [], total: 0 } satisfies AdminUpstreamListResponse,
   'GET /api/v1/admin/upstreams/latency': { series: [] } satisfies AdminUpstreamLatenciesResponse,
   'GET /api/v1/admin/upstream-updates': { items: [], total: 0, next_cursor: null } satisfies AdminUpstreamUpdateListResponse,
+  'GET /api/v1/admin/dashboard/recent-downloads': { items: [] } satisfies RecentDownloadsResponse,
   'GET /api/v1/admin/logs': { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse,
   'GET /api/v1/admin/audit-logs': { items: [], total: 0, page: 1 } satisfies AuditLogListResponse,
   'GET /api/v1/admin/security/dashboard': {

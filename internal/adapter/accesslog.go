@@ -3,7 +3,6 @@ package adapter
 import (
 	"context"
 	"net/http"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -138,10 +137,7 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 
 	if hooks != nil && hooks.audit != nil {
 		action := "download"
-		if strings.HasSuffix(cacheKey, ".json") || strings.HasSuffix(cacheKey, ".html") ||
-			strings.HasSuffix(cacheKey, ".xml") || strings.Contains(cacheKey, "metadata") ||
-			strings.Contains(cacheKey, "index") || strings.Contains(cacheKey, "PACKAGES") ||
-			strings.Contains(cacheKey, "repodata") {
+		if db.ClassifyCacheKind(adapterType, cacheKey) == db.CacheKindMetadata {
 			action = "metadata"
 		}
 		cacheResult := "miss"
@@ -161,6 +157,7 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 			LatencyMs:   latency.Milliseconds(),
 			BytesSent:   bytesSent,
 			StatusCode:  statusCode,
+			CreatedAt:   now,
 		})
 	}
 }

@@ -50,6 +50,14 @@ type captureAuditLogger struct {
 	calls *capturedHookCalls
 }
 
+type captureAuditEntries struct {
+	entries []db.AuditLog
+}
+
+func (l *captureAuditEntries) Log(entry db.AuditLog) {
+	l.entries = append(l.entries, entry)
+}
+
 func (l *captureAuditLogger) Log(entry db.AuditLog) {
 	l.calls.mu.Lock()
 	l.calls.audit[entry.ClientIP] = l.owner
@@ -105,6 +113,43 @@ func TestInstallAccessHooksReleaseIsOwnerAwareAndLogUsesOneSnapshot(t *testing.T
 	releaseSecond()
 	if accessHooks.Load() != nil {
 		t.Fatal("current owner release did not clear its snapshot")
+	}
+}
+
+func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
+	accessHooks.Store(nil)
+	t.Cleanup(func() { accessHooks.Store(nil) })
+
+	calls := newCapturedHookCalls()
+	audit := &captureAuditEntries{}
+	InstallAccessHooks(&captureAccessRecorder{owner: 1, calls: calls}, audit)
+
+	tests := []struct {
+		ecosystem string
+		cacheKey  string
+		want      string
+	}{
+		{ecosystem: "apt", cacheKey: "apt/ubuntu/dists/jammy/InRelease", want: "metadata"},
+		{ecosystem: "apt", cacheKey: "apt/ubuntu/dists/jammy/main/binary-amd64/Packages.gz", want: "metadata"},
+		{ecosystem: "alpine", cacheKey: "alpine/v3.20/main/x86_64/APKINDEX.tar.gz", want: "metadata"},
+		{ecosystem: "pypi", cacheKey: "pypi/simple/requests/index.html", want: "metadata"},
+		{ecosystem: "pypi", cacheKey: "pypi/files/index-helper-1.0.0.whl", want: "download"},
+		{ecosystem: "npm", cacheKey: "npm/react/-/react-19.0.0.tgz", want: "download"},
+	}
+
+	for index, test := range tests {
+		LogAccess(context.Background(), nil, test.ecosystem, "GET", test.cacheKey, false, "upstream", time.Millisecond, 200, fmt.Sprintf("classification-%d", index), 10)
+	}
+	if len(audit.entries) != len(tests) {
+		t.Fatalf("audit entries = %d, want %d", len(audit.entries), len(tests))
+	}
+	for index, test := range tests {
+		if got := audit.entries[index].Action; got != test.want {
+			t.Errorf("%s %q action = %q, want %q", test.ecosystem, test.cacheKey, got, test.want)
+		}
+		if audit.entries[index].CreatedAt.IsZero() {
+			t.Errorf("%s %q has zero event timestamp", test.ecosystem, test.cacheKey)
+		}
 	}
 }
 
