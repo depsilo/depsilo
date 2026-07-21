@@ -64,6 +64,7 @@ jobs:
         run: |
           bash -n install.sh scripts/*.sh
           bash scripts/test-install-checksum.sh
+          bash scripts/test-makefile.sh
           bash scripts/test-make-dev-run.sh
           bash scripts/test-release-tag.sh
 

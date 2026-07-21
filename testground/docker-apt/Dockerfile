@@ -1,11 +1,11 @@
 FROM ubuntu:22.04
 
-ARG APT_MIRROR
+ARG DEPSILO_URL
 
-# Replace default sources with proxy if APT_MIRROR is set
-RUN if [ -n "$APT_MIRROR" ]; then \
-      sed -i "s|http://archive.ubuntu.com|${APT_MIRROR}|g" /etc/apt/sources.list && \
-      sed -i "s|http://security.ubuntu.com|${APT_MIRROR}|g" /etc/apt/sources.list; \
+# Replace default sources with the Depsilo APT route when configured.
+RUN if [ -n "$DEPSILO_URL" ]; then \
+      sed -i "s|http://archive.ubuntu.com|${DEPSILO_URL}/apt|g" /etc/apt/sources.list && \
+      sed -i "s|http://security.ubuntu.com|${DEPSILO_URL}/apt|g" /etc/apt/sources.list; \
     fi
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

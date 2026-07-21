@@ -1,6 +1,6 @@
 FROM composer:2
 
-ARG COMPOSER_MIRROR
+ARG DEPSILO_URL
 
 ENV COMPOSER_ALLOW_SUPERUSER=1
 WORKDIR /test
@@ -9,7 +9,7 @@ WORKDIR /test
 # secure-http must be disabled because Depsilo is served over plain HTTP
 # from the docker0 gateway; composer otherwise refuses non-https sources.
 RUN composer config -g secure-http false \
-    && composer config -g repo.packagist composer "${COMPOSER_MIRROR}" \
+    && composer config -g repo.packagist composer "${DEPSILO_URL}/composer" \
     && composer init --name "test/test" --no-interaction \
     && composer require --no-progress --no-interaction monolog/monolog:^3.0
 

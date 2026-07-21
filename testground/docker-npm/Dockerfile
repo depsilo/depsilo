@@ -1,8 +1,8 @@
 FROM node:20-alpine
 
-ARG NPM_REGISTRY
+ARG DEPSILO_URL
 
-RUN npm config set registry "${NPM_REGISTRY}" \
+RUN npm config set registry "${DEPSILO_URL}/npm/" \
     && mkdir -p /test && cd /test \
     && npm init -y >/dev/null \
     && npm install --no-audit --no-fund --no-progress lodash@4.17.21

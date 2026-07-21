@@ -1,6 +1,6 @@
 FROM continuumio/miniconda3
 
-ARG CONDA_CHANNEL
+ARG DEPSILO_URL
 
 # Tuna-style upstream layout: <root>/pkgs/main/<subdir>/repodata.json
 #
@@ -15,6 +15,6 @@ RUN conda config --set repodata_use_zst false \
     && conda config --set ssl_verify false
 
 RUN conda install -y --override-channels \
-    -c "${CONDA_CHANNEL}/pkgs/main" \
+    -c "${DEPSILO_URL}/conda/pkgs/main" \
     -n base requests \
     && python -c "import requests; print('conda: requests', requests.__version__, 'OK')"

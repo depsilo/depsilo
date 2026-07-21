@@ -109,7 +109,10 @@ make stop                   # kill the background Depsilo
 make test-clean             # remove all depsilo-test-* images
 ```
 
-Adding a new ecosystem? One new `testground/docker-<eco>/Dockerfile` plus one `test-docker-<eco>:` target in the Makefile — that's the entire surface.
+Adding a new ecosystem? Add `testground/docker-<eco>/Dockerfile` with the shared
+`ARG DEPSILO_URL` interface, then append the ecosystem name to
+`TEST_DOCKER_ALL_ECOS` in the Makefile. The generic rule creates the
+`test-docker-<eco>` target automatically.
 
 ## Before pushing
 

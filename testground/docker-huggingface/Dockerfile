@@ -1,7 +1,7 @@
 FROM python:3.11-alpine
 
-ARG HF_ENDPOINT
-ENV HF_ENDPOINT=${HF_ENDPOINT}
+ARG DEPSILO_URL
+ENV HF_ENDPOINT=${DEPSILO_URL}/huggingface
 
 RUN apk add --no-cache git
 RUN pip install --no-cache-dir huggingface_hub

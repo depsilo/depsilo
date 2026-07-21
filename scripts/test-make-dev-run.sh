@@ -120,6 +120,15 @@ for target in run run-pro dev; do
         echo "make $target does not use the guarded development runner" >&2
         exit 1
     fi
+    if [ "$target" = run-pro ]; then
+        if ! grep -Fq 'DEPSILO_DEV_PRO=1' <<<"$dry_run"; then
+            echo "make run-pro no longer enables Pro development features" >&2
+            exit 1
+        fi
+    elif grep -Fq 'DEPSILO_DEV_PRO=1' <<<"$dry_run"; then
+        echo "make $target unexpectedly enables Pro development features" >&2
+        exit 1
+    fi
 done
 
 echo "make development runner tests passed"

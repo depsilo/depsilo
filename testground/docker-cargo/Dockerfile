@@ -1,12 +1,12 @@
 FROM rust:1.75-slim
 
-ARG CARGO_REGISTRY
+ARG DEPSILO_URL
 
 RUN mkdir -p /root/.cargo && printf '%s\n' \
     '[source.crates-io]' \
     'replace-with = "depsilo"' \
     '[source.depsilo]' \
-    "registry = \"sparse+${CARGO_REGISTRY}\"" \
+    "registry = \"sparse+${DEPSILO_URL}/crates/\"" \
     > /root/.cargo/config.toml
 
 WORKDIR /test
