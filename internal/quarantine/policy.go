@@ -43,6 +43,11 @@ const (
 // Built by NewPolicy from a config.SupplyChainConfig — never
 // constructed by hand outside tests.
 type Policy struct {
+	// ageGateEnabled is the resolved global switch. Thresholds retain the
+	// recommended profile even while disabled so an explicit true can enable
+	// the profile without duplicating every ecosystem in configuration.
+	ageGateEnabled bool
+
 	// Per-ecosystem threshold lookup. Keys are lowercase ecosystem
 	// names matching internal/adapter directory names ("pypi", "npm",
 	// "cargo", ...). Missing key → fall back to Default.
@@ -76,6 +81,11 @@ type Policy struct {
 // docs/DIRECTION.md §Task 1 example and binds via mapstructure inside
 // config.Config.SupplyChain.
 type Config struct {
+	// MinReleaseAgeEnabled is tri-state for backward compatibility. Nil with
+	// no threshold table means off; nil with an explicit table preserves the
+	// pre-switch behavior; an explicit bool always wins.
+	MinReleaseAgeEnabled *bool `mapstructure:"min_release_age_enabled"`
+
 	// MinReleaseAge holds the per-ecosystem threshold strings. Keys
 	// are ecosystem names; values are Go-style duration strings
 	// ("3d", "7d", "0", "24h", "30m"). The special key "default"
@@ -96,10 +106,9 @@ type Config struct {
 	FailClosed *bool `mapstructure:"fail_closed"`
 }
 
-// DefaultThresholds returns the per-ecosystem threshold defaults
-// from the docs/DIRECTION.md decisions log. Used when no
-// supply_chain.min_release_age is set in the operator's config —
-// shipping safe defaults out of the box is part of the wedge.
+// DefaultThresholds returns the recommended per-ecosystem profile used when
+// the minimum-release-age gate is enabled. The gate itself defaults off for
+// new and empty configurations.
 //
 // Rationale per ecosystem:
 //   - pip / cargo / maven / rubygems / nuget / composer: 3d window
@@ -137,6 +146,10 @@ func DefaultThresholds() map[string]time.Duration {
 // operator hears about config typos at startup, not at request time.
 func NewPolicy(cfg Config) (*Policy, error) {
 	thresholds := DefaultThresholds()
+	ageGateEnabled := len(cfg.MinReleaseAge) > 0
+	if cfg.MinReleaseAgeEnabled != nil {
+		ageGateEnabled = *cfg.MinReleaseAgeEnabled
+	}
 
 	var defaultThreshold time.Duration
 
@@ -173,11 +186,12 @@ func NewPolicy(cfg Config) (*Policy, error) {
 	}
 
 	return &Policy{
-		Thresholds: thresholds,
-		Default:    defaultThreshold,
-		Mode:       mode,
-		Allow:      allow,
-		FailClosed: failClosed,
+		ageGateEnabled: ageGateEnabled,
+		Thresholds:     thresholds,
+		Default:        defaultThreshold,
+		Mode:           mode,
+		Allow:          allow,
+		FailClosed:     failClosed,
 	}, nil
 }
 
@@ -185,6 +199,9 @@ func NewPolicy(cfg Config) (*Policy, error) {
 // back to Default. Ecosystem names are normalized to lowercase
 // before lookup so callers don't need to remember the case.
 func (p *Policy) Threshold(ecosystem string) time.Duration {
+	if p == nil || !p.ageGateEnabled {
+		return 0
+	}
 	if d, ok := p.Thresholds[strings.ToLower(ecosystem)]; ok {
 		return d
 	}
@@ -196,6 +213,12 @@ func (p *Policy) Threshold(ecosystem string) time.Duration {
 // can short-circuit without even reaching the timestamp resolver.
 func (p *Policy) Enabled(ecosystem string) bool {
 	return p.Threshold(ecosystem) > 0
+}
+
+// IsAgeGateEnabled reports the resolved global switch before per-ecosystem
+// zero-threshold exemptions are applied.
+func (p *Policy) IsAgeGateEnabled() bool {
+	return p != nil && p.ageGateEnabled
 }
 
 // ParseDuration extends time.ParseDuration with "d" (days) and "w"

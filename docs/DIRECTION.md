@@ -157,10 +157,11 @@ Rebuilding those is now a low-ROI use of time. Updated T2:
 a configurable threshold, so a freshly-poisoned version cannot enter a build before the
 community catches it.
 
-**Config — built-in per-ecosystem defaults + explicit overrides:**
+**Config — default-off gate + recommended per-ecosystem profile:**
 
 ```yaml
 supply_chain:
+  min_release_age_enabled: false  # opt in explicitly
   min_release_age:
     default: 0             # fallback for unknown/future ecosystem keys only
     pypi: 3d
@@ -246,7 +247,8 @@ deps, **and** the container image. Tagged-release workflows upload them as GitHu
 Release attachments. Publishing at `.well-known/sbom/{version}.cdx.json` and
 cosign attestations remain planned.
 
-**T1 Task 1 defaults:** `pypi: 3d` · `npm: 7d` · `cargo: 3d` · `go: 0` (Go modules
+**T1 Task 1 default:** the age gate is off. When enabled, the recommended profile is
+`pypi: 3d` · `npm: 7d` · `cargo: 3d` · `go: 0` (Go modules
 are immutable + checksum DB already mitigates) · `maven/nuget/rubygems: 3d`.
 Not-found/unsupported timestamp → **fail-closed**; upstream outage → allow + warning.
 Allow-list supports glob

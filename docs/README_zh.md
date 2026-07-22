@@ -21,7 +21,7 @@
 ## ✨ 特性
 
 - 🚀 **14 个常规生态代理缓存 + Docker OCI** — pip, apt, npm, Go, cargo, Maven, RubyGems, Composer, NuGet, Conda, CRAN, Helm, Alpine, Hugging Face
-- 🛡️ **最小发布年龄隔离** — 按生态配置新版本冷却窗口，阻断刚发布的高风险版本
+- 🛡️ **最小发布年龄隔离** — 默认关闭；可按生态启用新版本冷却窗口
 - ⛔ **已知恶意包阻断** — 每 6 小时同步 8 个生态的 OSV MAL 精确版本/全版本记录，命中返回 451
 - 🔐 **篡改检测** — 首次抓取记录 SHA-256；后台刷新不一致时保留缓存，LRU 淘汰后重取会缓存/返回新字节并告警
 - 🧾 **审计与 Webhook** — block / bypass / approve / revoke / override 均可追踪；阻断和篡改信号可推送到 Slack / 钉钉 / 企微 / 飞书
@@ -180,6 +180,9 @@ ttl_index    = "5m"         # PyPI simple / APT Release 等元数据
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
+[supply_chain]
+min_release_age_enabled = false  # 默认关闭；改为 true 后启用推荐冷却阈值
+
 [auth]
 enabled    = true
 # 非 loopback 监听使用此占位值时将拒绝启动；推荐设置 DEPSILO_AUTH_JWT_SECRET。
@@ -207,6 +210,9 @@ name     = "aliyun"
 url      = "https://mirrors.aliyun.com"
 priority = 2
 ```
+
+`min_release_age_enabled` 只控制“最新版本冷却”门禁。默认开启的 OSV 已知恶意包
+封锁和仅告警的篡改检测不受该开关影响。
 
 升级后的首次启动会把普通生态的上游源导入数据库，并记录已激活生态。完成首次导入后，Admin 与数据库成为权威来源；通过 Admin 删除或修改的上游源不会在重启时被配置文件覆盖。若要启用此前未激活的受支持生态，需要先在配置文件中添加该生态的上游源并重启。Docker Registry 与额外索引仍由配置文件管理，不属于 Admin 上游源 CRUD。
 

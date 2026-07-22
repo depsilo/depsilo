@@ -40,6 +40,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   GOPROXY `!upper` path decoding); extra PyPI-compatible indexes
   canonicalize to the pypi blocklist rows.
 
+### Changed
+- **Minimum release age now defaults off** for new and empty configurations.
+  Set `[supply_chain] min_release_age_enabled = true` to activate the
+  recommended thresholds, or `false` to disable the gate while retaining a
+  threshold table. Existing configs with explicit thresholds and no switch
+  remain enabled for backward compatibility. The known-malicious blocklist
+  and tamper detection are unaffected.
+
 ### Fixed
 - Blocklist import semantics hardened by adversarial review against
   the LIVE dataset: bounded-range advisories without version lists

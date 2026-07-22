@@ -662,9 +662,9 @@ if pkg, version := packagekey.ParseXxxPath(path); pkg != "" && version != "" {
   webhook，并延长 TTL 防告警风暴。LRU 淘汰后重取仍会告警，但旧字节已不存在，
   无法恢复首见副本。不可变判定用 TTL 阈值（默认取 `cache.ttl_blob`）。
 - 每个生态需在 `internal/quarantine/resolvers/` 提供发布时间 resolver（真 API 或 Last-Modified 近似）
-- 默认阈值（`policy.go DefaultThresholds`）：npm 7d，多数生态 3d，go/apt 0（免检）；**空配置也生效**。not-found/unsupported 默认 fail-closed，真实上游故障始终放行并告警
+- 最小发布年龄门禁默认关闭；`[supply_chain] min_release_age_enabled = true` 后使用推荐阈值（`policy.go DefaultThresholds`）：npm 7d，多数生态 3d，go/apt 0（免检）。未配置新开关但已有显式阈值表的旧配置继续启用；显式 false 始终关闭。not-found/unsupported 默认 fail-closed，真实上游故障始终放行并告警
 - 元数据请求不 gate，只 gate 制品下载；版本字符串必须与 resolver 在上游元数据中能匹配到的形式一致（如 composer 用 pretty version 而非 normalized）
-- 集成测试注意：`tests/integration/main_test.go` 已把所有生态阈值归零（resolver 会查真实 registry，mock 包不存在会被 fail-closed 拦截）
+- 集成测试注意：`tests/integration/main_test.go` 显式关闭年龄门禁（resolver 会查真实 registry，mock 包不存在会被 fail-closed 拦截）
 
 ---
 

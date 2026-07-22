@@ -42,6 +42,9 @@ path = "./data/cache"
 	if got, want := cfg.Storage.Path, "/root/.depsilo/data/cache"; got != want {
 		t.Errorf("Storage.Path = %q, want %q", got, want)
 	}
+	if cfg.SupplyChain.MinReleaseAgeEnabled != nil {
+		t.Fatal("omitted minimum release age switch must remain nil for compatibility resolution")
+	}
 }
 
 func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
@@ -57,6 +60,46 @@ func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
 	}
 	if cfg.Server.Port != 23333 {
 		t.Fatalf("Server.Port = %d, want 23333", cfg.Server.Port)
+	}
+	if cfg.SupplyChain.MinReleaseAgeEnabled == nil || *cfg.SupplyChain.MinReleaseAgeEnabled {
+		t.Fatal("config.example.toml must explicitly default minimum release age to disabled")
+	}
+}
+
+func TestLoadMinimumReleaseAgeEnvironmentOverrideWithoutConfigKey(t *testing.T) {
+	setTestJWTSecret(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("[server]\nhost = \"127.0.0.1\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_SUPPLY_CHAIN_MIN_RELEASE_AGE_ENABLED", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SupplyChain.MinReleaseAgeEnabled == nil || !*cfg.SupplyChain.MinReleaseAgeEnabled {
+		t.Fatal("environment-only minimum release age override was not decoded")
+	}
+}
+
+func TestLoadMinimumReleaseAgeEnvironmentOverrideWinsOverConfig(t *testing.T) {
+	setTestJWTSecret(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte("[server]\nhost = \"127.0.0.1\"\n[supply_chain]\nmin_release_age_enabled = true\n")
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_SUPPLY_CHAIN_MIN_RELEASE_AGE_ENABLED", "false")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SupplyChain.MinReleaseAgeEnabled == nil || *cfg.SupplyChain.MinReleaseAgeEnabled {
+		t.Fatal("environment false did not override config true")
 	}
 }
 

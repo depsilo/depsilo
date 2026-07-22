@@ -456,7 +456,7 @@ const zh = {
     // Supply-chain Quarantine
     quarantine: {
       title: '供应链隔离',
-      subtitle: '基于「最小发布年龄」拦截可能被投毒的新版本。每条决策都会写入下面的事件流；管理员可以为可信版本临时放行。',
+      subtitle: '最小发布年龄默认关闭；启用并配置阈值后可隔离刚发布的版本。恶意包封锁独立运行，所有决策都会记录在这里。',
       tab: {
         events: '事件',
         approvals: '已放行',
@@ -492,7 +492,7 @@ const zh = {
         sync_now: '立即同步',
         syncing: '同步中…',
         overrides_title: '误报豁免',
-        overrides_hint: '豁免创建后 24 小时自动过期，且不可续期——只能重新创建（每次都是一条审计记录）。豁免只解除恶意封锁，不影响最小发布年龄隔离。',
+        overrides_hint: '豁免创建后 24 小时自动过期，且不可续期——只能重新创建（每次都是一条审计记录）。豁免只解除恶意封锁；若已启用最小发布年龄，隔离仍会继续执行。',
         no_overrides_title: '没有生效中的豁免',
         no_overrides_hint: '命中恶意封锁的请求会以 451 MALICIOUS_BLOCKED 拒绝。确认误报后可在此临时豁免。',
         col_expires: '剩余有效期',
@@ -518,7 +518,7 @@ const zh = {
       events: {
         table: '供应链隔离事件表格',
         empty_title: '暂无供应链事件',
-        empty_hint: '当一个新发布的包被请求时，决策会出现在这里。',
+        empty_hint: '最小发布年龄启用后的决策、恶意包命中和篡改告警会显示在这里。',
       },
       approvals: {
         table: '供应链隔离放行表格',
@@ -823,7 +823,7 @@ const zh = {
       heroEyebrow: '本地镜像 · 供应链护栏',
       heroTitle: '装得快，也装得放心',
       heroDesc: '复制下面的提示词到 Claude Code / Cursor / Copilot Chat。AI 会提出透明、可审核的 Dockerfile、CI 和构建脚本变更，明确写出 Depsilo，同时保留 lockfile 与签名校验。',
-      heroDescShort: '热依赖从局域网缓存毫秒返回；代理不可用时需要执行文档化回滚。最小发布年龄护栏会拦截刚上架的投毒版本。',
+      heroDescShort: '热依赖从局域网缓存毫秒返回。已知恶意版本由恶意清单阻断；如需让所有新版本先经过冷却期，可按需启用最小发布年龄护栏。',
       heroSub: '复制提示词给 Claude Code / Cursor，一分钟接入',
       heroPreviewLabel: '提示词预览',
       heroSizeHint: '约 5 KB',

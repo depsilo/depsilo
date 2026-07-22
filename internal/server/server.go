@@ -349,20 +349,24 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, err
 	}
 
-	// Supply-chain quarantine (T1 Task 1 — minimum release age). Built
-	// from cfg.SupplyChain; nil-safe if the operator hasn't configured
-	// anything (the default-thresholds map ships pre-populated, so the
-	// system protects even an empty config). Failure to build the
-	// checker (e.g. an unsupported mode) is a startup error — operators
-	// must hear about misconfiguration before the first request.
+	// Supply-chain quarantine (T1 Task 1 — minimum release age). The age
+	// gate defaults off for an empty config; explicit legacy threshold tables
+	// remain enabled unless the operator sets the new switch false. Failure to
+	// build the checker (e.g. an unsupported mode) is a startup error.
 	quarantinePolicy, err := quarantine.NewPolicy(quarantine.Config{
-		MinReleaseAge: cfg.SupplyChain.MinReleaseAge,
-		Mode:          cfg.SupplyChain.Mode,
-		Allow:         cfg.SupplyChain.Allow,
-		FailClosed:    cfg.SupplyChain.FailClosed,
+		MinReleaseAgeEnabled: cfg.SupplyChain.MinReleaseAgeEnabled,
+		MinReleaseAge:        cfg.SupplyChain.MinReleaseAge,
+		Mode:                 cfg.SupplyChain.Mode,
+		Allow:                cfg.SupplyChain.Allow,
+		FailClosed:           cfg.SupplyChain.FailClosed,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("quarantine policy: %w", err)
+	}
+	if quarantinePolicy.IsAgeGateEnabled() {
+		zap.L().Info("minimum release age quarantine enabled")
+	} else {
+		zap.L().Info("minimum release age quarantine disabled")
 	}
 	quarantineStore := quarantine.NewStore(database)
 	quarantineLookup := quarantine.NewLookup(quarantineStore, resolvers.NewRegistry())

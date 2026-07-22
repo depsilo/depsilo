@@ -87,11 +87,13 @@ lru_threshold = 90
 [auth]
 enabled = false
 
+[supply_chain]
+min_release_age_enabled = false
+
 # The malicious blocklist syncs from the mock's OSV endpoint — it
 # marks npm "malicious-pkg" as malware, driving the end-to-end 451
-# MALICIOUS_BLOCKED test. Note the age thresholds below are all zero,
-# which deliberately does NOT disable the blocklist: malware blocking
-# is checker step 0, before any threshold logic.
+# MALICIOUS_BLOCKED test. The age-gate switch above does not disable the
+# blocklist: malware blocking is checker step 0, before threshold logic.
 [supply_chain.blocklist]
 enabled = true
 sync_interval = "6h"
@@ -105,30 +107,6 @@ mirror_url = "%s"
 [supply_chain.tamper_detection]
 enabled = true
 immutable_threshold_seconds = 1
-
-# Quarantine ships enabled with per-ecosystem default thresholds, and
-# its publish-time resolvers query the REAL registries. The fake
-# packages served by the mock don't exist there, so the fail-closed
-# default would 451 every artifact download (and make results depend
-# on live registry data). Zero every threshold so the integration
-# suite exercises the proxy, not the quarantine policy.
-[supply_chain.min_release_age]
-default = "0"
-pypi = "0"
-npm = "0"
-go = "0"
-cargo = "0"
-maven = "0"
-rubygems = "0"
-composer = "0"
-nuget = "0"
-conda = "0"
-cran = "0"
-helm = "0"
-alpine = "0"
-docker = "0"
-huggingface = "0"
-apt = "0"
 
 [[pypi.upstreams]]
 name = "mock"

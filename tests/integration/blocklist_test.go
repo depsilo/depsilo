@@ -66,11 +66,10 @@ func TestBlocklist_MaliciousVersionBlockedEndToEnd(t *testing.T) {
 	_ = resp
 }
 
-func TestBlocklist_ThresholdZeroDoesNotBypassMalware(t *testing.T) {
-	// The test config zeroes every min_release_age threshold — if the
-	// malware gate ran AFTER the threshold short-circuit, this request
-	// would be served. Any different version must also block (the
-	// advisory covers all versions).
+func TestBlocklist_DisabledAgeGateDoesNotBypassMalware(t *testing.T) {
+	// The test config disables the minimum-release-age gate — if the malware
+	// gate depended on that switch, this request would be served. Any different
+	// version must also block (the advisory covers all versions).
 	url := depsiloURL + "/npm/malicious-pkg/-/malicious-pkg-9.9.9.tgz"
 	resp, err := http.Get(url)
 	if err != nil {

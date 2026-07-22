@@ -304,10 +304,14 @@ check_ttl = "24h"
 # self-propagating worms by giving the community a window to catch
 # and yank a poisoned version before it can enter a build.
 #
+# The age gate defaults OFF so normal installs never reject a package merely
+# because it is new. Set min_release_age_enabled = true to activate the
+# recommended profile below, then override only the ecosystems you need.
+# Existing configs that already contain a threshold table but predate the
+# switch remain enabled until they explicitly set the switch to false.
+#
 # Threshold values accept "3d" / "7d" / "2w" / "24h" / "30m" / "0".
-# Set "0" explicitly to disable quarantine for a supported ecosystem.
-# Omitting a key retains its built-in value. The defaults shown below
-# match the current implementation; override only what you want to change.
+# Set an ecosystem to "0" to exempt it while the global switch is on.
 #
 # Mode: only "block" is implemented. Other values fail at startup so a
 # configuration mistake cannot silently weaken enforcement.
@@ -321,12 +325,13 @@ check_ttl = "24h"
 # runtime via the admin UI — those approvals persist permanently.
 #
 # fail_closed controls not-found / unsupported timestamp results:
-#   true  (default) — treat as quarantined (safer)
+#   true  (default when the age gate is enabled) — treat as quarantined
 #   false           — allow through (legacy / opt-in)
 # A genuine upstream outage always allows with a warning; one registry
 # incident must not halt every build.
 
 [supply_chain]
+min_release_age_enabled = false
 mode = "block"
 fail_closed = true
 
@@ -337,8 +342,8 @@ fail_closed = true
 # ]
 
 [supply_chain.min_release_age]
-# Fallback for unknown/future ecosystem keys only. Supported ecosystems use
-# their built-in threshold unless explicitly overridden below.
+# Recommended opt-in profile. The fallback is for unknown/future ecosystem
+# keys only; supported ecosystems use these values when the switch is true.
 default  = "0"
 pypi     = "3d"
 npm      = "7d"

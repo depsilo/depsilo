@@ -66,8 +66,8 @@ var (
 // "cargo", ...).
 //
 // Resolvers absent from the map cause Lookup to return ErrUnsupported,
-// which is by design — we ship resolvers only for ecosystems whose
-// quarantine threshold is non-zero by default. Operators who set a
+// which is by design — we ship resolvers for ecosystems in the recommended
+// minimum-release-age profile. Operators who set a
 // threshold for an unsupported ecosystem will hit ErrUnsupported and
 // see the audit trail explain what's missing.
 type Registry map[string]Resolver

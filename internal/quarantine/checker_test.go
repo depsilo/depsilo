@@ -22,6 +22,12 @@ func (c canned) Lookup(_ context.Context, _, _ string) (time.Time, error) {
 	return c.t, c.err
 }
 
+type resolverFunc func(pkg, version string) (time.Time, error)
+
+func (f resolverFunc) Lookup(_ context.Context, pkg, version string) (time.Time, error) {
+	return f(pkg, version)
+}
+
 // newChecker builds a Checker wired to an in-memory DB + a canned
 // resolver registry. `now` is fixed so age calculations are
 // deterministic.
@@ -59,7 +65,7 @@ func TestChecker_RejectsServeLastEligible(t *testing.T) {
 }
 
 func TestChecker_EcosystemDisabled(t *testing.T) {
-	// Threshold 0 → no quarantine → no resolver call ever.
+	// Empty config defaults the entire age gate off → no resolver call ever.
 	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
 	c := newChecker(t, Config{}, resolvers.Registry{}, now)
 	d := c.Check(context.Background(), "go", "github.com/x/y", "v1.0.0", "127.0.0.1")
@@ -68,6 +74,29 @@ func TestChecker_EcosystemDisabled(t *testing.T) {
 	}
 	if d.Threshold != 0 {
 		t.Errorf("threshold = %v, want 0", d.Threshold)
+	}
+}
+
+func TestChecker_ExplicitDisableSkipsPositiveThreshold(t *testing.T) {
+	enabled := false
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	calls := 0
+	c := newChecker(t, Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"npm": "7d"},
+	}, resolvers.Registry{
+		"npm": resolverFunc(func(_, _ string) (time.Time, error) {
+			calls++
+			return now, nil
+		}),
+	}, now)
+
+	d := c.Check(context.Background(), "npm", "fresh-package", "1.0.0", "127.0.0.1")
+	if !d.Allowed || d.Threshold != 0 {
+		t.Fatalf("disabled gate decision = %+v, want allowed with zero threshold", d)
+	}
+	if calls != 0 {
+		t.Fatalf("resolver calls = %d, want 0 while gate is disabled", calls)
 	}
 }
 

@@ -29,6 +29,11 @@ func Load() (*Config, error) {
 	v.SetEnvPrefix("DEPSILO")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+	// Keep this key out of setDefaults: its nil state distinguishes a new
+	// default-off install from an older config with explicit thresholds.
+	if err := v.BindEnv("supply_chain.min_release_age_enabled"); err != nil {
+		return nil, fmt.Errorf("bind minimum release age environment override: %w", err)
+	}
 
 	setDefaults(v)
 

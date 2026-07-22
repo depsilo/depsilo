@@ -456,7 +456,7 @@ const en = {
     // Supply-chain Quarantine
     quarantine: {
       title: 'Supply-chain Quarantine',
-      subtitle: 'Blocks freshly-published package versions until they age past your configured threshold. Each decision is logged below; operators can approve trusted versions through early.',
+      subtitle: 'Minimum release age is off by default. Once enabled and configured, it quarantines fresh releases; the malware blocklist runs independently and every decision is logged here.',
       tab: {
         events: 'Events',
         approvals: 'Approvals',
@@ -492,7 +492,7 @@ const en = {
         sync_now: 'Sync now',
         syncing: 'Syncing…',
         overrides_title: 'False-positive overrides',
-        overrides_hint: 'Overrides expire 24 hours after creation and cannot be extended — only re-created, each one an audited decision. An override lifts the malware block only; minimum-release-age quarantine still applies.',
+        overrides_hint: 'Overrides expire 24 hours after creation and cannot be extended — only re-created, each one an audited decision. An override lifts the malware block only; minimum-release-age quarantine still applies when enabled.',
         no_overrides_title: 'No active overrides',
         no_overrides_hint: 'Requests matching the blocklist are refused with 451 MALICIOUS_BLOCKED. Confirmed false positives can be temporarily exempted here.',
         col_expires: 'Expires in',
@@ -518,7 +518,7 @@ const en = {
       events: {
         table: 'Quarantine events table',
         empty_title: 'No quarantine events yet',
-        empty_hint: 'Decisions will appear here when a freshly-published version is requested.',
+        empty_hint: 'Age-gate decisions, malware matches, and tamper alerts will appear here.',
       },
       approvals: {
         table: 'Quarantine approvals table',
@@ -823,7 +823,7 @@ const en = {
       heroEyebrow: 'Local mirror · Supply-chain guardrail',
       heroTitle: 'Install fast. Install safe.',
       heroDesc: 'Copy the prompt below into Claude Code / Cursor / Copilot Chat. The agent proposes transparent, reviewable Dockerfile, CI, and build-script changes that name Depsilo and keep lockfiles and signature checks intact.',
-      heroDescShort: 'Hot dependencies return from the LAN cache in milliseconds. An unavailable proxy requires the documented rollback path; the minimum-release-age guardrail keeps just-published poisoned versions out.',
+      heroDescShort: 'Hot dependencies return from the LAN cache in milliseconds. The malware list blocks known-bad versions; enable minimum release age when every new release should pass through a cooling period.',
       heroSub: 'Paste the prompt into Claude Code / Cursor — connected in a minute',
       heroPreviewLabel: 'Prompt preview',
       heroSizeHint: '~5 KB',

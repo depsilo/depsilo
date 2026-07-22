@@ -19,7 +19,7 @@ const pageContracts = [
   {
     route: '/admin/quarantine',
     width: 'fluid',
-    description: '基于「最小发布年龄」拦截可能被投毒的新版本。',
+    description: '最小发布年龄默认关闭；启用并配置阈值后可隔离刚发布的版本。',
   },
   {
     route: '/admin/license',

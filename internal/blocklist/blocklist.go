@@ -36,9 +36,10 @@ const (
 
 // Config is the operator-facing shape under [supply_chain.blocklist].
 type Config struct {
-	// Enabled defaults to true — an empty config is protected, matching
-	// the quarantine posture. Sync failures degrade (serve on last good
-	// data; no data at all means no blocking) rather than break the proxy.
+	// Enabled defaults to true. This harder known-malware gate is independent
+	// of the default-off minimum-release-age policy. Sync failures degrade
+	// (serve on last good data; no data at all means no blocking) rather than
+	// break the proxy.
 	Enabled *bool `mapstructure:"enabled"`
 
 	// SyncInterval between dataset refreshes. Default 6h.

@@ -54,10 +54,14 @@ type Config struct {
 // freeze/snapshot features can own sub-blocks without reshaping the
 // quarantine package's public API.
 type SupplyChainConfig struct {
-	MinReleaseAge map[string]string `mapstructure:"min_release_age"`
-	Mode          string            `mapstructure:"mode"`
-	Allow         []string          `mapstructure:"allow"`
-	FailClosed    *bool             `mapstructure:"fail_closed"`
+	// MinReleaseAgeEnabled is a tri-state migration switch. Nil keeps an
+	// existing explicit threshold table enabled, while an entirely empty
+	// configuration defaults the age gate off. Explicit false always wins.
+	MinReleaseAgeEnabled *bool             `mapstructure:"min_release_age_enabled"`
+	MinReleaseAge        map[string]string `mapstructure:"min_release_age"`
+	Mode                 string            `mapstructure:"mode"`
+	Allow                []string          `mapstructure:"allow"`
+	FailClosed           *bool             `mapstructure:"fail_closed"`
 	// Blocklist mirrors blocklist.Config field-for-field — same
 	// convention as the fields above (config carries the raw operator
 	// shape; the domain package owns semantics and defaults).

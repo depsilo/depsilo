@@ -43,7 +43,7 @@ package manager exactly the way they always have.
 
 ## Supported ecosystems
 
-| Manager | Ecosystem | Quarantine threshold default |
+| Manager | Ecosystem | Recommended age threshold |
 |---------|-----------|--------|
 | **pip** / uv / Poetry | Python | 3 days |
 | **apt** | Debian / Ubuntu | 0 (curated upstream) |
@@ -60,9 +60,10 @@ package manager exactly the way they always have.
 | **apk** | Alpine | 3 days |
 | **huggingface-cli** / transformers / datasets | HF Hub | 3 days |
 
-Thresholds are configurable for the 13 ecosystems with publish-time resolvers;
-set one to `0` to disable its age check. APT is not connected to the quarantine
-gate, and Go has no publish-time resolver, so both must remain `0`. Add
+The age gate is off by default. When enabled, thresholds are configurable for
+the 13 ecosystems with publish-time resolvers; set one to `0` to exempt that
+ecosystem. APT is not connected to the quarantine gate, and Go has no
+publish-time resolver, so both must remain `0`. Add
 per-package overrides via the allow list (glob / pin / range syntax).
 
 ## Quick start
@@ -152,8 +153,13 @@ the next release.
 
 ### Minimum release age (quarantine)
 
-A version published less than the configured threshold ago gets a `451`
-with a structured error body:
+This gate is **off by default** for new and empty configurations. Enable it
+only when your organization wants every new release to pass through a cooling
+period; the known-malicious blocklist remains independent and enabled by
+default.
+
+When enabled, a version published less than the configured threshold ago gets
+a `451` with a structured error body:
 
 ```
 HTTP/1.1 451 Unavailable For Legal Reasons
@@ -174,6 +180,7 @@ audit reason. Approvals are permanent until explicitly revoked.
 
 ```toml
 [supply_chain]
+min_release_age_enabled = true  # default false; true activates the recommended profile
 mode = "block"            # currently supported mode
 fail_closed = true        # block on not-found/unsupported; upstream outages still allow
 
@@ -185,8 +192,8 @@ fail_closed = true        # block on not-found/unsupported; upstream outages sti
 # ]
 
 [supply_chain.min_release_age]
-# "default" is only a fallback for unknown/future ecosystem keys; the
-# supported ecosystems retain their built-in values unless listed explicitly.
+# Optional overrides for the recommended profile. "default" applies only to
+# unknown/future ecosystem keys.
 default  = "0"
 pypi     = "3d"
 npm      = "7d"

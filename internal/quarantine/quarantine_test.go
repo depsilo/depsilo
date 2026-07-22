@@ -62,24 +62,14 @@ func TestNewPolicy_Defaults(t *testing.T) {
 		t.Fatalf("NewPolicy(empty): %v", err)
 	}
 
-	// Locked-in defaults from DefaultThresholds() must survive an
-	// empty operator config — running depsilo with NO supply_chain
-	// section still gives quarantine for the major ecosystems.
-	cases := []struct {
-		eco  string
-		want time.Duration
-	}{
-		{"pypi", 3 * 24 * time.Hour},
-		{"npm", 7 * 24 * time.Hour},
-		{"go", 0},
-		{"cargo", 3 * 24 * time.Hour},
-		{"maven", 3 * 24 * time.Hour},
-		{"apt", 0},
-	}
-	for _, c := range cases {
-		if got := p.Threshold(c.eco); got != c.want {
-			t.Errorf("default %s threshold = %v, want %v", c.eco, got, c.want)
+	// Empty configuration must never block a newly published package.
+	for _, ecosystem := range []string{"pypi", "npm", "go", "cargo", "maven", "apt", "future"} {
+		if got := p.Threshold(ecosystem); got != 0 {
+			t.Errorf("default %s threshold = %v, want disabled", ecosystem, got)
 		}
+	}
+	if p.IsAgeGateEnabled() {
+		t.Fatal("empty configuration resolved the age gate to enabled")
 	}
 
 	if p.Mode != ModeBlock {
@@ -87,6 +77,57 @@ func TestNewPolicy_Defaults(t *testing.T) {
 	}
 	if !p.FailClosed {
 		t.Errorf("default fail_closed = false, want true (the safer default)")
+	}
+}
+
+func TestNewPolicy_ExplicitEnableUsesRecommendedThresholds(t *testing.T) {
+	enabled := true
+	p, err := NewPolicy(Config{MinReleaseAgeEnabled: &enabled})
+	if err != nil {
+		t.Fatalf("NewPolicy(enabled): %v", err)
+	}
+	if !p.IsAgeGateEnabled() {
+		t.Fatal("explicit true resolved the age gate to disabled")
+	}
+	for ecosystem, want := range map[string]time.Duration{
+		"pypi":  3 * 24 * time.Hour,
+		"npm":   7 * 24 * time.Hour,
+		"cargo": 3 * 24 * time.Hour,
+		"go":    0,
+	} {
+		if got := p.Threshold(ecosystem); got != want {
+			t.Errorf("enabled %s threshold = %v, want %v", ecosystem, got, want)
+		}
+	}
+}
+
+func TestNewPolicy_ExplicitDisableOverridesThresholdTable(t *testing.T) {
+	enabled := false
+	p, err := NewPolicy(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"npm": "7d"},
+	})
+	if err != nil {
+		t.Fatalf("NewPolicy(disabled): %v", err)
+	}
+	if got := p.Threshold("npm"); got != 0 {
+		t.Fatalf("disabled npm threshold = %v, want 0", got)
+	}
+	if p.IsAgeGateEnabled() {
+		t.Fatal("explicit false resolved the age gate to enabled")
+	}
+}
+
+func TestNewPolicy_LegacyExplicitThresholdTableRemainsEnabled(t *testing.T) {
+	p, err := NewPolicy(Config{MinReleaseAge: map[string]string{"npm": "2d"}})
+	if err != nil {
+		t.Fatalf("NewPolicy(legacy thresholds): %v", err)
+	}
+	if got, want := p.Threshold("npm"), 2*24*time.Hour; got != want {
+		t.Fatalf("legacy npm threshold = %v, want %v", got, want)
+	}
+	if !p.IsAgeGateEnabled() {
+		t.Fatal("legacy explicit threshold table must remain enabled")
 	}
 }
 
@@ -129,11 +170,13 @@ func TestNewPolicy_Overrides(t *testing.T) {
 }
 
 func TestNewPolicy_InvalidValues(t *testing.T) {
+	disabled := false
 	cases := []struct {
 		name string
 		cfg  Config
 	}{
 		{"bad duration", Config{MinReleaseAge: map[string]string{"npm": "forever"}}},
+		{"bad duration while disabled", Config{MinReleaseAgeEnabled: &disabled, MinReleaseAge: map[string]string{"npm": "forever"}}},
 		{"negative duration", Config{MinReleaseAge: map[string]string{"npm": "-3d"}}},
 		{"bad mode", Config{Mode: "lenient"}},
 		{"bad allow rule", Config{Allow: []string{"this-has-no-colon-prefix"}}},
