@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -64,6 +65,7 @@ func Load() (*Config, error) {
 			depsiloDir := filepath.Join(usr.HomeDir, ".depsilo")
 			v.Set("database.dsn", filepath.Join(depsiloDir, "data", "depsilo.db"))
 			v.Set("storage.path", filepath.Join(depsiloDir, "data", "cache"))
+			v.Set("compile_cache.storage.path", filepath.Join(depsiloDir, "data", "compile-cache"))
 			if resolvedPath == "" {
 				resolvedPath = filepath.Join(depsiloDir, "config.toml")
 			}
@@ -196,8 +198,93 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 		}
 		cfg.AccessLog.BatchInterval = d
 	}
+	if raw := v.GetString("compile_cache.upload_timeout"); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse compile_cache.upload_timeout: %w", err)
+		}
+		cfg.CompileCache.UploadTimeout = d
+	}
+	if raw := v.GetString("compile_cache.download_timeout"); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse compile_cache.download_timeout: %w", err)
+		}
+		cfg.CompileCache.DownloadTimeout = d
+	}
+	cfg.CompileCache.PublicURL = strings.TrimRight(strings.TrimSpace(cfg.CompileCache.PublicURL), "/")
+	if err := validateCompileCacheConfig(cfg.CompileCache); err != nil {
+		return nil, err
+	}
 
 	return cfg, nil
+}
+
+func validateCompileCacheConfig(cfg CompileCacheConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+	if cfg.MaxSizeGB <= 0 {
+		return errors.New("compile_cache.max_size_gb must be greater than zero")
+	}
+	if cfg.MaxEntries <= 0 {
+		return errors.New("compile_cache.max_entries must be greater than zero")
+	}
+	if cfg.MaxEntrySizeMB <= 0 {
+		return errors.New("compile_cache.max_entry_size_mb must be greater than zero")
+	}
+	if cfg.NamespaceMaxSizeGB <= 0 {
+		return errors.New("compile_cache.namespace_max_size_gb must be greater than zero")
+	}
+	if int64(cfg.NamespaceMaxSizeGB)*1024 < int64(cfg.MaxEntrySizeMB) {
+		return errors.New("compile_cache.namespace_max_size_gb must be large enough for max_entry_size_mb")
+	}
+	if cfg.NamespaceMaxEntries <= 0 {
+		return errors.New("compile_cache.namespace_max_entries must be greater than zero")
+	}
+	if cfg.MaxConcurrentUploads <= 0 {
+		return errors.New("compile_cache.max_concurrent_uploads must be greater than zero")
+	}
+	if cfg.MaxQueuedUploads < 0 {
+		return errors.New("compile_cache.max_queued_uploads must not be negative")
+	}
+	if cfg.UploadTimeout <= 0 || cfg.UploadTimeout > 24*time.Hour {
+		return errors.New("compile_cache.upload_timeout must be greater than zero and at most 24h")
+	}
+	if cfg.MaxConcurrentDownloads <= 0 {
+		return errors.New("compile_cache.max_concurrent_downloads must be greater than zero")
+	}
+	if cfg.DownloadTimeout <= 0 || cfg.DownloadTimeout > 24*time.Hour {
+		return errors.New("compile_cache.download_timeout must be greater than zero and at most 24h")
+	}
+	if cfg.MaxInflightUploadSizeMB < cfg.MaxEntrySizeMB {
+		return errors.New("compile_cache.max_inflight_upload_size_mb must be at least max_entry_size_mb")
+	}
+	if cfg.LRUThreshold < 1 || cfg.LRUThreshold > 100 {
+		return errors.New("compile_cache.lru_threshold must be between 1 and 100")
+	}
+	publicURL, err := url.Parse(strings.TrimSpace(cfg.PublicURL))
+	if err != nil || publicURL.Scheme != "http" && publicURL.Scheme != "https" || publicURL.Host == "" ||
+		publicURL.User != nil || publicURL.RawQuery != "" || publicURL.Fragment != "" ||
+		publicURL.Path != "" && publicURL.Path != "/" {
+		return errors.New("compile_cache.public_url must be an absolute http(s) origin without a path, query, fragment, or credentials")
+	}
+	if publicURL.Scheme == "http" && !isLoopbackHost(publicURL.Hostname()) && !cfg.AllowInsecureHTTP {
+		return errors.New("compile_cache.public_url must use https for remote clients; set allow_insecure_http=true only for a trusted LAN/VPN")
+	}
+	switch cfg.Storage.Type {
+	case "local":
+		if strings.TrimSpace(cfg.Storage.Path) == "" {
+			return errors.New("compile_cache.storage.path must not be empty for local storage")
+		}
+	case "s3":
+		if strings.TrimSpace(cfg.Storage.Bucket) == "" {
+			return errors.New("compile_cache.storage.bucket must not be empty for s3 storage")
+		}
+	default:
+		return fmt.Errorf("compile_cache.storage.type must be local or s3, got %q", cfg.Storage.Type)
+	}
+	return nil
 }
 
 func decodeConfigDocument(data []byte) (*Config, error) {
@@ -248,6 +335,23 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cache.ttl_index", "5m")
 	v.SetDefault("cache.ttl_blob", "72h")
 	v.SetDefault("cache.lru_threshold", 90)
+	v.SetDefault("compile_cache.enabled", false)
+	v.SetDefault("compile_cache.public_url", "")
+	v.SetDefault("compile_cache.allow_insecure_http", false)
+	v.SetDefault("compile_cache.max_size_gb", 20)
+	v.SetDefault("compile_cache.max_entries", 500000)
+	v.SetDefault("compile_cache.max_entry_size_mb", 512)
+	v.SetDefault("compile_cache.namespace_max_size_gb", 20)
+	v.SetDefault("compile_cache.namespace_max_entries", 250000)
+	v.SetDefault("compile_cache.max_concurrent_uploads", 8)
+	v.SetDefault("compile_cache.max_queued_uploads", 32)
+	v.SetDefault("compile_cache.max_inflight_upload_size_mb", 1024)
+	v.SetDefault("compile_cache.upload_timeout", "15m")
+	v.SetDefault("compile_cache.max_concurrent_downloads", 64)
+	v.SetDefault("compile_cache.download_timeout", "15m")
+	v.SetDefault("compile_cache.lru_threshold", 90)
+	v.SetDefault("compile_cache.storage.type", "local")
+	v.SetDefault("compile_cache.storage.path", "./data/compile-cache")
 	v.SetDefault("upstream_updates.enabled", true)
 	v.SetDefault("upstream_updates.check_interval", "1h")
 	v.SetDefault("auth.enabled", true)

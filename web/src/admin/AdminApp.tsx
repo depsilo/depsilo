@@ -15,6 +15,7 @@ const DashboardV2 = lazyRoute(() => import('./pages/Dashboard'))
 const BandwidthReportV2 = lazyRoute(() => import('./pages/BandwidthReport'))
 const CacheManageV2 = lazyRoute(() => import('./pages/CacheManage'))
 const CacheIndexes = lazyRoute(() => import('./pages/CacheIndexes'))
+const CompileCache = lazyRoute(() => import('./pages/CompileCache'))
 const UpstreamsV2 = lazyRoute(() => import('./pages/Upstreams'))
 const UpstreamUpdates = lazyRoute(() => import('./pages/UpstreamUpdates'))
 const AccessLogsV2 = lazyRoute(() => import('./pages/AccessLogs'))
@@ -32,6 +33,7 @@ const routeElements = {
   bandwidth: <BandwidthReportV2 />,
   cache: <CacheManageV2 />,
   cacheIndexes: <CacheIndexes />,
+  compileCache: <CompileCache />,
   upstreams: <UpstreamsV2 />,
   upstreamUpdates: <UpstreamUpdates />,
   accessLogs: <AccessLogsV2 />,

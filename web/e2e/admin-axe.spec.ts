@@ -12,7 +12,7 @@ import {
 
 test.describe.configure({ mode: 'parallel' })
 
-const routes = ['/admin', '/admin/bandwidth', '/admin/logs', '/admin/audit', '/admin/quarantine', '/admin/cache', '/admin/indexes', '/admin/upstreams', '/admin/upstream-updates', '/admin/users', '/admin/license', '/admin/rules', '/admin/security', '/admin/projects', '/admin/settings'] as const
+const routes = ['/admin', '/admin/bandwidth', '/admin/logs', '/admin/audit', '/admin/quarantine', '/admin/cache', '/admin/indexes', '/admin/compile-cache', '/admin/upstreams', '/admin/upstream-updates', '/admin/users', '/admin/license', '/admin/rules', '/admin/security', '/admin/projects', '/admin/settings'] as const
 const themes = ['light', 'dark'] as const satisfies readonly UiTheme[]
 const locales = ['zh', 'en'] as const satisfies readonly UiLocale[]
 

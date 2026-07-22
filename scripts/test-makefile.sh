@@ -17,7 +17,7 @@ assert_contains() {
 make_db=$(make -C "$ROOT" -pn help)
 required_targets=(
     build run run-pro dev stop logs
-    test test-unit test-integration test-e2e test-clean
+    test test-unit test-integration test-e2e test-compiler-cache test-clean
     lint lint-i18n verify clean help
     tray app-macos install-linux autostart-linux
 )
@@ -67,6 +67,15 @@ fi
 registry_dry_run=$(make -n -C "$ROOT" test-docker-docker DEPSILO_URL=http://127.0.0.1:24444)
 assert_contains "$registry_dry_run" "--build-arg DEPSILO_URL=http://127.0.0.1:24444"
 assert_contains "$registry_dry_run" "docker run --rm --privileged"
+
+compiler_cache_dry_run=$(make -n -C "$ROOT" test-compiler-cache \
+    COMPILER_CACHE_ENDPOINT=http://127.0.0.1:23333/ccache/v1/test \
+    COMPILER_CACHE_TOKEN=sentinel-compiler-cache-token)
+assert_contains "$compiler_cache_dry_run" "bash scripts/test-compiler-cache.sh"
+if [[ "$compiler_cache_dry_run" == *"sentinel-compiler-cache-token"* ]] \
+    || [[ "$compiler_cache_dry_run" == *"/ccache/v1/test"* ]]; then
+    fail "test-compiler-cache must not expose endpoint or token in process arguments"
+fi
 
 docker_run=$(make -n -C "$ROOT" docker-run CONFIG=config.toml DEV_JWT_SECRET=.dev-jwt-secret)
 assert_contains "$docker_run" 'DEPSILO_AUTH_JWT_SECRET="$secret" docker run'

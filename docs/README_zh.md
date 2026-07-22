@@ -116,6 +116,11 @@ export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
 生产部署仍须显式提供自己的 JWT 密钥。需要强制使用自定义配置路径时，请运行
 `DEPSILO_CONFIG=/etc/depsilo.toml make run`。
 
+Depsilo 也可以为本机或团队构建机提供独立的 ccache / sccache 编译缓存。sccache
+入口只是满足官方客户端所需的窄 WebDAV 兼容层，不是 `sccache-dist` 调度器，也
+不是 S3 API。存储隔离、构建凭据、客户端配置和真实客户端回归命令见
+[编译缓存指南](compile-cache.md)。
+
 ### AI 工作负载说明
 
 Hugging Face 模型动辄几十 GB（单个权重文件可达 50 GB+）。

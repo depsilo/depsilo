@@ -27,6 +27,44 @@ ttl_index    = "1h"         # 索引元数据刷新间隔（过期后同步刷�
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
+# 可选：为下游 ccache / sccache 提供本机或团队共享的编译产物缓存。
+# 该存储必须与上面的包缓存隔离；启用后通过 Admin API 创建 namespace 凭据。
+# 当前只支持单 Depsilo 实例，多个实例不能共享下面的目录/bucket 和容量账本。
+[compile_cache]
+enabled = false
+# 编译缓存客户端实际访问的外部 origin。远程部署建议填 TLS 反向代理地址，
+# 并确保 Depsilo 后端 HTTP 端口只对该代理或受信网络开放。
+public_url = "http://127.0.0.1:23333"
+# 仅在可信 LAN/VPN 且明确接受 bearer 明文传输风险时开启。
+allow_insecure_http = false
+max_size_gb = 20
+max_entries = 500000
+max_entry_size_mb = 512
+namespace_max_size_gb = 20
+namespace_max_entries = 250000
+max_concurrent_uploads = 8
+# 并发槽位之外最多允许等待的上传；队列满时快速返回 503。
+max_queued_uploads = 32
+# 单次上传的最长时间；超时会关闭请求体并释放上传槽位。
+upload_timeout = "15m"
+# 慢速下载的并发与最长传输时间，防止长期占用文件或 S3 响应体。
+max_concurrent_downloads = 64
+download_timeout = "15m"
+# 所有并发上传的暂存数据总上限，且不能小于 max_entry_size_mb。
+max_inflight_upload_size_mb = 1024
+lru_threshold = 90
+
+[compile_cache.storage]
+type = "local"              # local | s3
+path = "./data/compile-cache"
+# 这里的 S3 仅是 Depsilo 内部对象存储，不会向客户端暴露 S3 API。
+# S3 必须使用独立 bucket，不能与包缓存共用；关闭 versioning 或配置版本生命周期。
+# bucket = "depsilo-compile-cache"
+# endpoint = "http://minio:9000"
+# region = "us-east-1"
+# access_key = ""
+# secret_key = ""
+
 # 对已缓存且具备 HTTP 验证器的 PyPI 兼容元数据主动执行条件检查。
 # 不支持可靠变更判定的生态继续依赖正常 TTL 刷新；此任务绝不预拉取制品。
 [upstream_updates]

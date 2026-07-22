@@ -15,6 +15,7 @@ type Config struct {
 	Database                   DatabaseConfig     `mapstructure:"database"`
 	Storage                    StorageConfig      `mapstructure:"storage"`
 	Cache                      CacheConfig        `mapstructure:"cache"`
+	CompileCache               CompileCacheConfig `mapstructure:"compile_cache"`
 	AccessLog                  AccessLogConfig    `mapstructure:"access_log"`
 	Auth                       AuthConfig         `mapstructure:"auth"`
 	PyPI                       AdapterConfig      `mapstructure:"pypi"`
@@ -139,6 +140,28 @@ type CacheConfig struct {
 	TTLIndex     time.Duration `mapstructure:"ttl_index"`
 	TTLBlob      time.Duration `mapstructure:"ttl_blob"`
 	LRUThreshold int           `mapstructure:"lru_threshold"`
+}
+
+// CompileCacheConfig controls the ccache/sccache-compatible compiler cache. Its
+// storage is separate from StorageConfig so compiler artifacts cannot distort
+// package-cache capacity accounting or retention.
+type CompileCacheConfig struct {
+	Enabled                 bool          `mapstructure:"enabled"`
+	PublicURL               string        `mapstructure:"public_url"`
+	AllowInsecureHTTP       bool          `mapstructure:"allow_insecure_http"`
+	MaxSizeGB               int           `mapstructure:"max_size_gb"`
+	MaxEntries              int64         `mapstructure:"max_entries"`
+	MaxEntrySizeMB          int           `mapstructure:"max_entry_size_mb"`
+	NamespaceMaxSizeGB      int           `mapstructure:"namespace_max_size_gb"`
+	NamespaceMaxEntries     int64         `mapstructure:"namespace_max_entries"`
+	MaxConcurrentUploads    int           `mapstructure:"max_concurrent_uploads"`
+	MaxQueuedUploads        int           `mapstructure:"max_queued_uploads"`
+	MaxInflightUploadSizeMB int           `mapstructure:"max_inflight_upload_size_mb"`
+	UploadTimeout           time.Duration `mapstructure:"upload_timeout"`
+	MaxConcurrentDownloads  int           `mapstructure:"max_concurrent_downloads"`
+	DownloadTimeout         time.Duration `mapstructure:"download_timeout"`
+	LRUThreshold            int           `mapstructure:"lru_threshold"`
+	Storage                 StorageConfig `mapstructure:"storage"`
 }
 
 type AuthConfig struct {

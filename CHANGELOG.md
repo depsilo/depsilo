@@ -6,6 +6,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- **Compiler cache service**: adds namespace-scoped remote caching for official
+  ccache HTTP and sccache WebDAV clients, with read-only/read-write build
+  credentials, bounded uploads and downloads, global/per-namespace quotas,
+  LRU eviction, local or S3 storage, Admin management, Prometheus metrics, and
+  an opt-in real-client regression target.
 - **Admin control plane remediation**: Settings now atomically preserves and patches
   `config.toml` with explicit immediate/restart/environment-override results; ordinary
   upstream CRUD is database-authoritative and atomically updates live proxy Pools; fresh

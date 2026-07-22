@@ -7,6 +7,7 @@ const adminHrefs = [
   '/admin/audit',
   '/admin/cache',
   '/admin/indexes',
+  '/admin/compile-cache',
   '/admin/upstreams',
   '/admin/upstream-updates',
   '/admin/quarantine',

@@ -3,7 +3,7 @@ import { expect, expectResolvedUiPreferences, setUiPreferences, test } from './f
 test('renders every admin route without an unmatched API request', async ({ page }) => {
   const routes = [
     '/admin', '/admin/bandwidth', '/admin/logs', '/admin/audit',
-    '/admin/quarantine', '/admin/cache', '/admin/indexes', '/admin/upstreams',
+    '/admin/quarantine', '/admin/cache', '/admin/indexes', '/admin/compile-cache', '/admin/upstreams',
     '/admin/upstream-updates', '/admin/users',
     '/admin/license', '/admin/rules', '/admin/security', '/admin/projects',
     '/admin/settings',

@@ -13,6 +13,12 @@ type Metrics struct {
 	UpstreamRequestsTotal *prometheus.CounterVec
 	CacheSizeBytes        prometheus.Gauge
 	CacheFilesTotal       prometheus.Gauge
+	CompileCacheRequests  *prometheus.CounterVec
+	CompileCacheBytes     *prometheus.CounterVec
+	CompileCacheDuration  *prometheus.HistogramVec
+	CompileCacheSizeBytes prometheus.Gauge
+	CompileCacheEntries   prometheus.Gauge
+	CompileCacheEvictions *prometheus.CounterVec
 }
 
 // M is the package-level Metrics instance, registered on init.
@@ -54,6 +60,47 @@ func init() {
 				Help: "Number of cached files.",
 			},
 		),
+		CompileCacheRequests: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "depsilo_compile_cache_requests_total",
+				Help: "Total number of compiler-cache protocol operations.",
+			},
+			[]string{"protocol", "operation", "result"},
+		),
+		CompileCacheBytes: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "depsilo_compile_cache_bytes_total",
+				Help: "Total bytes stored or served by the compiler cache.",
+			},
+			[]string{"protocol", "direction"},
+		),
+		CompileCacheDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "depsilo_compile_cache_operation_duration_seconds",
+				Help:    "Compiler-cache operation latency in seconds.",
+				Buckets: prometheus.DefBuckets,
+			},
+			[]string{"protocol", "operation"},
+		),
+		CompileCacheSizeBytes: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "depsilo_compile_cache_size_bytes",
+				Help: "Current compiler-cache storage usage in bytes.",
+			},
+		),
+		CompileCacheEntries: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "depsilo_compile_cache_entries",
+				Help: "Current number of compiler-cache entries.",
+			},
+		),
+		CompileCacheEvictions: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "depsilo_compile_cache_evictions_total",
+				Help: "Total compiler-cache entries evicted by reason.",
+			},
+			[]string{"reason"},
+		),
 	}
 
 	prometheus.MustRegister(
@@ -62,6 +109,12 @@ func init() {
 		M.UpstreamRequestsTotal,
 		M.CacheSizeBytes,
 		M.CacheFilesTotal,
+		M.CompileCacheRequests,
+		M.CompileCacheBytes,
+		M.CompileCacheDuration,
+		M.CompileCacheSizeBytes,
+		M.CompileCacheEntries,
+		M.CompileCacheEvictions,
 	)
 }
 

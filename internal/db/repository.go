@@ -74,6 +74,9 @@ func AutoMigrate(db *gorm.DB) error {
 	zap.L().Info("running database auto-migration")
 	if err := db.AutoMigrate(
 		&CacheEntry{},
+		&CompileCacheEntry{},
+		&CompileCacheCredential{},
+		&CompileCacheDeletion{},
 		&UpstreamUpdateEvent{},
 		&AccessLog{},
 		&AccessLogFiveMinutely{},
@@ -114,10 +117,66 @@ func AutoMigrate(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
+	if err := migrateCompileCacheIdentityIndex(db); err != nil {
+		return err
+	}
 	if err := migrateVulnerabilityIdentityIndex(db); err != nil {
 		return err
 	}
 	return backfillCacheKinds(db)
+}
+
+func migrateCompileCacheIdentityIndex(database *gorm.DB) error {
+	const (
+		legacyIndex      = "idx_compile_cache_namespace_key"
+		replacementIndex = "idx_compile_cache_protocol_namespace_key"
+	)
+	wantColumns := []string{"protocol", "namespace", "key"}
+
+	return database.Transaction(func(tx *gorm.DB) error {
+		// SQLite applies the column default while adding protocol to the legacy
+		// table. Keep this explicit backfill for databases left in a partial
+		// migration state, without touching storage_path or timestamps.
+		if err := tx.Exec(
+			"UPDATE compile_cache_entries SET protocol = ? WHERE protocol IS NULL OR TRIM(protocol) = ''",
+			CompileCacheProtocolCCache,
+		).Error; err != nil {
+			return fmt.Errorf("backfill compiler-cache protocol: %w", err)
+		}
+
+		indexes, err := tx.Migrator().GetIndexes(&CompileCacheEntry{})
+		if err != nil {
+			return fmt.Errorf("read compiler-cache indexes: %w", err)
+		}
+		var replacement gorm.Index
+		for _, index := range indexes {
+			if index.Name() == replacementIndex {
+				replacement = index
+				break
+			}
+		}
+		if replacement == nil {
+			return fmt.Errorf("replacement compiler-cache index %q is missing", replacementIndex)
+		}
+		unique, known := replacement.Unique()
+		if !known || !unique || !slices.Equal(replacement.Columns(), wantColumns) {
+			return fmt.Errorf(
+				"replacement compiler-cache index %q has unique=%v columns=%v, want unique=true columns=%v",
+				replacementIndex,
+				unique,
+				replacement.Columns(),
+				wantColumns,
+			)
+		}
+
+		if !tx.Migrator().HasIndex(&CompileCacheEntry{}, legacyIndex) {
+			return nil
+		}
+		if err := tx.Migrator().DropIndex(&CompileCacheEntry{}, legacyIndex); err != nil {
+			return fmt.Errorf("drop legacy compiler-cache index %q: %w", legacyIndex, err)
+		}
+		return nil
+	})
 }
 
 func migrateVulnerabilityIdentityIndex(database *gorm.DB) error {

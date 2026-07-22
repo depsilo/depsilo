@@ -7,6 +7,8 @@ import type {
   AdminUpstreamListResponse,
   AdminUpstreamUpdateListResponse,
   AuditLogListResponse,
+  CompileCacheCredentialListResponse,
+  CompileCacheStatusResponse,
   ProjectListResponse,
   RecentDownloadsResponse,
   SecurityDashboard,
@@ -116,6 +118,19 @@ const canonicalAdminApiDefaults = {
   'GET /api/v1/admin/upstreams': { items: [], total: 0 } satisfies AdminUpstreamListResponse,
   'GET /api/v1/admin/upstreams/latency': { series: [] } satisfies AdminUpstreamLatenciesResponse,
   'GET /api/v1/admin/upstream-updates': { items: [], total: 0, next_cursor: null } satisfies AdminUpstreamUpdateListResponse,
+  'GET /api/v1/admin/compile-cache/status': {
+    enabled: true,
+    endpoint: 'http://localhost:23333/ccache/v1/{namespace}',
+    endpoints: {
+      ccache: 'http://localhost:23333/ccache/v1/{namespace}',
+      sccache: 'http://localhost:23333/sccache/v1/{namespace}',
+    },
+    stats: { size_bytes: 0, max_bytes: 21474836480, entries: 0, max_entries: 500000, hits: 0, namespace_count: 0 },
+  } satisfies CompileCacheStatusResponse,
+  'GET /api/v1/admin/compile-cache/credentials': {
+    items: [],
+    total: 0,
+  } satisfies CompileCacheCredentialListResponse,
   'GET /api/v1/admin/dashboard/recent-downloads': { items: [] } satisfies RecentDownloadsResponse,
   'GET /api/v1/admin/logs': { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse,
   'GET /api/v1/admin/audit-logs': { items: [], total: 0, page: 1 } satisfies AuditLogListResponse,

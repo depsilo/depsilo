@@ -15,6 +15,7 @@ const expectedRoutes = {
   quarantine: '/admin/quarantine',
   cache: '/admin/cache',
   cacheIndexes: '/admin/indexes',
+  compileCache: '/admin/compile-cache',
   upstreams: '/admin/upstreams',
   upstreamUpdates: '/admin/upstream-updates',
   users: '/admin/users',
@@ -27,7 +28,7 @@ const expectedRoutes = {
 
 const expectedGroups = [
   { id: 'operations', routes: ['dashboard', 'bandwidth', 'accessLogs', 'auditLogs'] },
-  { id: 'cacheUpstreams', routes: ['cache', 'cacheIndexes', 'upstreams', 'upstreamUpdates'] },
+  { id: 'cacheUpstreams', routes: ['cache', 'cacheIndexes', 'compileCache', 'upstreams', 'upstreamUpdates'] },
   { id: 'supplyChain', routes: ['quarantine', 'rules', 'security', 'projects'] },
   { id: 'system', routes: ['users', 'license', 'settings'] },
 ] as const

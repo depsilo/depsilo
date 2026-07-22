@@ -24,8 +24,13 @@ import type {
   CacheListResponse,
   CacheQuery,
   CheckUpstreamResponse,
+  CompileCacheCleanupResponse,
+  CompileCacheCredentialListResponse,
+  CompileCacheStatusResponse,
   CreateAPITokenRequest,
   CreateAPITokenResponse,
+  CreateCompileCacheCredentialRequest,
+  CreateCompileCacheCredentialResponse,
   CreateProjectRequest,
   CreateProjectResponse,
   CreateUserRequest,
@@ -149,6 +154,14 @@ export const adminApi = {
   listCacheIndexes: (params: CacheIndexQuery) => api.get<CacheIndexListResponse>('/admin/cache/indexes', { params }),
   refreshCacheIndex: (id: number) => api.post<CacheIndexRefreshResponse>(`/admin/cache/indexes/${id}/refresh`),
   warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post('/admin/cache/warmup', data),
+
+  // Compiler cache
+  getCompileCacheStatus: () => api.get<CompileCacheStatusResponse>('/admin/compile-cache/status'),
+  listCompileCacheCredentials: () => api.get<CompileCacheCredentialListResponse>('/admin/compile-cache/credentials'),
+  createCompileCacheCredential: (data: CreateCompileCacheCredentialRequest) =>
+    api.post<CreateCompileCacheCredentialResponse>('/admin/compile-cache/credentials', data),
+  deleteCompileCacheCredential: (id: number) => api.delete(`/admin/compile-cache/credentials/${id}`),
+  cleanupCompileCache: () => api.post<CompileCacheCleanupResponse>('/admin/compile-cache/cleanup'),
 
   // Upstreams
   listUpstreams: () => api.get<AdminUpstreamListResponse>('/admin/upstreams'),

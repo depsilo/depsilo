@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -76,6 +77,74 @@ func TestLocalStorageLifecycle(t *testing.T) {
 	exists, err = storage.Exists(ctx, key)
 	if err != nil || exists {
 		t.Fatalf("Exists after Delete = %v, %v; want false, nil", exists, err)
+	}
+}
+
+func TestPrivateLocalStoragePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose Unix owner/group/other permission bits")
+	}
+
+	base := filepath.Join(t.TempDir(), "compile-cache")
+	objectDir := filepath.Join(base, "v1", "team", "ab")
+	if err := os.MkdirAll(objectDir, 0777); err != nil {
+		t.Fatal(err)
+	}
+	// Make the pre-existing modes deterministic regardless of the test
+	// process's umask. The private storage must tighten every directory it
+	// uses, including a pre-created root and object hierarchy.
+	for _, dir := range []string{
+		base,
+		filepath.Join(base, "v1"),
+		filepath.Join(base, "v1", "team"),
+		objectDir,
+	} {
+		if err := os.Chmod(dir, 0777); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const key = "v1/team/ab/artifact"
+	tempPath := filepath.Join(base, filepath.FromSlash(key+".tmp"))
+	if err := os.WriteFile(tempPath, []byte("stale"), 0666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(tempPath, 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	storage, err := NewPrivateLocalStorage(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFilePermissions(t, base, 0700)
+
+	const payload = "private compiler artifact"
+	if err := storage.Put(context.Background(), key, strings.NewReader(payload), int64(len(payload)), "application/octet-stream"); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	for _, dir := range []string{
+		filepath.Join(base, "v1"),
+		filepath.Join(base, "v1", "team"),
+		objectDir,
+	} {
+		assertFilePermissions(t, dir, 0700)
+	}
+	assertFilePermissions(t, filepath.Join(base, filepath.FromSlash(key)), 0600)
+	if _, err := os.Stat(tempPath); !os.IsNotExist(err) {
+		t.Fatalf("temporary file still exists after Put: %v", err)
+	}
+}
+
+func assertFilePermissions(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("permissions for %s = %04o, want %04o", path, got, want)
 	}
 }
 

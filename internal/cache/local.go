@@ -19,15 +19,38 @@ var ErrInvalidStorageKey = errors.New("invalid local storage key")
 
 type LocalStorage struct {
 	basePath string
+	dirMode  fs.FileMode
+	fileMode fs.FileMode
+	private  bool
 }
 
 func NewLocalStorage(basePath string) (*LocalStorage, error) {
+	return newLocalStorage(basePath, 0755, 0666, false)
+}
+
+// NewPrivateLocalStorage creates a local storage root suitable for artifacts
+// that must not be readable by other users on the host. Unlike
+// NewLocalStorage, it enforces 0700 on the root and newly used directories and
+// 0600 on newly written files.
+func NewPrivateLocalStorage(basePath string) (*LocalStorage, error) {
+	return newLocalStorage(basePath, 0700, 0600, true)
+}
+
+func newLocalStorage(basePath string, dirMode, fileMode fs.FileMode, private bool) (*LocalStorage, error) {
 	absPath, err := filepath.Abs(basePath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve storage directory: %w", err)
 	}
-	if err := os.MkdirAll(absPath, 0755); err != nil {
+	if err := os.MkdirAll(absPath, dirMode); err != nil {
 		return nil, fmt.Errorf("create storage directory: %w", err)
+	}
+	// MkdirAll does not alter an existing directory. A private storage root
+	// therefore needs an explicit chmod so a pre-created root cannot retain
+	// group/world access.
+	if private {
+		if err := os.Chmod(absPath, dirMode); err != nil {
+			return nil, fmt.Errorf("secure storage directory: %w", err)
+		}
 	}
 	root, err := os.OpenRoot(absPath)
 	if err != nil {
@@ -36,7 +59,12 @@ func NewLocalStorage(basePath string) (*LocalStorage, error) {
 	if err := root.Close(); err != nil {
 		return nil, fmt.Errorf("close storage directory: %w", err)
 	}
-	return &LocalStorage{basePath: absPath}, nil
+	return &LocalStorage{
+		basePath: absPath,
+		dirMode:  dirMode,
+		fileMode: fileMode,
+		private:  private,
+	}, nil
 }
 
 func validateStorageKey(key string, allowRoot bool) (string, error) {
@@ -137,14 +165,28 @@ func (s *LocalStorage) Put(_ context.Context, key string, r io.Reader, _ int64, 
 	defer root.Close()
 
 	dir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(name)))
-	if err := root.MkdirAll(dir, 0755); err != nil {
+	if err := root.MkdirAll(dir, s.dirMode); err != nil {
 		return fmt.Errorf("create directory: %w", err)
+	}
+	if s.private {
+		if err := chmodDirectoryChain(root, dir, s.dirMode); err != nil {
+			return fmt.Errorf("secure directory: %w", err)
+		}
 	}
 
 	tmp := name + ".tmp"
-	f, err := root.Create(tmp)
+	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, s.fileMode)
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
+	}
+	// OpenFile only applies its mode when creating a file. Tighten a leftover
+	// temporary file as well before writing any private content into it.
+	if s.private {
+		if err := f.Chmod(s.fileMode); err != nil {
+			f.Close()
+			root.Remove(tmp)
+			return fmt.Errorf("secure temp file: %w", err)
+		}
 	}
 
 	if _, err := io.Copy(f, r); err != nil {
@@ -163,6 +205,24 @@ func (s *LocalStorage) Put(_ context.Context, key string, r io.Reader, _ int64, 
 	}
 
 	zap.L().Debug("stored cache file", zap.String("key", key))
+	return nil
+}
+
+func chmodDirectoryChain(root *os.Root, dir string, mode fs.FileMode) error {
+	if dir == "." {
+		return nil
+	}
+	current := ""
+	for _, element := range strings.Split(dir, "/") {
+		if current == "" {
+			current = element
+		} else {
+			current += "/" + element
+		}
+		if err := root.Chmod(current, mode); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

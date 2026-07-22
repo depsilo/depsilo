@@ -13,6 +13,7 @@ import (
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
+	"depsilo/internal/compilecache"
 	"depsilo/internal/config"
 	"depsilo/internal/entitlement"
 	"depsilo/internal/license"
@@ -45,6 +46,8 @@ type Deps struct {
 	Ecosystems       []string
 	CacheMgr         *cache.Manager
 	CacheRetention   *cache.Retention
+	CompileCache     *compilecache.Service
+	CompileCacheAuth *compilecache.Authorizer
 	IndexRefresher   upstreamupdates.Refresher
 	EventBus         *cache.EventBus
 	LicenseManager   *license.Manager
@@ -72,6 +75,20 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Public routes
 	r.GET("/health", healthHandler)
 	r.GET("/metrics", MetricsHandler())
+
+	// Stock ccache remote-storage data plane. The route remains registered
+	// while disabled so the SPA fallback never returns HTML as a false hit.
+	ccacheHandler := NewCCacheHandler(deps.Config.CompileCache.Enabled, deps.CompileCache, deps.CompileCacheAuth)
+	ccacheGroup := r.Group("/ccache/v1/:namespace")
+	ccacheGroup.Any("/*key", ccacheHandler.Handle)
+	// sccache uses a narrow WebDAV Adapter over the same quota/LRU/storage
+	// Module. Keep this route registered while disabled for the same SPA-safety
+	// reason as the ccache route above.
+	sccacheHandler := NewSCCacheHandler(deps.Config.CompileCache.Enabled, deps.CompileCache, deps.CompileCacheAuth)
+	sccacheGroup := r.Group("/sccache/v1/:namespace")
+	sccacheGroup.Any("/*path", sccacheHandler.Handle)
+	sccacheGroup.Handle(methodPropfind, "/*path", sccacheHandler.Handle)
+	sccacheGroup.Handle(methodMkcol, "/*path", sccacheHandler.Handle)
 
 	apiV1 := r.Group("/api/v1")
 
@@ -158,6 +175,21 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Cache warmup
 	warmupHandler := admin.NewWarmupHandler(deps.Tasks, deps.CacheMgr, deps.Pools, deps.Config)
 	adminWrite.POST("/cache/warmup", warmupHandler.Warmup)
+
+	// Compiler cache is a separate data domain from package cache. Its machine
+	// credentials can only access one compiler-cache namespace and grant no Admin API
+	// authority.
+	compileCacheHandler := admin.NewCompileCacheHandler(
+		deps.DB,
+		deps.CompileCache,
+		deps.Config.CompileCache.Enabled,
+		deps.Config.CompileCache.PublicURL,
+	)
+	adminRead.GET("/compile-cache/status", compileCacheHandler.Status)
+	adminRead.GET("/compile-cache/credentials", compileCacheHandler.ListCredentials)
+	adminWrite.POST("/compile-cache/credentials", compileCacheHandler.CreateCredential)
+	adminWrite.DELETE("/compile-cache/credentials/:id", compileCacheHandler.DeleteCredential)
+	adminWrite.POST("/compile-cache/cleanup", compileCacheHandler.Cleanup)
 
 	// Upstream management
 	upstreamHandler := admin.NewUpstreamHandler(deps.UpstreamRegistry)

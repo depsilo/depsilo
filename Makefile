@@ -118,7 +118,7 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-unit test-race test-integration test-http test-all test-pypi test-apt
+.PHONY: test test-unit test-race test-integration test-http test-all test-pypi test-apt test-compiler-cache
 
 test: test-unit                 ## 运行 Go 单元测试
 
@@ -136,6 +136,9 @@ test-http:                      # 兼容：仅运行 HTTP 端点集成测试
 		-run "Test[^_]+_(SimpleIndex|Metadata|Download|CacheHit|Release|Packages|ConfigJson|ModuleList|ArtifactDownload|Specs|PackagesJson|ServiceIndex|RepoData|IndexYaml)"
 
 test-all: test-unit test-integration  # 兼容：单元 + integration tag
+
+test-compiler-cache:              ## 用官方 ccache + sccache 验证已运行的编译缓存
+	@bash scripts/test-compiler-cache.sh
 
 $(TEST_DIR)/.venv:              ## 初始化测试用 Python 虚拟环境（uv）
 	@mkdir -p $(TEST_DIR)

@@ -128,6 +128,12 @@ make build
 
 Requires Go 1.25.12 or newer and Node.js 20+.
 
+Depsilo can also serve a dedicated local or team compiler cache to ccache and
+sccache. The sccache endpoint is a deliberately narrow WebDAV compatibility
+surface, not an `sccache-dist` scheduler or an S3 facade. See the
+[compiler-cache guide](docs/compile-cache.md) for storage, credentials, client
+setup and the opt-in real-client regression command.
+
 For local development, `make run` performs the build and starts the server. If
 `DEPSILO_AUTH_JWT_SECRET` is unset, it creates `.dev-jwt-secret` with mode 0600
 on the first run and reuses it on later restarts. A missing project
