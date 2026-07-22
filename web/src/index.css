@@ -946,6 +946,15 @@ a:focus:not(:focus-visible) {
   .quickstart-console {
     border-radius: 14px !important;
   }
+  .compile-cache-intro {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+    border-radius: 14px !important;
+  }
+  .compile-cache-intro-action {
+    padding-top: 16px;
+    border-top: 0.5px solid var(--border);
+  }
 }
 
 .portal-admin-mobile-label {
@@ -977,6 +986,12 @@ a:focus:not(:focus-visible) {
   }
   .quickstart-hero {
     padding: 22px !important;
+  }
+  .compile-cache-intro {
+    padding: 20px !important;
+  }
+  .compile-cache-intro-copy {
+    gap: 12px !important;
   }
   .quickstart-hero pre {
     font-size: 12px !important;
