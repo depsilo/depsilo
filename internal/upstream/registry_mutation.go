@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -38,15 +37,11 @@ func validateMutation(input MutationInput) (MutationInput, error) {
 	if input.Name == "" || len(input.Name) > 128 || input.Priority <= 0 {
 		return input, fmt.Errorf("%w: name and positive priority are required", ErrInvalidUpstream)
 	}
-	parsed, err := url.ParseRequestURI(input.URL)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+	if !validOriginURL(input.URL) {
 		return input, fmt.Errorf("%w: invalid url", ErrInvalidUpstream)
 	}
-	if input.Proxy != "" {
-		proxy, err := url.ParseRequestURI(input.Proxy)
-		if err != nil || proxy.Host == "" || (proxy.Scheme != "http" && proxy.Scheme != "https") {
-			return input, fmt.Errorf("%w: invalid proxy", ErrInvalidUpstream)
-		}
+	if input.Proxy != "" && !validHTTPURL(input.Proxy) {
+		return input, fmt.Errorf("%w: invalid proxy", ErrInvalidUpstream)
 	}
 	if input.ProbeMode != "active" && input.ProbeMode != "passive" {
 		return input, fmt.Errorf("%w: probe_mode must be active or passive", ErrInvalidUpstream)
@@ -278,20 +273,7 @@ func persistCheckedProbe(database *gorm.DB, u *Upstream, result ProbeResult) err
 	defer u.mu.Unlock()
 
 	next := u.health
-	next.totalReqs++
-	if result.Healthy {
-		next.successReqs++
-	}
-	next.successRate = float64(next.successReqs) / float64(next.totalReqs)
-	next.healthy = result.Healthy
-	next.lastCheckedAt = result.CheckedAt
-	if result.Latency > 0 {
-		if next.avgLatency == 0 {
-			next.avgLatency = result.Latency
-		} else {
-			next.avgLatency = (next.avgLatency*7 + result.Latency*3) / 10
-		}
-	}
+	next.applyProbe(result)
 
 	err := database.Transaction(func(tx *gorm.DB) error {
 		if u.ID != 0 {

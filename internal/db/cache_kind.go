@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+
+	"depsilo/internal/adapter/packagekey"
 )
 
 // backfillCacheKinds classifies rows created before cache_kind was introduced.
@@ -35,12 +37,45 @@ func backfillCacheKinds(database *gorm.DB) error {
 		}).Error
 }
 
+// backfillHuggingFacePackageNames gives legacy API metadata and opaque-query
+// rows the same repository identity as artifact rows. Repository-level
+// revocation depends on this exact identity to remove every cached sibling.
+func backfillHuggingFacePackageNames(database *gorm.DB) error {
+	var rows []CacheEntry
+	return database.
+		Where("adapter_type = ? AND (package_name = '' OR package_name IS NULL)", "huggingface").
+		FindInBatches(&rows, 500, func(_ *gorm.DB, _ int) error {
+			idsByPackage := make(map[string][]uint)
+			for _, row := range rows {
+				packageName := packagekey.ExtractName(row.AdapterType, row.Key)
+				if packageName != "" {
+					idsByPackage[packageName] = append(idsByPackage[packageName], row.ID)
+				}
+			}
+			for packageName, ids := range idsByPackage {
+				if err := database.Model(&CacheEntry{}).
+					Where("id IN ?", ids).
+					Update("package_name", packageName).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		}).Error
+}
+
 // ClassifyCacheKind derives whether a generated adapter cache key is mutable
 // metadata or an immutable artifact. It is used both for legacy backfills and
 // new writes so classification remains correct even when operators configure
 // ttl_index greater than the tamper-detection threshold.
 func ClassifyCacheKind(adapterType, key string) string {
 	adapterType = strings.ToLower(adapterType)
+	if adapterType == "huggingface" {
+		if huggingFaceMetadataKey(key) {
+			return CacheKindMetadata
+		}
+		return CacheKindArtifact
+	}
+
 	key = strings.ToLower(key)
 	metadata := false
 	switch {
@@ -78,6 +113,32 @@ func ClassifyCacheKind(adapterType, key string) string {
 		return CacheKindMetadata
 	}
 	return CacheKindArtifact
+}
+
+func huggingFaceMetadataKey(key string) bool {
+	const prefix = "huggingface/"
+	if !strings.HasPrefix(key, prefix) {
+		return false
+	}
+
+	parts := strings.Split(strings.TrimPrefix(key, prefix), "/")
+	if len(parts) >= 4 && parts[0] == "__query__" && isLowerHexSHA256(parts[2]) {
+		return parts[1] == "metadata"
+	}
+	return len(parts) >= 3 && parts[0] == "api" &&
+		(parts[1] == "models" || parts[1] == "datasets")
+}
+
+func isLowerHexSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for i := range value {
+		if (value[i] < '0' || value[i] > '9') && (value[i] < 'a' || value[i] > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func dockerTaggedManifestKey(key string) bool {

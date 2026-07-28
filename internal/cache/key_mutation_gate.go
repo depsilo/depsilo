@@ -14,8 +14,9 @@ var errEmptyMutationKey = errors.New("cache mutation key must not be empty")
 // lock allocated per key forever. A future multi-instance runtime would need
 // a durable fencing protocol rather than extending this in-memory gate.
 //
-// The gate is deliberately internal to the cache package: Manager commits and
-// retention deletes are the only operations that need to share this seam.
+// The gate is deliberately internal to the cache package. Writers hold it
+// across object and metadata publication; readers briefly hold it while
+// opening a stable storage snapshot that matches one metadata row.
 type keyMutationGate struct {
 	ctx context.Context
 
@@ -42,6 +43,22 @@ func newKeyMutationGate(ctx context.Context) *keyMutationGate {
 // both the operation context and the Manager lifecycle context supplied when
 // the gate was created.
 func (g *keyMutationGate) lock(ctx context.Context, key string) (func(), error) {
+	return g.lockWithLifecycle(ctx, key, true)
+}
+
+// lockSnapshot participates in the same per-key exclusion as mutations but is
+// not cancelled merely because Manager shutdown has begun. Existing durable
+// cache entries remain readable after Close; only new manager-owned work is
+// rejected.
+func (g *keyMutationGate) lockSnapshot(ctx context.Context, key string) (func(), error) {
+	return g.lockWithLifecycle(ctx, key, false)
+}
+
+func (g *keyMutationGate) lockWithLifecycle(
+	ctx context.Context,
+	key string,
+	enforceLifecycle bool,
+) (func(), error) {
 	if key == "" {
 		return nil, errEmptyMutationKey
 	}
@@ -51,16 +68,20 @@ func (g *keyMutationGate) lock(ctx context.Context, key string) (func(), error) 
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := g.ctx.Err(); err != nil {
-		return nil, err
+	if enforceLifecycle {
+		if err := g.ctx.Err(); err != nil {
+			return nil, err
+		}
 	}
 
 	g.mu.Lock()
-	// Recheck while holding mu so cancellation cannot race creation of a new
-	// entry after the Manager lifecycle has already ended.
-	if err := g.ctx.Err(); err != nil {
-		g.mu.Unlock()
-		return nil, err
+	// Mutation admission is rechecked while holding mu so cancellation cannot
+	// race creation of a new writer after the Manager lifecycle has ended.
+	if enforceLifecycle {
+		if err := g.ctx.Err(); err != nil {
+			g.mu.Unlock()
+			return nil, err
+		}
 	}
 	entry := g.entries[key]
 	if entry == nil {
@@ -70,6 +91,26 @@ func (g *keyMutationGate) lock(ctx context.Context, key string) (func(), error) 
 	}
 	entry.refs++
 	g.mu.Unlock()
+
+	if !enforceLifecycle {
+		select {
+		case <-entry.token:
+			if err := ctx.Err(); err != nil {
+				g.release(key, entry, true)
+				return nil, err
+			}
+		case <-ctx.Done():
+			g.release(key, entry, false)
+			return nil, ctx.Err()
+		}
+
+		var once sync.Once
+		return func() {
+			once.Do(func() {
+				g.release(key, entry, true)
+			})
+		}, nil
+	}
 
 	select {
 	case <-entry.token:

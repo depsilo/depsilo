@@ -46,15 +46,40 @@ func TestHF_ResolveSmallFile(t *testing.T) {
 }
 
 func TestHF_ResolveLFS_StreamedFromCDN(t *testing.T) {
+	const commit = "abc1234abc1234abc1234abc1234abc1234abc12"
+	movingBefore := countMockPath("/bert-base-uncased/resolve/main/pytorch_model.bin")
+	canonicalBefore := countMockPath("/bert-base-uncased/resolve/" + commit + "/pytorch_model.bin")
+	cdnBefore := countMockPath("/cdn-lfs/pytorch_model.bin")
+
 	resp := httpGet(t, depsiloURL+"/huggingface/bert-base-uncased/resolve/main/pytorch_model.bin")
-	defer resp.Body.Close()
 	assertStatus(t, resp, 200)
 	body := readBody(t, resp)
+	resp.Body.Close()
 	if body != "FAKE_WEIGHT" {
 		t.Errorf("body = %q, want FAKE_WEIGHT (server-side redirect should have fetched the CDN bytes)", body)
 	}
 	if got := resp.Header.Get("X-Linked-Etag"); got != "deadbeefcafe" {
 		t.Errorf("X-Linked-Etag = %q, want deadbeefcafe (header from upstream must pass through)", got)
+	}
+
+	cached := httpGet(t, depsiloURL+"/huggingface/bert-base-uncased/resolve/main/pytorch_model.bin")
+	assertStatus(t, cached, 200)
+	cachedBody := readBody(t, cached)
+	cached.Body.Close()
+	if cachedBody != "FAKE_WEIGHT" {
+		t.Errorf("cached body = %q, want FAKE_WEIGHT", cachedBody)
+	}
+	if got := cached.Header.Get("X-Linked-Etag"); got != "deadbeefcafe" {
+		t.Errorf("cached X-Linked-Etag = %q, want deadbeefcafe", got)
+	}
+	if got := countMockPath("/bert-base-uncased/resolve/"+commit+"/pytorch_model.bin") - canonicalBefore; got != 1 {
+		t.Errorf("canonical origin requests = %d, want 1 across miss + hit", got)
+	}
+	if got := countMockPath("/bert-base-uncased/resolve/main/pytorch_model.bin") - movingBefore; got < 0 || got > 1 {
+		t.Errorf("moving-ref metadata requests = %d, want at most one HEAD", got)
+	}
+	if got := countMockPath("/cdn-lfs/pytorch_model.bin") - cdnBefore; got != 1 {
+		t.Errorf("CDN requests = %d, want 1 across miss + hit", got)
 	}
 }
 
@@ -87,4 +112,14 @@ func TestHF_UnknownPath_404(t *testing.T) {
 	if resp.StatusCode != 404 {
 		t.Errorf("status = %d, want 404 for unrecognized path", resp.StatusCode)
 	}
+}
+
+func countMockPath(path string) int {
+	count := 0
+	for _, request := range mockServer.Requests() {
+		if request.Path == path {
+			count++
+		}
+	}
+	return count
 }

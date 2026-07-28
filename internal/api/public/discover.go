@@ -50,7 +50,7 @@ var ecosystemPurposes = map[string]string{
 	"cran":        "R — CRAN packages",
 	"alpine":      "Alpine Linux apk packages",
 	"helm":        "Kubernetes Helm charts",
-	"huggingface": "Hugging Face — models + datasets (huggingface-cli, transformers, datasets)",
+	"huggingface": "Hugging Face — models + datasets (hf CLI, transformers, datasets)",
 	"docker":      "OCI / Docker registry mirror (configure the service root)",
 }
 

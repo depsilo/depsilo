@@ -71,7 +71,7 @@ func TestWebhookListMasksURLForReadonlyPrincipal(t *testing.T) {
 func TestUpstreamListMasksCredentialsForReadonlyPrincipal(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	database := openCredentialTestDB(t, "upstreams.db", &db.UpstreamRecord{})
-	record := db.UpstreamRecord{Name: "private", AdapterType: "pypi", URL: "https://alice:secret@packages.example.test/signed/path?token=hidden", Proxy: "http://proxy-user:proxy-pass@proxy.example.test:8080/private/path", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true}
+	record := db.UpstreamRecord{Name: "private", AdapterType: "pypi", URL: "https://alice:secret@packages.example.test/private/path", Proxy: "http://proxy-user:proxy-pass@proxy.example.test:8080/private/path", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: true}
 	if err := database.Create(&record).Error; err != nil {
 		t.Fatalf("seed: %v", err)
 	}

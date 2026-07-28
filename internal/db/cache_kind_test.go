@@ -1,6 +1,9 @@
 package db
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAutoMigrateBackfillsLegacyCacheKinds(t *testing.T) {
 	database, err := Open("sqlite", ":memory:")
@@ -30,6 +33,65 @@ func TestAutoMigrateBackfillsLegacyCacheKinds(t *testing.T) {
 	for i := range want {
 		if got[i].CacheKind != want[i] {
 			t.Errorf("row %q kind = %q, want %q", got[i].Key, got[i].CacheKind, want[i])
+		}
+	}
+}
+
+func TestAutoMigrateBackfillsLegacyHuggingFacePackageNames(t *testing.T) {
+	database, err := Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+
+	rows := []CacheEntry{
+		{
+			Key:         "huggingface/acme/model/resolve/main/model.bin",
+			AdapterType: "huggingface",
+		},
+		{
+			Key:         "huggingface/api/datasets/acme/corpus/tree/main",
+			AdapterType: "huggingface",
+		},
+		{
+			Key: "huggingface/__query__/metadata/" +
+				strings.Repeat("a", 64) +
+				"/api/models/acme/model/tree/main",
+			AdapterType: "huggingface",
+		},
+		{
+			Key:         "huggingface/api/models/preserved/name",
+			AdapterType: "huggingface",
+			PackageName: "operator-value",
+		},
+	}
+	if err := database.Create(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+
+	var got []CacheEntry
+	if err := database.Order("id ASC").Find(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"acme/model",
+		"datasets/acme/corpus",
+		"acme/model",
+		"operator-value",
+	}
+	for index := range want {
+		if got[index].PackageName != want[index] {
+			t.Errorf(
+				"row %q package_name = %q, want %q",
+				got[index].Key,
+				got[index].PackageName,
+				want[index],
+			)
 		}
 	}
 }
@@ -67,5 +129,83 @@ func TestClassifyDockerMetadata(t *testing.T) {
 		if got := ClassifyCacheKind("docker", tt.key); got != tt.want {
 			t.Errorf("ClassifyCacheKind(docker, %q) = %q, want %q", tt.key, got, tt.want)
 		}
+	}
+}
+
+func TestClassifyHuggingFaceCacheKind(t *testing.T) {
+	const commit = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+	tests := []struct {
+		name string
+		key  string
+		want string
+	}{
+		{
+			name: "model API metadata",
+			key:  "huggingface/api/models/google/flan-t5-base",
+			want: CacheKindMetadata,
+		},
+		{
+			name: "opaque model API query metadata",
+			key:  "huggingface/__query__/metadata/" + strings.Repeat("a", 64) + "/api/models/google/flan-t5-base/tree/main",
+			want: CacheKindMetadata,
+		},
+		{
+			name: "opaque artifact query remains artifact",
+			key:  "huggingface/__query__/artifact/" + strings.Repeat("b", 64) + "/google/flan-t5-base/resolve/main/model.bin",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "real repository named query metadata is an artifact",
+			key:  "huggingface/__query__/metadata/resolve/main/model.bin",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "dataset API metadata remains mutable at a commit revision",
+			key:  "huggingface/api/datasets/org/corpus/tree/" + commit,
+			want: CacheKindMetadata,
+		},
+		{
+			name: "model resolve at an immutable commit",
+			key:  "huggingface/google/flan-t5-base/resolve/" + commit + "/model.safetensors",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "single-token raw file at an immutable commit",
+			key:  "huggingface/bert-base-uncased/raw/" + commit + "/config.json",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "dataset file at an immutable commit",
+			key:  "huggingface/datasets/org/corpus/resolve/" + commit + "/data/train.parquet",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "commit file classification ignores package-like subpaths",
+			key:  "huggingface/google/flan-t5-base/resolve/" + commit + "/docs/simple/example/index.html",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "moving branch is still a downloadable artifact",
+			key:  "huggingface/google/flan-t5-base/resolve/main/model.safetensors",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "moving tag is still a downloadable artifact",
+			key:  "huggingface/bert-base-uncased/raw/v1.0/config.json",
+			want: CacheKindArtifact,
+		},
+		{
+			name: "uppercase hex file remains an artifact",
+			key:  "huggingface/google/flan-t5-base/resolve/A1B2C3D4E5F60718293A4B5C6D7E8F9012345678/model.safetensors",
+			want: CacheKindArtifact,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyCacheKind("huggingface", tt.key); got != tt.want {
+				t.Errorf("ClassifyCacheKind(huggingface, %q) = %q, want %q", tt.key, got, tt.want)
+			}
+		})
 	}
 }

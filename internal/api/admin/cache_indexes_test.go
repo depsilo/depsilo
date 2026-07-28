@@ -37,6 +37,7 @@ func TestCacheIndexesListsMetadataAndSummarizesByEcosystem(t *testing.T) {
 	rows := []db.CacheEntry{
 		{Key: "pypi/simple/av/index.html", AdapterType: "pypi", CacheKind: db.CacheKindMetadata, PackageName: "av", ETag: `"av-v1"`, ExpiresAt: now.Add(time.Hour), LastAccessed: now, UpdatedAt: now},
 		{Key: "npm/react/metadata.json", AdapterType: "npm", CacheKind: db.CacheKindMetadata, PackageName: "react", ExpiresAt: now.Add(-time.Hour), LastAccessed: now, UpdatedAt: now.Add(-time.Minute)},
+		{Key: "huggingface/__query__/metadata/hash/api/models/acme/model/tree/main", AdapterType: "huggingface", CacheKind: db.CacheKindMetadata, ExpiresAt: now.Add(time.Hour)},
 		{Key: "pypi/files/av.whl", AdapterType: "pypi", CacheKind: db.CacheKindArtifact, PackageName: "av", ExpiresAt: now.Add(time.Hour), LastAccessed: now},
 	}
 	if err := database.Create(&rows).Error; err != nil {
@@ -146,6 +147,10 @@ func TestCacheIndexPublicPath(t *testing.T) {
 		{name: "cran", entry: metadata("cran", "cran/src/contrib/PACKAGES.gz"), want: "/cran/src/contrib/PACKAGES.gz"},
 		{name: "alpine", entry: metadata("alpine", "alpine/v3.20/main/x86_64/APKINDEX.tar.gz"), want: "/alpine/v3.20/main/x86_64/APKINDEX.tar.gz"},
 		{name: "helm", entry: metadata("helm", "helm/index.yaml"), want: "/helm/index.yaml"},
+		{name: "huggingface model API", entry: metadata("huggingface", "huggingface/api/models/google/flan-t5-base/tree/main"), want: "/huggingface/api/models/google/flan-t5-base/tree/main"},
+		{name: "huggingface dataset API", entry: metadata("huggingface", "huggingface/api/datasets/org/corpus"), want: "/huggingface/api/datasets/org/corpus"},
+		{name: "huggingface opaque query cannot be reconstructed", entry: metadata("huggingface", "huggingface/__query__/metadata/abc/api/models/acme/model/tree/main"), wantErr: true},
+		{name: "huggingface file is not index metadata", entry: metadata("huggingface", "huggingface/acme/model/resolve/main/config.json"), wantErr: true},
 		{name: "apt repeated repo", entry: metadata("apt", "apt/ubuntu/ubuntu/dists/jammy/InRelease"), want: "/apt/ubuntu/dists/jammy/InRelease"},
 		{name: "apt normalized legacy key", entry: metadata("apt", "apt/ubuntu/dists/jammy/Release"), wantErr: true},
 		{name: "unsupported adapter", entry: metadata("docker", "docker/library/alpine/tags/list"), wantErr: true},

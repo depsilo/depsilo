@@ -234,11 +234,13 @@ func (m *MockUpstream) RegisterHelm() {
 // tree listing, and the resolve flow with a 302 redirect to a tracked
 // "CDN" path served by the same mock server.
 func (m *MockUpstream) RegisterHuggingFace() {
+	const commit = "abc1234abc1234abc1234abc1234abc1234abc12"
+
 	// Model metadata endpoint
 	m.mux.HandleFunc("/api/models/bert-base-uncased", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		fmt.Fprint(w, `{"modelId":"bert-base-uncased","sha":"abc1234","siblings":[{"rfilename":"config.json"},{"rfilename":"pytorch_model.bin"}]}`)
+		fmt.Fprintf(w, `{"modelId":"bert-base-uncased","sha":"%s","siblings":[{"rfilename":"config.json"},{"rfilename":"pytorch_model.bin"}]}`, commit)
 	})
 
 	// Tree listing
@@ -256,21 +258,25 @@ func (m *MockUpstream) RegisterHuggingFace() {
 	})
 
 	// Direct 200 file (config.json — not LFS)
-	m.mux.HandleFunc("/bert-base-uncased/resolve/main/config.json", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Repo-Commit", "abc1234")
+	smallFile := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Repo-Commit", commit)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
 		fmt.Fprint(w, `{"hidden":false}`)
-	})
+	}
+	m.mux.HandleFunc("/bert-base-uncased/resolve/main/config.json", smallFile)
+	m.mux.HandleFunc("/bert-base-uncased/resolve/"+commit+"/config.json", smallFile)
 
 	// LFS file (pytorch_model.bin) — 302 redirects to mock CDN path
-	m.mux.HandleFunc("/bert-base-uncased/resolve/main/pytorch_model.bin", func(w http.ResponseWriter, r *http.Request) {
+	lfsFile := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Linked-Etag", "deadbeefcafe")
 		w.Header().Set("X-Linked-Size", "11")
-		w.Header().Set("X-Repo-Commit", "abc1234")
+		w.Header().Set("X-Repo-Commit", commit)
 		w.Header().Set("Location", m.URL()+"/cdn-lfs/pytorch_model.bin?sig=mock-sig")
 		w.WriteHeader(302)
-	})
+	}
+	m.mux.HandleFunc("/bert-base-uncased/resolve/main/pytorch_model.bin", lfsFile)
+	m.mux.HandleFunc("/bert-base-uncased/resolve/"+commit+"/pytorch_model.bin", lfsFile)
 
 	// "CDN" path serving the actual bytes
 	m.mux.HandleFunc("/cdn-lfs/pytorch_model.bin", func(w http.ResponseWriter, r *http.Request) {

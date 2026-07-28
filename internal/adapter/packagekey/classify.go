@@ -35,6 +35,9 @@ func IsPackageFile(adapterType, key string) bool {
 		return strings.HasSuffix(key, ".tgz")
 	case "docker":
 		return strings.Contains(key, "/blobs/") || strings.Contains(key, "/manifests/")
+	case "huggingface":
+		_, _, ok := parseHuggingFaceFileKey(key)
+		return ok
 	}
 	return false
 }

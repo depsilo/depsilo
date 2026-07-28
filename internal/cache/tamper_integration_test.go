@@ -146,7 +146,12 @@ func (s *memStorage) Exists(_ context.Context, key string) (bool, error) {
 	_, ok := s.data[key]
 	return ok, nil
 }
-func (s *memStorage) Delete(_ context.Context, key string) error { return nil }
+func (s *memStorage) Delete(_ context.Context, key string) error {
+	s.mu.Lock()
+	delete(s.data, key)
+	s.mu.Unlock()
+	return nil
+}
 func (s *memStorage) Stat(_ context.Context, key string) (*ObjectMeta, error) {
 	return nil, fmt.Errorf("not implemented")
 }

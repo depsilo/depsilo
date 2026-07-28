@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir huggingface_hub
 # prajjwal1/bert-tiny is ~17 MB — same protocol surface as a 50 GB model,
 # vastly smaller download. If this model becomes unavailable, swap to
 # any public model under ~50 MB.
-RUN huggingface-cli download prajjwal1/bert-tiny --local-dir /tmp/m \
+RUN hf download prajjwal1/bert-tiny --local-dir /tmp/m \
     && test -f /tmp/m/config.json \
     && python -c "import json; cfg = json.load(open('/tmp/m/config.json')); \
                   assert cfg.get('model_type') == 'bert', cfg; print('config.json OK')"

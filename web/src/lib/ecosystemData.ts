@@ -786,22 +786,23 @@ export const LANGUAGES: Language[] = [
     group: 'data', subtitleKey: 'huggingface',
     managers: [
       {
-        id: 'huggingface-cli', name: 'huggingface-cli', hint: 'Official CLI',
-        quick:      { lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface\nhuggingface-cli download bert-base-uncased --local-dir ./bert' },
+        id: 'hf-cli', name: 'hf', hint: 'Official CLI',
+        quick:      { lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface\nhf download bert-base-uncased --local-dir ./bert' },
         methods: [
           { label: 'quickstart.method.envvar',  lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface' },
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'HF_ENDPOINT={URL}/huggingface huggingface-cli download bert-base-uncased --local-dir ./bert' },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: 'HF_ENDPOINT={URL}/huggingface hf download bert-base-uncased --local-dir ./bert' },
         ],
         persistent: { file: '~/.bashrc', lang: 'sh', body: 'export HF_ENDPOINT={URL}/huggingface' },
-        verify:     { lang: 'sh', body: 'huggingface-cli download prajjwal1/bert-tiny --local-dir /tmp/bert-tiny && ls /tmp/bert-tiny' },
+        verify:     { lang: 'sh', body: 'hf download prajjwal1/bert-tiny --local-dir /tmp/bert-tiny && ls /tmp/bert-tiny' },
         paths: [
           { os: 'POSIX shells', path: '~/.bashrc, ~/.zshrc, ~/.profile' },
           { os: 'fish',         path: 'set -Ux HF_ENDPOINT {URL}/huggingface' },
         ],
         tutorial: [
-          'huggingface-cli, transformers, datasets — every official tool respects HF_ENDPOINT.',
+          'hf, transformers, datasets — every official tool respects HF_ENDPOINT.',
           'Set it once in your shell rc and forget about it; every download routes through Depsilo automatically.',
           'Gated models: pass your usual HF_TOKEN — Depsilo forwards it to upstream verbatim but does NOT cache the response.',
+          'Current cache support uses regular HTTP downloads (about 50 GB or less per file); Xet-native larger files are not yet supported.',
         ],
       },
       {

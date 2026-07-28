@@ -123,7 +123,8 @@ Depsilo 也可以为本机或团队构建机提供独立的 ccache / sccache 编
 
 ### AI 工作负载说明
 
-Hugging Face 模型动辄几十 GB（单个权重文件可达 50 GB+）。
+Hugging Face 模型动辄几十 GB。当前适配器缓存普通 HTTP 下载路径（单文件约
+50 GB 以内）；超过客户端该限制的 Xet 原生文件暂不支持。
 如果你主要用 Depsilo 缓存模型，建议把 `config.toml` 里的
 `[cache] max_size_gb` 从默认 20 GB 提到 200 GB 起步。
 
@@ -210,6 +211,10 @@ name     = "aliyun"
 url      = "https://mirrors.aliyun.com"
 priority = 2
 ```
+
+配置单上游 HTTP 代理后，重定向产物域名由该代理负责解析。请在代理出口侧默认
+阻断回环、链路本地和私网目标；只有私有制品库确实位于这些网段时才放行。
+Depsilo 直连模式会在进程内执行同等网络边界检查。
 
 `min_release_age_enabled` 只控制“最新版本冷却”门禁。默认开启的 OSV 已知恶意包
 封锁和仅告警的篡改检测不受该开关影响。

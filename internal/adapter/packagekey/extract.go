@@ -4,7 +4,10 @@
 // human-readable identifiers used by stats, search, and security scanning.
 package packagekey
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 // ExtractName returns a human-readable package name from a cache key,
 // or "" when the key does not denote a recognisable package.
@@ -192,6 +195,15 @@ func ExtractName(adapterType, key string) string {
 		if strings.Contains(key, "/blobs/") {
 			return ""
 		}
+	case "huggingface":
+		repo, _, ok := parseHuggingFaceFileKey(key)
+		if ok {
+			return repo
+		}
+		repo, ok = parseHuggingFaceMetadataKey(key)
+		if ok {
+			return repo
+		}
 	}
 	return ""
 }
@@ -326,6 +338,160 @@ func ExtractVersion(adapterType, key string) string {
 				}
 			}
 		}
+	case "huggingface":
+		_, ref, ok := parseHuggingFaceFileKey(key)
+		if ok {
+			return ref
+		}
 	}
 	return ""
+}
+
+func parseHuggingFaceFileKey(key string) (repo, ref string, ok bool) {
+	const prefix = "huggingface/"
+	if !strings.HasPrefix(key, prefix) {
+		return "", "", false
+	}
+
+	rest := strings.TrimPrefix(key, prefix)
+	if strings.HasPrefix(rest, "__query__/") {
+		// Query-bearing representations live in an unreachable structural
+		// namespace: __query__/{kind}/{hash}/{original-key-without-prefix}.
+		queryParts := strings.Split(rest, "/")
+		if len(queryParts) >= 4 &&
+			(queryParts[1] == "artifact" || queryParts[1] == "metadata") &&
+			isLowerHexSHA256(queryParts[2]) {
+			if queryParts[1] != "artifact" {
+				return "", "", false
+			}
+			rest = strings.Join(queryParts[3:], "/")
+		}
+	}
+
+	parts := strings.Split(rest, "/")
+	if len(parts) == 0 || parts[0] == "api" {
+		return "", "", false
+	}
+
+	maxRepoSegments := 2
+	if parts[0] == "datasets" {
+		maxRepoSegments = 3
+	}
+	if maxRepoSegments >= len(parts) {
+		maxRepoSegments = len(parts) - 1
+	}
+	for i := maxRepoSegments; i >= 1; i-- {
+		if parts[i] != "resolve" && parts[i] != "raw" {
+			continue
+		}
+		if i+2 >= len(parts) || parts[i+1] == "" ||
+			strings.Join(parts[i+2:], "/") == "" {
+			return "", "", false
+		}
+		repoParts := make([]string, i)
+		for index, part := range parts[:i] {
+			decoded, err := url.PathUnescape(part)
+			if err != nil || decoded == "" || decoded == "." || decoded == ".." {
+				return "", "", false
+			}
+			repoParts[index] = decoded
+		}
+		decodedRef, err := url.PathUnescape(parts[i+1])
+		if err != nil || decodedRef == "" || decodedRef == "." || decodedRef == ".." {
+			return "", "", false
+		}
+		repo = strings.Join(repoParts, "/")
+		if repo == "" {
+			return "", "", false
+		}
+		return repo, decodedRef, true
+	}
+
+	return "", "", false
+}
+
+func parseHuggingFaceMetadataKey(key string) (repo string, ok bool) {
+	const prefix = "huggingface/"
+	if !strings.HasPrefix(key, prefix) {
+		return "", false
+	}
+
+	rest := strings.TrimPrefix(key, prefix)
+	if strings.HasPrefix(rest, "__query__/") {
+		// Query-bearing metadata retains the original structural key after the
+		// opaque hash, so package-level operations can still find every
+		// representation without retaining any query values.
+		queryParts := strings.Split(rest, "/")
+		if len(queryParts) < 4 ||
+			queryParts[1] != "metadata" ||
+			!isLowerHexSHA256(queryParts[2]) {
+			return "", false
+		}
+		rest = strings.Join(queryParts[3:], "/")
+	}
+
+	parts := strings.Split(rest, "/")
+	if len(parts) < 3 || parts[0] != "api" ||
+		(parts[1] != "models" && parts[1] != "datasets") {
+		return "", false
+	}
+
+	route := parts[2:]
+	decoded := make([]string, len(route))
+	for index, part := range route {
+		component, err := url.PathUnescape(part)
+		if err != nil || component == "" || component == "." || component == ".." {
+			return "", false
+		}
+		decoded[index] = component
+	}
+
+	// Hub repository identifiers contain one component or owner/name. Prefer
+	// the two-component boundary because a repository itself may legally be
+	// named "tree" or "revision".
+	splitAt := -1
+	maxSplit := 2
+	if len(decoded)-2 < maxSplit {
+		maxSplit = len(decoded) - 2
+	}
+	for index := maxSplit; index >= 1; index-- {
+		if decoded[index] == "tree" || decoded[index] == "revision" {
+			splitAt = index
+			break
+		}
+	}
+
+	var repoParts []string
+	if splitAt < 0 {
+		if len(decoded) < 1 || len(decoded) > 2 {
+			return "", false
+		}
+		repoParts = decoded
+	} else {
+		repoParts = decoded[:splitAt]
+		if len(repoParts) < 1 || len(repoParts) > 2 || splitAt+1 >= len(decoded) {
+			return "", false
+		}
+		if decoded[splitAt] == "revision" && splitAt+2 != len(decoded) {
+			return "", false
+		}
+	}
+
+	repo = strings.Join(repoParts, "/")
+	if parts[1] == "datasets" {
+		repo = "datasets/" + repo
+	}
+	return repo, repo != ""
+}
+
+func isLowerHexSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for i := range value {
+		if (value[i] < '0' || value[i] > '9') && (value[i] < 'a' || value[i] > 'f') {
+			return false
+		}
+	}
+	return true
 }

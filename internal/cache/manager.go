@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
@@ -81,9 +83,11 @@ type Manager struct {
 	tamper             TamperRecorder
 	immutableThreshold time.Duration
 
-	inflightMu sync.Mutex
-	inflight   map[string]*inflightFetch
-	mutations  *keyMutationGate
+	inflightMu          sync.Mutex
+	inflight            map[string]*inflightFetch
+	mutations           *keyMutationGate
+	invalidations       *cacheInvalidationRegistry
+	invalidationTimeout time.Duration
 
 	lifecycleCtx    context.Context
 	lifecycleCancel context.CancelFunc
@@ -127,6 +131,7 @@ const (
 type inflightFetch struct {
 	done           chan struct{}
 	err            error
+	committedEntry *db.CacheEntry
 	refreshOutcome RefreshOutcome
 	trackers       []*RefreshTracker // guarded by Manager.inflightMu
 }
@@ -144,20 +149,22 @@ func (m *Manager) SetSecurityScanner(s SecurityScanner) {
 func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus, immutableThreshold time.Duration) *Manager {
 	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	m := &Manager{
-		storage:            storage,
-		db:                 database,
-		eventBus:           eventBus,
-		inflight:           make(map[string]*inflightFetch),
-		mutations:          newKeyMutationGate(lifecycleCtx),
-		immutableThreshold: immutableThreshold,
-		lifecycleCtx:       lifecycleCtx,
-		lifecycleCancel:    lifecycleCancel,
-		lifecycleDone:      make(chan struct{}),
-		hitUpdates:         make(chan hitCountUpdate, hitUpdateQueueSize),
-		scanQueue:          make(chan packageScan, scanQueueSize),
-		scanPending:        make(map[string]struct{}),
-		refreshing:         make(map[string]struct{}),
-		refreshSlots:       make(chan struct{}, refreshWorkerLimit),
+		storage:             storage,
+		db:                  database,
+		eventBus:            eventBus,
+		inflight:            make(map[string]*inflightFetch),
+		mutations:           newKeyMutationGate(lifecycleCtx),
+		invalidations:       newCacheInvalidationRegistry(),
+		invalidationTimeout: 10 * time.Second,
+		immutableThreshold:  immutableThreshold,
+		lifecycleCtx:        lifecycleCtx,
+		lifecycleCancel:     lifecycleCancel,
+		lifecycleDone:       make(chan struct{}),
+		hitUpdates:          make(chan hitCountUpdate, hitUpdateQueueSize),
+		scanQueue:           make(chan packageScan, scanQueueSize),
+		scanPending:         make(map[string]struct{}),
+		refreshing:          make(map[string]struct{}),
+		refreshSlots:        make(chan struct{}, refreshWorkerLimit),
 	}
 	m.goOwned(m.runHitCountWorker)
 	for range scanWorkerCount {
@@ -412,7 +419,15 @@ func (m *Manager) runScanWorker(ctx context.Context) {
 	}
 }
 
-func (m *Manager) scheduleBackgroundRefresh(key, adapterType string, ttl time.Duration, fetchFn FetchFunc) bool {
+func (m *Manager) scheduleBackgroundRefresh(key, adapterType string, ttl time.Duration, fetchFn FetchFunc, timeoutHint ...time.Duration) bool {
+	fetchTimeout := defaultFetchTimeout
+	fetchIdleTimeout := time.Duration(0)
+	if len(timeoutHint) > 0 {
+		fetchTimeout = timeoutHint[0]
+	}
+	if len(timeoutHint) > 1 {
+		fetchIdleTimeout = timeoutHint[1]
+	}
 	m.refreshMu.Lock()
 	if _, exists := m.refreshing[key]; exists {
 		m.refreshMu.Unlock()
@@ -434,7 +449,9 @@ func (m *Manager) scheduleBackgroundRefresh(key, adapterType string, ttl time.Du
 			<-m.refreshSlots
 			m.refreshMu.Unlock()
 		}()
-		m.backgroundRefresh(ctx, key, adapterType, ttl, fetchFn)
+		refreshCtx := WithFetchTimeout(ctx, fetchTimeout)
+		refreshCtx = WithFetchIdleTimeout(refreshCtx, fetchIdleTimeout)
+		m.backgroundRefresh(refreshCtx, key, adapterType, ttl, fetchFn)
 	})
 	if !started {
 		m.refreshMu.Lock()
@@ -547,6 +564,11 @@ func refreshRequestFrom(ctx context.Context) forceRefreshRequest {
 	return request
 }
 
+func persistenceRequired(ctx context.Context) bool {
+	request := refreshRequestFrom(ctx)
+	return request.contextBound || request.forced
+}
+
 func withTrackedPrefetch(ctx context.Context) (context.Context, *RefreshTracker) {
 	tracker := newRefreshTracker()
 	request := refreshRequestFrom(ctx)
@@ -628,23 +650,25 @@ type ResponseValidators struct {
 	LastModified string
 }
 
-type validatedReadCloser struct {
-	io.ReadCloser
-	validators ResponseValidators
-}
-
 // WithResponseValidators annotates a fetched body without changing FetchFunc's
 // public signature. Manager extracts and persists the validators while the
 // wrapped body otherwise behaves exactly like the original reader.
 func WithResponseValidators(body io.ReadCloser, etag, lastModified string) io.ReadCloser {
-	return &validatedReadCloser{ReadCloser: body, validators: ResponseValidators{ETag: etag, LastModified: lastModified}}
+	return WithResponseMetadata(body, http.Header{
+		"ETag":          {etag},
+		"Last-Modified": {lastModified},
+	})
 }
 
 func responseValidatorsFrom(body io.ReadCloser) ResponseValidators {
-	if wrapped, ok := body.(*validatedReadCloser); ok {
-		return wrapped.validators
+	return responseValidatorsFromMetadata(responseMetadataFrom(body))
+}
+
+func responseValidatorsFromMetadata(headers http.Header) ResponseValidators {
+	return ResponseValidators{
+		ETag:         headers.Get("ETag"),
+		LastModified: headers.Get("Last-Modified"),
 	}
-	return ResponseValidators{}
 }
 
 // GetResult holds the result of a cache get operation.
@@ -655,6 +679,7 @@ type GetResult struct {
 	Size        int64
 	Hit         bool
 	Upstream    string
+	Headers     http.Header
 }
 
 // Get implements policy-aware caching:
@@ -680,6 +705,10 @@ func (m *Manager) Prefetch(ctx context.Context, key string, adapterType string, 
 	if err := operationCtx.Err(); err != nil {
 		return err
 	}
+	// bindLifecycle deliberately detaches values from the caller context. Carry
+	// explicit transfer-timeout hints across that lifecycle seam.
+	operationCtx = WithFetchTimeout(operationCtx, fetchTimeoutFrom(ctx))
+	operationCtx = WithFetchIdleTimeout(operationCtx, fetchIdleTimeoutFrom(ctx))
 
 	trackedCtx, tracker := withTrackedPrefetch(operationCtx)
 	result, err := m.Get(trackedCtx, key, adapterType, ttl, fetchFn)
@@ -730,69 +759,121 @@ func wrapPrefetchError(operation string, err error) error {
 }
 
 func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) (*GetResult, error) {
-	// Check if we have a cached version (fresh or stale)
-	exists, err := m.storage.Exists(ctx, key)
-	if err != nil {
-		zap.L().Warn("cache exists check failed", zap.String("key", key), zap.Error(err))
+	// Followers must join before waiting on the publication gate: the writer
+	// holds that gate until object and metadata commit, while followers are
+	// intentionally waiting for that same commit.
+	var result *GetResult
+	var err error
+	joined := false
+	exists := false
+	forced := forceRefreshRequested(ctx)
+	m.inflightMu.Lock()
+	if flight, ok := m.inflight[key]; ok {
+		if tracker := refreshTrackerFrom(ctx); tracker != nil {
+			tracker.markUsed()
+			flight.trackers = append(flight.trackers, tracker)
+		}
+		m.inflightMu.Unlock()
+		result, err = m.followInflight(ctx, m.lifecycleCtx, key, flight)
+		joined = true
+		// A refresh flight may have started from an existing entry. Let the
+		// common error path attempt a stale snapshot without requiring another
+		// unlocked metadata preflight.
+		exists = true
+	} else {
+		m.inflightMu.Unlock()
 	}
 
-	if exists {
-		var entry db.CacheEntry
-		dbErr := m.db.WithContext(ctx).Where("key = ?", key).First(&entry).Error
-
-		if dbErr == nil {
-			isFresh := time.Now().Before(entry.ExpiresAt)
-			// Serving an expired package index before refreshing it makes a new
-			// release invisible for exactly one install attempt: pip receives the
-			// old version list, while the background refresh only helps the next
-			// build. Fall through to fetchAndStore for mutable metadata so this
-			// request receives the current index. The common error path below still
-			// serves this stale entry when the upstream is unavailable.
-			forced := forceRefreshRequested(ctx)
-			if forced || (!isFresh && m.isMutableMetadata(adapterType, key)) {
-				zap.L().Debug("metadata requires synchronous refresh",
-					zap.String("key", key),
-					zap.String("adapter_type", adapterType),
-					zap.Bool("operator_forced", forced),
-				)
-			} else {
-
-				// Serve fresh cache, or stale immutable content while it is
-				// verified/refreshed in the background.
-				reader, size, readErr := m.storage.Get(ctx, key)
-				if readErr == nil {
-					// Keep the hit path free of SQLite writes and per-request
-					// goroutines. The single bounded worker merges counts by entry ID.
-					m.recordHit(entry.ID, time.Now())
-
-					zap.L().Debug("cache hit",
-						zap.String("key", key),
-						zap.Bool("fresh", isFresh),
-					)
-
-					m.publishEvent(key, adapterType, true, 0)
-
-					// Only immutable/long-TTL entries reach this stale branch.
-					if !isFresh {
-						m.scheduleBackgroundRefresh(key, adapterType, ttl, fetchFn)
-					}
-
-					return &GetResult{
-						Reader:      reader,
-						ContentType: entry.ContentType,
-						Size:        size,
-						Hit:         true,
-					}, nil
+	// Open the metadata row and storage reader under the same per-key gate used
+	// by writers. Storage.Get returns a stable object snapshot (an open file or
+	// S3 response body), so the gate can be released before downstream drains
+	// it while still preventing new-body/old-metadata combinations.
+	//
+	// A forced refresh never serves this snapshot, so it must not wait behind
+	// an older writer before contacting upstream. In particular, an
+	// authoritative upstream response must be able to publish its tombstone
+	// immediately and bound the subsequent cleanup wait.
+	if !joined && !forced {
+		unlockRead, lockErr := m.lockSnapshot(ctx, key)
+		if lockErr != nil {
+			return nil, lockErr
+		}
+		if m.invalidations.readable(key) {
+			var entry db.CacheEntry
+			dbErr := m.db.WithContext(ctx).Where("key = ?", key).First(&entry).Error
+			if dbErr == nil {
+				var existsErr error
+				exists, existsErr = m.storage.Exists(ctx, entry.StoragePath)
+				if existsErr != nil {
+					zap.L().Warn("cache exists check failed", zap.String("key", key), zap.Error(existsErr))
+					exists = false
 				}
-				zap.L().Warn("cache read failed despite exists", zap.String("key", key), zap.Error(readErr))
+			}
+			if dbErr == nil && exists {
+				isFresh := time.Now().Before(entry.ExpiresAt)
+				// Serving an expired package index before refreshing it makes a new
+				// release invisible for exactly one install attempt: pip receives the
+				// old version list, while the background refresh only helps the next
+				// build. Fall through to fetchAndStore for mutable metadata so this
+				// request receives the current index. The common error path below still
+				// serves this stale entry when the upstream is unavailable.
+				if !isFresh && m.isMutableMetadata(adapterType, key) {
+					zap.L().Debug("metadata requires synchronous refresh",
+						zap.String("key", key),
+						zap.String("adapter_type", adapterType),
+					)
+				} else {
+					// Serve fresh cache, or stale immutable content while it is
+					// verified/refreshed in the background.
+					if m.invalidations.readable(key) {
+						reader, size, readErr := m.storage.Get(ctx, entry.StoragePath)
+						if readErr == nil {
+							unlockRead()
+							// Keep the hit path free of SQLite writes and per-request
+							// goroutines. The single bounded worker merges counts by entry ID.
+							m.recordHit(entry.ID, time.Now())
+
+							zap.L().Debug("cache hit",
+								zap.String("key", key),
+								zap.Bool("fresh", isFresh),
+							)
+
+							m.publishEvent(key, adapterType, true, 0)
+
+							// Only immutable/long-TTL entries reach this stale branch.
+							if !isFresh {
+								m.scheduleBackgroundRefresh(
+									key,
+									adapterType,
+									ttl,
+									fetchFn,
+									fetchTimeoutFrom(ctx),
+									fetchIdleTimeoutFrom(ctx),
+								)
+							}
+
+							return &GetResult{
+								Reader:      reader,
+								ContentType: entry.ContentType,
+								Size:        size,
+								Hit:         true,
+								Headers:     decodeStoredResponseMetadata(entry.ResponseHeaders, entry.ETag, entry.LastModified),
+							}, nil
+						}
+						zap.L().Warn("cache read failed despite exists", zap.String("key", key), zap.Error(readErr))
+					}
+				}
 			}
 		}
+		unlockRead()
 	}
 
 	// Cache miss — fetch from upstream via singleflight
-	result, err := m.fetchAndStore(ctx, key, adapterType, ttl, fetchFn)
+	if !joined {
+		result, err = m.fetchAndStore(ctx, key, adapterType, ttl, fetchFn)
+	}
 	if err != nil {
-		if errors.Is(err, ErrNotModified) && exists {
+		if errors.Is(err, ErrNotModified) && (exists || forced) {
 			unlock, lockErr := m.lockMutation(ctx, key)
 			if lockErr != nil {
 				return nil, lockErr
@@ -816,6 +897,9 @@ func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl t
 			}
 			return m.serveStale(ctx, key, adapterType)
 		}
+		if !allowStaleFallback(err) {
+			return nil, err
+		}
 		// An operator-triggered refresh must report an upstream failure to the
 		// admin UI. The old cache entry is deliberately left untouched so normal
 		// traffic can continue to use it; automatic expiry refreshes retain the
@@ -823,18 +907,113 @@ func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl t
 		if forceRefreshRequested(ctx) {
 			return nil, err
 		}
-		// Upstream failed — try serving stale cache as last resort
-		if exists {
+		// A persistence-only failure must not turn a healthy upstream response
+		// into a failed package install. A stale object is the cheapest fallback;
+		// without one, fetch directly for this caller and skip the unavailable
+		// cache path. Persistence-required Prefetch/refresh callers are handled by
+		// the force-refresh branch above or retain the error below.
+		if isCachePersistenceError(err) && !persistenceRequired(ctx) {
+			if exists {
+				zap.L().Warn("cache persistence failed while refreshing; serving stale cache",
+					zap.String("key", key),
+					zap.Error(err),
+				)
+				if stale, staleErr := m.serveStale(ctx, key, adapterType); staleErr == nil {
+					return stale, nil
+				} else {
+					zap.L().Warn("stale cache unavailable after persistence failure; bypassing cache",
+						zap.String("key", key),
+						zap.Error(staleErr),
+					)
+				}
+			}
+			return m.fetchPassthrough(ctx, fetchFn)
+		}
+		// Transient upstream failures may use stale data as a last resort.
+		// Authoritative errors (for example a package becoming private or being
+		// removed) must reach the client instead of being rewritten to stale 200.
+		if exists && allowStaleFallback(err) {
 			zap.L().Warn("upstream failed, serving stale cache",
 				zap.String("key", key),
 				zap.Error(err),
 			)
-			return m.serveStale(ctx, key, adapterType)
+			if stale, staleErr := m.serveStale(ctx, key, adapterType); staleErr == nil {
+				return stale, nil
+			} else {
+				// A joined miss has no unlocked metadata preflight, so
+				// "exists" only means stale data might be available. Preserve
+				// the real upstream failure when that optimistic lookup misses.
+				zap.L().Debug("stale cache unavailable after upstream failure",
+					zap.String("key", key),
+					zap.Error(staleErr),
+				)
+			}
 		}
 		return nil, err
 	}
 
 	return result, nil
+}
+
+// fetchPassthrough gives an ordinary follower an independent upstream stream
+// after the flight it joined failed only at the cache persistence layer. It
+// deliberately skips another cache attempt: during a storage outage, repeatedly
+// serialising followers behind doomed fills creates long tail latency.
+func (m *Manager) fetchPassthrough(ctx context.Context, fetchFn FetchFunc) (*GetResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	_, finishOwned, admitted := m.beginOwned()
+	if !admitted {
+		return nil, ErrManagerClosed
+	}
+	operationCtx, operationCancel := m.bindLifecycle(ctx)
+	fetchCtx, fetchCancel, cancelFetchWithCause := newFetchContext(operationCtx, fetchTimeoutFrom(ctx))
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() {
+			fetchCancel()
+			operationCancel()
+			finishOwned()
+		})
+	}
+	body, contentType, size, upstreamName, err := fetchFn(fetchCtx)
+	if err != nil {
+		if body != nil {
+			_ = body.Close()
+		}
+		cleanup()
+		return nil, err
+	}
+	if body == nil {
+		cleanup()
+		return nil, errors.New("upstream returned a nil body")
+	}
+	headers := responseMetadataFrom(body)
+	body = WithBodyIdleTimeout(body, fetchIdleTimeoutFrom(ctx), cancelFetchWithCause)
+	stopContextClose := context.AfterFunc(fetchCtx, func() {
+		_ = body.Close()
+		cleanup()
+	})
+	return &GetResult{
+		Reader: &cancelOnDoneReadCloser{
+			ReadCloser: body,
+			onDone: func() {
+				// If the context callback has already started, it owns cleanup
+				// and releases the lifecycle reservation only after body.Close
+				// returns. Releasing here would let Manager.Close return while
+				// that callback is still running.
+				if stopContextClose() {
+					cleanup()
+				}
+			},
+		},
+		ContentType: contentType,
+		Size:        size,
+		Hit:         false,
+		Upstream:    upstreamName,
+		Headers:     cloneResponseMetadata(headers),
+	}, nil
 }
 
 // fetchAndStore opens the upstream and returns a reader that streams bytes to
@@ -848,17 +1027,19 @@ func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl t
 // upstream→storage pump is finished. Semantics match the original spec:
 //
 //   - Leader (first request for the key) gets the live stream.
-//   - Followers (concurrent requests for the same key) wait on done, then read
-//     from cache. The done channel is closed only after storage.Put commits and
-//     the DB entry is written — not when the leader's client finishes reading.
-//   - Client disconnect on the leader does NOT abort the pump. The cache still
-//     fills and the DB entry is committed.
+//   - Followers wait for a durable commit, then read from cache. If only
+//     persistence fails, ordinary followers use stale bytes or an independent
+//     pass-through; persistence-required operations retain the commit error.
+//   - Client disconnect does not abort a healthy cache fill. If storage has
+//     already failed too, the pump stops because no useful consumer remains.
 //   - Upstream open failure: synchronous error to leader. Followers, if any,
 //     wake up with the same error and propagate.
 //   - Upstream mid-stream failure: leader's client read surfaces the error;
 //     storage.Put returns error; no DB entry is committed (LocalStorage's
 //     tmp+rename pattern also leaves no orphan file). On the next request the
 //     key is treated as a miss again.
+//   - Storage/DB failure: a normal leader continues streaming upstream bytes;
+//     Prefetch and tracked/forced refresh remain fail-closed.
 func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) (*GetResult, error) {
 	lifecycleCtx, finishOwned, admitted := m.beginOwned()
 	if !admitted {
@@ -884,6 +1065,7 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 	}
 	m.inflight[key] = flight
 	m.inflightMu.Unlock()
+	writeGeneration := m.invalidations.beginWrite(key)
 
 	// Open upstream synchronously so connect/auth errors surface to the caller
 	// before we hand back a reader. A 10-minute ceiling matches the previous
@@ -896,52 +1078,76 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		fetchBase = ctx
 		storeCtx = ctx
 	}
-	pumpCtx, pumpCancel := context.WithCancel(fetchBase)
-	fetchCtx, fetchCancel := context.WithTimeout(pumpCtx, 10*time.Minute)
+	fetchCtx, fetchCancel, cancelFetchWithCause := newFetchContext(fetchBase, fetchTimeoutFrom(ctx))
 	body, contentType, size, upstreamName, err := fetchFn(fetchCtx)
 	flight.refreshOutcome = RefreshOutcome{
 		Upstream:    upstreamName,
 		NotModified: errors.Is(err, ErrNotModified),
 	}
 	if err != nil {
+		// Publish an authoritative result only after its tombstone is visible and
+		// cleanup has been attempted. Releasing the flight first would let a new
+		// request fresh-hit revoked bytes in the gap before get() invalidated them.
+		if !allowStaleFallback(err) {
+			if invalidateErr := m.invalidateCachedEntry(ctx, key); invalidateErr != nil {
+				zap.L().Error("failed to invalidate cache after authoritative upstream response",
+					zap.String("key", key),
+					zap.Error(invalidateErr),
+				)
+			}
+		}
+		if body != nil {
+			_ = body.Close()
+		}
 		fetchCancel()
-		pumpCancel()
+		m.invalidations.abortWrite(key)
 		m.releaseInflight(key, flight, err)
 		return nil, err
 	}
 	if body == nil {
 		fetchCancel()
-		pumpCancel()
 		err = errors.New("upstream returned a nil body")
+		m.invalidations.abortWrite(key)
 		m.releaseInflight(key, flight, err)
 		return nil, err
 	}
-	validators := responseValidatorsFrom(body)
+	headers := responseMetadataFrom(body)
+	validators := responseValidatorsFromMetadata(headers)
 	if err := storeCtx.Err(); err != nil {
 		_ = body.Close()
 		fetchCancel()
-		pumpCancel()
+		m.invalidations.abortWrite(key)
 		m.releaseInflight(key, flight, err)
 		return nil, err
 	}
+	body = WithBodyIdleTimeout(body, fetchIdleTimeoutFrom(ctx), cancelFetchWithCause)
 
-	// Two pipes fan out from a single source: the client gets one (best-effort
-	// write — disconnect is silently absorbed) and storage gets the other
-	// (must-succeed write — Put consumes it). io.Pipe is unbuffered, so writes
-	// block until the reader consumes; that gives natural back-pressure
-	// upstream when either consumer is slow.
-	clientR, clientW := io.Pipe()
+	// Two detachable pipes fan out from a single source. Either consumer may
+	// disappear independently: a client disconnect still allows a healthy cache
+	// fill, while a cache backend failure still allows a healthy download.
+	clientPipeR, clientW := io.Pipe()
 	storageR, storageW := io.Pipe()
+	streamState := newMissStreamState(fetchCancel, persistenceRequired(ctx))
+	storeOperationCtx, cancelStore := context.WithCancelCause(storeCtx)
+	storageFanout := newMissStorageFanout(storageW, streamState, cancelStore)
+	clientR := &observedPipeReader{
+		PipeReader: clientPipeR,
+		onDone:     streamState.downstreamClosed,
+	}
 
-	// Pump and storage writer are admitted as one lifecycle unit. Shutdown can
-	// therefore never start one side while rejecting the other and stranding a
-	// pipe. The storage writer owns inflight release.
+	// The upstream/client pump, bounded storage fan-out, and persistence writer
+	// are admitted as one lifecycle unit. Shutdown can therefore never start
+	// only part of the pipeline and strand a pipe or queue.
 	started := m.goOwned(
 		func(context.Context) {
-			m.pumpUpstream(fetchCtx, body, fetchCancel, storageW, clientW)
+			m.pumpUpstream(fetchCtx, body, fetchCancel, streamState, storageFanout, clientW)
 		},
 		func(context.Context) {
-			m.storeAndCommit(storeCtx, pumpCancel, key, adapterType, ttl, contentType, size, validators, storageR, flight)
+			storageFanout.run(storeOperationCtx)
+		},
+		func(context.Context) {
+			defer cancelStore(nil)
+			m.storeAndCommit(storeOperationCtx, streamState, key, adapterType, ttl, contentType, size, validators, headers, storageR, flight, writeGeneration)
 		},
 	)
 	if !started {
@@ -951,11 +1157,13 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		}
 		_ = body.Close()
 		fetchCancel()
-		pumpCancel()
+		cancelStore(startErr)
+		storageFanout.closeInput(startErr)
 		_ = storageW.CloseWithError(startErr)
 		_ = clientW.CloseWithError(startErr)
 		_ = storageR.CloseWithError(startErr)
-		_ = clientR.CloseWithError(startErr)
+		_ = clientPipeR.CloseWithError(startErr)
+		m.invalidations.abortWrite(key)
 		m.releaseInflight(key, flight, startErr)
 		return nil, startErr
 	}
@@ -966,6 +1174,7 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		Size:        size,
 		Hit:         false,
 		Upstream:    upstreamName,
+		Headers:     cloneResponseMetadata(headers),
 	}, nil
 }
 
@@ -981,34 +1190,59 @@ func (m *Manager) followInflight(ctx, lifecycleCtx context.Context, key string, 
 	if flight.err != nil {
 		return nil, flight.err
 	}
-	reader, size, gerr := m.storage.Get(ctx, key)
+	if flight.committedEntry == nil {
+		return nil, errors.New("cache leader completed without committed metadata")
+	}
+	entry := *flight.committedEntry
+	unlock, lockErr := m.lockSnapshot(ctx, key)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	if !m.invalidations.readable(key) {
+		unlock()
+		return nil, ErrCacheMiss
+	}
+	reader, size, gerr := m.storage.Get(ctx, entry.StoragePath)
+	unlock()
 	if gerr != nil {
 		return nil, fmt.Errorf("read from cache after leader commit: %w", gerr)
 	}
-	var entry db.CacheEntry
-	_ = m.db.WithContext(ctx).Where("key = ?", key).First(&entry).Error
+	m.recordHit(entry.ID, time.Now())
+	m.publishEvent(key, entry.AdapterType, true, 0)
 	return &GetResult{
 		Reader:      reader,
 		ContentType: entry.ContentType,
 		Size:        size,
-		Hit:         false,
+		Hit:         true,
+		Headers:     decodeStoredResponseMetadata(entry.ResponseHeaders, entry.ETag, entry.LastModified),
 	}, nil
 }
 
-// pumpUpstream copies upstream to both the client and storage. The client is
-// written first so cache backend startup latency (notably an S3 PutObject
-// handshake) cannot delay the first response bytes on a cache miss. Client
-// errors are ignored so a disconnect still allows the cache fill to finish.
-func (m *Manager) pumpUpstream(ctx context.Context, body io.ReadCloser, fetchCancel context.CancelFunc, storageW, clientW *io.PipeWriter) {
+// pumpUpstream writes the client synchronously (preserving bounded
+// backpressure for a slow End User) and hands storage-owned chunks to a small
+// independent queue. A stuck cache sink is detached after the queue's bounded
+// grace period, while the client continues without full-body buffering.
+func (m *Manager) pumpUpstream(
+	ctx context.Context,
+	body io.ReadCloser,
+	fetchCancel context.CancelFunc,
+	state *missStreamState,
+	storage *missStorageFanout,
+	clientW *io.PipeWriter,
+) {
 	cancelDone := make(chan struct{})
 	stopCancel := context.AfterFunc(ctx, func() {
-		err := ctx.Err()
+		err := fetchBodyContextError(ctx, body)
+		if errors.Is(err, ErrFetchIdleTimeout) {
+			state.recordUpstreamTransferFailure(err)
+		}
 		_ = body.Close()
-		_ = storageW.CloseWithError(err)
+		storage.detach(err)
 		_ = clientW.CloseWithError(err)
 		close(cancelDone)
 	})
 	defer func() {
+		storage.closeInput(nil)
 		if stopCancel() {
 			_ = body.Close()
 			fetchCancel()
@@ -1018,32 +1252,55 @@ func (m *Manager) pumpUpstream(ctx context.Context, body io.ReadCloser, fetchCan
 		<-cancelDone
 	}()
 
-	buf := make([]byte, 32*1024)
+	clientActive := true
+	storageActive := true
 	for {
-		n, rerr := body.Read(buf)
+		chunk := acquireMissStreamChunk()
+		n, rerr := body.Read(chunk)
+		storageOwnsChunk := false
 		if n > 0 {
 			// Downstream delivery is the primary operation. This write normally
 			// has an active reader in the adapter's io.Copy and therefore gives
 			// pip the first bytes before cache persistence can apply backpressure.
-			_, _ = clientW.Write(buf[:n])
-			if _, werr := storageW.Write(buf[:n]); werr != nil {
-				// The cache consumer has failed after this chunk was delivered.
-				// End the response with the real error. storeAndCommit closes its
-				// pipe reader on failure, so this also terminates the producer.
-				_ = clientW.CloseWithError(werr)
+			if clientActive {
+				if _, werr := clientW.Write(chunk[:n]); werr != nil {
+					clientActive = false
+					state.downstreamClosed()
+				}
+			}
+			if storageActive {
+				waitForStorage := state.storageBackpressureRequired()
+				if storage.enqueue(ctx, chunk[:n], waitForStorage) {
+					storageOwnsChunk = true
+				} else {
+					storageActive = false
+				}
+			}
+			if !storageOwnsChunk {
+				releaseMissStreamChunk(chunk)
+			}
+			if !clientActive && !storageActive {
 				return
 			}
+		} else {
+			releaseMissStreamChunk(chunk)
 		}
 		if rerr != nil {
 			if rerr == io.EOF {
-				_ = storageW.Close()
-				_ = clientW.Close()
+				storage.closeInput(nil)
+				if clientActive {
+					_ = clientW.Close()
+				}
 			} else {
 				if ctxErr := ctx.Err(); ctxErr != nil {
-					rerr = ctxErr
+					rerr = fetchBodyContextError(ctx, body)
+				} else {
+					state.recordUpstreamTransferFailure(rerr)
 				}
-				_ = storageW.CloseWithError(rerr)
-				_ = clientW.CloseWithError(rerr)
+				storage.closeInput(rerr)
+				if clientActive {
+					_ = clientW.CloseWithError(rerr)
+				}
 			}
 			return
 		}
@@ -1053,83 +1310,182 @@ func (m *Manager) pumpUpstream(ctx context.Context, body io.ReadCloser, fetchCan
 // storeAndCommit drains the storage pipe into storage.Put and, on success,
 // upserts the CacheEntry row and publishes the cache event. Releases the
 // inflight slot when done so followers can read from cache.
-func (m *Manager) storeAndCommit(ctx context.Context, cancelPump context.CancelFunc, key, adapterType string, ttl time.Duration, contentType string, declaredSize int64, validators ResponseValidators, storageR *io.PipeReader, flight *inflightFetch) {
-	defer cancelPump()
+func (m *Manager) storeAndCommit(ctx context.Context, state *missStreamState, key, adapterType string, ttl time.Duration, contentType string, declaredSize int64, validators ResponseValidators, headers http.Header, storageR *io.PipeReader, flight *inflightFetch, writeGeneration uint64) {
+	writeFinished := false
+	defer func() {
+		if !writeFinished {
+			m.invalidations.abortWrite(key)
+		}
+	}()
 	unlock, lockErr := m.lockMutation(ctx, key)
 	if lockErr != nil {
+		ctxErr := ctx.Err()
+		cancelCause := context.Cause(ctx)
 		_ = storageR.CloseWithError(lockErr)
-		cancelPump()
-		m.releaseInflight(key, flight, lockErr)
+		state.storageFailed()
+		if cancelCause != nil &&
+			!errors.Is(cancelCause, context.Canceled) &&
+			!errors.Is(cancelCause, context.DeadlineExceeded) {
+			m.logCacheStorageBackpressure(key, cancelCause)
+			m.releaseInflight(key, flight, &cachePersistenceError{cause: cancelCause})
+		} else if ctxErr != nil {
+			m.releaseInflight(key, flight, ctxErr)
+		} else {
+			m.releaseInflight(key, flight, &cachePersistenceError{cause: lockErr})
+		}
 		return
 	}
 	defer unlock()
+	if !m.invalidations.writeCurrent(key, writeGeneration) {
+		_ = storageR.CloseWithError(errCacheWriteSuperseded)
+		state.storageFailed()
+		cleanupErr := m.discardSupersededWrite(ctx, key)
+		m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})
+		return
+	}
 
 	cr := NewCountingReader(storageR)
-	putErr := m.storage.Put(ctx, key, cr, declaredSize, contentType)
+	var storageReader io.Reader = cr
+	var exactReader *exactSizeReader
+	if declaredSize >= 0 {
+		exactReader = newExactSizeReader(cr, declaredSize)
+		storageReader = exactReader
+	}
+	putErr := m.storage.Put(ctx, key, storageReader, declaredSize, contentType)
+	putSucceeded := putErr == nil
+	if putErr == nil && exactReader != nil {
+		putErr = exactReader.validateConsumed()
+	}
 	if putErr != nil {
-		// Stop the producer immediately. Draining unconditionally could keep a
-		// failed request alive for an unbounded upstream body; closing the reader
-		// makes the pump's next write fail while cancelPump interrupts a blocked
-		// upstream read or client-pipe write.
+		ctxErr := ctx.Err()
+		cancelCause := context.Cause(ctx)
+		if putSucceeded {
+			// A backend that returned success without consuming the complete
+			// representation may already have published unsafe bytes. Remove
+			// both halves under the mutation gate instead of leaving an older
+			// metadata row pointing at the newly written object.
+			putErr = m.removeUncommittedObject(ctx, key, putErr)
+		}
+		// Detach the failed cache consumer. Normal downloads continue through the
+		// client pipe; persistence-required Prefetch/refresh operations cancel via
+		// missStreamState because they have no useful result without a commit.
 		_ = storageR.CloseWithError(putErr)
-		cancelPump()
-		zap.L().Warn("cache put failed", zap.String("key", key), zap.Error(putErr))
-		m.releaseInflight(key, flight, putErr)
+		state.storageFailed()
+		if upstreamErr := state.upstreamFailure(); upstreamErr != nil {
+			m.releaseInflight(key, flight, upstreamErr)
+			return
+		}
+		if cancelCause != nil &&
+			!errors.Is(cancelCause, context.Canceled) &&
+			!errors.Is(cancelCause, context.DeadlineExceeded) {
+			m.logCacheStorageBackpressure(key, cancelCause)
+			m.releaseInflight(key, flight, &cachePersistenceError{cause: cancelCause})
+			return
+		}
+		if ctxErr != nil {
+			m.releaseInflight(key, flight, ctxErr)
+			return
+		}
+		persistenceErr := &cachePersistenceError{cause: putErr}
+		zap.L().Warn("cache put failed; downstream remains in pass-through mode",
+			zap.String("key", key),
+			zap.Error(putErr),
+		)
+		m.releaseInflight(key, flight, persistenceErr)
+		return
+	}
+	if !m.invalidations.writeCurrent(key, writeGeneration) {
+		cleanupErr := m.discardSupersededWrite(ctx, key)
+		m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})
 		return
 	}
 
 	size := declaredSize
-	if size <= 0 {
+	if size < 0 {
 		size = cr.BytesRead()
 	}
 	now := time.Now()
 	entry := db.CacheEntry{
-		Key:          key,
-		AdapterType:  adapterType,
-		CacheKind:    m.cacheKind(adapterType, key),
-		StoragePath:  key,
-		Size:         size,
-		HitCount:     0,
-		ContentType:  contentType,
-		ETag:         validators.ETag,
-		LastModified: validators.LastModified,
-		PackageName:  packagekey.ExtractName(adapterType, key),
-		ExpiresAt:    now.Add(ttl),
-		LastAccessed: now,
+		Key:             key,
+		AdapterType:     adapterType,
+		CacheKind:       m.cacheKind(adapterType, key),
+		StoragePath:     key,
+		Size:            size,
+		HitCount:        0,
+		ContentType:     contentType,
+		ETag:            validators.ETag,
+		LastModified:    validators.LastModified,
+		ResponseHeaders: encodeResponseMetadata(headers),
+		PackageName:     packagekey.ExtractName(adapterType, key),
+		ExpiresAt:       now.Add(ttl),
+		LastAccessed:    now,
 	}
-	if createErr := m.db.WithContext(ctx).Create(&entry).Error; createErr != nil {
-		// Already exists — update instead.
-		update := m.db.WithContext(ctx).Model(&db.CacheEntry{}).Where("key = ?", key).Updates(map[string]interface{}{
-			"size":          size,
-			"content_type":  contentType,
-			"etag":          validators.ETag,
-			"last_modified": validators.LastModified,
-			"cache_kind":    m.cacheKind(adapterType, key),
-			"package_name":  packagekey.ExtractName(adapterType, key),
-			"expires_at":    now.Add(ttl),
-			"last_accessed": now,
-		})
-		if update.Error != nil || update.RowsAffected == 0 {
-			updateErr := update.Error
-			if updateErr == nil {
-				updateErr = errors.New("cache metadata row was not found during update")
+	persist := m.db.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "key"}},
+			DoUpdates: clause.Assignments(map[string]interface{}{
+				"adapter_type":     adapterType,
+				"storage_path":     key,
+				"size":             size,
+				"content_type":     contentType,
+				"etag":             validators.ETag,
+				"last_modified":    validators.LastModified,
+				"response_headers": encodeResponseMetadata(headers),
+				"cache_kind":       m.cacheKind(adapterType, key),
+				"package_name":     packagekey.ExtractName(adapterType, key),
+				"expires_at":       now.Add(ttl),
+				"last_accessed":    now,
+				"updated_at":       now,
+			}),
+		}).
+		Clauses(clause.Returning{Columns: []clause.Column{{Name: "id"}}}).
+		Create(&entry)
+	if persist.Error != nil {
+		commitErr := m.removeUncommittedObject(
+			ctx,
+			key,
+			fmt.Errorf("persist cache metadata: %w", persist.Error),
+		)
+		zap.L().Warn("cache DB commit failed; uncommitted object cleanup attempted",
+			zap.String("key", key),
+			zap.Error(commitErr),
+		)
+		m.releaseInflight(key, flight, &cachePersistenceError{cause: commitErr})
+		return
+	}
+	if entry.ID == 0 {
+		// RETURNING is supported by the production SQLite/PostgreSQL dialects.
+		// Keep a defensive lookup for dialects or drivers that accept the clause
+		// without populating the destination model.
+		var identity struct {
+			ID uint
+		}
+		if identityErr := m.db.WithContext(ctx).
+			Model(&db.CacheEntry{}).
+			Select("id").
+			Where("key = ?", key).
+			Scan(&identity).Error; identityErr != nil || identity.ID == 0 {
+			if identityErr == nil {
+				identityErr = errors.New("persisted cache metadata has no identity")
 			}
-			commitErr := errors.Join(
-				fmt.Errorf("cache metadata create failed: %w", createErr),
-				fmt.Errorf("cache metadata update failed: %w", updateErr),
-			)
-			commitErr = m.removeUncommittedObject(ctx, key, commitErr)
-			zap.L().Warn("cache DB commit failed; uncommitted object cleanup attempted",
+			zap.L().Warn("cache metadata identity lookup failed",
 				zap.String("key", key),
-				zap.Error(commitErr),
+				zap.Error(identityErr),
 			)
-			m.releaseInflight(key, flight, commitErr)
+			m.releaseInflight(
+				key,
+				flight,
+				&cachePersistenceError{cause: identityErr},
+			)
 			return
 		}
+		entry.ID = identity.ID
 	}
 
 	// Tamper baseline: first-seen SHA-256 of immutable artifacts.
-	if tamper := m.tamperRecorder(); tamper != nil && m.cacheKind(adapterType, key) == db.CacheKindArtifact && m.isImmutable(ttl) {
+	if tamper := m.tamperRecorder(); tamper != nil &&
+		m.cacheKind(adapterType, key) == db.CacheKindArtifact &&
+		m.tamperEligible(adapterType, key, ttl) {
 		pkgName := packagekey.ExtractName(adapterType, key)
 		// Verify (not Record): on a miss where a baseline already exists
 		// — e.g. the artifact was LRU-evicted and re-fetched — a differing
@@ -1140,12 +1496,30 @@ func (m *Manager) storeAndCommit(ctx context.Context, cancelPump context.CancelF
 		_ = tamper.Verify(ctx, key, adapterType, pkgName,
 			versionFromKey(adapterType, key), cr.SumHex(), size, "")
 	}
+	if !m.invalidations.commitWrite(key, writeGeneration) {
+		cleanupErr := m.discardSupersededWrite(ctx, key)
+		m.releaseInflight(key, flight, &cachePersistenceError{cause: errors.Join(errCacheWriteSuperseded, cleanupErr)})
+		return
+	}
+	writeFinished = true
 
 	m.publishEvent(key, adapterType, false, size)
 
 	m.enqueueScan(adapterType, packagekey.ExtractName(adapterType, key))
 
-	m.releaseInflight(key, flight, nil)
+	m.releaseInflight(key, flight, nil, entry)
+}
+
+func (m *Manager) logCacheStorageBackpressure(key string, cause error) {
+	if !errors.Is(cause, errCacheStorageBackpressure) {
+		return
+	}
+	zap.L().Warn("cache persistence detached after sustained storage backpressure",
+		zap.String("key", key),
+		zap.Duration("grace_period", missStorageBackpressureTTL),
+		zap.Int("queue_bytes", missStorageQueueDepth*missStreamChunkSize),
+		zap.Error(cause),
+	)
 }
 
 func (m *Manager) lockMutation(ctx context.Context, key string) (func(), error) {
@@ -1153,6 +1527,26 @@ func (m *Manager) lockMutation(ctx context.Context, key string) (func(), error) 
 		return nil, errors.New("cache mutation gate is not initialized")
 	}
 	return m.mutations.lock(ctx, key)
+}
+
+func (m *Manager) lockSnapshot(ctx context.Context, key string) (func(), error) {
+	if m.mutations == nil {
+		return nil, errors.New("cache mutation gate is not initialized")
+	}
+	return m.mutations.lockSnapshot(ctx, key)
+}
+
+// Invalidate makes a cache key unreadable before removing its metadata and
+// object. If neither backend can be cleaned, the in-memory tombstone remains
+// fail-closed until a successful replacement write or process restart.
+func (m *Manager) Invalidate(ctx context.Context, key string) error {
+	if m == nil {
+		return ErrManagerClosed
+	}
+	if key == "" {
+		return errors.New("cache invalidation key is empty")
+	}
+	return m.invalidateCachedEntry(ctx, key)
 }
 
 // removeUncommittedObject compensates for the lack of a transaction spanning
@@ -1164,24 +1558,80 @@ func (m *Manager) removeUncommittedObject(ctx context.Context, key string, commi
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	generation := m.invalidations.beginInvalidation(key)
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	if err := m.storage.Delete(cleanupCtx, key); err != nil {
-		cleanupErr := fmt.Errorf("remove uncommitted cache object: %w", err)
+
+	deleteResult := m.db.WithContext(cleanupCtx).
+		Where("key = ?", key).
+		Delete(&db.CacheEntry{})
+	dbErr := deleteResult.Error
+	storageErr := m.storage.Delete(cleanupCtx, key)
+	cleanupSafe := dbErr == nil || storageErr == nil
+	m.invalidations.finishInvalidation(key, generation, cleanupSafe)
+
+	if dbErr != nil {
+		dbErr = fmt.Errorf("remove uncommitted cache metadata: %w", dbErr)
+	}
+	if storageErr != nil {
+		storageErr = fmt.Errorf("remove uncommitted cache object: %w", storageErr)
 		zap.L().Error("failed to remove uncommitted cache object",
 			zap.String("key", key),
-			zap.Error(err),
+			zap.Error(storageErr),
 		)
-		return errors.Join(commitErr, cleanupErr)
 	}
-	return commitErr
+	return errors.Join(commitErr, dbErr, storageErr)
+}
+
+// invalidateCachedEntry makes an authoritative upstream result sticky across
+// later transient failures. Metadata is removed even when object cleanup
+// fails, and object cleanup is still attempted when the DB is unavailable; in
+// either case the old representation cannot be served through a valid row.
+func (m *Manager) invalidateCachedEntry(ctx context.Context, key string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	generation := m.invalidations.beginInvalidation(key)
+	cleanupSafe := false
+	defer func() {
+		m.invalidations.finishInvalidation(key, generation, cleanupSafe)
+	}()
+
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.invalidationTimeout)
+	defer cancel()
+	unlock, err := m.lockMutation(cleanupCtx, key)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if !m.invalidations.invalidationPending(key, generation) {
+		return nil
+	}
+
+	deleteResult := m.db.WithContext(cleanupCtx).
+		Where("key = ?", key).
+		Delete(&db.CacheEntry{})
+	dbErr := deleteResult.Error
+	storageErr := m.storage.Delete(cleanupCtx, key)
+	cleanupSafe = dbErr == nil || storageErr == nil
+	if dbErr != nil {
+		dbErr = fmt.Errorf("delete invalid cache metadata: %w", dbErr)
+	}
+	if storageErr != nil {
+		storageErr = fmt.Errorf("delete invalid cache object: %w", storageErr)
+	}
+	return errors.Join(dbErr, storageErr)
 }
 
 // releaseInflight removes the in-flight entry and closes done so followers can
 // proceed. err is recorded on the flight before done closes.
-func (m *Manager) releaseInflight(key string, flight *inflightFetch, err error) {
+func (m *Manager) releaseInflight(key string, flight *inflightFetch, err error, committed ...db.CacheEntry) {
 	m.inflightMu.Lock()
 	flight.err = err
+	if len(committed) > 0 {
+		entry := committed[0]
+		flight.committedEntry = &entry
+	}
 	if cur, ok := m.inflight[key]; ok && cur == flight {
 		delete(m.inflight, key)
 	}
@@ -1197,17 +1647,30 @@ func (m *Manager) releaseInflight(key string, flight *inflightFetch, err error) 
 // backgroundRefresh refreshes a stale cache entry in the background. Admission
 // is deduplicated by scheduleBackgroundRefresh before this task is started.
 func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapterType string, ttl time.Duration, fetchFn FetchFunc) {
-	ctx, cancel := context.WithTimeout(parentCtx, 10*time.Minute)
+	writeGeneration := m.invalidations.beginWrite(key)
+	writeFinished := false
+	defer func() {
+		if !writeFinished {
+			m.invalidations.abortWrite(key)
+		}
+	}()
+	ctx, cancel, cancelFetchWithCause := newFetchContext(parentCtx, fetchTimeoutFrom(parentCtx))
 	defer cancel()
 
 	err := func() error {
 		body, contentType, size, _, err := fetchFn(ctx)
 		if err != nil {
+			if body != nil {
+				_ = body.Close()
+			}
 			return err
 		}
 		if body == nil {
 			return errors.New("background refresh returned a nil body")
 		}
+		headers := responseMetadataFrom(body)
+		validators := responseValidatorsFromMetadata(headers)
+		body = WithBodyIdleTimeout(body, fetchIdleTimeoutFrom(ctx), cancelFetchWithCause)
 		defer body.Close()
 		closeDone := make(chan struct{})
 		stopClose := context.AfterFunc(ctx, func() {
@@ -1221,13 +1684,21 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 		}()
 
 		cr := NewCountingReader(body)
+		var refreshReader io.Reader = cr
+		var exactReader *exactSizeReader
+		if size >= 0 {
+			exactReader = newExactSizeReader(cr, size)
+			refreshReader = exactReader
+		}
 
 		// Immutable + tamper on: verify-only. Drain to discard (do NOT
 		// overwrite storage — immutable bytes are supposed to be
 		// identical), then compare the hash. A mismatch keeps the
 		// trusted first-seen copy and alerts; a match just extends TTL.
-		if tamper := m.tamperRecorder(); tamper != nil && m.cacheKind(adapterType, key) == db.CacheKindArtifact && m.isImmutable(ttl) {
-			if _, copyErr := io.Copy(io.Discard, cr); copyErr != nil {
+		if tamper := m.tamperRecorder(); tamper != nil &&
+			m.cacheKind(adapterType, key) == db.CacheKindArtifact &&
+			m.tamperEligible(adapterType, key, ttl) {
+			if _, copyErr := io.Copy(io.Discard, refreshReader); copyErr != nil {
 				return fmt.Errorf("bg verify read: %w", copyErr)
 			}
 			unlock, lockErr := m.lockMutation(ctx, key)
@@ -1235,6 +1706,9 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 				return lockErr
 			}
 			defer unlock()
+			if !m.invalidations.writeCurrent(key, writeGeneration) {
+				return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+			}
 			entry, entryErr := m.refreshEntry(ctx, key)
 			if entryErr != nil {
 				return entryErr
@@ -1259,6 +1733,10 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 				if err := refreshMetadataUpdateError(update, "bg tamper TTL update"); err != nil {
 					return err
 				}
+				if !m.invalidations.commitWrite(key, writeGeneration) {
+					return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+				}
+				writeFinished = true
 				return nil
 			}
 			now := time.Now()
@@ -1270,6 +1748,10 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 			if err := refreshMetadataUpdateError(update, "bg integrity TTL update"); err != nil {
 				return err
 			}
+			if !m.invalidations.commitWrite(key, writeGeneration) {
+				return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+			}
+			writeFinished = true
 			zap.L().Debug("tamper: integrity verified", zap.String("key", key))
 			return nil
 		}
@@ -1280,27 +1762,46 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 			return lockErr
 		}
 		defer unlock()
+		if !m.invalidations.writeCurrent(key, writeGeneration) {
+			return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+		}
 		entry, entryErr := m.refreshEntry(ctx, key)
 		if entryErr != nil {
 			return entryErr
 		}
-		if putErr := m.storage.Put(ctx, key, cr, size, contentType); putErr != nil {
-			return fmt.Errorf("bg refresh put: %w", putErr)
+		putErr := m.storage.Put(ctx, key, refreshReader, size, contentType)
+		putSucceeded := putErr == nil
+		if putErr == nil && exactReader != nil {
+			putErr = exactReader.validateConsumed()
 		}
-		if size <= 0 {
+		if putErr != nil {
+			putErr = fmt.Errorf("bg refresh put: %w", putErr)
+			if putSucceeded {
+				return m.removeUncommittedObject(ctx, key, putErr)
+			}
+			return putErr
+		}
+		if size < 0 {
 			size = cr.BytesRead()
 		}
 		now := time.Now()
 		update := m.db.WithContext(ctx).Model(&db.CacheEntry{}).Where("id = ? AND key = ?", entry.ID, key).Updates(map[string]interface{}{
-			"size":          size,
-			"content_type":  contentType,
-			"cache_kind":    m.cacheKind(adapterType, key),
-			"expires_at":    now.Add(ttl),
-			"last_accessed": now,
+			"size":             size,
+			"content_type":     contentType,
+			"etag":             validators.ETag,
+			"last_modified":    validators.LastModified,
+			"response_headers": encodeResponseMetadata(headers),
+			"cache_kind":       m.cacheKind(adapterType, key),
+			"expires_at":       now.Add(ttl),
+			"last_accessed":    now,
 		})
 		if err := refreshMetadataUpdateError(update, "bg refresh metadata update"); err != nil {
 			return m.removeUncommittedObject(ctx, key, err)
 		}
+		if !m.invalidations.commitWrite(key, writeGeneration) {
+			return errors.Join(errCacheWriteSuperseded, m.discardSupersededWrite(ctx, key))
+		}
+		writeFinished = true
 
 		zap.L().Debug("background refresh done", zap.String("key", key))
 		return nil
@@ -1309,6 +1810,14 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 	if errors.Is(err, errCacheEntryRemovedDuringRefresh) {
 		zap.L().Debug("background refresh skipped after cache entry removal", zap.String("key", key))
 	} else if err != nil {
+		if !allowStaleFallback(err) {
+			if invalidateErr := m.invalidateCachedEntry(parentCtx, key); invalidateErr != nil {
+				zap.L().Error("failed to invalidate background cache after authoritative upstream response",
+					zap.String("key", key),
+					zap.Error(invalidateErr),
+				)
+			}
+		}
 		zap.L().Warn("background refresh failed",
 			zap.String("key", key),
 			zap.Error(err),
@@ -1317,6 +1826,25 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 }
 
 var errCacheEntryRemovedDuringRefresh = errors.New("cache entry removed during refresh")
+var errCacheWriteSuperseded = errors.New("cache write superseded by authoritative invalidation")
+
+// discardSupersededWrite runs while the caller holds the key mutation gate.
+// It removes both halves of a write that lost the generation race.
+func (m *Manager) discardSupersededWrite(ctx context.Context, key string) error {
+	deleteResult := m.db.WithContext(ctx).Where("key = ?", key).Delete(&db.CacheEntry{})
+	var dbErr error
+	if deleteResult.Error != nil {
+		dbErr = fmt.Errorf("delete superseded cache metadata: %w", deleteResult.Error)
+	}
+	var storageErr error
+	if err := m.storage.Delete(ctx, key); err != nil {
+		storageErr = fmt.Errorf("delete superseded cache object: %w", err)
+	}
+	if dbErr == nil || storageErr == nil {
+		m.invalidations.markCleanupSafe(key)
+	}
+	return errors.Join(dbErr, storageErr)
+}
 
 func (m *Manager) refreshEntry(ctx context.Context, key string) (db.CacheEntry, error) {
 	var entry db.CacheEntry
@@ -1341,12 +1869,24 @@ func refreshMetadataUpdateError(update *gorm.DB, operation string) error {
 
 // serveStale returns a stale cached version when upstream is unavailable.
 func (m *Manager) serveStale(ctx context.Context, key string, adapterType string) (*GetResult, error) {
+	unlock, lockErr := m.lockSnapshot(ctx, key)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
+
+	if !m.invalidations.readable(key) {
+		return nil, fmt.Errorf("stale cache for %s was authoritatively invalidated", key)
+	}
 	var entry db.CacheEntry
 	if err := m.db.WithContext(ctx).Where("key = ?", key).First(&entry).Error; err != nil {
 		return nil, fmt.Errorf("no stale cache for %s", key)
 	}
 
-	reader, size, err := m.storage.Get(ctx, key)
+	if !m.invalidations.readable(key) {
+		return nil, fmt.Errorf("stale cache for %s was authoritatively invalidated", key)
+	}
+	reader, size, err := m.storage.Get(ctx, entry.StoragePath)
 	if err != nil {
 		return nil, fmt.Errorf("stale cache read failed: %w", err)
 	}
@@ -1360,6 +1900,7 @@ func (m *Manager) serveStale(ctx context.Context, key string, adapterType string
 		ContentType: entry.ContentType,
 		Size:        size,
 		Hit:         true,
+		Headers:     decodeStoredResponseMetadata(entry.ResponseHeaders, entry.ETag, entry.LastModified),
 	}, nil
 }
 
@@ -1383,8 +1924,11 @@ func (m *Manager) publishEvent(key, adapterType string, hit bool, size int64) {
 // readability. The cache key already encodes the artifact; we only need
 // something human-facing, so an empty result is acceptable.
 func versionFromKey(adapterType, key string) string {
-	// The filename tail usually carries the version; keep it simple —
-	// the authoritative identity is the cache key itself.
+	if version := packagekey.ExtractVersion(adapterType, key); version != "" {
+		return version
+	}
+	// Not every ecosystem parser can recover a version. Keep the historical
+	// filename fallback for those adapters; the cache key remains authoritative.
 	if i := strings.LastIndex(key, "/"); i >= 0 {
 		return key[i+1:]
 	}

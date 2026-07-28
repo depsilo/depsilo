@@ -44,6 +44,177 @@ func (b *closeBlockingBody) Close() error {
 	return nil
 }
 
+type controlledProgressBody struct {
+	remaining int
+	readReady chan struct{}
+	release   chan struct{}
+	closed    chan struct{}
+	closeOnce sync.Once
+}
+
+func newControlledProgressBody(chunks int) *controlledProgressBody {
+	return &controlledProgressBody{
+		remaining: chunks,
+		readReady: make(chan struct{}),
+		release:   make(chan struct{}),
+		closed:    make(chan struct{}),
+	}
+}
+
+func (b *controlledProgressBody) Read(p []byte) (int, error) {
+	if b.remaining == 0 {
+		return 0, io.EOF
+	}
+	select {
+	case b.readReady <- struct{}{}:
+	case <-b.closed:
+		return 0, context.Canceled
+	}
+	select {
+	case <-b.release:
+	case <-b.closed:
+		return 0, context.Canceled
+	}
+	b.remaining--
+	p[0] = 'x'
+	return 1, nil
+}
+
+func (b *controlledProgressBody) Close() error {
+	b.closeOnce.Do(func() { close(b.closed) })
+	return nil
+}
+
+func TestManagerIdleTimeoutCancelsStalledBodyAndReleasesPipeline(t *testing.T) {
+	database := openStreamTestDB(t)
+	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTestManager(t, manager) })
+	body := newCloseBlockingBody()
+	const key = "huggingface/models/acme/large/resolve/0123456789abcdef/model.bin"
+
+	ctx := WithFetchTimeout(context.Background(), 0)
+	ctx = WithFetchIdleTimeout(ctx, 20*time.Millisecond)
+	result, err := manager.Get(ctx, key, "huggingface", 24*time.Hour,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return body, "application/octet-stream", -1, "mock", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	readDone := make(chan error, 1)
+	go func() {
+		_, readErr := io.Copy(io.Discard, result.Reader)
+		closeErr := result.Reader.Close()
+		readDone <- errors.Join(readErr, closeErr)
+	}()
+
+	select {
+	case err := <-readDone:
+		if !errors.Is(err, ErrFetchIdleTimeout) {
+			t.Fatalf("stalled body read error = %v, want ErrFetchIdleTimeout", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stalled body did not time out")
+	}
+	select {
+	case <-body.closed:
+	default:
+		t.Fatal("idle timeout did not close the upstream body")
+	}
+	waitForNoInflight(t, manager)
+
+	// The timed-out flight must not occupy the key or leave a partial cache
+	// representation. A later request can start a fresh fetch immediately.
+	const recovered = "recovered canonical bytes"
+	retry, err := manager.Get(context.Background(), key, "huggingface", 24*time.Hour,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return io.NopCloser(bytes.NewBufferString(recovered)),
+				"application/octet-stream", int64(len(recovered)), "mock", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, readErr := io.ReadAll(retry.Reader)
+	closeErr := retry.Reader.Close()
+	if err := errors.Join(readErr, closeErr); err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != recovered {
+		t.Fatalf("retry body = %q, want %q", got, recovered)
+	}
+	waitForNoInflight(t, manager)
+}
+
+func TestManagerIdleTimeoutRollsForwardWhileBodyMakesProgress(t *testing.T) {
+	database := openStreamTestDB(t)
+	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
+	t.Cleanup(func() { closeTestManager(t, manager) })
+	body := newControlledProgressBody(5)
+
+	ctx := WithFetchTimeout(context.Background(), 0)
+	ctx = WithFetchIdleTimeout(ctx, 250*time.Millisecond)
+	start := time.Now()
+	result, err := manager.Get(ctx,
+		"huggingface/models/acme/large/resolve/0123456789abcdef/progress.bin",
+		"huggingface",
+		24*time.Hour,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return body, "application/octet-stream", 5, "mock", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type readOutcome struct {
+		body []byte
+		err  error
+	}
+	readDone := make(chan readOutcome, 1)
+	go func() {
+		got, readErr := io.ReadAll(result.Reader)
+		closeErr := result.Reader.Close()
+		readDone <- readOutcome{body: got, err: errors.Join(readErr, closeErr)}
+	}()
+
+	// Each release arrives comfortably inside the 250ms window, but the five
+	// windows make the whole transfer last longer than 250ms. Waiting for
+	// readReady proves the upstream Read is active before each controlled delay.
+	for range 5 {
+		select {
+		case <-body.readReady:
+		case outcome := <-readDone:
+			t.Fatalf("progressing body ended early: bytes=%q err=%v", outcome.body, outcome.err)
+		case <-time.After(time.Second):
+			t.Fatal("upstream did not start the next controlled Read")
+		}
+		time.Sleep(70 * time.Millisecond)
+		select {
+		case body.release <- struct{}{}:
+		case outcome := <-readDone:
+			t.Fatalf("progressing body timed out before release: bytes=%q err=%v", outcome.body, outcome.err)
+		case <-time.After(time.Second):
+			t.Fatal("controlled upstream Read was not waiting for release")
+		}
+	}
+
+	var outcome readOutcome
+	select {
+	case outcome = <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("progressing body did not finish")
+	}
+	if outcome.err != nil {
+		t.Fatal(outcome.err)
+	}
+	if string(outcome.body) != "xxxxx" {
+		t.Fatalf("progressing body = %q, want xxxxx", outcome.body)
+	}
+	if elapsed := time.Since(start); elapsed <= 250*time.Millisecond {
+		t.Fatalf("test transfer finished in %v; it did not outlive one idle interval", elapsed)
+	}
+	waitForNoInflight(t, manager)
+}
+
 func TestManagerCloseCancelsSlowMissAndReleasesInflight(t *testing.T) {
 	database := openStreamTestDB(t)
 	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
@@ -434,7 +605,7 @@ func (b *chunkThenBlockBody) Read(p []byte) (int, error) {
 	return b.closeBlockingBody.Read(p)
 }
 
-func TestManagerPutFailureCancelsPumpWithoutDrainingUpstream(t *testing.T) {
+func TestManagerPutFailureAndClientDisconnectCancelPumpWithoutDrainingUpstream(t *testing.T) {
 	database := openStreamTestDB(t)
 	wantErr := errors.New("storage unavailable")
 	storage := &failFastStorage{memStorage: newMemStorage(), err: wantErr, started: make(chan struct{})}
@@ -449,18 +620,361 @@ func TestManagerPutFailureCancelsPumpWithoutDrainingUpstream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer result.Reader.Close()
+	var firstByte [1]byte
+	if _, err := io.ReadFull(result.Reader, firstByte[:]); err != nil {
+		t.Fatalf("read first downstream byte: %v", err)
+	}
+	if string(firstByte[:]) != "x" {
+		t.Fatalf("first downstream byte = %q, want x", firstByte[:])
+	}
 	select {
 	case <-storage.started:
 	case <-time.After(time.Second):
 		t.Fatal("storage Put did not start")
 	}
+	if err := result.Reader.Close(); err != nil {
+		t.Fatalf("close downstream reader: %v", err)
+	}
 	select {
 	case <-body.closed:
 	case <-time.After(time.Second):
-		t.Fatal("storage failure did not cancel upstream body")
+		t.Fatal("storage failure plus downstream disconnect did not cancel upstream body")
 	}
 	waitForNoInflight(t, manager)
+}
+
+type failAfterReadStorage struct {
+	*memStorage
+	err error
+}
+
+func (s *failAfterReadStorage) Put(_ context.Context, _ string, r io.Reader, _ int64, _ string) error {
+	var firstByte [1]byte
+	_, _ = io.ReadFull(r, firstByte[:])
+	return s.err
+}
+
+type gatedFailStorage struct {
+	*memStorage
+	err         error
+	started     chan struct{}
+	release     chan struct{}
+	startOnce   sync.Once
+	releaseOnce sync.Once
+}
+
+func (s *gatedFailStorage) Put(ctx context.Context, _ string, _ io.Reader, _ int64, _ string) error {
+	s.startOnce.Do(func() { close(s.started) })
+	select {
+	case <-s.release:
+		return s.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *gatedFailStorage) fail() {
+	s.releaseOnce.Do(func() { close(s.release) })
+}
+
+func TestManagerPutFailureDoesNotInterruptLeaderDelivery(t *testing.T) {
+	database := openStreamTestDB(t)
+	storage := &failAfterReadStorage{
+		memStorage: newMemStorage(),
+		err:        errors.New("storage unavailable"),
+	}
+	manager := NewManager(storage, database, NewEventBus(), time.Hour)
+	defer closeTestManager(t, manager)
+
+	prefix := []byte("first-upstream-chunk")
+	suffix := []byte("remaining-downstream-body")
+	payload := append(append([]byte(nil), prefix...), suffix...)
+	result, err := manager.Get(context.Background(), "pypi/files/complete.whl", "pypi", time.Hour,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			body := io.MultiReader(bytes.NewReader(prefix), bytes.NewReader(suffix))
+			return io.NopCloser(body), "application/octet-stream", int64(len(payload)), "mock", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Reader.Close()
+
+	got, readErr := io.ReadAll(result.Reader)
+	if readErr != nil {
+		t.Fatalf("cache persistence failure interrupted downstream delivery after %d/%d bytes: %v", len(got), len(payload), readErr)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("downstream received %d/%d bytes after cache persistence failure", len(got), len(payload))
+	}
+	waitForNoInflight(t, manager)
+
+	var entries int64
+	if err := database.Model(&db.CacheEntry{}).Where("key = ?", "pypi/files/complete.whl").Count(&entries).Error; err != nil {
+		t.Fatal(err)
+	}
+	if entries != 0 {
+		t.Fatalf("cache entries after failed persistence = %d, want 0", entries)
+	}
+}
+
+func TestManagerPrefetchStillFailsWhenPersistenceFails(t *testing.T) {
+	database := openStreamTestDB(t)
+	wantErr := errors.New("storage unavailable")
+	storage := &failFastStorage{memStorage: newMemStorage(), err: wantErr, started: make(chan struct{})}
+	manager := NewManager(storage, database, NewEventBus(), time.Hour)
+	defer closeTestManager(t, manager)
+	body := &chunkThenBlockBody{closeBlockingBody: newCloseBlockingBody()}
+
+	err := manager.Prefetch(context.Background(), "pypi/files/prefetch-fail.whl", "pypi", time.Hour,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return body, "application/octet-stream", -1, "mock", nil
+		})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("prefetch error = %v, want storage error %v", err, wantErr)
+	}
+	select {
+	case <-body.closed:
+	default:
+		t.Fatal("failed Prefetch did not cancel its upstream body")
+	}
+	waitForNoInflight(t, manager)
+}
+
+func TestManagerFollowerBypassesCacheAfterPersistenceFailure(t *testing.T) {
+	database := openStreamTestDB(t)
+	storage := &gatedFailStorage{
+		memStorage: newMemStorage(),
+		err:        errors.New("storage unavailable"),
+		started:    make(chan struct{}),
+		release:    make(chan struct{}),
+	}
+	manager := NewManager(storage, database, NewEventBus(), time.Hour)
+	defer closeTestManager(t, manager)
+	defer storage.fail()
+
+	key := "pypi/files/follower.whl"
+	leaderPayload := []byte("leader pass-through response")
+	leader, err := manager.Get(context.Background(), key, "pypi", time.Hour,
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return io.NopCloser(bytes.NewReader(leaderPayload)), "application/octet-stream", int64(len(leaderPayload)), "leader", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	type readOutcome struct {
+		body []byte
+		err  error
+	}
+	leaderDone := make(chan readOutcome, 1)
+	go func() {
+		body, err := io.ReadAll(leader.Reader)
+		_ = leader.Reader.Close()
+		leaderDone <- readOutcome{body: body, err: err}
+	}()
+	select {
+	case <-storage.started:
+	case <-time.After(time.Second):
+		t.Fatal("storage Put did not start")
+	}
+
+	const followerCount = 3
+	fallbackPayload := []byte("independent follower pass-through")
+	type getOutcome struct {
+		result *GetResult
+		err    error
+	}
+	done := make(chan getOutcome, followerCount)
+	trackers := make([]*RefreshTracker, 0, followerCount)
+	var fallbackFetches atomic.Int64
+	for range followerCount {
+		tracker := newRefreshTracker()
+		trackers = append(trackers, tracker)
+		ctx := context.WithValue(context.Background(), forceRefreshContextKey{}, forceRefreshRequest{tracker: tracker})
+		go func() {
+			result, err := manager.Get(ctx, key, "pypi", time.Hour,
+				func(context.Context) (io.ReadCloser, string, int64, string, error) {
+					fallbackFetches.Add(1)
+					return io.NopCloser(bytes.NewReader(fallbackPayload)), "application/octet-stream", int64(len(fallbackPayload)), "fallback", nil
+				})
+			done <- getOutcome{result: result, err: err}
+		}()
+	}
+
+	deadline := time.Now().Add(time.Second)
+	allJoined := func() bool {
+		for _, tracker := range trackers {
+			if !tracker.Used() {
+				return false
+			}
+		}
+		return true
+	}
+	for !allJoined() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !allJoined() {
+		t.Fatal("followers did not join the existing inflight fetch")
+	}
+	storage.fail()
+
+	select {
+	case outcome := <-leaderDone:
+		if outcome.err != nil {
+			t.Fatalf("leader read: %v", outcome.err)
+		}
+		if !bytes.Equal(outcome.body, leaderPayload) {
+			t.Fatalf("leader body = %q, want %q", outcome.body, leaderPayload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("leader did not finish after storage failure")
+	}
+
+	for range followerCount {
+		var outcome getOutcome
+		select {
+		case outcome = <-done:
+		case <-time.After(time.Second):
+			t.Fatal("follower did not switch to pass-through after persistence failure")
+		}
+		if outcome.err != nil {
+			t.Fatal(outcome.err)
+		}
+		body, err := io.ReadAll(outcome.result.Reader)
+		_ = outcome.result.Reader.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(body, fallbackPayload) {
+			t.Fatalf("pass-through body = %q, want %q", body, fallbackPayload)
+		}
+		if outcome.result.Hit || outcome.result.Upstream != "fallback" {
+			t.Fatalf("pass-through result hit=%v upstream=%q", outcome.result.Hit, outcome.result.Upstream)
+		}
+	}
+	if got := fallbackFetches.Load(); got != followerCount {
+		t.Fatalf("follower pass-through fetches = %d, want %d", got, followerCount)
+	}
+	select {
+	case <-storage.release:
+	default:
+		t.Fatal("storage failure gate was not released")
+	}
+	waitForNoInflight(t, manager)
+}
+
+func TestManagerFollowerDoesNotBypassUpstreamFailure(t *testing.T) {
+	database := openStreamTestDB(t)
+	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
+	defer closeTestManager(t, manager)
+
+	key := "pypi/files/upstream-failure.whl"
+	flight := &inflightFetch{done: make(chan struct{})}
+	manager.inflightMu.Lock()
+	manager.inflight[key] = flight
+	manager.inflightMu.Unlock()
+
+	tracker := newRefreshTracker()
+	ctx := context.WithValue(context.Background(), forceRefreshContextKey{}, forceRefreshRequest{tracker: tracker})
+	wantErr := errors.New("upstream reset")
+	done := make(chan error, 1)
+	go func() {
+		_, err := manager.Get(ctx, key, "pypi", time.Hour,
+			func(context.Context) (io.ReadCloser, string, int64, string, error) {
+				t.Error("upstream failure follower unexpectedly bypassed the failed flight")
+				return nil, "", 0, "", nil
+			})
+		done <- err
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for !tracker.Used() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !tracker.Used() {
+		t.Fatal("request did not join the existing inflight fetch")
+	}
+	manager.releaseInflight(key, flight, wantErr)
+	select {
+	case err := <-done:
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("follower error = %v, want %v", err, wantErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("follower did not receive the upstream failure")
+	}
+	waitForNoInflight(t, manager)
+}
+
+type blockingCloseReadBody struct {
+	closeStarted chan struct{}
+	releaseClose chan struct{}
+	startOnce    sync.Once
+}
+
+func newBlockingCloseReadBody() *blockingCloseReadBody {
+	return &blockingCloseReadBody{
+		closeStarted: make(chan struct{}),
+		releaseClose: make(chan struct{}),
+	}
+}
+
+func (b *blockingCloseReadBody) Read([]byte) (int, error) {
+	<-b.closeStarted
+	return 0, context.Canceled
+}
+
+func (b *blockingCloseReadBody) Close() error {
+	b.startOnce.Do(func() { close(b.closeStarted) })
+	<-b.releaseClose
+	return nil
+}
+
+func TestManagerCloseWaitsForFollowerPassthroughCloseCallback(t *testing.T) {
+	database := openStreamTestDB(t)
+	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
+	body := newBlockingCloseReadBody()
+
+	result, err := manager.fetchPassthrough(context.Background(),
+		func(context.Context) (io.ReadCloser, string, int64, string, error) {
+			return body, "application/octet-stream", -1, "fallback", nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readDone := make(chan error, 1)
+	go func() {
+		var buf [1]byte
+		_, err := result.Reader.Read(buf[:])
+		readDone <- err
+	}()
+
+	closeDone := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		closeDone <- manager.Close(ctx)
+	}()
+	select {
+	case <-body.closeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("manager close did not start closing the pass-through body")
+	}
+	select {
+	case <-readDone:
+	case <-time.After(time.Second):
+		t.Fatal("pass-through reader did not observe context cancellation")
+	}
+	select {
+	case err := <-closeDone:
+		close(body.releaseClose)
+		t.Fatalf("manager close returned before the body close callback finished: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(body.releaseClose)
+	if err := <-closeDone; err != nil {
+		t.Fatal(err)
+	}
+	_ = result.Reader.Close()
 }
 
 func TestManagerConcurrentCloseAndHitsAreRaceSafe(t *testing.T) {

@@ -1,6 +1,8 @@
 package huggingface_test
 
 import (
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,6 +99,42 @@ func TestParseRequestPath(t *testing.T) {
 			path:     "/unknown/path",
 			wantKind: huggingface.PathUnknown,
 		},
+		{
+			path:     "/datasets/bigcode/the-stack/resolve/main/data/train.parquet",
+			wantKind: huggingface.PathResolve,
+			wantRepo: "datasets/bigcode/the-stack",
+			wantRef:  "main",
+			wantSub:  "data/train.parquet",
+		},
+		{
+			path:     "/acme/model/resolve/refs%2Fpr%2F1/a%3Fb",
+			wantKind: huggingface.PathResolve,
+			wantRepo: "acme/model",
+			wantRef:  "refs/pr/1",
+			wantSub:  "a?b",
+		},
+		{
+			path:     "/api/models/acme/model/tree/main/folder%2Fsub",
+			wantKind: huggingface.PathAPIModelTree,
+			wantRepo: "acme/model",
+			wantRef:  "main",
+			wantSub:  "folder/sub",
+		},
+		{
+			path:     "/api/models/acme/model/revision/main/not-valid",
+			wantKind: huggingface.PathUnknown,
+		},
+		{
+			path:     "/api/models/acme/tree",
+			wantKind: huggingface.PathAPIModelInfo,
+			wantRepo: "acme/tree",
+		},
+		{
+			path:     "/api/models/acme/tree/tree/main",
+			wantKind: huggingface.PathAPIModelTree,
+			wantRepo: "acme/tree",
+			wantRef:  "main",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
@@ -114,6 +152,83 @@ func TestParseRequestPath(t *testing.T) {
 				t.Errorf("Subpath = %q, want %q", got.Subpath, tc.wantSub)
 			}
 		})
+	}
+}
+
+func TestCacheKeyWithQueryIsCanonicalAndOpaque(t *testing.T) {
+	parsed := huggingface.ParseRequestPath("/api/models/google/flan-t5-base/tree/main")
+	first := huggingface.CacheKeyWithQuery(parsed, url.Values{
+		"cursor": {"secret-cursor"},
+		"limit":  {"10"},
+	})
+	second := huggingface.CacheKeyWithQuery(parsed, url.Values{
+		"limit":  {"10"},
+		"cursor": {"secret-cursor"},
+	})
+	if first != second {
+		t.Fatalf("equivalent query keys differ:\n%s\n%s", first, second)
+	}
+	if first == huggingface.CacheKey(parsed) {
+		t.Fatal("query-bearing request reused the query-free cache key")
+	}
+	if want := "secret-cursor"; strings.Contains(first, want) {
+		t.Fatalf("cache key leaked raw query value %q: %s", want, first)
+	}
+	if !strings.HasPrefix(first, "huggingface/__query__/metadata/") {
+		t.Fatalf("query key did not use isolated representation namespace: %s", first)
+	}
+
+	expandOne := huggingface.CacheKeyWithQuery(parsed, url.Values{
+		"expand": {"likes", "downloads"},
+	})
+	expandTwo := huggingface.CacheKeyWithQuery(parsed, url.Values{
+		"expand": {"downloads", "likes"},
+	})
+	if expandOne != expandTwo {
+		t.Fatalf("equivalent repeated query values differ:\n%s\n%s", expandOne, expandTwo)
+	}
+
+	modelInfo := huggingface.ParseRequestPath("/api/models/google/flan-t5-base")
+	lowerBoolean := huggingface.CacheKeyWithQuery(modelInfo, url.Values{"blobs": {"true"}})
+	titleBoolean := huggingface.CacheKeyWithQuery(modelInfo, url.Values{"blobs": {"True"}})
+	if lowerBoolean != titleBoolean {
+		t.Fatalf("equivalent boolean query keys differ:\n%s\n%s", lowerBoolean, titleBoolean)
+	}
+}
+
+func TestQueryCacheNamespaceCannotCollideWithAValidRouteKey(t *testing.T) {
+	parsed := huggingface.ParseRequestPath("/api/models/acme/model/tree/main")
+	queryKey := huggingface.CacheKeyWithQuery(parsed, url.Values{"cursor": {"next"}})
+	parts := strings.Split(queryKey, "/")
+	if len(parts) < 6 {
+		t.Fatalf("unexpected query cache key: %q", queryKey)
+	}
+	// A route attempting to spell the reserved namespace is not recognized,
+	// while the original base path remains visible only after the opaque hash.
+	reservedRoute := huggingface.ParseRequestPath("/__query__/metadata/" + parts[3])
+	if reservedRoute.Kind != huggingface.PathUnknown || huggingface.CacheKey(reservedRoute) != "" {
+		t.Fatalf("reserved query namespace was reachable as a Hub route: %+v", reservedRoute)
+	}
+	if strings.HasPrefix(queryKey, huggingface.CacheKey(parsed)+"/") {
+		t.Fatalf("query identity was appended inside a user-controlled tree path: %q", queryKey)
+	}
+}
+
+func TestCacheKeyPreservesEncodedRevisionAndTreeSubpath(t *testing.T) {
+	encodedFile := huggingface.ParseRequestPath("/acme/model/resolve/refs%2Fpr%2F1/a%3Fb")
+	if got, want := huggingface.CacheKey(encodedFile), "huggingface/acme/model/resolve/refs%2Fpr%2F1/a%3Fb"; got != want {
+		t.Fatalf("encoded file CacheKey = %q, want %q", got, want)
+	}
+
+	first := huggingface.ParseRequestPath("/api/models/acme/model/tree/main/coreml")
+	second := huggingface.ParseRequestPath("/api/models/acme/model/tree/main/coreml/fill-mask")
+	firstKey := huggingface.CacheKey(first)
+	secondKey := huggingface.CacheKey(second)
+	if firstKey == secondKey {
+		t.Fatalf("tree subpaths collided at %q", firstKey)
+	}
+	if want := "huggingface/api/models/acme/model/tree/main/coreml/fill-mask"; secondKey != want {
+		t.Fatalf("tree CacheKey = %q, want %q", secondKey, want)
 	}
 }
 

@@ -24,7 +24,7 @@ func TestStatsPublicUpstreamURLDoesNotExposeCredentials(t *testing.T) {
 	}
 	pool, err := upstream.NewPoolFromRecords([]db.UpstreamRecord{{
 		ID: 1, AdapterType: "pypi", Name: "private",
-		URL:      "https://alice:secret@packages.example.test:8443/signed/path?token=hidden#secret",
+		URL:      "https://alice:secret@packages.example.test:8443/private/path",
 		Priority: 1, Healthy: true,
 	}})
 	if err != nil {

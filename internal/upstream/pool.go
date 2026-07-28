@@ -2,8 +2,10 @@ package upstream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -23,6 +25,8 @@ import (
 // constant to adjust the global default frequency.
 const DefaultProbeInterval = 30 * time.Minute
 
+var errCriticalFailureLatched = errors.New("upstream disabled after critical protocol failure")
+
 // Upstream represents a single upstream source with its HTTP client.
 type Upstream struct {
 	ID            uint
@@ -36,18 +40,23 @@ type Upstream struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	client        *http.Client
+	// directNetworkGuard means hostname targets are resolved and authorized by
+	// the guarded dialer before the exact resolved IP is used for the socket.
+	// Configured HTTP proxies own their DNS and egress boundary instead.
+	directNetworkGuard bool
 
 	mu     sync.RWMutex
 	health healthState
 }
 
 type healthState struct {
-	healthy       bool
-	avgLatency    time.Duration
-	successRate   float64
-	totalReqs     int64
-	successReqs   int64
-	lastCheckedAt time.Time
+	healthy                bool
+	criticalFailureLatched bool
+	avgLatency             time.Duration
+	successRate            float64
+	totalReqs              int64
+	successReqs            int64
+	lastCheckedAt          time.Time
 }
 
 // HealthSnapshot is one consistent sample of an upstream's mutable health.
@@ -64,6 +73,23 @@ type ProbeResult struct {
 	Latency   time.Duration
 	CheckedAt time.Time
 	Err       error
+}
+
+func (h *healthState) applyProbe(result ProbeResult) {
+	h.totalReqs++
+	if result.Healthy {
+		h.successReqs++
+	}
+	h.successRate = float64(h.successReqs) / float64(h.totalReqs)
+	h.healthy = result.Healthy && !h.criticalFailureLatched
+	h.lastCheckedAt = result.CheckedAt
+	if result.Latency > 0 {
+		if h.avgLatency == 0 {
+			h.avgLatency = result.Latency
+		} else {
+			h.avgLatency = (h.avgLatency*7 + result.Latency*3) / 10
+		}
+	}
 }
 
 // FetchResult holds the response from an upstream fetch.
@@ -199,7 +225,7 @@ func newUpstreamFromRecord(record db.UpstreamRecord) (*Upstream, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := buildClient(record.Proxy)
+	client, err := buildClient(record.Proxy, record.URL)
 	if err != nil {
 		return nil, fmt.Errorf("build client for %s: %w", record.Name, err)
 	}
@@ -207,6 +233,7 @@ func newUpstreamFromRecord(record db.UpstreamRecord) (*Upstream, error) {
 		ID: record.ID, AdapterType: record.AdapterType, Name: record.Name, URL: record.URL,
 		Proxy: record.Proxy, Priority: record.Priority, ProbeMode: mode, ProbeInterval: interval,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, client: client,
+		directNetworkGuard: record.Proxy == "",
 		health: healthState{
 			healthy: record.Healthy, avgLatency: time.Duration(record.AvgLatencyMs) * time.Millisecond,
 			successRate: record.SuccessRate, lastCheckedAt: record.LastCheckedAt,
@@ -223,7 +250,11 @@ func (u *Upstream) sameConfig(record db.UpstreamRecord) bool {
 
 // Fetch performs an HTTP GET to the upstream, joining the given path.
 func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error) {
-	return u.do(ctx, u.URL+path, true)
+	reqURL, err := originRequestURL(u.URL, path)
+	if err != nil {
+		return nil, err
+	}
+	return u.do(ctx, reqURL, true)
 }
 
 // FetchURL performs an HTTP GET against an absolute URL using this
@@ -236,6 +267,14 @@ func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error)
 // third-party host, and charging its latency or failures to this
 // upstream would poison the mirror's health accounting.
 func (u *Upstream) FetchURL(ctx context.Context, reqURL string) (*FetchResult, error) {
+	if !validHTTPURL(reqURL) {
+		return nil, fmt.Errorf("create request for %s: invalid HTTP URL", safeURLOrigin(reqURL))
+	}
+	target, _ := url.Parse(reqURL)
+	origin, _ := url.Parse(u.URL)
+	if err := validateExternalTarget(origin, target, u.directNetworkGuard); err != nil {
+		return nil, fmt.Errorf("fetch %s: external target rejected", safeURLOrigin(reqURL))
+	}
 	return u.do(ctx, reqURL, false)
 }
 
@@ -246,8 +285,17 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 	}
 	req.Header.Set("User-Agent", "depsilo/0.1")
 
+	if u.client == nil {
+		return nil, fmt.Errorf("fetch %s: upstream client unavailable", safeURLOrigin(reqURL))
+	}
+	client := *u.client
+	client.CheckRedirect = u.secureRedirectCheck(client.CheckRedirect)
+	if err := u.admitExchange(); err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), err)
+	}
+
 	start := time.Now()
-	resp, err := u.client.Do(req)
+	resp, err := client.Do(req)
 	latency := time.Since(start)
 
 	if err != nil {
@@ -281,7 +329,10 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 
 // FetchWithHeaders performs an HTTP GET with additional request headers.
 func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers map[string]string) (*FetchResult, error) {
-	reqURL := u.URL + path
+	reqURL, joinErr := originRequestURL(u.URL, path)
+	if joinErr != nil {
+		return nil, joinErr
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -295,8 +346,17 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 		}
 	}
 
+	if u.client == nil {
+		return nil, fmt.Errorf("fetch %s: upstream client unavailable", safeURLOrigin(reqURL))
+	}
+	client := *u.client
+	client.CheckRedirect = u.secureRedirectCheck(client.CheckRedirect)
+	if err := u.admitExchange(); err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), err)
+	}
+
 	start := time.Now()
-	resp, err := u.client.Do(req)
+	resp, err := client.Do(req)
 	latency := time.Since(start)
 
 	if err != nil {
@@ -326,7 +386,10 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 func (u *Upstream) Report(latency time.Duration, success bool) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	u.reportLocked(latency, success)
+}
 
+func (u *Upstream) reportLocked(latency time.Duration, success bool) {
 	u.health.totalReqs++
 	if success {
 		u.health.successReqs++
@@ -340,28 +403,46 @@ func (u *Upstream) Report(latency time.Duration, success bool) {
 		u.health.avgLatency = (u.health.avgLatency*7 + latency*3) / 10
 	}
 
-	// Mark unhealthy if success rate drops too low
-	u.health.healthy = u.health.successRate > 0.3
+	// Mark unhealthy if success rate drops too low. A protocol-integrity
+	// failure is intentionally sticky for this runtime object: routine traffic
+	// cannot re-admit it to selection.
+	u.health.healthy = !u.health.criticalFailureLatched && u.health.successRate > 0.3
+}
+
+// ReportCriticalFailure records a failed exchange and immediately removes the
+// upstream from selection, regardless of historical success volume. It is for
+// protocol-integrity violations where retrying the same origin could serve
+// bytes from the wrong immutable object. The failure stays latched for this
+// runtime object; publishing a replacement configuration or restarting creates
+// a fresh object and clears the latch.
+func (u *Upstream) ReportCriticalFailure(latency time.Duration) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.health.criticalFailureLatched = true
+	u.reportLocked(latency, false)
+}
+
+// admitExchange is the linearization point between a caller holding an older
+// Upstream pointer and a concurrent protocol-integrity failure. Exchanges
+// admitted before the latch are already in flight; every later exchange is
+// rejected even when it bypasses Selector and reuses that pointer directly.
+func (u *Upstream) admitExchange() error {
+	if u == nil {
+		return errors.New("nil upstream")
+	}
+	u.mu.RLock()
+	latched := u.health.criticalFailureLatched
+	u.mu.RUnlock()
+	if latched {
+		return errCriticalFailureLatched
+	}
+	return nil
 }
 
 func (u *Upstream) applyProbe(result ProbeResult) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-
-	u.health.totalReqs++
-	if result.Healthy {
-		u.health.successReqs++
-	}
-	u.health.successRate = float64(u.health.successReqs) / float64(u.health.totalReqs)
-	u.health.healthy = result.Healthy
-	u.health.lastCheckedAt = result.CheckedAt
-	if result.Latency > 0 {
-		if u.health.avgLatency == 0 {
-			u.health.avgLatency = result.Latency
-		} else {
-			u.health.avgLatency = (u.health.avgLatency*7 + result.Latency*3) / 10
-		}
-	}
+	u.health.applyProbe(result)
 }
 
 // HealthSnapshot returns one locked sample of mutable health fields.
@@ -391,21 +472,37 @@ func (u *Upstream) IsHealthy() bool {
 	return u.HealthSnapshot().Healthy
 }
 
-func buildClient(proxy string) (*http.Client, error) {
+func buildClient(proxy, origin string) (*http.Client, error) {
+	originURL, err := url.Parse(origin)
+	if err != nil || !validOriginURL(origin) {
+		return nil, fmt.Errorf("parse origin URL %s: invalid URL", safeURLOrigin(origin))
+	}
 	transport := &http.Transport{
 		MaxIdleConnsPerHost:   10,
 		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 60 * time.Second, // timeout for headers only, not body
 		TLSHandshakeTimeout:   15 * time.Second,
+		ForceAttemptHTTP2:     true,
 	}
 
 	if proxy != "" {
 		proxyURL, err := url.Parse(proxy)
-		if err != nil {
+		if err != nil || !validHTTPURL(proxy) {
 			return nil, fmt.Errorf("parse proxy URL %s: invalid URL", safeURLOrigin(proxy))
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
 		zap.L().Info("using proxy", zap.String("proxy", safeURLOrigin(proxy)))
+	} else {
+		dialer := &net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}
+		guard := &guardedDialer{
+			origin:      originURL,
+			resolver:    net.DefaultResolver,
+			dialContext: dialer.DialContext,
+		}
+		transport.DialContext = guard.DialContext
 	}
 
 	return &http.Client{

@@ -254,7 +254,10 @@ func TestHFResolver(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Both with-revision and without-revision endpoints should
 		// resolve to the same lastModified for our test fixture.
-		if r.URL.Path == "/models/bert-base-uncased" || strings.HasPrefix(r.URL.Path, "/models/bert-base-uncased/revision/") {
+		if r.URL.Path == "/models/bert-base-uncased" ||
+			strings.HasPrefix(r.URL.Path, "/models/bert-base-uncased/revision/") ||
+			r.URL.Path == "/datasets/org/corpus" ||
+			strings.HasPrefix(r.URL.Path, "/datasets/org/corpus/revision/") {
 			_, _ = w.Write([]byte(`{"lastModified":"2026-06-15T12:34:56.000Z"}`))
 			return
 		}
@@ -280,6 +283,14 @@ func TestHFResolver(t *testing.T) {
 	}
 	if !got.Equal(fixedTime) {
 		t.Errorf("got %v, want %v", got, fixedTime)
+	}
+
+	got, err = r.Lookup(context.Background(), "datasets/org/corpus", "v2")
+	if err != nil {
+		t.Fatalf("dataset revision lookup: %v", err)
+	}
+	if !got.Equal(fixedTime) {
+		t.Errorf("dataset got %v, want %v", got, fixedTime)
 	}
 }
 

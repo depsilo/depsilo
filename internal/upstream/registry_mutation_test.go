@@ -153,6 +153,8 @@ func TestRegistryMutationValidation(t *testing.T) {
 	cases := []MutationInput{
 		{AdapterType: "pypi", Name: "", URL: "https://valid.example", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m"},
 		{AdapterType: "pypi", Name: "two", URL: "ftp://invalid.example", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m"},
+		{AdapterType: "pypi", Name: "two", URL: "https://valid.example/base?token=secret", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m"},
+		{AdapterType: "pypi", Name: "two", URL: "https://valid.example/base#fragment", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m"},
 		{AdapterType: "pypi", Name: "two", URL: "https://valid.example", Proxy: "file:///tmp/proxy", Priority: 1, ProbeMode: "passive", ProbeInterval: "30m"},
 		{AdapterType: "pypi", Name: "two", URL: "https://valid.example", Priority: 1, ProbeMode: "sometimes", ProbeInterval: "30m"},
 		{AdapterType: "pypi", Name: "two", URL: "https://valid.example", Priority: 1, ProbeMode: "passive", ProbeInterval: "0s"},
@@ -437,6 +439,80 @@ func TestRegistryCheckPersistsProbe(t *testing.T) {
 	defer u.mu.RUnlock()
 	if u.health.totalReqs != 1 || u.health.successReqs != 1 {
 		t.Fatalf("health applied more than once: %#v", u.health)
+	}
+}
+
+func TestRegistryCheckCannotPersistentlyRecoverCriticalFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	database, _ := registryFixture(t, "pypi", 1)
+	var record db.UpstreamRecord
+	if err := database.First(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&record).Update("url", server.URL).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry, err := NewRegistry(database, []string{"pypi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, ok := registry.Pools()["pypi"].Find(record.ID)
+	if !ok {
+		t.Fatal("runtime upstream not found")
+	}
+	u.ReportCriticalFailure(time.Millisecond)
+
+	updated, result, err := registry.Check(context.Background(), record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Healthy {
+		t.Fatalf("probe did not observe the healthy server: %#v", result)
+	}
+	if updated.Healthy || u.IsHealthy() {
+		t.Fatalf("healthy probe cleared critical latch: runtime=%#v live=%v", updated, u.IsHealthy())
+	}
+	var stored db.UpstreamRecord
+	if err := database.First(&stored, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Healthy {
+		t.Fatalf("healthy probe persisted recovery for critically failed upstream: %#v", stored)
+	}
+
+	reconfigured, err := registry.Update(context.Background(), record.ID, MutationInput{
+		AdapterType:   "pypi",
+		Name:          "source-reconfigured",
+		URL:           server.URL,
+		Priority:      record.Priority,
+		ProbeMode:     "passive",
+		ProbeInterval: "30m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement, ok := registry.Pools()["pypi"].Find(record.ID)
+	if !ok || replacement == u {
+		t.Fatal("configuration update did not publish a fresh upstream object")
+	}
+	if reconfigured.Healthy {
+		t.Fatal("object replacement unexpectedly rewrote persisted health before a probe")
+	}
+
+	recovered, secondResult, err := registry.Check(context.Background(), record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !secondResult.Healthy || !recovered.Healthy || !replacement.IsHealthy() {
+		t.Fatalf(
+			"fresh object did not recover from healthy probe: runtime=%#v probe=%#v live=%v",
+			recovered,
+			secondResult,
+			replacement.IsHealthy(),
+		)
 	}
 }
 

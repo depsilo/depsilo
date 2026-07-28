@@ -64,7 +64,8 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 
 	now := time.Now().UTC()
 	query := h.db.WithContext(c.Request.Context()).Model(&db.CacheEntry{}).
-		Where("cache_kind = ?", db.CacheKindMetadata)
+		Where("cache_kind = ?", db.CacheKindMetadata).
+		Where("NOT (adapter_type = ? AND key LIKE ?)", "huggingface", "huggingface/__query__/%")
 	if search != "" {
 		like := "%" + search + "%"
 		query = query.Where("package_name LIKE ? OR key LIKE ?", like, like)
@@ -111,6 +112,7 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 			SUM(CASE WHEN expires_at <= ? THEN 1 ELSE 0 END) AS stale,
 			MAX(updated_at) AS last_updated`, now, now).
 		Where("cache_kind = ?", db.CacheKindMetadata).
+		Where("NOT (adapter_type = ? AND key LIKE ?)", "huggingface", "huggingface/__query__/%").
 		Group("adapter_type").Order("adapter_type ASC").Scan(&summary).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
@@ -243,6 +245,15 @@ func CacheIndexPublicPath(entry db.CacheEntry) (string, error) {
 			return "", unsupportedIndexKey(entry)
 		}
 		publicPath = "/" + entry.AdapterType + "/" + rest
+
+	case "huggingface":
+		rest, ok := trimCachePrefix(entry.Key, "huggingface/")
+		if !ok ||
+			(!strings.HasPrefix(rest, "api/models/") && !strings.HasPrefix(rest, "api/datasets/")) ||
+			strings.HasPrefix(rest, "__query__/") {
+			return "", unsupportedIndexKey(entry)
+		}
+		publicPath = "/huggingface/" + rest
 
 	case "apt":
 		rest, ok := trimCachePrefix(entry.Key, "apt/")

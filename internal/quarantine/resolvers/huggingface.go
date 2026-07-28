@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -27,7 +28,16 @@ type hfModelDoc struct {
 }
 
 func (r *hfResolver) Lookup(ctx context.Context, pkg, version string) (time.Time, error) {
-	// Hugging Face model IDs are "owner/name" — preserve the slash
+	// Hugging Face repository IDs are "owner/name" — preserve the slash.
+	// Dataset download keys retain a "datasets/" namespace so project and
+	// tamper identities cannot collide with a same-named model; translate that
+	// namespace back to the Hub's /api/datasets endpoint here.
+	resource := "models"
+	if strings.HasPrefix(pkg, "datasets/") {
+		resource = "datasets"
+		pkg = strings.TrimPrefix(pkg, "datasets/")
+	}
+
 	// on the wire. `version` is the revision (branch, tag, commit).
 	// When a specific revision is supplied we use the /api/models/<id>
 	// /revision/<ref> endpoint to get per-revision lastModified. With
@@ -35,9 +45,9 @@ func (r *hfResolver) Lookup(ctx context.Context, pkg, version string) (time.Time
 	// level lastModified, which is what we want.
 	var url string
 	if version != "" && version != "main" {
-		url = fmt.Sprintf("%s/models/%s/revision/%s", r.base, pkg, safePathSegment(version))
+		url = fmt.Sprintf("%s/%s/%s/revision/%s", r.base, resource, pkg, safePathSegment(version))
 	} else {
-		url = fmt.Sprintf("%s/models/%s", r.base, pkg)
+		url = fmt.Sprintf("%s/%s/%s", r.base, resource, pkg)
 	}
 
 	var doc hfModelDoc

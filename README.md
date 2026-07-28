@@ -58,7 +58,7 @@ package manager exactly the way they always have.
 | **Rscript** | R (CRAN) | 3 days |
 | **helm** | Kubernetes | 3 days |
 | **apk** | Alpine | 3 days |
-| **huggingface-cli** / transformers / datasets | HF Hub | 3 days |
+| **hf** CLI / transformers / datasets | HF Hub | 3 days |
 
 The age gate is off by default. When enabled, thresholds are configurable for
 the 13 ecosystems with publish-time resolvers; set one to `0` to exempt that
@@ -332,6 +332,11 @@ proxy    = "http://127.0.0.1:7890"    # optional per-upstream proxy
 
 On the first start after upgrading, Depsilo imports ordinary ecosystem upstreams into the database and records the active ecosystems. After that seed, Admin and the database are authoritative: deleting or editing an upstream is not overwritten by later restarts. Adding upstreams in config for a previously inactive supported ecosystem activates that ecosystem on the next restart. Docker registries and extra indexes remain config-owned and are not managed by Admin Upstream CRUD.
 
+When a per-upstream HTTP proxy is configured, that proxy resolves redirected
+artifact hostnames. Its egress policy should block loopback, link-local, and
+private-network targets unless those networks intentionally host your registry.
+Direct connections enforce this boundary inside Depsilo.
+
 See [`config.example.toml`](config.example.toml) for the full reference,
 including the `[supply_chain]` quarantine block.
 
@@ -349,7 +354,9 @@ default. Run `depsilo serve --help` for the full list.
 > **AI workloads:** Hugging Face models are large — a single weights file
 > can be 30-50 GB. If you primarily use Depsilo as a model cache, raise
 > `[cache] max_size_gb` from the default 20 GB. A practical starting
-> point is 200 GB for teams using multiple LLMs.
+> point is 200 GB for teams using multiple LLMs. The current adapter caches
+> the Hub's regular HTTP download path (roughly up to 50 GB per file).
+> Xet-native files above that client limit are not yet supported.
 
 ## Caching engine
 

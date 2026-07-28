@@ -4,11 +4,10 @@ Outcome: A — huggingface_hub does NOT send `Range` headers on first downloads.
 
 ## How the spike was run
 
-`huggingface-cli` has been deprecated in huggingface_hub v1.16.4 (the version
-available in this environment). The replacement CLI (`hf`) was not installed
-system-wide. Rather than relying on the CLI, we performed a static source-code
-inspection of `huggingface_hub.file_download` (the module that implements all
-HTTP downloads used by both the CLI and the Python API).
+The legacy `huggingface-cli` command has been removed from huggingface_hub 1.x;
+the current command is `hf`. Rather than relying on a system CLI, we performed
+a static source-code inspection of `huggingface_hub.file_download` (the module
+that implements all HTTP downloads used by both the CLI and the Python API).
 
 ```
 uv run --with huggingface_hub python3 -c "import inspect; ..."

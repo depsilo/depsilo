@@ -176,8 +176,8 @@ func normalizeSeedUpstream(item config.UpstreamConfig) (config.UpstreamConfig, e
 	if item.Priority <= 0 {
 		return item, errors.New("priority must be positive")
 	}
-	if !validHTTPURL(item.URL) {
-		return item, errors.New("url must be an http or https URL with a host")
+	if !validOriginURL(item.URL) {
+		return item, errors.New("url must be an http or https URL with a host and no query or fragment")
 	}
 	if item.Proxy != "" && !validHTTPURL(item.Proxy) {
 		return item, errors.New("proxy must be an http or https URL with a host")
@@ -202,6 +202,13 @@ func normalizeSeedUpstream(item config.UpstreamConfig) (config.UpstreamConfig, e
 func validHTTPURL(value string) bool {
 	parsed, err := url.ParseRequestURI(value)
 	return err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https")
+}
+
+func validOriginURL(value string) bool {
+	parsed, err := url.Parse(value)
+	return err == nil && parsed.IsAbs() && parsed.Opaque == "" && parsed.Host != "" &&
+		(parsed.Scheme == "http" || parsed.Scheme == "https") &&
+		parsed.RawQuery == "" && parsed.Fragment == ""
 }
 
 func canonicalActive(stored []string) ([]string, error) {

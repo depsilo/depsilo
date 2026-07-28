@@ -503,7 +503,7 @@ func (h *MCPHandler) toolConfigure(c *gin.Context, ecosystem string) (any, error
 		},
 		"huggingface": {
 			"env":    fmt.Sprintf("HF_ENDPOINT=%s/huggingface", base),
-			"verify": fmt.Sprintf("HF_ENDPOINT=%s/huggingface huggingface-cli download bert-base-uncased --cache-dir /tmp/hf-test", base),
+			"verify": fmt.Sprintf("HF_ENDPOINT=%s/huggingface hf download bert-base-uncased --cache-dir /tmp/hf-test", base),
 		},
 		"cran": {
 			"config": fmt.Sprintf(`# ~/.Rprofile\noptions(repos = c(CRAN = "%s/cran/"))`, base),

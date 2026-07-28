@@ -8,21 +8,48 @@ const (
 )
 
 type CacheEntry struct {
-	ID           uint      `gorm:"primarykey" json:"id"`
-	Key          string    `gorm:"uniqueIndex;size:512" json:"key"`
-	AdapterType  string    `gorm:"size:16;index" json:"adapter_type"`
-	CacheKind    string    `gorm:"size:16;index" json:"cache_kind"` // CacheKindMetadata | CacheKindArtifact
-	PackageName  string    `gorm:"size:256;index" json:"package_name"`
-	StoragePath  string    `gorm:"size:512" json:"storage_path"`
-	Size         int64     `json:"size"`
-	HitCount     int64     `gorm:"default:0" json:"hit_count"`
-	ContentType  string    `gorm:"size:128" json:"content_type"`
-	ETag         string    `gorm:"column:etag;size:512" json:"etag"`
-	LastModified string    `gorm:"size:128" json:"last_modified"`
-	ExpiresAt    time.Time `gorm:"index" json:"expires_at"`
-	LastAccessed time.Time `gorm:"index" json:"last_accessed"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID              uint      `gorm:"primarykey" json:"id"`
+	Key             string    `gorm:"uniqueIndex;size:512" json:"key"`
+	AdapterType     string    `gorm:"size:16;index" json:"adapter_type"`
+	CacheKind       string    `gorm:"size:16;index" json:"cache_kind"` // CacheKindMetadata | CacheKindArtifact
+	PackageName     string    `gorm:"size:256;index" json:"package_name"`
+	StoragePath     string    `gorm:"size:512" json:"storage_path"`
+	Size            int64     `json:"size"`
+	HitCount        int64     `gorm:"default:0" json:"hit_count"`
+	ContentType     string    `gorm:"size:128" json:"content_type"`
+	ETag            string    `gorm:"column:etag;size:512" json:"etag"`
+	LastModified    string    `gorm:"size:128" json:"last_modified"`
+	ResponseHeaders string    `gorm:"type:text" json:"-"`
+	ExpiresAt       time.Time `gorm:"index" json:"expires_at"`
+	LastAccessed    time.Time `gorm:"index" json:"last_accessed"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// HuggingFaceRefPin leases a mutable Hub ref (branch/tag) to one canonical
+// commit. Bodies remain normal CacheEntry objects keyed by that commit; this
+// table only keeps HEAD and subsequent GET requests on the same snapshot.
+type HuggingFaceRefPin struct {
+	Key       string    `gorm:"primaryKey;size:512" json:"key"`
+	Commit    string    `gorm:"size:40;not null" json:"commit"`
+	ExpiresAt time.Time `gorm:"index;not null" json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// HuggingFaceRepositoryRevocation is a durable fail-closed marker for one
+// model or dataset repository. Row existence means public requests must not
+// consult package cache. CleanupSafe only records whether both cache metadata
+// and object cleanup reached a safe state; it does not revoke the marker by
+// itself. Token provides compare-and-swap ordering between concurrent
+// revocation generations.
+type HuggingFaceRepositoryRevocation struct {
+	Repository  string    `gorm:"primaryKey;size:256" json:"repository"`
+	EscapedRepo string    `gorm:"size:512;not null" json:"escaped_repo"`
+	Token       string    `gorm:"size:32;not null" json:"-"`
+	CleanupSafe bool      `gorm:"not null;default:false" json:"cleanup_safe"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // UpstreamUpdateEvent records proactive metadata checks for cached packages.

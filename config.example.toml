@@ -250,6 +250,8 @@ name     = "official"
 url      = "https://huggingface.co"
 priority = 2
 # proxy = "http://127.0.0.1:7890"   # optional per-upstream HTTP proxy
+# A configured proxy resolves redirected artifact hostnames. Its egress policy
+# should block loopback/link-local/private targets unless intentionally needed.
 
 [docker]
 default_registry = "docker.io"

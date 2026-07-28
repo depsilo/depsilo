@@ -74,6 +74,8 @@ func AutoMigrate(db *gorm.DB) error {
 	zap.L().Info("running database auto-migration")
 	if err := db.AutoMigrate(
 		&CacheEntry{},
+		&HuggingFaceRefPin{},
+		&HuggingFaceRepositoryRevocation{},
 		&CompileCacheEntry{},
 		&CompileCacheCredential{},
 		&CompileCacheDeletion{},
@@ -123,7 +125,10 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := migrateVulnerabilityIdentityIndex(db); err != nil {
 		return err
 	}
-	return backfillCacheKinds(db)
+	if err := backfillCacheKinds(db); err != nil {
+		return err
+	}
+	return backfillHuggingFacePackageNames(db)
 }
 
 func migrateCompileCacheIdentityIndex(database *gorm.DB) error {
