@@ -1,24 +1,101 @@
-// web/src/portal/components/ConfigurePane.tsx
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
-import PromptCard from '@/portal/components/PromptCard'
 import EcosystemIcon from '@/components/EcosystemIcon'
-import { LANGUAGES, buildPrompt, type ManagerConfig } from '@/lib/ecosystemData'
+import Icon from '@/components/Icon'
+import { LANGUAGES, type ManagerConfig } from '@/lib/ecosystemData'
 
 interface Props {
   languageId: string
   endpoint: string
   /**
-   * When true, suppress the component's own `.card` border + radius and
-   * let the parent container provide the chrome. Used by QuickStart's
-   * console layout where ConfigurePane sits inside a shared card next to
-   * the ecosystem rail.
+   * When true, the parent surface owns the border and radius.
    */
   flush?: boolean
 }
 
-function ManagerTabs({
+function ManagerChoice({
+  manager,
+  active,
+  recommended,
+  onChange,
+}: {
+  manager: ManagerConfig
+  active: boolean
+  recommended: boolean
+  onChange: (id: string) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onChange(manager.id)}
+      className="stripe-focus-ring active:scale-[0.97]"
+      style={{
+        display: 'inline-flex',
+        minWidth: 138,
+        minHeight: 48,
+        flexDirection: 'column',
+        justifyContent: 'center',
+        padding: '7px 11px',
+        background: active ? 'var(--brand-soft)' : 'var(--bg-card)',
+        border: `1px solid ${active ? 'var(--brand-border)' : 'var(--border)'}`,
+        borderRadius: 8,
+        textAlign: 'left',
+        cursor: 'pointer',
+        transition:
+          'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span
+          style={{
+            color: active ? 'var(--brand-text)' : 'var(--text)',
+            fontSize: 14,
+            fontWeight: active ? 650 : 560,
+            lineHeight: 1.25,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {manager.name}
+        </span>
+        {recommended && (
+          <span
+            style={{
+              padding: '1px 5px',
+              color: 'var(--brand-text)',
+              background: 'var(--brand-soft)',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: 1.4,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('quickstart.recommendedManager')}
+          </span>
+        )}
+      </span>
+      <span
+        style={{
+          overflow: 'hidden',
+          marginTop: 2,
+          color: 'var(--text-muted)',
+          fontSize: 12,
+          lineHeight: 1.25,
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {manager.hint}
+      </span>
+    </button>
+  )
+}
+
+function ManagerPicker({
   managers,
   active,
   onChange,
@@ -28,184 +105,125 @@ function ManagerTabs({
   onChange: (id: string) => void
 }) {
   const { t } = useTranslation()
-  const isAI = active === 'ai'
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      {/* AI option: always first */}
-      <button
-        type="button"
-        onClick={() => onChange('ai')}
-        style={{
-          display: 'inline-flex',
-          flexDirection: 'column',
-          minHeight: 52,
-          padding: '9px 14px',
-          background: isAI ? 'var(--brand-soft)' : 'transparent',
-          border: `0.5px solid ${isAI ? 'var(--brand-border)' : 'var(--border)'}`,
-          borderRadius: 9,
-          textAlign: 'left',
-          cursor: 'pointer',
-          transition: 'background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-        }}
-        className="active:scale-[0.96]"
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: isAI ? 'var(--brand-text)' : 'var(--text-subtle)',
-              background: isAI ? 'var(--brand-soft)' : 'var(--bg-soft)',
-              border: `0.5px solid ${isAI ? 'var(--brand-border)' : 'var(--border)'}`,
-              borderRadius: 3,
-              padding: '1px 4px',
-              letterSpacing: '0.04em',
-            }}
-          >
-            AI
-          </span>
-          <span
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: isAI ? 'var(--brand-text)' : 'var(--text-muted)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {t('quickstart.aiTab')}
-          </span>
-        </span>
-        <span style={{ fontSize: 11.5, color: isAI ? 'var(--brand-text)' : 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
-          {t('quickstart.aiTabHint')}
-        </span>
-      </button>
+  const [expanded, setExpanded] = useState(false)
+  const primary = managers[0]
+  const alternatives = managers.slice(1)
+  const visibleManagers = expanded
+    ? managers
+    : managers.filter(
+        manager => manager.id === primary?.id || manager.id === active,
+      )
+  const hiddenAlternativeCount = alternatives.filter(
+    manager => manager.id !== active,
+  ).length
 
-      {managers.map(m => {
-        const isActive = m.id === active
-        return (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onChange(m.id)}
-            className="active:scale-[0.96]"
-            style={{
-              display: 'inline-flex',
-              flexDirection: 'column',
-              minHeight: 52,
-              minWidth: 132,
-              padding: '9px 14px',
-              background: isActive ? 'var(--bg-card)' : 'transparent',
-              border: `0.5px solid ${isActive ? 'var(--border-strong)' : 'var(--border)'}`,
-              borderRadius: 9,
-              textAlign: 'left',
-              cursor: 'pointer',
-              transition:
-                'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-            }}
-          >
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: isActive ? 600 : 460,
-                color: isActive ? 'var(--text)' : 'var(--text-muted)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {m.name}
-            </span>
-            <span style={{ fontSize: 11.5, color: 'var(--text-subtle)', whiteSpace: 'nowrap', marginTop: 1 }}>
-              {m.hint}
-            </span>
-          </button>
-        )
-      })}
+  return (
+    <div role="group" aria-label={t('quickstart.managerPickerLabel')}>
+      <div id="quickstart-manager-alternatives" className="flex flex-wrap gap-2">
+        {visibleManagers.map(manager => (
+          <ManagerChoice
+            key={manager.id}
+            manager={manager}
+            active={manager.id === active}
+            recommended={manager.id === primary?.id}
+            onChange={onChange}
+          />
+        ))}
+      </div>
+
+      {alternatives.length > 0 && (expanded || hiddenAlternativeCount > 0) && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls="quickstart-manager-alternatives"
+          onClick={() => setExpanded(value => !value)}
+          className="stripe-focus-ring mt-2 inline-flex min-h-10 items-center gap-1 rounded-[6px] px-1 text-[13px] font-[560] text-[var(--text-muted)] hover:text-[var(--text)]"
+          style={{ background: 'transparent', border: 0, cursor: 'pointer' }}
+        >
+          {expanded
+            ? t('quickstart.hideOtherManagers')
+            : t('quickstart.showOtherManagers', {
+                count: hiddenAlternativeCount,
+              })}
+          <Icon name={expanded ? 'expand_less' : 'expand_more'} size="sm" />
+        </button>
+      )}
     </div>
   )
 }
 
 function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) {
   const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
+
   return (
-    <div
+    <details
       style={{
         border: '0.5px solid var(--border)',
         borderRadius: 6,
         background: 'var(--bg-soft)',
       }}
     >
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        style={{
-          width: '100%',
-          padding: '6px 12px',
-          fontSize: 11,
-          color: 'var(--text-muted)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          background: 'transparent',
-          border: 'none',
-          textAlign: 'left',
-        }}
-      >
-        <span style={{ color: 'var(--text-subtle)', transition: 'transform 150ms', transform: open ? 'rotate(90deg)' : 'none', display: 'inline-block' }}>▸</span>
+      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-[13px] font-[540] text-[var(--text-muted)]">
         {t('quickstart.whereReadsFrom')}
-      </button>
-      {open && (
-        <div style={{ borderTop: '0.5px solid var(--border)', overflow: 'hidden' }}>
-          {paths.map((p, i) => (
-            <div
-              key={i}
+        <Icon name="expand_more" size="sm" />
+      </summary>
+      <div style={{ borderTop: '0.5px solid var(--border)', overflow: 'hidden' }}>
+        {paths.map((path, index) => (
+          <div
+            key={`${path.os}-${path.path}`}
+            className="grid grid-cols-1 gap-1 px-3 py-2 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center sm:gap-3"
+            style={{
+              borderBottom:
+                index < paths.length - 1 ? '0.5px solid var(--border)' : 'none',
+            }}
+          >
+            <span
               style={{
-                display: 'grid',
-                gridTemplateColumns: '120px 1fr',
-                alignItems: 'center',
-                gap: 12,
-                padding: '6px 12px',
-                borderBottom: i < paths.length - 1 ? '0.5px solid var(--border)' : 'none',
+                color: 'var(--text-muted)',
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
               }}
             >
-              <span className="eyebrow" style={{ whiteSpace: 'nowrap' }}>{p.os}</span>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11.5,
-                  color: 'var(--text)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {p.path}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+              {path.os}
+            </span>
+            <span
+              style={{
+                overflow: 'hidden',
+                color: 'var(--text)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={path.path}
+            >
+              {path.path}
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
   )
 }
 
 export default function ConfigurePane({ languageId, endpoint, flush = false }: Props) {
   const { t } = useTranslation()
-  const lang = LANGUAGES.find(l => l.id === languageId)
-  // Default to the AI-prompt tab: the QuickStart redesign foregrounds the
-  // AI workflow so the first thing a user lands on inside each ecosystem
-  // is "here's the prompt you paste into your coding agent". Explicit
-  // manager tabs (pip / uv / Poetry / etc.) remain a click away.
-  const [mgrId, setMgrId] = useState<string>('ai')
+  const language = LANGUAGES.find(item => item.id === languageId)
+  const [managerId, setManagerId] = useState<string>(
+    () => language?.managers[0]?.id ?? '',
+  )
 
-  if (!lang) return null
+  if (!language) return null
 
-  const m = lang.managers.find(x => x.id === mgrId) ?? lang.managers[0]
-  const url = endpoint
-  const host = url.replace(/^https?:\/\//, '')
-  const plainHTTP = /^http:\/\//i.test(url)
-  const fill = (s: string) => {
-    let value = s.replace(/\{URL\}/g, url).replace(/\{HOST\}/g, host)
+  const manager =
+    language.managers.find(item => item.id === managerId) ?? language.managers[0]
+  if (!manager) return null
+
+  const host = endpoint.replace(/^https?:\/\//, '')
+  const plainHTTP = /^http:\/\//i.test(endpoint)
+  const fill = (source: string) => {
+    let value = source.replace(/\{URL\}/g, endpoint).replace(/\{HOST\}/g, host)
     if (!plainHTTP) {
       value = value
         .replace(/\ntrusted-host = [^\n]*/g, '')
@@ -214,125 +232,132 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
     }
     return value
   }
-  const prompt = buildPrompt(endpoint, languageId)
 
   return (
     <div
       className={flush ? '' : 'card'}
-      style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}
+      style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column' }}
     >
-      {/* Header */}
       <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          borderBottom: '0.5px solid var(--border)',
-          padding: '0 22px',
-          height: 66,
-          flexShrink: 0,
-          gap: 12,
-        }}
+        className="flex min-h-[76px] items-center gap-3 px-4 py-3 sm:px-6"
+        style={{ borderBottom: '0.5px solid var(--border)' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap' }}>
-          <span
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: 'var(--brand-soft)',
-              border: '0.5px solid var(--brand-border)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'inline-flex',
+            width: 36,
+            height: 36,
+            flex: '0 0 36px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--brand-soft)',
+            border: '0.5px solid var(--brand-border)',
+            borderRadius: 8,
+          }}
+        >
+          <EcosystemIcon type={language.iconAdapter} size={19} useColor />
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <h3
+            className="m-0 font-[var(--font-display)] text-[clamp(21px,2.2vw,26px)] font-[680] leading-[1.15] text-[var(--text)]"
           >
-            <EcosystemIcon type={lang.iconAdapter} size={18} useColor={true} />
-          </span>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 25, fontWeight: 680, letterSpacing: '-0.035em' }}>
-            {t('quickstart.configureTitle', { name: lang.name })}
-          </span>
-          <span style={{ fontSize: 12, color: 'var(--text-subtle)', marginLeft: 4 }}>
-            {t('quickstart.managerCount', { count: lang.managers.length })}
-          </span>
+            {t('quickstart.configureTitle', { name: language.name })}
+          </h3>
+          <p className="mt-1 text-[12px] leading-[1.35] text-[var(--text-muted)]">
+            {t('quickstart.configureLead', {
+              manager: language.managers[0]?.name ?? '',
+            })}
+          </p>
         </div>
-        <div style={{ flex: 1 }} />
       </div>
 
-      {/* Body */}
-      <div
-        style={{
-          padding: 22,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 20,
-        }}
-      >
-        <ManagerTabs managers={lang.managers} active={mgrId} onChange={setMgrId} />
+      <div className="flex flex-col gap-6 p-4 sm:p-6">
+        <ManagerPicker
+          managers={language.managers}
+          active={manager.id}
+          onChange={setManagerId}
+        />
 
-        {mgrId === 'ai' ? (
-          <>
-            <PromptCard prompt={prompt} label={t('quickstart.promptForTools')} />
-            {/* Fill the lower half of the pane with the natural next
-                step — the same verify command the manual tabs end with,
-                so the AI path doesn't leave the console feeling empty. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
-                {t('quickstart.aiVerifyHint')}
-              </span>
-              <div style={{ flex: 1, height: '0.5px', background: 'var(--border)' }} />
-            </div>
-            <CodeBlock code={fill(m.verify.body)} language={m.verify.lang} />
-          </>
-        ) : (
-          <>
-            {/* Quick methods (e.g. -i flag, env var) */}
-            {m.methods && m.methods.length > 0 && (
-              <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {m.methods.map((method, i) => (
-                    <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 10,
-                          color: 'var(--text-subtle)',
-                          letterSpacing: '0.04em',
-                          padding: '0 2px',
-                        }}
-                      >
-                        {t(method.label)}
-                      </span>
-                      <CodeBlock code={fill(method.body)} language={method.lang} />
-                    </div>
-                  ))}
-                </div>
-
-                {/* separator → persistent config */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
-                    {t('quickstart.orSaveToConfig')}
-                  </span>
-                  <div style={{ flex: 1, height: '0.5px', background: 'var(--border)' }} />
-                </div>
-              </>
-            )}
-
-            {/* Config block */}
+        <section aria-labelledby="quickstart-config-step">
+          <h4
+            id="quickstart-config-step"
+            className="m-0 text-[15px] font-[650] leading-[1.3] text-[var(--text)]"
+          >
+            {t('quickstart.configStep')}
+          </h4>
+          <p className="mb-3 mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
+            {t('quickstart.configStepSubtitle', { file: manager.persistent.file })}
+          </p>
+          <div className="flex flex-col gap-2">
             <CodeBlock
-              filename={m.persistent.file}
-              code={fill(m.persistent.body)}
-              language={m.persistent.lang}
+              filename={manager.persistent.file}
+              code={fill(manager.persistent.body)}
+              language={manager.persistent.lang}
+              copyName={manager.persistent.file}
             />
+            <PathsCollapsible paths={manager.paths} />
+          </div>
+        </section>
 
-            {/* Where config lives */}
-            <PathsCollapsible paths={m.paths} />
-
-            {/* Verify block */}
-            <CodeBlock code={fill(m.verify.body)} language={m.verify.lang} />
-          </>
+        {manager.methods && manager.methods.length > 0 && (
+          <details className="border-y border-[var(--border)] py-2">
+            <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1">
+              <span>
+                <span className="block text-[13px] font-[620] text-[var(--text)]">
+                  {t('quickstart.quickMethods')}
+                </span>
+                <span className="mt-0.5 block text-[12px] leading-[1.4] text-[var(--text-muted)]">
+                  {t('quickstart.quickMethodsDescription')}
+                </span>
+              </span>
+              <Icon name="expand_more" size="sm" />
+            </summary>
+            <div className="flex flex-col gap-3 pb-2 pt-3">
+              {manager.methods.map(method => (
+                <div key={`${method.label}-${method.body}`} className="flex flex-col gap-1">
+                  <span className="px-0.5 text-[12px] font-[560] text-[var(--text-muted)]">
+                    {t(method.label)}
+                  </span>
+                  <CodeBlock
+                    code={fill(method.body)}
+                    language={method.lang}
+                    copyName={t(method.label)}
+                  />
+                </div>
+              ))}
+            </div>
+          </details>
         )}
-      </div>
 
+        <section aria-labelledby="quickstart-verify-step">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h4
+                id="quickstart-verify-step"
+                className="m-0 text-[15px] font-[650] leading-[1.3] text-[var(--text)]"
+              >
+                {t('quickstart.verifyStep')}
+              </h4>
+              <p className="mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
+                {t('quickstart.verifyStepSubtitle')}
+              </p>
+            </div>
+            <a
+              href="/monitor"
+              className="stripe-focus-ring inline-flex min-h-10 items-center gap-1 rounded-[6px] px-2 text-[13px] font-[600] text-[var(--brand-text)] no-underline hover:bg-[var(--brand-soft)]"
+            >
+              {t('quickstart.openMonitor')}
+              <Icon name="arrow_forward" size="sm" />
+            </a>
+          </div>
+          <CodeBlock
+            code={fill(manager.verify.body)}
+            language={manager.verify.lang}
+            copyName={t('quickstart.verifyStep')}
+          />
+        </section>
+      </div>
     </div>
   )
 }

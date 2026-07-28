@@ -20,13 +20,16 @@ import (
 )
 
 const (
-	eventDetailLimit   = 512
-	eventWriteAttempts = 3
-	historyCursorV1    = 1
-	defaultHistoryPage = 50
-	maxHistoryPage     = 500
-	maxLegacyOffset    = 100000
-	maxCursorLength    = 4096
+	eventEcosystemLimit = 32
+	eventUpstreamLimit  = 128
+	eventPackageLimit   = 256
+	eventDetailLimit    = 512
+	eventWriteAttempts  = 3
+	historyCursorV1     = 1
+	defaultHistoryPage  = 50
+	maxHistoryPage      = 500
+	maxLegacyOffset     = 100000
+	maxCursorLength     = 4096
 )
 
 var (
@@ -239,8 +242,8 @@ func normalizeObservation(observation Observation) (normalizedObservation, error
 	if !validHistoryResult(result) {
 		return normalizedObservation{}, fmt.Errorf("%w: unsupported result", ErrInvalidObservation)
 	}
-	ecosystem := sanitizeEventValue(observation.Ecosystem, 32)
-	packageName := sanitizeEventValue(observation.Package, 256)
+	ecosystem := sanitizeEventValue(observation.Ecosystem, eventEcosystemLimit)
+	packageName := sanitizeEventValue(observation.Package, eventPackageLimit)
 	if ecosystem == "" || packageName == "" {
 		return normalizedObservation{}, fmt.Errorf("%w: ecosystem and package are required", ErrInvalidObservation)
 	}
@@ -255,7 +258,7 @@ func normalizeObservation(observation Observation) (normalizedObservation, error
 	return normalizedObservation{
 		CacheEntryID: observation.CacheEntryID,
 		Ecosystem:    ecosystem,
-		Upstream:     sanitizeEventValue(observation.Upstream, 128),
+		Upstream:     sanitizeEventValue(observation.Upstream, eventUpstreamLimit),
 		Package:      packageName,
 		Result:       result,
 		Detail:       sanitizeEventValue(observation.Detail, eventDetailLimit),
@@ -331,13 +334,21 @@ func normalizeHistoryQuery(query HistoryQuery) (normalizedHistoryQuery, error) {
 	if result != "" && !validHistoryResult(result) {
 		return normalizedHistoryQuery{}, fmt.Errorf("%w: unsupported result", ErrInvalidHistoryQuery)
 	}
+	ecosystem := strings.TrimSpace(query.Ecosystem)
+	upstream := strings.TrimSpace(query.Upstream)
+	packageName := strings.TrimSpace(query.Package)
+	if len(ecosystem) > eventEcosystemLimit ||
+		len(upstream) > eventUpstreamLimit ||
+		len(packageName) > eventPackageLimit {
+		return normalizedHistoryQuery{}, fmt.Errorf("%w: filter is too long", ErrInvalidHistoryQuery)
+	}
 	normalized := normalizedHistoryQuery{
 		limit:        limit,
 		cursor:       cursor,
 		legacyOffset: offset,
-		ecosystem:    strings.TrimSpace(query.Ecosystem),
-		upstream:     strings.TrimSpace(query.Upstream),
-		packageName:  strings.TrimSpace(query.Package),
+		ecosystem:    ecosystem,
+		upstream:     upstream,
+		packageName:  packageName,
 		result:       result,
 	}
 	normalized.fingerprint = historyFilterFingerprint(normalized)
@@ -490,11 +501,11 @@ func projectHistoryEvents(rows []db.UpstreamUpdateEvent) []HistoryEvent {
 		items = append(items, HistoryEvent{
 			ID:              row.ID,
 			CacheEntryID:    row.CacheEntryID,
-			Ecosystem:       row.Ecosystem,
-			Upstream:        row.Upstream,
-			Package:         row.Package,
+			Ecosystem:       sanitizeEventValue(row.Ecosystem, eventEcosystemLimit),
+			Upstream:        sanitizeEventValue(row.Upstream, eventUpstreamLimit),
+			Package:         sanitizeEventValue(row.Package, eventPackageLimit),
 			Result:          row.Result,
-			Detail:          row.Detail,
+			Detail:          sanitizeEventValue(row.Detail, eventDetailLimit),
 			LatencyMs:       row.LatencyMs,
 			OccurrenceCount: count,
 			FirstSeenAt:     row.CreatedAt,

@@ -11,6 +11,7 @@ interface ModalV2Props {
   width?: number
   initialFocus?: RefObject<HTMLElement | null>
   finalFocus?: RefObject<HTMLElement | null>
+  closeDisabled?: boolean
 }
 
 export default function ModalV2({
@@ -21,12 +22,17 @@ export default function ModalV2({
   width = 440,
   initialFocus,
   finalFocus,
+  closeDisabled = false,
 }: ModalV2Props) {
   const { i18n } = useTranslation()
   const closeLabel = i18n.language.startsWith('zh') ? '\u5173\u95ed' : 'Close'
 
   return (
-    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()} modal>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => !nextOpen && !closeDisabled && onClose()}
+      modal
+    >
       <Dialog.Portal>
         <Dialog.Backdrop className="app-dialog-backdrop" />
         <Dialog.Viewport className="app-dialog-viewport">
@@ -43,6 +49,7 @@ export default function ModalV2({
                 <IconButton
                   icon="close"
                   label={closeLabel}
+                  disabled={closeDisabled}
                   className="app-dialog-close active:scale-[0.96]"
                 />
               }

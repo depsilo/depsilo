@@ -72,12 +72,15 @@ cards.
 
 ## Typography And Icons
 
-- UI: `Inter Variable` with native Chinese fallbacks and Noto Sans SC.
+- UI: `Inter Variable` for Latin; Chinese falls through to the native
+  `PingFang SC` / `HarmonyOS Sans SC` / `MiSans` / `Microsoft YaHei` stack.
 - Display: `Inter Tight Variable`.
 - Code/data: `JetBrains Mono Variable` with tabular numerals.
-- Icons: `Material Symbols Outlined`, wrapped by `components/Icon.tsx`.
+- Icons: tree-shakeable Lucide SVGs, wrapped by `components/Icon.tsx`. The
+  wrapper preserves the existing Material-style string names at call sites.
 
-Do not add a second icon library or inline SVG for a symbol already present.
+Do not import a second general icon family or inline an SVG for a symbol already
+present in `components/Icon.tsx`.
 Metric values, versions, bytes, latency, and other changing numbers should use
 the mono/tabular treatment to avoid layout movement.
 
@@ -99,14 +102,20 @@ Use these before adding a new primitive. Admin-specific composition belongs in
 
 `QuickStart.tsx` contains:
 
-1. A compact `HeroAICTA` integration strip.
-2. One console surface with `EcosystemCatalog` on the left.
-3. `ConfigurePane` on the right for the selected technology stack.
+1. A compact three-step orientation: choose an ecosystem, copy the persistent
+   package-manager configuration, then verify the request in Monitor.
+2. The primary setup surface, with `EcosystemCatalog` on the left and
+   `ConfigurePane` on the right for the selected technology stack.
+3. A lower-priority optional-enhancements section containing the sole
+   project-level AI integration path and the compiler-cache entry point.
 
-The catalog has 14 technology-stack entries and exposes all supported package
-manager instructions, including Docker under Container. Endpoint URLs derive
-from `window.location.origin`; Docker registry mirrors use the service root,
-because Docker appends `/v2/` itself.
+The catalog recommends Python, Node.js, and Container first, remembers at most
+three validated recent choices, searches ecosystem and manager names, and keeps
+the complete 14-item catalog behind a native disclosure. `ConfigurePane`
+defaults to the first supported manager (Python starts with pip); alternate
+managers, one-off commands, and configuration paths use progressive
+disclosure. Endpoint URLs derive from `window.location.origin`; Docker registry
+mirrors use the service root, because Docker appends `/v2/` itself.
 
 `Monitor.tsx` contains:
 
@@ -114,6 +123,10 @@ because Docker appends `/v2/` itself.
 - seven-day hit rate and saved bytes when traffic exists;
 - search/filter over grouped upstream cards;
 - success rate, latency, and latency beats;
+- explicit loading, error, successful-empty, stale, and search-empty states;
+- one shared upstream status rule: unavailable is failed; an available
+  upstream at or above 150 ms is degraded; other available upstreams are
+  healthy;
 - 30-second stats refresh and 60-second latency-series refresh.
 
 There is no current Portal package-browser or live-event-stream page.
@@ -124,6 +137,11 @@ There is no current Portal package-browser or live-event-stream page.
 navigation shell. Admin pages use compact headings, stable table/control sizes,
 clear empty/loading/error states, and explicit confirmation for destructive
 commands.
+
+The Dashboard is capped at 1440px inside the wider Admin outlet to keep
+operational scanning distances reasonable. Its live service strip and recent
+downloads precede the KPI/trend view; lower-priority package and bandwidth
+summaries may share a two-column row only when each remains readable.
 
 Current admin-specific components are:
 
@@ -176,6 +194,24 @@ Create, update, delete, and manual check responses reflect the live Registry
 snapshot; Docker remains configuration-authoritative and outside this CRUD
 surface. Mutation controls stay disabled and dimensionally stable while their
 request is pending, and row-local failures preserve the current data and form.
+
+The Upstreams page is an operational inventory before it is a chart: operators
+can search names, ecosystems, URLs, and proxies, then filter by the shared
+healthy/degraded/failed rule. Large ecosystem groups expand into an adaptive
+multi-column list while small groups retain the compact tiled layout. “Check
+All” runs at most four requests concurrently, exposes progress and partial
+request failures, and reports the same three health states used by filters.
+Pending create, update, and delete dialogs cannot be dismissed until their
+request completes.
+
+Upstream Updates is stable episode history rather than a current-failures
+dashboard. Operators can filter package, ecosystem, and result through
+URL-backed server queries. Desktop uses a compact table; narrow screens use a
+divided event list that keeps outcome and detail visible without horizontal
+scrolling. The episode window displays both first and latest observation, while
+latency is explicitly the latest observation's value. Auto-refresh runs only
+while viewing the newest page; loading older pages pauses polling, and “Back to
+latest” replaces history only after the newest-page request succeeds.
 
 ### Query-State Contract
 

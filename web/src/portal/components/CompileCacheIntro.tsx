@@ -1,130 +1,88 @@
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 
-// CompileCacheIntro keeps the public explanation deliberately separate from
-// the package-manager console: compiler artifacts have their own storage,
-// capacity accounting, and credentials in Depsilo.
 export default function CompileCacheIntro() {
   const { t } = useTranslation()
 
   return (
-    <section
-      className="compile-cache-intro"
+    <article
       aria-labelledby="portal-compile-cache-title"
+      className="flex min-h-full flex-col rounded-[var(--r-card)] p-5 sm:p-6"
       style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 0.38fr)',
-        alignItems: 'center',
-        gap: 28,
-        padding: '22px 24px',
         background: 'var(--bg-card)',
         border: '0.5px solid var(--border-strong)',
-        borderRadius: 16,
         boxShadow: 'var(--shadow-card)',
       }}
     >
-      <div className="compile-cache-intro-copy" style={{ display: 'flex', alignItems: 'flex-start', gap: 16, minWidth: 0 }}>
+      <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
-          style={{
-            width: 44,
-            height: 44,
-            flex: '0 0 44px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--brand-text)',
-            background: 'var(--brand-soft)',
-            border: '0.5px solid var(--brand-border)',
-            borderRadius: 12,
-          }}
+          className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand-text)]"
         >
           <Icon name="memory" />
         </span>
-
-        <div style={{ minWidth: 0 }}>
-          <div
-            className="eyebrow"
-            style={{ color: 'var(--brand-text)', fontSize: 11, marginBottom: 6 }}
-          >
-            {t('quickstart.compileCacheEyebrow')}
-          </div>
-          <h2
+        <div className="min-w-0">
+          <h3
             id="portal-compile-cache-title"
-            style={{
-              margin: 0,
-              color: 'var(--text)',
-              fontFamily: 'var(--font-display)',
-              fontSize: 'clamp(21px, 1.8vw, 28px)',
-              fontWeight: 650,
-              letterSpacing: '-0.025em',
-              lineHeight: 1.18,
-            }}
+            className="m-0 font-[var(--font-display)] text-[18px] font-[650] leading-[1.25] text-[var(--text)]"
           >
             {t('quickstart.compileCacheTitle')}
-          </h2>
-          <p
-            style={{
-              maxWidth: 900,
-              margin: '8px 0 0',
-              color: 'var(--text-muted)',
-              fontSize: 13,
-              lineHeight: 1.55,
-            }}
-          >
-            {t('quickstart.compileCacheDescription')}
+          </h3>
+          <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.55] text-[var(--text-muted)]">
+            {t('quickstart.compileCacheSummary')}
           </p>
-          <div className="compile-cache-intro-facts" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 12 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-soft)', fontSize: 11.5 }}>
-              <Icon name="cloud_sync" size="sm" />
-              {t('quickstart.compileCacheProtocol')}
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-soft)', fontSize: 11.5 }}>
-              <Icon name="storage" size="sm" />
-              {t('quickstart.compileCacheStorage')}
-            </span>
-          </div>
         </div>
       </div>
 
-      <div className="compile-cache-intro-action" style={{ minWidth: 0 }}>
+      <div className="mt-auto pt-5">
         <a
           href="/admin/compile-cache"
-          className="stripe-focus-ring bg-[var(--btn)] hover:bg-[var(--btn-press)] active:scale-[0.97]"
+          className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] font-[620] no-underline hover:bg-[var(--bg-hover)] active:scale-[0.97]"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 7,
-            minHeight: 40,
-            padding: '8px 13px',
-            color: 'var(--btn-fg)',
-            borderRadius: 7,
-            boxShadow: 'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
-            textDecoration: 'none',
-            fontSize: 12.5,
-            fontWeight: 600,
-            transition: 'background 150ms ease, transform 150ms ease',
+            color: 'var(--brand-text)',
+            background: 'transparent',
+            border: '1px solid var(--brand-border)',
+            transition:
+              'background 150ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
           }}
         >
           {t('quickstart.compileCacheAction')}
           <Icon name="arrow_forward" size="sm" />
         </a>
-        <p
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 7,
-            margin: '10px 0 0',
-            color: 'var(--text-subtle)',
-            fontSize: 11,
-            lineHeight: 1.45,
-          }}
-        >
-          <Icon name="info" size="sm" style={{ flex: '0 0 auto', marginTop: 1 }} />
-          <span>{t('quickstart.compileCacheLimitation')}</span>
-        </p>
+
+        <details className="mt-3 border-t border-[var(--border)] pt-2">
+          <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1 text-[13px] font-[560] text-[var(--text-muted)] hover:text-[var(--text)]">
+            {t('quickstart.compileCacheDetails')}
+            <Icon name="expand_more" size="sm" />
+          </summary>
+          <ul className="mb-1 mt-2 flex list-none flex-col gap-2 p-0 text-[12px] leading-[1.5] text-[var(--text-muted)]">
+            <li className="flex items-start gap-2">
+              <Icon
+                name="cloud_sync"
+                size="sm"
+                className="mt-0.5 shrink-0 text-[var(--brand-text)]"
+              />
+              <span>{t('quickstart.compileCacheProtocol')}</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Icon
+                name="storage"
+                size="sm"
+                className="mt-0.5 shrink-0 text-[var(--brand-text)]"
+              />
+              <span>{t('quickstart.compileCacheStorage')}</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <Icon
+                name="info"
+                size="sm"
+                className="mt-0.5 shrink-0 text-[var(--warn-text)]"
+              />
+              <span>{t('quickstart.compileCacheLimitation')}</span>
+            </li>
+          </ul>
+        </details>
       </div>
-    </section>
+    </article>
   )
 }

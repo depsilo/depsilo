@@ -177,17 +177,28 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
     return raw.map(point => toChartPoint(point, pointGranularity))
   }, [raw, dataRange])
 
-  const allEmpty = points.length === 0 || points.every(p => !p.hits && !p.misses)
+  const allEmpty = points.length === 0 || points.every(point => (
+    !point.requests
+    && !point.bytes_total
+    && !point.avg_latency_ms
+    && !point.errors
+  ))
+  const activeTab = TABS.find(item => item.value === tab)
+  const activeRange = RANGES.find(item => item.value === dataRange)
+  const chartDescription = t('dashboard.trendChartDescription', {
+    metric: activeTab ? t(`dashboard.${activeTab.key}`) : '',
+    range: activeRange ? t(`dashboard.${activeRange.key}`) : '',
+  })
 
   return (
     <section>
       <SectionHeader
         title={t('dashboard.hitMissTrend')}
         action={
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
             {/* Tabs */}
             <div
-              className="flex flex-wrap items-center gap-1"
+              className="grid grid-cols-4 gap-0.5 rounded-[7px] border-[0.5px] border-[var(--border)] bg-[var(--bg-soft)] p-1 sm:flex"
               role="group"
               aria-label={t('dashboard.trendMetricGroup')}
             >
@@ -199,11 +210,11 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
                     type="button"
                     onClick={() => setTab(tb.value)}
                     aria-pressed={active}
-                    className="whitespace-nowrap rounded-[4px] px-2.5 py-1 text-[11px] font-[500] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] cursor-pointer"
+                    className="stripe-focus-ring min-h-[40px] min-w-0 whitespace-nowrap rounded-[5px] px-2 text-[11px] font-[500] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] cursor-pointer sm:px-2.5"
                     style={{
-                      background: active ? 'var(--bg-soft)' : 'transparent',
+                      background: active ? 'var(--bg-card)' : 'transparent',
                       color: active ? 'var(--text)' : 'var(--text-soft)',
-                      border: active ? '0.5px solid var(--border)' : '0.5px solid transparent',
+                      border: active ? '0.5px solid var(--border-strong)' : '0.5px solid transparent',
                     }}
                   >
                     {t(`dashboard.${tb.key}`)}
@@ -211,10 +222,9 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
                 )
               })}
             </div>
-            <span style={{ width: 1, height: 14, background: 'var(--border)' }} aria-hidden />
             {/* Range selector */}
             <div
-              className="flex flex-wrap items-center gap-1"
+              className="grid grid-cols-4 gap-0.5 rounded-[7px] border-[0.5px] border-[var(--border)] bg-[var(--bg-soft)] p-1 sm:flex"
               role="group"
               aria-label={t('dashboard.hitMissTrend')}
             >
@@ -223,9 +233,10 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
                 return (
                   <button
                     key={r.value}
+                    type="button"
                     onClick={() => onRangeChange(r.value)}
                     aria-pressed={active}
-                    className="whitespace-nowrap rounded-[4px] px-2.5 py-1 text-[11px] font-[500] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] cursor-pointer"
+                    className="stripe-focus-ring min-h-[40px] min-w-0 whitespace-nowrap rounded-[5px] px-2 text-[11px] font-[500] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] cursor-pointer sm:px-2.5"
                     style={{
                       background: active ? 'var(--hit)' : 'transparent',
                       color: active ? 'var(--on-hit)' : 'var(--text-soft)',
@@ -250,7 +261,11 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
         />
       ) : (
         <ResponsiveContainer width="100%" height={240}>
-          <ComposedChart data={points} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <ComposedChart
+            data={points}
+            margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+            desc={chartDescription}
+          >
             <defs>
               <linearGradient id="trBrand" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.32} />

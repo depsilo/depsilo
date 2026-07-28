@@ -912,63 +912,53 @@ a:focus:not(:focus-visible) {
   outline: none;
 }
 
-/* Portal topbar — hide the endpoint pill on narrow viewports so the
-   nav + status + lang/theme controls don't wrap into the logo row. */
-@media (max-width: 720px) {
-  .portal-endpoint-pill { display: none !important; }
+@media (pointer: coarse) {
+  .app-button {
+    min-height: 40px;
+  }
 }
 
-/* QuickStart console — IDE-style 2-column layout on desktop. Below
-   860px the rail moves above the config pane so neither cell gets
-   crushed under 200px and content stays readable on tablet / phone. */
-@media (max-width: 860px) {
-  .quickstart-setup {
-    grid-template-columns: 1fr !important;
-  }
-  .quickstart-console {
-    grid-template-columns: 1fr !important;
-    min-height: 0 !important;
-  }
-  .quickstart-console > nav {
-    border-right: none !important;
-    border-bottom: 0.5px solid var(--border) !important;
-    max-height: 280px;
-  }
-  /* Hero strip — text + preview stack into one column rather than
-     squeeze side by side. */
-  .quickstart-hero {
-    grid-template-columns: 1fr !important;
-    padding: 28px !important;
-    min-height: 0 !important;
-    gap: 22px !important;
-    border-radius: 14px !important;
-  }
-  .quickstart-console {
-    border-radius: 14px !important;
-  }
-  .compile-cache-intro {
-    grid-template-columns: 1fr !important;
-    gap: 18px !important;
-    border-radius: 14px !important;
-  }
-  .compile-cache-intro-action {
-    padding-top: 16px;
-    border-top: 0.5px solid var(--border);
-  }
+/* Portal topbar — keep navigation and health reachable on narrow
+   screens. Labels step down before controls disappear. */
+@media (max-width: 720px) {
+  .portal-endpoint-pill { display: none !important; }
 }
 
 .portal-admin-mobile-label {
   display: none;
 }
+.portal-status-compact-icon {
+  display: none;
+}
 
 @media (max-width: 560px) {
   .portal-theme-control,
-  .portal-status-pill {
+  .portal-version,
+  .portal-admin-label,
+  .portal-status-label {
     display: none !important;
   }
-  .portal-version,
-  .portal-admin-label {
+  .portal-brand-name {
     display: none !important;
+  }
+  .portal-header-inner {
+    gap: 8px !important;
+    padding-left: max(10px, env(safe-area-inset-left)) !important;
+    padding-right: max(10px, env(safe-area-inset-right)) !important;
+  }
+  .portal-header-actions {
+    min-width: 0;
+    gap: 4px !important;
+  }
+  .portal-status-pill {
+    min-width: 28px !important;
+    padding-inline: 8px !important;
+  }
+  .portal-status-dot {
+    display: none !important;
+  }
+  .portal-status-compact-icon {
+    display: inline-flex;
   }
   .portal-admin-link {
     width: auto;
@@ -984,65 +974,22 @@ a:focus:not(:focus-visible) {
   .portal-admin-mobile-label {
     display: inline;
   }
-  .quickstart-hero {
-    padding: 22px !important;
-  }
-  .compile-cache-intro {
-    padding: 20px !important;
-  }
-  .compile-cache-intro-copy {
-    gap: 12px !important;
-  }
-  .quickstart-hero pre {
-    font-size: 12px !important;
-  }
-  .quickstart-hero-actions {
-    flex-wrap: wrap;
-    align-items: flex-start !important;
-  }
-  .quickstart-hero-actions > button {
-    min-height: 40px;
-  }
-  .quickstart-hero-compat {
-    flex-basis: 100%;
-    margin-left: 0 !important;
+  .portal-monitor-search {
+    width: 100% !important;
   }
 }
 
-@media (max-width: 360px) {
-  .portal-brand-name {
+@media (max-width: 340px) {
+  .portal-header-brand {
     display: none !important;
   }
   .portal-header-inner {
-    gap: 10px !important;
-    padding-inline: 8px !important;
+    gap: 6px !important;
+    padding-left: max(8px, env(safe-area-inset-left)) !important;
+    padding-right: max(8px, env(safe-area-inset-right)) !important;
   }
-}
-
-/* ── QuickStart hero backdrop ─────────────────────────────
-   Brand glow rising from the hero card's lower-left corner. The dark
-   values are the original design; light mode halves every brand stop —
-   at full strength the mint tint reads as grime on a white card. */
-.quickstart-hero-wash {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 6%, transparent) 0%, color-mix(in oklab, var(--brand) 2%, transparent) 54%, transparent 78%),
-    linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 95%, var(--brand) 5%) 0%, var(--bg-card) 48%, var(--bg-card) 100%);
-}
-html.dark .quickstart-hero-wash,
-[data-theme="dark"] .quickstart-hero-wash {
-  background:
-    radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 13%, transparent) 0%, color-mix(in oklab, var(--brand) 4%, transparent) 54%, transparent 78%),
-    linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 90%, var(--brand) 10%) 0%, var(--bg-card) 48%, var(--bg-card) 100%);
-}
-@media (prefers-color-scheme: dark) {
-  html:not(.light):not([data-theme="light"]) .quickstart-hero-wash {
-    background:
-      radial-gradient(620px 360px at 0% 105%, color-mix(in oklab, var(--brand) 13%, transparent) 0%, color-mix(in oklab, var(--brand) 4%, transparent) 54%, transparent 78%),
-      linear-gradient(135deg, color-mix(in oklab, var(--bg-card) 90%, var(--brand) 10%) 0%, var(--bg-card) 48%, var(--bg-card) 100%);
+  .portal-header-nav > a {
+    padding-inline: 6px !important;
   }
 }
 
@@ -1068,80 +1015,6 @@ html.dark .quickstart-hero-wash,
 .eco-tile:hover::before { opacity: 1; }
 /* Content above the spotlight layer. */
 .eco-tile > * { position: relative; z-index: 1; }
-
-/* ── Animated chromatic shimmer ring on the primary CTA ────
-   The page's only continuous animation — a slow multi-hue conic ring
-   circling the "copy the full prompt" button (moved here from the old
-   AI eyebrow chip per the 2026-07-09 redesign spec). @property is the
-   load-bearing modern-CSS hook: it lets the browser animate a custom
-   property as if it were a real CSS value. Restricted to one element;
-   if every button had this it would feel cheap. The JSX only attaches
-   the class in the resting enabled state, so copied/disabled buttons
-   don't shimmer. Under prefers-reduced-motion the global rule freezes
-   the rotation — the ring degrades to a static gradient border. */
-@property --cta-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-@keyframes ctaShimmerRotate {
-  to { --cta-angle: 360deg; }
-}
-.cta-shimmer {
-  position: relative;
-  isolation: isolate;
-}
-.cta-shimmer::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  /* Button radius 8 + 2px offset — concentric. */
-  border-radius: 10px;
-  padding: 1.5px;
-  background: conic-gradient(
-    from var(--cta-angle),
-    #3DDC91,
-    #54C6E6 28%,
-    color-mix(in oklab, #54C6E6 30%, transparent) 42%,
-    #F2B544 58%,
-    #2DBE7A 78%,
-    #3DDC91 100%
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  animation: ctaShimmerRotate 8s linear infinite;
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* ── Container queries on the ecosystem catalog ───────────
-   The same EcosystemCatalog drives two layouts: the 240px narrow
-   rail in QuickStart and any wider variant (e.g. a future landing
-   page). Container queries let the inner <ul> read the catalog's
-   own width and switch its grid template without media queries or
-   a `mode` prop. */
-@container eco-catalog (min-width: 360px) {
-  .eco-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 4px;
-    padding: 0 8px;
-  }
-  /* Wider layouts pull the row border-left accent down to a left
-     dot so the brand-accent doesn't become a load-bearing visual
-     element on every column. */
-  .eco-list .eco-tile {
-    border-left-width: 0 !important;
-    border-radius: 8px;
-  }
-  .eco-list .eco-tile[aria-current='true'],
-  .eco-list .eco-tile:hover {
-    border-radius: 8px;
-  }
-}
 
 /* ── Scroll-driven reveal ─────────────────────────────────
    Sections fade + nudge up 8px as they enter the viewport. Pure

@@ -12,10 +12,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { statsApi } from '@/lib/api'
+import ButtonV2 from '@/components/Button'
+import EmptyState from '@/components/EmptyState'
+import InlineNotice from '@/components/InlineNotice'
+import QueryErrorState from '@/components/QueryErrorState'
 import StatusDot from '@/components/StatusDot'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
 import { LANGUAGES, type MirrorStatus } from '@/lib/ecosystemData'
+import { upstreamStatus } from '@/lib/upstreamStatus'
 
 interface LatencyPoint {
   time: string
@@ -51,12 +57,6 @@ function formatBytes(bytes: number): { value: string; unit: string } {
   if (bytes >= 1e6)  return { value: (bytes / 1e6).toFixed(0),  unit: 'MB' }
   if (bytes >= 1e3)  return { value: (bytes / 1e3).toFixed(0),  unit: 'KB' }
   return { value: String(bytes), unit: 'B' }
-}
-
-function mirrorStatus(u: UpstreamInfo): MirrorStatus {
-  if (!u.healthy) return 'failed'
-  if (u.avg_latency_ms > 150) return 'degraded'
-  return 'healthy'
 }
 
 function latencySeriesToBeats(series?: LatencyPoint[]): (number | null)[] {
@@ -105,6 +105,12 @@ function matchesQuery(u: UpstreamItem, q: string): boolean {
   )
 }
 
+function summarizeQuery(value: string, maxLength = 48): string {
+  const characters = Array.from(value)
+  if (characters.length <= maxLength) return value
+  return `${characters.slice(0, maxLength - 1).join('')}…`
+}
+
 // ── SearchPill ────────────────────────────────────────────────────
 // Compact header search. "/" focuses it from anywhere on the page,
 // Escape clears and blurs. Pure client-side filter — the stats payload
@@ -113,10 +119,12 @@ function SearchPill({
   value,
   onChange,
   placeholder,
+  clearLabel,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder: string
+  clearLabel: string
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const [focused, setFocused] = useState(false)
@@ -136,12 +144,14 @@ function SearchPill({
   return (
     <div
       role="search"
+      className="portal-monitor-search"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap: 7,
-        width: 230,
-        padding: '6px 8px 6px 10px',
+        width: 'min(100%, 320px)',
+        minHeight: 40,
+        padding: '0 0 0 10px',
         background: 'var(--bg-soft)',
         border: `0.5px solid ${focused ? 'var(--brand-border)' : 'var(--border)'}`,
         borderRadius: 8,
@@ -185,14 +195,15 @@ function SearchPill({
             onChange('')
             ref.current?.focus()
           }}
-          aria-label="Clear"
-          className="hit-extend"
+          aria-label={clearLabel}
+          className="portal-monitor-search-clear stripe-focus-ring"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 16,
-            height: 16,
+            width: 40,
+            height: 40,
+            flexShrink: 0,
             padding: 0,
             background: 'transparent',
             border: 'none',
@@ -234,36 +245,38 @@ export default function MonitorPage() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
   const [query, setQuery] = useState('')
-  const { data } = useQuery<StatsData>({
+  const statsQuery = useQuery<StatsData>({
     queryKey: ['stats-monitor'],
     queryFn: async () => {
       const res = await statsApi.getStats()
       return res.data
     },
     refetchInterval: 30000,
+    retry: false,
   })
 
   // Latency series loaded separately (heavy query, ~160KB)
-  const { data: latencyMap } = useQuery<Record<string, LatencyPoint[]>>({
+  const latencyQuery = useQuery<Record<string, LatencyPoint[]>>({
     queryKey: ['latency-series'],
     queryFn: async () => {
       const res = await statsApi.getLatencySeries()
       return res.data
     },
     refetchInterval: 60000,
+    retry: false,
   })
 
   // Merge latency_series into upstream objects
-  const rawUpstreams = data?.upstreams ?? []
+  const rawUpstreams = statsQuery.data?.upstreams ?? []
   const upstreams = rawUpstreams.map(u => ({
     ...u,
-    latency_series: latencyMap?.[u.name],
+    latency_series: latencyQuery.data?.[u.name],
   }))
-  const week = data?.week
+  const week = statsQuery.data?.week
 
   const healthyCounts = upstreams.reduce(
     (acc, u) => {
-      const s = mirrorStatus(u)
+      const s = upstreamStatus(u)
       acc[s] = (acc[s] ?? 0) + 1
       return acc
     },
@@ -275,6 +288,7 @@ export default function MonitorPage() {
   // the service, not the current search.
   const q = query.trim().toLowerCase()
   const visibleItems = q ? upstreamItems.filter(u => matchesQuery(u, q)) : upstreamItems
+  const summarizedQuery = summarizeQuery(query.trim())
 
   const savedFmt = formatBytes(week?.bytes_saved ?? 0)
 
@@ -311,71 +325,149 @@ export default function MonitorPage() {
               value={query}
               onChange={setQuery}
               placeholder={t('monitor.searchPlaceholder')}
+              clearLabel={t('monitor.clearSearch')}
             />
           </div>
-          <p
-            style={{
-              margin: '10px 0 0 0',
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '8px 12px',
-              fontSize: 13,
-              lineHeight: 1.3,
-              color: 'var(--text-muted)',
-            }}
-          >
-            <span>
-              <span className="num">{upstreams.length}</span> {t('monitor.upstreams')}
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <StatusDot status="healthy" />
-              <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <StatusDot status="degraded" />
-              <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <StatusDot status="failed" />
-              <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
-            </span>
-            {/* Value metrics — compact, 7-day rolling window. Hidden on
-                fresh installs (no traffic yet) so the row never shows a
-                meaningless 0%. */}
-            {week && week.total_requests > 0 && (
-              <>
-                <span
-                  aria-hidden
-                  style={{ width: 1, height: 12, background: 'var(--border-strong)' }}
-                />
-                <span>
-                  {t('monitor.hitRate7d')}{' '}
-                  <span className="num" style={{ color: 'var(--brand-text)', fontWeight: 600 }}>
-                    {(week.hit_rate * 100).toFixed(1)}%
+          {statsQuery.data && (
+            <p
+              style={{
+                margin: '10px 0 0 0',
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px 12px',
+                fontSize: 13,
+                lineHeight: 1.3,
+                color: 'var(--text-muted)',
+              }}
+            >
+              <span>
+                <span className="num">{upstreams.length}</span> {t('monitor.upstreams')}
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <StatusDot status="healthy" />
+                <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <StatusDot status="degraded" />
+                <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <StatusDot status="failed" />
+                <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
+              </span>
+              {/* Value metrics — compact, 7-day rolling window. Hidden on
+                  fresh installs (no traffic yet) so the row never shows a
+                  meaningless 0%. */}
+              {week && week.total_requests > 0 && (
+                <>
+                  <span
+                    className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 border-l border-[var(--border-strong)] pl-3"
+                  >
+                    <span>
+                      {t('monitor.hitRate7d')}{' '}
+                      <span className="num" style={{ color: 'var(--brand-text)', fontWeight: 600 }}>
+                        {(week.hit_rate * 100).toFixed(1)}%
+                      </span>
+                    </span>
+                    <span>
+                      {t('monitor.saved7d')}{' '}
+                      <span className="num" style={{ color: 'var(--text)', fontWeight: 600 }}>
+                        {savedFmt.value} {savedFmt.unit}
+                      </span>
+                    </span>
                   </span>
-                </span>
-                <span>
-                  {t('monitor.saved7d')}{' '}
-                  <span className="num" style={{ color: 'var(--text)', fontWeight: 600 }}>
-                    {savedFmt.value} {savedFmt.unit}
-                  </span>
-                </span>
-              </>
-            )}
-          </p>
+                </>
+              )}
+            </p>
+          )}
         </div>
       </div>
 
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {q
+          ? visibleItems.length === 0
+            ? t('monitor.noMatch', { q: summarizedQuery })
+            : t('monitor.searchResults', { count: visibleItems.length })
+          : ''}
+      </p>
+
       {/* Upstream health — the page's main content */}
-      <div className="fade-up fade-up-d1" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {visibleItems.length > 0 && (
-          <UpstreamGroupedPanel upstreams={visibleItems} variant="cards" minColumnWidth={380} />
-        )}
-        {q !== '' && visibleItems.length === 0 && upstreamItems.length > 0 && (
-          <p style={{ margin: 0, padding: '28px 0', fontSize: 13, color: 'var(--text-soft)', textAlign: 'center' }}>
-            {t('monitor.noMatch', { q: query.trim() })}
-          </p>
+      <div
+        data-monitor-upstreams
+        className="fade-up fade-up-d1"
+        aria-busy={statsQuery.isPending || undefined}
+        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
+        {statsQuery.isPending ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <span className="sr-only">{t('monitor.loading')}</span>
+            <div aria-hidden="true" className="contents">
+              {[...Array(4)].map((_, index) => (
+                <div
+                  key={index}
+                  className="h-32 animate-pulse rounded-[10px]"
+                  style={{ background: 'var(--bg-soft)' }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : statsQuery.isError && !statsQuery.data ? (
+          <QueryErrorState
+            message={t('monitor.loadError')}
+            onRetry={() => { void statsQuery.refetch() }}
+          />
+        ) : (
+          <>
+            {statsQuery.isRefetchError && statsQuery.data && (
+              <InlineNotice tone="warning">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span>{t('monitor.refreshUnavailable')}</span>
+                  <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void statsQuery.refetch() }}>
+                    {t('common.retry')}
+                  </ButtonV2>
+                </div>
+              </InlineNotice>
+            )}
+            {latencyQuery.isError && (
+              <InlineNotice tone="warning">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span>{t('monitor.historyUnavailable')}</span>
+                  <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void latencyQuery.refetch() }}>
+                    {t('common.retry')}
+                  </ButtonV2>
+                </div>
+              </InlineNotice>
+            )}
+            {upstreamItems.length === 0 ? (
+              <EmptyState
+                icon="dns"
+                title={t('monitor.noUpstreams')}
+                hint={t('monitor.noUpstreamsHint')}
+                action={(
+                  <Link
+                    to="/admin/upstreams"
+                    className="app-button stripe-focus-ring inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-[13px] font-[500] no-underline"
+                    style={{
+                      border: '0.5px solid var(--border-strong)',
+                      color: 'var(--text)',
+                      background: 'var(--bg-card)',
+                    }}
+                  >
+                    {t('monitor.configureUpstreams')}
+                  </Link>
+                )}
+              />
+            ) : q !== '' && visibleItems.length === 0 ? (
+              <EmptyState
+                icon="search"
+                title={t('monitor.noMatch', { q: summarizedQuery })}
+                hint={t('monitor.noMatchHint')}
+              />
+            ) : (
+              <UpstreamGroupedPanel upstreams={visibleItems} variant="cards" minColumnWidth={380} />
+            )}
+          </>
         )}
       </div>
     </div>

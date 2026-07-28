@@ -425,6 +425,22 @@ test('Dashboard bandwidth failure is explicit while dashboard siblings remain vi
   await expect(page.getByText(/热门包|Top packages/)).toBeVisible()
 })
 
+test('Dashboard snapshot failure keeps independent live and analytics regions mounted', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard': {
+      status: 500,
+      body: { code: 'FAILED', message: 'fixture dashboard snapshot failure' },
+    },
+  })
+  await page.goto('/admin')
+
+  await expect(page.getByRole('alert').filter({ hasText: 'fixture dashboard snapshot failure' })).toBeVisible()
+  await expect(page.locator('[data-query-key="now"]')).toBeVisible()
+  await expect(page.locator('[data-recent-downloads]')).toBeVisible()
+  await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: /带宽节省|Bandwidth Savings/ })).toBeVisible()
+})
+
 test('Cache distribution failure is explicit while cache entries remain visible', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/cache/distribution': { status: 500, body: { code: 'FAILED', message: 'fixture distribution failure' } },

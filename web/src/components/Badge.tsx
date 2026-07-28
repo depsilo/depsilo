@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 
-type BadgeV2Variant = 'default' | 'success' | 'error' | 'warning' | 'pro' | 'ecosystem'
+type BadgeV2Variant = 'default' | 'neutral' | 'success' | 'error' | 'warning' | 'pro' | 'ecosystem'
 
 interface BadgeV2Props {
   variant?: BadgeV2Variant
@@ -11,6 +11,7 @@ interface BadgeV2Props {
 // Tinted chip. Pro adds a subtle brand border to distinguish entitlement.
 const variantStyles: Record<BadgeV2Variant, { bg: string; color: string; border?: string }> = {
   default:   { bg: 'var(--brand-soft)',  color: 'var(--brand-text)' },
+  neutral:   { bg: 'var(--bg-soft)', color: 'var(--text-muted)', border: 'var(--border)' },
   success:   { bg: 'var(--ok-fill)',     color: 'var(--ok-text)' },
   error:     { bg: 'var(--danger-fill)', color: 'var(--danger-text)' },
   warning:   { bg: 'var(--warn-fill)',   color: 'var(--warn-text)' },

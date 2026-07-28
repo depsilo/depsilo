@@ -91,7 +91,7 @@ for (const [name, response] of malformedSetupStatuses) {
     await page.goto('/')
 
     await expect(page.getByRole('alert')).toContainText('无法确认 Depsilo 是否已完成初始化')
-    await expect(page.getByRole('heading', { name: '装得快，也装得放心' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: '快速开始' })).toHaveCount(0)
     expect(statsRequests).toBe(0)
   })
 }
@@ -152,7 +152,7 @@ test('Portal unknown paths keep the shell without loading a page route', async (
   await notFound.getByRole('link', { name: '返回快速开始' }).click()
 
   await expect(page).toHaveURL(/\/$/)
-  await expect(page.getByRole('heading', { name: '装得快，也装得放心' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '快速开始' })).toBeVisible()
   await expect(navigation.getByRole('link', { name: '快速开始' })).toHaveAttribute('aria-current', 'page')
   expect(pageModuleRequests.some(pathname => pathname.endsWith('/QuickStart.tsx'))).toBe(true)
 })

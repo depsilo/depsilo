@@ -10,27 +10,26 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/accesslog"
-	"depsilo/internal/cache"
 	"depsilo/internal/db"
 	"depsilo/internal/upstream"
 )
 
 type DashboardHandler struct {
 	db         *gorm.DB
-	storage    cache.Storage
 	pools      map[string]*upstream.Pool
 	ecosystems []string
 	useRollup  bool
+	maxSizeGB  int
 	now        func() time.Time
 }
 
-func NewDashboardHandler(database *gorm.DB, storage cache.Storage, pools map[string]*upstream.Pool, ecosystems []string, useRollup bool) *DashboardHandler {
+func NewDashboardHandler(database *gorm.DB, pools map[string]*upstream.Pool, ecosystems []string, useRollup bool, maxSizeGB int) *DashboardHandler {
 	return &DashboardHandler{
 		db:         database,
-		storage:    storage,
 		pools:      pools,
 		ecosystems: ecosystems,
 		useRollup:  useRollup,
+		maxSizeGB:  maxSizeGB,
 		now:        time.Now,
 	}
 }
@@ -111,28 +110,38 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		PackageName string `json:"name"`
 		HitCount    int64  `json:"hit_count"`
 	}
-	var pypiTop, aptTop []topPkg
+	type topPkgRow struct {
+		AdapterType string
+		PackageName string
+		HitCount    int64
+	}
+	var topRows []topPkgRow
 	if h.useRollup {
 		h.db.Table("access_log_package_daily").
-			Select("package_name, COALESCE(SUM(request_count),0) AS hit_count").
-			Where("adapter_type = ? AND package_name != ''", "pypi").
-			Group("package_name").Order("hit_count DESC").Limit(10).Scan(&pypiTop)
-		h.db.Table("access_log_package_daily").
-			Select("package_name, COALESCE(SUM(request_count),0) AS hit_count").
-			Where("adapter_type = ? AND package_name != ''", "apt").
-			Group("package_name").Order("hit_count DESC").Limit(10).Scan(&aptTop)
+			Select("adapter_type, package_name, COALESCE(SUM(request_count),0) AS hit_count").
+			Where("package_name != ''").
+			Group("adapter_type, package_name").
+			Order("hit_count DESC, adapter_type ASC, package_name ASC").
+			Limit(10).
+			Scan(&topRows)
 	} else {
 		h.db.Model(&db.AccessLog{}).
-			Select("package_name, COUNT(*) as hit_count").
-			Where("adapter_type = ? AND package_name != ''", "pypi").
-			Group("package_name").Order("hit_count DESC").Limit(10).Scan(&pypiTop)
-		h.db.Model(&db.AccessLog{}).
-			Select("package_name, COUNT(*) as hit_count").
-			Where("adapter_type = ? AND package_name != ''", "apt").
-			Group("package_name").Order("hit_count DESC").Limit(10).Scan(&aptTop)
+			Select("adapter_type, package_name, COUNT(*) AS hit_count").
+			Where("package_name != ''").
+			Group("adapter_type, package_name").
+			Order("hit_count DESC, adapter_type ASC, package_name ASC").
+			Limit(10).
+			Scan(&topRows)
+	}
+	topPackages := make(map[string][]topPkg)
+	for _, row := range topRows {
+		topPackages[row.AdapterType] = append(topPackages[row.AdapterType], topPkg{
+			PackageName: row.PackageName,
+			HitCount:    row.HitCount,
+		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"last_24h": gin.H{
 			"total_requests": totalRequests,
 			"hit_count":      hitCount,
@@ -146,13 +155,24 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 			"bytes_served":   prev24h.Bytes,
 			"avg_latency_ms": prevAvgLatency,
 		},
-		"daily_stats": dailyStats,
-		"upstreams":   upstreams,
-		"top_packages": gin.H{
-			"pypi": pypiTop,
-			"apt":  aptTop,
-		},
-	})
+		"daily_stats":  dailyStats,
+		"upstreams":    upstreams,
+		"top_packages": topPackages,
+	}
+	if h.maxSizeGB > 0 {
+		var totalSize int64
+		result := h.db.Model(&db.CacheEntry{}).
+			Select("COALESCE(SUM(size), 0)").
+			Scan(&totalSize)
+		if result.Error != nil {
+			zap.L().Warn("load dashboard cache usage", zap.Error(result.Error))
+		} else {
+			const bytesPerGiB = 1024 * 1024 * 1024
+			response["cache_usage_percent"] = float64(totalSize) / (float64(h.maxSizeGB) * bytesPerGiB) * 100
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // aggSnapshot is the cross-cutting count/SUM tuple every rolling-window

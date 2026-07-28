@@ -20,7 +20,8 @@ const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
 // copy the URL for sharing without exposing it as a giant hero element.
 // Hidden on viewports under 720px to keep the topbar from wrapping.
 function EndpointPill() {
-  const [copied, setCopied] = useState(false)
+  const { t } = useTranslation()
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const url = window.location.origin
   // Drop the protocol for visual density — the click-to-copy still
   // copies the full URL with scheme.
@@ -28,75 +29,90 @@ function EndpointPill() {
 
   async function handleCopy() {
     if (await copyText(url)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopyState('copied')
+      setTimeout(() => setCopyState('idle'), 2000)
+    } else {
+      setCopyState('failed')
+      setTimeout(() => setCopyState('idle'), 3000)
     }
   }
 
+  const copied = copyState === 'copied'
+
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="active:scale-[0.96] portal-endpoint-pill hit-extend"
-      title={url}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        padding: '3px 8px 3px 10px',
-        background: 'var(--bg-soft)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 6,
-        fontSize: 11.5,
-        fontFamily: 'var(--font-mono)',
-        color: 'var(--text-muted)',
-        cursor: 'pointer',
-        transition: 'background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = 'var(--bg-hover)'
-        e.currentTarget.style.color = 'var(--text)'
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = 'var(--bg-soft)'
-        e.currentTarget.style.color = 'var(--text-muted)'
-      }}
-    >
-      <span style={{ letterSpacing: '-0.01em' }}>{compact}</span>
-      {/* Both glyphs stay in the DOM and cross-fade (opacity + scale +
-          blur) so the ⧉ → ✓ swap reads as a state change instead of a
-          hard snap. */}
-      <span style={{ position: 'relative', display: 'inline-flex', width: 11, height: 13, fontSize: 10 }}>
-        <span
-          aria-hidden
-          style={{
-            position: 'absolute',
-            inset: 0,
-            color: 'var(--text-subtle)',
-            opacity: copied ? 0 : 1,
-            transform: copied ? 'scale(0.25)' : 'scale(1)',
-            filter: copied ? 'blur(4px)' : 'blur(0)',
-            transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
-          }}
-        >
-          ⧉
+    <>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="active:scale-[0.96] portal-endpoint-pill hit-extend stripe-focus-ring"
+        aria-label={t('portal.copyEndpointNamed', { endpoint: url })}
+        title={url}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '3px 8px 3px 10px',
+          background: 'var(--bg-soft)',
+          border: '0.5px solid var(--border)',
+          borderRadius: 6,
+          fontSize: 11.5,
+          fontFamily: 'var(--font-mono)',
+          color: copyState === 'failed' ? 'var(--danger-text)' : 'var(--text-muted)',
+          cursor: 'pointer',
+          transition: 'background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'var(--bg-hover)'
+          if (copyState !== 'failed') e.currentTarget.style.color = 'var(--text)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'var(--bg-soft)'
+          e.currentTarget.style.color = copyState === 'failed' ? 'var(--danger-text)' : 'var(--text-muted)'
+        }}
+      >
+        <span style={{ letterSpacing: '-0.01em' }}>{compact}</span>
+        {/* Both glyphs stay in the DOM and cross-fade (opacity + scale +
+            blur) so the ⧉ → ✓ swap reads as a state change instead of a
+            hard snap. */}
+        <span style={{ position: 'relative', display: 'inline-flex', width: 11, height: 13, fontSize: 10 }}>
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              color: copyState === 'failed' ? 'var(--danger-text)' : 'var(--text-subtle)',
+              opacity: copied ? 0 : 1,
+              transform: copied ? 'scale(0.25)' : 'scale(1)',
+              filter: copied ? 'blur(4px)' : 'blur(0)',
+              transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
+            }}
+          >
+            {copyState === 'failed' ? '!' : '⧉'}
+          </span>
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              color: 'var(--ok-text)',
+              opacity: copied ? 1 : 0,
+              transform: copied ? 'scale(1)' : 'scale(0.25)',
+              filter: copied ? 'blur(0)' : 'blur(4px)',
+              transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
+            }}
+          >
+            ✓
+          </span>
         </span>
-        <span
-          aria-hidden
-          style={{
-            position: 'absolute',
-            inset: 0,
-            color: 'var(--ok-text)',
-            opacity: copied ? 1 : 0,
-            transform: copied ? 'scale(1)' : 'scale(0.25)',
-            filter: copied ? 'blur(0)' : 'blur(4px)',
-            transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
-          }}
-        >
-          ✓
-        </span>
+      </button>
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {copyState === 'copied'
+          ? t('portal.endpointCopied')
+          : copyState === 'failed'
+            ? t('portal.endpointCopyFailed')
+            : ''}
       </span>
-    </button>
+    </>
   )
 }
 
@@ -168,7 +184,20 @@ export default function PortalAppV2() {
   })
 
   const serviceStatus = data?.service?.status ?? 'unknown'
-  const dotStatus = serviceStatus === 'healthy' ? 'healthy' : serviceStatus === 'degraded' ? 'degraded' : 'failed'
+  const dotStatus = serviceStatus === 'healthy'
+    ? 'healthy'
+    : serviceStatus === 'degraded'
+      ? 'degraded'
+      : serviceStatus === 'failed'
+        ? 'failed'
+        : 'unknown'
+  const statusLabel = dotStatus === 'healthy'
+    ? t('portal.online')
+    : dotStatus === 'degraded'
+      ? t('degraded')
+      : dotStatus === 'failed'
+        ? t('portal.offline')
+        : t('portal.statusUnknown')
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
@@ -198,7 +227,12 @@ export default function PortalAppV2() {
             gap: 16,
           }}
         >
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
+          <Link
+            to="/"
+            aria-label="Depsilo"
+            className="portal-header-brand"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}
+          >
             <Logo size={28} />
             <span
               className="portal-brand-name"
@@ -209,7 +243,7 @@ export default function PortalAppV2() {
                 color: 'var(--text)',
               }}
             >
-              depsilo
+              Depsilo
             </span>
             <span
               className="portal-version"
@@ -229,7 +263,11 @@ export default function PortalAppV2() {
           </Link>
 
           {/* Nav tabs */}
-          <nav aria-label={t('portal.navigation')} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <nav
+            aria-label={t('portal.navigation')}
+            className="portal-header-nav"
+            style={{ display: 'flex', alignItems: 'center', gap: 2 }}
+          >
             <NavTab to="/" label={t('portal.quickStart')} />
             <NavTab to="/monitor" label={t('portal.monitor')} />
           </nav>
@@ -238,40 +276,63 @@ export default function PortalAppV2() {
           <div style={{ flex: 1 }} />
 
           {/* Right side controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="portal-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Endpoint pill — copy-able URL, hidden on narrow viewports. */}
             <EndpointPill />
             {/* Status pill — tinted chip matching service health */}
-            {data && (
-              <span
-                className="portal-status-pill"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '3px 8px',
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  fontFamily: 'var(--font-mono)',
-                  background:
-                    dotStatus === 'healthy'
-                      ? 'var(--ok-fill)'
-                      : dotStatus === 'degraded'
-                        ? 'var(--warn-fill)'
-                        : 'var(--danger-fill)',
-                  color:
-                    dotStatus === 'healthy'
-                      ? 'var(--ok-text)'
-                      : dotStatus === 'degraded'
-                        ? 'var(--warn-text)'
-                        : 'var(--danger-text)',
-                }}
-              >
+            <span
+              className="portal-status-pill"
+              role="status"
+              aria-label={t('portal.serviceStatusNamed', { status: statusLabel })}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                minWidth: 28,
+                minHeight: 28,
+                padding: '3px 8px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 500,
+                fontFamily: 'var(--font-mono)',
+                background:
+                  dotStatus === 'healthy'
+                    ? 'var(--ok-fill)'
+                    : dotStatus === 'degraded'
+                      ? 'var(--warn-fill)'
+                      : dotStatus === 'failed'
+                        ? 'var(--danger-fill)'
+                        : 'var(--bg-soft)',
+                color:
+                  dotStatus === 'healthy'
+                    ? 'var(--ok-text)'
+                    : dotStatus === 'degraded'
+                      ? 'var(--warn-text)'
+                      : dotStatus === 'failed'
+                        ? 'var(--danger-text)'
+                        : 'var(--text-muted)',
+              }}
+            >
+              <span className="portal-status-dot" aria-hidden="true">
                 <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
-                {dotStatus === 'healthy' ? t('portal.online') : t('portal.offline')}
               </span>
-            )}
+              <span className="portal-status-compact-icon" aria-hidden="true">
+                <Icon
+                  name={
+                    dotStatus === 'healthy'
+                      ? 'check'
+                      : dotStatus === 'degraded'
+                        ? 'warning'
+                        : dotStatus === 'failed'
+                          ? 'close'
+                          : 'help'
+                  }
+                  size="sm"
+                />
+              </span>
+              <span className="portal-status-label" aria-hidden="true">{statusLabel}</span>
+            </span>
             <LangToggle />
             <span className="portal-theme-control" style={{ display: 'inline-flex' }}>
               <ThemeToggle />

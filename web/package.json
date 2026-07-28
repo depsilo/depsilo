@@ -9,6 +9,7 @@
     "type-check": "tsc -b --pretty false",
     "type-check:e2e": "tsc -p tsconfig.e2e.json --noEmit",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
+    "design:audit": "cd .. && node .agents/skills/impeccable/scripts/detect.mjs web/src",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "playwright test",

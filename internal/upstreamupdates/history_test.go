@@ -380,6 +380,9 @@ func TestHistoryListRejectsInvalidAndMismatchedCursors(t *testing.T) {
 		{name: "filter mismatch", query: HistoryQuery{Limit: 1, Cursor: page.NextCursor, Ecosystem: "npm"}},
 		{name: "cursor and offset", query: HistoryQuery{Limit: 1, Cursor: page.NextCursor, LegacyOffset: &zero, Ecosystem: "pypi"}},
 		{name: "unknown result", query: HistoryQuery{Limit: 1, Result: "success"}},
+		{name: "ecosystem filter too long", query: HistoryQuery{Limit: 1, Ecosystem: strings.Repeat("e", eventEcosystemLimit+1)}},
+		{name: "upstream filter too long", query: HistoryQuery{Limit: 1, Upstream: strings.Repeat("u", eventUpstreamLimit+1)}},
+		{name: "package filter too long", query: HistoryQuery{Limit: 1, Package: strings.Repeat("p", eventPackageLimit+1)}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -435,6 +438,40 @@ func TestHistorySanitizesCredentialBearingURLs(t *testing.T) {
 	for _, secret := range []string{"upstream-user", "upstream-secret", "package-user", "package-secret", "detail-user", "detail-secret", "token", "hidden", "/private"} {
 		if strings.Contains(persisted, secret) {
 			t.Fatalf("event disclosed %q: %+v", secret, event)
+		}
+	}
+}
+
+func TestHistorySanitizesLegacyRowsAtReadBoundary(t *testing.T) {
+	history, database := newHistoryContractTestSubject(t)
+	legacy := db.UpstreamUpdateEvent{
+		CacheEntryID: 92,
+		Ecosystem:    "https://ecosystem-user:ecosystem-secret@ecosystem.example/private?token=hidden",
+		Upstream:     "https://upstream-user:upstream-secret@mirror.example/private?token=hidden",
+		Package:      "https://package-user:package-secret@packages.example/private?token=hidden",
+		Result:       ResultError,
+		Detail:       "https://detail-user:detail-secret@detail.example/private?token=hidden",
+		CreatedAt:    time.Date(2026, 7, 17, 14, 30, 0, 0, time.UTC),
+	}
+	if err := database.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	page := mustListHistory(t, history, HistoryQuery{Limit: 1})
+	if len(page.Items) != 1 {
+		t.Fatalf("page = %+v", page)
+	}
+	event := page.Items[0]
+	if event.Ecosystem != "https://ecosystem.example/***" ||
+		event.Upstream != "https://mirror.example/***" ||
+		event.Package != "https://packages.example/***" ||
+		event.Detail != "https://detail.example/***" {
+		t.Fatalf("sanitized legacy event = %+v", event)
+	}
+	projected := event.Ecosystem + event.Upstream + event.Package + event.Detail
+	for _, secret := range []string{"user", "secret", "token", "hidden", "/private"} {
+		if strings.Contains(projected, secret) {
+			t.Fatalf("legacy event disclosed %q: %+v", secret, event)
 		}
 	}
 }

@@ -43,7 +43,7 @@ func newTrendsTestHandler(t *testing.T) (*DashboardHandler, *gin.Engine) {
 		t.Fatalf("migrate trends db: %v", err)
 	}
 
-	handler := NewDashboardHandler(database, nil, nil, nil, true)
+	handler := NewDashboardHandler(database, nil, nil, true, 0)
 	handler.now = func() time.Time { return fixedTrendsNow }
 
 	// Normal fixtures model a completed transactional backfill. Fallback
@@ -694,10 +694,10 @@ func TestDashboardUsesSnapshotUpstreamIDs(t *testing.T) {
 		t.Fatalf("create npm pool: %v", err)
 	}
 
-	handler := NewDashboardHandler(database, nil, map[string]*upstream.Pool{
+	handler := NewDashboardHandler(database, map[string]*upstream.Pool{
 		"pypi": pypiPool,
 		"npm":  npmPool,
-	}, []string{"pypi", "npm"}, false)
+	}, []string{"pypi", "npm"}, false, 0)
 	router := gin.New()
 	router.GET("/dashboard", handler.GetDashboard)
 	recorder := httptest.NewRecorder()

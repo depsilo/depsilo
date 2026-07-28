@@ -20,7 +20,7 @@ export default function SectionHeader({ title, action, hint }: SectionHeaderProp
           </p>
         )}
       </div>
-      {action && <div className="flex min-w-0 flex-wrap items-center gap-2">{action}</div>}
+      {action && <div className="flex min-w-0 w-full flex-wrap items-center gap-2 sm:w-auto">{action}</div>}
     </header>
   )
 }

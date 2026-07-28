@@ -1,10 +1,12 @@
 import { useState, useCallback, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { copyText } from '@/lib/clipboard'
 
 interface CodeBlockProps {
   filename?: string
   code: string
   language?: string
+  copyName?: string
 }
 
 // Lightweight syntax highlight: comments + URLs.
@@ -49,15 +51,21 @@ function highlight(code: string): ReactNode {
   ))
 }
 
-export default function CodeBlock({ filename, code }: CodeBlockProps) {
-  const [copied, setCopied] = useState(false)
+export default function CodeBlock({ filename, code, copyName }: CodeBlockProps) {
+  const { t } = useTranslation()
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   const handleCopy = useCallback(async () => {
     if (await copyText(code)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopyState('copied')
+      setTimeout(() => setCopyState('idle'), 2000)
+    } else {
+      setCopyState('failed')
+      setTimeout(() => setCopyState('idle'), 3000)
     }
   }, [code])
+
+  const copied = copyState === 'copied'
 
   return (
     <div
@@ -73,36 +81,47 @@ export default function CodeBlock({ filename, code }: CodeBlockProps) {
         style={{
           background: 'var(--bg-card)',
           borderBottom: '0.5px solid var(--border)',
-          height: 28,
+          minHeight: 40,
           display: 'flex',
           alignItems: 'center',
-          padding: '0 12px',
+          padding: '0 4px 0 12px',
           justifyContent: 'space-between',
         }}
       >
         <span
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--text-subtle)',
           }}
         >
           {filename ?? ''}
         </span>
         <button
+          type="button"
           onClick={handleCopy}
-          className="active:scale-[0.96]"
+          className="active:scale-[0.96] stripe-focus-ring"
+          aria-label={
+            copyName
+              ? t('quickstart.copyNamedCode', { name: copyName })
+              : t('quickstart.copyCode')
+          }
           style={{
-            color: copied ? 'var(--ok)' : 'var(--text-subtle)',
+            color: copied
+              ? 'var(--ok-text)'
+              : copyState === 'failed'
+                ? 'var(--danger-text)'
+                : 'var(--text-muted)',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
+            minHeight: 40,
             padding: '4px 8px',
             borderRadius: 4,
             display: 'flex',
             alignItems: 'center',
             gap: 4,
-            fontSize: 11,
+            fontSize: 12,
             transition: 'color 200ms cubic-bezier(0.2, 0, 0, 1), transform 120ms cubic-bezier(0.2, 0, 0, 1)',
           }}
         >
@@ -155,8 +174,19 @@ export default function CodeBlock({ filename, code }: CodeBlockProps) {
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
           </span>
-          {copied ? 'Copied' : 'Copy'}
+          {copyState === 'copied'
+            ? t('quickstart.copied')
+            : copyState === 'failed'
+              ? t('quickstart.copyFailed')
+              : t('quickstart.copy')}
         </button>
+        <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {copyState === 'copied'
+            ? t('quickstart.copied')
+            : copyState === 'failed'
+              ? t('quickstart.copyFailed')
+              : ''}
+        </span>
       </div>
       <pre
         tabIndex={0}

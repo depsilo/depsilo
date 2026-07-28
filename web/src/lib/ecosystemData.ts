@@ -826,18 +826,3 @@ export const LANGUAGES: Language[] = [
     ],
   },
 ]
-
-// ── AI prompt / shell script builders ─────────────────────────────
-
-export function buildPrompt(endpoint: string, languageId: string): string {
-  if (languageId === 'all') {
-    return `I have a local Depsilo supply-chain proxy running at ${endpoint}. Detect every package manager used by this project and route its project/build configuration through that URL. Keep every edit transparent: name Depsilo and the endpoint, preserve the original registry as a documented manual rollback rather than an active parallel source, show each diff, and keep signature/checksum verification enabled. Host-level Docker/container runtime settings must only be proposed for operator review; do not edit or restart the host runtime automatically. Run one verification install for each project-scoped manager you change.`
-  }
-  if (languageId === 'container') {
-    return `Prepare this project to use the Depsilo OCI proxy at ${endpoint}. Detect the container runtime and show the exact host-level mirror configuration for operator review. Use the service root because the runtime requests /v2/ itself. Do not edit daemon files or restart Docker, containerd, Podman, or k3s automatically. Keep the original configuration as a documented rollback and explain how the operator can verify the selected mirror.`
-  }
-  const lang = LANGUAGES.find(l => l.id === languageId)
-  const langName = lang?.name ?? languageId
-  const mgrList = lang ? lang.managers.map(m => m.name).join(', ') : ''
-  return `Configure my ${langName} project to use the Depsilo supply-chain proxy at ${endpoint}. Detect which package manager this project uses (${mgrList}) and propose the persistent configuration needed to route it through that URL. Keep the change transparent: name Depsilo and the endpoint, do not add a parallel public source, preserve the original registry as a documented manual rollback, and keep signature/checksum verification enabled. Show the diff before applying it. If the change touches host-level files, needs elevated privileges, or restarts a service, only show the exact operator commands; do not execute them. After approved project/user changes, run a small verification install.`
-}

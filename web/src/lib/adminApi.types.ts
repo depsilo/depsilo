@@ -321,7 +321,7 @@ export interface DashboardResponse {
   prev_24h: DashboardWindow
   daily_stats: Array<{ date: string; adapter_type: string; count: number }>
   upstreams: DashboardUpstream[]
-  top_packages: { pypi: DashboardTopPackage[]; apt: DashboardTopPackage[] }
+  top_packages: Partial<Record<AdminEcosystem, DashboardTopPackage[]>>
   cache_usage_percent?: number
 }
 export interface DashboardTrendsResponse { points: Array<{ bucket: number; date: string; requests: number; hits: number; misses: number; hit_rate: number; bytes_served: number; bytes_hit: number; bytes_miss: number; sum_latency_ms: number; avg_latency_ms: number; errors: number }> }

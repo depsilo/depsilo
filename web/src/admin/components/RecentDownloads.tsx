@@ -126,7 +126,7 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
         </div>
         <Link
           to={getAdminRouteHref('auditLogs')}
-          className="inline-flex min-h-8 items-center gap-1 whitespace-nowrap text-[11px] font-[500] no-underline text-[var(--brand-text)]"
+          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-[11px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-hover)]"
         >
           {t('recentDownloads.viewAudit')}
           <span aria-hidden>→</span>
@@ -194,7 +194,7 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     {isAdminEcosystem(item.ecosystem) ? (
-                      <EcosystemIcon type={item.ecosystem} size={13} />
+                      <EcosystemIcon type={item.ecosystem} size={13} decorative />
                     ) : (
                       <Icon name="package_2" size="sm" aria-hidden />
                     )}

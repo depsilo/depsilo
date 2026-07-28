@@ -9,7 +9,7 @@ const pageContracts = [
   {
     route: '/admin/upstream-updates',
     width: 'fluid',
-    description: '已缓存且具备上游验证器的元数据主动检查结果',
+    description: '查看 Depsilo 复验缓存元数据时，哪些已刷新、保持有效或发生失败。',
   },
   {
     route: '/admin/users',

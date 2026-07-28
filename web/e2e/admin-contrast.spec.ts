@@ -55,6 +55,21 @@ test('trend metric selector exposes button and pressed semantics', async ({ page
   await expect(metrics[2]).toHaveAttribute('aria-pressed', 'true')
 })
 
+test('trend chart exposes the selected metric and range to assistive technology', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints },
+  })
+  await page.goto('/admin')
+
+  const chartDescription = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper > svg.recharts-surface > desc')
+  await expect(chartDescription).toHaveText('Requests trend for 1h. Use the left and right arrow keys to inspect time points.')
+
+  await page.getByRole('group', { name: 'Trend metric' }).getByRole('button', { name: 'Latency' }).click()
+  await page.getByRole('group', { name: 'Activity Trend' }).getByRole('button', { name: '24h' }).click()
+  await expect(chartDescription).toHaveText('Latency trend for 24h. Use the left and right arrow keys to inspect time points.')
+})
+
 test('trend series use linear paths', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints },

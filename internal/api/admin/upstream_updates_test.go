@@ -153,6 +153,7 @@ func TestUpstreamUpdateHandlerRejectsInvalidQueries(t *testing.T) {
 		{name: "damaged cursor", path: "/upstream-updates?cursor=not-a-history-cursor"},
 		{name: "cursor and offset", path: "/upstream-updates?offset=0&cursor=" + url.QueryEscape(*first.NextCursor)},
 		{name: "cursor filter mismatch", path: "/upstream-updates?result=unchanged&cursor=" + url.QueryEscape(*first.NextCursor)},
+		{name: "oversized filter", path: "/upstream-updates?ecosystem=" + strings.Repeat("e", 33)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

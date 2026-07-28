@@ -9,7 +9,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import { Link } from 'react-router-dom'
 
+import { getAdminRouteHref } from '@/admin/routes'
 import ButtonV2 from '@/components/Button'
 import QueryErrorState from '@/components/QueryErrorState'
 import { statsApi } from '@/lib/api'
@@ -260,7 +262,12 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
       )}
 
       {/* Status dot + label — always visible */}
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      <span
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}
+      >
         <span
           className={!hasInitialError && !(isPending && !data) ? 'now-pulse' : undefined}
           aria-hidden
@@ -295,30 +302,47 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
               for any downstream caller that wants to distinguish
               never-tracked from genuinely-zero, but the NowStrip
               treats them the same. */}
-          <span style={sepStyle}>·</span>
-          <span style={cellStyle}>
-            <span style={valueStyle}>{data.rate.requests_per_min ?? 0}</span>
-            {t('now.reqPerMin')}
+          <span className="inline-flex items-center gap-3">
+            <span style={sepStyle}>·</span>
+            <span style={cellStyle}>
+              <span style={valueStyle}>{data.rate.requests_per_min ?? 0}</span>
+              {t('now.reqPerMin')}
+            </span>
           </span>
 
-          <span style={sepStyle}>·</span>
-          <span style={cellStyle}>
-            <span style={{ ...arrowStyle, color: 'var(--ok-text)' }} aria-hidden>↑</span>
-            <span style={valueStyle}>{formatBps(data.rate.egress_bps ?? 0)}</span>
-            {t('now.egress')}
+          <span className="inline-flex items-center gap-3">
+            <span style={sepStyle}>·</span>
+            <span style={cellStyle}>
+              <span style={{ ...arrowStyle, color: 'var(--ok-text)' }} aria-hidden>↑</span>
+              <span style={valueStyle}>{formatBps(data.rate.egress_bps ?? 0)}</span>
+              {t('now.egress')}
+            </span>
           </span>
 
-          <span style={sepStyle}>·</span>
-          <span style={cellStyle}>
-            <span style={{ ...arrowStyle, color: 'var(--text-muted)' }} aria-hidden>↓</span>
-            <span style={valueStyle}>{formatBps(data.rate.ingress_bps ?? 0)}</span>
-            {t('now.ingress')}
+          <span className="inline-flex items-center gap-3">
+            <span style={sepStyle}>·</span>
+            <span style={cellStyle}>
+              <span style={{ ...arrowStyle, color: 'var(--text-muted)' }} aria-hidden>↓</span>
+              <span style={valueStyle}>{formatBps(data.rate.ingress_bps ?? 0)}</span>
+              {t('now.ingress')}
+            </span>
           </span>
 
-          <span style={sepStyle}>·</span>
-          <span style={cellStyle}>
-            <span style={valueStyle}>{data.upstreams.healthy}/{data.upstreams.total}</span>
-            {t('now.upstreams')}
+          <span className="inline-flex items-center gap-3">
+            <span style={sepStyle}>·</span>
+            <Link
+              to={getAdminRouteHref('upstreams')}
+              className="stripe-focus-ring -my-1 inline-flex min-h-[40px] items-center gap-1 rounded-[4px] px-1 no-underline hover:bg-[var(--bg-hover)]"
+              style={cellStyle}
+              aria-label={t('now.viewUpstreams', {
+                healthy: data.upstreams.healthy,
+                total: data.upstreams.total,
+              })}
+            >
+              <span style={valueStyle}>{data.upstreams.healthy}/{data.upstreams.total}</span>
+              {t('now.upstreams')}
+              <span aria-hidden>→</span>
+            </Link>
           </span>
 
           <span style={{ flex: 1 }} />
@@ -333,15 +357,9 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
 
       {!isEmpty && data?.last_activity && (
         <div
-          style={{
-            width: '100%',
-            fontSize: 11,
-            color: 'var(--text-subtle)',
-            display: 'flex',
-            gap: 12,
-          }}
+          className="flex w-full min-w-0 flex-wrap items-start gap-x-3 gap-y-1 text-[11px] text-[var(--text-subtle)]"
         >
-          <span>
+          <span className="min-w-0 flex-1 break-words">
             {t('now.lastActivity')}{' '}
             {formatRelative(data.last_activity.seconds_ago, t)} ·{' '}
             <span style={{ color: 'var(--text-muted)' }}>{data.last_activity.adapter_type}</span>
@@ -355,7 +373,7 @@ export default function NowStrip({ variant = 'card' }: NowStripProps) {
               ({data.last_activity.hit ? t('now.cacheHit') : t('now.cacheMiss')})
             </span>
           </span>
-          <span style={{ marginLeft: 'auto' }}>
+          <span className="ml-auto shrink-0">
             {t('now.uptime')} {formatUptime(data.uptime_seconds, t)}
           </span>
         </div>

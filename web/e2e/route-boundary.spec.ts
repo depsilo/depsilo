@@ -30,7 +30,7 @@ test('top-level lazy route failure refreshes the same URL and recovers', async (
   await failure.getByRole('button', { name: '刷新页面' }).click()
 
   await expect(page).toHaveURL(/\/\?source=route-boundary#quickstart$/)
-  await expect(page.getByRole('heading', { name: '装得快，也装得放心' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '快速开始' })).toBeVisible()
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('route-document-loads'))).toBe('2')
   expect(moduleRequests).toBeGreaterThanOrEqual(2)
 })

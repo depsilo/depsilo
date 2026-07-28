@@ -22,6 +22,10 @@ interface EcosystemIconProps {
   size?: number
   useColor?: boolean
   className?: string
+  /** Hide the icon from assistive technology when adjacent text already names it. */
+  decorative?: boolean
+  /** Override the upstream icon title when the icon carries meaning on its own. */
+  label?: string
 }
 
 interface IconData {
@@ -82,6 +86,8 @@ export default function EcosystemIcon({
   size = 16,
   useColor = true,
   className = '',
+  decorative = false,
+  label,
 }: EcosystemIconProps) {
   const icon = iconMap[type]
   if (!icon) return null
@@ -97,13 +103,15 @@ export default function EcosystemIcon({
 
   return (
     <svg
-      role="img"
+      role={decorative ? undefined : 'img'}
       viewBox="0 0 24 24"
       width={size}
       height={size}
       fill={color}
       className={className}
-      aria-label={icon.title}
+      focusable="false"
+      aria-hidden={decorative || undefined}
+      aria-label={decorative ? undefined : (label ?? icon.title)}
     >
       <path d={icon.path} />
     </svg>

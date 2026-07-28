@@ -24,16 +24,16 @@ export default function ButtonV2({
   ...rest
 }: ButtonV2Props) {
   const base =
-    'inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-[background,color,border-color,transform] duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] stripe-focus-ring'
+    'app-button inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-[background,color,border-color,transform] duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] stripe-focus-ring'
 
   const sizes = {
-    sm: 'text-[12px] px-2.5 py-1 rounded-[5px]',
-    md: 'text-[13px] px-3 py-1.5 rounded-[5px]',
+    sm: 'min-h-8 text-[12px] px-2.5 py-1 rounded-[5px]',
+    md: 'min-h-9 text-[13px] px-3 py-1.5 rounded-[5px]',
   }
 
   const variants: Record<string, string> = {
     primary: 'text-[var(--btn-fg)] bg-[var(--btn)] hover:bg-[var(--btn-press)]',
-    secondary: 'hover:bg-[var(--brand-soft)]',
+    secondary: 'hover:bg-[var(--bg-hover)] hover:text-[var(--text)]',
     ghost: 'bg-transparent hover:bg-[var(--bg-hover)]',
     danger: 'hover:bg-[var(--danger-fill)]',
   }
@@ -58,7 +58,7 @@ export default function ButtonV2({
       style={{
         ...primaryStyle,
         ...(isSecondary
-          ? { border: '0.5px solid var(--brand-border)', color: 'var(--brand-text)', background: 'transparent' }
+          ? { border: '0.5px solid var(--border-strong)', color: 'var(--text-soft)', background: 'var(--bg-card)' }
           : {}),
         ...(isDanger
           ? { border: '0.5px solid var(--danger-border)', color: 'var(--danger-text)', background: 'transparent' }

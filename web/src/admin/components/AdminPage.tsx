@@ -38,7 +38,7 @@ export default function AdminPage({
           className="mb-8 flex min-w-0 flex-col gap-3 border-b border-[var(--border)] pb-4 sm:flex-row sm:items-end sm:justify-between"
         >
           {description && (
-            <div data-admin-page-description className="max-w-2xl text-[13px] leading-5" style={{ color: 'var(--text-soft)' }}>
+            <div data-admin-page-description className="max-w-2xl text-[13px] leading-[1.5]" style={{ color: 'var(--text-soft)' }}>
               {description}
             </div>
           )}

@@ -51,7 +51,7 @@ for (const width of [320, 768, 1024]) for (const theme of themes) for (const loc
   }
 }
 
-test('/admin/upstream-updates populated table is keyboard-scrollable and passes axe', async ({ page }) => {
+test('/admin/upstream-updates populated mobile list exposes outcomes without overflow and passes axe', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await mockAdminApi(page, {
     'GET /api/v1/admin/upstream-updates': {
@@ -76,13 +76,11 @@ test('/admin/upstream-updates populated table is keyboard-scrollable and passes 
 
   await page.goto('/admin/upstream-updates')
 
-  const viewport = page.getByRole('region', { name: /上游更新记录/ })
-  await expect(viewport).toBeVisible()
-  await expect(page.getByRole('cell', { name: '已更新', exact: true })).toBeVisible()
-  await expect(page.getByRole('cell', { name: '已刷新缓存元数据。', exact: true })).toBeVisible()
-  expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
-  await viewport.focus()
-  await expect(viewport).toBeFocused()
+  const mobileList = page.locator('[data-upstream-update-mobile-list]')
+  await expect(mobileList).toBeVisible()
+  await expect(mobileList.getByText('已更新', { exact: true })).toBeVisible()
+  await expect(mobileList.getByText('已刷新缓存元数据。', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
 })
 

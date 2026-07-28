@@ -2,12 +2,14 @@
  * Shared upstream display component with heartbeat bars.
  * Used by: MonitorV2, DashboardV2, UpstreamsV2
  */
-import { useState, useMemo } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { adminApi } from '@/lib/api'
 import EcosystemIcon from '@/components/EcosystemIcon'
+import StatusDot from '@/components/StatusDot'
 import { isEcosystemType } from '@/lib/ecosystemTypes'
+import { upstreamStatus } from '@/lib/upstreamStatus'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -23,6 +25,10 @@ export interface UpstreamItem {
   priority?: number
   beats?: (number | null)[]
   beatLabels?: string[]
+  probeMode?: 'active' | 'passive'
+  probeInterval?: string
+  lastCheckedAt?: string | null
+  workerRunning?: boolean
 }
 
 // ── Heartbeat bar ──────────────────────────────────────────────────
@@ -35,8 +41,8 @@ const HEARTBEAT_WIDTH = HEARTBEAT_LIMIT * BEAT_WIDTH + (HEARTBEAT_LIMIT - 1) * B
 // Red is reserved for DOWN (-1): a slow-but-alive upstream must never
 // paint the panel in danger color — a wall of red on a page whose
 // header says "0 failed" reads as a contradiction. Slow is a single
-// amber tier, and the 150ms threshold matches mirrorStatus() on the
-// Monitor page so ticks and status dots always agree.
+// amber tier, and the shared 150ms threshold keeps ticks and status
+// labels aligned across Portal and Admin.
 function beatColor(latency: number | null): string {
   if (latency === null) return 'color-mix(in oklab, var(--border-strong) 58%, var(--bg-card))'
   if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
@@ -44,9 +50,9 @@ function beatColor(latency: number | null): string {
   return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
 }
 
-function beatLabel(latency: number | null): string {
-  if (latency === null) return 'No data'
-  if (latency < 0) return 'Down'
+function beatLabel(latency: number | null, noDataLabel: string, failedLabel: string): string {
+  if (latency === null) return noDataLabel
+  if (latency < 0) return failedLabel
   return `${latency}ms`
 }
 
@@ -83,7 +89,11 @@ function normalizeBeats(
 }
 
 export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
+  const { t } = useTranslation()
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
+  const detailId = useId()
+  const instructionsId = useId()
   const normalized = useMemo(
     () => normalizeBeats(upstream.beats ?? [], upstream.beatLabels),
     [upstream.beats, upstream.beatLabels],
@@ -93,37 +103,96 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   const emptySlots = Math.max(0, HEARTBEAT_LIMIT - beats.length)
   const displayBeats = [...Array(emptySlots).fill(null), ...beats]
   const displayLabels = [...Array(emptySlots).fill(''), ...resolvedLabels]
-  const tooltipLeft = hoveredIdx === null
+  const activeIdx = hoveredIdx ?? selectedIdx
+  const latestIdx = displayBeats.length - 1
+  const firstDataIdx = beats.length > 0 ? emptySlots : latestIdx
+  const tooltipLeft = activeIdx === null
     ? '0%'
-    : `${((hoveredIdx + 0.5) / displayBeats.length) * 100}%`
+    : `${((activeIdx + 0.5) / displayBeats.length) * 100}%`
+  const tooltipTransform = activeIdx === null || activeIdx < 6
+    ? 'translateX(0)'
+    : activeIdx > displayBeats.length - 7
+      ? 'translateX(-100%)'
+      : 'translateX(-50%)'
+  const activeDetail = activeIdx === null
+    ? ''
+    : `${displayLabels[activeIdx] ? `${displayLabels[activeIdx]} · ` : ''}${beatLabel(displayBeats[activeIdx], t('monitor.noLatencyData'), t('monitor.failed'))}`
+
+  function moveSelection(delta: number) {
+    setSelectedIdx(current =>
+      Math.max(firstDataIdx, Math.min(latestIdx, (current ?? latestIdx) + delta)),
+    )
+  }
 
   return (
     <div
       data-upstream-heartbeat
-      className="relative w-full min-w-0"
-      style={{ height: 26, maxWidth: HEARTBEAT_WIDTH }}
-      aria-label="Upstream latency history"
+      className="stripe-focus-ring relative w-full min-w-0 rounded-[5px]"
+      style={{ height: 40, maxWidth: HEARTBEAT_WIDTH }}
+      tabIndex={0}
+      aria-label={t('monitor.latencyHistoryNamed', { name: upstream.name })}
+      aria-describedby={`${instructionsId}${activeIdx === null ? '' : ` ${detailId}`}`}
+      aria-keyshortcuts="ArrowLeft ArrowRight Home End Enter Space Escape"
+      onFocus={() => { setSelectedIdx(current => current ?? latestIdx) }}
+      onBlur={() => {
+        setHoveredIdx(null)
+        setSelectedIdx(null)
+      }}
+      onPointerDown={event => {
+        event.currentTarget.focus({ preventScroll: true })
+        const bounds = event.currentTarget.getBoundingClientRect()
+        const ratio = bounds.width > 0
+          ? (event.clientX - bounds.left) / bounds.width
+          : 1
+        const pointerIdx = Math.floor(ratio * displayBeats.length)
+        setSelectedIdx(
+          Math.max(firstDataIdx, Math.min(latestIdx, pointerIdx)),
+        )
+      }}
+      onKeyDown={event => {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault()
+          moveSelection(-1)
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault()
+          moveSelection(1)
+        } else if (event.key === 'Home') {
+          event.preventDefault()
+          setSelectedIdx(firstDataIdx)
+        } else if (event.key === 'End' || event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          setSelectedIdx(latestIdx)
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          setHoveredIdx(null)
+          setSelectedIdx(null)
+        }
+      }}
     >
+      <span id={instructionsId} className="sr-only">
+        {t('monitor.latencyHistoryInstructions')}
+      </span>
       <div
-        className="absolute inset-x-0 bottom-0 grid items-stretch"
+        className="absolute inset-x-0 bottom-1 grid items-stretch"
         style={{
           gridTemplateColumns: `repeat(${HEARTBEAT_LIMIT}, minmax(0, ${BEAT_WIDTH}px))`,
           columnGap: BEAT_GAP,
-          height: 20,
+          height: 24,
         }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
         {displayBeats.map((lat, i) => (
-          // Hover-only affordance (tooltip): default cursor — pointer
-          // would promise a click these bars don't have.
           <div
             key={i}
+            data-heartbeat-beat
+            data-heartbeat-index={i}
+            aria-hidden="true"
             style={{
               minWidth: 0,
               borderRadius: 4,
               background: beatColor(lat),
-              opacity: beats.length === 0 || lat === null ? 0.14 : (hoveredIdx !== null && hoveredIdx !== i ? 0.42 : 1),
-              boxShadow: hoveredIdx === i
+              opacity: beats.length === 0 || lat === null ? 0.14 : (activeIdx !== null && activeIdx !== i ? 0.42 : 1),
+              boxShadow: activeIdx === i
                 ? '0 0 0 1px color-mix(in oklab, var(--text) 22%, transparent) inset'
                 : 'none',
               transition: 'opacity 90ms ease, box-shadow 90ms ease',
@@ -132,14 +201,17 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           />
         ))}
       </div>
-      {hoveredIdx !== null && (
+      {activeIdx !== null && (
         <div
-          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[10px] font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: tooltipLeft, transform: 'translateX(-50%)' }}
+          id={detailId}
+          data-heartbeat-detail
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
+          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: tooltipLeft, transform: tooltipTransform }}
         >
-          {displayBeats[hoveredIdx] === null
-            ? beatLabel(null)
-            : <>{displayLabels?.[hoveredIdx] ? `${displayLabels[hoveredIdx]} · ` : ''}{beatLabel(displayBeats[hoveredIdx])}</>}
+          {activeDetail}
         </div>
       )}
     </div>
@@ -148,32 +220,92 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
 
 // ── Upstream row (name + latency + dot + heartbeat) ────────────────
 
-export function UpstreamRow({ upstream, actions }: { upstream: UpstreamItem; actions?: React.ReactNode }) {
+export function UpstreamRow({
+  upstream,
+  actions,
+  metadata,
+}: {
+  upstream: UpstreamItem
+  actions?: React.ReactNode
+  metadata?: React.ReactNode
+}) {
+  const { t } = useTranslation()
+  const status = upstreamStatus(upstream)
+  const hasActions = actions !== undefined && actions !== null && actions !== false
+  const latency = (upstream.avg_latency_ms || 0) <= 1 ? '--' : `${upstream.avg_latency_ms}ms`
+  const statusIndicator = (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 text-[11px] font-[550]"
+      style={{ color: 'var(--text-muted)' }}
+    >
+      <StatusDot status={status} />
+      {t(`monitor.${status}`)}
+    </span>
+  )
+  const latencyIndicator = (
+    <span
+      className="shrink-0 font-mono text-[11px] tabular-nums"
+      style={{ color: 'var(--text-muted)' }}
+    >
+      {latency}
+    </span>
+  )
+
   return (
-    <div data-upstream-row className="min-w-0">
-      <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
-        <span
-          className="min-w-0 flex-1 truncate text-[12px] font-[400]"
-          title={upstream.name}
-          style={{ color: 'var(--text)' }}
-        >
-          {upstream.name}
-        </span>
-        <div className="flex shrink-0 items-center gap-2">
-          <span
-            className="font-mono text-[11px] tabular-nums"
-            style={{
-              color: (upstream.avg_latency_ms || 0) <= 1 ? 'var(--text-soft)'
-                : upstream.avg_latency_ms < 100 ? 'var(--ok)'
-                : upstream.avg_latency_ms < 500 ? 'var(--text-soft)' : 'var(--danger)',
-            }}
+    <div data-upstream-row data-upstream-status={status} className="min-w-0">
+      {hasActions ? (
+        <>
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <span
+              className="min-w-0 flex-1 truncate text-[12px] font-[400]"
+              title={upstream.name}
+              style={{ color: 'var(--text)' }}
+            >
+              {upstream.name}
+            </span>
+            <div className="flex shrink-0 items-center">
+              {actions}
+            </div>
+          </div>
+          <div
+            data-upstream-operational-line
+            className="mb-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
           >
-            {(upstream.avg_latency_ms || 0) <= 1 ? '--' : `${upstream.avg_latency_ms}ms`}
-          </span>
-          <span className="text-[10px]" style={{ color: upstream.healthy ? 'var(--ok)' : 'var(--danger)' }}>●</span>
-          {actions}
-        </div>
-      </div>
+            {statusIndicator}
+            {latencyIndicator}
+            {metadata !== undefined && metadata !== null && metadata !== false && (
+              <div data-upstream-metadata className="min-w-0 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {metadata}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+            <span
+              className="min-w-0 flex-1 truncate text-[12px] font-[400]"
+              title={upstream.name}
+              style={{ color: 'var(--text)' }}
+            >
+              {upstream.name}
+            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              {latencyIndicator}
+              {statusIndicator}
+            </div>
+          </div>
+          {metadata !== undefined && metadata !== null && metadata !== false && (
+            <div
+              data-upstream-metadata
+              className="mb-1 min-w-0 text-[11px]"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              {metadata}
+            </div>
+          )}
+        </>
+      )}
       <HeartbeatBar upstream={upstream} />
     </div>
   )
@@ -184,12 +316,22 @@ export function UpstreamRow({ upstream, actions }: { upstream: UpstreamItem; act
 interface UpstreamGroupedPanelProps {
   upstreams: UpstreamItem[]
   renderActions?: (upstream: UpstreamItem) => React.ReactNode
+  renderMetadata?: (upstream: UpstreamItem) => React.ReactNode
   variant?: 'plain' | 'cards'
   minColumnWidth?: number
+  layout?: 'tiles' | 'adaptive'
 }
 
-export function UpstreamGroupedPanel({ upstreams, renderActions, variant = 'plain', minColumnWidth = 360 }: UpstreamGroupedPanelProps) {
+export function UpstreamGroupedPanel({
+  upstreams,
+  renderActions,
+  renderMetadata,
+  variant = 'plain',
+  minColumnWidth = 360,
+  layout = 'tiles',
+}: UpstreamGroupedPanelProps) {
   const { t } = useTranslation()
+  const groupHeadingBaseId = useId()
 
   const heartbeatUpstreamIDs = useMemo(() => Array.from(new Set(
     upstreams.flatMap(upstream => upstream.id !== undefined && upstream.beats === undefined ? [upstream.id] : []),
@@ -262,6 +404,7 @@ export function UpstreamGroupedPanel({ upstreams, renderActions, variant = 'plai
       )}
       <div
         data-upstream-grouped-panel
+        data-upstream-panel-layout={layout}
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minColumnWidth}px), 1fr))`,
@@ -270,38 +413,60 @@ export function UpstreamGroupedPanel({ upstreams, renderActions, variant = 'plai
           width: '100%',
         }}
       >
-        {groups.map(([adapter, items]) => (
+        {groups.map(([adapter, items], groupIndex) => (
           (() => {
             const checkCount = Math.max(0, ...items.map(u => u.beats?.length ?? 0))
+            const healthyCount = items.filter(u => upstreamStatus(u) === 'healthy').length
+            const usesAdaptiveItemGrid = layout === 'adaptive' && (groups.length === 1 || items.length >= 3)
+            const headingId = `${groupHeadingBaseId}-${groupIndex}`
             return (
-              <div
+              <section
                 key={adapter}
                 data-upstream-group={adapter}
+                data-upstream-group-layout={usesAdaptiveItemGrid ? 'full' : 'tile'}
+                aria-labelledby={headingId}
                 className={isCards ? 'card min-w-0' : 'min-w-0'}
-                style={isCards ? { padding: '12px 14px' } : undefined}
+                style={{
+                  ...(isCards ? { padding: '12px 14px' } : undefined),
+                  ...(usesAdaptiveItemGrid ? { gridColumn: '1 / -1' } : undefined),
+                }}
               >
                 <div
-                  className="mb-3 flex min-w-0 items-center gap-2 pb-2"
+                  className="mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-2"
                   style={{ borderBottom: '1px solid var(--border)' }}
                 >
-                  {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor />}
-                  <span className="min-w-0 truncate text-[11px] font-mono font-[600] uppercase tracking-[0.1em]" style={{ color: 'var(--text)' }}>
-                    {adapter}
-                  </span>
-                  <span className="ml-auto shrink-0 text-[10px] font-mono tabular-nums" style={{ color: 'var(--text-subtle)' }}>
-                    {t('monitor.historySummary', { count: checkCount })} · {items.filter(u => u.healthy).length}/{items.length}
+                  <h2
+                    id={headingId}
+                    className="flex min-w-0 items-center gap-2 text-[12px] font-mono font-[600] uppercase tracking-[0.1em]"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor decorative />}
+                    <span className="min-w-0 truncate">{adapter}</span>
+                  </h2>
+                  <span className="ml-auto shrink-0 text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                    {t('monitor.historySummary', { count: checkCount })} · {t('monitor.healthySummary', { healthy: healthyCount, total: items.length })}
                   </span>
                 </div>
-                <div className="space-y-3">
+                <div
+                  data-upstream-item-grid={usesAdaptiveItemGrid ? 'auto-fill' : 'stack'}
+                  className={usesAdaptiveItemGrid ? undefined : 'space-y-3'}
+                  style={usesAdaptiveItemGrid ? {
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 350px), 1fr))',
+                    gap: '12px 24px',
+                    minWidth: 0,
+                  } : undefined}
+                >
                   {items.map((u) => (
                     <UpstreamRow
-                      key={u.name}
+                      key={u.id ?? `${u.adapter}:${u.name}:${u.url ?? ''}`}
                       upstream={u}
                       actions={renderActions?.(u)}
+                      metadata={renderMetadata?.(u)}
                     />
                   ))}
                 </div>
-              </div>
+              </section>
             )
           })()
         ))}

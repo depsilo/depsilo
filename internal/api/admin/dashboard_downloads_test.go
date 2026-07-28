@@ -154,7 +154,7 @@ func newRecentDownloadsTestDB(t *testing.T) *gorm.DB {
 
 func newRecentDownloadsTestRouter(database *gorm.DB) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	handler := NewDashboardHandler(database, nil, nil, nil, false)
+	handler := NewDashboardHandler(database, nil, nil, false, 0)
 	router := gin.New()
 	router.GET("/dashboard/recent-downloads", handler.GetRecentDownloads)
 	return router

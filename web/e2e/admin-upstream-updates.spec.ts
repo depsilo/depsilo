@@ -63,8 +63,9 @@ test('upstream update history renders episode counts and loads the next cursor p
 
   await page.goto('/admin/upstream-updates')
 
-  await expect(page.getByRole('cell', { name: 'requests', exact: true })).toBeVisible()
-  await expect(page.getByText('×3', { exact: true })).toHaveAttribute('aria-label', '检查次数：3')
+  const table = page.locator('[data-upstream-update-table]')
+  await expect(table.getByRole('cell', { name: 'requests', exact: true })).toBeVisible()
+  await expect(table.getByText('×3', { exact: true })).toHaveAttribute('aria-label', '检查次数：3')
 
   const loadMore = page.getByRole('button', { name: /加载/ })
   await loadMore.click()
