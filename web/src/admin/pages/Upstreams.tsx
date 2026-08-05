@@ -21,45 +21,16 @@ import { standardUpstreamEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { upstreamStatus } from '@/lib/upstreamStatus'
+import {
+  createUpstreamRuntimeModel,
+  type RuntimeCheckOutcome,
+  type RuntimeCheckReconciliation,
+} from '@/admin/upstreams/runtimeModel'
 import type {
   AdminUpstream,
   AdminUpstreamListResponse,
-  CheckUpstreamResponse,
   UpstreamMutationRequest,
 } from '@/lib/adminApi.types'
-
-const runtimeEcosystemOrder = standardUpstreamEcosystems.map(ecosystem => ecosystem.id)
-const runtimeEcosystemRank = new Map<string, number>(runtimeEcosystemOrder.map((name, index) => [name, index] as const))
-
-function upsertRuntimeUpstream(current: AdminUpstreamListResponse | undefined, upstream: AdminUpstream): AdminUpstreamListResponse {
-  const items = current?.items ?? []
-  const index = items.findIndex((item) => item.id === upstream.id)
-  const next = index < 0 ? [...items, upstream] : items.map((item) => item.id === upstream.id ? upstream : item)
-  next.sort((a, b) => (runtimeEcosystemRank.get(a.adapter_type) ?? Number.MAX_SAFE_INTEGER) - (runtimeEcosystemRank.get(b.adapter_type) ?? Number.MAX_SAFE_INTEGER) || a.priority - b.priority || a.id - b.id)
-  return { items: next, total: next.length }
-}
-
-function removeRuntimeUpstream(current: AdminUpstreamListResponse | undefined, deletedID: number): AdminUpstreamListResponse {
-  const items = (current?.items ?? []).filter((item) => item.id !== deletedID)
-  return { items, total: items.length }
-}
-
-function replaceRuntimeList(current: AdminUpstreamListResponse | undefined, replacements: AdminUpstream[]): AdminUpstreamListResponse {
-  let next = current ?? { items: [], total: 0 }
-  for (const replacement of replacements) next = upsertRuntimeUpstream(next, replacement)
-  return next
-}
-
-interface RuntimeCheckBaseline {
-  generation: number
-  updatedAt: string
-}
-
-interface RuntimeCheckResponse {
-  upstream: AdminUpstream
-  check: CheckUpstreamResponse['check']
-  baseline: RuntimeCheckBaseline
-}
 
 type UpstreamHealth = ReturnType<typeof upstreamStatus>
 type UpstreamStatusFilter = 'all' | UpstreamHealth
@@ -75,34 +46,6 @@ interface BulkCheckSummary {
   degraded: number
   failed: number
   requestFailed: number
-}
-
-function mergeRuntimeChecks(
-  current: AdminUpstreamListResponse | undefined,
-  checks: RuntimeCheckResponse[],
-  generations: ReadonlyMap<number, number>,
-): AdminUpstreamListResponse | undefined {
-  if (!current) return current
-  const replacements = checks.flatMap(({ upstream, baseline }) => {
-    return isRuntimeCheckCurrent(current, upstream.id, baseline, generations)
-      ? [upstream]
-      : []
-  })
-  return replaceRuntimeList(current, replacements)
-}
-
-function isRuntimeCheckCurrent(
-  current: AdminUpstreamListResponse | undefined,
-  upstreamID: number,
-  baseline: RuntimeCheckBaseline,
-  generations: ReadonlyMap<number, number>,
-): boolean {
-  const currentUpstream = current?.items.find((item) => item.id === upstreamID)
-  return Boolean(
-    currentUpstream
-    && (generations.get(upstreamID) ?? 0) === baseline.generation
-    && currentUpstream.updated_at === baseline.updatedAt,
-  )
 }
 
 const emptyForm = (ecosystem: string): UpstreamMutationRequest => ({
@@ -170,7 +113,7 @@ export default function UpstreamsV2() {
   const queryClient = useQueryClient()
   const toast = useAppToast()
   const { canWrite } = usePrincipal()
-  const resourceGenerations = useRef(new Map<number, number>())
+  const [runtimeModel] = useState(createUpstreamRuntimeModel)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // CRUD state
@@ -258,9 +201,11 @@ export default function UpstreamsV2() {
   const createMutation = useMutation({
     mutationFn: (request: UpstreamMutationRequest) => adminApi.createUpstream(request),
     onSuccess: ({ data: runtime }) => {
-      advanceResourceGeneration(runtime.id)
       setBulkCheckSummary(null)
-      queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], (current) => upsertRuntimeUpstream(current, runtime))
+      queryClient.setQueryData<AdminUpstreamListResponse>(
+        ['admin', 'upstreams'],
+        current => runtimeModel.applyMutation(current, { kind: 'saved', upstream: runtime }),
+      )
       closeDialog()
       toast.show({ tone: 'success', message: t('upstreams.createdNamed', { name: runtime.name }) })
     },
@@ -268,9 +213,11 @@ export default function UpstreamsV2() {
   const updateMutation = useMutation({
     mutationFn: ({ id, request }: { id: number; request: UpstreamMutationRequest }) => adminApi.updateUpstream(id, request),
     onSuccess: ({ data: runtime }) => {
-      advanceResourceGeneration(runtime.id)
       setBulkCheckSummary(null)
-      queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], (current) => upsertRuntimeUpstream(current, runtime))
+      queryClient.setQueryData<AdminUpstreamListResponse>(
+        ['admin', 'upstreams'],
+        current => runtimeModel.applyMutation(current, { kind: 'saved', upstream: runtime }),
+      )
       removeCheckFailure(runtime.id)
       closeDialog()
       toast.show({ tone: 'success', message: t('upstreams.updatedNamed', { name: runtime.name }) })
@@ -279,26 +226,17 @@ export default function UpstreamsV2() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminApi.deleteUpstream(id),
     onSuccess: ({ data }) => {
-      advanceResourceGeneration(data.deleted_id)
       setBulkCheckSummary(null)
-      queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], (current) => removeRuntimeUpstream(current, data.deleted_id))
+      queryClient.setQueryData<AdminUpstreamListResponse>(
+        ['admin', 'upstreams'],
+        current => runtimeModel.applyMutation(current, { kind: 'deleted', upstreamId: data.deleted_id }),
+      )
       removeCheckFailure(data.deleted_id)
       const deletedName = deleteTarget?.name ?? t('upstreams.unnamed')
       closeDeleteDialog()
       toast.show({ tone: 'success', message: t('upstreams.deletedNamed', { name: deletedName }) })
     },
   })
-
-  function advanceResourceGeneration(id: number) {
-    resourceGenerations.current.set(id, (resourceGenerations.current.get(id) ?? 0) + 1)
-  }
-
-  function captureCheckBaseline(upstream: AdminUpstream): RuntimeCheckBaseline {
-    return {
-      generation: resourceGenerations.current.get(upstream.id) ?? 0,
-      updatedAt: upstream.updated_at,
-    }
-  }
 
   function removeCheckFailure(id: number) {
     setCheckFailures((current) => {
@@ -379,24 +317,25 @@ export default function UpstreamsV2() {
     try {
       const batch = allUpstreams.map((upstream) => ({
         upstream,
-        baseline: captureCheckBaseline(upstream),
+        ticket: runtimeModel.beginCheck(upstream),
       }))
-      const settled: PromiseSettledResult<RuntimeCheckResponse>[] = new Array(batch.length)
+      const outcomes: RuntimeCheckOutcome[] = new Array(batch.length)
       let cursor = 0
       const workerCount = Math.min(4, batch.length)
       const workers = Array.from({ length: workerCount }, async () => {
         while (cursor < batch.length) {
           const index = cursor
           cursor += 1
-          const { upstream, baseline } = batch[index]
+          const { upstream, ticket } = batch[index]
           try {
             const { data: result } = await adminApi.checkUpstream(upstream.id)
-            settled[index] = {
+            outcomes[index] = {
               status: 'fulfilled',
-              value: { upstream: result.upstream, check: result.check, baseline },
+              ticket,
+              result,
             }
           } catch (reason) {
-            settled[index] = { status: 'rejected', reason }
+            outcomes[index] = { status: 'rejected', ticket, reason }
           } finally {
             setCheckProgress((current) => ({
               ...current,
@@ -406,26 +345,13 @@ export default function UpstreamsV2() {
         }
       })
       await Promise.all(workers)
-      const fulfilled = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
       const latest = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
-      const accepted = fulfilled.filter(({ upstream, baseline }) => (
-        isRuntimeCheckCurrent(latest, upstream.id, baseline, resourceGenerations.current)
-      ))
-      queryClient.setQueryData<AdminUpstreamListResponse>(
-        ['admin', 'upstreams'],
-        (current) => mergeRuntimeChecks(current, accepted, resourceGenerations.current),
-      )
-      const failedIDs = new Set(settled.flatMap((result, index) => (
-        result.status === 'rejected'
-        && isRuntimeCheckCurrent(
-          latest,
-          batch[index].upstream.id,
-          batch[index].baseline,
-          resourceGenerations.current,
-        )
-          ? [batch[index].upstream.id]
-          : []
-      )))
+      const reconciliation: RuntimeCheckReconciliation = runtimeModel.applyChecks(latest, outcomes)
+      if (reconciliation.data) {
+        queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], reconciliation.data)
+      }
+      const accepted = reconciliation.accepted
+      const failedIDs = new Set(reconciliation.failures.map(failure => failure.upstreamId))
       setCheckFailures(failedIDs)
       const summary: BulkCheckSummary = {
         healthy: accepted.filter(result => upstreamStatus(result.upstream) === 'healthy').length,
@@ -445,44 +371,44 @@ export default function UpstreamsV2() {
     const current = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
     const upstream = current?.items.find((item) => item.id === id)
     if (!upstream) return
-    const baseline = captureCheckBaseline(upstream)
+    const ticket = runtimeModel.beginCheck(upstream)
     setBulkCheckSummary(null)
     removeCheckFailure(id)
     setCheckingIds((current) => new Set(current).add(id))
     try {
       const { data: result } = await adminApi.checkUpstream(id)
       const latest = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
-      if (!isRuntimeCheckCurrent(latest, id, baseline, resourceGenerations.current)) return
-      queryClient.setQueryData<AdminUpstreamListResponse>(
-        ['admin', 'upstreams'],
-        (latest) => mergeRuntimeChecks(
-          latest,
-          [{ upstream: result.upstream, check: result.check, baseline }],
-          resourceGenerations.current,
-        ),
-      )
+      const reconciliation = runtimeModel.applyChecks(latest, [{ status: 'fulfilled', ticket, result }])
+      const acceptedResult = reconciliation.accepted[0]
+      if (!acceptedResult || !reconciliation.data) return
+      queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], reconciliation.data)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams', 'latencies', '24h'] })
-      const resultStatus = upstreamStatus(result.upstream)
+      const resultStatus = upstreamStatus(acceptedResult.upstream)
       toast.show({
         tone: resultStatus === 'healthy' ? 'success' : 'warning',
         message: resultStatus === 'healthy'
           ? t('upstreams.checkHealthy', {
               name: upstream.name,
-              latency: result.check.latency_ms,
+              latency: acceptedResult.check.latency_ms,
             })
           : resultStatus === 'degraded'
             ? t('upstreams.checkDegraded', {
                 name: upstream.name,
-                latency: result.check.latency_ms,
+                latency: acceptedResult.check.latency_ms,
               })
             : t('upstreams.checkUnhealthy', {
               name: upstream.name,
-              reason: result.check.error || t('upstreams.unreachable'),
+              reason: acceptedResult.check.error || t('upstreams.unreachable'),
             }),
       })
     } catch (checkError) {
       const latest = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
-      if (!isRuntimeCheckCurrent(latest, id, baseline, resourceGenerations.current)) return
+      const reconciliation = runtimeModel.applyChecks(latest, [{
+        status: 'rejected',
+        ticket,
+        reason: checkError,
+      }])
+      if (reconciliation.failures.length === 0) return
       setCheckFailures((current) => new Set(current).add(id))
       toast.show({
         tone: 'danger',

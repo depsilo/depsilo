@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	pathpkg "path"
 	"strings"
 	"sync"
 	"time"
@@ -114,8 +115,12 @@ func (u *Upstream) request(
 	} else {
 		client.CheckRedirect = u.secureRedirectCheck(client.CheckRedirect)
 	}
-	if err := u.admitExchange(); err != nil {
+	recovery, err := u.admitExchange()
+	if err != nil {
 		return nil, fmt.Errorf("request %s: %w", safeURLOrigin(reqURL), err)
+	}
+	if recovery {
+		defer u.finishPassiveRecovery()
 	}
 
 	start := time.Now()
@@ -700,7 +705,9 @@ func originRequestURL(base, path string) (string, error) {
 	relative, err := url.ParseRequestURI(path)
 	baseURL, baseErr := url.Parse(base)
 	if err != nil || relative.IsAbs() || relative.Host != "" ||
+		!validOriginRequestPath(relative) ||
 		baseErr != nil || !validHTTPURL(base) ||
+		!validConfiguredOriginPath(baseURL) ||
 		baseURL.RawQuery != "" || baseURL.Fragment != "" {
 		return "", fmt.Errorf("create request for %s: invalid relative URL", safeURLOrigin(base))
 	}
@@ -712,10 +719,72 @@ func originRequestURL(base, path string) (string, error) {
 	if err != nil ||
 		!strings.EqualFold(finalURL.Scheme, baseURL.Scheme) ||
 		!strings.EqualFold(finalURL.Host, baseURL.Host) ||
-		!sameURLUserInfo(finalURL.User, baseURL.User) {
+		!sameURLUserInfo(finalURL.User, baseURL.User) ||
+		!urlPathWithinBase(baseURL.Path, finalURL.Path) {
 		return "", fmt.Errorf("create request for %s: target escaped configured origin", safeURLOrigin(base))
 	}
 	return reqURL, nil
+}
+
+func validOriginRequestPath(target *url.URL) bool {
+	if target == nil || target.Fragment != "" {
+		return false
+	}
+	return validCanonicalOriginPath(target.EscapedPath(), false)
+}
+
+func validConfiguredOriginPath(target *url.URL) bool {
+	if target == nil {
+		return false
+	}
+	return validCanonicalOriginPath(target.EscapedPath(), true)
+}
+
+const maxOriginPathDecodeLayers = 8
+
+// validCanonicalOriginPath validates every decoded representation of a URL
+// path. Bounded PathUnescape catches traversal hidden behind multiple layers
+// of escaping while retaining encoded slashes in otherwise safe paths. Paths
+// that still decode after the bound fail closed so nested percent escapes
+// cannot turn validation into work proportional to depth times request size.
+func validCanonicalOriginPath(escapedPath string, allowEmpty bool) bool {
+	if escapedPath == "" {
+		return allowEmpty
+	}
+	candidate := escapedPath
+	for range maxOriginPathDecodeLayers {
+		if !validOriginPathValue(candidate) {
+			return false
+		}
+		decoded, err := url.PathUnescape(candidate)
+		if err != nil || decoded == candidate {
+			return true
+		}
+		candidate = decoded
+	}
+	return false
+}
+
+func validOriginPathValue(value string) bool {
+	if !strings.HasPrefix(value, "/") ||
+		strings.Contains(value, `\`) ||
+		strings.Contains(value, "//") {
+		return false
+	}
+	for _, segment := range strings.Split(value, "/") {
+		if segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func urlPathWithinBase(basePath, targetPath string) bool {
+	canonicalBase := pathpkg.Clean("/" + strings.TrimPrefix(basePath, "/"))
+	canonicalTarget := pathpkg.Clean("/" + strings.TrimPrefix(targetPath, "/"))
+	return canonicalBase == "/" ||
+		canonicalTarget == canonicalBase ||
+		strings.HasPrefix(canonicalTarget, canonicalBase+"/")
 }
 
 func sameURLUserInfo(left, right *url.Userinfo) bool {

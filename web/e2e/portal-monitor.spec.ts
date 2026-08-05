@@ -6,7 +6,7 @@ const emptyStats = {
   upstreams: [],
 }
 
-test('Monitor distinguishes initial loading, failure recovery, and a successful empty response', async ({ page }) => {
+test('Monitor distinguishes initial loading, failure recovery, and a successful empty response', { tag: '@smoke' }, async ({ page }) => {
   let releaseStats!: (value: JsonValue) => void
   const pendingStats = new Promise<JsonValue>((resolve) => {
     releaseStats = resolve

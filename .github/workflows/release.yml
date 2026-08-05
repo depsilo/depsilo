@@ -22,16 +22,17 @@ jobs:
     needs: [verify, tray-macos, tray-linux]
     permissions:
       contents: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       # Generate the source inventory before npm ci/frontend/GoReleaser create
       # node_modules or build artifacts, so Syft sees only declared sources.
       - name: Generate source SBOM (CycloneDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: cyclonedx-json
@@ -40,7 +41,7 @@ jobs:
           upload-release-assets: false
 
       - name: Generate source SBOM (SPDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: spdx-json
@@ -49,9 +50,9 @@ jobs:
           upload-release-assets: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '22.22.0'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
@@ -60,7 +61,7 @@ jobs:
         run: npm ci && npm run build
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
@@ -73,30 +74,64 @@ jobs:
           cp "$RUNNER_TEMP/depsilo-${RELEASE_TAG}-source.spdx.json" release-assets/source/
 
       - name: Download tray bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: depsilo-tray-*
           path: release-assets/tray
           merge-multiple: true
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        with:
+          cosign-release: v3.1.2
+
       # GoReleaser uploads CLI archives, checksums, and install.sh to a draft.
       # A failed/retried job reuses that draft and replaces duplicate assets.
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.15.4
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # action-gh-release uploads every remaining asset before publishing the
-      # existing draft. If upload fails, users never see a partial release.
-      - name: Finalize release
-        uses: softprops/action-gh-release@v3
+      - name: Smoke-test Linux archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(find dist -type f -name 'depsilo_*_linux_amd64.tar.gz' -print -quit)"
+          test -n "$archive"
+          smoke_dir="$(mktemp -d)"
+          tar -xzf "$archive" -C "$smoke_dir"
+          test -x "$smoke_dir/depsilo"
+          "$smoke_dir/depsilo" version
+          (cd dist && sha256sum --check checksums.txt)
+
+      - name: Sign release checksums and attached artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets/signatures
+          for artifact in \
+            dist/checksums.txt \
+            install.sh \
+            release-assets/source/* \
+            release-assets/tray/*; do
+            test -f "$artifact"
+            bundle="release-assets/signatures/$(basename "$artifact").sigstore.json"
+            cosign sign-blob --yes --bundle "$bundle" "$artifact"
+          done
+
+      # Keep the release as a draft until the container is smoke-tested,
+      # signed, and attested. Users never see a partially trusted release.
+      - name: Upload signed release assets to draft
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
+          draft: true
           files: |
             release-assets/tray/*
             release-assets/source/*
+            release-assets/signatures/*
           fail_on_unmatched_files: true
 
   # Job 2: macOS menu-bar app (.app bundle, unsigned)
@@ -109,17 +144,17 @@ jobs:
       contents: read
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '22.22.0'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
@@ -141,7 +176,7 @@ jobs:
           zip -r "depsilo-tray-macos.zip" Depsilo.app
 
       - name: Stage tray artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: depsilo-tray-macos
           path: bin/depsilo-tray-macos.zip
@@ -158,7 +193,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install Linux tray build dependencies
         run: |
@@ -169,14 +204,14 @@ jobs:
             libayatana-appindicator3-dev
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '22.22.0'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
 
@@ -197,56 +232,58 @@ jobs:
           tar czf depsilo-tray-linux-amd64.tar.gz -C stage .
 
       - name: Stage tray artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: depsilo-tray-linux
           path: depsilo-tray-linux-amd64.tar.gz
           if-no-files-found: error
           retention-days: 7
 
-  # Publish the container only after the GitHub Release and all of its source
-  # artifacts exist. Keeping this in the same workflow removes the previous
-  # cross-workflow race between GoReleaser and image SBOM uploads.
-  container:
+  # Build a uniquely named candidate only after the draft release and all source
+  # artifacts exist. This job never writes a public semver or floating tag.
+  # Its digest becomes a job output only after smoke, signing, attestation, and
+  # release-asset upload have all succeeded.
+  container_candidate:
     needs: release
     permissions:
       contents: write
+      id-token: write
       packages: write
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
+      - name: Extract build metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           images: |
             depsilo/depsilo
             ghcr.io/depsilo/depsilo
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref_name, 'v0.') }}
           labels: |
             org.opencontainers.image.title=Depsilo
             org.opencontainers.image.description=Supply-chain enforcement proxy for 14 ecosystems and Docker OCI
@@ -258,39 +295,151 @@ jobs:
         id: date
         run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push
+      - name: Build and push candidate manifests
         id: build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          # run_id + run_attempt is unique across a workflow and all of its
+          # retries. Candidate tags are never reused or treated as releases.
+          tags: |
+            depsilo/depsilo:release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+            ghcr.io/depsilo/depsilo:release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ github.sha }}
             BUILD_DATE=${{ steps.date.outputs.date }}
 
-      - name: Generate image SBOM (CycloneDX)
-        uses: anchore/sbom-action@v0
+      - name: Verify candidate digest in both registries
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          CANDIDATE_TAG: release-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          for image in depsilo/depsilo ghcr.io/depsilo/depsilo; do
+            actual="$(docker buildx imagetools inspect "${image}:${CANDIDATE_TAG}" \
+              --format '{{json .Manifest}}' | jq -er '.digest')"
+            test "$actual" = "$IMAGE_DIGEST"
+          done
+
+      - name: Smoke-test image and readiness endpoint
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          container_id=""
+          cleanup() {
+            if [ -n "$container_id" ]; then
+              docker rm -f "$container_id" >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup EXIT
+          test -f scripts/release-smoke.toml
+          container_id="$(docker run --detach \
+            --publish 127.0.0.1::23333 \
+            --volume "$GITHUB_WORKSPACE/scripts/release-smoke.toml:/app/config.toml:ro" \
+            --env DEPSILO_CONFIG=/app/config.toml \
+            --env DEPSILO_AUTH_JWT_SECRET=release-smoke-only-0123456789abcdef0123456789abcdef \
+            "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}")"
+          port="$(docker port "$container_id" 23333/tcp | sed 's/.*://')"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${port}/ready"; then
+              exit 0
+            fi
+            if ! docker inspect --format '{{.State.Running}}' "$container_id" | grep -qx true; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs "$container_id"
+          exit 1
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
         with:
-          image: depsilo/depsilo:${{ steps.meta.outputs.version }}
+          cosign-release: v3.1.2
+
+      - name: Sign image manifests
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          for image in depsilo/depsilo ghcr.io/depsilo/depsilo; do
+            cosign sign --yes "${image}@${IMAGE_DIGEST}"
+          done
+
+      - name: Generate image SBOM (CycloneDX)
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ghcr.io/depsilo/depsilo@${{ steps.build.outputs.digest }}
           format: cyclonedx-json
           output-file: depsilo-${{ github.ref_name }}-image.cdx.json
           upload-artifact: false
           upload-release-assets: false
 
       - name: Generate image SBOM (SPDX)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
-          image: depsilo/depsilo:${{ steps.meta.outputs.version }}
+          image: ghcr.io/depsilo/depsilo@${{ steps.build.outputs.digest }}
           format: spdx-json
           output-file: depsilo-${{ github.ref_name }}-image.spdx.json
           upload-artifact: false
           upload-release-assets: false
+
+      - name: Attest image SBOM and sign SBOM files
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cyclonedx="depsilo-${RELEASE_TAG}-image.cdx.json"
+          for image in depsilo/depsilo ghcr.io/depsilo/depsilo; do
+            cosign attest --yes --type cyclonedx --predicate "$cyclonedx" \
+              "${image}@${IMAGE_DIGEST}"
+          done
+          for sbom in depsilo-${RELEASE_TAG}-image.*.json; do
+            cosign sign-blob --yes --bundle "${sbom}.sigstore.json" "$sbom"
+          done
+
+      - name: Verify candidate trust gate
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          for image in depsilo/depsilo ghcr.io/depsilo/depsilo; do
+            cosign verify \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "${image}@${IMAGE_DIGEST}" >/dev/null
+            cosign verify-attestation \
+              --type cyclonedx \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "${image}@${IMAGE_DIGEST}" >/dev/null
+          done
+          for sbom in depsilo-${RELEASE_TAG}-image.*.json; do
+            cosign verify-blob \
+              --bundle "${sbom}.sigstore.json" \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "$sbom" >/dev/null
+          done
 
       - name: Upload image SBOMs to release
         env:
@@ -299,4 +448,195 @@ jobs:
           gh release upload "${{ github.ref_name }}" \
             "depsilo-${{ github.ref_name }}-image.cdx.json" \
             "depsilo-${{ github.ref_name }}-image.spdx.json" \
+            "depsilo-${{ github.ref_name }}-image.cdx.json.sigstore.json" \
+            "depsilo-${{ github.ref_name }}-image.spdx.json.sigstore.json" \
             --clobber -R "${{ github.repository }}"
+
+  # Promote only the trusted digest emitted by the successful candidate job.
+  # A failed promotion can be retried without rebuilding: successful job
+  # outputs are retained by GitHub, and every tag operation is idempotent.
+  publish:
+    needs: container_candidate
+    permissions:
+      contents: write
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Detect stable release
+        id: release_kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          version_without_build="${version%%+*}"
+          if [[ "$version_without_build" == *-* ]]; then
+            echo 'stable=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'stable=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract formal release tags
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: |
+            depsilo/depsilo
+            ghcr.io/depsilo/depsilo
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}},priority=910
+            type=semver,pattern={{major}}.{{minor}},priority=900,enable=${{ steps.release_kind.outputs.stable == 'true' }}
+            type=semver,pattern={{major}},priority=890,enable=${{ steps.release_kind.outputs.stable == 'true' && !startsWith(github.ref_name, 'v0.') }}
+            type=raw,value=latest,enable=${{ steps.release_kind.outputs.stable == 'true' }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        with:
+          cosign-release: v3.1.2
+
+      - name: Verify trusted digest before promotion
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ needs.container_candidate.outputs.digest }}
+          CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          for image in depsilo/depsilo ghcr.io/depsilo/depsilo; do
+            actual="$(docker buildx imagetools inspect "${image}@${IMAGE_DIGEST}" \
+              --format '{{json .Manifest}}' | jq -er '.digest')"
+            test "$actual" = "$IMAGE_DIGEST"
+            cosign verify \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "${image}@${IMAGE_DIGEST}" >/dev/null
+            cosign verify-attestation \
+              --type cyclonedx \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "${image}@${IMAGE_DIGEST}" >/dev/null
+          done
+
+      - name: Promote trusted digest to release tags
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ needs.container_candidate.outputs.digest }}
+          FORMAL_TAGS: ${{ steps.meta.outputs.tags }}
+          FORMAL_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          resolve_tag_digest() {
+            local reference="$1"
+            local digest error_file output
+            error_file="$(mktemp)"
+            if output="$(docker buildx imagetools inspect "$reference" \
+              --format '{{json .Manifest}}' 2>"$error_file")"; then
+              rm -f "$error_file"
+              if ! digest="$(jq -er \
+                '.digest | select(test("^sha256:[0-9a-f]{64}$"))' <<<"$output")"; then
+                echo "registry returned an invalid digest for $reference" >&2
+                return 2
+              fi
+              printf '%s\n' "$digest"
+              return 0
+            fi
+            if grep -Eqi 'not found|manifest unknown|name unknown' "$error_file"; then
+              rm -f "$error_file"
+              return 1
+            fi
+            cat "$error_file" >&2
+            rm -f "$error_file"
+            return 2
+          }
+
+          # Semver tags are immutable. Check both registries before writing any
+          # tag, so a conflict cannot leave a half-promoted release.
+          test -n "$FORMAL_VERSION"
+          for image in depsilo/depsilo ghcr.io/depsilo/depsilo; do
+            exact="${image}:${FORMAL_VERSION}"
+            if existing="$(resolve_tag_digest "$exact")"; then
+              if [ "$existing" != "$IMAGE_DIGEST" ]; then
+                echo "refusing to replace immutable release tag $exact ($existing)" >&2
+                exit 1
+              fi
+            else
+              status=$?
+              if [ "$status" -ne 1 ]; then
+                echo "could not safely inspect release tag $exact" >&2
+                exit "$status"
+              fi
+            fi
+          done
+
+          docker_exact=false
+          ghcr_exact=false
+          mapfile -t tags < <(printf '%s\n' "$FORMAL_TAGS" | sed '/^[[:space:]]*$/d')
+          test "${#tags[@]}" -ge 2
+          for tag in "${tags[@]}"; do
+            repository="${tag%:*}"
+            case "$repository" in
+              depsilo/depsilo)
+                [ "$tag" = "${repository}:${FORMAL_VERSION}" ] && docker_exact=true
+                ;;
+              ghcr.io/depsilo/depsilo)
+                [ "$tag" = "${repository}:${FORMAL_VERSION}" ] && ghcr_exact=true
+                ;;
+              *)
+                echo "refusing unexpected release repository: $tag" >&2
+                exit 1
+                ;;
+            esac
+          done
+          [ "$docker_exact" = true ]
+          [ "$ghcr_exact" = true ]
+
+          for tag in "${tags[@]}"; do
+            repository="${tag%:*}"
+            docker buildx imagetools create \
+              --tag "$tag" \
+              "${repository}@${IMAGE_DIGEST}"
+          done
+
+      - name: Verify promoted release tags
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ needs.container_candidate.outputs.digest }}
+          FORMAL_TAGS: ${{ steps.meta.outputs.tags }}
+          CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            actual="$(docker buildx imagetools inspect "$tag" \
+              --format '{{json .Manifest}}' | jq -er '.digest')"
+            test "$actual" = "$IMAGE_DIGEST"
+            cosign verify \
+              --certificate-identity "$CERT_IDENTITY" \
+              --certificate-oidc-issuer "$OIDC_ISSUER" \
+              "$tag" >/dev/null
+          done <<<"$FORMAL_TAGS"
+
+      - name: Publish trusted GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false -R "${{ github.repository }}"

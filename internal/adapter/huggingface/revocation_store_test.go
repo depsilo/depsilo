@@ -210,6 +210,9 @@ func TestRepositoryRevocationStoreConcurrentCleanupObserversBothConverge(
 }
 
 func TestRepositoryRevocationStoreEnforcesAndDetectsCapacity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("4,096-row capacity boundary contract")
+	}
 	database := openRepositoryRevocationTestDB(t)
 	records := make([]db.HuggingFaceRepositoryRevocation, 0, maxPersistedRepositoryRevocations+1)
 	for i := 0; i < maxPersistedRepositoryRevocations; i++ {

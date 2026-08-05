@@ -2,9 +2,10 @@ package db
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
+	"strings"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -12,6 +13,44 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+const sqliteMaxOpenConnections = 4
+
+// sqliteConnectionDSN carries connection-scoped pragmas in the DSN so the
+// driver applies them to every database/sql connection, not only the first
+// connection used by an explicit PRAGMA statement.
+func sqliteConnectionDSN(dsn string) string {
+	pragmas := []string{
+		"busy_timeout(5000)",
+		"synchronous(NORMAL)",
+	}
+	separator := "?"
+	if strings.HasSuffix(dsn, "?") || strings.HasSuffix(dsn, "&") {
+		separator = ""
+	} else if strings.Contains(dsn, "?") {
+		separator = "&"
+	}
+	encoded := make([]string, 0, len(pragmas))
+	for _, pragma := range pragmas {
+		encoded = append(encoded, "_pragma="+url.QueryEscape(pragma))
+	}
+	return dsn + separator + strings.Join(encoded, "&")
+}
+
+func sqliteConnectionLimit(dsn string) int {
+	normalized := strings.ToLower(dsn)
+	if strings.HasPrefix(normalized, ":memory:") ||
+		strings.HasPrefix(normalized, "file::memory:") {
+		return 1
+	}
+	if queryStart := strings.IndexByte(dsn, '?'); queryStart >= 0 {
+		query, err := url.ParseQuery(dsn[queryStart+1:])
+		if err == nil && strings.EqualFold(query.Get("mode"), "memory") {
+			return 1
+		}
+	}
+	return sqliteMaxOpenConnections
+}
 
 func Open(driver, dsn string) (*gorm.DB, error) {
 	var dialector gorm.Dialector
@@ -24,7 +63,7 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 				return nil, fmt.Errorf("create database directory: %w", err)
 			}
 		}
-		dialector = sqlite.Open(dsn)
+		dialector = sqlite.Open(sqliteConnectionDSN(dsn))
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", driver)
 	}
@@ -56,6 +95,18 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 	//                        rather than instant ERR_BUSY (matters when AccessLog
 	//                        goroutines and admin queries compete for the writer).
 	if driver == "sqlite" {
+		sqlDatabase, err := db.DB()
+		if err != nil {
+			return nil, fmt.Errorf("access sqlite connection pool: %w", err)
+		}
+		// Four connections preserve WAL read concurrency while bounding the
+		// number of writers entering SQLite's busy handler. Separate SQLite
+		// connections otherwise receive separate in-memory databases, so keep
+		// tests and ephemeral callers on one shared view.
+		maxConnections := sqliteConnectionLimit(dsn)
+		sqlDatabase.SetMaxOpenConns(maxConnections)
+		sqlDatabase.SetMaxIdleConns(maxConnections)
+
 		if err := db.Exec("PRAGMA journal_mode=WAL").Error; err != nil {
 			return nil, fmt.Errorf("set WAL mode: %w", err)
 		}
@@ -70,160 +121,95 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
-func AutoMigrate(db *gorm.DB) error {
-	zap.L().Info("running database auto-migration")
-	if err := db.AutoMigrate(
-		&CacheEntry{},
-		&HuggingFaceRefPin{},
-		&HuggingFaceRepositoryRevocation{},
-		&CompileCacheEntry{},
-		&CompileCacheCredential{},
-		&CompileCacheDeletion{},
-		&UpstreamUpdateEvent{},
-		&AccessLog{},
-		&AccessLogFiveMinutely{},
-		&AccessLogHourly{},
-		&AccessLogDaily{},
-		&AccessLogPackageDaily{},
-		&UpstreamRecord{},
-		&ControlPlaneState{},
-		&User{},
-		&APIToken{},
-		&UpstreamLatencyLog{},
-		&AuditLog{},
-		&PackageRule{},
-		&Vulnerability{},
-		&VulnerabilityCheck{},
-		&SecurityPolicy{},
-		&DismissedVuln{},
-		&Project{},
-		&ProjectPackage{},
-		&TrialRecord{},
-		&LicenseStorage{},
-		&WebhookConfig{},
-		// Quarantine (T1 Task 1 — minimum release age). Three tables:
-		// PackageTimestamp caches upstream publish times, ApprovedVersion
-		// records operator bypasses, QuarantineEvent is the audit log.
-		// All defined in db/quarantine.go; helpers in internal/quarantine.
-		&PackageTimestamp{},
-		&ApprovedVersion{},
-		&QuarantineEvent{},
-		// Known-malicious blocklist (DIRECTION Task 2). Defined in
-		// db/blocklist.go; helpers in internal/blocklist.
-		&MaliciousPackage{},
-		&MalwareOverride{},
-		&BlocklistSyncState{},
-		// Tamper detection (DIRECTION T1). Defined in db/tamper.go;
-		// helper in internal/tamper.
-		&TamperRecord{},
-	); err != nil {
-		return err
-	}
-	if err := migrateCompileCacheIdentityIndex(db); err != nil {
-		return err
-	}
-	if err := migrateVulnerabilityIdentityIndex(db); err != nil {
-		return err
-	}
-	if err := backfillCacheKinds(db); err != nil {
-		return err
-	}
-	return backfillHuggingFacePackageNames(db)
+// CurrentSchemaVersion is the newest database schema understood by this
+// binary. Every schema-changing release must add a numbered migration rather
+// than relying on GORM to infer an upgrade from the latest model definitions.
+const CurrentSchemaVersion = 1
+
+type schemaMigrationRecord struct {
+	Version   int       `gorm:"primaryKey;autoIncrement:false"`
+	Name      string    `gorm:"size:128;not null"`
+	AppliedAt time.Time `gorm:"not null"`
 }
 
-func migrateCompileCacheIdentityIndex(database *gorm.DB) error {
-	const (
-		legacyIndex      = "idx_compile_cache_namespace_key"
-		replacementIndex = "idx_compile_cache_protocol_namespace_key"
-	)
-	wantColumns := []string{"protocol", "namespace", "key"}
+func (schemaMigrationRecord) TableName() string { return "schema_migrations" }
 
+type schemaMigration struct {
+	version int
+	name    string
+	apply   func(*gorm.DB) error
+}
+
+var schemaMigrations = []schemaMigration{
+	{version: 1, name: "baseline", apply: migrateBaselineSchema},
+}
+
+// AutoMigrate applies each numbered schema migration exactly once. Databases
+// created before the migration ledger are treated as version zero, so the
+// baseline migration remains an idempotent upgrade path for existing installs.
+// A database written by a newer binary is rejected to prevent a downgrade from
+// silently mutating a schema it does not understand.
+func AutoMigrate(database *gorm.DB) error {
+	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
+		return fmt.Errorf("create schema migration ledger: %w", err)
+	}
+
+	var current int
+	if err := database.Model(&schemaMigrationRecord{}).
+		Select("COALESCE(MAX(version), 0)").
+		Scan(&current).Error; err != nil {
+		return fmt.Errorf("read database schema version: %w", err)
+	}
+	if current > CurrentSchemaVersion {
+		return fmt.Errorf(
+			"database schema version %d is newer than this binary supports (%d); upgrade Depsilo instead of downgrading the database",
+			current,
+			CurrentSchemaVersion,
+		)
+	}
+
+	for _, migration := range schemaMigrations {
+		if migration.version <= current {
+			continue
+		}
+		zap.L().Info("running database migration",
+			zap.Int("from_version", current),
+			zap.Int("to_version", migration.version),
+			zap.String("name", migration.name),
+		)
+		if err := applySchemaMigration(database, migration, time.Now().UTC()); err != nil {
+			return fmt.Errorf("apply database migration %d (%s): %w", migration.version, migration.name, err)
+		}
+		current = migration.version
+	}
+
+	// These checks are deliberately repeatable. Besides upgrading old schemas,
+	// they repair interrupted index swaps and rows left partially backfilled by
+	// older binaries. Keeping them outside the one-shot ledger means a later
+	// startup can heal that drift without pretending a new schema version exists.
+	return ensureCurrentSchemaInvariants(database)
+}
+
+func applySchemaMigration(database *gorm.DB, migration schemaMigration, appliedAt time.Time) error {
 	return database.Transaction(func(tx *gorm.DB) error {
-		// SQLite applies the column default while adding protocol to the legacy
-		// table. Keep this explicit backfill for databases left in a partial
-		// migration state, without touching storage_path or timestamps.
-		if err := tx.Exec(
-			"UPDATE compile_cache_entries SET protocol = ? WHERE protocol IS NULL OR TRIM(protocol) = ''",
-			CompileCacheProtocolCCache,
-		).Error; err != nil {
-			return fmt.Errorf("backfill compiler-cache protocol: %w", err)
+		if err := migration.apply(tx); err != nil {
+			return err
 		}
-
-		indexes, err := tx.Migrator().GetIndexes(&CompileCacheEntry{})
-		if err != nil {
-			return fmt.Errorf("read compiler-cache indexes: %w", err)
+		record := schemaMigrationRecord{
+			Version:   migration.version,
+			Name:      migration.name,
+			AppliedAt: appliedAt,
 		}
-		var replacement gorm.Index
-		for _, index := range indexes {
-			if index.Name() == replacementIndex {
-				replacement = index
-				break
-			}
-		}
-		if replacement == nil {
-			return fmt.Errorf("replacement compiler-cache index %q is missing", replacementIndex)
-		}
-		unique, known := replacement.Unique()
-		if !known || !unique || !slices.Equal(replacement.Columns(), wantColumns) {
-			return fmt.Errorf(
-				"replacement compiler-cache index %q has unique=%v columns=%v, want unique=true columns=%v",
-				replacementIndex,
-				unique,
-				replacement.Columns(),
-				wantColumns,
-			)
-		}
-
-		if !tx.Migrator().HasIndex(&CompileCacheEntry{}, legacyIndex) {
-			return nil
-		}
-		if err := tx.Migrator().DropIndex(&CompileCacheEntry{}, legacyIndex); err != nil {
-			return fmt.Errorf("drop legacy compiler-cache index %q: %w", legacyIndex, err)
+		if err := tx.Create(&record).Error; err != nil {
+			return fmt.Errorf("record database migration %d: %w", migration.version, err)
 		}
 		return nil
 	})
 }
 
-func migrateVulnerabilityIdentityIndex(database *gorm.DB) error {
-	const (
-		legacyIndex      = "idx_vulnerabilities_osv_id"
-		replacementIndex = "idx_vuln_osv_eco_pkg"
-	)
-	wantColumns := []string{"osv_id", "ecosystem", "package_name"}
-
-	return database.Transaction(func(tx *gorm.DB) error {
-		indexes, err := tx.Migrator().GetIndexes(&Vulnerability{})
-		if err != nil {
-			return fmt.Errorf("read vulnerability indexes: %w", err)
-		}
-
-		var replacement gorm.Index
-		for _, index := range indexes {
-			if index.Name() == replacementIndex {
-				replacement = index
-				break
-			}
-		}
-		if replacement == nil {
-			return fmt.Errorf("replacement vulnerability index %q is missing", replacementIndex)
-		}
-		unique, known := replacement.Unique()
-		if !known || !unique || !slices.Equal(replacement.Columns(), wantColumns) {
-			return fmt.Errorf(
-				"replacement vulnerability index %q has unique=%v columns=%v, want unique=true columns=%v",
-				replacementIndex,
-				unique,
-				replacement.Columns(),
-				wantColumns,
-			)
-		}
-
-		if !tx.Migrator().HasIndex(&Vulnerability{}, legacyIndex) {
-			return nil
-		}
-		if err := tx.Migrator().DropIndex(&Vulnerability{}, legacyIndex); err != nil {
-			return fmt.Errorf("drop legacy vulnerability index %q: %w", legacyIndex, err)
-		}
-		return nil
-	})
+func ensureCurrentSchemaInvariants(database *gorm.DB) error {
+	// Version 1 is currently the newest schema, so its repairable invariants
+	// are also the current invariants. A future version should append its own
+	// invariant function here without changing ensureSchemaV1Invariants.
+	return ensureSchemaV1Invariants(database)
 }

@@ -1,5 +1,11 @@
 # Depsilo — Product & Engineering Direction
 
+> Historical strategy snapshot from 2026-06-30. It is retained as decision
+> context, not as the current backlog. `PRODUCT.md` records the newer intent to
+> serve individuals/small teams and eventually grow toward a general-purpose
+> artifact repository. Any architecture that contradicts ADR-0004 still needs
+> an explicit superseding ADR.
+
 > A north-star brief for **Claude Code**. Read this before picking up roadmap work.
 > It explains where Depsilo stands, the strategic bet, and a prioritized build
 > order with concrete first tasks. When in doubt, optimize for the bet below.
@@ -102,8 +108,10 @@ on the request path (refuses to serve based on policy — not just scans and rep
       preserve the public index as a documented rollback (not a parallel policy bypass),
       and make the change reviewable. *(Frontend Quick Start page + the prompt generator;
       completed 2026-07-02.)*
-- [ ] **Sign releases.** CI already publishes versioned binaries, checksums, container
-      images, and SBOMs; add cosign/sigstore signatures and attestations.
+- [x] **Sign releases.** CI signs checksums, attached artifacts, SBOMs, and both
+      container registries with cosign keyless OIDC, and attaches the image SBOM as an
+      attestation. The draft is published only after archive and image smoke tests pass.
+      *(Completed 2026-08-01.)*
 - [x] **Dogfood SBOM.** Source and container-image CycloneDX + SPDX SBOMs are generated
       and attached to tagged releases. *(Completed 2026-07-09.)*
 
@@ -234,18 +242,20 @@ Depsilo + the mirror URL in a comment. Preserve a documented one-line rollback t
 original registry, but do not configure parallel indexes or all-error fallthrough that
 can bypass enforcement. The agent must print a diff summary at the end.
 
-**Released artifacts (signing currently parked):** v0.8.0 shipped binaries, checksums,
-container images, and SBOM attachments without signatures. The target signing stack is
-**cosign keyless (OIDC via GitHub Actions)** for binaries, checksums, container images,
-and SBOMs, distributed via GitHub Releases + GHCR + Docker Hub. Use an RC soak before the
-first signed stable release.
+**Released artifacts:** v0.8.0 shipped binaries, checksums, container images, and SBOM
+attachments without signatures. Tagged builds now use **cosign keyless (OIDC via GitHub
+Actions)** for checksums, attached artifacts, container images, and SBOMs, distributed
+via GitHub Releases + GHCR + Docker Hub. A release remains a draft until the Linux archive
+and container health smoke tests pass and the image SBOM attestation is attached. Use an
+RC soak before the first signed stable release.
 Reproducibility goal is **deterministic** (`-trimpath`, `-buildvcs=false`, locked
 versions); bit-for-bit reproducible is out of scope for v0.x.
 
 **SBOM:** Syft generates **CycloneDX + SPDX** covering Go module/source deps, `web/` npm
 deps, **and** the container image. Tagged-release workflows upload them as GitHub
-Release attachments. Publishing at `.well-known/sbom/{version}.cdx.json` and
-cosign attestations remain planned.
+Release attachments. Container-image CycloneDX is also attached to both registry digests
+as a cosign attestation. Publishing at `.well-known/sbom/{version}.cdx.json` remains
+planned.
 
 **T1 Task 1 default:** the age gate is off. When enabled, the recommended profile is
 `pypi: 3d` · `npm: 7d` · `cargo: 3d` · `go: 0` (Go modules

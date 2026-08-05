@@ -18,6 +18,7 @@ interface AdminRouteDefinition {
 
 const routeDefinitions = [
   { id: 'dashboard', path: '', titleKey: 'nav.dashboard', icon: 'dashboard', navGroup: 'operations' },
+  { id: 'attention', path: 'attention', titleKey: 'nav.attention', icon: 'inbox', navGroup: 'operations' },
   { id: 'bandwidth', path: 'bandwidth', titleKey: 'bandwidth.title', icon: 'bar_chart', navGroup: 'operations' },
   { id: 'accessLogs', path: 'logs', titleKey: 'nav.accessLogs', icon: 'receipt_long', navGroup: 'operations' },
   { id: 'auditLogs', path: 'audit', titleKey: 'nav.auditLogs', icon: 'policy', navGroup: 'operations' },

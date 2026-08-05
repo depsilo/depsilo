@@ -9,6 +9,10 @@ import { LANGUAGES } from '@/lib/ecosystemData'
 const RECENT_ECOSYSTEMS_KEY = 'depsilo.portal.recent-ecosystems.v1'
 const MAX_RECENT_ECOSYSTEMS = 3
 
+interface Props {
+  pytorchIndexPath?: string
+}
+
 function readRecentEcosystems(): string[] {
   try {
     const stored = window.localStorage.getItem(RECENT_ECOSYSTEMS_KEY)
@@ -39,7 +43,7 @@ function writeRecentEcosystems(ids: string[]) {
   }
 }
 
-export default function QuickStart() {
+export default function QuickStart({ pytorchIndexPath }: Props) {
   const { t } = useTranslation()
   const endpoint = window.location.origin
   const [recentEcosystems, setRecentEcosystems] = useState(readRecentEcosystems)
@@ -60,52 +64,16 @@ export default function QuickStart() {
   }
 
   return (
-    <div className="flex flex-col gap-8 lg:gap-10">
-      <header className="fade-up max-w-[780px]">
+    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-7">
+      <header className="fade-up max-w-[760px]">
         <h1
-          className="m-0 font-[var(--font-display)] text-[clamp(34px,4vw,48px)] font-[690] leading-[1.04] text-[var(--text)]"
+          id="quickstart-title"
+          className="m-0 font-[var(--font-display)] text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-[var(--text)]"
         >
           {t('quickstart.title')}
         </h1>
-        <p className="mt-3 max-w-[68ch] text-[15px] leading-[1.6] text-[var(--text-muted)]">
+        <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.5] text-[var(--text-muted)]">
           {t('quickstart.flowIntro')}
-        </p>
-
-        <ol
-          aria-label={t('quickstart.flowLabel')}
-          className="mt-6 grid list-none grid-cols-1 gap-2 p-0 sm:grid-cols-3 sm:gap-5"
-        >
-          {[
-            t('quickstart.flowChoose'),
-            t('quickstart.flowCopy'),
-            t('quickstart.flowVerify'),
-          ].map((label, index) => (
-            <li
-              key={label}
-              className="flex min-h-12 items-center gap-3 border-t border-[var(--border-strong)] pt-3 text-[13px] font-[560] text-[var(--text)]"
-            >
-              <span
-                aria-hidden="true"
-                className="num flex size-6 shrink-0 items-center justify-center rounded-[4px] bg-[var(--bg-soft)] text-[12px] font-[650] text-[var(--brand-text)]"
-              >
-                {index + 1}
-              </span>
-              {index === 2 ? (
-                <a
-                  href="/monitor"
-                  className="stripe-focus-ring rounded-[4px] text-[var(--text)] underline decoration-[var(--border-strong)] underline-offset-4 hover:text-[var(--brand-text)]"
-                >
-                  {label}
-                </a>
-              ) : (
-                <span>{label}</span>
-              )}
-            </li>
-          ))}
-        </ol>
-
-        <p className="mt-4 border-l-2 border-[var(--brand-border)] pl-3 text-[12px] leading-[1.55] text-[var(--text-muted)]">
-          {t('quickstart.heroDescShort')}
         </p>
       </header>
 
@@ -114,26 +82,15 @@ export default function QuickStart() {
         aria-labelledby="quickstart-config-title"
         className="fade-up fade-up-d1"
       >
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2
-              id="quickstart-config-title"
-              className="m-0 font-[var(--font-display)] text-[20px] font-[650] leading-[1.2] text-[var(--text)]"
-            >
-              {t('quickstart.primaryTitle')}
-            </h2>
-            <p className="mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
-              {t('quickstart.primaryDescription')}
-            </p>
-          </div>
-        </div>
-
+        <h2 id="quickstart-config-title" className="sr-only">
+          {t('quickstart.primaryTitle')}
+        </h2>
         <div
-          className="grid grid-cols-1 overflow-hidden rounded-[var(--r-shell)] min-[861px]:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]"
+          data-quickstart-shell
+          className="grid grid-cols-1 overflow-hidden rounded-[var(--r-shell)] min-[900px]:grid-cols-[280px_minmax(0,1fr)]"
           style={{
             background: 'var(--bg-card)',
-            border: '0.5px solid var(--border-strong)',
-            boxShadow: 'var(--shadow-pop)',
+            border: '1px solid var(--border-strong)',
           }}
         >
           <EcosystemCatalog
@@ -141,7 +98,13 @@ export default function QuickStart() {
             recent={recentEcosystems}
             onSelect={selectLanguage}
           />
-          <ConfigurePane key={language} languageId={language} endpoint={endpoint} flush />
+          <ConfigurePane
+            key={language}
+            languageId={language}
+            endpoint={endpoint}
+            pytorchIndexPath={pytorchIndexPath}
+            flush
+          />
         </div>
       </section>
 

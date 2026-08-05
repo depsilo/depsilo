@@ -7,6 +7,7 @@ interface CodeBlockProps {
   code: string
   language?: string
   copyName?: string
+  tone?: 'light' | 'ink'
 }
 
 // Lightweight syntax highlight: comments + URLs.
@@ -15,11 +16,14 @@ interface CodeBlockProps {
 // lands on the part of the snippet they actually need to verify.
 const URL_RE = /(https?:\/\/[^\s'"`<>]+)/g
 
-function highlightLine(line: string, lineIdx: number): ReactNode {
+function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
   const trimmed = line.trimStart()
   if (trimmed.startsWith('#') || trimmed.startsWith(';')) {
     return (
-      <span key={lineIdx} style={{ color: 'var(--text-subtle)' }}>
+      <span
+        key={lineIdx}
+        style={{ color: ink ? 'var(--code-muted)' : 'var(--text-subtle)' }}
+      >
         {line}
       </span>
     )
@@ -31,7 +35,10 @@ function highlightLine(line: string, lineIdx: number): ReactNode {
   while ((m = URL_RE.exec(line)) !== null) {
     if (m.index > last) parts.push(line.slice(last, m.index))
     parts.push(
-      <span key={`u${m.index}`} style={{ color: 'var(--brand-text)', fontWeight: 500 }}>
+      <span
+        key={`u${m.index}`}
+        style={{ color: ink ? 'var(--code-accent)' : 'var(--brand-text)', fontWeight: 560 }}
+      >
         {m[0]}
       </span>
     )
@@ -41,19 +48,25 @@ function highlightLine(line: string, lineIdx: number): ReactNode {
   return <span key={lineIdx}>{parts}</span>
 }
 
-function highlight(code: string): ReactNode {
+function highlight(code: string, ink: boolean): ReactNode {
   const lines = code.split('\n')
   return lines.map((line, i) => (
     <span key={i}>
-      {highlightLine(line, i)}
+      {highlightLine(line, i, ink)}
       {i < lines.length - 1 && '\n'}
     </span>
   ))
 }
 
-export default function CodeBlock({ filename, code, copyName }: CodeBlockProps) {
+export default function CodeBlock({
+  filename,
+  code,
+  copyName,
+  tone = 'light',
+}: CodeBlockProps) {
   const { t } = useTranslation()
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const ink = tone === 'ink'
 
   const handleCopy = useCallback(async () => {
     if (await copyText(code)) {
@@ -69,22 +82,24 @@ export default function CodeBlock({ filename, code, copyName }: CodeBlockProps) 
 
   return (
     <div
-      className="group"
+      className="code-block group"
+      data-code-tone={tone}
       style={{
-        background: 'var(--bg-soft)',
-        border: '0.5px solid var(--border)',
+        background: ink ? 'var(--code-bg)' : 'var(--bg-soft)',
+        border: ink ? 'none' : '1px solid var(--border)',
         borderRadius: 'var(--r-card)',
+        boxShadow: ink ? 'var(--code-shadow)' : 'none',
         overflow: 'hidden',
       }}
     >
       <div
         style={{
-          background: 'var(--bg-card)',
-          borderBottom: '0.5px solid var(--border)',
-          minHeight: 40,
+          background: ink ? 'var(--code-header)' : 'var(--bg-card)',
+          borderBottom: `1px solid ${ink ? 'var(--code-line)' : 'var(--border)'}`,
+          minHeight: 42,
           display: 'flex',
           alignItems: 'center',
-          padding: '0 4px 0 12px',
+          padding: '0 5px 0 14px',
           justifyContent: 'space-between',
         }}
       >
@@ -92,7 +107,7 @@ export default function CodeBlock({ filename, code, copyName }: CodeBlockProps) 
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 12,
-            color: 'var(--text-subtle)',
+            color: ink ? 'var(--code-muted)' : 'var(--text-subtle)',
           }}
         >
           {filename ?? ''}
@@ -100,7 +115,7 @@ export default function CodeBlock({ filename, code, copyName }: CodeBlockProps) 
         <button
           type="button"
           onClick={handleCopy}
-          className="active:scale-[0.96] stripe-focus-ring"
+          className="code-copy-control active:scale-[0.96] stripe-focus-ring"
           aria-label={
             copyName
               ? t('quickstart.copyNamedCode', { name: copyName })
@@ -108,10 +123,16 @@ export default function CodeBlock({ filename, code, copyName }: CodeBlockProps) 
           }
           style={{
             color: copied
-              ? 'var(--ok-text)'
+              ? ink
+                ? 'var(--code-accent)'
+                : 'var(--ok-text)'
               : copyState === 'failed'
-                ? 'var(--danger-text)'
-                : 'var(--text-muted)',
+                ? ink
+                  ? 'var(--code-danger)'
+                  : 'var(--danger-text)'
+                : ink
+                  ? 'var(--code-muted)'
+                  : 'var(--text-muted)',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
@@ -192,16 +213,16 @@ export default function CodeBlock({ filename, code, copyName }: CodeBlockProps) 
         tabIndex={0}
         style={{
           margin: 0,
-          padding: '12px 16px',
+          padding: ink ? '18px 20px 20px' : '14px 16px',
           fontFamily: 'var(--font-mono)',
           fontSize: 13,
-          lineHeight: 1.6,
-          color: 'var(--text)',
+          lineHeight: ink ? 1.68 : 1.6,
+          color: ink ? 'var(--code-fg)' : 'var(--text)',
           overflowX: 'auto',
           background: 'transparent',
         }}
       >
-        <code>{highlight(code)}</code>
+        <code>{highlight(code, ink)}</code>
       </pre>
     </div>
   )

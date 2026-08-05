@@ -1,0 +1,21 @@
+config_version = 1
+
+[server]
+host = "0.0.0.0"
+port = 23333
+log_level = "warn"
+
+[database]
+driver = "sqlite"
+dsn = "/tmp/depsilo-smoke/depsilo.db"
+
+[storage]
+type = "local"
+path = "/tmp/depsilo-smoke/cache"
+
+[compile_cache]
+enabled = false
+
+[auth]
+enabled = true
+token_ttl = "1h"

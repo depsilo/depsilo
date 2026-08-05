@@ -102,6 +102,23 @@ func (s *LocalStorage) openRoot() (*os.Root, error) {
 	return root, nil
 }
 
+// CheckReady verifies the same root-directory capability needed by cache-hit
+// reads without walking the cache tree.
+func (s *LocalStorage) CheckReady(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	root, err := s.openRoot()
+	if err != nil {
+		return err
+	}
+	closeErr := root.Close()
+	if err := ctx.Err(); err != nil {
+		return errors.Join(closeErr, err)
+	}
+	return closeErr
+}
+
 func (s *LocalStorage) Exists(_ context.Context, key string) (bool, error) {
 	name, err := validateStorageKey(key, false)
 	if err != nil {
@@ -333,3 +350,4 @@ func (s *LocalStorage) TotalSize(_ context.Context) (int64, error) {
 
 // Ensure interface compliance at compile time.
 var _ Storage = (*LocalStorage)(nil)
+var _ ReadinessProber = (*LocalStorage)(nil)

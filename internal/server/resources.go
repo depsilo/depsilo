@@ -81,6 +81,7 @@ type serverResources struct {
 
 	accessRecorder  resourceCloser
 	cacheManager    resourceCloser
+	compileCache    resourceCloser
 	securityScanner resourceCloser
 	background      resourceCloser
 	closeFetcher    func()
@@ -96,6 +97,7 @@ type serverResources struct {
 	listenerClosed bool
 	accessClosed   bool
 	cacheClosed    bool
+	compileClosed  bool
 	scannerClosed  bool
 	backgroundDone bool
 	fetcherClosed  bool
@@ -219,7 +221,6 @@ func (resources *serverResources) closeAttempt(ctx context.Context) error {
 			return errors.Join(closeErrors...)
 		}
 	}
-
 	// Scanner and fetcher form a strict chain behind the cache. A failed cache
 	// attempt leaves both pending without manufacturing extra errors.
 	if resources.cacheClosed {
@@ -246,8 +247,17 @@ func (resources *serverResources) closeAttempt(ctx context.Context) error {
 			return errors.Join(closeErrors...)
 		}
 	}
+	// Compiler-cache maintenance previously lived in the shared background
+	// runtime. Preserve that shutdown position while giving the data domain its
+	// own retryable close state and final metadata flush.
+	if err := resources.closeContextResource(ctx, "compiler-cache runtime", resources.compileCache, &resources.compileClosed); err != nil {
+		closeErrors = append(closeErrors, err)
+		if isContextError(err) {
+			return errors.Join(closeErrors...)
+		}
+	}
 
-	if resources.cacheClosed && resources.scannerClosed && resources.backgroundDone {
+	if resources.cacheClosed && resources.scannerClosed && resources.backgroundDone && resources.compileClosed {
 		if err := resources.closeContextResource(ctx, "upstream registry", resources.closeRegistry, &resources.registryClosed); err != nil {
 			closeErrors = append(closeErrors, err)
 			if isContextError(err) {
@@ -256,7 +266,7 @@ func (resources *serverResources) closeAttempt(ctx context.Context) error {
 		}
 	}
 
-	if resources.accessClosed && resources.cacheClosed && resources.scannerClosed &&
+	if resources.accessClosed && resources.cacheClosed && resources.compileClosed && resources.scannerClosed &&
 		resources.backgroundDone && resources.fetcherClosed && resources.registryClosed {
 		if err := resources.closeContextResource(ctx, "database", resources.closeDatabase, &resources.databaseClosed); err != nil {
 			closeErrors = append(closeErrors, err)
@@ -314,6 +324,7 @@ func (resources *serverResources) allClosed() bool {
 	return resources.listenerClosed &&
 		resources.accessClosed &&
 		resources.cacheClosed &&
+		resources.compileClosed &&
 		resources.scannerClosed &&
 		resources.backgroundDone &&
 		resources.fetcherClosed &&

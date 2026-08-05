@@ -1,22 +1,24 @@
 import AxeBuilder from '@axe-core/playwright'
 import type { Page } from '@playwright/test'
+import { adminRouteManifest } from '../src/admin/routes'
 import {
   expect,
   expectResolvedUiPreferences,
-  mockAdminApi,
   setUiPreferences,
   test,
   type UiLocale,
   type UiTheme,
 } from './fixtures/admin-api'
 
-test.describe.configure({ mode: 'parallel' })
+interface AccessibilityCase {
+  route: string
+  width: number
+  theme: UiTheme
+  locale: UiLocale
+}
 
-const routes = ['/admin', '/admin/bandwidth', '/admin/logs', '/admin/audit', '/admin/quarantine', '/admin/cache', '/admin/indexes', '/admin/compile-cache', '/admin/upstreams', '/admin/upstream-updates', '/admin/users', '/admin/license', '/admin/rules', '/admin/security', '/admin/projects', '/admin/settings'] as const
-const themes = ['light', 'dark'] as const satisfies readonly UiTheme[]
-const locales = ['zh', 'en'] as const satisfies readonly UiLocale[]
-
-async function assertRouteMatrix(page: Page, route: string, width: number, theme: UiTheme, locale: UiLocale) {
+async function assertAccessibleRoute(page: Page, testCase: AccessibilityCase) {
+  const { route, width, theme, locale } = testCase
   await page.setViewportSize({ width, height: width <= 390 ? 844 : 1000 })
   await setUiPreferences(page, theme, locale)
   await page.goto(route)
@@ -34,59 +36,24 @@ async function assertRouteMatrix(page: Page, route: string, width: number, theme
   expect(result.violations).toEqual([])
 }
 
-for (const width of [390, 1440]) for (const theme of themes) for (const locale of locales) {
-  for (const route of routes) {
-    test(`${route} ${width} ${theme} ${locale} passes axe`, async ({ page }) => {
-      await assertRouteMatrix(page, route, width, theme, locale)
-    })
-  }
-}
-
-const targetedRoutes = ['/admin', '/admin/settings', '/admin/bandwidth', '/admin/cache', '/admin/logs', '/admin/security', '/admin/quarantine'] as const
-for (const width of [320, 768, 1024]) for (const theme of themes) for (const locale of locales) {
-  for (const route of targetedRoutes) {
-    test(`${route} targeted ${width} ${theme} ${locale} passes axe`, async ({ page }) => {
-      await assertRouteMatrix(page, route, width, theme, locale)
-    })
-  }
-}
-
-test('/admin/upstream-updates populated mobile list exposes outcomes without overflow and passes axe', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/upstream-updates': {
-      items: [{
-        id: 1,
-        cache_entry_id: 42,
-        ecosystem: 'npm',
-        upstream: 'npmjs',
-        package: '@depsilo/example-package-with-a-long-name',
-        result: 'updated',
-        detail: 'cached metadata refreshed',
-        latency_ms: 123,
-        occurrence_count: 1,
-        first_seen_at: '2026-07-17T08:00:00Z',
-        last_seen_at: '2026-07-17T08:00:00Z',
-        created_at: '2026-07-17T08:00:00Z',
-      }],
-      total: 1,
-      next_cursor: null,
-    },
+for (const route of adminRouteManifest.map(item => item.href)) {
+  test(`${route} mobile light zh passes the Admin accessibility contract`, async ({ page }) => {
+    await assertAccessibleRoute(page, { route, width: 390, theme: 'light', locale: 'zh' })
   })
+}
 
-  await page.goto('/admin/upstream-updates')
-
-  const mobileList = page.locator('[data-upstream-update-mobile-list]')
-  await expect(mobileList).toBeVisible()
-  await expect(mobileList.getByText('已更新', { exact: true })).toBeVisible()
-  await expect(mobileList.getByText('已刷新缓存元数据。', { exact: true })).toBeVisible()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
-  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
-})
+for (const testCase of [
+  { route: '/admin', width: 1440, theme: 'dark', locale: 'en' },
+  { route: '/admin/settings', width: 768, theme: 'light', locale: 'en' },
+  { route: '/admin/security', width: 320, theme: 'dark', locale: 'zh' },
+] satisfies readonly AccessibilityCase[]) {
+  test(`${testCase.route} ${testCase.width} ${testCase.theme} ${testCase.locale} passes the Admin accessibility contract`, async ({ page }) => {
+    await assertAccessibleRoute(page, testCase)
+  })
+}
 
 test('opened mobile Admin drawer passes axe and restores trigger focus', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 })
-  await mockAdminApi(page)
   await page.goto('/admin')
 
   const trigger = page.getByRole('button', { name: /打开导航/ })

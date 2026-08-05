@@ -1,67 +1,79 @@
-# testground — 本地代理测试目录
+# testground — 真实客户端端到端测试
 
-此目录用于通过 Depsilo 代理模拟安装依赖包，支持反复测试。
+该目录保存真实包管理器的 Docker 测试夹具。每个
+`docker-<ecosystem>/Dockerfile` 都通过 `ARG DEPSILO_URL` 接收服务地址，
+再使用该生态的官方客户端向 Depsilo 发起安装或下载请求。
 
-## 快速开始
+这些测试会访问真实上游，需要 Docker 和可用网络；存在本地开发配置时会
+复用它，否则使用 Depsilo 默认配置。它们不属于离线 `make verify`。
 
-```bash
-# 启动服务（项目根目录）
-make dev
-
-# 安装包（首次自动创建 venv）
-./pip_install.sh requests flask numpy
-
-# 验证通过后，清空包再测
-./pip_clean.sh
-./pip_install.sh httpx pandas
-```
-
-## 脚本说明
-
-### pip_install.sh — 安装包
+## 运行全部包管理器
 
 ```bash
-./pip_install.sh [包名...]       # 通过代理安装，默认装 requests
-./pip_install.sh requests flask  # 安装多个包
-./pip_install.sh "numpy>=1.24"   # 支持版本约束
+make test-e2e
 ```
 
-- 自动创建 `.venv`（如不存在）
-- 代理地址默认 `http://localhost:23333`，可通过 `DEPSILO_PORT` 环境变量修改
+该命令会启动本地 Depsilo，并依次验证 14 个夹具：PyPI、APT、npm、Go、
+Cargo、Maven、RubyGems、Composer、NuGet、Conda、CRAN、Alpine、Helm 和
+Hugging Face。
 
-### pip_clean.sh — 清理环境
+完整真实客户端流程只在 GitHub Actions 的定时或手动工作流中运行，不加入
+普通 push/PR 验证；本地仍可用同一个 `make test-e2e` 入口复现。
 
-三种模式，适合不同测试场景：
+## 只运行一个生态
+
+迭代某个适配器时，优先运行对应目标：
 
 ```bash
-./pip_clean.sh          # 卸载所有第三方包，保留 venv（最快，适合反复测试）
-./pip_clean.sh --venv   # 删除整个 venv（下次 install 自动重建）
-./pip_clean.sh --all    # 删除 venv + 服务端缓存数据（测试冷启动回源，需重启服务）
+make test-docker-pypi
+make test-docker-npm
+make test-docker-apt
 ```
 
-## 典型测试流程
-
-### 测试缓存命中
+所有普通夹具都使用同一规则：
 
 ```bash
-./pip_install.sh requests    # 第一次：MISS，从上游下载
-./pip_clean.sh               # 清空本地包
-./pip_install.sh requests    # 第二次：HIT，从缓存读取（明显更快）
+docker build \
+  --build-arg DEPSILO_URL=http://host.docker.internal:23333 \
+  --add-host=host.docker.internal:host-gateway \
+  testground/docker-<ecosystem>
 ```
 
-### 测试冷启动回源
+可通过 `DEPSILO_URL` 和 `DOCKER_HOST_ALIAS` 覆盖默认地址。
+
+## Docker Registry（单独启用）
+
+Docker Registry 验证需要在容器中执行真实 `docker pull`，因此使用
+Docker-in-Docker 和 `--privileged`，不会包含在默认的 14 生态测试中：
 
 ```bash
-./pip_clean.sh --all         # 清除所有缓存
-make dev                     # 重启服务
-./pip_install.sh flask       # 全部从上游重新下载
+make test-docker-docker
 ```
 
-## Makefile 集成
+## 编译缓存夹具
 
-也可以直接在项目根目录使用：
+`compiler-cache/hello.c` 由独立的 ccache/sccache 兼容性测试使用。该测试需要
+已运行的服务、构建凭据以及本机安装的官方客户端：
 
 ```bash
-make test-pypi     # 一键测试（自动启动服务 + 安装 requests/flask）
-make test-clean    # 清理测试 venv
+COMPILER_CACHE_ENDPOINT=http://localhost:23333/ccache/v1/example \
+COMPILER_CACHE_TOKEN='<read-write token>' \
+make test-compiler-cache
 ```
+
+## 清理
+
+```bash
+make stop
+make test-clean
+```
+
+`test-clean` 删除测试镜像和其他端到端测试产物，不会删除项目源文件。
+
+## 新增夹具
+
+1. 新建 `testground/docker-<ecosystem>/Dockerfile`。
+2. 只声明 `ARG DEPSILO_URL`，并由它派生该生态的代理路由。
+3. 使用真实客户端执行一个小而稳定的安装或下载。
+4. 将生态名加入 Makefile 的 `TEST_DOCKER_ALL_ECOS`。
+5. 先运行单生态目标，再运行 `make test-e2e`。

@@ -22,12 +22,14 @@ import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import type {
   AdminUser,
+  APITokenSummary,
   CreateAPITokenRequest,
   CreateUserRequest,
   TokenPermissions,
   UpdateUserRequest,
   UserRole,
 } from '@/lib/adminApi.types'
+import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 
 function upsertUser(current: AxiosResponse<AdminUser[]> | undefined, response: AxiosResponse<AdminUser>): AxiosResponse<AdminUser[]> {
   const user = response.data
@@ -52,6 +54,9 @@ export default function UsersV2() {
   const [tokenResultOpen, setTokenResultOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [togglingUserIds, setTogglingUserIds] = useState<ReadonlySet<number>>(() => new Set())
+  const [disableTarget, setDisableTarget] = useState<AdminUser | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<APITokenSummary | null>(null)
+  const [enableFailure, setEnableFailure] = useState<{ user: AdminUser; error: unknown } | null>(null)
 
   const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: () => adminApi.listUsers(), retry: false })
   const tokensQuery = useQuery({ queryKey: ['admin', 'tokens'], queryFn: () => adminApi.listTokens(), retry: false })
@@ -65,8 +70,20 @@ export default function UsersV2() {
   const updateUserMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: UpdateUserRequest }) => adminApi.updateUser(id, data), onSuccess: (response) => { queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response)); closeUserDialog() } })
   const toggleUserMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) => adminApi.updateUser(id, { enabled }),
-    onMutate: ({ id }) => setTogglingUserIds((current) => new Set(current).add(id)),
-    onSuccess: (response) => { queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response)) },
+    onMutate: ({ id }) => {
+      setTogglingUserIds((current) => new Set(current).add(id))
+      setEnableFailure(null)
+    },
+    onSuccess: (response, variables) => {
+      queryClient.setQueryData<AxiosResponse<AdminUser[]>>(['admin', 'users'], (current) => upsertUser(current, response))
+      if (!variables.enabled) setDisableTarget(null)
+    },
+    onError: (error, variables) => {
+      if (variables.enabled) {
+        const user = users.find((item) => item.id === variables.id)
+        if (user) setEnableFailure({ user, error })
+      }
+    },
     onSettled: (_data, _error, { id }) => setTogglingUserIds((current) => {
       const next = new Set(current)
       next.delete(id)
@@ -74,11 +91,40 @@ export default function UsersV2() {
     }),
   })
   const createTokenMutation = useMutation({ mutationFn: (data: CreateAPITokenRequest) => adminApi.createToken(data), onSuccess: (res) => { setCreatedToken(res.data.token); setTokenDialogOpen(false); setTokenResultOpen(true); queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] }) } })
-  const deleteTokenMutation = useMutation({ mutationFn: (id: number) => adminApi.deleteToken(id), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] }) } })
+  const deleteTokenMutation = useMutation({
+    mutationFn: (id: number) => adminApi.deleteToken(id),
+    onSuccess: () => {
+      setRevokeTarget(null)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] })
+    },
+  })
 
   function closeUserDialog() { setUserDialogOpen(false); setEditUserId(null); setUserForm({ username: '', password: '', role: 'readonly' }) }
   function openCreateUser() { createUserMutation.reset(); setEditUserId(null); setUserForm({ username: '', password: '', role: 'readonly' }); setUserDialogOpen(true) }
   function openEditUser(user: AdminUser) { updateUserMutation.reset(); setEditUserId(user.id); setUserForm({ username: user.username, password: '', role: user.role }); setUserDialogOpen(true) }
+  function openDisableDialog(user: AdminUser) {
+    toggleUserMutation.reset()
+    setDisableTarget(user)
+  }
+  function closeDisableDialog() {
+    if (toggleUserMutation.isPending) return
+    setDisableTarget(null)
+    toggleUserMutation.reset()
+  }
+  function enableUser(user: AdminUser) {
+    if (!canWrite) return
+    toggleUserMutation.reset()
+    toggleUserMutation.mutate({ id: user.id, enabled: true })
+  }
+  function openRevokeDialog(token: APITokenSummary) {
+    deleteTokenMutation.reset()
+    setRevokeTarget(token)
+  }
+  function closeRevokeDialog() {
+    if (deleteTokenMutation.isPending) return
+    setRevokeTarget(null)
+    deleteTokenMutation.reset()
+  }
   function handleUserSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!canWrite) return
@@ -106,12 +152,12 @@ export default function UsersV2() {
   const tokensApiError = getApiError(tokensQuery.error)
 
   const userColumns = [
-    { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[500] shrink-0" style={{ background: 'var(--brand)', color: 'white' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
+    { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[13px] font-[500] shrink-0" style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
     { key: 'role', label: t('users.role'), render: (v: unknown) => <BadgeV2 variant={(v as string) === 'admin' ? 'ecosystem' : 'default'}>{v as string}</BadgeV2> },
     { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'error'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? 'person_off' : 'person'} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (canWrite) toggleUserMutation.mutate({ id: row.id, enabled: !row.enabled }) }} />}</div>) : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? 'person_off' : 'person'} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }} />}</div>) : null },
   ]
 
   const tokenColumns = [
@@ -119,7 +165,7 @@ export default function UsersV2() {
     { key: 'permissions', label: t('users.permissions'), render: (v: unknown) => <BadgeV2>{v as string}</BadgeV2> },
     { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'expires_at', label: t('users.expiresAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverExpires')}</span> },
-    { key: 'id', label: t('actions'), render: (v: unknown) => canWrite ? <ButtonV2 variant="ghost" size="sm" className="!text-[12px]" style={{ color: 'var(--danger)' }} disabled={deleteTokenMutation.isPending} onClick={(e: React.MouseEvent) => { e.stopPropagation(); if (canWrite) deleteTokenMutation.mutate(v as number) }}>{t('users.revoke')}</ButtonV2> : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => canWrite ? <ButtonV2 variant="ghost" size="sm" className="!text-[12px]" style={{ color: 'var(--danger)' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openRevokeDialog(row) }}>{t('users.revoke')}</ButtonV2> : null },
   ]
 
   return (
@@ -138,6 +184,36 @@ export default function UsersV2() {
         ) : (
           <div className="space-y-3">
             {usersData && usersQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void usersQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+            {enableFailure && (
+              <InlineNotice
+                tone="danger"
+                title={t('users.enableFailed', { name: enableFailure.user.username })}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span>{getApiError(enableFailure.error).message}</span>
+                  <div className="flex flex-wrap gap-2">
+                    <ButtonV2
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={togglingUserIds.has(enableFailure.user.id)}
+                      onClick={() => enableUser(enableFailure.user)}
+                    >
+                      {t('common.retry')}
+                    </ButtonV2>
+                    <ButtonV2
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={togglingUserIds.has(enableFailure.user.id)}
+                      onClick={() => setEnableFailure(null)}
+                    >
+                      {t('common.close')}
+                    </ButtonV2>
+                  </div>
+                </div>
+              </InlineNotice>
+            )}
             {users.length === 0 ? (
               <EmptyState icon="group" title={t('users.noUsers')} minHeight={180} />
             ) : (
@@ -156,7 +232,7 @@ export default function UsersV2() {
       {/* ── API Tokens ───────────────────────────────── */}
       <section>
         <SectionHeader
-          title="API Tokens"
+          title={t('users.apiTokensTitle')}
           action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={() => { createTokenMutation.reset(); setTokenDialogOpen(true) }}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2> : undefined}
         />
         {tokensQuery.isPending ? (
@@ -189,7 +265,13 @@ export default function UsersV2() {
 
       <ModalV2 open={tokenDialogOpen} onClose={() => setTokenDialogOpen(false)} title={t('users.generateToken')}>
         <form onSubmit={handleTokenSubmit} className="space-y-4">
-          <InputV2 label={t('name')} value={tokenForm.name} onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })} placeholder="e.g. CI/CD Pipeline" required />
+          <InputV2
+            label={t('name')}
+            value={tokenForm.name}
+            onChange={(e) => setTokenForm({ ...tokenForm, name: e.target.value })}
+            placeholder={t('users.tokenNamePlaceholder')}
+            required
+          />
           <SelectV2 label={t('users.permissions')} value={tokenForm.permissions} onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value as TokenPermissions })}><option value="readonly">{t('users.readonly')}</option><option value="readwrite">{t('users.readwrite')}</option></SelectV2>
           <SelectV2 label={t('users.validity')} value={tokenForm.ttl} onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value as CreateAPITokenRequest['ttl'] })}><option value="7d">{t('users.days7')}</option><option value="30d">{t('users.days30')}</option><option value="90d">{t('users.days90')}</option><option value="never">{t('users.neverExpires')}</option></SelectV2>
           {createTokenMutation.isError && <InlineNotice tone="danger">{getApiError(createTokenMutation.error).message}</InlineNotice>}
@@ -206,6 +288,50 @@ export default function UsersV2() {
         <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('users.tokenSaveWarning')}</p>
         <div className="flex justify-end mt-4"><ButtonV2 onClick={() => setTokenResultOpen(false)}>{t('confirm')}</ButtonV2></div>
       </ModalV2>
+
+      <ConfirmActionDialog
+        open={disableTarget !== null}
+        title={t('users.disableNamed', { name: disableTarget?.username ?? '' })}
+        description={t('users.disableImpact', { name: disableTarget?.username ?? '' })}
+        details={disableTarget ? [
+          { label: t('users.user'), value: disableTarget.username },
+          { label: t('users.role'), value: disableTarget.role, mono: true },
+          { label: t('status'), value: t('users.enabled') },
+        ] : []}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('users.disableNamed', { name: disableTarget?.username ?? '' })}
+        pendingLabel={t('users.disabling')}
+        pending={toggleUserMutation.isPending && disableTarget !== null}
+        errorMessage={disableTarget && toggleUserMutation.isError ? getApiError(toggleUserMutation.error).message : null}
+        onClose={closeDisableDialog}
+        onConfirm={() => {
+          if (disableTarget && canWrite) toggleUserMutation.mutate({ id: disableTarget.id, enabled: false })
+        }}
+      />
+
+      <ConfirmActionDialog
+        open={revokeTarget !== null}
+        title={t('users.revokeTitle')}
+        description={t('users.revokeImpact', { name: revokeTarget?.name ?? '' })}
+        details={revokeTarget ? [
+          { label: t('name'), value: revokeTarget.name },
+          { label: t('users.permissions'), value: revokeTarget.permissions, mono: true },
+          {
+            label: t('users.expiresAt'),
+            value: revokeTarget.expires_at ? formatTime(revokeTarget.expires_at) : t('users.neverExpires'),
+            mono: true,
+          },
+        ] : []}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('users.confirmRevoke')}
+        pendingLabel={t('users.revoking')}
+        pending={deleteTokenMutation.isPending}
+        errorMessage={revokeTarget && deleteTokenMutation.isError ? getApiError(deleteTokenMutation.error).message : null}
+        onClose={closeRevokeDialog}
+        onConfirm={() => {
+          if (revokeTarget && canWrite) deleteTokenMutation.mutate(revokeTarget.id)
+        }}
+      />
     </div>
     </AdminPage>
   )

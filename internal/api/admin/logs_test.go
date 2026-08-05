@@ -159,6 +159,9 @@ func TestEncodeAccessLogsCSVNeutralizesAllTextCells(t *testing.T) {
 }
 
 func TestAccessLogExportCapsRowsAtTenThousand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("10,001-row export boundary contract")
+	}
 	const (
 		contractExportRows = 10000
 		seedRows           = 10001

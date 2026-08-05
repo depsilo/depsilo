@@ -3,12 +3,8 @@
 ## Pre-release
 
 ### Code Quality
-- [ ] `go vet ./...` passes
-- [ ] `go test ./... -race` passes
-- [ ] `make test-integration` passes
-- [ ] `cd web && npm run type-check` succeeds
-- [ ] `cd web && npm run build` succeeds
-- [ ] i18n audit passes: `python3 scripts/i18n-audit.py`
+- [ ] `make verify` passes (lint, race, integration, build, browser, scripts)
+- [ ] `make security` passes (online dependency vulnerability scan)
 
 ### Binary
 - [ ] `make build` produces `bin/depsilo` successfully
@@ -38,12 +34,16 @@ git push origin vX.Y.Z
 - [ ] Source SBOMs uploaded: CycloneDX + SPDX
 - [ ] Container-image SBOMs uploaded: CycloneDX + SPDX
 - [ ] Tray builds uploaded: macOS (`.app` zip) and Linux amd64 (`.tar.gz`)
+- [ ] Linux amd64 archive smoke test and `checksums.txt` verification pass
+- [ ] Sigstore bundles uploaded for checksums, installer, tray bundles, and SBOMs
 
 ### Docker
 - [ ] Docker image pushed to Docker Hub (`depsilo/depsilo`)
 - [ ] Docker image pushed to GHCR (`ghcr.io/depsilo/depsilo`)
 - [ ] Stable release tags published: `X.Y.Z`, `X.Y`, `X`, and metadata-action's automatic `latest`
 - [ ] GHCR package is public and an anonymous `docker pull ghcr.io/depsilo/depsilo:X.Y.Z` succeeds
+- [ ] Both registry digests have keyless signatures and CycloneDX attestations
+- [ ] Published image starts and `/health` succeeds in the automated smoke test
 
 ### Post-release
 - [ ] `curl -fsSL https://depsilo.com/install.sh | bash` works on clean machine
@@ -52,8 +52,6 @@ git push origin vX.Y.Z
 
 ## Known release gaps
 
-- Release binaries, checksums, container images, and SBOMs are currently unsigned;
-  cosign keyless signing and attestations are not automated yet.
 - Homebrew formula generation runs locally in GoReleaser, but tap publishing is
   disabled with `skip_upload: true` until `depsilo/homebrew-tap` exists.
 - There is no Windows NSIS/tray installer job; Windows CLI zip archives are published.

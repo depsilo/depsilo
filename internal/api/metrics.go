@@ -1,6 +1,9 @@
 package api
 
 import (
+	"strconv"
+
+	"depsilo/internal/adapter"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,6 +22,24 @@ type Metrics struct {
 	CompileCacheSizeBytes prometheus.Gauge
 	CompileCacheEntries   prometheus.Gauge
 	CompileCacheEvictions *prometheus.CounterVec
+}
+
+// ObserveAccess implements adapter.RequestObserver at the telemetry seam.
+// Every protocol adapter already reports its completed requests through
+// adapter.LogAccess, so metrics stay consistent without protocol-specific
+// Prometheus calls.
+func (m *Metrics) ObserveAccess(observation adapter.AccessObservation) {
+	if m == nil {
+		return
+	}
+	m.RequestsTotal.WithLabelValues(observation.AdapterType, strconv.FormatBool(observation.Hit)).Inc()
+	m.RequestDuration.WithLabelValues(observation.AdapterType).Observe(observation.Latency.Seconds())
+	if !observation.Hit && observation.Upstream != "" {
+		m.UpstreamRequestsTotal.WithLabelValues(
+			observation.Upstream,
+			strconv.FormatBool(observation.StatusCode < 500),
+		).Inc()
+	}
 }
 
 // M is the package-level Metrics instance, registered on init.
@@ -51,13 +72,13 @@ func init() {
 		CacheSizeBytes: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "depsilo_cache_size_bytes",
-				Help: "Current cache storage usage in bytes.",
+				Help: "Total bytes tracked by the durable package-cache inventory.",
 			},
 		),
 		CacheFilesTotal: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "depsilo_cache_files_total",
-				Help: "Number of cached files.",
+				Help: "Number of objects tracked by the durable package-cache inventory.",
 			},
 		),
 		CompileCacheRequests: prometheus.NewCounterVec(

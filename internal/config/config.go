@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	ConfigVersion              int                `mapstructure:"config_version" json:"-"`
 	IsDefault                  bool               `mapstructure:"-" json:"-"` // true when no config file found
 	ConfigPath                 string             `mapstructure:"-" json:"-"` // resolved path for config file
 	BootstrapToken             string             `mapstructure:"-" json:"-"` // ephemeral first-run authorization token
@@ -35,8 +36,12 @@ type Config struct {
 	Docker                     DockerConfig       `mapstructure:"docker"`
 	License                    LicenseConfig      `mapstructure:"license"`
 	Security                   SecurityConfig     `mapstructure:"security"`
+	ExtraIndexPresets          ExtraIndexPresets  `mapstructure:"extra_index_presets"`
 	ExtraIndexes               []ExtraIndexConfig `mapstructure:"extra_indexes"`
 	Webhooks                   []WebhookConfig    `mapstructure:"webhooks"`
+	// Custom is an explicit operator-owned extension table. Depsilo preserves
+	// it when patching managed settings but never interprets its contents.
+	Custom map[string]any `mapstructure:"custom" json:"-"`
 	// UpstreamUpdates controls proactive conditional checks for validated
 	// PyPI-compatible metadata already in the local cache. It never prefetches
 	// artifacts or guesses at changes when an adapter lacks validators.
@@ -205,10 +210,20 @@ type AdapterConfig struct {
 	Upstreams []UpstreamConfig `mapstructure:"upstreams"`
 }
 
+// ExtraIndexPresets controls the third-party Python index families bundled
+// with Depsilo. An absent enabled value keeps the built-in catalog enabled;
+// operators can disable the catalog wholesale or suppress individual entries.
+type ExtraIndexPresets struct {
+	Enabled  *bool    `mapstructure:"enabled"`
+	Disabled []string `mapstructure:"disabled"`
+}
+
 type ExtraIndexConfig struct {
-	Name      string           `mapstructure:"name"`
-	Path      string           `mapstructure:"path"`
-	Upstreams []UpstreamConfig `mapstructure:"upstreams"`
+	Name       string           `mapstructure:"name"`
+	Kind       string           `mapstructure:"kind"`
+	Path       string           `mapstructure:"path"`
+	SimplePath string           `mapstructure:"simple_path"`
+	Upstreams  []UpstreamConfig `mapstructure:"upstreams"`
 }
 
 type UpstreamConfig struct {

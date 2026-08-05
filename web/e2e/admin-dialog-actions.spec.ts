@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures/admin-api'
+import { test, expect, setUiPreferences } from './fixtures/admin-api'
 
 test('dialog traps focus and restores its trigger', async ({ page }) => {
   await page.goto('/admin/users')
@@ -15,7 +15,10 @@ test('dialog traps focus and restores its trigger', async ({ page }) => {
 
   const closeButton = dialog.locator('[data-icon-button]:visible')
   await closeButton.focus()
-  await expect(page.getByRole('tooltip')).toContainText(/关闭/)
+  const tooltip = page.getByRole('tooltip')
+  await expect(tooltip).toContainText(/关闭/)
+  await expect(tooltip).toHaveCSS('background-color', 'rgb(233, 236, 238)')
+  await expect(tooltip).toHaveCSS('color', 'rgb(11, 13, 15)')
 
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
@@ -38,6 +41,7 @@ test('every visible icon action is named and at least 40px', async ({ page }) =>
 })
 
 test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'zh')
   await page.goto('/admin/users')
   await page.getByRole('button', { name: /添加用户/ }).click()
 
@@ -45,5 +49,8 @@ test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
   await page.keyboard.press('Shift+Tab')
 
   await expect(button).toBeFocused()
-  await expect(page.getByRole('tooltip')).toContainText(/关闭/)
+  const tooltip = page.getByRole('tooltip')
+  await expect(tooltip).toContainText(/关闭/)
+  await expect(tooltip).toHaveCSS('background-color', 'rgb(20, 24, 26)')
+  await expect(tooltip).toHaveCSS('color', 'rgb(255, 255, 255)')
 })

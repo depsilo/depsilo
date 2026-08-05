@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation, useNavigate, Link } from 'react-router-dom'
+import { useLocation, useNavigate, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import InputV2 from '@/components/Input'
@@ -81,7 +81,7 @@ export default function LoginV2() {
 
   return (
     <div
-      className="min-h-screen"
+      className="login-page min-h-screen"
       style={{
         background: 'var(--bg-page)',
         position: 'relative',
@@ -91,8 +91,6 @@ export default function LoginV2() {
         padding: '24px',
       }}
     >
-      <div className="page-wash" />
-
       {/* Top-left: back to Portal */}
       <Link
         to="/"
@@ -107,6 +105,8 @@ export default function LoginV2() {
           color: 'var(--text-muted)',
           textDecoration: 'none',
           padding: '4px 8px',
+          minHeight: 40,
+          justifyContent: 'center',
           borderRadius: 4,
           zIndex: 10,
         }}
@@ -341,7 +341,7 @@ export default function LoginV2() {
       {/* Bottom-right: version */}
       {stats?.service?.version && (
         <span
-          className="mono"
+          className="login-version mono"
           title={stats.service.version}
           style={{
             position: 'absolute',
@@ -369,6 +369,15 @@ export default function LoginV2() {
           .aurora-rim {
             grid-template-columns: 1fr !important;
             max-width: 420px !important;
+          }
+        }
+        @media (max-height: 600px) {
+          .login-page {
+            align-items: flex-start !important;
+            padding-top: 72px !important;
+          }
+          .login-version {
+            display: none !important;
           }
         }
       `}</style>

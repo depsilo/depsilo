@@ -100,6 +100,45 @@ func TestServerResourcesPreservesOrderAndDatabaseSafetyAcrossRetry(t *testing.T)
 	}
 }
 
+func TestServerResourcesRetriesCompileCacheBeforeDatabase(t *testing.T) {
+	var events resourceEventLog
+	compileFailure := errors.New("compile cache still flushing")
+	var attempts atomic.Int32
+	resources := newServerResources(func() { events.add("cancel") }, nil)
+	resources.background = resourceCloserFunc(func(context.Context) error {
+		events.add("background")
+		return nil
+	})
+	resources.compileCache = resourceCloserFunc(func(context.Context) error {
+		events.add("compile")
+		if attempts.Add(1) == 1 {
+			return compileFailure
+		}
+		return nil
+	})
+	resources.closeRegistry = resourceCloserFunc(func(context.Context) error {
+		events.add("registry")
+		return nil
+	})
+	resources.closeDatabase = resourceCloserFunc(func(context.Context) error {
+		events.add("database")
+		return nil
+	})
+
+	if err := resources.Close(context.Background()); !errors.Is(err, compileFailure) {
+		t.Fatalf("first close error = %v, want compiler-cache failure", err)
+	}
+	if got, want := events.snapshot(), []string{"cancel", "background", "compile"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("first close events = %v, want %v", got, want)
+	}
+	if err := resources.Close(context.Background()); err != nil {
+		t.Fatalf("retry close: %v", err)
+	}
+	if got, want := events.snapshot(), []string{"cancel", "background", "compile", "compile", "registry", "database"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("retried close events = %v, want %v", got, want)
+	}
+}
+
 func TestServerResourcesTimeoutCanBeRetried(t *testing.T) {
 	var attempts atomic.Int32
 	var databaseCloses atomic.Int32

@@ -367,6 +367,7 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 	for _, idx := range h.extraIndexes {
 		extraIdxs = append(extraIdxs, gin.H{
 			"name": idx.Name,
+			"kind": idx.Kind,
 			"path": idx.Path,
 		})
 	}

@@ -57,7 +57,12 @@ for (const routeCase of cases) {
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 
-    if (routeCase.table) {
+    if (routeCase.path === '/admin/quarantine') {
+      const mobileList = page.locator('[data-quarantine-mobile-list="events"]')
+      await expect(mobileList).toBeVisible()
+      await expect(mobileList.getByText('unsafe', { exact: true })).toBeVisible()
+      await expect(page.locator('[data-table-viewport]')).toBeHidden()
+    } else if (routeCase.table) {
       const region = page.locator('[data-table-viewport]').first()
       await expect(region).toBeVisible()
       await expect(region).toHaveAttribute('aria-label', /.+/)
@@ -192,8 +197,8 @@ test('upstream row checks keep independent loading state when responses finish o
   await expect(alphaCheck).not.toHaveAttribute('aria-busy', 'true')
 })
 
-test('user toggles keep independent loading state when responses finish out of order', async ({ page }) => {
-  const alpha = { id: 2, username: 'operator-alpha', role: 'readonly', enabled: true, last_login_at: null, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z' }
+test('direct user enables keep independent loading state when responses finish out of order', async ({ page }) => {
+  const alpha = { id: 2, username: 'operator-alpha', role: 'readonly', enabled: false, last_login_at: null, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z' }
   const beta = { ...alpha, id: 3, username: 'operator-beta' }
   let alphaStarted!: () => void
   let betaStarted!: () => void
@@ -209,20 +214,20 @@ test('user toggles keep independent loading state when responses finish out of o
     'PUT /api/v1/admin/users/2': async () => {
       alphaStarted()
       await alphaResponse
-      return { ...alpha, enabled: false }
+      return { ...alpha, enabled: true }
     },
     'PUT /api/v1/admin/users/3': async () => {
       betaStarted()
       await betaResponse
-      return { ...beta, enabled: false }
+      return { ...beta, enabled: true }
     },
   })
   await page.goto('/admin/users')
 
   const alphaRow = page.getByRole('row', { name: /operator-alpha/ })
   const betaRow = page.getByRole('row', { name: /operator-beta/ })
-  const alphaToggle = alphaRow.getByRole('button', { name: /禁用 operator-alpha|Disable operator-alpha/ })
-  const betaToggle = betaRow.getByRole('button', { name: /禁用 operator-beta|Disable operator-beta/ })
+  const alphaToggle = alphaRow.getByRole('button', { name: /启用 operator-alpha|Enable operator-alpha/ })
+  const betaToggle = betaRow.getByRole('button', { name: /启用 operator-beta|Enable operator-beta/ })
   await alphaToggle.click()
   await betaToggle.click()
   await Promise.all([alphaRequestStarted, betaRequestStarted])
@@ -230,14 +235,14 @@ test('user toggles keep independent loading state when responses finish out of o
   await expect(betaToggle).toHaveAttribute('aria-busy', 'true')
 
   releaseBeta()
-  await expect(betaRow.getByRole('button', { name: /启用 operator-beta|Enable operator-beta/ })).not.toHaveAttribute('aria-busy', 'true')
+  await expect(betaRow.getByRole('button', { name: /禁用 operator-beta|Disable operator-beta/ })).not.toHaveAttribute('aria-busy', 'true')
   await expect(alphaToggle).toHaveAttribute('aria-busy', 'true')
 
   releaseAlpha()
-  await expect(alphaRow.getByRole('button', { name: /启用 operator-alpha|Enable operator-alpha/ })).not.toHaveAttribute('aria-busy', 'true')
+  await expect(alphaRow.getByRole('button', { name: /禁用 operator-alpha|Disable operator-alpha/ })).not.toHaveAttribute('aria-busy', 'true')
 })
 
-test('quarantine secondary tables use their own named scroll regions', async ({ page }) => {
+test('quarantine uses direct mobile lists and preserves named desktop table regions', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await mockAdminApi(page, {
     'GET /api/v1/admin/quarantine/approvals': {
@@ -253,12 +258,32 @@ test('quarantine secondary tables use their own named scroll regions', async ({ 
 
   await page.getByRole('tab', { name: /已放行|Approvals/ }).click()
   const approvals = page.getByRole('region', { name: /供应链隔离放行表格|Quarantine approvals table/ })
-  await expect(approvals).toBeVisible()
-  expect(await approvals.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+  const approvalList = page.locator('[data-quarantine-mobile-list="approvals"]')
+  await expect(approvalList).toBeVisible()
+  await expect(approvalList.getByText('trusted', { exact: true })).toBeVisible()
+  await expect(approvalList.getByRole('button', { name: /撤销|Revoke/ })).toBeVisible()
+  await expect(approvals).toBeHidden()
 
   await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
   const overrides = page.getByRole('region', { name: /恶意封锁豁免表格|Malware override table/ })
+  const overrideList = page.locator('[data-quarantine-mobile-list="overrides"]')
+  await expect(overrideList).toBeVisible()
+  await expect(overrideList.getByText('false-positive', { exact: true })).toBeVisible()
+  await expect(overrideList.getByRole('button', { name: /撤销|Revoke/ })).toBeVisible()
+  await expect(overrides).toBeHidden()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+
+  await page.setViewportSize({ width: 639, height: 900 })
+  await expect(overrideList).toBeVisible()
+  await expect(overrides).toBeHidden()
+
+  await page.setViewportSize({ width: 640, height: 900 })
+  await expect(overrideList).toBeHidden()
   await expect(overrides).toBeVisible()
   expect(await overrides.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+
+  await page.getByRole('tab', { name: /已放行|Approvals/ }).click()
+  await expect(approvalList).toBeHidden()
+  await expect(approvals).toBeVisible()
+  expect(await approvals.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
 })

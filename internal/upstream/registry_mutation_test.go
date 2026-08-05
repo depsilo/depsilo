@@ -590,6 +590,9 @@ func TestRegistryMutationAndLifecycleDoNotRace(t *testing.T) {
 }
 
 func TestRegistryReadersAndMutationsAreRaceFree(t *testing.T) {
+	if testing.Short() {
+		t.Skip("high-volume concurrency contract")
+	}
 	_, registry := registryFixture(t, "pypi", 2)
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {

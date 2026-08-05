@@ -1,6 +1,6 @@
 import { type RefObject, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
 import BadgeV2 from '@/components/Badge'
@@ -95,7 +95,7 @@ function SidebarContent({
           <span className="text-[15px] font-[700]" style={{ color: 'var(--text)' }}>depsilo</span>
         </Link>
         <span
-          className="ml-auto inline-flex min-w-16 items-center justify-center rounded-[4px] border px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
+          className="ml-auto inline-flex min-w-16 items-center justify-center rounded-[4px] border px-1.5 py-0.5 font-mono text-[11px] tabular-nums"
           title={version}
           style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
         >
@@ -112,7 +112,7 @@ function SidebarContent({
         {sections.map((section, sectionIndex) => (
           <div key={section.id} data-admin-nav-group={section.id}>
             <p
-              className={`${sectionIndex === 0 ? 'mt-2' : 'mt-4'} mb-1.5 px-5 font-mono text-[10px] font-[600] uppercase`}
+              className={`${sectionIndex === 0 ? 'mt-2' : 'mt-4'} mb-1.5 px-5 font-mono text-[11px] font-[600] uppercase`}
               style={{ color: 'var(--text-subtle)' }}
             >
               {section.label}
@@ -139,14 +139,14 @@ function SidebarContent({
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--text)' }}>{username}</p>
-            <p className="mt-0.5 text-[10px] leading-tight" style={{ color: 'var(--text-subtle)' }}>
+            <p className="mt-0.5 text-[11px] leading-tight" style={{ color: 'var(--text-subtle)' }}>
               {canWrite ? t('nav.admin') : t('nav.readonly')}
             </p>
           </div>
           <button
             type="button"
             onClick={onLogout}
-            className="inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-[4px] bg-transparent p-1.5 text-[var(--text-soft)] opacity-100 transition-[opacity,color,transform] duration-150 hover:text-[var(--text)] active:scale-[0.96] lg:opacity-0 lg:group-hover:opacity-100"
+            className="stripe-focus-ring inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-[4px] bg-transparent p-1.5 text-[var(--text-soft)] opacity-100 transition-[opacity,color,transform] duration-150 hover:text-[var(--text)] focus-visible:opacity-100 active:scale-[0.96] lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
             aria-label={t('nav.logout')}
           >
             <Icon name="logout" size="sm" />

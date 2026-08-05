@@ -1,4 +1,4 @@
-# Docker Registry e2e is *not* part of `test-docker-all`.
+# Docker Registry E2E is opt-in and is not part of `make test-e2e`.
 #
 # Verifying `docker pull` through Depsilo requires docker-in-docker (--privileged
 # + /var/run/docker.sock or a nested dockerd). That's expensive in CI and
@@ -11,7 +11,7 @@
 # tiny image. Success means Depsilo's docker adapter (token negotiation +
 # manifest+blob fetch) is wired correctly end-to-end.
 
-FROM docker:24-dind
+FROM docker:24-dind@sha256:9b17a9f25adf17b88d0a013b4f00160754adf4b07ccbe9986664a49886c2c98e
 
 ARG DEPSILO_URL
 

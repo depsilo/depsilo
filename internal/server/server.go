@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,9 +18,9 @@ import (
 	"depsilo/internal/api"
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/audit"
+	"depsilo/internal/backup"
 	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
-	"depsilo/internal/compilecache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/entitlement"
@@ -111,15 +108,23 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	)
 
 	// Initialize database
+	databaseLease, err := backup.HoldDatabase(cfg.Database.DSN)
+	if err != nil {
+		return nil, fmt.Errorf("acquire database runtime lease: %w", err)
+	}
 	database, err := db.Open(cfg.Database.Driver, cfg.Database.DSN)
 	if err != nil {
+		_ = databaseLease.Close()
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 	sqlDatabase, err := database.DB()
 	if err != nil {
+		_ = databaseLease.Close()
 		return nil, fmt.Errorf("access database pool: %w", err)
 	}
-	resources.closeDatabase = newAsyncCloseAdapter(sqlDatabase.Close)
+	resources.closeDatabase = newAsyncCloseAdapter(func() error {
+		return errors.Join(sqlDatabase.Close(), databaseLease.Close())
+	})
 	if err := db.AutoMigrate(database); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
@@ -227,97 +232,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, fmt.Errorf("configure cache retention: %w", err)
 	}
 
-	// Compiler artifacts have different trust, retention and capacity
-	// semantics from package artifacts. Always use a separate storage root or
-	// bucket, even though both data domains share the Storage implementation.
-	var compileCacheService *compilecache.Service
-	compileCacheAuthorizer := compilecache.NewAuthorizer(database)
-	if cfg.CompileCache.Enabled {
-		compileStorageConfig := cfg.CompileCache.Storage
-		if cfg.Storage.Type == "local" && compileStorageConfig.Type == "local" {
-			overlaps, overlapErr := localStoragePathsOverlap(cfg.Storage.Path, compileStorageConfig.Path)
-			if overlapErr != nil {
-				return nil, fmt.Errorf("compare package and compiler cache paths: %w", overlapErr)
-			}
-			if overlaps {
-				return nil, errors.New("compile_cache.storage.path must not overlap storage.path")
-			}
-		}
-		if cfg.Storage.Type == "s3" && compileStorageConfig.Type == "s3" &&
-			strings.EqualFold(strings.TrimRight(cfg.Storage.Endpoint, "/"), strings.TrimRight(compileStorageConfig.Endpoint, "/")) &&
-			cfg.Storage.Bucket == compileStorageConfig.Bucket {
-			return nil, errors.New("compile_cache.storage.bucket must be separate from the package-cache bucket")
-		}
-		var compileStorage cache.Storage
-		switch compileStorageConfig.Type {
-		case "local":
-			compileStorage, err = cache.NewPrivateLocalStorage(compileStorageConfig.Path)
-		case "s3":
-			compileStorage, err = cache.NewS3Storage(
-				compileStorageConfig.Endpoint,
-				compileStorageConfig.Bucket,
-				compileStorageConfig.Region,
-				compileStorageConfig.AccessKey,
-				compileStorageConfig.SecretKey,
-			)
-		default:
-			err = fmt.Errorf("unsupported storage type %q", compileStorageConfig.Type)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("init compiler-cache storage: %w", err)
-		}
-		compileCacheService, err = compilecache.NewService(compileStorage, database, compilecache.Limits{
-			MaxBytes:               int64(cfg.CompileCache.MaxSizeGB) * 1024 * 1024 * 1024,
-			MaxEntries:             cfg.CompileCache.MaxEntries,
-			MaxEntryBytes:          int64(cfg.CompileCache.MaxEntrySizeMB) * 1024 * 1024,
-			NamespaceMaxBytes:      int64(cfg.CompileCache.NamespaceMaxSizeGB) * 1024 * 1024 * 1024,
-			NamespaceMaxEntries:    cfg.CompileCache.NamespaceMaxEntries,
-			MaxConcurrentUploads:   cfg.CompileCache.MaxConcurrentUploads,
-			MaxQueuedUploads:       cfg.CompileCache.MaxQueuedUploads,
-			MaxInflightUploadBytes: int64(cfg.CompileCache.MaxInflightUploadSizeMB) * 1024 * 1024,
-			UploadTimeout:          cfg.CompileCache.UploadTimeout,
-			MaxConcurrentDownloads: cfg.CompileCache.MaxConcurrentDownloads,
-			DownloadTimeout:        cfg.CompileCache.DownloadTimeout,
-			HighWatermarkPercent:   cfg.CompileCache.LRUThreshold,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("init compiler cache: %w", err)
-		}
-		if err := compileCacheService.ProcessPendingDeletions(serverCtx, 1000); err != nil {
-			return nil, fmt.Errorf("retry compiler-cache deletions: %w", err)
-		}
-		// No request can be active during single-instance startup, so every
-		// unreferenced generation (including local .tmp files) is safe to reclaim.
-		if err := compileCacheService.Reconcile(serverCtx, 0); err != nil {
-			return nil, fmt.Errorf("reconcile compiler cache: %w", err)
-		}
-		if _, err := compileCacheService.EnforceLimits(serverCtx); err != nil {
-			return nil, fmt.Errorf("enforce compiler-cache limits: %w", err)
-		}
-		compileCacheService.SetObserver(compilecache.Observer{
-			StatsUpdated: func(stats compilecache.Stats) {
-				api.M.CompileCacheSizeBytes.Set(float64(stats.SizeBytes))
-				api.M.CompileCacheEntries.Set(float64(stats.Entries))
-			},
-			Evicted: func(reason string, entries int) {
-				api.M.CompileCacheEvictions.WithLabelValues(reason).Add(float64(entries))
-			},
-		})
-		if err := submitBackground("compiler-cache maintenance", compileCacheService.RunMaintenance); err != nil {
-			return nil, err
-		}
-		zap.L().Info("compiler cache enabled",
-			zap.String("ccache_endpoint", "/ccache/v1/{namespace}"),
-			zap.String("sccache_endpoint", "/sccache/v1/{namespace}"),
-			zap.String("public_url", cfg.CompileCache.PublicURL),
-			zap.String("storage_type", compileStorageConfig.Type),
-			zap.Int("max_size_gb", cfg.CompileCache.MaxSizeGB),
-			zap.Int("max_entry_size_mb", cfg.CompileCache.MaxEntrySizeMB),
-		)
-		if strings.HasPrefix(strings.ToLower(cfg.CompileCache.PublicURL), "http://") && cfg.CompileCache.AllowInsecureHTTP {
-			zap.L().Warn("compiler-cache bearer credentials are using explicitly enabled plaintext HTTP; restrict access to a trusted LAN/VPN")
-		}
+	compilerCache, err := openCompileCacheRuntime(serverCtx, cfg.Storage, cfg.CompileCache, database)
+	if err != nil {
+		return nil, err
 	}
+	resources.compileCache = compilerCache
 
 	// Sync webhook configs from config.toml to DB
 	syncWebhookConfigs(database, cfg.Webhooks)
@@ -378,6 +297,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		accessRecorder,
 		auditLogger,
 		quarantine.Wrap(quarantineChecker),
+		api.M,
 	)
 
 	// Known-malicious blocklist (DIRECTION Task 2) — wired in as the
@@ -548,6 +468,11 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}); err != nil {
 		return nil, err
 	}
+	if err := submitBackground("cache metrics", func(ctx context.Context) {
+		runCacheMetrics(ctx, cacheMgr, time.Minute)
+	}); err != nil {
+		return nil, err
+	}
 
 	// Setup Gin
 	r.Use(middleware.Recovery())
@@ -577,8 +502,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		Ecosystems:       ecosystemNames,
 		CacheMgr:         cacheMgr,
 		CacheRetention:   cacheRetention,
-		CompileCache:     compileCacheService,
-		CompileCacheAuth: compileCacheAuthorizer,
+		CompileCache:     compilerCache.handlerDependencies(),
 		IndexRefresher:   indexRefresher,
 		EventBus:         eventBus,
 		LicenseManager:   licenseManager,
@@ -613,7 +537,17 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		)
 	}
 
-	// Register extra PyPI-compatible indexes
+	// Register extra PyPI-compatible indexes. One domain-separated key signs
+	// only artifact URLs that were declared by a fetched index page; binding the
+	// MAC to each adapter ID prevents references from being replayed across
+	// routes with different cache or egress policy.
+	var extraIndexArtifactKey []byte
+	if len(cfg.ExtraIndexes) > 0 {
+		extraIndexArtifactKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for _, idx := range cfg.ExtraIndexes {
 		idxPool, err := upstream.NewPool(idx.Upstreams)
 		if err != nil {
@@ -627,19 +561,55 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 			return nil, err
 		}
 
-		idxHandler := pypi.NewWithPrefix(cacheMgr, upstream.NewPrioritySelector(idxPool), cfg.Cache, database, "/"+idx.Path, "extra:"+idx.Name)
-		idxHandler.Register(r.Group("/" + idx.Path))
-		idxHandler.Register(projectGroup.Group("/" + idx.Path))
+		options := pypi.Options{
+			PathPrefix:         "/" + idx.Path,
+			AdapterID:          "extra:" + idx.Name,
+			UpstreamSimplePath: idx.SimplePath,
+			ArtifactSigningKey: extraIndexArtifactKey,
+			ArtifactSelector:   upstream.NewEgressSelector(idxPool),
+		}
+		if idx.Kind == config.ExtraIndexKindPyTorch {
+			idxHandler, err := pypi.NewChannelFamily(
+				cacheMgr,
+				upstream.NewPassiveRecoverySelector(idxPool),
+				cfg.Cache,
+				database,
+				options,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("create extra index %s channel adapter: %w", idx.Name, err)
+			}
+			idxHandler.Register(r.Group("/" + idx.Path))
+			idxHandler.Register(projectGroup.Group("/" + idx.Path))
+		} else {
+			idxHandler, err := pypi.NewWithOptions(
+				cacheMgr,
+				upstream.NewPassiveRecoverySelector(idxPool),
+				cfg.Cache,
+				database,
+				options,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("create extra index %s adapter: %w", idx.Name, err)
+			}
+			idxHandler.Register(r.Group("/" + idx.Path))
+			idxHandler.Register(projectGroup.Group("/" + idx.Path))
+		}
 
 		zap.L().Info("extra index registered",
 			zap.String("name", idx.Name),
+			zap.String("kind", idx.Kind),
 			zap.String("path", "/"+idx.Path),
 			zap.Int("upstreams", len(idx.Upstreams)),
 		)
 	}
 
 	// Serve embedded frontend (SPA fallback).
-	if err := registerFrontend(r); err != nil {
+	extraProxyPrefixes := make([]string, 0, len(cfg.ExtraIndexes))
+	for _, idx := range cfg.ExtraIndexes {
+		extraProxyPrefixes = append(extraProxyPrefixes, idx.Path)
+	}
+	if err := registerFrontend(r, extraProxyPrefixes...); err != nil {
 		return nil, err
 	}
 
@@ -689,63 +659,6 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	return srv, nil
-}
-
-func localStoragePathsOverlap(left, right string) (bool, error) {
-	leftAbsolute, err := canonicalStoragePath(left)
-	if err != nil {
-		return false, err
-	}
-	rightAbsolute, err := canonicalStoragePath(right)
-	if err != nil {
-		return false, err
-	}
-	contains := func(parent, child string) (bool, error) {
-		relative, err := filepath.Rel(parent, child)
-		if err != nil {
-			return false, err
-		}
-		return relative == "." || relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)), nil
-	}
-	leftContainsRight, err := contains(leftAbsolute, rightAbsolute)
-	if err != nil {
-		return false, err
-	}
-	rightContainsLeft, err := contains(rightAbsolute, leftAbsolute)
-	if err != nil {
-		return false, err
-	}
-	return leftContainsRight || rightContainsLeft, nil
-}
-
-// canonicalStoragePath resolves every existing symlink component, including
-// when the final cache directory has not been created yet. This prevents two
-// visually different configured paths from aliasing the same storage root.
-func canonicalStoragePath(path string) (string, error) {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	current := filepath.Clean(absolute)
-	var suffix []string
-	for {
-		resolved, err := filepath.EvalSymlinks(current)
-		if err == nil {
-			for index := len(suffix) - 1; index >= 0; index-- {
-				resolved = filepath.Join(resolved, suffix[index])
-			}
-			return filepath.Clean(resolved), nil
-		}
-		if !os.IsNotExist(err) {
-			return "", err
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", err
-		}
-		suffix = append(suffix, filepath.Base(current))
-		current = parent
-	}
 }
 
 func newServerRuntimeContext(parent context.Context) (context.Context, context.CancelFunc) {

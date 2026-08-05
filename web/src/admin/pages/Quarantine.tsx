@@ -230,21 +230,28 @@ export default function Quarantine() {
       />
 
       {/* Approve dialog */}
-      <ModalV2 open={approveOpen} onClose={() => setApproveOpen(false)} title={t('quarantine.approve.title')}>
+      <ModalV2
+        open={approveOpen}
+        onClose={() => setApproveOpen(false)}
+        title={t('quarantine.approve.title')}
+        closeDisabled={approveM.isPending}
+      >
         {approveTarget && (
           <div className="space-y-4">
             <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
               {t('quarantine.approve.body', { eco: approveTarget.ecosystem, pkg: approveTarget.package, ver: approveTarget.version })}
             </p>
             <InputV2
+              label={t('quarantine.col.reason')}
               placeholder={t('quarantine.reason_placeholder')}
               value={approveReason}
               onChange={(e) => setApproveReason(e.target.value)}
+              disabled={approveM.isPending}
               autoFocus
             />
             {approveM.isError && <InlineNotice tone="danger">{getApiError(approveM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
-              <ButtonV2 variant="secondary" onClick={() => setApproveOpen(false)}>
+              <ButtonV2 variant="secondary" onClick={() => setApproveOpen(false)} disabled={approveM.isPending}>
                 {t('cancel')}
               </ButtonV2>
               <ButtonV2
@@ -260,26 +267,34 @@ export default function Quarantine() {
       </ModalV2>
 
       {/* Revoke dialog */}
-      <ModalV2 open={revokeOpen} onClose={() => setRevokeOpen(false)} title={t('quarantine.revoke.title')}>
+      <ModalV2
+        open={revokeOpen}
+        onClose={() => setRevokeOpen(false)}
+        title={t('quarantine.revoke.title')}
+        closeDisabled={revokeM.isPending}
+      >
         {revokeTarget && (
           <div className="space-y-4">
             <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
               {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version })}
             </p>
             <InputV2
+              label={t('quarantine.col.reason')}
               placeholder={t('quarantine.reason_placeholder')}
               value={revokeReason}
               onChange={(e) => setRevokeReason(e.target.value)}
+              disabled={revokeM.isPending}
               autoFocus
             />
             {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
-              <ButtonV2 variant="secondary" onClick={() => setRevokeOpen(false)}>
+              <ButtonV2 variant="secondary" onClick={() => setRevokeOpen(false)} disabled={revokeM.isPending}>
                 {t('cancel')}
               </ButtonV2>
               <ButtonV2
                 variant="danger"
                 onClick={() => revokeM.mutate()}
+                aria-busy={revokeM.isPending || undefined}
                 disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
               >
                 {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
@@ -310,12 +325,13 @@ function EventsTab(props: {
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <InputV2
+          aria-label={t('quarantine.filter.package_placeholder')}
           placeholder={t('quarantine.filter.package_placeholder')}
           value={props.pkgSearch}
           onChange={(e) => props.setPkgSearch(e.target.value)}
-          style={{ maxWidth: 260 }}
+          className="col-span-2 sm:w-[260px]"
         />
         <FilterSelect
           label={t('quarantine.col.ecosystem')}
@@ -350,6 +366,41 @@ function EventsTab(props: {
           title={t('quarantine.events.empty_title')}
           hint={t('quarantine.events.empty_hint')}
         /> : (
+        <>
+        <ul
+          aria-label={t('quarantine.events.table')}
+          data-quarantine-mobile-list="events"
+          className="divide-y divide-[var(--border)] sm:hidden"
+        >
+          {items.map((ev) => (
+            <li key={ev.id} className="space-y-3 py-4 first:pt-0">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <MobilePackageIdentity
+                  ecosystem={ev.ecosystem}
+                  packageName={ev.package}
+                  version={ev.version}
+                />
+                <div className="shrink-0">{actionBadge(ev.action, t)}</div>
+              </div>
+              <MobileMetadata
+                entries={[
+                  { label: t('quarantine.col.reason'), value: ev.reason },
+                  { label: t('quarantine.col.time'), value: formatTime(ev.created_at), mono: true },
+                ]}
+              />
+              {props.canWrite && ev.action === 'blocked' && (
+                <ButtonV2
+                  className="min-h-[40px] w-full"
+                  variant="secondary"
+                  onClick={() => props.onApprove(ev)}
+                >
+                  <Icon name="check" size="sm" /> {t('quarantine.approve.cta')}
+                </ButtonV2>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="hidden sm:block">
         <TableViewport label={t('quarantine.events.table')} minWidth={920}>
           <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
             <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -397,6 +448,8 @@ function EventsTab(props: {
             </table>
           </div>
         </TableViewport>
+        </div>
+        </>
         )}
         </div>
       )}
@@ -432,6 +485,41 @@ function ApprovalsTab(props: {
         hint={t('quarantine.approvals.empty_hint')}
       />
     ) : (
+    <>
+    <ul
+      aria-label={t('quarantine.approvals.table')}
+      data-quarantine-mobile-list="approvals"
+      className="divide-y divide-[var(--border)] sm:hidden"
+    >
+      {items.map((row) => (
+        <li key={row.id} className="space-y-3 py-4 first:pt-0">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <MobilePackageIdentity
+              ecosystem={row.ecosystem}
+              packageName={row.package}
+              version={row.version}
+            />
+            <div className="shrink-0">{actionBadge('approved', t)}</div>
+          </div>
+          <MobileMetadata
+            entries={[
+              { label: t('quarantine.col.reason'), value: row.reason },
+              { label: t('quarantine.col.created_at'), value: formatTime(row.created_at), mono: true },
+            ]}
+          />
+          {props.canWrite && (
+            <ButtonV2
+              className="min-h-[40px] w-full"
+              variant="danger"
+              onClick={() => props.onRevoke(row)}
+            >
+              <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
+            </ButtonV2>
+          )}
+        </li>
+      ))}
+    </ul>
+    <div className="hidden sm:block">
     <TableViewport label={t('quarantine.approvals.table')} minWidth={820}>
       <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
         <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -473,6 +561,8 @@ function ApprovalsTab(props: {
         </table>
       </div>
     </TableViewport>
+    </div>
+    </>
     )}
     </div>
   )
@@ -589,11 +679,11 @@ function BlocklistTab() {
             <span className="text-[12px]" style={{ color: 'var(--danger-text)' }}>{st.last_error}</span>
           </StatusItem>
         )}
-        {canWrite && <div className="ml-auto flex gap-2">
-          <ButtonV2 variant="secondary" onClick={() => { createM.reset(); setCreateOpen(true) }}>
+        {canWrite && <div className="grid w-full grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:ml-auto sm:flex sm:w-auto">
+          <ButtonV2 className="min-h-[40px] sm:min-h-9" variant="secondary" onClick={() => { createM.reset(); setCreateOpen(true) }}>
             <Icon name="add" size="sm" /> {t('quarantine.blocklist.add_override')}
           </ButtonV2>
-          <ButtonV2 onClick={() => syncM.mutate()} aria-busy={syncM.isPending || undefined} disabled={syncM.isPending || !!st?.running}>
+          <ButtonV2 className="min-h-[40px] sm:min-h-9" onClick={() => syncM.mutate()} aria-busy={syncM.isPending || undefined} disabled={syncM.isPending || !!st?.running}>
             <Icon name="sync" size="sm" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
           </ButtonV2>
         </div>}
@@ -623,6 +713,55 @@ function BlocklistTab() {
             hint={t('quarantine.blocklist.no_overrides_hint')}
           />
         ) : (
+          <>
+          <ul
+            aria-label={t('quarantine.blocklist.overrides_table')}
+            data-quarantine-mobile-list="overrides"
+            className="divide-y divide-[var(--border)] sm:hidden"
+          >
+            {overrides.map((row) => {
+              const msLeft = new Date(row.expires_at).getTime() - now
+              const expired = msLeft <= 0
+              return (
+                <li key={row.id} className="space-y-3 py-4 first:pt-0" style={{ opacity: expired ? 0.55 : 1 }}>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <MobilePackageIdentity
+                      ecosystem={row.ecosystem}
+                      packageName={row.package}
+                      version={row.version || t('quarantine.blocklist.all_versions')}
+                    />
+                    <div className="shrink-0">
+                      {expired ? (
+                        <BadgeV2>{t('quarantine.blocklist.expired')}</BadgeV2>
+                      ) : (
+                        <BadgeV2 variant="warning">{formatRemaining(msLeft)}</BadgeV2>
+                      )}
+                    </div>
+                  </div>
+                  <MobileMetadata
+                    entries={[
+                      { label: t('quarantine.col.reason'), value: row.reason },
+                      {
+                        label: t('quarantine.blocklist.col_expires'),
+                        value: expired ? t('quarantine.blocklist.expired') : formatRemaining(msLeft),
+                        mono: !expired,
+                      },
+                    ]}
+                  />
+                  {canWrite && !expired && (
+                    <ButtonV2
+                      className="min-h-[40px] w-full"
+                      variant="danger"
+                      onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}
+                    >
+                      <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
+                    </ButtonV2>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          <div className="hidden sm:block">
           <TableViewport label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
             <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
               <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -678,44 +817,58 @@ function BlocklistTab() {
               </table>
             </div>
           </TableViewport>
+          </div>
+          </>
           )}
           </div>
         )}
       </div>
 
       {/* Create override dialog */}
-      <ModalV2 open={createOpen} onClose={() => setCreateOpen(false)} title={t('quarantine.blocklist.create_title')}>
+      <ModalV2
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title={t('quarantine.blocklist.create_title')}
+        closeDisabled={createM.isPending}
+      >
         <div className="space-y-4">
           <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
             {t('quarantine.blocklist.create_body')}
           </p>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
             <FilterSelect
               label={t('quarantine.col.ecosystem')}
               value={form.ecosystem}
               onChange={(v) => setForm({ ...form, ecosystem: v })}
               options={ECOSYSTEMS.map((eco) => ({ value: eco, label: eco }))}
+              disabled={createM.isPending}
             />
             <InputV2
+              label={t('quarantine.col.package')}
               placeholder={t('quarantine.blocklist.package_placeholder')}
               value={form.package}
               onChange={(e) => setForm({ ...form, package: e.target.value })}
+              disabled={createM.isPending}
             />
           </div>
           <InputV2
+            label={t('quarantine.col.version')}
             placeholder={t('quarantine.blocklist.version_placeholder')}
             value={form.version}
             onChange={(e) => setForm({ ...form, version: e.target.value })}
+            disabled={createM.isPending}
             mono
           />
           <InputV2
+            label={t('quarantine.col.reason')}
             placeholder={t('quarantine.reason_placeholder')}
             value={form.reason}
             onChange={(e) => setForm({ ...form, reason: e.target.value })}
+            disabled={createM.isPending}
           />
           {createM.isError && <InlineNotice tone="danger">{getApiError(createM.error).message}</InlineNotice>}
           <div className="flex justify-end gap-2">
-            <ButtonV2 variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
+            <ButtonV2 variant="secondary" onClick={() => setCreateOpen(false)} disabled={createM.isPending}>{t('cancel')}</ButtonV2>
             <ButtonV2
               onClick={() => createM.mutate()}
               aria-busy={createM.isPending || undefined}
@@ -728,24 +881,32 @@ function BlocklistTab() {
       </ModalV2>
 
       {/* Revoke override dialog */}
-      <ModalV2 open={!!revokeTarget} onClose={() => setRevokeTarget(null)} title={t('quarantine.revoke.title')}>
+      <ModalV2
+        open={!!revokeTarget}
+        onClose={() => setRevokeTarget(null)}
+        title={t('quarantine.revoke.title')}
+        closeDisabled={revokeM.isPending}
+      >
         {revokeTarget && (
           <div className="space-y-4">
             <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
               {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
             </p>
             <InputV2
+              label={t('quarantine.col.reason')}
               placeholder={t('quarantine.reason_placeholder')}
               value={revokeReason}
               onChange={(e) => setRevokeReason(e.target.value)}
+              disabled={revokeM.isPending}
               autoFocus
             />
             {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
-              <ButtonV2 variant="secondary" onClick={() => setRevokeTarget(null)}>{t('cancel')}</ButtonV2>
+              <ButtonV2 variant="secondary" onClick={() => setRevokeTarget(null)} disabled={revokeM.isPending}>{t('cancel')}</ButtonV2>
               <ButtonV2
                 variant="danger"
                 onClick={() => revokeM.mutate()}
+                aria-busy={revokeM.isPending || undefined}
                 disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
               >
                 {revokeM.isPending ? t('quarantine.revoke.submitting') : t('quarantine.revoke.submit')}
@@ -790,13 +951,64 @@ function Td({ children }: { children: React.ReactNode }) {
   return <td className="px-3 py-2 align-middle">{children}</td>
 }
 
-function FilterSelect(props: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+function MobilePackageIdentity(props: { ecosystem: string; packageName: string; version: string }) {
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      {isAdminEcosystem(props.ecosystem) && (
+        <span className="mt-0.5 shrink-0">
+          <EcosystemIcon type={props.ecosystem} size={16} />
+        </span>
+      )}
+      <div className="min-w-0">
+        <p className="break-words font-mono text-[14px] font-[550]" style={{ color: 'var(--text)' }}>
+          {props.packageName}
+        </p>
+        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[12px]" style={{ color: 'var(--text-muted)' }}>
+          <span>{props.ecosystem}</span>
+          <span aria-hidden="true">·</span>
+          <span className="break-all">{props.version}</span>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function MobileMetadata({ entries }: {
+  entries: { label: string; value: React.ReactNode; mono?: boolean }[]
+}) {
+  return (
+    <dl className="grid grid-cols-1 gap-2.5">
+      {entries.map((entry) => (
+        <div key={entry.label} className="min-w-0">
+          <dt className="text-[11px] font-[600]" style={{ color: 'var(--text-subtle)' }}>
+            {entry.label}
+          </dt>
+          <dd
+            className={`mt-0.5 break-words text-[13px] leading-[1.5] ${entry.mono ? 'font-mono tabular-nums' : ''}`}
+            style={{ color: 'var(--text-soft)' }}
+          >
+            {entry.value || '—'}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function FilterSelect(props: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+  disabled?: boolean
+}) {
   return (
     <select
       aria-label={props.label}
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
-      className="h-9 px-3 rounded-[6px] text-[12px] cursor-pointer"
+      disabled={props.disabled}
+      className="min-h-[40px] w-full cursor-pointer rounded-[6px] px-3 text-[16px] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-[12px]"
       style={{
         background: 'var(--bg-soft)',
         color: 'var(--text)',

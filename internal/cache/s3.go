@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
+
+const s3ReadinessMarkerKey = "__depsilo_internal__/readiness-v1"
 
 // S3Storage implements the Storage interface using an S3-compatible backend.
 type S3Storage struct {
@@ -48,10 +51,47 @@ func NewS3Storage(endpoint, bucket, region, accessKey, secretKey string) (*S3Sto
 		}
 	}
 
-	return &S3Storage{
+	storage := &S3Storage{
 		client: client,
 		bucket: bucket,
-	}, nil
+	}
+	// A stable zero-byte marker lets readiness exercise GetObject without
+	// requiring ListBucket. It is managed storage metadata rather than a
+	// per-probe temporary object, so readiness remains read-only and cheap.
+	if err := storage.writeReadinessMarker(ctx); err != nil {
+		return nil, fmt.Errorf("s3: initialize readiness marker: %w", err)
+	}
+	return storage, nil
+}
+
+func (s *S3Storage) writeReadinessMarker(ctx context.Context) error {
+	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(s3ReadinessMarkerKey),
+		Body:          bytes.NewReader(nil),
+		ContentLength: aws.Int64(0),
+		ContentType:   aws.String("application/octet-stream"),
+	})
+	return err
+}
+
+// CheckReady exercises the cache-hit GetObject path against the marker
+// created during storage initialization. In particular, it never calls
+// ListObjectsV2, so an otherwise sufficient object policy does not need the
+// broader ListBucket permission merely to satisfy /ready.
+func (s *S3Storage) CheckReady(ctx context.Context) (err error) {
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s3ReadinessMarkerKey),
+	})
+	if err != nil {
+		return fmt.Errorf("s3: read readiness marker: %w", err)
+	}
+	defer func() { err = errors.Join(err, output.Body.Close()) }()
+	if _, err := io.Copy(io.Discard, output.Body); err != nil {
+		return fmt.Errorf("s3: read readiness marker body: %w", err)
+	}
+	return nil
 }
 
 func (s *S3Storage) Exists(ctx context.Context, key string) (bool, error) {
@@ -195,3 +235,5 @@ func (s *S3Storage) TotalSize(ctx context.Context) (int64, error) {
 
 	return total, nil
 }
+
+var _ ReadinessProber = (*S3Storage)(nil)

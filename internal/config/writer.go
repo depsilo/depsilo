@@ -51,6 +51,7 @@ func WriteConfig(path string, req SetupRequest) error {
 	}
 
 	var b strings.Builder
+	b.WriteString(fmt.Sprintf("config_version = %d\n\n", CurrentConfigVersion))
 
 	// Server section
 	port := req.Server.Port

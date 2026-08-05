@@ -257,7 +257,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         className="text-[48px] font-[700] mb-2"
         style={{ color: 'var(--text)' }}
       >
-        DepSilo
+        Depsilo
       </div>
       <p
         className="text-[16px] mb-8 max-w-md mx-auto"
@@ -590,14 +590,14 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
       <div className="w-full max-w-[720px]">
         {/* Progress indicator */}
         {step > 1 && phase === 'editing' && (
-          <div className="flex items-center justify-center gap-2 mb-6">
+          <div className="mb-6 flex items-center justify-center gap-[6px]">
             {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
-              <div key={s} className="flex items-center gap-2">
+              <div key={s} className="flex items-center gap-[6px]">
                 <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-[500]"
+                  className="flex h-[28px] w-[28px] items-center justify-center rounded-full text-[12px] font-[500]"
                   style={{
-                    background: s <= step ? 'var(--brand)' : 'var(--bg-soft)',
-                    color: s <= step ? 'white' : 'var(--text-muted)',
+                    background: s <= step ? 'var(--hit)' : 'var(--bg-soft)',
+                    color: s <= step ? 'var(--on-hit)' : 'var(--text-muted)',
                     border: s <= step ? 'none' : '1px solid var(--border)',
                   }}
                 >
@@ -605,7 +605,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 </div>
                 {s < totalSteps && (
                   <div
-                    className="w-8 h-[2px]"
+                    className="h-[2px] w-[18px] sm:w-[32px]"
                     style={{
                       background: s < step ? 'var(--brand)' : 'var(--border)',
                     }}
@@ -613,7 +613,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 )}
               </div>
             ))}
-            <span className="ml-3 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+            <span className="ml-2 whitespace-nowrap text-[13px]" style={{ color: 'var(--text-muted)' }}>
               {t('setup.step_of', { current: step, total: totalSteps })}
             </span>
           </div>

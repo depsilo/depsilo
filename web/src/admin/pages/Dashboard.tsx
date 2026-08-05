@@ -1,7 +1,7 @@
 import { useState, useMemo, type ReactNode } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
 import EcosystemIcon from '@/components/EcosystemIcon'

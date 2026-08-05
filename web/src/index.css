@@ -39,7 +39,7 @@
  *  the utility-class machinery, while the actual cascading values
  *  on :root override them per data-theme. */
 @theme {
-  --color-bg-page:   #F0F2F1;
+  --color-bg-page:   #FFFFFF;
   --color-bg-panel:  #FFFFFF;
   --color-bg-card:   #FFFFFF;
   --color-bg-soft:   #F1F3F2;
@@ -120,7 +120,7 @@
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Surfaces — old names */
-  --bg-page:   #F0F2F1;
+  --bg-page:   #FFFFFF;
   --bg-panel:  #FFFFFF;
   --bg-card:   #FFFFFF;
   --bg-soft:   #F1F3F2;
@@ -199,6 +199,8 @@
   --fg:        var(--text);
   --fg-mut:    var(--text-muted);
   --fg-faint:  var(--text-subtle);
+  --inverse:   var(--text);
+  --on-inverse: var(--bg-page);
   --hit:       var(--brand);
   --hit-press: var(--brand-strong);
   --hit-bg:    var(--brand-soft);
@@ -232,6 +234,18 @@
                     rgba(12, 22, 17, 0.06) 0 4px 12px -6px;
   --shadow-pop:  rgba(12, 22, 17, 0.15) 0 30px 45px -30px,
                  rgba(12, 22, 17, 0.08) 0 18px 36px -18px;
+
+  /* Quick Start's primary configuration is the one intentional inverse
+     surface in the light Portal. Keeping it tokenized prevents a parallel
+     hard-coded palette from leaking into CodeBlock. */
+  --code-bg: #101512;
+  --code-header: #151C18;
+  --code-line: rgba(231, 241, 235, 0.10);
+  --code-fg: #E8F0EB;
+  --code-muted: #98A79F;
+  --code-accent: #55DDA0;
+  --code-danger: #FF9D9D;
+  --code-shadow: rgba(8, 15, 11, 0.28) 0 22px 44px -24px;
 }
 
 /* ── Dark mode — Instrument default ────────────────────── */
@@ -322,6 +336,15 @@ html.dark,
   --shadow-surface: none;
   --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
                  rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
+
+  --code-bg: #080C0A;
+  --code-header: #0D120F;
+  --code-line: rgba(232, 244, 237, 0.10);
+  --code-fg: #EDF5F0;
+  --code-muted: #91A097;
+  --code-accent: #61E6AA;
+  --code-danger: #FFAAAA;
+  --code-shadow: rgba(0, 0, 0, 0.52) 0 24px 48px -22px;
 }
 
 /* Auto-follow OS when user has selected "system" mode (i.e. no
@@ -413,6 +436,15 @@ html.dark,
     --shadow-surface: none;
     --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
                    rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
+
+    --code-bg: #080C0A;
+    --code-header: #0D120F;
+    --code-line: rgba(232, 244, 237, 0.10);
+    --code-fg: #EDF5F0;
+    --code-muted: #91A097;
+    --code-accent: #61E6AA;
+    --code-danger: #FFAAAA;
+    --code-shadow: rgba(0, 0, 0, 0.52) 0 24px 48px -22px;
   }
 }
 
@@ -564,10 +596,8 @@ pre, code, .code-mono {
    four-blob mesh + noise grain made the page feel tinted (warm
    copper era) or clinical-cool (purple era) depending on the brand
    hue. Per user direction we ship the page on its plain --bg-page
-   instead. The .page-wash element is kept in the DOM (PortalApp /
-   MainLayout / App / Login all still mount it) so adding ambient
-   back later is a one-CSS-rule revert rather than a multi-file
-   refactor. */
+   instead. App mounts one global .page-wash for every route so ambient
+   treatment has a single owner and cannot stack across nested surfaces. */
 .page-wash {
   position: fixed;
   inset: 0;
@@ -581,21 +611,17 @@ pre, code, .code-mono {
   background: none;
 }
 
-/* Frosted film grain — a tiled SVG fractal-noise texture over the page
-   background (2026-07-09 redesign follow-up, paper-design/shaders as
-   the aesthetic reference; implemented dependency-free). Deliberately
-   STATIC: the frosted feel comes from texture, not motion, and the
-   page's single ambient animation stays the CTA shimmer. The layer
-   lives under all content (cards paint over it), so text never sits
-   on noise. Monochrome and uniform across the full page. */
+/* Dark-mode film grain — a static tiled SVG texture that adds depth without
+   sitting behind readable content. Light mode deliberately keeps this layer
+   invisible so its canvas remains true #FFFFFF rather than textured gray. */
 .page-wash::before {
   content: '';
   position: absolute;
   inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
   background-size: 180px 180px;
-  /* Light theme: ink-on-paper grain, kept very quiet. */
-  opacity: 0.05;
+  /* Light theme: pure white means no ambient texture. */
+  opacity: 0;
   mix-blend-mode: multiply;
 }
 html.dark .page-wash::before,
@@ -772,6 +798,12 @@ html.dark .logo-icon-light,
 .stripe-focus-ring:focus-visible {
   outline-color: var(--focus-ring);
 }
+/* Route and setup state containers receive focus only so assistive technology
+   announces the new state. They are not keyboard targets; drawing the global
+   focus ring around a full-page region obscures the actionable control inside. */
+.programmatic-focus-target:focus-visible {
+  outline: none;
+}
 
 /* Application overlays share Base UI's focus management and lifecycle. */
 .app-dialog-backdrop {
@@ -834,8 +866,8 @@ html.dark .logo-icon-light,
   max-width: min(240px, calc(100vw - 24px));
   padding: 5px 8px;
   border-radius: 4px;
-  color: var(--bg-page);
-  background: var(--text);
+  color: var(--on-inverse);
+  background: var(--inverse);
   box-shadow: var(--shadow-pop);
   font-size: 12px;
   line-height: 1.4;
@@ -918,27 +950,155 @@ a:focus:not(:focus-visible) {
   }
 }
 
-/* Portal topbar — keep navigation and health reachable on narrow
-   screens. Labels step down before controls disappear. */
-@media (max-width: 720px) {
-  .portal-endpoint-pill { display: none !important; }
+/* Portal topbar — equal geometry, distinct semantics. Service information and
+   display preferences share quiet segmented rails; Admin is the sole accented
+   navigation action. Every interactive segment keeps a 40px target. */
+.portal-header-actions {
+  display: flex;
+  min-width: 0;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+.portal-header-group {
+  display: inline-flex;
+  height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 7px;
+  background: var(--bg-card);
+  outline: 0.5px solid var(--border);
+  outline-offset: -0.5px;
+}
+.portal-header-control {
+  display: inline-flex;
+  height: 40px;
+  min-height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+button.portal-header-control {
+  cursor: pointer;
+}
+.portal-header-group > .portal-header-control:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.portal-header-group > .portal-header-control:last-child {
+  border-radius: 0 7px 7px 0;
+}
+.portal-header-group > .portal-header-control + .portal-header-control {
+  border-left: 0.5px solid var(--border);
+}
+.portal-header-group button.portal-header-control:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.portal-header-group button.portal-header-control:active {
+  transform: scale(0.97);
+}
+.portal-endpoint-pill {
+  padding: 0 10px 0 11px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.portal-endpoint-pill[data-copy-state='failed'] {
+  color: var(--danger-text);
+}
+.portal-endpoint-label {
+  font-variant-numeric: tabular-nums;
+}
+.portal-endpoint-icon {
+  position: relative;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+.portal-endpoint-icon > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.portal-status-pill {
+  min-width: 68px;
+  padding: 0 10px;
+}
+.portal-status-pill[data-status='healthy'] { color: var(--ok-text); }
+.portal-status-pill[data-status='degraded'] { color: var(--warn-text); }
+.portal-status-pill[data-status='failed'] { color: var(--danger-text); }
+.portal-status-pill[data-status='unknown'] { color: var(--text-muted); }
+.portal-status-compact-icon,
+.portal-admin-mobile-label,
+.portal-language-compact-label {
+  display: none;
+}
+.portal-language-control,
+.portal-theme-button {
+  padding: 0 10px;
+}
+.portal-admin-link {
+  padding: 0 11px;
+  border: 0.5px solid var(--brand-border);
+  border-radius: 7px;
+  color: var(--brand-text);
+  background: var(--brand-soft);
+  font-weight: 600;
+  text-decoration: none;
+}
+.portal-admin-link:hover {
+  background: color-mix(in oklab, var(--brand-soft) 82%, var(--bg-hover));
+}
+.portal-admin-link:active {
+  transform: scale(0.97);
 }
 
-.portal-admin-mobile-label {
-  display: none;
+/* Keep the copy action available at intermediate widths while collapsing its
+   volatile endpoint text. The full value remains in the accessible name. */
+@media (max-width: 960px) {
+  .portal-endpoint-pill {
+    width: 40px;
+    padding-inline: 0;
+  }
+  .portal-endpoint-label {
+    display: none;
+  }
 }
-.portal-status-compact-icon {
-  display: none;
+
+@media (max-width: 760px) {
+  .portal-version,
+  .portal-language-label,
+  .portal-theme-label {
+    display: none !important;
+  }
+  .portal-language-compact-label {
+    display: inline;
+  }
+  .portal-language-control,
+  .portal-theme-button {
+    width: 40px;
+    padding-inline: 0;
+  }
+  .portal-language-control .icon {
+    display: none;
+  }
 }
 
 @media (max-width: 560px) {
-  .portal-theme-control,
-  .portal-version,
+  .portal-endpoint-pill,
+  .portal-theme-button,
+  .portal-brand-name,
   .portal-admin-label,
   .portal-status-label {
-    display: none !important;
-  }
-  .portal-brand-name {
     display: none !important;
   }
   .portal-header-inner {
@@ -947,12 +1107,24 @@ a:focus:not(:focus-visible) {
     padding-right: max(10px, env(safe-area-inset-right)) !important;
   }
   .portal-header-actions {
-    min-width: 0;
-    gap: 4px !important;
+    gap: 4px;
+  }
+  .portal-header-nav > a {
+    padding-inline: 6px !important;
+  }
+  .portal-service-group,
+  .portal-tools-group {
+    width: 40px;
   }
   .portal-status-pill {
-    min-width: 28px !important;
-    padding-inline: 8px !important;
+    width: 40px;
+    min-width: 40px;
+    padding-inline: 0;
+    border-left: 0 !important;
+    border-radius: 7px !important;
+  }
+  .portal-language-control {
+    border-radius: 7px !important;
   }
   .portal-status-dot {
     display: none !important;
@@ -961,12 +1133,8 @@ a:focus:not(:focus-visible) {
     display: inline-flex;
   }
   .portal-admin-link {
-    width: auto;
     min-width: 48px;
-    height: 40px;
-    padding: 0 9px !important;
-    justify-content: center;
-    flex-shrink: 0;
+    padding: 0 9px;
   }
   .portal-admin-link .icon {
     display: none;
@@ -987,9 +1155,6 @@ a:focus:not(:focus-visible) {
     gap: 6px !important;
     padding-left: max(8px, env(safe-area-inset-left)) !important;
     padding-right: max(8px, env(safe-area-inset-right)) !important;
-  }
-  .portal-header-nav > a {
-    padding-inline: 6px !important;
   }
 }
 
@@ -1015,6 +1180,52 @@ a:focus:not(:focus-visible) {
 .eco-tile:hover::before { opacity: 1; }
 /* Content above the spotlight layer. */
 .eco-tile > * { position: relative; z-index: 1; }
+
+/* Quick Start precision workbench. The rail is one control surface rather
+   than a row of detached cards; only the active segment receives lift. */
+.manager-picker-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+@media (hover: hover) {
+  .manager-choice:hover:not([data-active='true']) {
+    background: var(--bg-hover) !important;
+  }
+  .code-block[data-code-tone='ink'] .code-copy-control:hover {
+    background: color-mix(in oklab, var(--code-fg) 8%, transparent) !important;
+    color: var(--code-fg) !important;
+  }
+  .code-block[data-code-tone='light'] .code-copy-control:hover {
+    background: var(--bg-hover) !important;
+    color: var(--text) !important;
+  }
+}
+
+.config-disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure-chevron {
+  color: var(--text-subtle);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1), color 140ms ease;
+}
+.config-disclosure[open] > summary .disclosure-chevron {
+  color: var(--text);
+  transform: rotate(180deg);
+}
+
+@keyframes managerConfigReveal {
+  from {
+    opacity: 0.72;
+    filter: blur(2px);
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+.manager-config-swap {
+  animation: managerConfigReveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
 /* ── Scroll-driven reveal ─────────────────────────────────
    Sections fade + nudge up 8px as they enter the viewport. Pure

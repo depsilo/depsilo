@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"depsilo/internal/adapter"
+	"depsilo/internal/adapter/pypi"
 	"depsilo/internal/api/admin"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -129,26 +130,42 @@ func cacheIndexProxyPath(
 	if name == "" {
 		return "", fmt.Errorf("invalid extra index adapter %q", entry.AdapterType)
 	}
-	var route string
+	var selected *config.ExtraIndexConfig
 	for _, index := range extraIndexes {
 		if index.Name == name {
-			route = strings.Trim(index.Path, "/")
+			copy := index
+			selected = &copy
 			break
 		}
 	}
+	if selected == nil {
+		return "", fmt.Errorf("no safe public route is configured for extra index %q", name)
+	}
+	route := strings.Trim(selected.Path, "/")
 	if route == "" || !safeConfiguredRoute(route) {
 		return "", fmt.Errorf("no safe public route is configured for extra index %q", name)
 	}
 
-	const suffixPrefix = "/simple/"
-	if !strings.HasPrefix(entry.Key, entry.AdapterType+suffixPrefix) {
-		return "", fmt.Errorf("unsupported extra index cache key %q", entry.Key)
+	var pkg string
+	if selected.Kind == config.ExtraIndexKindPyTorch {
+		channel, packageName, ok := pypi.ChannelIndexFromCacheKey(entry.AdapterType, entry.Key)
+		if !ok {
+			return "", fmt.Errorf("unsupported PyTorch channel cache key %q", entry.Key)
+		}
+		route += "/" + channel
+		pkg = packageName
+	} else {
+		packageName, ok := pypi.IndexPackageFromCacheKey(entry.AdapterType, entry.Key)
+		if !ok {
+			return "", fmt.Errorf("unsupported extra index cache key %q", entry.Key)
+		}
+		pkg = packageName
 	}
 	// Reuse the standard PyPI mapper for package-name and traversal checks,
 	// then substitute the configured route prefix.
 	synthetic := entry
 	synthetic.AdapterType = "pypi"
-	synthetic.Key = "pypi" + strings.TrimPrefix(entry.Key, entry.AdapterType)
+	synthetic.Key = pypi.IndexCacheKey("pypi", pkg)
 	standardPath, err := admin.CacheIndexPublicPath(synthetic)
 	if err != nil {
 		return "", err

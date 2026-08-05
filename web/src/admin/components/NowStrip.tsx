@@ -9,7 +9,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 
 import { getAdminRouteHref } from '@/admin/routes'
 import ButtonV2 from '@/components/Button'

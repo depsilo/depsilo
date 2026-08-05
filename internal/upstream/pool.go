@@ -45,8 +45,15 @@ type Upstream struct {
 	// Configured HTTP proxies own their DNS and egress boundary instead.
 	directNetworkGuard bool
 
-	mu     sync.RWMutex
-	health healthState
+	mu       sync.RWMutex
+	health   healthState
+	recovery passiveRecoveryState
+}
+
+type passiveRecoveryState struct {
+	reserved    bool
+	inFlight    bool
+	nextAttempt time.Time
 }
 
 type healthState struct {
@@ -100,6 +107,10 @@ type FetchResult struct {
 	StatusCode   int
 	ETag         string
 	LastModified string
+	// URL is the final response URL after redirects, with credentials and the
+	// fragment removed. Adapters use it only as a base for resolving links
+	// declared by upstream metadata.
+	URL string
 }
 
 // Pool manages a set of upstreams for a given adapter type.
@@ -290,8 +301,12 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 	}
 	client := *u.client
 	client.CheckRedirect = u.secureRedirectCheck(client.CheckRedirect)
-	if err := u.admitExchange(); err != nil {
+	recovery, err := u.admitExchange()
+	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), err)
+	}
+	if recovery {
+		defer u.finishPassiveRecovery()
 	}
 
 	start := time.Now()
@@ -324,6 +339,7 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 		StatusCode:   resp.StatusCode,
 		ETag:         resp.Header.Get("ETag"),
 		LastModified: resp.Header.Get("Last-Modified"),
+		URL:          responseURL(resp, reqURL),
 	}, nil
 }
 
@@ -351,8 +367,12 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 	}
 	client := *u.client
 	client.CheckRedirect = u.secureRedirectCheck(client.CheckRedirect)
-	if err := u.admitExchange(); err != nil {
+	recovery, err := u.admitExchange()
+	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), err)
+	}
+	if recovery {
+		defer u.finishPassiveRecovery()
 	}
 
 	start := time.Now()
@@ -379,7 +399,23 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 		StatusCode:   resp.StatusCode,
 		ETag:         resp.Header.Get("ETag"),
 		LastModified: resp.Header.Get("Last-Modified"),
+		URL:          responseURL(resp, reqURL),
 	}, nil
+}
+
+func responseURL(response *http.Response, fallback string) string {
+	resolved := fallback
+	if response != nil && response.Request != nil && response.Request.URL != nil {
+		resolved = response.Request.URL.String()
+	}
+	parsed, err := url.Parse(resolved)
+	if err != nil {
+		return ""
+	}
+	parsed.User = nil
+	parsed.Fragment = ""
+	parsed.RawFragment = ""
+	return parsed.String()
 }
 
 // Report records a request result for latency/health tracking.
@@ -426,17 +462,27 @@ func (u *Upstream) ReportCriticalFailure(latency time.Duration) {
 // Upstream pointer and a concurrent protocol-integrity failure. Exchanges
 // admitted before the latch are already in flight; every later exchange is
 // rejected even when it bypasses Selector and reuses that pointer directly.
-func (u *Upstream) admitExchange() error {
+func (u *Upstream) admitExchange() (bool, error) {
 	if u == nil {
-		return errors.New("nil upstream")
+		return false, errors.New("nil upstream")
 	}
-	u.mu.RLock()
-	latched := u.health.criticalFailureLatched
-	u.mu.RUnlock()
-	if latched {
-		return errCriticalFailureLatched
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.health.criticalFailureLatched {
+		return false, errCriticalFailureLatched
 	}
-	return nil
+	recovery := u.recovery.reserved
+	if recovery {
+		u.recovery.reserved = false
+		u.recovery.inFlight = true
+	}
+	return recovery, nil
+}
+
+func (u *Upstream) finishPassiveRecovery() {
+	u.mu.Lock()
+	u.recovery.inFlight = false
+	u.mu.Unlock()
 }
 
 func (u *Upstream) applyProbe(result ProbeResult) {

@@ -114,7 +114,7 @@ if (
     exit 1
 fi
 
-for target in run run-pro dev; do
+for target in run run-pro; do
     dry_run=$(make -n -C "$ROOT" "$target" BIN="$FAKE_BIN" CONFIG="$CONFIG_FILE" DEV_JWT_SECRET="$SECRET_FILE")
     if ! grep -Fq 'scripts/run-dev.sh' <<<"$dry_run"; then
         echo "make $target does not use the guarded development runner" >&2
@@ -130,5 +130,19 @@ for target in run run-pro dev; do
         exit 1
     fi
 done
+
+dev_dry_run=$(make -n -C "$ROOT" dev BIN="$FAKE_BIN" CONFIG="$CONFIG_FILE" DEV_JWT_SECRET="$SECRET_FILE")
+if ! grep -Fq 'scripts/dev-service.sh start' <<<"$dev_dry_run"; then
+    echo "make dev does not use the guarded background service manager" >&2
+    exit 1
+fi
+if ! grep -Fq -- '--port "23333"' <<<"$dev_dry_run"; then
+    echo "make dev does not keep its service and health-check ports aligned" >&2
+    exit 1
+fi
+if grep -Fq 'DEPSILO_DEV_PRO=1' <<<"$dev_dry_run"; then
+    echo "make dev unexpectedly enables Pro development features" >&2
+    exit 1
+fi
 
 echo "make development runner tests passed"

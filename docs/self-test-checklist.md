@@ -32,10 +32,10 @@ docker run -d --name depsilo \
 ```
 
 - [ ] `curl -sf http://localhost:23333/health | jq .` 返回 healthy
-- [ ] 首次打开 `http://localhost:23333/`，完成 Setup Wizard。向导配置端口、
-      存储和上游，不创建管理员
+- [ ] 从 `docker logs depsilo` 取得一次性 bootstrap token，首次打开
+      `http://localhost:23333/` 后完成 Setup Wizard。向导配置服务并创建首个管理员
 - [ ] `/api/v1/discover` 的 `ecosystems` 长度为 14；Docker OCI 单独走 `/v2/`
-- [ ] 使用默认 `admin` / `admin` 登录 `/admin`，立即修改密码
+- [ ] 使用向导中创建的管理员登录 `/admin`；系统不存在默认 `admin/admin` 密码
 - [ ] 容器重启后配置、数据库和缓存目录仍存在
 - [ ] doctor 没有 fail：
 
@@ -154,12 +154,16 @@ handler 会更新，普通 PyPI/npm 等请求不会生成对应 series。
 
 CLI backup **只包含 `config.toml` 和 SQLite 数据库**，不包含本地/S3 缓存对象。
 恢复数据库中的缓存元数据不等于恢复制品字节；缓存需单独备份或重新回源。
-当前 backup 直接读取 SQLite 主文件，不使用 online-backup API，也不归档 WAL；
-生成一致备份前先停止 server。
+backup v2 使用 SQLite `VACUUM INTO` 在线生成一致快照，会包含仍在 WAL 中的已提交事务；
+manifest 记录格式版本、文件大小和 SHA-256。创建备份时无需停止 server。
+restore 只接受完成校验的 v2 归档；旧 v1 归档应先在隔离环境中恢复并重新备份。
+恢复以持久 journal 执行，进程在切换中途退出后，下一次 server 启动或 restore
+会自动收敛到完整旧状态或完整新状态。Unix 上数据库目录必须由 Depsilo 服务账号
+持有且不可被 group/other 写入（建议 `0750` 或 `0700`）；共享卷请在启动前完成
+`chown`/`chmod`，否则服务会为保护运行锁而拒绝启动。
 
 ```bash
 mkdir -p backups
-docker stop depsilo
 docker run --rm \
   -e DEPSILO_CONFIG=/root/.depsilo/config.toml \
   -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
@@ -168,12 +172,12 @@ docker run --rm \
   -v "$PWD/backups:/backup" \
   depsilo/depsilo:0.8.0 \
   backup --out /backup/depsilo-backup.tar.gz
-docker start depsilo
 tar -tzf backups/depsilo-backup.tar.gz
 ```
 
 - [ ] 归档只有 manifest、config 和 database；不声称包含 cache
-- [ ] 备份期间没有 Depsilo server 进程写 SQLite
+- [ ] `manifest.json` 为 `depsilo-backup` v2，两个状态文件都有 SHA-256
+- [ ] server 正常运行时也能完成备份，并能在隔离 SQLite 中读到备份前已提交的数据
 - [ ] 在隔离目录执行恢复演练，不删除生产 `depsilo-state`
 
 下面的 disposable container 不启动服务器，因此满足“restore 时服务必须停止”：
@@ -195,7 +199,12 @@ test -s restore-drill/config.toml
 test -s restore-drill/data/depsilo.db
 ```
 
-- [ ] 实际恢复前停止 Depsilo；不要在运行中的 server 进程旁覆盖 SQLite
+- [ ] 实际恢复前停止 Depsilo；运行锁存在时 restore 必须拒绝覆盖 SQLite
+- [ ] 数据库目录权限为 `0750` 或更严格，且归 Depsilo 服务账号所有
+- [ ] checksum、TOML 或 SQLite 完整性校验失败时，现有状态保持不变
+- [ ] 在测试环境中断一次 restore，确认下一次启动能自动完成或安全回滚
+- [ ] 恢复后的 `config.toml` 和数据库权限为 `0600`，旧状态保留在
+      `*.pre-restore-*.bak`
 - [ ] 恢复后核对用户、上游、规则和审计数据
 - [ ] 单独验证缓存对象备份，或接受首次安装重新回源
 

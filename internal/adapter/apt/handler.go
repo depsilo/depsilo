@@ -1,14 +1,7 @@
 package apt
 
 import (
-	"context"
-	"fmt"
-	"io"
-	"net/http"
-	"time"
-
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
@@ -20,18 +13,14 @@ import (
 // Handler implements the APT adapter.
 // APT responses are fully passthrough — no content modification — to preserve GPG signatures.
 type Handler struct {
-	cacheMgr *cache.Manager
-	selector upstream.Selector
-	cfg      config.CacheConfig
-	db       *gorm.DB
+	proxy *adapter.TransparentProxy
+	cfg   config.CacheConfig
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
 	return &Handler{
-		cacheMgr: cacheMgr,
-		selector: selector,
-		cfg:      cfg,
-		db:       database,
+		proxy: adapter.NewTransparentProxy("apt", cacheMgr, selector, database),
+		cfg:   cfg,
 	}
 }
 
@@ -45,7 +34,6 @@ func (h *Handler) Register(rg *gin.RouterGroup) {
 func (h *Handler) handleRequest(c *gin.Context) {
 	repo := c.Param("repo")
 	filepath := c.Param("filepath")
-	start := time.Now()
 
 	// Build the full upstream path: /{repo}/dists/{filepath} or /{repo}/pool/{filepath}
 	// Gin strips the matched prefix, so we reconstruct from the full URL path
@@ -60,55 +48,12 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		ttl = h.cfg.TTLIndex
 	}
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "apt", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		ups, err := h.selector.Select(ctx)
-		if err != nil {
-			return nil, "", 0, "", err
-		}
-
-		zap.L().Info("fetching from apt upstream",
-			zap.String("upstream", ups.Name),
-			zap.String("path", upstreamPath),
-		)
-
-		fetchResult, err := ups.Fetch(ctx, upstreamPath)
-		if err != nil {
-			return nil, "", 0, "", err
-		}
-
-		if fetchResult.StatusCode == http.StatusNotFound {
-			fetchResult.Body.Close()
-			return nil, "", 0, ups.Name, fmt.Errorf("not found: %s", upstreamPath)
-		}
-
-		return fetchResult.Body, fetchResult.ContentType, fetchResult.Size, ups.Name, nil
+	h.proxy.Serve(c, adapter.TransparentPlan{
+		Path:               upstreamPath,
+		CacheKey:           cacheKey,
+		TTL:                ttl,
+		DefaultContentType: detectContentType(filepath),
 	})
-
-	if err != nil {
-		zap.L().Error("apt fetch failed",
-			zap.String("path", upstreamPath),
-			zap.Error(err),
-		)
-		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
-		return
-	}
-	defer result.Reader.Close()
-
-	ct := result.ContentType
-	if ct == "" {
-		ct = detectContentType(filepath)
-	}
-	c.Header("Content-Type", ct)
-	if result.Size > 0 {
-		c.Header("Content-Length", fmt.Sprintf("%d", result.Size))
-	}
-	c.Status(http.StatusOK)
-	written, copyErr := io.Copy(c.Writer, result.Reader)
-	if copyErr != nil {
-		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
-	}
-
-	adapter.LogAccess(c.Request.Context(), h.db, "apt", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
 func detectContentType(path string) string {

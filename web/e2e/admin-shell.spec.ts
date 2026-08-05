@@ -2,6 +2,7 @@ import { adminApiDefaults, test, expect, mockAdminApi, setUiPreferences } from '
 
 const adminHrefs = [
   '/admin',
+  '/admin/attention',
   '/admin/bandwidth',
   '/admin/logs',
   '/admin/audit',
@@ -75,6 +76,20 @@ test('desktop navigation follows Operator task domains without changing URLs', a
   await page.goto('/admin/security/unknown')
   await expect(page.locator('[data-route-state="not-found"]')).toBeVisible()
   await expect(navigation.locator('a[aria-current="page"]')).toHaveCount(0)
+})
+
+test('desktop sign-out control becomes visibly focused for keyboard users', async ({ page }) => {
+  await mockAdminApi(page)
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/admin')
+
+  const sidebar = page.locator('aside')
+  const signOut = sidebar.getByRole('button', { name: /退出登录|Sign out/ })
+  await expect(signOut).toHaveCSS('opacity', '0')
+  await signOut.focus()
+  await expect(signOut).toBeFocused()
+  await expect(signOut).toHaveCSS('opacity', '1')
+  await expect(signOut).toHaveCSS('outline-style', /solid|auto/)
 })
 
 test('short mobile drawer keeps shell controls fixed while every domain remains reachable', async ({ page }) => {

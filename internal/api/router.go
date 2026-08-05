@@ -46,8 +46,7 @@ type Deps struct {
 	Ecosystems       []string
 	CacheMgr         *cache.Manager
 	CacheRetention   *cache.Retention
-	CompileCache     *compilecache.Service
-	CompileCacheAuth *compilecache.Authorizer
+	CompileCache     CompileCacheRouteDependencies
 	IndexRefresher   upstreamupdates.Refresher
 	EventBus         *cache.EventBus
 	LicenseManager   *license.Manager
@@ -71,20 +70,32 @@ type Deps struct {
 	Tasks           asyncruntime.Submitter
 }
 
+// CompileCacheRouteDependencies is the coherent handler-facing view of the
+// optional compiler-cache runtime. Disabled routes remain registered with a
+// nil Service so package-client misses can never fall through to the SPA.
+type CompileCacheRouteDependencies struct {
+	Enabled    bool
+	PublicURL  string
+	Service    *compilecache.Service
+	Authorizer *compilecache.Authorizer
+}
+
 func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Public routes
 	r.GET("/health", healthHandler)
+	r.GET("/live", healthHandler)
+	r.GET("/ready", readinessHandler(deps.DB, deps.Storage))
 	r.GET("/metrics", MetricsHandler())
 
 	// Stock ccache remote-storage data plane. The route remains registered
 	// while disabled so the SPA fallback never returns HTML as a false hit.
-	ccacheHandler := NewCCacheHandler(deps.Config.CompileCache.Enabled, deps.CompileCache, deps.CompileCacheAuth)
+	ccacheHandler := NewCCacheHandler(deps.CompileCache.Enabled, deps.CompileCache.Service, deps.CompileCache.Authorizer)
 	ccacheGroup := r.Group("/ccache/v1/:namespace")
 	ccacheGroup.Any("/*key", ccacheHandler.Handle)
 	// sccache uses a narrow WebDAV Adapter over the same quota/LRU/storage
 	// Module. Keep this route registered while disabled for the same SPA-safety
 	// reason as the ccache route above.
-	sccacheHandler := NewSCCacheHandler(deps.Config.CompileCache.Enabled, deps.CompileCache, deps.CompileCacheAuth)
+	sccacheHandler := NewSCCacheHandler(deps.CompileCache.Enabled, deps.CompileCache.Service, deps.CompileCache.Authorizer)
 	sccacheGroup := r.Group("/sccache/v1/:namespace")
 	sccacheGroup.Any("/*path", sccacheHandler.Handle)
 	sccacheGroup.Handle(methodPropfind, "/*path", sccacheHandler.Handle)
@@ -181,9 +192,9 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// authority.
 	compileCacheHandler := admin.NewCompileCacheHandler(
 		deps.DB,
-		deps.CompileCache,
-		deps.Config.CompileCache.Enabled,
-		deps.Config.CompileCache.PublicURL,
+		deps.CompileCache.Service,
+		deps.CompileCache.Enabled,
+		deps.CompileCache.PublicURL,
 	)
 	adminRead.GET("/compile-cache/status", compileCacheHandler.Status)
 	adminRead.GET("/compile-cache/credentials", compileCacheHandler.ListCredentials)

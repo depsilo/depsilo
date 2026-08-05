@@ -156,8 +156,8 @@ export default function BandwidthReport() {
               onClick={() => setRange(r.value)}
               className="whitespace-nowrap rounded-[4px] px-3 py-1 text-[12px] font-[500] transition-colors duration-150 cursor-pointer"
               style={{
-                background: active ? 'var(--btn-primary-bg)' : 'transparent',
-                color: active ? 'white' : 'var(--text-soft)',
+                background: active ? 'var(--btn)' : 'transparent',
+                color: active ? 'var(--btn-fg)' : 'var(--text-soft)',
                 border: active ? 'none' : '1px solid var(--border)',
               }}
             >

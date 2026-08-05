@@ -78,9 +78,10 @@ const ICONS: Record<Theme, string> = {
 
 interface ThemeToggleProps {
   labeled?: boolean
+  variant?: 'default' | 'portal'
 }
 
-export default function ThemeToggle({ labeled = false }: ThemeToggleProps) {
+export default function ThemeToggle({ labeled = false, variant = 'default' }: ThemeToggleProps) {
   const { t } = useTranslation()
   const [theme, setTheme] = useTheme()
 
@@ -97,6 +98,22 @@ export default function ThemeToggle({ labeled = false }: ThemeToggleProps) {
 
   const label = t('theme.changeNamed', { theme: LABELS[theme] })
   const visibleLabel = t('theme.controlNamed', { theme: LABELS[theme] })
+
+  if (variant === 'portal') {
+    return (
+      <button
+        type="button"
+        data-theme-toggle="portal"
+        aria-label={label}
+        title={label}
+        onClick={cycle}
+        className="portal-header-control portal-theme-button stripe-focus-ring"
+      >
+        <Icon name={ICONS[theme]} size="sm" />
+        <span className="portal-theme-label">{LABELS[theme]}</span>
+      </button>
+    )
+  }
 
   if (labeled) {
     return (

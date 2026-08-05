@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-21
 **Status:** Approved design, ready for implementation plan
-**Backlog source:** [docs/plans/2026-05-20-feature-backlog.md](../plans/2026-05-20-feature-backlog.md) §二 Tier A1 + A2
+**Historical source:** 2026-05-20 feature backlog (available in Git history), Tier A1 + A2
 **Scope:** `depsilo/` + `depsilo-landingpage/` (two repos)
 
 ---

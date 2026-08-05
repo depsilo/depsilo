@@ -2,9 +2,11 @@ package pypi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"time"
@@ -29,29 +31,85 @@ type Handler struct {
 	db         *gorm.DB
 	pathPrefix string
 	adapterID  string
+	// cacheNamespace and artifactAudience may vary inside a channel-aware
+	// index family while adapterID stays stable for policy, metrics, and DB
+	// classification. Empty values preserve the legacy adapterID identity.
+	cacheNamespace   string
+	artifactAudience string
+	// upstreamSimplePath is the upstream root that contains project index
+	// pages. PyPI uses /simple; PyTorch's CUDA indexes expose them at /.
+	upstreamSimplePath string
+	artifactSigningKey []byte
+	artifactSelector   upstream.Selector
+}
+
+// Options configures one PyPI-compatible route while keeping the public route
+// shape (/simple/...) independent from the upstream's project-index layout.
+type Options struct {
+	PathPrefix         string
+	AdapterID          string
+	UpstreamSimplePath string
+	// ArtifactSigningKey authenticates artifact URLs declared by an index page.
+	// Keep it stable across restarts for as long as cached index pages may live.
+	ArtifactSigningKey []byte
+	// ArtifactSelector chooses the egress client for signed artifact downloads.
+	// Nil falls back to the metadata selector for backward compatibility.
+	ArtifactSelector upstream.Selector
 }
 
 // New creates a new PyPI handler.
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
-	return &Handler{
-		cacheMgr:   cacheMgr,
-		selector:   selector,
-		cfg:        cfg,
-		db:         database,
-		pathPrefix: "/pypi",
-		adapterID:  "pypi",
-	}
+	handler, _ := newWithOptions(cacheMgr, selector, cfg, database, Options{
+		PathPrefix:         "/pypi",
+		AdapterID:          "pypi",
+		UpstreamSimplePath: "/simple",
+	})
+	return handler
 }
 
-func NewWithPrefix(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB, pathPrefix, adapterID string) *Handler {
-	return &Handler{
-		cacheMgr:   cacheMgr,
-		selector:   selector,
-		cfg:        cfg,
-		db:         database,
-		pathPrefix: pathPrefix,
-		adapterID:  adapterID,
+// NewWithPrefix creates a legacy-layout route. Callers that identify the route
+// as an extra index must use NewWithOptions and provide an artifact signing key.
+func NewWithPrefix(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB, pathPrefix, adapterID string) (*Handler, error) {
+	return newWithOptions(cacheMgr, selector, cfg, database, Options{
+		PathPrefix:         pathPrefix,
+		AdapterID:          adapterID,
+		UpstreamSimplePath: "/simple",
+	})
+}
+
+// NewWithOptions creates a PyPI-compatible handler with an explicit upstream
+// project-index root and signed artifact references.
+func NewWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB, options Options) (*Handler, error) {
+	return newWithOptions(cacheMgr, selector, cfg, database, options)
+}
+
+func newWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB, options Options) (*Handler, error) {
+	if options.PathPrefix == "" {
+		options.PathPrefix = "/pypi"
 	}
+	if options.AdapterID == "" {
+		options.AdapterID = "pypi"
+	}
+	if strings.HasPrefix(options.AdapterID, "extra:") && len(options.ArtifactSigningKey) < 32 {
+		return nil, errors.New("extra PyPI index requires an artifact signing key of at least 32 bytes")
+	}
+	simplePath, err := normalizeUpstreamSimplePath(options.UpstreamSimplePath)
+	if err != nil {
+		return nil, err
+	}
+	return &Handler{
+		cacheMgr:           cacheMgr,
+		selector:           selector,
+		cfg:                cfg,
+		db:                 database,
+		pathPrefix:         strings.TrimRight(options.PathPrefix, "/"),
+		adapterID:          options.AdapterID,
+		cacheNamespace:     options.AdapterID,
+		artifactAudience:   options.AdapterID,
+		upstreamSimplePath: simplePath,
+		artifactSigningKey: append([]byte(nil), options.ArtifactSigningKey...),
+		artifactSelector:   options.ArtifactSelector,
+	}, nil
 }
 
 func (h *Handler) Type() string { return h.adapterID }
@@ -72,7 +130,7 @@ func (h *Handler) handleSimpleIndex(c *gin.Context) {
 		return
 	}
 
-	result, err := ups.Fetch(c.Request.Context(), "/simple/")
+	result, err := ups.Fetch(c.Request.Context(), h.upstreamProjectPath(""))
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
@@ -96,7 +154,10 @@ func (h *Handler) handlePackageRedirect(c *gin.Context) {
 // handlePackageIndex proxies and caches a package's simple index, rewriting URLs.
 func (h *Handler) handlePackageIndex(c *gin.Context) {
 	pkg := c.Param("package")
-	cacheKey := IndexCacheKey(h.adapterID, pkg)
+	cacheKey := IndexCacheKey(h.cacheIdentity(), pkg)
+	if strings.HasPrefix(h.adapterID, "extra:") {
+		cacheKey = signedIndexCacheKey(h.cacheIdentity(), pkg, h.artifactSigningKey)
+	}
 	start := time.Now()
 
 	baseURL := getBaseURL(c)
@@ -119,7 +180,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 			zap.String("upstream", ups.Name),
 		)
 
-		fetchResult, err := ups.FetchWithHeaders(ctx, "/simple/"+pkg+"/", map[string]string{
+		fetchResult, err := ups.FetchWithHeaders(ctx, h.upstreamProjectPath(pkg), map[string]string{
 			"If-None-Match":     cachedValidators.ETag,
 			"If-Modified-Since": cachedValidators.LastModified,
 		})
@@ -138,9 +199,17 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 			return nil, "", 0, ups.Name, err
 		}
 
-		html := string(body)
-		// Rewrite all download URLs to point through our proxy (stored with empty base)
-		html = RewriteURLs(html, "", h.pathPrefix)
+		html, err := rewriteSignedArtifactURLs(
+			string(body),
+			"",
+			h.pathPrefix,
+			fetchResult.URL,
+			h.tokenAudience(),
+			h.artifactSigningKey,
+		)
+		if err != nil {
+			return nil, "", 0, ups.Name, err
+		}
 
 		bodyReader := io.NopCloser(strings.NewReader(html))
 		return cache.WithResponseValidators(bodyReader, fetchResult.ETag, fetchResult.LastModified), fetchResult.ContentType, int64(len(html)), ups.Name, nil
@@ -184,37 +253,62 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 // handleFileDownload proxies and caches package file downloads.
 func (h *Handler) handleFileDownload(c *gin.Context) {
 	filepath := c.Param("filepath")
-	// Quarantine gate. PyPI file paths look like
-	// "/packages/source/r/requests/requests-2.32.3.tar.gz" or the
-	// equivalent wheel; the last component carries (pkg, version)
-	// in PEP 427 / 625 form. Only fire the check for the extra-
-	// indexes / main PyPI route — we DO NOT block on the extra-index
-	// adapterID layer here since each extra-index is its own
-	// ecosystem name and may not have a quarantine threshold; the
-	// checker short-circuits on threshold-0 ecosystems anyway, so
-	// passing adapterID is safe.
-	if base := lastPathSegment(filepath); base != "" {
+	externalTarget, external, err := h.resolveExternalArtifact(filepath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "invalid external artifact reference"})
+		return
+	}
+	artifactPath := filepath
+	if external {
+		artifactPath = externalTarget.filename
+	}
+	// PyPI file paths carry (package, version) in their PEP 427 / 625
+	// filename. Keep adapterID as the policy identity: the blocklist layer
+	// canonicalizes extra:* to PyPI, while extra-index release-age resolution
+	// remains distinct from the public PyPI registry.
+	if base := lastPathSegment(artifactPath); base != "" {
 		if pkg, version := packagekey.ParsePypiFilename(base); pkg != "" && version != "" {
 			if blocked := adapter.QuarantineGate(c, h.adapterID, pkg, version); blocked {
 				return
 			}
 		}
 	}
-	cacheKey := FileCacheKey(h.adapterID, filepath)
+	cacheKey := FileCacheKey(h.cacheIdentity(), filepath)
+	if external {
+		cacheKey = ExternalFileCacheKey(h.cacheIdentity(), externalTarget.url)
+	}
 	start := time.Now()
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		ups, err := h.selector.Select(ctx)
+		downloadSelector := h.selector
+		if external && h.artifactSelector != nil {
+			downloadSelector = h.artifactSelector
+		}
+		ups, err := downloadSelector.Select(ctx)
 		if err != nil {
 			return nil, "", 0, "", err
 		}
 
-		zap.L().Info("fetching file from upstream",
-			zap.String("filepath", filepath),
+		logFields := []zap.Field{
+			zap.String("cache_key", cacheKey),
 			zap.String("upstream", ups.Name),
-		)
+		}
+		if external {
+			logFields = append(logFields,
+				zap.String("artifact_filename", externalTarget.filename),
+				zap.String("artifact_host", externalTarget.host),
+			)
+		} else {
+			logFields = append(logFields, zap.String("filepath", filepath))
+		}
+		zap.L().Info("fetching file from upstream", logFields...)
 
-		fetchResult, err := ups.Fetch(ctx, filepath)
+		var fetchResult *upstream.FetchResult
+		if external {
+			fetchResult, err = ups.FetchURL(ctx, externalTarget.url)
+		} else {
+			fetchResult, err = ups.Fetch(ctx, filepath)
+		}
 		if err != nil {
 			return nil, "", 0, "", err
 		}
@@ -223,7 +317,16 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 	})
 
 	if err != nil {
-		zap.L().Error("failed to get file", zap.String("filepath", filepath), zap.Error(err))
+		logFields := []zap.Field{zap.String("cache_key", cacheKey), zap.Error(err)}
+		if external {
+			logFields = append(logFields,
+				zap.String("artifact_filename", externalTarget.filename),
+				zap.String("artifact_host", externalTarget.host),
+			)
+		} else {
+			logFields = append(logFields, zap.String("filepath", filepath))
+		}
+		zap.L().Error("failed to get file", logFields...)
 		status := http.StatusBadGateway
 		code := "UPSTREAM_UNAVAILABLE"
 		if strings.Contains(err.Error(), "returned 404") {
@@ -252,6 +355,55 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 	adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
 }
 
+type externalArtifactTarget struct {
+	url      string
+	host     string
+	filename string
+}
+
+var errInvalidExternalArtifactReference = errors.New("invalid external artifact reference")
+
+func (h *Handler) resolveExternalArtifact(filepath string) (externalArtifactTarget, bool, error) {
+	const prefix = "/_external/"
+	if !strings.HasPrefix(filepath, prefix) {
+		return externalArtifactTarget{}, false, nil
+	}
+	reference := strings.TrimPrefix(filepath, prefix)
+	token, requestedFilename, found := strings.Cut(reference, "/")
+	if !found || token == "" || requestedFilename == "" ||
+		strings.Contains(requestedFilename, "/") || len(requestedFilename) > maxArtifactFilenameLength+len(".metadata") {
+		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
+	}
+	targetText, err := decodeExternalArtifactToken(h.artifactSigningKey, h.tokenAudience(), token)
+	if err != nil {
+		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
+	}
+	target, err := parseFetchableArtifactURL(targetText)
+	if err != nil || !obviousPythonArtifactURL(target) {
+		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
+	}
+	expectedFilename, err := artifactFilename(target)
+	if err != nil {
+		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
+	}
+	artifactFilename := expectedFilename
+	switch {
+	case requestedFilename == expectedFilename:
+	case !strings.HasSuffix(strings.ToLower(expectedFilename), ".metadata") && requestedFilename == expectedFilename+".metadata":
+		target.Path += ".metadata"
+		if target.RawPath != "" {
+			target.RawPath += ".metadata"
+		}
+	default:
+		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
+	}
+	return externalArtifactTarget{
+		url:      target.String(),
+		host:     target.Hostname(),
+		filename: artifactFilename,
+	}, true, nil
+}
+
 // getBaseURL extracts the base URL from the request (scheme + host).
 func getBaseURL(c *gin.Context) string {
 	scheme := "http"
@@ -272,4 +424,47 @@ func lastPathSegment(p string) string {
 		return p[i+1:]
 	}
 	return p
+}
+
+func normalizeUpstreamSimplePath(value string) (string, error) {
+	if value == "" {
+		return "/simple", nil
+	}
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		!strings.HasPrefix(parsed.Path, "/") || strings.HasPrefix(parsed.Path, "//") {
+		return "", fmt.Errorf("upstream simple path %q must be an absolute URL path", value)
+	}
+	normalized := strings.TrimRight(parsed.EscapedPath(), "/")
+	if normalized == "" {
+		normalized = "/"
+	}
+	return normalized, nil
+}
+
+func (h *Handler) upstreamProjectPath(packageName string) string {
+	if packageName == "" {
+		if h.upstreamSimplePath == "/" {
+			return "/"
+		}
+		return h.upstreamSimplePath + "/"
+	}
+	if h.upstreamSimplePath == "/" {
+		return "/" + packageName + "/"
+	}
+	return h.upstreamSimplePath + "/" + packageName + "/"
+}
+
+func (h *Handler) cacheIdentity() string {
+	if h.cacheNamespace != "" {
+		return h.cacheNamespace
+	}
+	return h.adapterID
+}
+
+func (h *Handler) tokenAudience() string {
+	if h.artifactAudience != "" {
+		return h.artifactAudience
+	}
+	return h.adapterID
 }

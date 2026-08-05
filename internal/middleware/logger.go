@@ -10,7 +10,7 @@ import (
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
-		path := c.Request.URL.Path
+		path := redactedRequestPath(c.Request.URL.Path)
 
 		c.Next()
 

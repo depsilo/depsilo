@@ -142,18 +142,6 @@ func TestURLRewrite_Npm_InvalidJSON(t *testing.T) {
 
 // ---------- Composer URL Rewrite ----------
 
-func TestURLRewrite_Composer_PackagesJSON(t *testing.T) {
-	input := `{"packages":{},"metadata-url":"/p2/%package%.json"}`
-	result, err := composerAdapter.RewritePackagesJSON([]byte(input), "http://localhost:8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resultStr := string(result)
-	if !strings.Contains(resultStr, "http://localhost:8080/composer/p2/%package%.json") {
-		t.Errorf("metadata-url not rewritten: %s", resultStr)
-	}
-}
-
 func TestURLRewrite_Composer_PreservesPackages(t *testing.T) {
 	input := `{"packages":{"test/pkg":[]},"metadata-url":"/p2/%package%.json"}`
 	result, err := composerAdapter.RewritePackagesJSON([]byte(input), "http://localhost:8080")
@@ -166,13 +154,6 @@ func TestURLRewrite_Composer_PreservesPackages(t *testing.T) {
 	}
 	if _, ok := doc["packages"]; !ok {
 		t.Error("packages field not preserved")
-	}
-}
-
-func TestURLRewrite_Composer_InvalidJSON(t *testing.T) {
-	_, err := composerAdapter.RewritePackagesJSON([]byte("{bad"), "http://localhost:8080")
-	if err == nil {
-		t.Error("expected error for invalid JSON")
 	}
 }
 

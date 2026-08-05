@@ -1,9 +1,8 @@
-version: '3.8'
 services:
   depsilo:
     build: .
     ports:
-      - "23333:23333"
+      - "${PORT:-23333}:23333"
     volumes:
       - ./data:/app/data
       - ./config.toml:/app/config.toml

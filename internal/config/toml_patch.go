@@ -131,68 +131,50 @@ func indexSettingsDocument(document []byte) (settingsDocumentIndex, error) {
 	return index, nil
 }
 
-func sanitizeConfigDocumentForViper(document []byte) ([]byte, error) {
-	type parsedExpression struct {
-		start    int
-		sanitize bool
-	}
-
+func validateConfigDocumentSyntax(document []byte) error {
 	var parser unstable.Parser
 	parser.KeepComments = true
 	parser.Reset(document)
-	atRoot := true
-	sanitizeTableBlock := false
-	expressions := make([]parsedExpression, 0)
+	var tablePath []string
 	for parser.NextExpression() {
 		expression := parser.Expression()
-		sanitize := sanitizeTableBlock
 		switch expression.Kind {
 		case unstable.Table, unstable.ArrayTable:
-			atRoot = false
-			path := nodeKey(expression)
-			sanitizeTableBlock = len(path) > 0 && strings.Contains(path[0], ".")
-			sanitize = sanitizeTableBlock
+			tablePath = nodeKey(expression)
+			if !isCustomDocumentPath(tablePath) && containsLiteralDottedComponent(tablePath) {
+				return fmt.Errorf(
+					"literal dotted table %q is not allowed outside [custom]; split the quoted component into TOML dotted table segments",
+					strings.Join(tablePath, "."),
+				)
+			}
 		case unstable.KeyValue:
 			key := nodeKey(expression)
-			sanitize = sanitizeTableBlock || (atRoot && len(key) == 1 && strings.Contains(key[0], "."))
+			path := append(append([]string(nil), tablePath...), key...)
+			if !isCustomDocumentPath(path) && containsLiteralDottedComponent(key) {
+				return fmt.Errorf(
+					"literal dotted key %q is not allowed outside [custom]; split the quoted component into TOML dotted key segments",
+					strings.Join(path, "."),
+				)
+			}
 		}
-		expressions = append(expressions, parsedExpression{
-			start:    expressionLineStart(document, expression),
-			sanitize: sanitize,
-		})
 	}
 	if err := parser.Error(); err != nil {
-		return nil, fmt.Errorf("parse config document: %w", err)
+		return fmt.Errorf("parse config document: %w", err)
 	}
-
-	sanitized := append([]byte(nil), document...)
-	for i, expression := range expressions {
-		if !expression.sanitize {
-			continue
-		}
-		end := len(document)
-		if i+1 < len(expressions) {
-			end = expressions[i+1].start
-		}
-		blankDocumentRange(sanitized, expression.start, end)
-	}
-	return sanitized, nil
+	return nil
 }
 
-func expressionLineStart(document []byte, expression *unstable.Node) int {
-	at := int(expression.Raw.Offset)
-	if expression.Kind == unstable.Table || expression.Kind == unstable.ArrayTable || expression.Kind == unstable.KeyValue {
-		at = firstKeyOffset(expression)
-	}
-	return lineStartAt(document, at)
-}
-
-func blankDocumentRange(sanitized []byte, start, end int) {
-	for i := start; i < end; i++ {
-		if sanitized[i] != '\r' && sanitized[i] != '\n' {
-			sanitized[i] = ' '
+func containsLiteralDottedComponent(path []string) bool {
+	for _, component := range path {
+		if strings.Contains(component, ".") {
+			return true
 		}
 	}
+	return false
+}
+
+func isCustomDocumentPath(path []string) bool {
+	return len(path) > 0 && path[0] == "custom"
 }
 
 func indexValue(index *settingsDocumentIndex, value *unstable.Node, path []string) {

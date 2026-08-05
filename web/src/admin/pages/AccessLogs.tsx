@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
@@ -16,6 +17,8 @@ import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getApiError } from '@/lib/apiError'
+import { downloadBlob } from '@/lib/download'
+import { useAppToast } from '@/components/Toast'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AccessLog, AccessLogQuery } from '@/lib/adminApi.types'
 
@@ -25,13 +28,57 @@ function latencyColor(ms: number): string {
   return 'var(--danger)'
 }
 
+function parsePage(value: string | null): number {
+  if (value === null || !/^[1-9]\d*$/.test(value)) return 1
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : 1
+}
+
+function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(current)
+  const packageName = current.get('package')?.trim() ?? ''
+  if (packageName) next.set('package', packageName)
+  else next.delete('package')
+
+  const ecosystem = current.get('ecosystem')?.trim() ?? ''
+  if (operatorEcosystems.some(item => item.id === ecosystem)) next.set('ecosystem', ecosystem)
+  else next.delete('ecosystem')
+
+  const result = current.get('result')
+  if (result === 'hit' || result === 'miss') next.set('result', result)
+  else next.delete('result')
+
+  const page = parsePage(current.get('page'))
+  if (page > 1) next.set('page', String(page))
+  else next.delete('page')
+  return next
+}
+
 export default function AccessLogsV2() {
   const { t } = useTranslation()
-  const [search, setSearch] = useState('')
-  const [adapterType, setAdapterType] = useState('all')
-  const [hitFilter, setHitFilter] = useState('all')
-  const [page, setPage] = useState(1)
-  const [appliedSearch, setAppliedSearch] = useState('')
+  const toast = useAppToast()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const serializedSearchParams = searchParams.toString()
+  const canonicalSearchParams = canonicalizeSearchParams(searchParams)
+  const serializedCanonicalSearchParams = canonicalSearchParams.toString()
+  const searchParamsRef = useRef(canonicalSearchParams)
+  const appliedSearch = canonicalSearchParams.get('package') ?? ''
+  const adapterType = canonicalSearchParams.get('ecosystem') ?? 'all'
+  const hitFilter = canonicalSearchParams.get('result') ?? 'all'
+  const page = parsePage(canonicalSearchParams.get('page'))
+  const [search, setSearch] = useState(appliedSearch)
+
+  useEffect(() => {
+    const next = new URLSearchParams(serializedCanonicalSearchParams)
+    searchParamsRef.current = next
+    if (serializedSearchParams !== serializedCanonicalSearchParams) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [serializedCanonicalSearchParams, serializedSearchParams, setSearchParams])
+
+  useEffect(() => {
+    setSearch(appliedSearch)
+  }, [appliedSearch])
 
   const params: AccessLogQuery = { page, page_size: 50 }
   if (appliedSearch) Object.assign(params, { search: appliedSearch })
@@ -50,29 +97,67 @@ export default function AccessLogsV2() {
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
 
-  function handleSearch() {
-    setAppliedSearch(search)
-    setPage(1)
+  const exportMutation = useMutation({
+    mutationFn: () => adminApi.exportLogs(params),
+    onSuccess: (response) => {
+      const filename = `depsilo-access-logs-${new Date().toISOString().slice(0, 10)}.csv`
+      downloadBlob(new Blob([response.data]), filename)
+      toast.show({ tone: 'success', message: t('logs.exportSuccess', { filename }) })
+    },
+    onError: (mutationError) => {
+      toast.show({ tone: 'danger', message: t('logs.exportFailed', { reason: getApiError(mutationError).message }) })
+    },
+  })
+
+  function updateParams(mutator: (next: URLSearchParams) => void) {
+    const next = new URLSearchParams(searchParamsRef.current)
+    mutator(next)
+    next.delete('page')
+    searchParamsRef.current = next
+    setSearchParams(next)
   }
 
-  function handleExport() {
-    void adminApi.exportLogs(params).then(res => {
-      const url = URL.createObjectURL(new Blob([res.data]))
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `depsilo-access-logs-${new Date().toISOString().slice(0, 10)}.csv`
-      anchor.click()
-      URL.revokeObjectURL(url)
+  function handleSearch() {
+    updateParams((next) => {
+      const normalized = search.trim()
+      if (normalized) next.set('package', normalized)
+      else next.delete('package')
     })
   }
+
+  function clearFilters() {
+    setSearch('')
+    updateParams((next) => {
+      next.delete('package')
+      next.delete('ecosystem')
+      next.delete('result')
+    })
+  }
+
+  function setPage(nextPage: number) {
+    const next = new URLSearchParams(searchParamsRef.current)
+    if (nextPage <= 1) next.delete('page')
+    else next.set('page', String(nextPage))
+    searchParamsRef.current = next
+    setSearchParams(next)
+  }
+
+  const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || hitFilter !== 'all')
 
   return (
     <AdminPage
       description={t('logs.subtitle')}
       actions={(
-        <ButtonV2 type="button" variant="secondary" size="sm" onClick={handleExport}>
+        <ButtonV2
+          type="button"
+          variant="secondary"
+          size="sm"
+          aria-busy={exportMutation.isPending || undefined}
+          disabled={exportMutation.isPending}
+          onClick={() => exportMutation.mutate()}
+        >
           <Icon name="download" size="sm" />
-          {t('logs.export')}
+          {exportMutation.isPending ? t('logs.exporting') : t('logs.export')}
         </ButtonV2>
       )}
     >
@@ -95,12 +180,28 @@ export default function AccessLogsV2() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:contents">
-          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.ecosystem')} value={adapterType} onChange={(e) => { setAdapterType(e.target.value); setPage(1) }}>
+          <SelectV2
+            className="min-h-10 sm:w-auto"
+            aria-label={t('audit.ecosystem')}
+            value={adapterType}
+            onChange={(event) => updateParams((next) => {
+              if (event.target.value === 'all') next.delete('ecosystem')
+              else next.set('ecosystem', event.target.value)
+            })}
+          >
             <option value="all">{t('all')}</option>
             {operatorEcosystems.map(ecosystem => <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>)}
           </SelectV2>
 
-          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.result')} value={hitFilter} onChange={(e) => { setHitFilter(e.target.value); setPage(1) }}>
+          <SelectV2
+            className="min-h-10 sm:w-auto"
+            aria-label={t('audit.result')}
+            value={hitFilter}
+            onChange={(event) => updateParams((next) => {
+              if (event.target.value === 'all') next.delete('result')
+              else next.set('result', event.target.value)
+            })}
+          >
             <option value="all">{t('all')}</option>
             <option value="hit">{t('logs.hit')}</option>
             <option value="miss">{t('logs.miss')}</option>
@@ -110,6 +211,11 @@ export default function AccessLogsV2() {
         <ButtonV2 type="submit" variant="primary" size="sm" className="min-h-10 self-start sm:min-h-0">
           {t('search')}
         </ButtonV2>
+        {hasFilters && (
+          <ButtonV2 type="button" variant="secondary" size="sm" className="min-h-10 self-start sm:min-h-0" onClick={clearFilters}>
+            {t('logs.clearFilters')}
+          </ButtonV2>
+        )}
       </form>
 
       {/* Table — bare */}

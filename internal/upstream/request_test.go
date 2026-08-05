@@ -935,7 +935,7 @@ func TestDialResolvedDeadlineClosesLateConnection(t *testing.T) {
 func TestFetchRejectsTargetThatEscapesConfiguredOrigin(t *testing.T) {
 	var calls atomic.Int64
 	u := &Upstream{
-		URL: "https://origin.example",
+		URL: "https://alice:secret@origin.example/repository",
 		client: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			calls.Add(1)
 			return nil, errors.New("transport should not run")
@@ -947,16 +947,75 @@ func TestFetchRejectsTargetThatEscapesConfiguredOrigin(t *testing.T) {
 		"//evil.example/private",
 		"@evil.example/private",
 		"relative/path",
+		"/../admin",
+		"/packages/../../admin",
+		"/packages/%2e%2e/admin",
+		"/packages/%2E%2E/admin",
+		"/packages/%2e%2E/admin",
+		"/packages/%252e%252e/admin",
+		"/packages%252F..%252Fadmin",
+		"/packages\\..\\admin",
+		"/packages/%5c..%5cadmin",
+		"/packages/%255c..%255cadmin",
+		"/packages//item",
+		"/packages/%2Fitem",
 	} {
-		if _, err := u.Fetch(context.Background(), target); err == nil {
-			t.Errorf("Fetch target %q unexpectedly accepted", target)
-		}
-		if _, err := u.FetchWithHeaders(context.Background(), target, nil); err == nil {
-			t.Errorf("FetchWithHeaders target %q unexpectedly accepted", target)
-		}
+		t.Run(target, func(t *testing.T) {
+			if _, err := u.Request(context.Background(), target, RequestOptions{}); err == nil {
+				t.Errorf("Request target %q unexpectedly accepted", target)
+			}
+			if _, err := u.Fetch(context.Background(), target); err == nil {
+				t.Errorf("Fetch target %q unexpectedly accepted", target)
+			}
+			if _, err := u.FetchWithHeaders(context.Background(), target, nil); err == nil {
+				t.Errorf("FetchWithHeaders target %q unexpectedly accepted", target)
+			}
+		})
 	}
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("transport calls = %d, want 0", got)
+	}
+}
+
+func TestFetchRejectsNonCanonicalConfiguredBasePath(t *testing.T) {
+	var calls atomic.Int64
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls.Add(1)
+		return nil, errors.New("transport should not run")
+	})}
+
+	for _, base := range []string{
+		"https://origin.example/repository/../private",
+		"https://origin.example/repository/./private",
+		"https://origin.example/repository/%2e%2e/private",
+		"https://origin.example/repository/%252e%252e/private",
+		"https://origin.example/repository\\private",
+		"https://origin.example/repository/%5cprivate",
+		"https://origin.example/repository//private",
+	} {
+		t.Run(base, func(t *testing.T) {
+			u := &Upstream{URL: base, client: client}
+			if _, err := u.Fetch(context.Background(), "/packages/item"); err == nil {
+				t.Errorf("configured base %q unexpectedly accepted", base)
+			}
+		})
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("transport calls = %d, want 0", got)
+	}
+}
+
+func TestOriginPathValidationBoundsNestedEscaping(t *testing.T) {
+	if !validCanonicalOriginPath("/packages/%25literal", false) {
+		t.Fatal("a normally escaped literal percent was rejected")
+	}
+
+	deeplyEscaped := "/packages/%literal"
+	for range maxOriginPathDecodeLayers + 1 {
+		deeplyEscaped = strings.ReplaceAll(deeplyEscaped, "%", "%25")
+	}
+	if validCanonicalOriginPath(deeplyEscaped, false) {
+		t.Fatal("path that exceeds the nested-escape limit was accepted")
 	}
 }
 
@@ -964,7 +1023,7 @@ func TestFetchPreservesConfiguredOriginUserInfoAndBasePath(t *testing.T) {
 	var gotURL string
 	u := &Upstream{
 		Name: "private",
-		URL:  "https://alice:secret@origin.example/repository",
+		URL:  "https://alice:secret@origin.example/repository/",
 		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 			gotURL = request.URL.String()
 			return &http.Response{
@@ -976,13 +1035,19 @@ func TestFetchPreservesConfiguredOriginUserInfoAndBasePath(t *testing.T) {
 		})},
 	}
 
-	result, err := u.Fetch(context.Background(), "/packages/item")
+	result, err := u.Fetch(
+		context.Background(),
+		"/acme/model/resolve/refs%2Fpr%2F1/pkg-1.2.3/.well-known/item?channel=stable&signature=a%2Fb",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer result.Body.Close()
-	if gotURL != "https://alice:secret@origin.example/repository/packages/item" {
+	if gotURL != "https://alice:secret@origin.example/repository/acme/model/resolve/refs%2Fpr%2F1/pkg-1.2.3/.well-known/item?channel=stable&signature=a%2Fb" {
 		t.Fatalf("Fetch URL = %q, want configured credentials and base path", gotURL)
+	}
+	if result.URL != "https://origin.example/repository/acme/model/resolve/refs%2Fpr%2F1/pkg-1.2.3/.well-known/item?channel=stable&signature=a%2Fb" {
+		t.Fatalf("FetchResult.URL = %q, want final URL without configured credentials", result.URL)
 	}
 }
 

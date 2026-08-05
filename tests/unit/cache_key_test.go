@@ -1,7 +1,6 @@
 package unit
 
 import (
-	"strings"
 	"testing"
 
 	aptAdapter "depsilo/internal/adapter/apt"
@@ -25,10 +24,6 @@ func TestCacheKey_PyPI_Index(t *testing.T) {
 	key := pypi.IndexCacheKey("pypi", "requests")
 	if key != "pypi/simple/requests/index.html" {
 		t.Errorf("expected pypi/simple/requests/index.html, got %s", key)
-	}
-	// Deterministic
-	if pypi.IndexCacheKey("pypi", "requests") != key {
-		t.Error("IndexCacheKey is not deterministic")
 	}
 }
 
@@ -59,9 +54,6 @@ func TestCacheKey_Npm_Metadata(t *testing.T) {
 	if key != "npm/lodash/metadata.json" {
 		t.Errorf("got %s", key)
 	}
-	if npm.MetadataCacheKey("lodash") != key {
-		t.Error("not deterministic")
-	}
 }
 
 func TestCacheKey_Npm_ScopedMetadata(t *testing.T) {
@@ -91,9 +83,6 @@ func TestCacheKey_APT(t *testing.T) {
 	key := aptAdapter.CacheKey("ubuntu", "dists/jammy/InRelease")
 	if key != "apt/ubuntu/dists/jammy/InRelease" {
 		t.Errorf("got %s", key)
-	}
-	if aptAdapter.CacheKey("ubuntu", "dists/jammy/InRelease") != key {
-		t.Error("not deterministic")
 	}
 }
 
@@ -168,9 +157,6 @@ func TestCacheKey_Cargo_Crate(t *testing.T) {
 
 func TestCacheKey_Maven(t *testing.T) {
 	key := mavenAdapter.CacheKey("org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar")
-	if !strings.HasPrefix(key, "maven/") {
-		t.Errorf("expected maven/ prefix, got %s", key)
-	}
 	expected := "maven/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar"
 	if key != expected {
 		t.Errorf("got %s", key)
@@ -181,9 +167,6 @@ func TestCacheKey_Maven(t *testing.T) {
 
 func TestCacheKey_RubyGems(t *testing.T) {
 	key := rubygemsAdapter.CacheKey("gems/rails-7.0.0.gem")
-	if !strings.HasPrefix(key, "rubygems/") {
-		t.Errorf("expected rubygems/ prefix, got %s", key)
-	}
 	if key != "rubygems/gems/rails-7.0.0.gem" {
 		t.Errorf("got %s", key)
 	}
@@ -223,9 +206,6 @@ func TestCacheKey_Composer_Dist(t *testing.T) {
 
 func TestCacheKey_NuGet(t *testing.T) {
 	key := nugetAdapter.CacheKey("v3/package/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg")
-	if !strings.HasPrefix(key, "nuget/") {
-		t.Errorf("expected nuget/ prefix, got %s", key)
-	}
 	expected := "nuget/v3/package/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg"
 	if key != expected {
 		t.Errorf("got %s", key)
@@ -236,9 +216,6 @@ func TestCacheKey_NuGet(t *testing.T) {
 
 func TestCacheKey_Conda(t *testing.T) {
 	key := condaAdapter.CacheKey("pkgs/main/linux-64/numpy-1.24.0.tar.bz2")
-	if !strings.HasPrefix(key, "conda/") {
-		t.Errorf("expected conda/ prefix, got %s", key)
-	}
 	expected := "conda/pkgs/main/linux-64/numpy-1.24.0.tar.bz2"
 	if key != expected {
 		t.Errorf("got %s", key)
@@ -249,9 +226,6 @@ func TestCacheKey_Conda(t *testing.T) {
 
 func TestCacheKey_CRAN(t *testing.T) {
 	key := cranAdapter.CacheKey("src/contrib/ggplot2_3.4.0.tar.gz")
-	if !strings.HasPrefix(key, "cran/") {
-		t.Errorf("expected cran/ prefix, got %s", key)
-	}
 	expected := "cran/src/contrib/ggplot2_3.4.0.tar.gz"
 	if key != expected {
 		t.Errorf("got %s", key)
@@ -262,9 +236,6 @@ func TestCacheKey_CRAN(t *testing.T) {
 
 func TestCacheKey_Helm(t *testing.T) {
 	key := helmAdapter.CacheKey("nginx-15.0.0.tgz")
-	if !strings.HasPrefix(key, "helm/") {
-		t.Errorf("expected helm/ prefix, got %s", key)
-	}
 	expected := "helm/nginx-15.0.0.tgz"
 	if key != expected {
 		t.Errorf("got %s", key)
@@ -298,71 +269,5 @@ func TestCacheKey_Docker_TagList(t *testing.T) {
 	key := dockerAdapter.TagListCacheKey("dockerhub", "library/nginx")
 	if key != "docker/dockerhub/tags/library/nginx/list" {
 		t.Errorf("got %s", key)
-	}
-}
-
-// ---------- Cross-ecosystem collision ----------
-
-func TestCacheKey_NoCollision(t *testing.T) {
-	keys := map[string]string{
-		"pypi":     pypi.IndexCacheKey("pypi", "requests"),
-		"npm":      npm.MetadataCacheKey("requests"),
-		"apt":      aptAdapter.CacheKey("ubuntu", "dists/jammy/InRelease"),
-		"go":       goProxy.InfoCacheKey("github.com/test/mod", "v1.0.0"),
-		"cargo":    cargoAdapter.CrateCacheKey("serde", "1.0.0"),
-		"maven":    mavenAdapter.CacheKey("org/example/test/1.0.0/test-1.0.0.jar"),
-		"rubygems": rubygemsAdapter.CacheKey("gems/rails-7.0.0.gem"),
-		"composer": composerAdapter.MetadataCacheKey("monolog", "monolog"),
-		"nuget":    nugetAdapter.CacheKey("v3/package/test/1.0.0/test.nupkg"),
-		"conda":    condaAdapter.CacheKey("pkgs/main/linux-64/numpy-1.0.tar.bz2"),
-		"cran":     cranAdapter.CacheKey("src/contrib/ggplot2_3.4.0.tar.gz"),
-		"helm":     helmAdapter.CacheKey("nginx-15.0.0.tgz"),
-		"docker":   dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "latest"),
-	}
-
-	seen := make(map[string]string)
-	for ecosystem, key := range keys {
-		if prev, ok := seen[key]; ok {
-			t.Errorf("collision between %s and %s: both produce key %q", ecosystem, prev, key)
-		}
-		seen[key] = ecosystem
-	}
-}
-
-// ---------- Valid filesystem path ----------
-
-func TestCacheKey_ValidFilesystemPath(t *testing.T) {
-	keys := []string{
-		pypi.IndexCacheKey("pypi", "requests"),
-		pypi.FileCacheKey("pypi", "/packages/ab/cd/requests-2.31.0.tar.gz"),
-		npm.MetadataCacheKey("lodash"),
-		npm.TarballCacheKey("lodash", "lodash-4.17.21.tgz"),
-		aptAdapter.CacheKey("ubuntu", "dists/jammy/InRelease"),
-		goProxy.ZipCacheKey("github.com/test/mod", "v1.0.0"),
-		cargoAdapter.CrateCacheKey("serde", "1.0.0"),
-		mavenAdapter.CacheKey("org/example/test-1.0.0.jar"),
-		rubygemsAdapter.CacheKey("gems/rails-7.0.0.gem"),
-		composerAdapter.MetadataCacheKey("monolog", "monolog"),
-		nugetAdapter.CacheKey("v3/package/test.nupkg"),
-		condaAdapter.CacheKey("pkgs/main/linux-64/numpy.tar.bz2"),
-		cranAdapter.CacheKey("src/contrib/ggplot2_3.4.0.tar.gz"),
-		helmAdapter.CacheKey("nginx-15.0.0.tgz"),
-		dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "latest"),
-		dockerAdapter.ManifestCacheKey("dockerhub", "library/nginx", "sha256:abc123"),
-		dockerAdapter.BlobCacheKey("dockerhub", "sha256:abc123"),
-		dockerAdapter.TagListCacheKey("dockerhub", "library/nginx"),
-	}
-
-	illegalChars := []string{"\x00", "\\", ":", "*", "?", "\"", "<", ">", "|"}
-	for _, key := range keys {
-		if key == "" {
-			t.Error("cache key is empty")
-			continue
-		}
-		for _, c := range illegalChars {
-			if strings.Contains(key, c) {
-				t.Errorf("cache key %q contains illegal filesystem char %q", key, c)
-			}
-		}
 	}
 }

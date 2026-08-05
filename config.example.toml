@@ -1,3 +1,5 @@
+config_version = 1
+
 [server]
 host = "0.0.0.0"
 port = 23333
@@ -270,17 +272,33 @@ url      = "https://registry-1.docker.io"
 # password = "ghp_xxx"
 
 # ─── Extra PyPI-compatible indexes ───────────
-# Proxy additional PyPI indexes at custom paths.
-# Useful for CUDA-specific wheels (PyTorch, vLLM).
+# The built-in PyTorch channel family is enabled by default. It registers
+# /pypi-torch/{channel}/simple/ without contacting the upstream until first use.
+# Use the channel suffix from PyTorch's official install URL (for example cpu,
+# cu..., or rocm...). Artifact URLs declared by each channel are signed by
+# Depsilo and fetched through an isolated cache namespace.
+[extra_index_presets]
+enabled = true
+# disabled = ["pytorch"]
+
+# Proxy additional PyPI-compatible indexes at custom paths. Artifact links
+# declared by every extra index are signed and cached automatically, so CDN
+# host lists are not required. `simple_path` controls the package-list path
+# below each upstream: normal PyPI mirrors use "/simple"; flat indexes such as
+# download.pytorch.org use "/".
+# `name` must be a unique URL-safe slug of at most 128 bytes, without surrounding
+# whitespace. `path` may contain multiple literal segments (for example
+# "python/private"), but must be unique and must not use Depsilo's occupied
+# roots such as api, admin, pypi, assets, p, or v2.
 #
 # [[extra_indexes]]
-# name = "pytorch-cu130"
-# path = "pypi-torch-cu130"
+# name = "company-python"
+# path = "python/company"
 # [[extra_indexes.upstreams]]
-# name = "pytorch"
-# url = "https://download.pytorch.org/whl/cu130"
+# name = "company"
+# url = "https://packages.example.com/python"
 # priority = 1
-#
+# probe_mode = "passive"
 # [[extra_indexes]]
 # name = "vllm-cu130"
 # path = "pypi-vllm-cu130"
@@ -290,7 +308,8 @@ url      = "https://registry-1.docker.io"
 # priority = 1
 #
 # Usage:
-#   pip install torch --index-url http://HOST:PORT/pypi-torch-cu130/simple/
+#   PYTORCH_CHANNEL=cpu
+#   pip install torch --index-url http://HOST:PORT/pypi-torch/${PYTORCH_CHANNEL}/simple/
 
 [security]
 enabled = true

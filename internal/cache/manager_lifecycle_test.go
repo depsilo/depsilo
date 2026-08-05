@@ -147,6 +147,9 @@ func TestManagerIdleTimeoutCancelsStalledBodyAndReleasesPipeline(t *testing.T) {
 }
 
 func TestManagerIdleTimeoutRollsForwardWhileBodyMakesProgress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("idle timeout timing contract")
+	}
 	database := openStreamTestDB(t)
 	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
 	t.Cleanup(func() { closeTestManager(t, manager) })
@@ -978,6 +981,9 @@ func TestManagerCloseWaitsForFollowerPassthroughCloseCallback(t *testing.T) {
 }
 
 func TestManagerConcurrentCloseAndHitsAreRaceSafe(t *testing.T) {
+	if testing.Short() {
+		t.Skip("concurrent shutdown stress contract")
+	}
 	database := openStreamTestDB(t)
 	storage := newMemStorage()
 	key := "pypi/simple/race/index.html"

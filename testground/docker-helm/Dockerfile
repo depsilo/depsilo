@@ -1,4 +1,4 @@
-FROM alpine/helm:3.13.3
+FROM alpine/helm:3.13.3@sha256:904fe876ba5eb93dea4c10ff12c44f19c81dd2ae81e61b60e50ea4863b4676c1
 
 ARG DEPSILO_URL
 

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
@@ -16,6 +17,8 @@ import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getApiError } from '@/lib/apiError'
+import { downloadBlob } from '@/lib/download'
+import { useAppToast } from '@/components/Toast'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AuditLog, AuditLogQuery } from '@/lib/adminApi.types'
 
@@ -39,29 +42,77 @@ function getTimeRange(preset: string) {
   return { start: start.toISOString(), end }
 }
 
+function parsePage(value: string | null): number {
+  if (value === null || !/^[1-9]\d*$/.test(value)) return 1
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : 1
+}
+
+function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(current)
+  const packageName = current.get('package')?.trim() ?? ''
+  if (packageName) next.set('package', packageName)
+  else next.delete('package')
+
+  const ecosystem = current.get('ecosystem')?.trim() ?? ''
+  if (operatorEcosystems.some(item => item.id === ecosystem)) next.set('ecosystem', ecosystem)
+  else next.delete('ecosystem')
+
+  const result = current.get('result')
+  if (result === 'hit' || result === 'miss' || result === 'error') next.set('result', result)
+  else next.delete('result')
+
+  const range = current.get('range')
+  if (range === '7d' || range === '30d') next.set('range', range)
+  else next.delete('range')
+
+  const page = parsePage(current.get('page'))
+  if (page > 1) next.set('page', String(page))
+  else next.delete('page')
+  return next
+}
+
 export default function AuditLogsV2() {
   const { t } = useTranslation()
-  const [search, setSearch] = useState('')
-  const [ecosystem, setEcosystem] = useState('all')
-  const [resultFilter, setResultFilter] = useState('all')
-  const [timeRange, setTimeRange] = useState('today')
-  const [page, setPage] = useState(1)
-  const [appliedSearch, setAppliedSearch] = useState('')
-  const [appliedEcosystem, setAppliedEcosystem] = useState('all')
-  const [appliedResult, setAppliedResult] = useState('all')
-  const [appliedTimeRange, setAppliedTimeRange] = useState('today')
+  const toast = useAppToast()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const serializedSearchParams = searchParams.toString()
+  const canonicalSearchParams = canonicalizeSearchParams(searchParams)
+  const serializedCanonicalSearchParams = canonicalSearchParams.toString()
+  const searchParamsRef = useRef(canonicalSearchParams)
+  const appliedSearch = canonicalSearchParams.get('package') ?? ''
+  const ecosystem = canonicalSearchParams.get('ecosystem') ?? 'all'
+  const resultFilter = canonicalSearchParams.get('result') ?? 'all'
+  const timeRange = canonicalSearchParams.get('range') ?? 'today'
+  const page = parsePage(canonicalSearchParams.get('page'))
+  const [search, setSearch] = useState(appliedSearch)
 
-  const range = getTimeRange(appliedTimeRange)
-  const params: AuditLogQuery = { page, page_size: 50, start: range.start, end: range.end }
-  if (appliedSearch) params.package = appliedSearch
-  if (appliedEcosystem !== 'all') params.ecosystem = appliedEcosystem
-  if (appliedResult === 'hit') params.result = 'hit'
-  if (appliedResult === 'miss') params.result = 'miss'
-  if (appliedResult === 'error') params.result = 'error'
+  useEffect(() => {
+    const next = new URLSearchParams(serializedCanonicalSearchParams)
+    searchParamsRef.current = next
+    if (serializedSearchParams !== serializedCanonicalSearchParams) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [serializedCanonicalSearchParams, serializedSearchParams, setSearchParams])
+
+  useEffect(() => {
+    setSearch(appliedSearch)
+  }, [appliedSearch])
+
+  function buildParams(): AuditLogQuery {
+    const range = getTimeRange(timeRange)
+    const params: AuditLogQuery = { page, page_size: 50, start: range.start, end: range.end }
+    if (appliedSearch) params.package = appliedSearch
+    if (ecosystem !== 'all') params.ecosystem = ecosystem
+    if (resultFilter === 'hit') params.result = 'hit'
+    if (resultFilter === 'miss') params.result = 'miss'
+    if (resultFilter === 'error') params.result = 'error'
+    return params
+  }
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
-    queryKey: ['admin', 'audit-logs', appliedSearch, appliedEcosystem, appliedResult, appliedTimeRange, page],
-    queryFn: () => adminApi.listAuditLogs(params),
+    queryKey: ['admin', 'audit-logs', appliedSearch, ecosystem, resultFilter, timeRange, page],
+    queryFn: () => adminApi.listAuditLogs(buildParams()),
     retry: false,
   })
 
@@ -70,19 +121,55 @@ export default function AuditLogsV2() {
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
 
-  function handleSearch() {
-    setAppliedSearch(search); setAppliedEcosystem(ecosystem)
-    setAppliedResult(resultFilter); setAppliedTimeRange(timeRange); setPage(1)
+  const exportMutation = useMutation({
+    mutationFn: () => adminApi.exportAuditLogs(buildParams()),
+    onSuccess: (response) => {
+      const filename = `depsilo-audit-${new Date().toISOString().slice(0, 10)}.csv`
+      downloadBlob(new Blob([response.data]), filename)
+      toast.show({ tone: 'success', message: t('audit.exportSuccess', { filename }) })
+    },
+    onError: (mutationError) => {
+      toast.show({ tone: 'danger', message: t('audit.exportFailed', { reason: getApiError(mutationError).message }) })
+    },
+  })
+
+  function updateParams(mutator: (next: URLSearchParams) => void) {
+    const next = new URLSearchParams(searchParamsRef.current)
+    mutator(next)
+    next.delete('page')
+    searchParamsRef.current = next
+    setSearchParams(next)
   }
 
-  function handleExport() {
-    adminApi.exportAuditLogs(params).then(res => {
-      const url = URL.createObjectURL(new Blob([res.data]))
-      const a = document.createElement('a')
-      a.href = url; a.download = `depsilo-audit-${new Date().toISOString().slice(0, 10)}.csv`
-      a.click(); URL.revokeObjectURL(url)
+  function handleSearch() {
+    updateParams((next) => {
+      const normalized = search.trim()
+      if (normalized) next.set('package', normalized)
+      else next.delete('package')
     })
   }
+
+  function clearFilters() {
+    setSearch('')
+    updateParams((next) => {
+      next.delete('package')
+      next.delete('ecosystem')
+      next.delete('result')
+      next.delete('range')
+    })
+  }
+
+  function setPage(nextPage: number) {
+    const next = new URLSearchParams(searchParamsRef.current)
+    if (nextPage <= 1) next.delete('page')
+    else next.set('page', String(nextPage))
+    searchParamsRef.current = next
+    setSearchParams(next)
+  }
+
+  const hasFilters = Boolean(
+    appliedSearch || ecosystem !== 'all' || resultFilter !== 'all' || timeRange !== 'today',
+  )
 
   // Audit logs moved to open-source on 2026-06-28 — the page no longer
   // 402s, so there is no Pro paywall branch to render.
@@ -96,9 +183,16 @@ export default function AuditLogsV2() {
     <AdminPage
       description={t('audit.subtitle')}
       actions={(
-        <ButtonV2 type="button" variant="secondary" size="sm" onClick={handleExport}>
+        <ButtonV2
+          type="button"
+          variant="secondary"
+          size="sm"
+          aria-busy={exportMutation.isPending || undefined}
+          disabled={exportMutation.isPending}
+          onClick={() => exportMutation.mutate()}
+        >
           <Icon name="download" size="sm" />
-          {t('audit.exportCsv')}
+          {exportMutation.isPending ? t('audit.exporting') : t('audit.exportCsv')}
         </ButtonV2>
       )}
     >
@@ -121,12 +215,28 @@ export default function AuditLogsV2() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:contents">
-          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.ecosystem')} value={ecosystem} onChange={(e) => setEcosystem(e.target.value)}>
+          <SelectV2
+            className="min-h-10 sm:w-auto"
+            aria-label={t('audit.ecosystem')}
+            value={ecosystem}
+            onChange={(event) => updateParams((next) => {
+              if (event.target.value === 'all') next.delete('ecosystem')
+              else next.set('ecosystem', event.target.value)
+            })}
+          >
             <option value="all">{t('all')}</option>
             {operatorEcosystems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </SelectV2>
 
-          <SelectV2 className="min-h-10 sm:w-auto" aria-label={t('audit.result')} value={resultFilter} onChange={(e) => setResultFilter(e.target.value)}>
+          <SelectV2
+            className="min-h-10 sm:w-auto"
+            aria-label={t('audit.result')}
+            value={resultFilter}
+            onChange={(event) => updateParams((next) => {
+              if (event.target.value === 'all') next.delete('result')
+              else next.set('result', event.target.value)
+            })}
+          >
             <option value="all">{t('all')}</option>
             <option value="hit">{t('audit.hit')}</option>
             <option value="miss">{t('audit.miss')}</option>
@@ -140,12 +250,15 @@ export default function AuditLogsV2() {
             <button
               type="button"
               key={r}
-              onClick={() => setTimeRange(r)}
+              onClick={() => updateParams((next) => {
+                if (r === 'today') next.delete('range')
+                else next.set('range', r)
+              })}
               aria-pressed={timeRange === r}
               className="px-2.5 py-1 text-[11px] rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
               style={{
-                background: timeRange === r ? 'var(--btn-primary-bg)' : 'transparent',
-                color: timeRange === r ? 'white' : 'var(--text-soft)',
+                background: timeRange === r ? 'var(--btn)' : 'transparent',
+                color: timeRange === r ? 'var(--btn-fg)' : 'var(--text-soft)',
                 border: timeRange === r ? 'none' : '1px solid var(--border)',
               }}
             >
@@ -157,6 +270,11 @@ export default function AuditLogsV2() {
         <ButtonV2 type="submit" variant="primary" size="sm" className="min-h-10 self-start sm:min-h-0">
           {t('search')}
         </ButtonV2>
+        {hasFilters && (
+          <ButtonV2 type="button" variant="secondary" size="sm" className="min-h-10 self-start sm:min-h-0" onClick={clearFilters}>
+            {t('audit.clearFilters')}
+          </ButtonV2>
+        )}
       </form>
 
       {/* Table — bare */}

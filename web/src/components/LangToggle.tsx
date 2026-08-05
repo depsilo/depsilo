@@ -1,8 +1,14 @@
 import { useTranslation } from 'react-i18next'
+import Icon from './Icon'
 
-export default function LangToggle() {
+interface LangToggleProps {
+  variant?: 'default' | 'portal'
+}
+
+export default function LangToggle({ variant = 'default' }: LangToggleProps) {
   const { i18n, t } = useTranslation()
   const isZh = i18n.language === 'zh'
+  const portal = variant === 'portal'
 
   function toggle() {
     const next = isZh ? 'en' : 'zh'
@@ -14,10 +20,13 @@ export default function LangToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="inline-flex items-center justify-center stripe-focus-ring"
+      data-language-toggle={portal ? 'portal' : 'default'}
+      className={portal
+        ? 'portal-header-control portal-language-control stripe-focus-ring'
+        : 'inline-flex items-center justify-center stripe-focus-ring'}
       aria-label={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
       title={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
-      style={{
+      style={portal ? undefined : {
         fontSize: 11,
         fontWeight: 500,
         minWidth: 40,
@@ -31,7 +40,15 @@ export default function LangToggle() {
         cursor: 'pointer',
       }}
     >
-      {isZh ? 'EN' : '中'}
+      {portal ? (
+        <>
+          <Icon name="language" size="sm" />
+          <span className="portal-language-label">{isZh ? '中文' : 'EN'}</span>
+          <span className="portal-language-compact-label" aria-hidden="true">
+            {isZh ? '中' : 'EN'}
+          </span>
+        </>
+      ) : (isZh ? 'EN' : '中')}
     </button>
   )
 }

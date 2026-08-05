@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -58,11 +59,104 @@ func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
 	if cfg.Database.Driver != "sqlite" {
 		t.Fatalf("Database.Driver = %q, want sqlite", cfg.Database.Driver)
 	}
+	if cfg.ConfigVersion != CurrentConfigVersion {
+		t.Fatalf("ConfigVersion = %d, want %d", cfg.ConfigVersion, CurrentConfigVersion)
+	}
 	if cfg.Server.Port != 23333 {
 		t.Fatalf("Server.Port = %d, want 23333", cfg.Server.Port)
 	}
 	if cfg.SupplyChain.MinReleaseAgeEnabled == nil || *cfg.SupplyChain.MinReleaseAgeEnabled {
 		t.Fatal("config.example.toml must explicitly default minimum release age to disabled")
+	}
+}
+
+func TestLoadRejectsUnknownConfigKey(t *testing.T) {
+	setTestJWTSecret(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte("config_version = 1\n[server]\nhost = \"127.0.0.1\"\nprot = 23333\n")
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load accepted an unknown config key")
+	}
+	if !strings.Contains(err.Error(), "prot") || !strings.Contains(err.Error(), "unknown keys") {
+		t.Fatalf("Load error = %q, want the unknown key named", err)
+	}
+}
+
+func TestLoadRejectsConfigFromNewerBinary(t *testing.T) {
+	setTestJWTSecret(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte("config_version = 999\n[server]\nhost = \"127.0.0.1\"\n")
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load accepted config from a newer binary")
+	}
+	if !strings.Contains(err.Error(), "newer than this binary supports") {
+		t.Fatalf("Load error = %q, want actionable downgrade refusal", err)
+	}
+}
+
+func TestLoadConfigVersionCannotBeOverriddenByEnvironment(t *testing.T) {
+	setTestJWTSecret(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte("config_version = 999\n[server]\nhost = \"127.0.0.1\"\n")
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_CONFIG_VERSION", "1")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load allowed an environment variable to mask the file schema version")
+	}
+	if !strings.Contains(err.Error(), "newer than this binary supports") {
+		t.Fatalf("Load error = %q, want file-version downgrade refusal", err)
+	}
+}
+
+func TestLoadRejectsFutureVersionBeforeDecodingFutureKeys(t *testing.T) {
+	setTestJWTSecret(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	document := []byte("config_version = 999\n[future_feature]\nenabled = true\n")
+	if err := os.WriteFile(configPath, document, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load accepted config from a newer binary")
+	}
+	if !strings.Contains(err.Error(), "newer than this binary supports") || strings.Contains(err.Error(), "invalid keys") {
+		t.Fatalf("Load error = %q, want version refusal before future-key decoding", err)
+	}
+}
+
+func TestLoadMigratesUnversionedConfigInMemory(t *testing.T) {
+	setTestJWTSecret(t)
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("[server]\nhost = \"127.0.0.1\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load legacy config: %v", err)
+	}
+	if cfg.ConfigVersion != CurrentConfigVersion {
+		t.Fatalf("ConfigVersion = %d, want in-memory migration to %d", cfg.ConfigVersion, CurrentConfigVersion)
 	}
 }
 

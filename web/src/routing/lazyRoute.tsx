@@ -8,7 +8,7 @@ import {
   useId,
   useRef,
 } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Button from '@/components/Button'
 
@@ -89,7 +89,7 @@ function RouteFailure({ surface }: { surface: RouteSurface }) {
       role="alert"
       aria-labelledby={titleId}
       tabIndex={-1}
-      className={`grid place-items-center px-4 py-10 ${surfaceClassName(surface)}`}
+      className={`programmatic-focus-target grid place-items-center px-4 py-10 ${surfaceClassName(surface)}`}
     >
       <div
         className="w-full max-w-[520px] rounded-[8px] border border-[var(--danger-border)] bg-[var(--bg-card)] p-5 shadow-[var(--shadow-pop)]"

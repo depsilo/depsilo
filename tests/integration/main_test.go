@@ -196,7 +196,9 @@ func startDepsilo(ctx context.Context, dir string) {
 		root, _ = filepath.Abs(root + "/../..")
 	}
 
-	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/server")
+	// Exercise the same public CLI entry point documented for operators instead
+	// of the legacy server-only compatibility binary.
+	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/depsilo", "serve")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
 		"DEPSILO_CONFIG="+dir+"/config.toml",

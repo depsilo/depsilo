@@ -85,7 +85,7 @@ enforcement primitive.
   origin, so this gate is caching + audit + best-effort blocking.
 - `/api/v1/stats` gains a `week` block (7-day rolling window) so portal value
   metrics no longer reset at midnight.
-- Portal redesign (design spec in `docs/superpowers/specs/`): dual-value hero
+- Portal redesign: dual-value hero
   ("Install fast. Install safe."), frosted film-grain background, chromatic
   shimmer on the primary CTA, prompt preview with filename/line numbers,
   hi-res (2560px) layout support, health-first Monitor with a quick filter

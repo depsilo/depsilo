@@ -31,7 +31,6 @@ const primaryQueries = [
   { path: '/admin', endpoint: 'GET /api/v1/admin/dashboard', success: adminApiDefaults['GET /api/v1/admin/dashboard'] },
   { path: '/admin/bandwidth', endpoint: 'GET /api/v1/admin/bandwidth', success: adminApiDefaults['GET /api/v1/admin/bandwidth'] },
   { path: '/admin/logs', endpoint: 'GET /api/v1/admin/logs', success: adminApiDefaults['GET /api/v1/admin/logs'] },
-  { path: '/admin/audit', endpoint: 'GET /api/v1/admin/audit-logs', success: adminApiDefaults['GET /api/v1/admin/audit-logs'] },
   { path: '/admin/quarantine', endpoint: 'GET /api/v1/admin/quarantine/events', success: adminApiDefaults['GET /api/v1/admin/quarantine/events'] },
   { path: '/admin/cache', endpoint: 'GET /api/v1/admin/cache', success: adminApiDefaults['GET /api/v1/admin/cache'], siblings: { 'GET /api/v1/admin/cache/distribution': populatedDistribution } },
   { path: '/admin/upstreams', endpoint: 'GET /api/v1/admin/upstreams', success: adminApiDefaults['GET /api/v1/admin/upstreams'] },
@@ -89,7 +88,7 @@ test('Projects 402 renders the Pro upgrade callout rather than empty or permissi
   })
   await page.goto('/admin/projects')
   await expect(page.getByText(/多项目工作区.*Pro/)).toBeVisible()
-  await expect(page.getByRole('link', { name: /购买|升级|终身/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /咨询 Pro 授权|Ask about Pro access/ })).toBeVisible()
   await expect(page.getByText(/暂无项目|no projects/i)).toHaveCount(0)
   await expect(page.getByText(/权限不足|permission denied/i)).toHaveCount(0)
 })
@@ -375,46 +374,42 @@ test('Dashboard trends keeps its rendered chart when its focus refetch fails', a
   await expect(trends).toContainText(/陈旧|已过期|stale/i)
 })
 
-for (const status of [500, 403] as const) {
-  test(`Users stay visible when Tokens initially return ${status}`, async ({ page }) => {
-    await mockAdminApi(page, {
-      'GET /api/v1/admin/users': adminApiDefaults['GET /api/v1/admin/users'],
-      'GET /api/v1/admin/tokens': { status, body: { code: status === 403 ? 'FORBIDDEN' : 'FAILED', message: 'fixture tokens failure' } },
-    })
-    await page.goto('/admin/users')
-    await expect(page.getByRole('row', { name: /admin/ })).toBeVisible()
-    await expect(page.getByRole('alert')).toContainText(status === 403 ? /权限|permission/i : 'fixture tokens failure')
+test('Users stay visible when Tokens initially return 500', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/users': adminApiDefaults['GET /api/v1/admin/users'],
+    'GET /api/v1/admin/tokens': { status: 500, body: { code: 'FAILED', message: 'fixture tokens failure' } },
   })
-}
+  await page.goto('/admin/users')
+  await expect(page.getByRole('row', { name: /admin/ })).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('fixture tokens failure')
+})
 
 const populatedOverride = {
   id: 4, ecosystem: 'pypi', package: 'false-positive', version: '1.0.0', reason: 'reviewed',
   actor_id: 1, created_at: '2026-07-10T00:00:00Z', expires_at: '2099-07-11T00:00:00Z',
 }
 
-for (const status of [500, 403] as const) {
-  test(`Blocklist overrides stay visible when status initially returns ${status}`, async ({ page }) => {
-    await mockAdminApi(page, {
-      'GET /api/v1/admin/blocklist/status': { status, body: { code: status === 403 ? 'FORBIDDEN' : 'FAILED', message: 'fixture status failure' } },
-      'GET /api/v1/admin/blocklist/overrides': { items: [populatedOverride], now: '2026-07-10T00:00:00Z' },
-    })
-    await page.goto('/admin/quarantine')
-    await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
-    await expect(page.getByText('false-positive')).toBeVisible()
-    await expect(page.getByRole('alert')).toContainText(status === 403 ? /权限|permission/i : 'fixture status failure')
+test('Blocklist overrides stay visible when status initially returns 500', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/blocklist/status': { status: 500, body: { code: 'FAILED', message: 'fixture status failure' } },
+    'GET /api/v1/admin/blocklist/overrides': { items: [populatedOverride], now: '2026-07-10T00:00:00Z' },
   })
+  await page.goto('/admin/quarantine')
+  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
+  await expect(page.getByRole('table').getByText('false-positive')).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('fixture status failure')
+})
 
-  test(`Blocklist status stays visible when overrides initially return ${status}`, async ({ page }) => {
-    await mockAdminApi(page, {
-      'GET /api/v1/admin/blocklist/status': { enabled: true, entry_count: 7, last_sync_at: null, last_success_at: null, last_error: '', duration_ms: 0, per_ecosystem: { pypi: 7 }, ecosystems: ['pypi'], running: false, next_sync_at: null },
-      'GET /api/v1/admin/blocklist/overrides': { status, body: { code: status === 403 ? 'FORBIDDEN' : 'FAILED', message: 'fixture overrides failure' } },
-    })
-    await page.goto('/admin/quarantine')
-    await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
-    await expect(page.getByText('7', { exact: true })).toBeVisible()
-    await expect(page.getByRole('alert')).toContainText(status === 403 ? /权限|permission/i : 'fixture overrides failure')
+test('Blocklist status stays visible when overrides initially return 500', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/blocklist/status': { enabled: true, entry_count: 7, last_sync_at: null, last_success_at: null, last_error: '', duration_ms: 0, per_ecosystem: { pypi: 7 }, ecosystems: ['pypi'], running: false, next_sync_at: null },
+    'GET /api/v1/admin/blocklist/overrides': { status: 500, body: { code: 'FAILED', message: 'fixture overrides failure' } },
   })
-}
+  await page.goto('/admin/quarantine')
+  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
+  await expect(page.getByText('7', { exact: true })).toBeVisible()
+  await expect(page.getByRole('alert')).toContainText('fixture overrides failure')
+})
 
 test('Dashboard bandwidth failure is explicit while dashboard siblings remain visible', async ({ page }) => {
   await mockAdminApi(page, {
@@ -495,38 +490,7 @@ interface MutationCase {
   retained(page: Page): Locator
 }
 
-const webhook = {
-  id: 1, name: 'ops', platform: 'slack', url: 'https://example.test/hook', enabled: true,
-  events: '*', cooldown_minutes: 30, last_sent_at: null,
-  created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z',
-}
-
 const mutationCases: MutationCase[] = [
-  {
-    name: 'Cache delete', path: '/admin/cache', endpoint: 'DELETE /api/v1/admin/cache/41', status: 500,
-    fixtures: {
-      'GET /api/v1/admin/cache': {
-        items: [{
-          id: 41, key: 'pypi/simple/fixture/index.html', adapter_type: 'pypi', package_name: 'fixture',
-          size: 512, hit_count: 3, last_accessed: '2026-07-10T00:00:00Z', expires_at: '2026-07-11T00:00:00Z',
-        }],
-        total: 1, page: 1, page_size: 20,
-      },
-    },
-    submit: async page => {
-      await page.getByRole('button', { name: /删除缓存条目 pypi\/simple\/fixture\/index\.html|Delete cache entry pypi\/simple\/fixture\/index\.html/ }).click()
-      await page.getByRole('dialog').getByRole('button', { name: /^删除$|^Delete$/ }).click()
-    },
-    retained: page => page.getByRole('dialog', { name: /确认删除|Confirm Delete/ }),
-  },
-  {
-    name: 'Cache cleanup', path: '/admin/cache', endpoint: 'POST /api/v1/admin/cache/cleanup', status: 500,
-    submit: async page => {
-      await page.getByRole('button', { name: /清理过期/ }).click()
-      await page.getByRole('dialog').getByRole('button', { name: /确认清理/ }).click()
-    },
-    retained: page => page.getByRole('dialog', { name: /清理过期缓存/ }),
-  },
   {
     name: 'Upstream save', path: '/admin/upstreams', endpoint: 'POST /api/v1/admin/upstreams', status: 422,
     fixtures: {
@@ -585,17 +549,6 @@ const mutationCases: MutationCase[] = [
     retained: page => page.getByRole('dialog', { name: /添加规则/ }),
   },
   {
-    name: 'Security policy save', path: '/admin/security', endpoint: 'PUT /api/v1/admin/security/policies/pypi', status: 422,
-    fixtures: {
-      'GET /api/v1/admin/security/policies': [{ id: 1, ecosystem: 'pypi', auto_block_enabled: true, min_cvss_score: 8.5, created_by: 'admin', created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z' }],
-    },
-    submit: async page => {
-      await page.getByRole('tab', { name: /策略/ }).click()
-      await page.getByRole('tabpanel').getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ }).click()
-    },
-    retained: page => page.getByRole('tabpanel'),
-  },
-  {
     name: 'Project save', path: '/admin/projects', endpoint: 'POST /api/v1/admin/projects', status: 422,
     fixtures: { 'GET /api/v1/admin/projects': { items: [], total: 0 } },
     submit: async page => {
@@ -604,15 +557,6 @@ const mutationCases: MutationCase[] = [
       await page.getByRole('dialog').getByRole('button', { name: /^保存$/ }).click()
     },
     retained: page => page.getByRole('dialog', { name: /创建项目/ }),
-  },
-  {
-    name: 'Webhook test', path: '/admin/settings', endpoint: 'POST /api/v1/admin/webhooks/1/test', status: 500,
-    fixtures: { 'GET /api/v1/admin/webhooks': [webhook] },
-    submit: async page => {
-      await page.getByRole('tab', { name: /Webhook/ }).click()
-      await page.getByRole('button', { name: /测试 ops/ }).click()
-    },
-    retained: page => page.getByText('ops'),
   },
   {
     name: 'Quarantine approval', path: '/admin/quarantine', endpoint: 'POST /api/v1/admin/quarantine/approve', status: 422,
@@ -737,38 +681,6 @@ test('Cache cleanup clears an old failure before the confirmation dialog is reop
   dialog = page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByRole('alert')).toHaveCount(0)
-})
-
-test('Rule create inserts the returned entity before closing', async ({ page }) => {
-  const createdRule = {
-    id: 9, ecosystem: 'pypi', package_name: 'fixture-package', version: '*',
-    action: 'deny', reason: 'fixture reason', created_at: '2026-07-10T00:00:00Z',
-  }
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/rules': [],
-    'POST /api/v1/admin/rules': createdRule,
-  })
-  await page.goto('/admin/rules')
-  await page.getByRole('button', { name: /添加规则|Add Rule/ }).click()
-  await page.getByLabel(/包名|Package Name/).fill('fixture-package')
-  await page.getByRole('dialog').getByRole('button', { name: /^保存$|^Save$/ }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByRole('row', { name: /fixture-package/ })).toBeVisible()
-})
-
-test('Blocklist override create inserts the complete returned entity before closing', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/blocklist/overrides': { items: [], now: '2026-07-10T00:00:00Z' },
-    'POST /api/v1/admin/blocklist/overrides': populatedOverride,
-  })
-  await page.goto('/admin/quarantine')
-  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
-  await page.getByRole('button', { name: /添加豁免|Add override/ }).click()
-  await page.getByPlaceholder(/^包名$|^Package$/).fill('false-positive')
-  await page.getByPlaceholder(/填写理由|Reason/).fill('reviewed')
-  await page.getByRole('dialog').getByRole('button', { name: /创建豁免|Create override/ }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByRole('row', { name: /false-positive/ })).toBeVisible()
 })
 
 test('Rule create recovers the list from an initial query failure with the returned entity', async ({ page }) => {

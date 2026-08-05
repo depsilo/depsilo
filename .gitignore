@@ -1,5 +1,6 @@
 # Build
 bin/
+/dist/
 web/dist/
 /depsilo
 
@@ -20,7 +21,6 @@ config.toml
 !.env.example
 
 # Test
-testground/.venv/
 web/playwright-report/
 web/test-results/
 
@@ -44,6 +44,7 @@ logo/
 # Ephemeral Impeccable output, runtime state, and per-developer overrides.
 # Shared config/design/review artifacts remain tracked.
 .impeccable/config.local.json
+.impeccable/critique/
 .impeccable/hook.cache.json
 .impeccable/hook.pending.json
 .impeccable/*.png

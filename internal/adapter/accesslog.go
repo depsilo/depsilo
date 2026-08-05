@@ -94,9 +94,22 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	pkgName := packagekey.ExtractName(adapterType, cacheKey)
 	now := time.Now().UTC()
 	hooks := accessHooks.Load()
+	var observer RequestObserver
 	if scope, ok := requestScopeFromContext(ctx); ok {
 		// A scoped nil recorder/audit pair is intentional and authoritative.
 		hooks = &scope.access
+		observer = scope.observer
+	}
+	if observer != nil {
+		observer.ObserveAccess(AccessObservation{
+			AdapterType: adapterType,
+			Method:      method,
+			Hit:         hit,
+			Upstream:    upstreamName,
+			Latency:     latency,
+			StatusCode:  statusCode,
+			BytesSent:   bytesSent,
+		})
 	}
 
 	if hooks != nil && hooks.recorder != nil {

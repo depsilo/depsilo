@@ -1,4 +1,4 @@
-FROM python:3.11-alpine
+FROM python:3.11-alpine@sha256:25976e9d34a0fab1f278cae931f34c8303d97bf0c0d7f85b6b4dcf641d7702a4
 
 ARG DEPSILO_URL
 ENV HF_ENDPOINT=${DEPSILO_URL}/huggingface

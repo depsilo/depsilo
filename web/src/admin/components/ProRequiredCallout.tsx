@@ -1,6 +1,5 @@
-import ButtonV2 from '@/components/Button'
 import Icon from '@/components/Icon'
-import { buyLifetimeUrl } from '@/lib/buy'
+import { proAccessUrl } from '@/lib/buy'
 
 interface ProRequiredCalloutProps {
   /** Material symbol name (e.g. "lock", "shield", "security", "folder_managed") */
@@ -9,13 +8,11 @@ interface ProRequiredCalloutProps {
   title: string
   /** Already-translated description text */
   description: string
-  /** Already-translated CTA button label — "Buy lifetime · $99" by default */
+  /** Already-translated CTA button label */
   upgradeLabel: string
   /**
-   * Where the CTA links to. Defaults to the lifetime-buy mailto resolved
-   * from `lib/buy.ts`. When a payment provider eventually gets wired,
-   * only `lib/buy.ts` needs to change — this prop and every caller stay
-   * the same.
+   * Where the CTA links to. Defaults to the neutral Pro access enquiry
+   * resolved from `lib/buy.ts`.
    */
   upgradeHref?: string
 }
@@ -30,7 +27,7 @@ export default function ProRequiredCallout({
   title,
   description,
   upgradeLabel,
-  upgradeHref = buyLifetimeUrl(),
+  upgradeHref = proAccessUrl(),
 }: ProRequiredCalloutProps) {
   return (
     <div
@@ -50,8 +47,14 @@ export default function ProRequiredCallout({
         <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>
           {description}
         </p>
-        <a href={upgradeHref} target="_blank" rel="noopener noreferrer">
-          <ButtonV2>{upgradeLabel}</ButtonV2>
+        <a
+          href={upgradeHref}
+          className="app-button stripe-focus-ring inline-flex min-h-9 items-center justify-center rounded-[5px] bg-[var(--btn)] px-3 py-1.5 text-[13px] font-[500] no-underline text-[var(--btn-fg)] transition-[background,color,transform] duration-150 hover:bg-[var(--btn-press)] active:scale-[0.96]"
+          style={{
+            boxShadow: 'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
+          }}
+        >
+          {upgradeLabel}
         </a>
       </div>
     </div>

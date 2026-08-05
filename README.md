@@ -8,7 +8,7 @@
 block known-malicious packages,
 detect silent republishing, and serve installs at LAN speed. Single binary, ~50 MB memory.
 
-[![Go 1.25.12+](https://img.shields.io/badge/Go-1.25.12+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go 1.26.5+](https://img.shields.io/badge/Go-1.26.5+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/depsilo/depsilo)](https://hub.docker.com/r/depsilo/depsilo)
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
@@ -122,12 +122,16 @@ the example JWT placeholder.
 ```bash
 git clone https://github.com/depsilo/depsilo.git
 cd depsilo
-cd web && npm ci && cd ..
+make setup
 make build
 ./bin/depsilo serve
 ```
 
-Requires Go 1.25.12 or newer and Node.js 20+.
+Requires Go 1.26.5 or newer and Node.js 22.22.0+.
+
+Tagged binaries, checksums, attached SBOMs, and container digests are signed
+with cosign keyless OIDC. See [release verification](docs/release-verification.md)
+for verification commands and the immutable CI/build inputs.
 
 Depsilo can also serve a dedicated local or team compiler cache to ccache and
 sccache. The sccache endpoint is a deliberately narrow WebDAV compatibility
@@ -141,7 +145,9 @@ on the first run and reuses it on later restarts. A missing project
 `config.toml` is not forced: the CLI continues through its normal home-config
 and built-in-default search order. Production deployments must still provide
 their own JWT secret. To require a custom config path, pass it explicitly, for
-example `DEPSILO_CONFIG=/etc/depsilo.toml make run`.
+example `DEPSILO_CONFIG=/etc/depsilo.toml make run`. The background development
+service keeps its listener and readiness probe on the same port; override both
+with `PORT=18080 make dev`.
 
 ## Supply-chain enforcement
 
@@ -332,6 +338,24 @@ proxy    = "http://127.0.0.1:7890"    # optional per-upstream proxy
 
 On the first start after upgrading, Depsilo imports ordinary ecosystem upstreams into the database and records the active ecosystems. After that seed, Admin and the database are authoritative: deleting or editing an upstream is not overwritten by later restarts. Adding upstreams in config for a previously inactive supported ecosystem activates that ecosystem on the next restart. Docker registries and extra indexes remain config-owned and are not managed by Admin Upstream CRUD.
 
+PyTorch channel caching is available by default at
+`/pypi-torch/{channel}/simple/`. Use the channel suffix from the official
+PyTorch install URL, so CPU, CUDA, and ROCm builds remain independently
+selectable without a Depsilo release for each new channel. These indexes are
+not merged into `/pypi/simple/`, so build variants never compete implicitly.
+Depsilo signs the artifact URLs declared by each upstream index and proxies
+them through an isolated local cache. The preset uses passive probing and
+makes no upstream request until a client uses it:
+
+```bash
+PYTORCH_CHANNEL=cpu
+pip install torch torchvision torchaudio \
+  --index-url http://localhost:23333/pypi-torch/${PYTORCH_CHANNEL}/simple/
+```
+
+Disable it with `[extra_index_presets] disabled = ["pytorch"]`; custom
+PyPI-compatible indexes remain available through `[[extra_indexes]]`.
+
 When a per-upstream HTTP proxy is configured, that proxy resolves redirected
 artifact hostnames. Its egress policy should block loopback, link-local, and
 private-network targets unless those networks intentionally host your registry.
@@ -420,14 +444,14 @@ Released through v0.8.0:
 - [x] CLI: `serve` / `status` / `doctor` / `warmup` / `flush` / `init-agent`
 - [x] Native MCP server for AI agents
 - [x] OSV vulnerability scanning + Settings → Security dashboard
-- [x] CycloneDX + SPDX source and container-image SBOM release artifacts (unsigned)
+- [x] CycloneDX + SPDX source and container-image SBOM release artifacts
 
 Landed on `master` (unreleased):
 - [x] Known-malicious blocklist (OSV MAL advisories + 24h audited override)
 - [x] Tamper detection (first-seen SHA-256 + critical alert)
+- [x] Cosign keyless signatures, image SBOM attestations, and release smoke tests
 
 Next up:
-- [ ] Signed releases (cosign keyless via CI)
 - [ ] Freeze / golden snapshot mode (reproducible build set, immune to
       upstream poisoning)
 - [ ] CRA-mode SBOM workflow (supplier, hashes, licenses, dependency graph)
@@ -435,11 +459,9 @@ Next up:
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
-guidelines. The codebase is documented at three levels:
-[`docs/DIRECTION.md`](docs/DIRECTION.md) (product direction),
-[`docs/adr/`](docs/adr/) (architecture decisions), and the per-package
-README comments in `internal/`.
+Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the change
+workflow, or start with the [documentation map](docs/README.md). Coding agents
+should use [AGENTS.md](AGENTS.md) as the compact repository entry point.
 
 ## License
 

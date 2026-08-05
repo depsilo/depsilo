@@ -1,6 +1,6 @@
 # Depsilo Design System
 
-> Status: current implementation reference, updated 2026-07-10. The source of
+> Status: current implementation reference, updated 2026-07-29. The source of
 > truth is `web/src/index.css`, `web/src/components/`, `web/src/portal/`, and
 > `web/src/admin/`. When this document and code differ, update this document in
 > the same change.
@@ -25,6 +25,8 @@ The active visual system is **Instrument**:
   focus. It replaced the old purple palette.
 - Amber means slow/degraded. Red means miss/danger/failure.
 - Dark mode is the product default; light mode uses the same semantic roles.
+- Light mode uses a pure-white page canvas without ambient grain. Dark mode
+  retains one subtle global grain layer mounted by `App`.
 - Surfaces are neutral gray/green-black, with restrained borders and shadows.
 - Gradients are limited green sweeps retained for a few brand accents. Purple
   Aurora backgrounds are not part of the current design.
@@ -42,11 +44,13 @@ Tokens live in `web/src/index.css`. Tailwind v4 exposes matching utilities via
 
 | Role | Current light value | Use |
 | --- | --- | --- |
-| `--bg-page` | `#F0F2F1` | Page background |
+| `--bg-page` | `#FFFFFF` | Pure-white light-mode page background |
+| `--admin-canvas` | `#FFFFFF` | Admin light-mode shell and main canvas |
 | `--bg-card` | `#FFFFFF` | Primary surface |
 | `--bg-soft` | `#F1F3F2` | Inset/secondary surface |
 | `--text` | `#14181A` | Primary text |
 | `--text-muted` | `#586068` | Secondary text |
+| `--inverse` / `--on-inverse` | `#14181A` / `#FFFFFF` | Compact inverse tooltips and data details |
 | `--brand` / `--hit` | `#0FA86F` | Active, hit, healthy, focus |
 | `--btn-primary-bg` / `--btn` | `#0A8654` | Primary command |
 | `--warn` / `--slow` | `#B5770E` | Slow/degraded |
@@ -100,21 +104,35 @@ Use these before adding a new primitive. Admin-specific composition belongs in
 
 ## Portal
 
+The Portal header uses one 40px control geometry without pretending every
+item has the same role. The copyable endpoint and service health share a quiet
+information rail; language and appearance share a segmented preference rail;
+Admin is the sole brand-tinted navigation action. At narrow widths labels
+collapse before essential controls disappear, and the document never scrolls
+horizontally.
+
 `QuickStart.tsx` contains:
 
-1. A compact three-step orientation: choose an ecosystem, copy the persistent
-   package-manager configuration, then verify the request in Monitor.
+1. A compact title and one-line orientation for choosing an ecosystem and
+   package manager, copying the persistent configuration, and verifying it.
 2. The primary setup surface, with `EcosystemCatalog` on the left and
-   `ConfigurePane` on the right for the selected technology stack.
+   `ConfigurePane` on the right for the selected technology stack. This
+   Precision Workbench is capped at 1440px rather than inheriting the wider
+   Admin canvas.
 3. A lower-priority optional-enhancements section containing the sole
    project-level AI integration path and the compiler-cache entry point.
 
-The catalog recommends Python, Node.js, and Container first, remembers at most
-three validated recent choices, searches ecosystem and manager names, and keeps
-the complete 14-item catalog behind a native disclosure. `ConfigurePane`
-defaults to the first supported manager (Python starts with pip); alternate
-managers, one-off commands, and configuration paths use progressive
-disclosure. Endpoint URLs derive from `window.location.origin`; Docker registry
+The catalog remembers at most three validated recent choices as compact
+shortcuts, searches ecosystem and manager names, and shows the complete
+14-item catalog by default. Its white directory rail uses selection state, not
+a large tinted slab, to establish hierarchy. `ConfigurePane` shows every
+supported manager in one compact segmented rail and defaults to the first one
+(Python starts with pip). The persistent configuration is the sole inverse
+ink surface in the light workbench; one-off commands, test commands, and
+configuration paths remain light and retain progressive disclosure. The test
+command confirms client configuration through its own successful exit; request
+records, cache results, and policy decisions belong to Admin and are not shown
+in Portal. Endpoint URLs derive from `window.location.origin`; Docker registry
 mirrors use the service root, because Docker appends `/v2/` itself.
 
 `Monitor.tsx` contains:
@@ -143,6 +161,13 @@ operational scanning distances reasonable. Its live service strip and recent
 downloads precede the KPI/trend view; lower-priority package and bandwidth
 summaries may share a two-column row only when each remains readable.
 
+Admin uses a hybrid information architecture. Expert pages remain the source
+of truth for investigation and configuration; **Needs Attention** is the
+lightweight operational inbox for unhealthy Upstreams, security suggestions,
+cache pressure, and recent supply-chain decisions. It links to those expert
+pages rather than duplicating their full workflows. An incomplete refresh must
+be identified as unknown or stale and must never be presented as “all clear.”
+
 Current admin-specific components are:
 
 - `MainLayout`
@@ -150,6 +175,7 @@ Current admin-specific components are:
 - `TrendsCard`
 - `WebhookTab`
 - `ProRequiredCallout`
+- `ConfirmActionDialog`
 
 Shared metrics use `components/Metric.tsx`; upstream presentation uses
 `components/UpstreamCard.tsx`. Do not reference removed `MetricCard`,
@@ -163,6 +189,10 @@ Admin interactions are composed from the project-owned wrappers `Button`,
 `QueryErrorState`. These wrappers own focus treatment, labels, keyboard
 behavior, stable control dimensions, and semantic status feedback. Pages own
 only their domain composition and query decisions.
+
+Programmatically focused route and setup status regions suppress the decorative
+focus outline because they are announcement targets, not keyboard controls.
+Their retry and navigation controls retain the standard visible focus ring.
 
 Icon-only controls must use `IconButton`: a label and tooltip are mandatory,
 and the interactive target is at least 40x40 CSS pixels. The same minimum
@@ -213,6 +243,18 @@ latency is explicitly the latest observation's value. Auto-refresh runs only
 while viewing the newest page; loading older pages pauses polling, and “Back to
 latest” replaces history only after the newest-page request succeeds.
 
+Access Logs and Audit Logs keep applied filters and pagination in canonical URL
+parameters so links, reload, and browser navigation restore the same
+investigation. Security does the same for its active tab. Invalid values are
+replaced with the default canonical form rather than retained as misleading
+address-bar state. Export actions expose pending, success, and retryable failure
+feedback.
+
+Quarantine keeps dense tables on desktop and switches below 640px to direct
+event, approval, and override lists. Each mobile row keeps the package,
+version, reason, outcome, and primary action together without requiring
+horizontal scrolling.
+
 ### Query-State Contract
 
 | State | Required presentation |
@@ -226,6 +268,12 @@ latest” replaces history only after the newest-page request succeeds.
 
 Independent sibling queries own independent pending, error, stale, and empty
 boundaries. A failure in one panel must not erase successful data in another.
+
+Destructive or access-changing actions identify the affected object and impact
+in a confirmation dialog. Dialogs cannot be dismissed while their mutation is
+pending; a failure stays in context and remains retryable. Multi-item security
+policy changes use a shared draft and changed-only review, and cannot overlap
+with an in-flight single-policy save.
 
 ### Control-Plane Authority
 
@@ -257,21 +305,16 @@ contract is documented in [Admin Control Plane](docs/admin-control-plane.md).
 For frontend changes run:
 
 ```bash
-cd web
-npm run type-check
-npm run type-check:e2e
-npm run build
-npm run test:e2e
-xargs -r npx eslint < admin-remediation-eslint-files.txt
-cd ..
-python3 scripts/i18n-audit.py
+make check
 ```
 
-The Playwright suite verifies the 13 Admin routes across the responsive,
-light/dark, and Chinese/English matrix; it also checks API contracts, WCAG 2.1
-A/AA rules, 40x40 icon targets, zero non-normal letter spacing, the 1840px wide
-layout cap, and Portal token regressions. Keep screenshots failure-only; do not
-commit full-page pixel snapshots.
+`make check` runs the fast Go and browser smoke layers plus frontend contracts.
+Before merging broad UI changes, run `make verify` for the complete Playwright
+suite. Accessibility coverage visits every Admin route once and uses a small set
+of representative responsive, theme, and locale combinations; it also checks
+API contracts, WCAG 2.1 A/AA rules, target sizes, layout caps, and Portal token
+regressions. Keep screenshots failure-only; do not commit full-page pixel
+snapshots.
 
 The repository has unrelated historical lint debt. The manifest is the exact
 Admin remediation scope: fix errors in those files without deriving a new list

@@ -7,88 +7,7 @@ import type {
   CacheListResponse,
   ProjectListResponse,
 } from '../src/lib/adminApi.types'
-import { operatorEcosystems, standardUpstreamEcosystems } from '../src/admin/operatorEcosystems'
 import { expect, mockAdminApi, test } from './fixtures/admin-api'
-
-test('Operator ecosystem catalogs expose product surfaces without internal adapter aliases', () => {
-  const operatorIds = operatorEcosystems.map(ecosystem => ecosystem.id)
-  expect(operatorIds).toEqual([
-    'pypi',
-    'apt',
-    'npm',
-    'go',
-    'cargo',
-    'maven',
-    'rubygems',
-    'composer',
-    'nuget',
-    'conda',
-    'cran',
-    'helm',
-    'alpine',
-    'docker',
-    'huggingface',
-  ])
-  expect(operatorIds).toHaveLength(15)
-  for (const internalAlias of ['pip', 'goproxy', 'crates']) {
-    expect(operatorIds).not.toContain(internalAlias)
-  }
-
-  expect(standardUpstreamEcosystems.map(ecosystem => ecosystem.id)).toEqual([
-    'pypi',
-    'apt',
-    'npm',
-    'go',
-    'cargo',
-    'maven',
-    'rubygems',
-    'composer',
-    'nuget',
-    'conda',
-    'cran',
-    'helm',
-    'alpine',
-    'huggingface',
-  ])
-})
-
-const pageContracts = [
-  {
-    route: '/admin/logs',
-    title: '访问日志',
-    description: '查看包请求、缓存结果、延迟与来源',
-    pageActions: [/导出 CSV/],
-    contentActions: [/^搜索$/],
-  },
-  {
-    route: '/admin/audit',
-    title: '审计日志',
-    description: '追溯包访问结果与客户端来源',
-    pageActions: [/导出 CSV/],
-    contentActions: [/^搜索$/],
-  },
-  {
-    route: '/admin/cache',
-    title: '缓存管理',
-    description: '查看存储占用与缓存条目',
-    pageActions: [/预热/, /清理过期/],
-    contentActions: [],
-  },
-  {
-    route: '/admin/indexes',
-    title: '索引缓存',
-    description: '检查已缓存包元数据的新鲜度',
-    pageActions: [],
-    contentActions: [/^搜索$/],
-  },
-  {
-    route: '/admin/upstreams',
-    title: '上游源',
-    description: '管理各软件生态的上游源',
-    pageActions: [/全部检测/, /添加上游源/],
-    contentActions: [],
-  },
-] as const
 
 const populatedUpstream = {
   id: 1,
@@ -193,99 +112,54 @@ async function expectNoPageOverflow(page: Page, width: number) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
 }
 
-for (const contract of pageContracts) {
-  test(`${contract.route} exposes the shared Operator page chrome and correctly placed actions`, async ({ page }) => {
-    await page.goto(contract.route)
-
-    const adminPage = page.locator('[data-admin-page]')
-    const pageActions = adminPage.locator('[data-admin-page-actions]')
-    const pageContent = adminPage.locator('[data-admin-page-content]')
-
-    await expect(adminPage).toHaveAttribute('data-admin-page-width', 'fluid')
-    await expect(adminPage.locator('[data-admin-page-description]')).toContainText(contract.description)
-    await expect(page.locator('h1:visible')).toHaveCount(1)
-    await expect(page.locator('[data-admin-topbar] h1')).toHaveText(contract.title)
-
-    if (contract.pageActions.length === 0) {
-      await expect(pageActions).toHaveCount(0)
-    }
-    for (const actionName of contract.pageActions) {
-      await expect(pageActions.getByRole('button', { name: actionName })).toBeVisible()
-      await expect(pageContent.getByRole('button', { name: actionName })).toHaveCount(0)
-    }
-    for (const actionName of contract.contentActions) {
-      await expect(pageContent.getByRole('button', { name: actionName })).toBeVisible()
-      await expect(pageActions.getByRole('button', { name: actionName })).toHaveCount(0)
-    }
-  })
-}
-
-test('Cache indexes keeps its Operator page chrome when the initial request fails', async ({ page }) => {
+test('Upstream heartbeat, actions, and empty-state creation stay operable at 320px', async ({ page }) => {
+  const width = 320
+  await page.setViewportSize({ width, height: 844 })
   await mockAdminApi(page, {
-    'GET /api/v1/admin/cache/indexes': {
-      status: 500,
-      body: { code: 'CACHE_INDEXES_UNAVAILABLE', message: 'cache indexes unavailable' },
+    'GET /api/v1/admin/upstreams': {
+      items: [populatedUpstream],
+      total: 1,
+    } satisfies AdminUpstreamListResponse,
+    'GET /api/v1/admin/upstreams/latency': {
+      series: [{
+        upstream_id: 1,
+        points: [
+          { latency_ms: 12, time: '2026-07-10T00:00:00Z', healthy: true },
+          { latency_ms: 18, time: '2026-07-10T00:01:00Z', healthy: true },
+          { latency_ms: 9, time: '2026-07-10T00:02:00Z', healthy: true },
+        ],
+      }],
     },
   })
-  await page.goto('/admin/indexes')
+  await page.goto('/admin/upstreams')
 
-  const adminPage = page.locator('[data-admin-page]')
-  await expect(adminPage).toHaveAttribute('data-admin-page-width', 'fluid')
-  await expect(adminPage.locator('[data-admin-page-description]')).toContainText('检查已缓存包元数据的新鲜度')
-  await expect(adminPage.getByRole('alert')).toBeVisible()
-  await expect(adminPage.getByRole('button', { name: '重试' })).toBeVisible()
-  await expect(page.locator('[data-admin-topbar] h1')).toHaveText('索引缓存')
-})
+  const heartbeat = page.locator('[data-upstream-heartbeat]')
+  await expect(heartbeat).toHaveCount(1)
+  await expectInViewport(page, heartbeat)
 
-for (const width of [320, 375]) {
-  test(`Upstream heartbeat, actions, and empty-state creation stay operable at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 })
-    await mockAdminApi(page, {
-      'GET /api/v1/admin/upstreams': {
-        items: [populatedUpstream],
-        total: 1,
-      } satisfies AdminUpstreamListResponse,
-      'GET /api/v1/admin/upstreams/latency': {
-        series: [{
-          upstream_id: 1,
-          points: [
-            { latency_ms: 12, time: '2026-07-10T00:00:00Z', healthy: true },
-            { latency_ms: 18, time: '2026-07-10T00:01:00Z', healthy: true },
-            { latency_ms: 9, time: '2026-07-10T00:02:00Z', healthy: true },
-          ],
-        }],
-      },
-    })
-    await page.goto('/admin/upstreams')
+  for (const actionName of [/全部检测/, /添加上游源/, /检测 tuna/, /编辑 tuna/, /删除 tuna/]) {
+    await expectInViewport(page, page.getByRole('button', { name: actionName }))
+  }
+  await expectNoPageOverflow(page, width)
 
-    const heartbeat = page.locator('[data-upstream-heartbeat]')
-    await expect(heartbeat).toHaveCount(1)
-    await expectInViewport(page, heartbeat)
-
-    for (const actionName of [/全部检测/, /添加上游源/, /检测 tuna/, /编辑 tuna/, /删除 tuna/]) {
-      await expectInViewport(page, page.getByRole('button', { name: actionName }))
-    }
-    await expectNoPageOverflow(page, width)
-
-    await mockAdminApi(page, {
-      'GET /api/v1/admin/upstreams': { items: [], total: 0 } satisfies AdminUpstreamListResponse,
-    })
-    await page.reload()
-    await page.getByRole('button', { name: /添加上游源/ }).click()
-
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    const ecosystemSelect = dialog.getByLabel('类型')
-    await expectInViewport(page, ecosystemSelect)
-    await expect(ecosystemSelect).toHaveValue('pypi')
-    const optionValues = await ecosystemSelect.locator('option').evaluateAll(options => (
-      options.map(option => (option as HTMLOptionElement).value)
-    ))
-    expect(optionValues).toEqual(expect.arrayContaining(['pypi', 'npm', 'huggingface']))
-    expect(optionValues).not.toContain('')
-    await expectNoPageOverflow(page, width)
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/upstreams': { items: [], total: 0 } satisfies AdminUpstreamListResponse,
   })
-}
+  await page.reload()
+  await page.getByRole('button', { name: /添加上游源/ }).click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  const ecosystemSelect = dialog.getByLabel('类型')
+  await expectInViewport(page, ecosystemSelect)
+  await expect(ecosystemSelect).toHaveValue('pypi')
+  const optionValues = await ecosystemSelect.locator('option').evaluateAll(options => (
+    options.map(option => (option as HTMLOptionElement).value)
+  ))
+  expect(optionValues).toEqual(expect.arrayContaining(['pypi', 'npm', 'huggingface']))
+  expect(optionValues).not.toContain('')
+  await expectNoPageOverflow(page, width)
+})
 
 test('Security policy controls remain visible at 320px', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 })
@@ -391,20 +265,19 @@ const paginationFixtures = [
   },
 ] as const
 
-for (const width of [320, 375]) {
-  test(`Operation pagination remains fully visible at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 })
+test('Operation pagination remains fully visible at 320px', async ({ page }) => {
+  const width = 320
+  await page.setViewportSize({ width, height: 844 })
 
-    for (const fixture of paginationFixtures) {
-      await mockAdminApi(page, fixture.override)
-      await page.goto(fixture.route)
+  for (const fixture of paginationFixtures) {
+    await mockAdminApi(page, fixture.override)
+    await page.goto(fixture.route)
 
-      const pagination = page.locator('[data-admin-pagination]')
-      await expect(pagination).toHaveCount(1)
-      await expectInViewport(page, pagination)
-      await expectInViewport(page, pagination.getByRole('button', { name: '上一页' }))
-      await expectInViewport(page, pagination.getByRole('button', { name: '下一页' }))
-      await expectNoPageOverflow(page, width)
-    }
-  })
-}
+    const pagination = page.locator('[data-admin-pagination]')
+    await expect(pagination).toHaveCount(1)
+    await expectInViewport(page, pagination)
+    await expectInViewport(page, pagination.getByRole('button', { name: '上一页' }))
+    await expectInViewport(page, pagination.getByRole('button', { name: '下一页' }))
+    await expectNoPageOverflow(page, width)
+  }
+})

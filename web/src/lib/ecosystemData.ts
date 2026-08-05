@@ -459,7 +459,7 @@ export const LANGUAGES: Language[] = [
     group: 'lang', subtitleKey: 'go',
     managers: [
       {
-        id: 'goenv', name: 'go env', hint: 'Recommended (persisted)',
+        id: 'goenv', name: 'go env', hint: 'Persistent Go proxy setting',
         quick:      { lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
         methods: [
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
@@ -679,23 +679,25 @@ export const LANGUAGES: Language[] = [
     managers: [
       {
         id: 'apt', name: 'apt', hint: 'Debian/Ubuntu packages',
-        quick:      { lang: 'sh', body: "sudo sed -i 's|http://archive.ubuntu.com|{URL}/apt/tuna|g; s|http://security.ubuntu.com|{URL}/apt/tuna|g' /etc/apt/sources.list && sudo apt update" },
+        quick:      { lang: 'sh', body: "sudo sed -i -e 's|https\\?://deb.debian.org/debian-security|{URL}/apt/debian-security|g' -e 's|https\\?://deb.debian.org/debian|{URL}/apt/debian|g' /etc/apt/sources.list.d/debian.sources && sudo apt update" },
         methods: [
-          { label: 'quickstart.method.cmdline', lang: 'sh', body: "sudo sed -i 's|http://archive.ubuntu.com|{URL}/apt/tuna|g; s|http://security.ubuntu.com|{URL}/apt/tuna|g' /etc/apt/sources.list" },
+          { label: 'quickstart.method.cmdline', lang: 'sh', body: "sudo sed -i -e 's|https\\?://deb.debian.org/debian-security|{URL}/apt/debian-security|g' -e 's|https\\?://deb.debian.org/debian|{URL}/apt/debian|g' /etc/apt/sources.list.d/debian.sources" },
         ],
-        persistent: { file: '/etc/apt/sources.list', lang: 'conf',
-          body: 'deb {URL}/apt/tuna/ubuntu jammy main restricted universe multiverse\ndeb {URL}/apt/tuna/ubuntu jammy-updates main restricted universe multiverse\ndeb {URL}/apt/tuna/ubuntu jammy-security main restricted universe multiverse' },
+        persistent: { file: '/etc/apt/sources.list.d/debian.sources', lang: 'conf',
+          body: 'Types: deb\nURIs: {URL}/apt/debian\nSuites: trixie trixie-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n\nTypes: deb\nURIs: {URL}/apt/debian-security\nSuites: trixie-security\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg' },
         verify:     { lang: 'sh', body: 'sudo apt update && apt-cache policy | head' },
         paths: [
-          { os: 'Debian/Ubuntu', path: '/etc/apt/sources.list' },
+          { os: 'Modern Debian', path: '/etc/apt/sources.list.d/debian.sources' },
+          { os: 'Legacy Debian/Ubuntu', path: '/etc/apt/sources.list' },
           { os: 'Modern Ubuntu', path: '/etc/apt/sources.list.d/ubuntu.sources' },
         ],
         tutorial: [
           'Depsilo proxies APT as a reverse proxy — you must replace the host in sources.list, not set Acquire::http::Proxy (which is for forward proxies).',
-          'The path segment after /apt/ (tuna in this example) is the upstream name configured on the Depsilo server. Run depsilo config show or check the admin UI to see your upstream names.',
-          'After /apt/<upstream-name>/, the path mirrors the upstream layout (so /ubuntu/dists/... for an upstream pointed at https://mirrors.tuna.tsinghua.edu.cn).',
+          'Use /apt/debian for the base and updates suites, and /apt/debian-security for the security suite. /apt-security is not a Depsilo route.',
+          'The segment after /apt/ is the repository root path passed to the selected mirror, not an upstream name. Depsilo selects a healthy upstream automatically.',
+          'Ubuntu uses /apt/ubuntu with suites such as noble, noble-updates, and noble-security.',
           'Depsilo passes the response body through untouched so GPG signature verification keeps working.',
-          'Replace jammy with your release codename (focal, bookworm, etc) — check with lsb_release -cs.',
+          'Replace trixie with your Debian release codename; check it with . /etc/os-release && echo "$VERSION_CODENAME".',
         ],
       },
     ],

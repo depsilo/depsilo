@@ -16,6 +16,14 @@ type Storage interface {
 	TotalSize(ctx context.Context) (int64, error)
 }
 
+// ReadinessProber is the narrow capability used by the HTTP readiness check.
+// It is intentionally separate from Storage: cache implementations and test
+// doubles that are never exposed as server dependencies do not need to grow an
+// operational-health API.
+type ReadinessProber interface {
+	CheckReady(ctx context.Context) error
+}
+
 type ObjectMeta struct {
 	Key          string
 	Size         int64

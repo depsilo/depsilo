@@ -51,4 +51,4 @@
 
 ## 来源
 
-设计规范详见 `depsilo-landingpage/logo/DESIGN.md`。
+设计规范详见仓库根目录的 [`DESIGN.md`](../../DESIGN.md)。

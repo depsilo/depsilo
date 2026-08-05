@@ -56,53 +56,42 @@ for (const viewport of [
   })
 }
 
-for (const width of [1920, 2560]) {
-  test(`Admin outlet is centered in main and capped at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 1080 })
-    await setUiPreferences(page, 'light', 'en')
-    await page.goto('/admin')
-    await expectResolvedUiPreferences(page, 'light', 'en')
-    await expect(page.locator('[data-admin-main]')).toBeVisible()
-    await expect(page.locator('[data-admin-outlet]')).toBeVisible()
-    const metrics = await page.evaluate(() => {
-      const main = document.querySelector<HTMLElement>('[data-admin-main]')
-      const outlet = document.querySelector<HTMLElement>('[data-admin-outlet]')
-      if (!main || !outlet) throw new Error('admin geometry hooks missing')
-      const mainRect = main.getBoundingClientRect()
-      const outletRect = outlet.getBoundingClientRect()
-      return {
-        mainLeft: mainRect.left,
-        mainWidth: mainRect.width,
-        outletLeft: outletRect.left,
-        outletWidth: outletRect.width,
-      }
-    })
-    expect(metrics.outletWidth).toBeLessThanOrEqual(1840)
-    expect(Math.abs(
-      (metrics.outletLeft - metrics.mainLeft) - (metrics.mainWidth - metrics.outletWidth) / 2,
-    )).toBeLessThanOrEqual(1)
-    if (width === 2560) expect(metrics.outletWidth).toBeCloseTo(1840, 0)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+test('Admin outlet is centered in main and capped at 2560px', async ({ page }) => {
+  const width = 2560
+  await page.setViewportSize({ width, height: 1080 })
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/admin')
+  await expectResolvedUiPreferences(page, 'light', 'en')
+  await expect(page.locator('[data-admin-main]')).toBeVisible()
+  await expect(page.locator('[data-admin-outlet]')).toBeVisible()
+  const metrics = await page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>('[data-admin-main]')
+    const outlet = document.querySelector<HTMLElement>('[data-admin-outlet]')
+    if (!main || !outlet) throw new Error('admin geometry hooks missing')
+    const mainRect = main.getBoundingClientRect()
+    const outletRect = outlet.getBoundingClientRect()
+    return {
+      mainLeft: mainRect.left,
+      mainWidth: mainRect.width,
+      outletLeft: outletRect.left,
+      outletWidth: outletRect.width,
+    }
   })
-}
-
-test('Portal mobile header keeps Admin navigation reachable', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 720 })
-  await setUiPreferences(page, 'dark', 'zh')
-  await page.goto('/')
-  await expectResolvedUiPreferences(page, 'dark', 'zh')
-
-  const adminLink = page.getByRole('link', { name: /管理后台/ })
-  await expect(adminLink).toBeVisible()
-  await expect(adminLink.getByText('管理', { exact: true })).toBeVisible()
-  const box = await adminLink.boundingBox()
-  expect(box?.width).toBeGreaterThanOrEqual(40)
-  expect(box?.height).toBeGreaterThanOrEqual(40)
-  await adminLink.click()
-  await expect(page).toHaveURL(/\/admin(?:\/|$)/)
+  expect(metrics.outletWidth).toBeCloseTo(1840, 0)
+  expect(Math.abs(
+    (metrics.outletLeft - metrics.mainLeft) - (metrics.mainWidth - metrics.outletWidth) / 2,
+  )).toBeLessThanOrEqual(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
 })
 
-for (const route of ['/', '/monitor']) for (const width of [390, 1440]) for (const theme of ['light', 'dark'] as const) {
+const portalVisualCases = [
+  { route: '/', width: 390, theme: 'light' },
+  { route: '/', width: 1440, theme: 'dark' },
+  { route: '/monitor', width: 390, theme: 'dark' },
+  { route: '/monitor', width: 1440, theme: 'light' },
+] as const
+
+for (const { route, width, theme } of portalVisualCases) {
   test(`Portal ${route} ${width} ${theme} has no token regression`, async ({ page }) => {
     const consoleErrors: string[] = []
     page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()) })

@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-27
 **Status:** Approved design, ready for implementation plan
-**Backlog source:** [docs/plans/2026-05-20-feature-backlog.md](../plans/2026-05-20-feature-backlog.md) §二 Tier S1
+**Historical source:** 2026-05-20 feature backlog (available in Git history), Tier S1
 **Companion existing spec:** [docs/specs/2026-04-13-docker-registry-proxy.md](2026-04-13-docker-registry-proxy.md) — Docker Registry adapter, comparable in shape (server-side redirect following, signed-URL handling, large blob streaming).
 
 ---

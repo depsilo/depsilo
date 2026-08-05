@@ -28,7 +28,11 @@ If you discover a security vulnerability in Depsilo, please report it responsibl
 
 The following are known limitations, not vulnerabilities:
 
-- Default admin credentials (`admin:admin`) created on first run — this is documented and intended for initial setup only. Users are expected to change the password immediately.
+- The one-time bootstrap token and any generated initial password are printed
+  to the server log during setup. Anyone who can read that log during the
+  bootstrap window may be able to claim or access the initial administrator.
+  Protect logs and complete setup promptly. There is no default `admin/admin`
+  credential.
 - The `config.example.toml` contains placeholder values (`change-me-in-production`) — these are not real secrets.
 - SQLite data is not encrypted at rest. Depsilo does not currently support
   PostgreSQL; use encrypted disks/filesystems and restrict access to the state directory.
@@ -41,8 +45,9 @@ The following are known limitations, not vulnerabilities:
 
 When deploying Depsilo in production:
 
-1. **Change the default admin password** immediately after first login
-2. **Set a strong `jwt_secret`** in your configuration — never use the default
+1. **Protect the bootstrap token** and choose a strong initial administrator
+   password; remove broad access to bootstrap logs after setup
+2. **Set a strong `jwt_secret`** in your configuration — never use the example placeholder
 3. **Use HTTPS** via a reverse proxy (nginx, Caddy, Traefik)
 4. **Restrict network access** to the admin API (`/api/v1/admin/*`)
 5. **Protect the SQLite state directory** with restrictive permissions,

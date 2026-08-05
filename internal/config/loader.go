@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"depsilo/internal/ecosystem"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -63,6 +64,10 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 		isDefault = true
+		// Config schema metadata belongs to the document, not the environment.
+		// Pin the missing-document version so DEPSILO_CONFIG_VERSION cannot
+		// fabricate or mask an on-disk schema version.
+		v.Set("config_version", 0)
 		zap.L().Warn("config file not found, using defaults — visit the web UI to run setup")
 
 		// When no config file, use ~/.depsilo/ paths as defaults
@@ -77,7 +82,7 @@ func Load() (*Config, error) {
 		}
 	} else {
 		resolvedPath = v.ConfigFileUsed()
-		if err := readSanitizedConfig(v, resolvedPath); err != nil {
+		if err := readValidatedConfig(v, resolvedPath); err != nil {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 	}
@@ -170,9 +175,28 @@ func explicitUpstreamEcosystems(v *viper.Viper) map[string]bool {
 }
 
 func decodeViper(v *viper.Viper) (*Config, error) {
+	documentVersion := v.GetInt("config_version")
+	if err := validateConfigVersion(documentVersion); err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{}
-	if err := v.Unmarshal(cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal config: %w", err)
+	if err := v.UnmarshalExact(cfg); err != nil {
+		return nil, fmt.Errorf("decode config schema: %w; remove unknown keys or consult config.example.toml", err)
+	}
+	if cfg.ConfigVersion == 0 {
+		// Files written before the version field was introduced are schema zero.
+		// The first schema has no structural rewrite, so it is safe to migrate in
+		// memory while preserving the operator-owned file byte-for-byte.
+		cfg.ConfigVersion = CurrentConfigVersion
+	}
+	resolvedExtraIndexes, err := resolveExtraIndexPresets(cfg.ExtraIndexPresets, cfg.ExtraIndexes)
+	if err != nil {
+		return nil, err
+	}
+	cfg.ExtraIndexes = resolvedExtraIndexes
+	if err := normalizeExtraIndexes(cfg.ExtraIndexes); err != nil {
+		return nil, err
 	}
 
 	if raw := v.GetString("cache.ttl_index"); raw != "" {
@@ -223,6 +247,20 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func validateConfigVersion(documentVersion int) error {
+	if documentVersion > CurrentConfigVersion {
+		return fmt.Errorf(
+			"config version %d is newer than this binary supports (%d); upgrade Depsilo instead of starting with an older binary",
+			documentVersion,
+			CurrentConfigVersion,
+		)
+	}
+	if documentVersion < 0 {
+		return fmt.Errorf("config_version must be between 0 and %d", CurrentConfigVersion)
+	}
+	return nil
 }
 
 func validateCompileCacheConfig(cfg CompileCacheConfig) error {
@@ -296,14 +334,18 @@ func decodeConfigDocument(data []byte) (*Config, error) {
 	v := viper.New()
 	setDefaults(v)
 	if len(data) > 0 {
-		sanitized, err := sanitizeConfigDocumentForViper(data)
-		if err != nil {
+		if err := pinDocumentConfigVersion(v, data); err != nil {
+			return nil, err
+		}
+		if err := validateConfigDocumentSyntax(data); err != nil {
 			return nil, err
 		}
 		v.SetConfigType("toml")
-		if err := v.ReadConfig(bytes.NewReader(sanitized)); err != nil {
+		if err := v.ReadConfig(bytes.NewReader(data)); err != nil {
 			return nil, fmt.Errorf("parse config: %w", err)
 		}
+	} else {
+		v.Set("config_version", 0)
 	}
 	cfg, err := decodeViper(v)
 	if err != nil {
@@ -315,16 +357,36 @@ func decodeConfigDocument(data []byte) (*Config, error) {
 	return cfg, nil
 }
 
-func readSanitizedConfig(v *viper.Viper, path string) error {
+func readValidatedConfig(v *viper.Viper, path string) error {
 	document, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	sanitized, err := sanitizeConfigDocumentForViper(document)
-	if err != nil {
+	if err := pinDocumentConfigVersion(v, document); err != nil {
 		return err
 	}
-	return v.ReadConfig(bytes.NewReader(sanitized))
+	if err := validateConfigDocumentSyntax(document); err != nil {
+		return err
+	}
+	return v.ReadConfig(bytes.NewReader(document))
+}
+
+func pinDocumentConfigVersion(v *viper.Viper, document []byte) error {
+	var metadata struct {
+		ConfigVersion *int `toml:"config_version"`
+	}
+	if err := toml.Unmarshal(document, &metadata); err != nil {
+		return fmt.Errorf("parse config metadata: %w", err)
+	}
+	version := 0
+	if metadata.ConfigVersion != nil {
+		version = *metadata.ConfigVersion
+	}
+	// Viper.Set has higher precedence than environment variables. This is
+	// intentional: schema metadata describes the file itself and must not be
+	// spoofable via DEPSILO_CONFIG_VERSION.
+	v.Set("config_version", version)
+	return validateConfigVersion(version)
 }
 
 func setDefaults(v *viper.Viper) {

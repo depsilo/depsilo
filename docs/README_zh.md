@@ -1,4 +1,4 @@
-[![Go](https://img.shields.io/badge/Go-1.25.12+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.26.5+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/depsilo/depsilo)](https://hub.docker.com/r/depsilo/depsilo)
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
@@ -97,13 +97,15 @@ docker-compose up -d
 ```bash
 git clone https://github.com/depsilo/depsilo.git
 cd depsilo
-cd web && npm ci && cd ..
+make setup
 make build
 cp config.example.toml config.toml
 export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
 export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
 ./bin/depsilo serve
 ```
+
+源码构建需要 Go 1.26.5+ 与 Node.js 22.22.0+。
 
 服务默认启动在 `http://localhost:23333`。
 不再提供预设管理员密码；互动安装由向导创建，无头部署则从
@@ -114,7 +116,8 @@ export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
 `.dev-jwt-secret`，之后重启继续复用。项目根目录没有 `config.toml` 时不会
 再强制传入缺失路径，而是继续使用 CLI 的用户目录配置或内置默认配置。
 生产部署仍须显式提供自己的 JWT 密钥。需要强制使用自定义配置路径时，请运行
-`DEPSILO_CONFIG=/etc/depsilo.toml make run`。
+`DEPSILO_CONFIG=/etc/depsilo.toml make run`。后台开发服务会让实际监听端口与健康
+检查端口保持一致；需要改端口时使用 `PORT=18080 make dev`。
 
 Depsilo 也可以为本机或团队构建机提供独立的 ccache / sccache 编译缓存。sccache
 入口只是满足官方客户端所需的窄 WebDAV 兼容层，不是 `sccache-dist` 调度器，也
@@ -239,6 +242,26 @@ index-url = http://你的IP:23333/pypi/simple/
 trusted-host = 你的IP
 ```
 
+**PyTorch 构建索引：** Depsilo 默认提供
+`/pypi-torch/{channel}/simple/`，无需为每个新 CUDA 版本等待 Depsilo
+更新。将 PyTorch 官方安装地址中 `/whl/` 后的通道填入 URL，即可分别缓存
+CPU、CUDA 和 ROCm wheel。各通道拥有独立缓存，不会与清华 PyPI 的候选
+版本自动混合；索引声明的下载地址会由 Depsilo 签名后代理：
+
+```bash
+PYTORCH_CHANNEL=cpu
+pip install torch torchvision torchaudio \
+  --index-url http://你的IP:23333/pypi-torch/${PYTORCH_CHANNEL}/simple/ \
+  --trusted-host 你的IP
+```
+
+内置上游使用被动探测：没有客户端请求时不会访问 PyTorch。如需关闭：
+
+```toml
+[extra_index_presets]
+disabled = ["pytorch"]
+```
+
 **Docker 构建**（无需修改 Dockerfile）：
 
 ```bash
@@ -299,14 +322,14 @@ depsilo_cache_files_total
 - [x] Docker 部署
 - [x] 审计日志与包级 Allow/Deny 规则
 - [x] 最小发布年龄隔离与审批流
-- [x] CycloneDX + SPDX 源码和容器镜像 SBOM 发布附件（当前未签名）
+- [x] CycloneDX + SPDX 源码和容器镜像 SBOM 发布附件
 
 已合入 `master`，尚未发布：
 - [x] OSV 已知恶意包阻断与 24 小时审计 override
 - [x] 不可变制品篡改检测与 critical Webhook
+- [x] Cosign keyless 签名、镜像 SBOM attestation 与发布冒烟测试
 
 下一步：
-- [ ] 使用 cosign keyless 签名发布制品
 - [ ] Freeze / Golden Snapshot
 - [ ] CRA 完整 SBOM
 - [ ] Helm Chart

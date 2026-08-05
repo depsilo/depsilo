@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright'
 
 import { adminApiDefaults, expect, mockAdminApi, test } from './fixtures/admin-api'
 
-test('setup status failure blocks every app branch until a validated retry succeeds', async ({ page }) => {
+test('setup status failure blocks every app branch until a validated retry succeeds', { tag: '@smoke' }, async ({ page }) => {
   let setupAttempts = 0
   let authRequests = 0
   let statsRequests = 0

@@ -30,7 +30,7 @@ Steps to verify this change works:
 
 - [ ] I have performed a self-review of my code
 - [ ] I have added tests for new functionality
-- [ ] `go vet ./...` passes
-- [ ] `go test ./...` passes
-- [ ] Frontend builds without errors (`npm run build`)
+- [ ] The smallest focused test for the changed module passes
+- [ ] `make check` passes, or the omitted checks are explained above
+- [ ] Protocol changes include the relevant integration/real-client evidence
 - [ ] Documentation updated (if behavior changed)

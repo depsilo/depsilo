@@ -17,10 +17,10 @@ interface EcosystemButtonProps {
   subtitle: string
   onSelect: (id: string) => void
   compact?: boolean
+  chip?: boolean
 }
 
 const GROUP_ORDER: LanguageGroup[] = ['os', 'lang', 'data', 'infra']
-const RECOMMENDED_IDS = ['python', 'node', 'container']
 
 function groupLabelKey(group: LanguageGroup): string {
   return `quickstart.group${group.charAt(0).toUpperCase()}${group.slice(1)}`
@@ -36,13 +36,16 @@ function EcosystemButton({
   subtitle,
   onSelect,
   compact = false,
+  chip = false,
 }: EcosystemButtonProps) {
   const active = language.id === selected
 
   return (
     <button
       type="button"
-      aria-current={active ? 'true' : undefined}
+      aria-pressed={active}
+      data-active={active ? 'true' : undefined}
+      title={language.name}
       onClick={() => onSelect(language.id)}
       className="eco-tile stripe-focus-ring active:scale-[0.98]"
       onMouseMove={event => {
@@ -55,13 +58,14 @@ function EcosystemButton({
         overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
-        gap: compact ? 9 : 11,
+        gap: compact ? 6 : 11,
         width: '100%',
-        minHeight: compact ? 46 : 52,
-        padding: compact ? '7px 9px' : '8px 10px',
+        minHeight: chip ? 40 : compact ? 40 : 52,
+        padding: chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
         background: active ? 'var(--brand-soft)' : 'transparent',
         border: `1px solid ${active ? 'var(--brand-border)' : 'transparent'}`,
-        borderRadius: 8,
+        borderRadius: chip || compact ? 6 : 8,
+        boxShadow: active ? 'inset 1px 0 0 var(--brand)' : 'none',
         textAlign: 'left',
         cursor: 'pointer',
         transition:
@@ -74,30 +78,34 @@ function EcosystemButton({
         if (!active) event.currentTarget.style.background = 'transparent'
       }}
     >
-      <span
-        aria-hidden="true"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: compact ? 28 : 32,
-          height: compact ? 28 : 32,
-          borderRadius: 7,
-          background: active ? 'var(--bg-card)' : 'var(--bg-soft)',
-          border: '0.5px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <EcosystemIcon type={language.iconAdapter} size={compact ? 16 : 18} useColor />
-      </span>
+      {!chip && (
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: compact ? 24 : 32,
+            height: compact ? 24 : 32,
+            borderRadius: 6,
+            background: active
+              ? 'var(--bg-card)'
+              : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
+            flexShrink: 0,
+          }}
+        >
+          <EcosystemIcon type={language.iconAdapter} size={compact ? 14 : 18} useColor />
+        </span>
+      )}
       <span style={{ minWidth: 0, flex: 1 }}>
         <span
           style={{
             display: 'block',
             overflow: 'hidden',
             color: active ? 'var(--brand-text)' : 'var(--text)',
-            fontSize: compact ? 13 : 14,
+            fontSize: chip ? 12 : compact ? 12.5 : 14,
             fontWeight: active ? 640 : 540,
+            letterSpacing: compact ? '-0.01em' : undefined,
             lineHeight: 1.25,
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -105,7 +113,7 @@ function EcosystemButton({
         >
           {language.name}
         </span>
-        {!compact && (
+        {!compact && !chip && (
           <span
             style={{
               display: 'block',
@@ -137,13 +145,6 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
   const recentLanguages = recent
     .map(id => languagesById.get(id))
     .filter((language): language is Language => Boolean(language))
-  const recentIds = new Set(recentLanguages.map(language => language.id))
-  const recommendedLanguages = RECOMMENDED_IDS
-    .map(id => languagesById.get(id))
-    .filter(
-      (language): language is Language =>
-        language !== undefined && !recentIds.has(language.id),
-    )
 
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const matchingLanguages = normalizedQuery
@@ -186,7 +187,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
           >
             {t(groupLabelKey(group))}
           </h4>
-          <ul className="m-0 grid list-none grid-cols-1 gap-1 p-0 sm:grid-cols-2 min-[861px]:grid-cols-1">
+          <ul className="m-0 grid list-none grid-cols-1 gap-1 p-0 min-[360px]:grid-cols-2">
             {items.map(language => (
               <li key={language.id}>
                 <EcosystemButton
@@ -194,6 +195,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
                   selected={selected}
                   subtitle={t(ecoLabelKey(language.subtitleKey))}
                   onSelect={onSelect}
+                  compact
                 />
               </li>
             ))}
@@ -206,11 +208,11 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
   return (
     <nav
       aria-label={t('quickstart.pickEcosystem')}
-      className="eco-catalog border-b border-[var(--border)] min-[861px]:border-r min-[861px]:border-b-0"
+      className="eco-catalog border-b border-[var(--border)] min-[900px]:border-r min-[900px]:border-b-0"
       style={{
         minWidth: 0,
-        padding: '18px 16px 20px',
-        background: 'var(--bg-soft)',
+        padding: '18px 14px 20px',
+        background: 'var(--bg-card)',
       }}
     >
       <h3 className="m-0 text-[16px] font-[650] leading-[1.3] text-[var(--text)]">
@@ -237,12 +239,17 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
           placeholder={t('quickstart.searchEcosystemPlaceholder')}
           autoComplete="off"
           className="pl-9"
-          style={{ background: 'var(--bg-card)' }}
+          style={{ background: 'var(--bg-soft)' }}
         />
       </div>
 
       {normalizedQuery ? (
         <div className="mt-4 flex flex-col gap-4">
+          <span className="sr-only" aria-live="polite">
+            {t('quickstart.searchResultCount', {
+              count: matchingLanguages.length,
+            })}
+          </span>
           {matchingLanguages.length > 0 ? (
             renderGroupedLanguages(matchingLanguages)
           ) : (
@@ -254,14 +261,14 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
       ) : (
         <>
           {recentLanguages.length > 0 && (
-            <section className="mt-5" aria-labelledby="recent-ecosystems-title">
+            <section className="mt-4" aria-labelledby="recent-ecosystems-title">
               <h4
                 id="recent-ecosystems-title"
-                className="m-0 mb-2 text-[12px] font-[620] text-[var(--text-muted)]"
+                className="m-0 mb-1.5 text-[12px] font-[620] text-[var(--text-muted)]"
               >
                 {t('quickstart.recentEcosystems')}
               </h4>
-              <div className="grid grid-cols-2 gap-1 min-[861px]:grid-cols-1">
+              <div className="grid grid-cols-3 gap-1">
                 {recentLanguages.map(language => (
                   <EcosystemButton
                     key={language.id}
@@ -270,44 +277,27 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
                     subtitle={t(ecoLabelKey(language.subtitleKey))}
                     onSelect={onSelect}
                     compact
+                    chip
                   />
                 ))}
               </div>
             </section>
           )}
 
-          {recommendedLanguages.length > 0 && (
-            <section className="mt-5" aria-labelledby="recommended-ecosystems-title">
-              <h4
-                id="recommended-ecosystems-title"
-                className="m-0 mb-2 text-[12px] font-[620] text-[var(--text-muted)]"
-              >
-                {t('quickstart.recommendedEcosystems')}
-              </h4>
-              <div className="grid grid-cols-2 gap-1 min-[861px]:grid-cols-1">
-                {recommendedLanguages.map(language => (
-                  <EcosystemButton
-                    key={language.id}
-                    language={language}
-                    selected={selected}
-                    subtitle={t(ecoLabelKey(language.subtitleKey))}
-                    onSelect={onSelect}
-                    compact
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          <details className="mt-5 border-t border-[var(--border)] pt-2">
-            <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between rounded-[6px] px-1 text-[13px] font-[600] text-[var(--text)] hover:text-[var(--brand-text)]">
-              <span>{t('quickstart.browseAll', { count: LANGUAGES.length })}</span>
-              <Icon name="expand_more" size="sm" />
-            </summary>
-            <div className="mt-3 flex flex-col gap-4">
+          <section
+            className="mt-4 border-t border-[var(--border)] pt-3"
+            aria-labelledby="all-ecosystems-title"
+          >
+            <h4
+              id="all-ecosystems-title"
+              className="m-0 mb-2 text-[12px] font-[620] text-[var(--text-muted)]"
+            >
+              {t('quickstart.allEcosystems')}
+            </h4>
+            <div className="flex flex-col gap-3">
               {renderGroupedLanguages(LANGUAGES)}
             </div>
-          </details>
+          </section>
         </>
       )}
     </nav>

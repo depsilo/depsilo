@@ -1,5 +1,5 @@
 import { useEffect, useReducer, type ReactElement } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import QueryErrorState from '@/components/QueryErrorState'
@@ -12,6 +12,7 @@ import { adminRouteManifest, type AdminRouteId } from './routes'
 const LoginV2 = lazyRoute(() => import('./pages/Login'), { surface: 'page' })
 const AdminShell = lazyRoute(() => import('./AdminShell'), { surface: 'page' })
 const DashboardV2 = lazyRoute(() => import('./pages/Dashboard'))
+const Attention = lazyRoute(() => import('./pages/Attention'))
 const BandwidthReportV2 = lazyRoute(() => import('./pages/BandwidthReport'))
 const CacheManageV2 = lazyRoute(() => import('./pages/CacheManage'))
 const CacheIndexes = lazyRoute(() => import('./pages/CacheIndexes'))
@@ -30,6 +31,7 @@ const SettingsV2 = lazyRoute(() => import('./pages/Settings'))
 
 const routeElements = {
   dashboard: <DashboardV2 />,
+  attention: <Attention />,
   bandwidth: <BandwidthReportV2 />,
   cache: <CacheManageV2 />,
   cacheIndexes: <CacheIndexes />,

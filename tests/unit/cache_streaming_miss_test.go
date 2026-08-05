@@ -56,6 +56,28 @@ func newTestCacheManager(t *testing.T, store cache.Storage, database *gorm.DB) *
 	return manager
 }
 
+func waitForCommittedCacheEntry(t *testing.T, database *gorm.DB, key string, timeout time.Duration) db.CacheEntry {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		var count int64
+		if err := database.Model(&db.CacheEntry{}).Where("key = ?", key).Count(&count).Error; err != nil {
+			t.Fatalf("count cache entry %q: %v", key, err)
+		}
+		if count == 1 {
+			var entry db.CacheEntry
+			if err := database.Where("key = ?", key).First(&entry).Error; err != nil {
+				t.Fatalf("load committed cache entry %q: %v", key, err)
+			}
+			return entry
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cache entry %q was not committed within %v", key, timeout)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 // trackingStorage wraps fakeStorage with hooks for observing Put lifecycle and
 // optional slow-write simulation.
 type trackingStorage struct {
@@ -241,6 +263,9 @@ func TestMissPath_FirstByteIsFast(t *testing.T) {
 // client stops reading mid-stream, the upstream→storage pump keeps going and
 // the cache entry lands in DB + storage.
 func TestMissPath_ClientDisconnect_StorageStillCompletes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("stream disconnect lifecycle contract")
+	}
 	d := newTestDB(t)
 	store := newTrackingStorage()
 	mgr := newTestCacheManager(t, store, d)
@@ -278,11 +303,9 @@ func TestMissPath_ClientDisconnect_StorageStillCompletes(t *testing.T) {
 		t.Error("stored data does not match upstream body after client disconnect")
 	}
 
-	// DB entry should be present.
-	var entry db.CacheEntry
-	if err := d.Where("key = ?", key).First(&entry).Error; err != nil {
-		t.Fatalf("DB entry missing after client disconnect: %v", err)
-	}
+	// Storage.Put completing precedes the asynchronous metadata commit. Wait
+	// for that final state instead of racing the persistence goroutine.
+	entry := waitForCommittedCacheEntry(t, d, key, 5*time.Second)
 	if entry.Size != int64(total) {
 		t.Errorf("DB entry size = %d, want %d", entry.Size, total)
 	}

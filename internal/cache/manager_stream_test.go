@@ -131,6 +131,9 @@ func TestManager_CacheMissDeliversBytesBeforeCachePutIsReady(t *testing.T) {
 }
 
 func TestManager_CacheMissLargeBodyDoesNotWaitForCachePutReadiness(t *testing.T) {
+	if testing.Short() {
+		t.Skip("large streaming pressure contract")
+	}
 	database := openStreamTestDB(t)
 	storage := &delayedPutStorage{memStorage: newMemStorage(), release: make(chan struct{})}
 	m := NewManager(storage, database, NewEventBus(), time.Hour)
@@ -192,6 +195,9 @@ func TestManager_CacheMissLargeBodyDoesNotWaitForCachePutReadiness(t *testing.T)
 }
 
 func TestManager_TransientCachePutStallStillPersistsMiss(t *testing.T) {
+	if testing.Short() {
+		t.Skip("storage backpressure timing contract")
+	}
 	database := openStreamTestDB(t)
 	storage := &delayedPutStorage{
 		memStorage: newMemStorage(),
@@ -285,6 +291,9 @@ func TestManager_TransientCachePutStallStillPersistsMiss(t *testing.T) {
 }
 
 func TestManager_FollowerFailsOpenWhenCachePutRemainsBackpressured(t *testing.T) {
+	if testing.Short() {
+		t.Skip("backpressure timeout contract")
+	}
 	database := openStreamTestDB(t)
 	storage := &delayedPutStorage{
 		memStorage: newMemStorage(),
@@ -432,6 +441,9 @@ func TestManager_SlowDownstreamAppliesBoundedBackpressureWithoutAbandoningCacheF
 }
 
 func TestManager_DownstreamDisconnectDuringStorageBackpressureKeepsCacheFill(t *testing.T) {
+	if testing.Short() {
+		t.Skip("backpressure timeout contract")
+	}
 	database := openStreamTestDB(t)
 	storage := &delayedPutStorage{
 		memStorage: newMemStorage(),

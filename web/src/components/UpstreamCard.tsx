@@ -209,7 +209,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           aria-live="polite"
           aria-atomic="true"
           className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--text)', color: 'var(--bg-page)', left: tooltipLeft, transform: tooltipTransform }}
+          style={{ background: 'var(--inverse)', color: 'var(--on-inverse)', left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
         </div>

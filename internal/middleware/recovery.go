@@ -13,7 +13,7 @@ func Recovery() gin.HandlerFunc {
 			if r := recover(); r != nil {
 				zap.L().Error("panic recovered",
 					zap.Any("error", r),
-					zap.String("path", c.Request.URL.Path),
+					zap.String("path", redactedRequestPath(c.Request.URL.Path)),
 				)
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"code":    "INTERNAL_ERROR",

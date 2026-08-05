@@ -35,8 +35,9 @@ func RewritePackagesJSON(data []byte, baseURL string) ([]byte, error) {
 	// composer gate therefore provides caching, audit events and
 	// best-effort blocking, but NOT hard enforcement on its own.
 	// Hard enforcement needs egress control (proxy-only network) or
-	// filtering quarantined versions out of the p2 metadata — a
-	// product decision tracked in CLAUDE.md §11.4.
+	// filtering quarantined versions out of the p2 metadata. The
+	// current product boundary is documented in PRODUCT.md; changing
+	// enforcement semantics requires an explicit design decision.
 	doc["mirrors"] = []map[string]interface{}{
 		{
 			"dist-url":  baseURL + "/composer/dist/%package%/%version%/%reference%.%type%",

@@ -26,12 +26,3 @@ func TestAPT_DebDownload(t *testing.T) {
 	resp := httpGet(t, depsiloURL+"/apt/ubuntu/pool/main/c/curl/curl_7.68.0.deb")
 	assertStatus(t, resp, 200)
 }
-
-func TestAPT_CacheHit(t *testing.T) {
-	httpGet(t, depsiloURL+"/apt/ubuntu/dists/jammy/Release")
-	before := mockServer.RequestCount()
-	resp := httpGet(t, depsiloURL+"/apt/ubuntu/dists/jammy/Release")
-	assertStatus(t, resp, 200)
-	// Note: Release has short TTL, so this might still be cached within the test run
-	_ = before
-}

@@ -8,28 +8,38 @@ import (
 	"depsilo/internal/adapter/packagekey"
 )
 
-// backfillCacheKinds classifies rows created before cache_kind was introduced.
-// New writes are tagged by cache.Manager, so this runs only for legacy rows.
-func backfillCacheKinds(database *gorm.DB) error {
-	var rows []CacheEntry
-	return database.Where("cache_kind = '' OR cache_kind IS NULL").
+// cacheBackfillRow is intentionally narrower than CacheEntry. Schema
+// migrations must not inherit future domain-model fields merely to repair the
+// three legacy columns they need.
+type cacheBackfillRow struct {
+	ID          uint `gorm:"primaryKey"`
+	AdapterType string
+	Key         string
+}
+
+// backfillSchemaV1CacheKinds classifies rows created before cache_kind was
+// introduced. New writes are tagged by cache.Manager, so this runs only for
+// legacy rows.
+func backfillSchemaV1CacheKinds(database *gorm.DB) error {
+	var rows []cacheBackfillRow
+	return database.Table("cache_entries").Where("cache_kind = '' OR cache_kind IS NULL").
 		FindInBatches(&rows, 500, func(_ *gorm.DB, _ int) error {
 			metadataIDs := make([]uint, 0, len(rows))
 			artifactIDs := make([]uint, 0, len(rows))
 			for _, row := range rows {
-				if ClassifyCacheKind(row.AdapterType, row.Key) == CacheKindMetadata {
+				if ClassifyCacheKind(row.AdapterType, row.Key) == schemaV1CacheKindMetadata {
 					metadataIDs = append(metadataIDs, row.ID)
 				} else {
 					artifactIDs = append(artifactIDs, row.ID)
 				}
 			}
 			if len(metadataIDs) > 0 {
-				if err := database.Model(&CacheEntry{}).Where("id IN ?", metadataIDs).Update("cache_kind", CacheKindMetadata).Error; err != nil {
+				if err := database.Table("cache_entries").Where("id IN ?", metadataIDs).Update("cache_kind", schemaV1CacheKindMetadata).Error; err != nil {
 					return err
 				}
 			}
 			if len(artifactIDs) > 0 {
-				if err := database.Model(&CacheEntry{}).Where("id IN ?", artifactIDs).Update("cache_kind", CacheKindArtifact).Error; err != nil {
+				if err := database.Table("cache_entries").Where("id IN ?", artifactIDs).Update("cache_kind", schemaV1CacheKindArtifact).Error; err != nil {
 					return err
 				}
 			}
@@ -37,12 +47,14 @@ func backfillCacheKinds(database *gorm.DB) error {
 		}).Error
 }
 
-// backfillHuggingFacePackageNames gives legacy API metadata and opaque-query
-// rows the same repository identity as artifact rows. Repository-level
-// revocation depends on this exact identity to remove every cached sibling.
-func backfillHuggingFacePackageNames(database *gorm.DB) error {
-	var rows []CacheEntry
+// backfillSchemaV1HuggingFacePackageNames gives legacy API metadata and
+// opaque-query rows the same repository identity as artifact rows.
+// Repository-level revocation depends on this exact identity to remove every
+// cached sibling.
+func backfillSchemaV1HuggingFacePackageNames(database *gorm.DB) error {
+	var rows []cacheBackfillRow
 	return database.
+		Table("cache_entries").
 		Where("adapter_type = ? AND (package_name = '' OR package_name IS NULL)", "huggingface").
 		FindInBatches(&rows, 500, func(_ *gorm.DB, _ int) error {
 			idsByPackage := make(map[string][]uint)
@@ -53,7 +65,7 @@ func backfillHuggingFacePackageNames(database *gorm.DB) error {
 				}
 			}
 			for packageName, ids := range idsByPackage {
-				if err := database.Model(&CacheEntry{}).
+				if err := database.Table("cache_entries").
 					Where("id IN ?", ids).
 					Update("package_name", packageName).Error; err != nil {
 					return err

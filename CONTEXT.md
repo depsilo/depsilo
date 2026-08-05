@@ -10,7 +10,7 @@ that violate operator policy.
 ### Customer & user roles
 
 **Operator**:
-The hands-on engineer who installs and runs Depsilo inside a customer's network. Typically a DevOps / platform engineer in a 50–300 person Chinese tech company. The product's UX is optimised for this persona.
+The hands-on person who installs and runs Depsilo. Typically an individual developer, technical founder, or DevOps/platform engineer in a small team. The product's UX is optimised for this persona without assuming dedicated artifact-infrastructure staff.
 _Avoid_: User (ambiguous with End User), Admin (technical role, not persona), 小李
 
 **End User**:
@@ -18,10 +18,10 @@ Anyone whose `pip install` / `npm install` / `mvn` resolves through Depsilo. Nev
 _Avoid_: Developer (too broad), Consumer
 
 **Buyer**:
-The person inside the customer org who signs off on adoption. Usually the
-Operator's manager — CTO, head of infra, or security lead. Different motivations
-from the Operator (compliance, cost control, audit trail) and must be satisfied
-independently for Depsilo to stay deployed.
+When a team, rather than an individual, adopts Depsilo, the person who signs off
+on adoption. This may be a technical founder, engineering lead, or
+infrastructure/security owner. Their motivations differ from the Operator's
+(risk, cost control, auditability), even when one person holds both roles.
 _Avoid_: Client, customer (ambiguous with org-level "customer")
 
 ### Distribution posture
@@ -30,12 +30,10 @@ User-facing documentation should describe Depsilo as MIT-licensed,
 self-hosted, and open-source. Do not invent product tiers; when a current
 entitlement boundary matters, state it precisely. The
 current product story is the enforcement layer itself: cache, upstream
-management, audit logs, package allow/deny rules, security intelligence, public
-release SBOMs (runtime per-project export is currently Pro), webhook alerts,
-Prometheus metrics, and supply-chain policy primitives.
-Minimum release age shipped in `v0.8.0`; malicious blocklist and tamper detection
-have landed on `master` but are not released yet. Freeze/snapshot and
-CRA-complete SBOM workflows remain planned.
+management, audit logs, package allow/deny rules, security intelligence,
+release SBOMs, webhook alerts, Prometheus metrics, and supply-chain policy
+primitives. Use `CHANGELOG.md` and the current code for release status rather
+than copying a version snapshot into this glossary.
 
 ### Product surface
 

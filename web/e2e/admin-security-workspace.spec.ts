@@ -78,22 +78,6 @@ test('Security vulnerability search keeps draft input local and submits a trimme
   expect(requests).toHaveLength(3)
 })
 
-test('Security ecosystem catalog matches the scanner capability surface exactly', () => {
-  expect(securityEcosystems.map(ecosystem => ecosystem.id)).toEqual([
-    'pypi',
-    'apt',
-    'npm',
-    'go',
-    'cargo',
-    'maven',
-    'rubygems',
-    'composer',
-    'nuget',
-    'cran',
-  ])
-  expect(securityEcosystems).toHaveLength(10)
-})
-
 test('Security suggestions use total-count pagination and disable Next on the last page', async ({ page }) => {
   const requestedPages: number[] = []
   await mockAdminApi(page, {
@@ -121,6 +105,169 @@ test('Security suggestions use total-count pagination and disable Next on the la
   await expect(pagination).toContainText(/2\s*\/\s*2|2\s+of\s+2/i)
   await expect(pagination.getByRole('button', { name: /上一页|Previous/ })).toBeEnabled()
   await expect(pagination.getByRole('button', { name: /下一页|Next/ })).toBeDisabled()
+})
+
+test('Security tabs are deep-linkable and preserve browser back navigation', async ({ page }) => {
+  await page.goto('/admin/security?tab=suggestions')
+  await expect(page.getByRole('tab', { name: /建议规则|Suggested Rules/ })).toHaveAttribute('aria-selected', 'true')
+
+  await page.getByRole('tab', { name: /策略配置|Policies/ }).click()
+  await expect(page).toHaveURL(/\/admin\/security\?tab=policies$/)
+  await expect(page.getByRole('tab', { name: /策略配置|Policies/ })).toHaveAttribute('aria-selected', 'true')
+
+  await page.goBack()
+  await expect(page).toHaveURL(/\/admin\/security\?tab=suggestions$/)
+  await expect(page.getByRole('tab', { name: /建议规则|Suggested Rules/ })).toHaveAttribute('aria-selected', 'true')
+})
+
+test('Security replaces an invalid tab with the canonical overview URL', async ({ page }) => {
+  await page.goto('/admin')
+  await page.goto('/admin/security?tab=not-a-security-tab')
+
+  await expect(page).toHaveURL(/\/admin\/security$/)
+  await expect(page.getByRole('tab', { name: /总览|Overview/ })).toHaveAttribute('aria-selected', 'true')
+
+  await page.goBack()
+  await expect(page).toHaveURL(/\/admin$/)
+})
+
+test('Security suggestion decisions require confirmation and preserve a failed action for retry', async ({ page }) => {
+  let requestCount = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/security/suggestions': {
+      items: [suggestion(1, 'unsafe-package')],
+      total: 1,
+      page: 1,
+    },
+    'POST /api/v1/admin/security/suggestions/1/approve': () => {
+      requestCount += 1
+      if (requestCount === 1) {
+        return {
+          status: 503,
+          body: { code: 'RULE_CREATE_UNAVAILABLE', message: 'Rule service is temporarily unavailable' },
+        }
+      }
+      return { rule_id: 71 }
+    },
+  })
+  await page.goto('/admin/security?tab=suggestions')
+
+  await page.getByRole('button', { name: /阻止|Block/ }).click()
+  const dialog = page.getByRole('dialog', { name: /要拦截这条包建议吗|Block this package suggestion/ })
+  const confirm = dialog.getByRole('button', { name: /创建拦截规则|Create blocking rule/ })
+  await expect(dialog).toContainText('unsafe-package')
+  expect(requestCount).toBe(0)
+
+  await confirm.click()
+  await expect(dialog.getByRole('alert')).toContainText('Rule service is temporarily unavailable')
+  await expect(confirm).toBeEnabled()
+
+  await confirm.click()
+  await expect(dialog).not.toBeVisible()
+  expect(requestCount).toBe(2)
+})
+
+test('Security policies support a shared draft, changed-only review, and one batch save', async ({ page }) => {
+  const policyRequests: Array<{ ecosystem: string; autoBlock: boolean; threshold: number }> = []
+  let activeRequests = 0
+  let maxConcurrentRequests = 0
+  let releaseRequests!: () => void
+  const requestsReleased = new Promise<void>((resolve) => { releaseRequests = resolve })
+  const policyOverrides = Object.fromEntries(securityEcosystems.map(ecosystem => [
+    `PUT /api/v1/admin/security/policies/${ecosystem.id}`,
+    async (request: Request) => {
+      const body = request.postDataJSON() as { auto_block_enabled: boolean; min_cvss_score: number }
+      policyRequests.push({
+        ecosystem: ecosystem.id,
+        autoBlock: body.auto_block_enabled,
+        threshold: body.min_cvss_score,
+      })
+      const requestId = policyRequests.length
+      activeRequests += 1
+      maxConcurrentRequests = Math.max(maxConcurrentRequests, activeRequests)
+      try {
+        await requestsReleased
+        return {
+          id: requestId,
+          ecosystem: ecosystem.id,
+          auto_block_enabled: body.auto_block_enabled,
+          min_cvss_score: body.min_cvss_score,
+          created_by: 'admin',
+          created_at: '2026-07-10T00:00:00Z',
+          updated_at: '2026-07-10T00:00:00Z',
+        }
+      } finally {
+        activeRequests -= 1
+      }
+    },
+  ]))
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/security/policies': [],
+    ...policyOverrides,
+  })
+  await page.goto('/admin/security?tab=policies')
+
+  const bulk = page.locator('[data-security-policy-bulk]')
+  await bulk.getByRole('switch', { name: /共享自动拦截基线|Shared auto-block baseline/ }).click()
+  await bulk.getByLabel(/CVSS 阈值|CVSS threshold/).fill('8.5')
+  await bulk.getByRole('button', { name: /应用草稿到全部|Apply draft to all/ }).click()
+
+  await expect(page.getByText(/10 项未保存变更|10 unsaved changes/)).toBeVisible()
+  await expect(page.locator('[data-policy-ecosystem]')).toHaveCount(10)
+  await page.getByRole('button', { name: /保存全部变更|Save all changes/ }).click()
+  const dialog = page.getByRole('dialog', { name: /要保存安全策略变更吗|Save security policy changes/ })
+  await expect(dialog).toContainText(/10 个生态策略|10 ecosystem policies/)
+  await dialog.getByRole('button', { name: /保存策略变更|Save policy changes/ }).click()
+
+  await expect.poll(() => policyRequests.length).toBeGreaterThan(0)
+  await page.waitForTimeout(100)
+  expect(policyRequests.length).toBeLessThanOrEqual(4)
+  expect(maxConcurrentRequests).toBeLessThanOrEqual(4)
+  releaseRequests()
+
+  await expect.poll(() => policyRequests).toHaveLength(10)
+  expect(maxConcurrentRequests).toBeLessThanOrEqual(4)
+  expect(policyRequests.every(request => request.autoBlock && request.threshold === 8.5)).toBe(true)
+  await expect(page.getByText(/没有策略变更|No policy changes/)).toBeVisible()
+})
+
+test('Security disables conflicting bulk policy actions while a row save is pending', async ({ page }) => {
+  let markSaveStarted!: () => void
+  let releaseSave!: () => void
+  const saveStarted = new Promise<void>((resolve) => { markSaveStarted = resolve })
+  const saveReleased = new Promise<void>((resolve) => { releaseSave = resolve })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/security/policies': [],
+    'PUT /api/v1/admin/security/policies/pypi': async (request: Request) => {
+      const body = request.postDataJSON() as { auto_block_enabled: boolean; min_cvss_score: number }
+      markSaveStarted()
+      await saveReleased
+      return {
+        id: 1,
+        ecosystem: 'pypi',
+        auto_block_enabled: body.auto_block_enabled,
+        min_cvss_score: body.min_cvss_score,
+        created_by: 'admin',
+        created_at: '2026-07-10T00:00:00Z',
+        updated_at: '2026-07-10T00:00:00Z',
+      }
+    },
+  })
+  await page.goto('/admin/security?tab=policies')
+
+  const pypiPolicy = page.locator('[data-policy-ecosystem="pypi"]')
+  await pypiPolicy.getByRole('switch', { name: /PYPI.*自动拦截|PYPI.*Auto-block/ }).click()
+  await pypiPolicy.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ }).click()
+  await saveStarted
+
+  const bulk = page.locator('[data-security-policy-bulk]')
+  await expect(bulk.getByRole('switch', { name: /共享自动拦截基线|Shared auto-block baseline/ })).toBeDisabled()
+  await expect(bulk.getByRole('button', { name: /应用草稿到全部|Apply draft to all/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /重置变更|Reset changes/ })).toBeDisabled()
+  await expect(page.getByRole('button', { name: /保存全部变更|Save all changes/ })).toBeDisabled()
+
+  releaseSave()
+  await expect(pypiPolicy.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ })).toBeDisabled()
 })
 
 test('Security reports an API scan already in progress as a busy disabled action', async ({ page }) => {

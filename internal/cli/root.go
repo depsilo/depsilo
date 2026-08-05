@@ -66,8 +66,8 @@ Commands:
     activate [--shell|--eco]    Print shell environment configuration
     warmup <eco> <pkg> [pkg...] Pre-fetch packages into cache
     flush                       Clear expired cache entries
-    backup [--out file.tar.gz]  Backup config + database to archive
-    restore <backup.tar.gz>     Restore config + database from backup
+    backup [--out file.tar.gz]  Online backup of config + SQLite state
+    restore <backup.tar.gz>     Validated restore; target server must be stopped
     help                        Show this message
 
 Common serve flags (use depsilo serve --help for full detail):

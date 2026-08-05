@@ -86,21 +86,16 @@ or fragments.
 
 ## Verification
 
-Run backend race and contract tests with:
+Run the complete offline verification with:
 
 ```bash
-go test -race ./internal/config ./internal/upstream ./internal/middleware ./internal/api/... ./internal/server
-go test ./...
+make verify
 ```
 
-Run frontend contracts and accessibility checks with:
+For a faster edit loop, run only the relevant layers:
 
 ```bash
-cd web
-npm run type-check
-npm run type-check:e2e
-npm run build
-npm run test:e2e
-cd ..
-python3 scripts/i18n-audit.py
+make test
+make test-ui
+make verify-web
 ```

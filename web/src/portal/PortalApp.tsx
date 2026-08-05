@@ -1,4 +1,4 @@
-import { Routes, Route, Link, NavLink } from 'react-router-dom'
+import { Routes, Route, Link, NavLink } from 'react-router'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -16,9 +16,14 @@ import RouteNotFound from '@/routing/RouteNotFound'
 const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
 const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
 
-// EndpointPill — small monospace pill in the header so operators can
-// copy the URL for sharing without exposing it as a giant hero element.
-// Hidden on viewports under 720px to keep the topbar from wrapping.
+interface PortalStats {
+  service: { status: string; version: string }
+  extra_indexes?: Array<{ kind?: string; path: string }>
+}
+
+// The endpoint is an action inside the service-information group. The full
+// URL remains available to assistive technology and is always copied even
+// when its visible label collapses at narrower widths.
 function EndpointPill() {
   const { t } = useTranslation()
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -44,39 +49,16 @@ function EndpointPill() {
       <button
         type="button"
         onClick={handleCopy}
-        className="active:scale-[0.96] portal-endpoint-pill hit-extend stripe-focus-ring"
+        className="portal-header-control portal-endpoint-pill hit-extend stripe-focus-ring"
         aria-label={t('portal.copyEndpointNamed', { endpoint: url })}
         title={url}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '3px 8px 3px 10px',
-          background: 'var(--bg-soft)',
-          border: '0.5px solid var(--border)',
-          borderRadius: 6,
-          fontSize: 11.5,
-          fontFamily: 'var(--font-mono)',
-          color: copyState === 'failed' ? 'var(--danger-text)' : 'var(--text-muted)',
-          cursor: 'pointer',
-          transition: 'background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = 'var(--bg-hover)'
-          if (copyState !== 'failed') e.currentTarget.style.color = 'var(--text)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = 'var(--bg-soft)'
-          e.currentTarget.style.color = copyState === 'failed' ? 'var(--danger-text)' : 'var(--text-muted)'
-        }}
+        data-copy-state={copyState}
       >
-        <span style={{ letterSpacing: '-0.01em' }}>{compact}</span>
-        {/* Both glyphs stay in the DOM and cross-fade (opacity + scale +
-            blur) so the ⧉ → ✓ swap reads as a state change instead of a
-            hard snap. */}
-        <span style={{ position: 'relative', display: 'inline-flex', width: 11, height: 13, fontSize: 10 }}>
+        <span className="portal-endpoint-label">{compact}</span>
+        {/* Both icons stay in the DOM and cross-fade so copy success reads as
+            a state change instead of a hard snap. */}
+        <span className="portal-endpoint-icon" aria-hidden="true">
           <span
-            aria-hidden
             style={{
               position: 'absolute',
               inset: 0,
@@ -87,10 +69,9 @@ function EndpointPill() {
               transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
             }}
           >
-            {copyState === 'failed' ? '!' : '⧉'}
+            <Icon name={copyState === 'failed' ? 'warning' : 'content_copy'} size="sm" />
           </span>
           <span
-            aria-hidden
             style={{
               position: 'absolute',
               inset: 0,
@@ -101,7 +82,7 @@ function EndpointPill() {
               transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
             }}
           >
-            ✓
+            <Icon name="check" size="sm" />
           </span>
         </span>
       </button>
@@ -174,7 +155,7 @@ function NavTab({ to, label }: NavTabProps) {
 export default function PortalAppV2() {
   const { t } = useTranslation()
 
-  const { data } = useQuery<{ service: { status: string; version: string } }>({
+  const { data } = useQuery<PortalStats>({
     queryKey: ['stats-status'],
     queryFn: async () => {
       const res = await statsApi.getStats()
@@ -198,10 +179,10 @@ export default function PortalAppV2() {
       : dotStatus === 'failed'
         ? t('portal.offline')
         : t('portal.statusUnknown')
+  const pytorchIndexPath = data?.extra_indexes?.find(index => index.kind === 'pytorch')?.path
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
-      <div className="page-wash" />
       <header
         style={{
           position: 'sticky',
@@ -275,87 +256,51 @@ export default function PortalAppV2() {
           {/* Spacer */}
           <div style={{ flex: 1 }} />
 
-          {/* Right side controls */}
-          <div className="portal-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* Endpoint pill — copy-able URL, hidden on narrow viewports. */}
-            <EndpointPill />
-            {/* Status pill — tinted chip matching service health */}
-            <span
-              className="portal-status-pill"
-              role="status"
-              aria-label={t('portal.serviceStatusNamed', { status: statusLabel })}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                minWidth: 28,
-                minHeight: 28,
-                padding: '3px 8px',
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 500,
-                fontFamily: 'var(--font-mono)',
-                background:
-                  dotStatus === 'healthy'
-                    ? 'var(--ok-fill)'
-                    : dotStatus === 'degraded'
-                      ? 'var(--warn-fill)'
-                      : dotStatus === 'failed'
-                        ? 'var(--danger-fill)'
-                        : 'var(--bg-soft)',
-                color:
-                  dotStatus === 'healthy'
-                    ? 'var(--ok-text)'
-                    : dotStatus === 'degraded'
-                      ? 'var(--warn-text)'
-                      : dotStatus === 'failed'
-                        ? 'var(--danger-text)'
-                        : 'var(--text-muted)',
-              }}
+          {/* Information, preferences, and navigation intentionally use
+              separate groups so equal geometry does not flatten semantics. */}
+          <div className="portal-header-actions">
+            <div className="portal-header-group portal-service-group" data-portal-control-group="service">
+              <EndpointPill />
+              <span
+                className="portal-header-control portal-status-pill"
+                role="status"
+                data-status={dotStatus}
+                aria-label={t('portal.serviceStatusNamed', { status: statusLabel })}
+              >
+                <span className="portal-status-dot" aria-hidden="true">
+                  <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
+                </span>
+                <span className="portal-status-compact-icon" aria-hidden="true">
+                  <Icon
+                    name={
+                      dotStatus === 'healthy'
+                        ? 'check'
+                        : dotStatus === 'degraded'
+                          ? 'warning'
+                          : dotStatus === 'failed'
+                            ? 'close'
+                            : 'help'
+                    }
+                    size="sm"
+                  />
+                </span>
+                <span className="portal-status-label" aria-hidden="true">{statusLabel}</span>
+              </span>
+            </div>
+            <div
+              className="portal-header-group portal-tools-group"
+              data-portal-control-group="preferences"
+              role="group"
+              aria-label={t('portal.displayPreferences')}
             >
-              <span className="portal-status-dot" aria-hidden="true">
-                <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
-              </span>
-              <span className="portal-status-compact-icon" aria-hidden="true">
-                <Icon
-                  name={
-                    dotStatus === 'healthy'
-                      ? 'check'
-                      : dotStatus === 'degraded'
-                        ? 'warning'
-                        : dotStatus === 'failed'
-                          ? 'close'
-                          : 'help'
-                  }
-                  size="sm"
-                />
-              </span>
-              <span className="portal-status-label" aria-hidden="true">{statusLabel}</span>
-            </span>
-            <LangToggle />
-            <span className="portal-theme-control" style={{ display: 'inline-flex' }}>
-              <ThemeToggle />
-            </span>
+              <LangToggle variant="portal" />
+              <ThemeToggle variant="portal" />
+            </div>
             <a
               href="/admin"
-              className="portal-admin-link hit-extend"
+              className="portal-header-control portal-admin-link hit-extend stripe-focus-ring"
               aria-label={t('portal.adminPanel')}
               title={t('portal.adminPanel')}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '4px 10px',
-                fontSize: 12,
-                fontWeight: 500,
-                color: 'var(--brand-text)',
-                background: 'var(--brand-soft)',
-                border: '0.5px solid var(--brand-border)',
-                borderRadius: 6,
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}
             >
               <Icon name="admin_panel_settings" size="sm" />
               <span className="portal-admin-label">{t('portal.adminPanel')}</span>
@@ -367,7 +312,7 @@ export default function PortalAppV2() {
 
       <main style={{ maxWidth: 'clamp(1280px, 92vw, 1840px)', margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) clamp(16px, 2.1vw, 32px) 48px' }}>
         <Routes>
-          <Route index element={<QuickStart />} />
+          <Route index element={<QuickStart pytorchIndexPath={pytorchIndexPath} />} />
           <Route path="monitor" element={<MonitorV2 />} />
           <Route path="*" element={<RouteNotFound area="portal" />} />
         </Routes>

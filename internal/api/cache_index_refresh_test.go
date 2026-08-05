@@ -21,21 +21,50 @@ import (
 )
 
 func TestCacheIndexProxyPathSupportsConfiguredExtraPyPIIndex(t *testing.T) {
-	entry := db.CacheEntry{
-		AdapterType: "extra:private",
-		CacheKind:   db.CacheKindMetadata,
-		Key:         "extra:private/simple/pillow/index.html",
+	for _, key := range []string{
+		"extra:private/simple/pillow/index.html",
+		"extra:private/simple/pillow/_signed/v1/" + strings.Repeat("a", 64) + "/index.html",
+	} {
+		entry := db.CacheEntry{
+			AdapterType: "extra:private",
+			CacheKind:   db.CacheKindMetadata,
+			Key:         key,
+		}
+		got, err := cacheIndexProxyPath(entry, []config.ExtraIndexConfig{{Name: "private", Path: "python/private"}}, config.DockerConfig{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "/python/private/simple/pillow/" {
+			t.Fatalf("extra index proxy path = %q", got)
+		}
 	}
-	got, err := cacheIndexProxyPath(entry, []config.ExtraIndexConfig{{Name: "private", Path: "python/private"}}, config.DockerConfig{})
+
+	entry := db.CacheEntry{AdapterType: "extra:private", CacheKind: db.CacheKindMetadata, Key: "extra:private/simple/pillow/index.html"}
+	if _, err := cacheIndexProxyPath(entry, []config.ExtraIndexConfig{{Name: "private", Path: "../admin"}}, config.DockerConfig{}); err == nil {
+		t.Fatal("unsafe configured route was accepted")
+	}
+}
+
+func TestCacheIndexProxyPathSupportsPyTorchChannelFamily(t *testing.T) {
+	entry := db.CacheEntry{
+		AdapterType: "extra:pytorch",
+		CacheKind:   db.CacheKindMetadata,
+		Key:         "extra:pytorch/channels/rocm6.4/simple/torch/index.html",
+	}
+	indexes := []config.ExtraIndexConfig{{
+		Name: "pytorch", Kind: config.ExtraIndexKindPyTorch, Path: "pypi-torch",
+	}}
+	got, err := cacheIndexProxyPath(entry, indexes, config.DockerConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "/python/private/simple/pillow/" {
-		t.Fatalf("extra index proxy path = %q", got)
+	if got != "/pypi-torch/rocm6.4/simple/torch/" {
+		t.Fatalf("PyTorch channel proxy path = %q", got)
 	}
 
-	if _, err := cacheIndexProxyPath(entry, []config.ExtraIndexConfig{{Name: "private", Path: "../admin"}}, config.DockerConfig{}); err == nil {
-		t.Fatal("unsafe configured route was accepted")
+	entry.Key = "extra:pytorch/channels/../simple/torch/index.html"
+	if _, err := cacheIndexProxyPath(entry, indexes, config.DockerConfig{}); err == nil {
+		t.Fatal("unsafe PyTorch channel cache key was accepted")
 	}
 }
 

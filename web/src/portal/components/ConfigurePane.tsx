@@ -1,95 +1,71 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import { LANGUAGES, type ManagerConfig } from '@/lib/ecosystemData'
+import PyTorchIndexNotice from '@/portal/components/PyTorchIndexNotice'
 
 interface Props {
   languageId: string
   endpoint: string
+  pytorchIndexPath?: string
   /**
    * When true, the parent surface owns the border and radius.
    */
   flush?: boolean
 }
 
+function managerHintKey(managerId: string): string {
+  const normalized = managerId.replace(/-([a-z])/g, (_, letter: string) =>
+    letter.toUpperCase(),
+  )
+  return `quickstart.managerHints.${normalized}`
+}
+
 function ManagerChoice({
   manager,
   active,
-  recommended,
   onChange,
 }: {
   manager: ManagerConfig
   active: boolean
-  recommended: boolean
   onChange: (id: string) => void
 }) {
-  const { t } = useTranslation()
-
   return (
     <button
       type="button"
       aria-pressed={active}
+      data-active={active ? 'true' : undefined}
       onClick={() => onChange(manager.id)}
-      className="stripe-focus-ring active:scale-[0.97]"
+      className="manager-choice stripe-focus-ring active:scale-[0.97]"
       style={{
-        display: 'inline-flex',
-        minWidth: 138,
-        minHeight: 48,
-        flexDirection: 'column',
+        display: 'flex',
+        minWidth: 82,
+        minHeight: 40,
+        alignItems: 'center',
         justifyContent: 'center',
-        padding: '7px 11px',
-        background: active ? 'var(--brand-soft)' : 'var(--bg-card)',
-        border: `1px solid ${active ? 'var(--brand-border)' : 'var(--border)'}`,
-        borderRadius: 8,
-        textAlign: 'left',
+        padding: '6px 11px',
+        background: active ? 'var(--bg-card)' : 'transparent',
+        border: '1px solid transparent',
+        borderRadius: 6,
+        boxShadow: active ? 'var(--shadow-surface)' : 'none',
+        textAlign: 'center',
         cursor: 'pointer',
         transition:
-          'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
+          'background 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
       }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        <span
-          style={{
-            color: active ? 'var(--brand-text)' : 'var(--text)',
-            fontSize: 14,
-            fontWeight: active ? 650 : 560,
-            lineHeight: 1.25,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {manager.name}
-        </span>
-        {recommended && (
-          <span
-            style={{
-              padding: '1px 5px',
-              color: 'var(--brand-text)',
-              background: 'var(--brand-soft)',
-              borderRadius: 4,
-              fontSize: 12,
-              fontWeight: 600,
-              lineHeight: 1.4,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {t('quickstart.recommendedManager')}
-          </span>
-        )}
-      </span>
       <span
         style={{
-          overflow: 'hidden',
-          marginTop: 2,
-          color: 'var(--text-muted)',
-          fontSize: 12,
+          color: active ? 'var(--brand-text)' : 'var(--text)',
+          fontSize: 13,
+          fontWeight: active ? 660 : 540,
           lineHeight: 1.25,
-          textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
         }}
       >
-        {manager.hint}
+        {manager.name}
       </span>
     </button>
   )
@@ -105,49 +81,88 @@ function ManagerPicker({
   onChange: (id: string) => void
 }) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(false)
-  const primary = managers[0]
-  const alternatives = managers.slice(1)
-  const visibleManagers = expanded
-    ? managers
-    : managers.filter(
-        manager => manager.id === primary?.id || manager.id === active,
-      )
-  const hiddenAlternativeCount = alternatives.filter(
-    manager => manager.id !== active,
-  ).length
+  const titleId = useId()
+  const activeManager = managers.find(manager => manager.id === active) ?? managers[0]
+  const activeHint = activeManager
+    ? t(managerHintKey(activeManager.id), {
+        defaultValue: activeManager.hint,
+      })
+    : ''
 
   return (
-    <div role="group" aria-label={t('quickstart.managerPickerLabel')}>
-      <div id="quickstart-manager-alternatives" className="flex flex-wrap gap-2">
-        {visibleManagers.map(manager => (
-          <ManagerChoice
-            key={manager.id}
-            manager={manager}
-            active={manager.id === active}
-            recommended={manager.id === primary?.id}
-            onChange={onChange}
-          />
-        ))}
-      </div>
-
-      {alternatives.length > 0 && (expanded || hiddenAlternativeCount > 0) && (
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls="quickstart-manager-alternatives"
-          onClick={() => setExpanded(value => !value)}
-          className="stripe-focus-ring mt-2 inline-flex min-h-10 items-center gap-1 rounded-[6px] px-1 text-[13px] font-[560] text-[var(--text-muted)] hover:text-[var(--text)]"
-          style={{ background: 'transparent', border: 0, cursor: 'pointer' }}
+    <div role="group" aria-labelledby={titleId}>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <span
+          id={titleId}
+          className="text-[12px] font-[650] leading-[1.3] text-[var(--text-muted)]"
         >
-          {expanded
-            ? t('quickstart.hideOtherManagers')
-            : t('quickstart.showOtherManagers', {
-                count: hiddenAlternativeCount,
-              })}
-          <Icon name={expanded ? 'expand_less' : 'expand_more'} size="sm" />
-        </button>
-      )}
+          {t('quickstart.managerPickerLabel')}
+        </span>
+        <span className="font-[var(--font-mono)] text-[11px] text-[var(--text-subtle)]">
+          {t('quickstart.managerCount', { count: managers.length })}
+        </span>
+      </div>
+      <div
+        className="manager-picker-viewport overflow-x-auto rounded-[8px] p-1"
+        style={{ background: 'var(--bg-soft)' }}
+      >
+        <div
+          className="grid gap-1"
+          style={{
+            gridTemplateColumns: `repeat(${managers.length}, minmax(82px, 1fr))`,
+            minWidth: `max(100%, ${managers.length * 86}px)`,
+          }}
+        >
+          {managers.map(manager => (
+            <ManagerChoice
+              key={manager.id}
+              manager={manager}
+              active={manager.id === active}
+              onChange={onChange}
+            />
+          ))}
+        </div>
+      </div>
+      <p
+        data-manager-description
+        className="mb-0 mt-2 text-[12px] leading-[1.5] text-[var(--text-muted)]"
+      >
+        {activeHint}
+      </p>
+    </div>
+  )
+}
+
+function StepHeading({
+  id,
+  number,
+  title,
+  description,
+}: {
+  id: string
+  number: number
+  title: string
+  description: string
+}) {
+  return (
+    <div className="mb-3 flex items-start gap-3">
+      <span
+        aria-hidden="true"
+        className="mt-0.5 font-[var(--font-mono)] text-[11px] font-[650] leading-[1.4] text-[var(--brand-text)]"
+      >
+        {String(number).padStart(2, '0')}
+      </span>
+      <div>
+        <h4
+          id={id}
+          className="m-0 text-[15px] font-[660] leading-[1.3] text-[var(--text)]"
+        >
+          {title}
+        </h4>
+        <p className="mb-0 mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
+          {description}
+        </p>
+      </div>
     </div>
   )
 }
@@ -157,24 +172,26 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
 
   return (
     <details
+      className="config-disclosure overflow-hidden rounded-[7px]"
       style={{
-        border: '0.5px solid var(--border)',
-        borderRadius: 6,
-        background: 'var(--bg-soft)',
+        border: '1px solid var(--border)',
+        background: 'var(--bg-card)',
       }}
     >
       <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-[13px] font-[540] text-[var(--text-muted)]">
         {t('quickstart.whereReadsFrom')}
-        <Icon name="expand_more" size="sm" />
+        <span className="disclosure-chevron inline-flex">
+          <Icon name="expand_more" size="sm" />
+        </span>
       </summary>
-      <div style={{ borderTop: '0.5px solid var(--border)', overflow: 'hidden' }}>
+      <div style={{ borderTop: '1px solid var(--border)', overflow: 'hidden' }}>
         {paths.map((path, index) => (
           <div
             key={`${path.os}-${path.path}`}
             className="grid grid-cols-1 gap-1 px-3 py-2 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center sm:gap-3"
             style={{
               borderBottom:
-                index < paths.length - 1 ? '0.5px solid var(--border)' : 'none',
+                index < paths.length - 1 ? '1px solid var(--border)' : 'none',
             }}
           >
             <span
@@ -207,7 +224,12 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
   )
 }
 
-export default function ConfigurePane({ languageId, endpoint, flush = false }: Props) {
+export default function ConfigurePane({
+  languageId,
+  endpoint,
+  pytorchIndexPath,
+  flush = false,
+}: Props) {
   const { t } = useTranslation()
   const language = LANGUAGES.find(item => item.id === languageId)
   const [managerId, setManagerId] = useState<string>(
@@ -219,6 +241,13 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
   const manager =
     language.managers.find(item => item.id === managerId) ?? language.managers[0]
   if (!manager) return null
+
+  const pytorchClient =
+    manager.id === 'uv'
+      ? 'uv'
+      : manager.id === 'pip' || manager.id === 'venv'
+        ? 'pip'
+        : null
 
   const host = endpoint.replace(/^https?:\/\//, '')
   const plainHTTP = /^http:\/\//i.test(endpoint)
@@ -239,124 +268,136 @@ export default function ConfigurePane({ languageId, endpoint, flush = false }: P
       style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column' }}
     >
       <div
-        className="flex min-h-[76px] items-center gap-3 px-4 py-3 sm:px-6"
-        style={{ borderBottom: '0.5px solid var(--border)' }}
+        className="flex min-h-[72px] items-center gap-3 px-4 py-3.5 sm:px-6"
+        style={{ borderBottom: '1px solid var(--border)' }}
       >
         <span
           aria-hidden="true"
           style={{
             display: 'inline-flex',
-            width: 36,
-            height: 36,
-            flex: '0 0 36px',
+            width: 38,
+            height: 38,
+            flex: '0 0 38px',
             alignItems: 'center',
             justifyContent: 'center',
             background: 'var(--brand-soft)',
-            border: '0.5px solid var(--brand-border)',
+            border: '1px solid var(--brand-border)',
             borderRadius: 8,
           }}
         >
-          <EcosystemIcon type={language.iconAdapter} size={19} useColor />
+          <EcosystemIcon type={language.iconAdapter} size={20} useColor />
         </span>
         <div style={{ minWidth: 0 }}>
           <h3
-            className="m-0 font-[var(--font-display)] text-[clamp(21px,2.2vw,26px)] font-[680] leading-[1.15] text-[var(--text)]"
+            className="m-0 font-[var(--font-display)] text-[clamp(20px,2vw,24px)] font-[680] leading-[1.15] text-[var(--text)]"
           >
             {t('quickstart.configureTitle', { name: language.name })}
           </h3>
-          <p className="mt-1 text-[12px] leading-[1.35] text-[var(--text-muted)]">
-            {t('quickstart.configureLead', {
-              manager: language.managers[0]?.name ?? '',
-            })}
-          </p>
+        </div>
+        <div
+          className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-[6px] px-2.5 py-1.5 min-[640px]:flex"
+          style={{ background: 'var(--bg-soft)' }}
+          title={endpoint}
+        >
+          <Icon name="link" size="sm" className="shrink-0 text-[var(--text-subtle)]" />
+          <span className="sr-only">{t('quickstart.endpointLabel')}</span>
+          <span className="truncate font-[var(--font-mono)] text-[11px] text-[var(--text-muted)]">
+            {endpoint}
+          </span>
         </div>
       </div>
 
-      <div className="flex flex-col gap-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-7 p-4 sm:p-6 lg:p-7">
         <ManagerPicker
           managers={language.managers}
           active={manager.id}
           onChange={setManagerId}
         />
 
-        <section aria-labelledby="quickstart-config-step">
-          <h4
-            id="quickstart-config-step"
-            className="m-0 text-[15px] font-[650] leading-[1.3] text-[var(--text)]"
-          >
-            {t('quickstart.configStep')}
-          </h4>
-          <p className="mb-3 mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
-            {t('quickstart.configStepSubtitle', { file: manager.persistent.file })}
-          </p>
-          <div className="flex flex-col gap-2">
-            <CodeBlock
-              filename={manager.persistent.file}
-              code={fill(manager.persistent.body)}
-              language={manager.persistent.lang}
-              copyName={manager.persistent.file}
+        <div key={manager.id} className="manager-config-swap flex flex-col gap-7">
+          <section aria-labelledby="quickstart-config-step">
+            <StepHeading
+              id="quickstart-config-step"
+              number={1}
+              title={t('quickstart.configStep')}
+              description={t('quickstart.configStepSubtitle', {
+                file: manager.persistent.file,
+              })}
             />
-            <PathsCollapsible paths={manager.paths} />
-          </div>
-        </section>
+            <div className="flex flex-col gap-3">
+              <CodeBlock
+                filename={manager.persistent.file}
+                code={fill(manager.persistent.body)}
+                language={manager.persistent.lang}
+                copyName={manager.persistent.file}
+                tone="ink"
+              />
+              <PathsCollapsible paths={manager.paths} />
+            </div>
+          </section>
 
-        {manager.methods && manager.methods.length > 0 && (
-          <details className="border-y border-[var(--border)] py-2">
-            <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1">
-              <span>
-                <span className="block text-[13px] font-[620] text-[var(--text)]">
-                  {t('quickstart.quickMethods')}
-                </span>
-                <span className="mt-0.5 block text-[12px] leading-[1.4] text-[var(--text-muted)]">
-                  {t('quickstart.quickMethodsDescription')}
-                </span>
-              </span>
-              <Icon name="expand_more" size="sm" />
-            </summary>
-            <div className="flex flex-col gap-3 pb-2 pt-3">
-              {manager.methods.map(method => (
-                <div key={`${method.label}-${method.body}`} className="flex flex-col gap-1">
-                  <span className="px-0.5 text-[12px] font-[560] text-[var(--text-muted)]">
-                    {t(method.label)}
+          {manager.methods && manager.methods.length > 0 && (
+            <details className="config-disclosure border-y border-[var(--border)] py-2">
+              <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1">
+                <span className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="mt-0.5 font-[var(--font-mono)] text-[11px] font-[650] leading-[1.4] text-[var(--brand-text)]"
+                  >
+                    02
                   </span>
-                  <CodeBlock
-                    code={fill(method.body)}
-                    language={method.lang}
-                    copyName={t(method.label)}
-                  />
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+                  <span>
+                    <span className="block text-[14px] font-[640] text-[var(--text)]">
+                      {t('quickstart.quickMethods')}
+                    </span>
+                    <span className="mt-0.5 block text-[12px] leading-[1.45] text-[var(--text-muted)]">
+                      {t('quickstart.quickMethodsDescription')}
+                    </span>
+                  </span>
+                </span>
+                <span className="disclosure-chevron inline-flex">
+                  <Icon name="expand_more" size="sm" />
+                </span>
+              </summary>
+              <div className="flex flex-col gap-3 pb-2 pt-3">
+                {manager.methods.map(method => (
+                  <div key={`${method.label}-${method.body}`} className="flex flex-col gap-1">
+                    <span className="px-0.5 text-[12px] font-[560] text-[var(--text-muted)]">
+                      {t(method.label)}
+                    </span>
+                    <CodeBlock
+                      code={fill(method.body)}
+                      language={method.lang}
+                      copyName={t(method.label)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
 
-        <section aria-labelledby="quickstart-verify-step">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h4
-                id="quickstart-verify-step"
-                className="m-0 text-[15px] font-[650] leading-[1.3] text-[var(--text)]"
-              >
-                {t('quickstart.verifyStep')}
-              </h4>
-              <p className="mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
-                {t('quickstart.verifyStepSubtitle')}
-              </p>
-            </div>
-            <a
-              href="/monitor"
-              className="stripe-focus-ring inline-flex min-h-10 items-center gap-1 rounded-[6px] px-2 text-[13px] font-[600] text-[var(--brand-text)] no-underline hover:bg-[var(--brand-soft)]"
-            >
-              {t('quickstart.openMonitor')}
-              <Icon name="arrow_forward" size="sm" />
-            </a>
-          </div>
-          <CodeBlock
-            code={fill(manager.verify.body)}
-            language={manager.verify.lang}
-            copyName={t('quickstart.verifyStep')}
-          />
-        </section>
+          <section aria-labelledby="quickstart-verify-step">
+            <StepHeading
+              id="quickstart-verify-step"
+              number={manager.methods && manager.methods.length > 0 ? 3 : 2}
+              title={t('quickstart.verifyStep')}
+              description={t('quickstart.verifyStepSubtitle')}
+            />
+            <CodeBlock
+              code={fill(manager.verify.body)}
+              language={manager.verify.lang}
+              copyName={t('quickstart.verifyStep')}
+            />
+          </section>
+
+          {language.id === 'python' && pytorchClient && pytorchIndexPath && (
+            <PyTorchIndexNotice
+              endpoint={endpoint}
+              path={pytorchIndexPath}
+              client={pytorchClient}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 import { test, expect, mockAdminApi } from './fixtures/admin-api'
 import type { Request } from '@playwright/test'
 
-test('expired session and failed login stay in-app, then return to the deep link', async ({ page }) => {
+test('expired session and failed login stay in-app, then return to the deep link', { tag: '@smoke' }, async ({ page }) => {
   let authenticated = false
   await page.addInitScript(() => {
     const count = Number(sessionStorage.getItem('document-load-count') || '0')

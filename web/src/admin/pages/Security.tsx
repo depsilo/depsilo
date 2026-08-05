@@ -1,7 +1,8 @@
-import { useState, useRef, type ComponentProps } from 'react'
+import { useEffect, useState, useRef, type ComponentProps } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatDate, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
@@ -20,6 +21,7 @@ import EcosystemIcon from '@/components/EcosystemIcon'
 import QueryErrorState from '@/components/QueryErrorState'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
+import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { securityEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
@@ -38,6 +40,8 @@ const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'succ
   medium: 'default',
   low: 'success',
 }
+
+const POLICY_SAVE_CONCURRENCY = 4
 
 type EcosystemName = ComponentProps<typeof EcosystemIcon>['type']
 
@@ -316,6 +320,10 @@ function SuggestionsTab() {
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
   const [page, setPage] = useState(1)
+  const [actionTarget, setActionTarget] = useState<{
+    item: SecurityVulnerability
+    action: 'block' | 'dismiss'
+  } | null>(null)
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'suggestions', { page }],
@@ -330,6 +338,7 @@ function SuggestionsTab() {
   const approveMutation = useMutation({
     mutationFn: (vulnId: number) => adminApi.approveSuggestion(vulnId),
     onSuccess: () => {
+      setActionTarget(null)
       queryClient.invalidateQueries({ queryKey: ['admin', 'security'] })
     },
   })
@@ -337,9 +346,25 @@ function SuggestionsTab() {
   const dismissMutation = useMutation({
     mutationFn: (vulnId: number) => adminApi.dismissSuggestion(vulnId),
     onSuccess: () => {
+      setActionTarget(null)
       queryClient.invalidateQueries({ queryKey: ['admin', 'security'] })
     },
   })
+
+  const activeMutation = actionTarget?.action === 'block' ? approveMutation : dismissMutation
+
+  function openAction(item: SecurityVulnerability, action: 'block' | 'dismiss') {
+    approveMutation.reset()
+    dismissMutation.reset()
+    setActionTarget({ item, action })
+  }
+
+  function closeAction() {
+    if (approveMutation.isPending || dismissMutation.isPending) return
+    setActionTarget(null)
+    approveMutation.reset()
+    dismissMutation.reset()
+  }
 
   if (query.isPending) {
     return (
@@ -398,7 +423,7 @@ function SuggestionsTab() {
                   variant="danger"
                   size="sm"
                   disabled={isActing}
-                  onClick={() => approveMutation.mutate(item.id)}
+                  onClick={() => openAction(item, 'block')}
                 >
                   <Icon name="block" size="sm" />
                   {t('security.block')}
@@ -407,7 +432,7 @@ function SuggestionsTab() {
                   variant="ghost"
                   size="sm"
                   disabled={isActing}
-                  onClick={() => dismissMutation.mutate(item.id)}
+                  onClick={() => openAction(item, 'dismiss')}
                 >
                   <Icon name="close" size="sm" />
                   {t('security.dismiss')}
@@ -419,6 +444,34 @@ function SuggestionsTab() {
       </div>
 
       <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
+      <ConfirmActionDialog
+        open={actionTarget !== null}
+        title={actionTarget?.action === 'block' ? t('security.blockTitle') : t('security.dismissTitle')}
+        description={actionTarget?.action === 'block'
+          ? t('security.blockImpact', { name: actionTarget?.item.package_name ?? '' })
+          : t('security.dismissImpact', { name: actionTarget?.item.package_name ?? '' })}
+        details={actionTarget ? [
+          { label: t('security.package'), value: actionTarget.item.package_name, mono: true },
+          { label: t('security.ecosystem'), value: actionTarget.item.ecosystem.toUpperCase() },
+          { label: t('security.osvId'), value: actionTarget.item.osv_id, mono: true },
+          {
+            label: t('security.cvssScore'),
+            value: Number(actionTarget.item.cvss_score).toFixed(1),
+            mono: true,
+          },
+        ] : []}
+        cancelLabel={t('cancel')}
+        confirmLabel={actionTarget?.action === 'block' ? t('security.confirmBlock') : t('security.confirmDismiss')}
+        pendingLabel={actionTarget?.action === 'block' ? t('security.blocking') : t('security.dismissing')}
+        pending={activeMutation.isPending}
+        errorMessage={activeMutation.isError ? getApiError(activeMutation.error).message : null}
+        onClose={closeAction}
+        onConfirm={() => {
+          if (!actionTarget || !canWrite) return
+          if (actionTarget.action === 'block') approveMutation.mutate(actionTarget.item.id)
+          else dismissMutation.mutate(actionTarget.item.id)
+        }}
+      />
       </>}
     </div>
   )
@@ -446,6 +499,14 @@ function PoliciesTab() {
   type PolicySaveState = { isPending: boolean; error: unknown | null }
   const [localPolicies, setLocalPolicies] = useState<Record<string, EditablePolicy>>({})
   const [policySaveStates, setPolicySaveStates] = useState<Record<string, PolicySaveState>>({})
+  const [bulkPolicy, setBulkPolicy] = useState<EditablePolicy>({ auto_block_enabled: false, min_cvss_score: 9 })
+  const [showChangedOnly, setShowChangedOnly] = useState(false)
+  const [isBatchSaving, setIsBatchSaving] = useState(false)
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false)
+  const [batchSaveError, setBatchSaveError] = useState(false)
+  const policyWritesInFlightRef = useRef<Set<string>>(new Set())
+  const batchSaveInFlightRef = useRef(false)
+  const [policyWriteCount, setPolicyWriteCount] = useState(0)
 
   const importMutation = useMutation({
     mutationFn: (formData: FormData) => adminApi.importVulnerabilities(formData),
@@ -464,16 +525,44 @@ function PoliciesTab() {
     }
   }
 
+  function getServerPolicy(ecosystem: string): EditablePolicy {
+    const server = policies.find((policy) => policy.ecosystem === ecosystem)
+    return {
+      auto_block_enabled: server?.auto_block_enabled ?? false,
+      min_cvss_score: server?.min_cvss_score ?? 9.0,
+    }
+  }
+
+  function isPolicyDirty(ecosystem: string) {
+    const local = localPolicies[ecosystem]
+    if (!local) return false
+    const server = getServerPolicy(ecosystem)
+    return local.auto_block_enabled !== server.auto_block_enabled ||
+      local.min_cvss_score !== server.min_cvss_score
+  }
+
   function setPolicy(ecosystem: string, patch: Partial<EditablePolicy>) {
+    if (batchSaveInFlightRef.current || policyWritesInFlightRef.current.has(ecosystem)) return
+    const serverPolicy = getServerPolicy(ecosystem)
     setLocalPolicies((prev) => ({
       ...prev,
-      [ecosystem]: { ...getPolicy(ecosystem), ...patch },
+      [ecosystem]: { ...(prev[ecosystem] ?? serverPolicy), ...patch },
     }))
   }
 
-  async function handleSave(ecosystem: string) {
-    if (!canWrite || policySaveStates[ecosystem]?.isPending) return
-    const policy: UpdateSecurityPolicyRequest = getPolicy(ecosystem)
+  function beginPolicyWrite(ecosystem: string) {
+    if (batchSaveInFlightRef.current || policyWritesInFlightRef.current.has(ecosystem)) return false
+    policyWritesInFlightRef.current.add(ecosystem)
+    setPolicyWriteCount(policyWritesInFlightRef.current.size)
+    return true
+  }
+
+  function finishPolicyWrite(ecosystem: string) {
+    policyWritesInFlightRef.current.delete(ecosystem)
+    setPolicyWriteCount(policyWritesInFlightRef.current.size)
+  }
+
+  async function persistPolicy(ecosystem: string, policy: UpdateSecurityPolicyRequest) {
     setPolicySaveStates((current) => ({ ...current, [ecosystem]: { isPending: true, error: null } }))
     try {
       const { data: updated } = await adminApi.updateSecurityPolicy(ecosystem, policy)
@@ -484,13 +573,82 @@ function PoliciesTab() {
           : [...current.data, updated] } : current,
       )
       setLocalPolicies((current) => {
+        const currentDraft = current[ecosystem]
+        if (currentDraft &&
+          (currentDraft.auto_block_enabled !== policy.auto_block_enabled ||
+            currentDraft.min_cvss_score !== policy.min_cvss_score)) {
+          return current
+        }
         const next = { ...current }
         delete next[ecosystem]
         return next
       })
       setPolicySaveStates((current) => ({ ...current, [ecosystem]: { isPending: false, error: null } }))
+      return true
     } catch (error) {
       setPolicySaveStates((current) => ({ ...current, [ecosystem]: { isPending: false, error } }))
+      return false
+    }
+  }
+
+  async function handleSave(ecosystem: string) {
+    if (!canWrite || !beginPolicyWrite(ecosystem)) return false
+    const policy: UpdateSecurityPolicyRequest = getPolicy(ecosystem)
+    try {
+      return await persistPolicy(ecosystem, policy)
+    } finally {
+      finishPolicyWrite(ecosystem)
+    }
+  }
+
+  function applyBulkPolicy() {
+    if (!canWrite || batchSaveInFlightRef.current || policyWritesInFlightRef.current.size > 0) return
+    setLocalPolicies(Object.fromEntries(
+      securityEcosystems.map(ecosystem => [ecosystem.id, { ...bulkPolicy }]),
+    ))
+    setShowChangedOnly(true)
+  }
+
+  function resetPolicyChanges() {
+    if (batchSaveInFlightRef.current || policyWritesInFlightRef.current.size > 0) return
+    setLocalPolicies({})
+    setPolicySaveStates({})
+    setShowChangedOnly(false)
+  }
+
+  async function handleSaveAll() {
+    const dirty = ecosystems.filter(isPolicyDirty)
+    if (!canWrite || batchSaveInFlightRef.current ||
+      policyWritesInFlightRef.current.size > 0 || dirty.length === 0) return
+    const snapshots = dirty.map(ecosystem => ({
+      ecosystem,
+      policy: getPolicy(ecosystem) as UpdateSecurityPolicyRequest,
+    }))
+    batchSaveInFlightRef.current = true
+    setIsBatchSaving(true)
+    setBatchSaveError(false)
+    snapshots.forEach(({ ecosystem }) => policyWritesInFlightRef.current.add(ecosystem))
+    setPolicyWriteCount(policyWritesInFlightRef.current.size)
+    try {
+      const results: boolean[] = []
+      for (let index = 0; index < snapshots.length; index += POLICY_SAVE_CONCURRENCY) {
+        const batch = snapshots.slice(index, index + POLICY_SAVE_CONCURRENCY)
+        const batchResults = await Promise.all(batch.map(async ({ ecosystem, policy }) => {
+          try {
+            return await persistPolicy(ecosystem, policy)
+          } finally {
+            finishPolicyWrite(ecosystem)
+          }
+        }))
+        results.push(...batchResults)
+      }
+      if (results.every(Boolean)) setBatchConfirmOpen(false)
+      else setBatchSaveError(true)
+    } finally {
+      batchSaveInFlightRef.current = false
+      policyWritesInFlightRef.current.clear()
+      setPolicyWriteCount(0)
+      setIsBatchSaving(false)
     }
   }
 
@@ -509,6 +667,9 @@ function PoliciesTab() {
   }
 
   const ecosystems = securityEcosystems.map(ecosystem => ecosystem.id)
+  const dirtyEcosystems = ecosystems.filter(isPolicyDirty)
+  const visibleEcosystems = showChangedOnly ? dirtyEcosystems : ecosystems
+  const hasPolicyWrites = policyWriteCount > 0
 
   if (query.isPending) {
     return (
@@ -532,18 +693,110 @@ function PoliciesTab() {
       {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
       {/* ── Per-ecosystem policies ───────────────────── */}
       <section>
-        <SectionHeader title={t('security.ecosystemPolicies')} />
+        <SectionHeader
+          title={t('security.ecosystemPolicies')}
+          hint={t('security.policyHint')}
+        />
+        {canWrite && (
+          <div
+            data-security-policy-bulk
+            className="mb-5 grid min-w-0 gap-4 border-b border-[var(--border)] pb-5 md:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)_auto] md:items-end"
+          >
+            <div className="min-w-0">
+              <SwitchV2
+                label={t('security.bulkAutoBlock')}
+                checked={bulkPolicy.auto_block_enabled}
+                disabled={isBatchSaving || hasPolicyWrites}
+                onCheckedChange={(checked) => setBulkPolicy(current => ({
+                  ...current,
+                  auto_block_enabled: checked,
+                }))}
+              />
+              <p className="mt-1 text-[12px] leading-5 text-[var(--text-soft)]">
+                {t('security.bulkPolicyHint')}
+              </p>
+            </div>
+            <InputV2
+              label={t('security.cvssThreshold')}
+              type="number"
+              min={0}
+              max={10}
+              step={0.1}
+              value={bulkPolicy.min_cvss_score}
+              disabled={!bulkPolicy.auto_block_enabled || isBatchSaving || hasPolicyWrites}
+              onChange={(event) => setBulkPolicy(current => ({
+                ...current,
+                min_cvss_score: Number.parseFloat(event.target.value) || 0,
+              }))}
+              mono
+            />
+            <ButtonV2
+              type="button"
+              variant="secondary"
+              onClick={applyBulkPolicy}
+              disabled={isBatchSaving || hasPolicyWrites}
+            >
+              {t('security.applyToAll')}
+            </ButtonV2>
+          </div>
+        )}
+        <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <span className="text-[12px] text-[var(--text-soft)]" aria-live="polite">
+              {t('security.unsavedCount', { count: dirtyEcosystems.length })}
+            </span>
+            <SwitchV2
+              label={t('security.showChangedOnly')}
+              checked={showChangedOnly}
+              onCheckedChange={setShowChangedOnly}
+            />
+          </div>
+          {canWrite && (
+            <div className="flex flex-wrap items-center gap-2">
+              <ButtonV2
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={resetPolicyChanges}
+                disabled={dirtyEcosystems.length === 0 || isBatchSaving || hasPolicyWrites}
+              >
+                {t('security.resetChanges')}
+              </ButtonV2>
+              <ButtonV2
+                type="button"
+                size="sm"
+                aria-busy={isBatchSaving || undefined}
+                onClick={() => {
+                  if (batchSaveInFlightRef.current || policyWritesInFlightRef.current.size > 0) return
+                  setBatchSaveError(false)
+                  setBatchConfirmOpen(true)
+                }}
+                disabled={dirtyEcosystems.length === 0 || isBatchSaving || hasPolicyWrites}
+              >
+                {isBatchSaving ? t('security.savingAll') : t('security.saveAll')}
+              </ButtonV2>
+            </div>
+          )}
+        </div>
         <div>
-          {ecosystems.map((eco, idx) => {
+          {visibleEcosystems.length === 0 ? (
+            <EmptyState
+              icon="task_alt"
+              title={t('security.noChangedPolicies')}
+              hint={t('security.noChangedPoliciesHint')}
+              minHeight={160}
+            />
+          ) : visibleEcosystems.map((eco, idx) => {
             const policy = getPolicy(eco)
             const saveState = policySaveStates[eco]
             const isSaving = saveState?.isPending ?? false
+            const isDirty = isPolicyDirty(eco)
             return (
               <div
                 key={eco}
                 data-policy-ecosystem={eco}
                 className="py-3"
-                style={{ borderBottom: idx < ecosystems.length - 1 ? '1px solid var(--border)' : 'none' }}
+                style={{ borderBottom: idx < visibleEcosystems.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
                 <div
                   data-security-policy-layout
@@ -554,6 +807,7 @@ function PoliciesTab() {
                     <span className="min-w-0 truncate text-[13px] font-[500]" title={eco.toUpperCase()} style={{ color: 'var(--text)' }}>
                       {eco.toUpperCase()}
                     </span>
+                    {isDirty && <BadgeV2 variant="warning">{t('security.unsaved')}</BadgeV2>}
                   </div>
 
                   <div className="justify-self-end text-[var(--text-soft)] sm:justify-self-start">
@@ -561,7 +815,7 @@ function PoliciesTab() {
                       label={t('security.autoBlock')}
                       aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
                       checked={policy.auto_block_enabled}
-                      disabled={!canWrite || isSaving}
+                      disabled={!canWrite || isSaving || isBatchSaving}
                       onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
                     />
                   </div>
@@ -576,7 +830,7 @@ function PoliciesTab() {
                       max={10}
                       step={0.1}
                       value={policy.min_cvss_score}
-                      disabled={!canWrite || isSaving}
+                      disabled={!canWrite || isSaving || isBatchSaving || !policy.auto_block_enabled}
                       onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
                       mono
                       className="px-2 py-1 text-center"
@@ -589,10 +843,10 @@ function PoliciesTab() {
                       size="sm"
                       aria-label={`${eco.toUpperCase()} ${t('save')}`}
                       aria-busy={isSaving || undefined}
-                      disabled={isSaving}
+                      disabled={isSaving || isBatchSaving || !isDirty}
                       onClick={() => { void handleSave(eco) }}
                     >
-                      {isSaving ? t('saving') : t('save')}
+                      {isSaving ? t('saving') : isDirty ? t('save') : t('security.saved')}
                     </ButtonV2>
                   </div>}
                 </div>
@@ -602,6 +856,31 @@ function PoliciesTab() {
           })}
         </div>
       </section>
+
+      <ConfirmActionDialog
+        open={batchConfirmOpen}
+        title={t('security.reviewChangesTitle')}
+        description={t('security.batchImpact', { count: dirtyEcosystems.length })}
+        details={[
+          {
+            label: t('security.changedEcosystems'),
+            value: dirtyEcosystems.map(ecosystem => ecosystem.toUpperCase()).join(', '),
+            mono: true,
+          },
+        ]}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('security.confirmSaveAll')}
+        pendingLabel={t('security.savingAll')}
+        confirmVariant="primary"
+        pending={isBatchSaving}
+        errorMessage={batchSaveError ? t('security.batchSaveFailed') : null}
+        onClose={() => {
+          if (isBatchSaving) return
+          setBatchConfirmOpen(false)
+          setBatchSaveError(false)
+        }}
+        onConfirm={() => { void handleSaveAll() }}
+      />
 
       {/* ── Offline import ────────────────────────── */}
       <section>
@@ -672,7 +951,23 @@ function PoliciesTab() {
 
 export default function Security() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const serializedSearchParams = searchParams.toString()
+  const requestedTab = searchParams.get('tab')
+  const hasValidTab = ['overview', 'vulnerabilities', 'suggestions', 'policies'].includes(requestedTab ?? '')
+  const tab = hasValidTab
+    ? requestedTab!
+    : 'overview'
+  const activeTabRef = useRef(tab)
+  useEffect(() => {
+    activeTabRef.current = tab
+  }, [tab])
+  useEffect(() => {
+    if (requestedTab === null || hasValidTab) return
+    const nextParams = new URLSearchParams(serializedSearchParams)
+    nextParams.delete('tab')
+    setSearchParams(nextParams, { replace: true })
+  }, [hasValidTab, requestedTab, serializedSearchParams, setSearchParams])
 
   // Pro gate removed 2026-06-28 — the dashboard query no longer needs
   // to be intercepted for 402, and the page's own data queries cover
@@ -694,7 +989,14 @@ export default function Security() {
       <TabsV2
         items={tabs}
         value={tab}
-        onValueChange={setTab}
+        onValueChange={(nextTab) => {
+          if (nextTab === activeTabRef.current) return
+          activeTabRef.current = nextTab
+          const nextParams = new URLSearchParams(searchParams)
+          if (nextTab === 'overview') nextParams.delete('tab')
+          else nextParams.set('tab', nextTab)
+          setSearchParams(nextParams)
+        }}
         ariaLabel={t('security.title')}
       />
     </div>

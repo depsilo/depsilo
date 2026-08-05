@@ -4,30 +4,55 @@
 APP        := depsilo
 BIN_DIR    := bin
 BIN        := $(BIN_DIR)/$(APP)
+DIST_DIR   := dist
 WEB_DIR    := web
+WEB_DIST   ?= $(WEB_DIR)/dist
+WEB_DIST_INDEX := $(WEB_DIST)/index.html
 CONFIG     := config.toml
 DEV_JWT_SECRET ?= .dev-jwt-secret
 PID_FILE   := .server.pid
 DEV_LOG    := .dev.log
-PORT       := 23333
+PORT       ?= 23333
+DEV_URL    ?= http://localhost:$(PORT)
 TEST_DIR   := testground
 NPM_RUN    := npm --prefix $(WEB_DIR) run
+GO_PROD_PKGS := ./cmd/... ./internal/... ./web
+GO_TEST_PKGS := $(GO_PROD_PKGS) ./tests/unit/... ./tests/mock/...
 
 # ─── 版本注入 ─────────────────────────────────
 # Match only semver-style tags (v0.2.3) to avoid descriptive tags like
 # "portal-redesign-complete" polluting the version pill. Strip leading "v"
 # so backend serves clean "0.2.3" — frontend formatVersion() re-prepends
 # "v", avoiding "vv0.2.3" double-v.
-VERSION    ?= $(shell git describe --tags --match 'v*' --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
-COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-BUILD_DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+VERSION    ?= $(shell value=$$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --always --dirty 2>/dev/null || true); printf '%s\n' "$${value:-dev}" | sed 's/^v//')
+COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS    := -X depsilo/internal/version.Version=$(VERSION) \
               -X depsilo/internal/version.Commit=$(COMMIT) \
               -X depsilo/internal/version.BuildDate=$(BUILD_DATE)
-GO_BUILD   := CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)"
+GO_BUILD   := CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)"
 
-# ─── 构建 ─────────────────────────────────────
-.PHONY: frontend build build-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
+# ─── 初始化与构建 ─────────────────────────────
+.PHONY: setup setup-ui version prepare-go frontend build build-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
+
+setup:                          ## 安装 Go 与前端开发依赖
+	go mod download
+	npm --prefix $(WEB_DIR) ci
+
+setup-ui: setup                 ## 安装依赖及 Playwright Chromium
+	cd $(WEB_DIR) && npx --no-install playwright install chromium
+
+version:                        ## 显示将注入二进制的构建信息
+	@printf 'version=%s\ncommit=%s\nbuild_date=%s\n' "$(VERSION)" "$(COMMIT)" "$(BUILD_DATE)"
+
+# Go embeds web/dist. Keep backend-only checks usable on a fresh clone without
+# forcing a complete frontend build; `frontend` replaces this tiny placeholder.
+prepare-go:                     # 内部：确保 Go embed 目录存在
+	@if [ ! -f "$(WEB_DIST_INDEX)" ]; then \
+		mkdir -p "$(WEB_DIST)"; \
+		printf '%s\n' '<!doctype html><title>Depsilo test placeholder</title>' > "$(WEB_DIST_INDEX)"; \
+		echo ">>> prepared $(WEB_DIST_INDEX) for Go embed"; \
+	fi
 
 frontend:                       # 内部：构建前端
 	$(NPM_RUN) build
@@ -42,7 +67,7 @@ build-server: frontend | $(BIN_DIR)  # 兼容：构建纯服务器入口
 	$(GO_BUILD) -o $(BIN)-server ./cmd/server
 
 tray: frontend | $(BIN_DIR)     ## 构建桌面托盘应用
-	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP)-tray ./cmd/depsilo-tray
+	go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP)-tray ./cmd/depsilo-tray
 
 app-macos: tray                 ## 打 macOS .app bundle（必须在 macOS 上跑）
 	@bash scripts/build-macos-app.sh "$(VERSION)"
@@ -69,24 +94,14 @@ run run-pro:
 	@$(RUN_ENV) DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/run-dev.sh "./$(BIN)" "$(CONFIG)"
 
 dev: build stop                 ## 编译并后台运行（dev 模式）
-	@echo ">>> starting $(APP) on :$(PORT) ..."
-	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/run-dev.sh "./$(BIN)" "$(CONFIG)" > $(DEV_LOG) 2>&1 & echo $$! > $(PID_FILE)
-	@sleep 3
-	@if curl -sf http://localhost:$(PORT)/health > /dev/null 2>&1; then \
-		echo ">>> $(APP) running  pid=$$(cat $(PID_FILE))  http://localhost:$(PORT)"; \
-	else \
-		echo ">>> FAILED to start, check $(DEV_LOG)"; tail -20 $(DEV_LOG); exit 1; \
-	fi
+	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/dev-service.sh start \
+		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" --port "$(PORT)"
 
 stop:                           ## 停止后台 dev 服务
-	@if [ -f $(PID_FILE) ]; then \
-		kill $$(cat $(PID_FILE)) 2>/dev/null || true; \
-		rm -f $(PID_FILE); \
-		echo ">>> stopped"; \
-	fi
+	@bash scripts/dev-service.sh stop "./$(BIN)" "$(PID_FILE)"
 
 logs:                           ## 查看 dev 模式日志
-	@tail -f $(DEV_LOG)
+	@bash scripts/dev-service.sh logs "$(DEV_LOG)"
 
 # ─── CLI 管理 ────────────────────────────────
 .PHONY: cli-status cli-activate cli-warmup cli-flush cli-stop
@@ -110,7 +125,7 @@ cli-status cli-activate cli-warmup cli-flush cli-stop:
 sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 	@command -v syft >/dev/null 2>&1 || { echo "syft not installed. Install: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin"; exit 1; }
 	@mkdir -p dist/sbom
-	@VERSION=$$(git describe --tags --dirty --always 2>/dev/null || echo dev); \
+	@VERSION="$(VERSION)"; \
 		syft dir:. -o cyclonedx-json="dist/sbom/depsilo-$$VERSION-source.cdx.json" \
 		           -o spdx-json="dist/sbom/depsilo-$$VERSION-source.spdx.json" \
 		           --quiet; \
@@ -118,61 +133,22 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-unit test-race test-integration test-http test-all test-pypi test-apt test-compiler-cache
+.PHONY: test test-race test-integration test-ui test-compiler-cache
 
-test: test-unit                 ## 运行 Go 单元测试
+test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
+	go test -short $(GO_TEST_PKGS)
 
-test-unit:                      ## 运行全部非 integration-tag Go 测试
-	go test ./... -count=1
+test-race: prepare-go           ## 使用 race detector 运行 Go 测试
+	go test -race -count=1 $(GO_TEST_PKGS)
 
-test-race:                      ## 使用 race detector 运行 Go 测试
-	go test ./... -race -count=1
+test-integration: prepare-go    ## 运行集成测试（启动服务 + mock 上游）
+	go test ./tests/integration/... -count=1 -timeout 300s -tags integration
 
-test-integration:               ## 运行集成测试（启动服务 + mock 上游）
-	go test ./tests/integration/... -v -count=1 -timeout 300s -tags integration
-
-test-http:                      # 兼容：仅运行 HTTP 端点集成测试
-	go test ./tests/integration/... -v -count=1 -timeout 120s -tags integration \
-		-run "Test[^_]+_(SimpleIndex|Metadata|Download|CacheHit|Release|Packages|ConfigJson|ModuleList|ArtifactDownload|Specs|PackagesJson|ServiceIndex|RepoData|IndexYaml)"
-
-test-all: test-unit test-integration  # 兼容：单元 + integration tag
+test-ui:                        ## 快速浏览器冒烟测试（首次需安装 Playwright Chromium）
+	$(NPM_RUN) test:ui:smoke
 
 test-compiler-cache:              ## 用官方 ccache + sccache 验证已运行的编译缓存
 	@bash scripts/test-compiler-cache.sh
-
-$(TEST_DIR)/.venv:              ## 初始化测试用 Python 虚拟环境（uv）
-	@mkdir -p $(TEST_DIR)
-	cd $(TEST_DIR) && uv venv .venv
-	@echo ">>> venv created at $(TEST_DIR)/.venv"
-
-test-pypi: $(TEST_DIR)/.venv dev  ## 通过代理安装 Python 包（端到端测试）
-	@echo ""
-	@echo "=== pip install requests through proxy ==="
-	cd $(TEST_DIR) && uv pip install requests \
-		--index-url http://localhost:$(PORT)/pypi/simple/ \
-		--python .venv/bin/python
-	@echo ""
-	@echo "=== verify ==="
-	$(TEST_DIR)/.venv/bin/python -c "import requests; print('requests', requests.__version__, '✓')"
-	@echo ""
-	@echo "=== pip install flask (multi-dep) ==="
-	cd $(TEST_DIR) && uv pip install flask \
-		--index-url http://localhost:$(PORT)/pypi/simple/ \
-		--python .venv/bin/python
-	$(TEST_DIR)/.venv/bin/python -c "import flask; print('flask', flask.__version__, '✓')"
-
-test-apt: dev                   # 兼容：通过代理获取 APT 元数据
-	@echo ""
-	@echo "=== APT InRelease ==="
-	@curl -sf -o /dev/null -w "HTTP %{http_code}, Size: %{size_download} bytes\n" \
-		http://localhost:$(PORT)/apt/ubuntu/dists/jammy/InRelease \
-		|| echo "FAIL (may need network)"
-	@echo "=== APT Packages.gz ==="
-	@curl -sf -o /dev/null -w "HTTP %{http_code}, Size: %{size_download} bytes\n" \
-		http://localhost:$(PORT)/apt/ubuntu/dists/jammy/main/binary-amd64/Packages.gz \
-		|| echo "FAIL (may need network)"
-	@echo "=== APT cached files ==="
-	@find data/cache/apt -type f 2>/dev/null | head -5 || echo "(no cache yet)"
 
 # ─── Docker E2E ──────────────────────────────
 # Every fixture accepts one DEPSILO_URL build arg and derives its own route.
@@ -180,11 +156,11 @@ test-apt: dev                   # 兼容：通过代理获取 APT 元数据
 DOCKER_HOST_ALIAS       ?= host.docker.internal
 DEPSILO_URL             ?= http://$(DOCKER_HOST_ALIAS):$(PORT)
 DOCKER_E2E_BUILD_FLAGS  := --no-cache --progress=plain --add-host=$(DOCKER_HOST_ALIAS):host-gateway
-TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget conda cran helm huggingface
+TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget conda cran alpine helm huggingface
 TEST_DOCKER_ALL_TARGETS := $(addprefix test-docker-,$(TEST_DOCKER_ALL_ECOS))
 TEST_DOCKER_ECOS        := $(TEST_DOCKER_ALL_ECOS) docker
 
-.PHONY: $(TEST_DOCKER_ALL_TARGETS) test-docker-docker test-docker-all test-docker test-e2e test-clean
+.PHONY: $(TEST_DOCKER_ALL_TARGETS) test-docker-docker test-e2e test-clean
 
 $(TEST_DOCKER_ALL_TARGETS): test-docker-%: dev
 	@echo "=== [$*] real-client E2E ==="
@@ -197,14 +173,10 @@ test-docker-docker: dev         # opt-in：Docker Registry dind E2E
 		-t depsilo-test-docker $(TEST_DIR)/docker-docker
 	docker run --rm --privileged --add-host=$(DOCKER_HOST_ALIAS):host-gateway depsilo-test-docker
 
-test-docker-all: $(TEST_DOCKER_ALL_TARGETS)  ## 运行 13 个真实客户端 E2E
-	@echo ">>> ALL 13 ECOSYSTEMS PASSED"
-
-test-docker: test-docker-all    # 兼容别名
-test-e2e: test-docker-all       ## 运行全部端到端测试
+test-e2e: $(TEST_DOCKER_ALL_TARGETS)  ## 运行 14 个真实客户端 E2E
+	@echo ">>> ALL 14 ECOSYSTEMS PASSED"
 
 test-clean:                     ## 清理端到端测试环境
-	rm -rf $(TEST_DIR)/.venv
 	@docker rmi $(addprefix depsilo-test-,$(TEST_DOCKER_ECOS)) >/dev/null 2>&1 || true
 	@echo ">>> test env removed"
 
@@ -262,7 +234,7 @@ docker-status:                  # 兼容：查看容器状态
 	@curl -sf http://localhost:$(PORT)/health 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "health: unreachable"
 
 docker-compose-up:              # 兼容：使用 Docker Compose 启动
-	$(COMPOSE) up -d --build
+	PORT=$(PORT) $(COMPOSE) up -d --build
 	@echo ">>> running at http://localhost:$(PORT)"
 
 docker-compose-down:            # 兼容：停止 Docker Compose
@@ -288,22 +260,27 @@ proxy-env: cli-activate          # 兼容别名：打印代理环境变量
 release-dry-run: frontend        ## 本地模拟 goreleaser 发布（不推送）
 	goreleaser release --snapshot --clean --skip=publish
 
-release-check: frontend          ## 检查 goreleaser 配置是否正确
+release-check:                   ## 检查 goreleaser 配置是否正确
 	goreleaser check
 
 # ─── 清理 ─────────────────────────────────────
-.PHONY: clean lint lint-go lint-web lint-i18n verify verify-modules verify-build verify-web verify-e2e verify-security verify-installer help
+.PHONY: clean clean-all lint lint-go lint-web lint-i18n check verify verify-modules verify-build verify-web verify-ui security verify-scripts verify-installer help
 
-clean: stop docker-stop         ## 清理所有构建产物、容器和缓存数据
-	rm -rf $(BIN_DIR) data $(DEV_LOG) $(PID_FILE) $(DEV_JWT_SECRET) $(DEV_JWT_SECRET).tmp.*
+clean: stop docker-stop         ## 清理构建产物（保留运行数据与开发 JWT）
+	rm -rf $(BIN_DIR) $(DIST_DIR) $(WEB_DIST) $(DEV_LOG) $(PID_FILE)
 	@echo ">>> clean done"
+
+clean-all: clean                ## 额外删除本地运行数据与开发 JWT（不可恢复）
+	rm -rf data $(DEV_JWT_SECRET) $(DEV_JWT_SECRET).tmp.*
+	@echo ">>> local runtime data removed"
 
 lint: lint-go lint-web lint-i18n  ## Go/前端/i18n 静态检查
 
-lint-go:                        # 内部：检查 gofmt + go vet
-	@unformatted="$$(git ls-files --cached --others --exclude-standard -z -- '*.go' | xargs -0 gofmt -l)"; \
+lint-go: prepare-go             # 内部：检查 gofmt + go vet
+	@unformatted="$$(git ls-files --cached --others --exclude-standard -z -- '*.go' | \
+		xargs -0 sh -c 'for file do [ ! -f "$$file" ] || gofmt -l "$$file"; done' sh)"; \
 		test -z "$$unformatted" || { echo "gofmt required:"; echo "$$unformatted"; exit 1; }
-	go vet ./...
+	go vet $(GO_TEST_PKGS)
 
 lint-web:                       # 内部：检查前端 ESLint
 	$(NPM_RUN) lint
@@ -312,8 +289,8 @@ lint-i18n:                      ## 检查 zh.ts/en.ts 与 t() 调用是否一致
 	@python3 scripts/i18n-audit.py
 
 verify-web:                     # 内部：前端类型、浏览器契约与生产构建
-	$(NPM_RUN) type-check
 	$(NPM_RUN) type-check:e2e
+	$(NPM_RUN) test:unit
 	$(NPM_RUN) build
 	$(NPM_RUN) check:bundle
 
@@ -321,28 +298,35 @@ verify-modules:                 # 内部：校验 Go 模块完整性与 tidy 状
 	go mod verify
 	go mod tidy -diff
 
-verify-build:                   # 内部：编译正式 CLI 入口
-	@output="$$(mktemp)"; trap 'rm -f "$$output"' 0; go build -o "$$output" ./cmd/depsilo
+verify-build: prepare-go        # 内部：编译正式 CLI 入口
+	@output="$$(mktemp)"; trap 'rm -f "$$output"' 0; $(GO_BUILD) -o "$$output" ./cmd/depsilo
 
-verify-e2e:                     # 内部：运行 Playwright 浏览器测试
-	cd web && npx playwright install chromium
-	cd web && npm run test:e2e
+verify-ui:                      # 内部：运行完整 Playwright 浏览器测试
+	$(NPM_RUN) test:ui
 
-verify-security:                # 内部：扫描依赖漏洞
-	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
-	npm --prefix $(WEB_DIR) audit --omit=dev
+security: prepare-go            ## 扫描 Go 与全部前端依赖漏洞（需要联网）
+	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 $(GO_PROD_PKGS)
 	npm --prefix $(WEB_DIR) audit --audit-level=moderate
 
-verify-installer:               # 内部：工具脚本回归测试
+verify-scripts:                 # 内部：安装、开发与发布脚本回归测试
 	bash -n install.sh scripts/*.sh
 	bash scripts/test-install-checksum.sh
 	bash scripts/test-makefile.sh
 	bash scripts/test-make-dev-run.sh
+	bash scripts/test-dev-service.sh
 	bash scripts/test-release-tag.sh
 
-verify: lint verify-modules test-race test-integration verify-web verify-build verify-e2e verify-security verify-installer  ## 完整本地验证
+verify-installer: verify-scripts # 兼容别名
+
+check: lint test verify-web verify-build test-ui  ## 日常提交前快速检查
+
+verify: lint verify-modules test-race test-integration verify-web verify-build verify-ui verify-scripts  ## 完整离线验证
+
+# These aggregate targets share web/dist between Vite and Go's embed package.
+# Keep their prerequisites serialized even when a caller passes `make -j`.
+.NOTPARALLEL: check verify
 
 # ─── 帮助 ─────────────────────────────────────
 help:                           ## 显示帮助
 	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-21s\033[0m %s\n", $$1, $$2}'
