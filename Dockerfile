@@ -40,6 +40,11 @@ WORKDIR /app
 COPY --from=backend /app/depsilo .
 EXPOSE 23333
 
+# Keep container health independent from the host and orchestration layer.
+# BusyBox wget is part of Alpine, so this adds no package or attack surface.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+    CMD wget -q -O /dev/null "http://127.0.0.1:${DEPSILO_SERVER_PORT:-23333}/ready" || exit 1
+
 # ENTRYPOINT (not CMD) so `docker run image doctor` works the same as
 # `docker exec container /app/depsilo doctor` — args get appended to the
 # binary instead of replacing it. With CMD form, `docker run image version`

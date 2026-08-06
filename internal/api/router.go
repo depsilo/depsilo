@@ -115,32 +115,43 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	integrationPromptHandler := public.NewIntegrationPromptHandler()
 	apiV1.GET("/integration-prompt", integrationPromptHandler.Get)
 
-	// Model Context Protocol endpoint — JSON-RPC 2.0 over Streamable HTTP.
-	// AI clients (Claude Code, Cursor, etc.) POST initialize / tools/list /
-	// tools/call / resources/read / prompts/get here.
-	mcpHandler := public.NewMCPHandler(deps.DB, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled)
-	r.POST("/mcp", mcpHandler.Handle)
-
-	// Public stats
+	// Public stats. The same handler builds the MCP stats resource in-process,
+	// so both interfaces keep one response contract without HTTP self-fetching.
 	statsHandler := public.NewStatsHandler(deps.DB, deps.Storage, deps.Pools, deps.Ecosystems, deps.Config.ExtraIndexes, deps.Config.AccessLog.RollupEnabled)
 	apiV1.GET("/stats", statsHandler.GetStats)
 	apiV1.GET("/latency-series", statsHandler.GetLatencySeries)
 
-	// Live "Now" strip — polled every 5s by the dashboard. Small JSON,
-	// focused on liveness signal (rate / hit_rate / upstream health /
-	// last activity / 30-min sparkline). Reuses the StatsHandler's
-	// startTime so uptime values agree across endpoints.
-	nowHandler := public.NewNowHandler(deps.DB, deps.Pools, statsHandler.StartTime())
-	apiV1.GET("/now", nowHandler.Get)
+	// Model Context Protocol endpoint — JSON-RPC 2.0 over Streamable HTTP.
+	// AI clients (Claude Code, Cursor, etc.) POST initialize / tools/list /
+	// tools/call / resources/read / prompts/get here.
+	mcpHandler := public.NewMCPHandler(deps.DB, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled, statsHandler)
+	r.POST(
+		"/mcp",
+		middleware.Authenticate(deps.Config.Auth.JWTSecret, deps.DB),
+		middleware.ReadRequired(),
+		mcpHandler.Handle,
+	)
 
-	// Public packages
+	// Live "Now" strip — polled every 5s by authenticated Admin clients.
+	// It includes the most recent request identity, so it must not share the
+	// anonymous Portal status boundary. Reuses StatsHandler's startTime so
+	// uptime values agree across endpoints.
+	nowHandler := public.NewNowHandler(deps.DB, deps.Pools, statsHandler.StartTime())
+
+	// Package inventory and request history belong to authenticated Operators.
+	// Keep this group separate from the anonymous Portal status surface.
+	packageHistoryRead := apiV1.Group("")
+	packageHistoryRead.Use(middleware.Authenticate(deps.Config.Auth.JWTSecret, deps.DB))
+	packageHistoryRead.Use(middleware.ReadRequired())
+	packageHistoryRead.GET("/now", nowHandler.Get)
+
 	pkgHandler := public.NewPackagesHandler(deps.DB)
-	apiV1.GET("/packages", pkgHandler.List)
-	apiV1.GET("/packages/:type/:name", pkgHandler.Detail)
+	packageHistoryRead.GET("/packages", pkgHandler.List)
+	packageHistoryRead.GET("/packages/:type/:name", pkgHandler.Detail)
 
 	// Real-time events (SSE)
 	eventsHandler := public.NewEventsHandler(deps.EventBus)
-	apiV1.GET("/events/stream", eventsHandler.Stream)
+	packageHistoryRead.GET("/events/stream", eventsHandler.Stream)
 
 	// Setup wizard (no auth required)
 	setupHandler := NewSetupHandler(deps.Config, deps.DB)

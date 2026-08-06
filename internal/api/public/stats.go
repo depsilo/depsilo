@@ -216,7 +216,13 @@ func (h *StatsHandler) GetLatencySeries(c *gin.Context) {
 }
 
 func (h *StatsHandler) GetStats(c *gin.Context) {
-	now := time.Now()
+	c.JSON(http.StatusOK, h.snapshot(time.Now()))
+}
+
+// snapshot is the single in-process source for the public stats contract.
+// HTTP and MCP callers serialize this value directly; neither needs to fetch
+// the public route over the network.
+func (h *StatsHandler) snapshot(now time.Time) gin.H {
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	since := now.Add(-1 * time.Hour)
 
@@ -331,37 +337,6 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 		}
 	}
 
-	// Top packages
-	type topPkg struct {
-		PackageName string `json:"name"`
-		HitCount    int64  `json:"hit_count"`
-	}
-
-	var pypiTop, aptTop []topPkg
-	if h.useRollup {
-		h.db.Table("access_log_package_daily").
-			Select("package_name, COALESCE(SUM(request_count),0) AS hit_count").
-			Where("adapter_type = ? AND package_name != ''", "pypi").
-			Group("package_name").Order("hit_count DESC").Limit(10).
-			Scan(&pypiTop)
-		h.db.Table("access_log_package_daily").
-			Select("package_name, COALESCE(SUM(request_count),0) AS hit_count").
-			Where("adapter_type = ? AND package_name != ''", "apt").
-			Group("package_name").Order("hit_count DESC").Limit(10).
-			Scan(&aptTop)
-	} else {
-		h.db.Model(&db.AccessLog{}).
-			Select("package_name, COUNT(*) as hit_count").
-			Where("adapter_type = ? AND package_name != ''", "pypi").
-			Group("package_name").Order("hit_count DESC").Limit(10).
-			Scan(&pypiTop)
-		h.db.Model(&db.AccessLog{}).
-			Select("package_name, COUNT(*) as hit_count").
-			Where("adapter_type = ? AND package_name != ''", "apt").
-			Group("package_name").Order("hit_count DESC").Limit(10).
-			Scan(&aptTop)
-	}
-
 	// Extra indexes
 	extraIdxs := make([]gin.H, 0, len(h.extraIndexes))
 	for _, idx := range h.extraIndexes {
@@ -372,10 +347,10 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"service": gin.H{
 			"version":        version.Version,
-			"uptime_seconds": int64(time.Since(h.startTime).Seconds()),
+			"uptime_seconds": int64(now.Sub(h.startTime).Seconds()),
 			"status":         "healthy",
 		},
 		"today": gin.H{
@@ -402,11 +377,7 @@ func (h *StatsHandler) GetStats(c *gin.Context) {
 			"interval_minutes": 5,
 			"points":           seriesPoints,
 		},
-		"upstreams": upstreams,
-		"top_packages": gin.H{
-			"pypi": pypiTop,
-			"apt":  aptTop,
-		},
+		"upstreams":     upstreams,
 		"extra_indexes": extraIdxs,
-	})
+	}
 }

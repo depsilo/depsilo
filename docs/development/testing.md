@@ -12,6 +12,7 @@ the changed interface.
 | Fast Go | `make test` | No | Short-mode production and cross-module Go packages, with cache |
 | Frontend unit | `npm --prefix web run test:unit` | No | Pure state/model/manifest logic |
 | UI smoke | `make test-ui` | No | Critical Portal/Admin/setup routes with mocked APIs |
+| Production UI smoke | `make test-ui-production` | No | One browser flow against the built Go binary and its embedded frontend |
 | Tagged integration | `make test-integration` | No | Local Depsilo process plus mock Upstream over HTTP |
 | Normal gate | `make check` | No | Lint, fast Go, frontend unit/build/bundle, binary, UI smoke |
 | Complete gate | `make verify` | No | Race, integration, full Playwright, scripts, build and module checks |
@@ -32,6 +33,7 @@ Docker Registry remains a separate privileged dind check:
 | HTTP/package protocol | adjacent Go tests + tagged integration case | `make verify` and relevant `make test-docker-<ecosystem>` when network is available |
 | Pure frontend model/manifest | focused Vitest file | `make check` |
 | Portal/Admin interaction | focused Playwright file | `make check`; full `make verify` for shared shell/primitives |
+| Embedded frontend or release delivery | `make test-ui-production` | `make test-ui-production` plus release checks |
 | i18n | `make lint-i18n` | `make check` |
 | Makefile, installer, dev or release scripts | relevant `scripts/test-*.sh` | `make verify-scripts` or `make verify` |
 | Dependency versions or release inputs | focused build | `make security` plus release checks |

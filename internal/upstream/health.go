@@ -128,19 +128,8 @@ func persistProbe(ctx context.Context, database *gorm.DB, u *Upstream, result Pr
 	}
 	health := u.HealthSnapshot()
 	return database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if u.ID != 0 {
-			updated := tx.Model(&db.UpstreamRecord{}).Where("id = ?", u.ID).Updates(map[string]any{
-				"healthy":         health.Healthy,
-				"avg_latency_ms":  health.AvgLatency.Milliseconds(),
-				"success_rate":    health.SuccessRate,
-				"last_checked_at": health.LastCheckedAt,
-			})
-			if updated.Error != nil {
-				return updated.Error
-			}
-			if updated.RowsAffected != 1 {
-				return fmt.Errorf("persist upstream %d: expected one row, updated %d", u.ID, updated.RowsAffected)
-			}
+		if err := persistHealthSnapshot(tx, u, health); err != nil {
+			return err
 		}
 		return tx.Create(&db.UpstreamLatencyLog{
 			UpstreamID: u.ID,
@@ -150,6 +139,38 @@ func persistProbe(ctx context.Context, database *gorm.DB, u *Upstream, result Pr
 			CreatedAt:  result.CheckedAt,
 		}).Error
 	})
+}
+
+// persistHealthSnapshot publishes only observations newer than the durable
+// state. A zero-row conditional update is a benign stale result when the
+// Upstream still exists; a deleted Upstream remains an error so callers never
+// append an orphan latency record.
+func persistHealthSnapshot(tx *gorm.DB, u *Upstream, health HealthSnapshot) error {
+	if u.ID == 0 {
+		return nil
+	}
+	updated := tx.Model(&db.UpstreamRecord{}).
+		Where("id = ? AND last_checked_at < ?", u.ID, health.LastCheckedAt).
+		Updates(map[string]any{
+			"healthy":         health.Healthy,
+			"avg_latency_ms":  health.AvgLatency.Milliseconds(),
+			"success_rate":    health.SuccessRate,
+			"last_checked_at": health.LastCheckedAt,
+		})
+	if updated.Error != nil {
+		return updated.Error
+	}
+	if updated.RowsAffected == 1 {
+		return nil
+	}
+	var exists int64
+	if err := tx.Model(&db.UpstreamRecord{}).Where("id = ?", u.ID).Count(&exists).Error; err != nil {
+		return err
+	}
+	if exists == 0 {
+		return fmt.Errorf("persist upstream %d: expected one row, updated 0", u.ID)
+	}
+	return nil
 }
 
 // StartLatencyLogCleanup periodically removes latency logs older than 7 days.

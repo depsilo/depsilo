@@ -1,11 +1,14 @@
 package api
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -26,12 +29,108 @@ var (
 )
 
 type AuthHandler struct {
-	db  *gorm.DB
-	cfg config.AuthConfig
+	db           *gorm.DB
+	cfg          config.AuthConfig
+	loginLimiter *loginAttemptLimiter
 }
 
 func NewAuthHandler(database *gorm.DB, cfg config.AuthConfig) *AuthHandler {
-	return &AuthHandler{db: database, cfg: cfg}
+	return &AuthHandler{db: database, cfg: cfg, loginLimiter: newLoginAttemptLimiter()}
+}
+
+const (
+	loginAttemptLimit       = 5
+	loginAttemptWindow      = time.Minute
+	maxTrackedLoginAttempts = 4096
+	maxLoginRequestBody     = 8 << 10
+)
+
+type loginAttemptKey [sha256.Size]byte
+
+type loginAttemptWindowState struct {
+	attempts int
+	resetAt  time.Time
+}
+
+// loginAttemptLimiter bounds both work per credential tuple and its own
+// memory. It has no cleanup goroutine: the first request at an expiry boundary
+// reclaims stale entries, while a full table rejects new tuples rather than
+// evicting an active block and letting an attacker bypass it by key churn.
+type loginAttemptLimiter struct {
+	mu         sync.Mutex
+	attempts   map[loginAttemptKey]loginAttemptWindowState
+	nextExpiry time.Time
+}
+
+func newLoginAttemptLimiter() *loginAttemptLimiter {
+	return &loginAttemptLimiter{attempts: make(map[loginAttemptKey]loginAttemptWindowState)}
+}
+
+func makeLoginAttemptKey(clientIP, username string) loginAttemptKey {
+	identity := strings.TrimSpace(clientIP) + "\x00" + strings.ToLower(strings.TrimSpace(username))
+	return sha256.Sum256([]byte(identity))
+}
+
+func (l *loginAttemptLimiter) reserve(clientIP, username string) (bool, time.Duration) {
+	now := time.Now()
+	key := makeLoginAttemptKey(clientIP, username)
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if !l.nextExpiry.IsZero() && !now.Before(l.nextExpiry) {
+		l.pruneExpiredLocked(now)
+	}
+	if state, ok := l.attempts[key]; ok {
+		if state.attempts >= loginAttemptLimit {
+			return false, positiveRetryDelay(state.resetAt.Sub(now))
+		}
+		state.attempts++
+		l.attempts[key] = state
+		return true, 0
+	}
+	if len(l.attempts) >= maxTrackedLoginAttempts {
+		retry := loginAttemptWindow
+		if !l.nextExpiry.IsZero() {
+			retry = positiveRetryDelay(l.nextExpiry.Sub(now))
+		}
+		return false, retry
+	}
+
+	resetAt := now.Add(loginAttemptWindow)
+	l.attempts[key] = loginAttemptWindowState{attempts: 1, resetAt: resetAt}
+	if l.nextExpiry.IsZero() || resetAt.Before(l.nextExpiry) {
+		l.nextExpiry = resetAt
+	}
+	return true, 0
+}
+
+func (l *loginAttemptLimiter) clear(clientIP, username string) {
+	key := makeLoginAttemptKey(clientIP, username)
+	l.mu.Lock()
+	delete(l.attempts, key)
+	l.mu.Unlock()
+}
+
+func (l *loginAttemptLimiter) pruneExpiredLocked(now time.Time) {
+	nextExpiry := time.Time{}
+	for key, state := range l.attempts {
+		if !now.Before(state.resetAt) {
+			delete(l.attempts, key)
+			continue
+		}
+		if nextExpiry.IsZero() || state.resetAt.Before(nextExpiry) {
+			nextExpiry = state.resetAt
+		}
+	}
+	l.nextExpiry = nextExpiry
+}
+
+func positiveRetryDelay(delay time.Duration) time.Duration {
+	if delay < time.Second {
+		return time.Second
+	}
+	return delay
 }
 
 type loginRequest struct {
@@ -50,9 +149,23 @@ type loginResponse struct {
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxLoginRequestBody)
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"code": "REQUEST_TOO_LARGE", "message": "request body too large"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "invalid request body"})
+		return
+	}
+	clientIP := c.ClientIP()
+	allowed, retryAfter := h.loginLimiter.reserve(clientIP, req.Username)
+	if !allowed {
+		retrySeconds := int64((retryAfter + time.Second - 1) / time.Second)
+		c.Header("Retry-After", strconv.FormatInt(retrySeconds, 10))
+		c.JSON(http.StatusTooManyRequests, gin.H{"code": "RATE_LIMITED", "message": "too many login attempts; try again later"})
 		return
 	}
 
@@ -71,6 +184,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "invalid credentials"})
 		return
 	}
+	h.loginLimiter.clear(clientIP, req.Username)
 
 	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, user.ID, user.Username, user.Role, h.cfg.TokenTTL)
 	if err != nil {

@@ -56,12 +56,13 @@ var ecosystemPurposes = map[string]string{
 
 // Discover returns the catalog. Stable JSON shape consumed by AI agents.
 func (h *DiscoverHandler) Discover(c *gin.Context) {
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	base := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+	c.JSON(http.StatusOK, h.catalog(requestBase(c)))
+}
 
+// catalog builds the same service description for HTTP and in-process MCP
+// callers. The supplied base is display data only; this function never
+// dereferences it.
+func (h *DiscoverHandler) catalog(base string) gin.H {
 	ecos := make([]ecosystemInfo, 0, len(h.ecosystems))
 	for _, name := range h.ecosystems {
 		path := "/" + name + "/"
@@ -79,7 +80,7 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return gin.H{
 		"service":     "depsilo",
 		"version":     version.Version,
 		"commit":      version.Commit,
@@ -95,18 +96,26 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 			"integration_prompt": "/api/v1/integration-prompt",
 			"mcp":                "/mcp",
 			"public_stats":       "/api/v1/stats",
-			"public_packages":    "/api/v1/packages",
-			"events_stream":      "/api/v1/events/stream",
-			"admin_login":        "/api/v1/auth/login",
-			"admin_dashboard":    "/api/v1/admin/dashboard",
-			"admin_license":      "/api/v1/admin/license/status",
-			"admin_trial":        "/api/v1/admin/license/trial/activate",
+			// Stable legacy key: the endpoint now requires read authentication,
+			// but discover consumers must not lose the field during that change.
+			"public_packages": "/api/v1/packages",
+			"events_stream":   "/api/v1/events/stream",
+			"admin_login":     "/api/v1/auth/login",
+			"admin_dashboard": "/api/v1/admin/dashboard",
+			"admin_license":   "/api/v1/admin/license/status",
+			"admin_trial":     "/api/v1/admin/license/trial/activate",
+		},
+		"endpoint_authentication": gin.H{
+			"mcp":             "Authorization: Bearer <JWT or readonly API token>",
+			"public_packages": "Authorization: Bearer <JWT or readonly API token>",
+			"events_stream":   "Authorization: Bearer <JWT or readonly API token>",
 		},
 		"mcp": gin.H{
-			"url":       base + "/mcp",
-			"protocol":  "Model Context Protocol (JSON-RPC 2.0 over HTTP)",
-			"transport": "streamable-http",
-			"summary":   "POST initialize, then tools/list to discover what you can call. depsilo_status is a good first call.",
+			"url":            base + "/mcp",
+			"protocol":       "Model Context Protocol (JSON-RPC 2.0 over HTTP)",
+			"transport":      "streamable-http",
+			"authentication": "Authorization: Bearer <JWT or readonly API token>",
+			"summary":        "Authenticate, POST initialize, then tools/list to discover what you can call. depsilo_status is a good first call.",
 		},
 		"agent_setup": gin.H{
 			"prompt_url":                     base + "/api/v1/agent-prompt",
@@ -116,7 +125,7 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 			"summary":                        "Use the bootstrap prompt for local developer-machine settings or the Portal integration prompt for project build/CI edits.",
 			"readme_anchor":                  "https://github.com/depsilo/depsilo#use-with-ai-agents",
 		},
-	})
+	}
 }
 
 // AgentPrompt returns the local developer-machine bootstrap prompt as plain
@@ -128,13 +137,14 @@ func (h *DiscoverHandler) Discover(c *gin.Context) {
 // URLs are templated with the request host so deployments behind LB/ingress get
 // the correct URL.
 func (h *DiscoverHandler) AgentPrompt(c *gin.Context) {
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	base := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.String(http.StatusOK, h.agentPrompt(requestBase(c)))
+}
 
-	body := fmt.Sprintf(`This workspace has a local dependency cache called Depsilo at %s.
+// agentPrompt builds bootstrap guidance without making a request back into the
+// service. The base remains visible to the client in every generated command.
+func (h *DiscoverHandler) agentPrompt(base string) string {
+	return fmt.Sprintf(`This workspace has a local dependency cache called Depsilo at %s.
 It proxies 14 package ecosystems plus Docker OCI and serves cached artifacts at LAN speed.
 
 Before running any package install in this workspace:
@@ -169,7 +179,8 @@ Keep the original registry settings as documented rollback instructions; do
 not use GOPROXY "|direct", which would also bypass Depsilo's 451 enforcement.
 
 Native MCP integration (preferred for MCP-aware agents like Claude Code,
-Cursor): point your client at %s/mcp. Available tools include
+Cursor): create a read-only API token in Admin > Users, point your client at
+%s/mcp, and send it as an Authorization: Bearer header. Available tools include
 depsilo_status, depsilo_doctor, depsilo_configure, depsilo_search,
 depsilo_recent. POST initialize to begin, then tools/list to enumerate.
 `,
@@ -177,7 +188,12 @@ depsilo_recent. POST initialize to begin, then tools/list to enumerate.
 		base, base, base, base, base, base, base, base, base, base, base, base,
 		base,
 	)
+}
 
-	c.Header("Content-Type", "text/plain; charset=utf-8")
-	c.String(http.StatusOK, body)
+func requestBase(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s", scheme, c.Request.Host)
 }

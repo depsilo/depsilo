@@ -141,8 +141,10 @@ Hugging Face 模型动辄几十 GB。当前适配器缓存普通 HTTP 下载路�
 
 1. 在项目根目录运行 `depsilo init-agent`，自动更新 `CLAUDE.md`、`AGENTS.md`
    或 `.cursorrules` 中由 Depsilo 管理的说明区块。
-2. MCP 客户端连接 `http://localhost:23333/mcp`，调用状态、诊断、配置、搜索和
-   最近请求工具。预热工具当前只返回 Admin API 请求模板，不会直接执行。
+2. 在“管理后台 > 用户管理”创建只读 API Token，MCP 客户端携带
+   `Authorization: Bearer <token>` 连接 `http://localhost:23333/mcp`，调用状态、
+   诊断、配置、搜索和最近请求工具。预热工具当前只返回 Admin API 请求模板，
+   不会直接执行。
 3. 非 MCP Agent 获取提示词。Portal 展示的是修改项目构建/CI 配置的版本：
 
 ```bash

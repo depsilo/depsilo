@@ -63,14 +63,16 @@ const (
 
 // ReclaimReport describes observable work performed by one reclaim pass.
 type ReclaimReport struct {
-	Examined       int   `json:"examined"`
-	Removed        int   `json:"removed"`
-	Failed         int   `json:"failed"`
-	ReclaimedBytes int64 `json:"reclaimed_bytes"`
-	ExpiredRemoved int   `json:"expired_removed"`
-	LRURemoved     int   `json:"lru_removed"`
-	UsageBefore    int64 `json:"usage_before"`
-	UsageAfter     int64 `json:"usage_after"`
+	Examined        int   `json:"examined"`
+	Removed         int   `json:"removed"`
+	Failed          int   `json:"failed"`
+	ReclaimedBytes  int64 `json:"reclaimed_bytes"`
+	ExpiredRemoved  int   `json:"expired_removed"`
+	LRURemoved      int   `json:"lru_removed"`
+	StagingRemoved  int   `json:"staging_removed"`
+	StagingFailures int   `json:"staging_failures"`
+	UsageBefore     int64 `json:"usage_before"`
+	UsageAfter      int64 `json:"usage_after"`
 }
 
 // Removal reports which irreversible stages completed. A caller can therefore
@@ -225,9 +227,11 @@ func (retention *Retention) removeCandidate(
 	return removal, true, nil
 }
 
-// Reclaim removes cache entries according to mode and continues after
-// candidate-level failures. The returned error joins every independent
-// failure; the report always describes the work that did complete.
+// Reclaim removes cache entries according to mode and continues after formal
+// candidate-level failures. Staging reconciliation fails closed before any
+// formal mutation because deleting healthy objects cannot compensate safely
+// for unknown physical staging usage. The report always describes work that
+// did complete.
 func (retention *Retention) Reclaim(ctx context.Context, mode ReclaimMode) (ReclaimReport, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -250,8 +254,37 @@ func (retention *Retention) Reclaim(ctx context.Context, mode ReclaimMode) (Recl
 		report.UsageAfter = usage
 	}
 
+	// A failed process can leave LocalStorage staging files without metadata.
+	// Reconcile those candidates before deleting tracked cache entries;
+	// otherwise LRU can remove every valid object and still miss its target.
+	// Capacity passes defer the local walk until it is actually needed.
+	if mode == ReclaimModeManual || usage >= retention.threshold {
+		removed, reclaimed, stagingErrors := retention.reclaimStaging(ctx)
+		report.StagingRemoved += removed
+		report.StagingFailures += len(stagingErrors)
+		report.ReclaimedBytes += reclaimed
+		reclaimErrors = append(reclaimErrors, stagingErrors...)
+		if removed > 0 {
+			usage, err = retention.manager.storage.TotalSize(ctx)
+			if err != nil {
+				reclaimErrors = append(reclaimErrors, fmt.Errorf("measure cache usage after staging reclaim: %w", err))
+				return report, errors.Join(reclaimErrors...)
+			} else {
+				report.UsageAfter = usage
+			}
+		}
+		// Staging is part of the physical usage that triggered this pass. If it
+		// cannot be reconciled reliably, deleting healthy formal objects cannot
+		// prove the target will be reached and can cause avoidable data loss.
+		// Both manual and capacity passes therefore fail closed before expiry or
+		// LRU mutations.
+		if len(stagingErrors) > 0 {
+			return report, errors.Join(reclaimErrors...)
+		}
+	}
+
 	if mode == ReclaimModeCapacity && usage < retention.threshold {
-		return report, nil
+		return report, errors.Join(reclaimErrors...)
 	}
 
 	now := time.Now().UTC()
@@ -352,4 +385,44 @@ func (retention *Retention) Reclaim(ctx context.Context, mode ReclaimMode) (Recl
 		}
 	}
 	return report, errors.Join(reclaimErrors...)
+}
+
+func (retention *Retention) reclaimStaging(ctx context.Context) (int, int64, []error) {
+	stagingStore, ok := retention.manager.storage.(StagingObjectStore)
+	if !ok {
+		return 0, 0, nil
+	}
+	candidates, err := stagingStore.ListStaging(ctx)
+	if err != nil {
+		return 0, 0, []error{fmt.Errorf("list cache staging objects: %w", err)}
+	}
+
+	removed := 0
+	var reclaimed int64
+	var reclaimErrors []error
+	for _, candidate := range candidates {
+		if err := ctx.Err(); err != nil {
+			reclaimErrors = append(reclaimErrors, err)
+			break
+		}
+		unlock, err := retention.manager.lockMutation(ctx, candidate.Key)
+		if err != nil {
+			reclaimErrors = append(reclaimErrors, fmt.Errorf("lock staging object %q: %w", candidate.Key, err))
+			continue
+		}
+
+		removedCandidate, removeErr := stagingStore.RemoveStaging(ctx, candidate.Key)
+		unlock()
+		if removeErr != nil {
+			reclaimErrors = append(reclaimErrors, fmt.Errorf("reclaim staging object %q: %w", candidate.Key, removeErr))
+			continue
+		}
+		if removedCandidate {
+			removed++
+			if candidate.Size > 0 {
+				reclaimed += candidate.Size
+			}
+		}
+	}
+	return removed, reclaimed, reclaimErrors
 }

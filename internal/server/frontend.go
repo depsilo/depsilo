@@ -1,6 +1,9 @@
 package server
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"mime"
@@ -27,8 +30,10 @@ func registerFrontend(engine *gin.Engine, extraProxyPrefixes ...string) error {
 func registerFrontendFS(engine *gin.Engine, distFS fs.FS, extraProxyPrefixes ...string) {
 	staticHandler := http.FileServer(http.FS(distFS))
 	machinePrefixes := frontendMachinePrefixes(extraProxyPrefixes)
+	securityPolicy := frontendSecurityPolicy(distFS)
 
 	engine.NoRoute(func(c *gin.Context) {
+		setFrontendSecurityHeaders(c.Writer.Header(), securityPolicy)
 		requestPath := c.Request.URL.Path
 
 		if unsafeFrontendPath(requestPath) {
@@ -64,6 +69,85 @@ func registerFrontendFS(engine *gin.Engine, distFS fs.FS, extraProxyPrefixes ...
 		}()
 		staticHandler.ServeHTTP(c.Writer, c.Request)
 	})
+}
+
+func frontendSecurityPolicy(distFS fs.FS) string {
+	scriptSources := []string{"'self'"}
+	if document, err := fs.ReadFile(distFS, "index.html"); err == nil {
+		for _, script := range frontendInlineScripts(document) {
+			digest := sha256.Sum256(script)
+			scriptSources = append(scriptSources, "'sha256-"+base64.StdEncoding.EncodeToString(digest[:])+"'")
+		}
+	}
+
+	return strings.Join([]string{
+		"default-src 'self'",
+		"base-uri 'none'",
+		"object-src 'none'",
+		"frame-ancestors 'none'",
+		"script-src " + strings.Join(scriptSources, " "),
+		"script-src-attr 'none'",
+		"style-src 'self' 'unsafe-inline'",
+		"img-src 'self' data:",
+		"font-src 'self'",
+		"connect-src 'self'",
+		"form-action 'self'",
+		"manifest-src 'self'",
+		"worker-src 'self'",
+	}, "; ")
+}
+
+// frontendInlineScripts returns the exact bytes the CSP hash algorithm sees.
+// Vite leaves the pre-paint theme bootstrap inline but emits application code
+// with src attributes; only the former needs a hash source.
+func frontendInlineScripts(document []byte) [][]byte {
+	lowerDocument := bytes.ToLower(document)
+	var scripts [][]byte
+	for cursor := 0; cursor < len(document); {
+		relativeStart := bytes.Index(lowerDocument[cursor:], []byte("<script"))
+		if relativeStart < 0 {
+			break
+		}
+		start := cursor + relativeStart
+		relativeTagEnd := bytes.IndexByte(lowerDocument[start:], '>')
+		if relativeTagEnd < 0 {
+			break
+		}
+		tagEnd := start + relativeTagEnd
+		relativeClose := bytes.Index(lowerDocument[tagEnd+1:], []byte("</script>"))
+		if relativeClose < 0 {
+			break
+		}
+		closeStart := tagEnd + 1 + relativeClose
+		openingTag := strings.ToLower(string(document[start : tagEnd+1]))
+		if !scriptTagHasSource(openingTag) {
+			scripts = append(scripts, document[tagEnd+1:closeStart])
+		}
+		cursor = closeStart + len("</script>")
+	}
+	return scripts
+}
+
+func scriptTagHasSource(openingTag string) bool {
+	attributes := strings.FieldsFunc(openingTag, func(character rune) bool {
+		return character == '<' || character == '>' || character == '=' || character == ' ' || character == '\t' || character == '\r' || character == '\n'
+	})
+	for _, attribute := range attributes {
+		if attribute == "src" {
+			return true
+		}
+	}
+	return false
+}
+
+func setFrontendSecurityHeaders(header http.Header, policy string) {
+	header.Set("Content-Security-Policy", policy)
+	header.Set("X-Frame-Options", "DENY")
+	header.Set("Referrer-Policy", "no-referrer")
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+	header.Set("Cross-Origin-Opener-Policy", "same-origin")
+	header.Set("X-Permitted-Cross-Domain-Policies", "none")
 }
 
 func embeddedFrontendFileExists(distFS fs.FS, requestPath string) bool {

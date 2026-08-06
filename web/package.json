@@ -18,6 +18,7 @@
     "test:unit": "vitest run",
     "test:ui": "playwright test",
     "test:ui:smoke": "playwright test --grep @smoke",
+    "test:ui:production": "bash ../scripts/test-production-ui-smoke.sh",
     "test:ui:update": "playwright test --update-snapshots"
   },
   "dependencies": {

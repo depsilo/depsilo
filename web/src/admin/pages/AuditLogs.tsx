@@ -30,8 +30,10 @@ function latencyColor(ms: number): string {
 
 function resultBadge(result: string, t: (k: string) => string) {
   if (result === 'hit') return <BadgeV2 variant="success">{t('audit.hit')}</BadgeV2>
+  if (result === 'success') return <BadgeV2 variant="success">{t('audit.success')}</BadgeV2>
   if (result === 'error') return <BadgeV2 variant="error">{t('audit.error')}</BadgeV2>
-  return <BadgeV2>{t('audit.miss')}</BadgeV2>
+  if (result === 'miss') return <BadgeV2>{t('audit.miss')}</BadgeV2>
+  return <BadgeV2>{result || '-'}</BadgeV2>
 }
 
 function getTimeRange(preset: string) {
@@ -55,11 +57,11 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   else next.delete('package')
 
   const ecosystem = current.get('ecosystem')?.trim() ?? ''
-  if (operatorEcosystems.some(item => item.id === ecosystem)) next.set('ecosystem', ecosystem)
+  if (ecosystem === 'admin' || operatorEcosystems.some(item => item.id === ecosystem)) next.set('ecosystem', ecosystem)
   else next.delete('ecosystem')
 
   const result = current.get('result')
-  if (result === 'hit' || result === 'miss' || result === 'error') next.set('result', result)
+  if (result === 'hit' || result === 'miss' || result === 'success' || result === 'error') next.set('result', result)
   else next.delete('result')
 
   const range = current.get('range')
@@ -106,6 +108,7 @@ export default function AuditLogsV2() {
     if (ecosystem !== 'all') params.ecosystem = ecosystem
     if (resultFilter === 'hit') params.result = 'hit'
     if (resultFilter === 'miss') params.result = 'miss'
+    if (resultFilter === 'success') params.result = 'success'
     if (resultFilter === 'error') params.result = 'error'
     return params
   }
@@ -176,7 +179,8 @@ export default function AuditLogsV2() {
 
   const headers = [
     t('audit.time'), t('audit.ecosystem'), t('audit.packageName'), t('audit.version'),
-    t('audit.result'), t('audit.latency'), t('audit.bytes'), t('audit.clientIp'),
+    t('audit.action'), t('audit.result'), t('audit.latency'), t('audit.bytes'),
+    t('audit.actor'), t('audit.clientIp'),
   ]
 
   return (
@@ -225,6 +229,7 @@ export default function AuditLogsV2() {
             })}
           >
             <option value="all">{t('all')}</option>
+            <option value="admin">{t('audit.management')}</option>
             {operatorEcosystems.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </SelectV2>
 
@@ -240,6 +245,7 @@ export default function AuditLogsV2() {
             <option value="all">{t('all')}</option>
             <option value="hit">{t('audit.hit')}</option>
             <option value="miss">{t('audit.miss')}</option>
+            <option value="success">{t('audit.success')}</option>
             <option value="error">{t('audit.error')}</option>
           </SelectV2>
         </div>
@@ -278,7 +284,7 @@ export default function AuditLogsV2() {
       </form>
 
       {/* Table — bare */}
-      <TableViewport label={t('audit.table')} minWidth={980}>
+      <TableViewport label={t('audit.table')} minWidth={1180}>
         {isPending ? (
           <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
         ) : isError && !data ? (
@@ -324,6 +330,9 @@ export default function AuditLogsV2() {
                     <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.version || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
+                    <span className="font-mono whitespace-nowrap" style={{ color: 'var(--text)' }}>{row.action || '-'}</span>
+                  </td>
+                  <td className="py-2 px-3">
                     {resultBadge(row.cache_result, t)}
                   </td>
                   <td className="py-2 px-3 whitespace-nowrap">
@@ -332,8 +341,11 @@ export default function AuditLogsV2() {
                   <td className="py-2 px-3 whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(row.bytes_sent)}</span>
                   </td>
+                  <td className="py-2 px-3 max-w-[180px]">
+                    <span className="font-mono truncate block" title={row.user_agent || undefined} style={{ color: 'var(--text-soft)' }}>{row.user_agent || '-'}</span>
+                  </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip}</span>
+                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip || '-'}</span>
                   </td>
                 </tr>
               ))}

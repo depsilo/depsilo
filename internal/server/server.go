@@ -261,7 +261,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	rulesStore := rules.NewStore(database)
 	rulesEngine := rules.NewEngine(rulesStore, checker)
 
-	auditLogger := audit.NewLogger(database, checker)
+	auditLogger := audit.NewLogger(database)
 	if err := submitBackground("audit logger", func(ctx context.Context) {
 		auditLogger.Start(ctx)
 	}); err != nil {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -234,5 +235,103 @@ func TestAuthMeReportsAPITokenPermissions(t *testing.T) {
 	}
 	if principal.AuthMethod != middleware.AuthMethodAPIToken || principal.TokenPermissions == nil || *principal.TokenPermissions != "readonly" || principal.CanWrite {
 		t.Fatalf("principal = %#v", principal)
+	}
+}
+
+func loginTestRequest(router http.Handler, remoteIP, username, password string) *httptest.ResponseRecorder {
+	body := `{"username":"` + username + `","password":"` + password + `"}`
+	request := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.RemoteAddr = remoteIP + ":43210"
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
+}
+
+func TestLoginRateLimitsRepeatedFailuresAndResetsAfterSuccess(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	const username = "operator"
+	const password = "Tr0ub4dor&Correct"
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	if err := database.Create(&db.User{
+		Username:     username,
+		PasswordHash: string(hash),
+		Role:         "admin",
+		Enabled:      true,
+	}).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	newRouter := func() *gin.Engine {
+		handler := NewAuthHandler(database, config.AuthConfig{JWTSecret: authTestJWTSecret, TokenTTL: time.Hour})
+		router := gin.New()
+		router.POST("/auth/login", handler.Login)
+		return router
+	}
+
+	t.Run("returns 429 for one IP and username tuple", func(t *testing.T) {
+		router := newRouter()
+		for attempt := 1; attempt <= 5; attempt++ {
+			response := loginTestRequest(router, "192.0.2.10", username, "wrong-password")
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("attempt %d status = %d, want %d; body=%q", attempt, response.Code, http.StatusUnauthorized, response.Body.String())
+			}
+		}
+
+		limited := loginTestRequest(router, "192.0.2.10", username, "wrong-password")
+		if limited.Code != http.StatusTooManyRequests {
+			t.Fatalf("limited status = %d, want %d; body=%q", limited.Code, http.StatusTooManyRequests, limited.Body.String())
+		}
+		if retryAfter := limited.Header().Get("Retry-After"); retryAfter == "" || retryAfter == "0" {
+			t.Fatalf("Retry-After = %q, want positive delay", retryAfter)
+		}
+
+		otherIP := loginTestRequest(router, "192.0.2.11", username, "wrong-password")
+		if otherIP.Code != http.StatusUnauthorized {
+			t.Fatalf("different IP status = %d, want %d", otherIP.Code, http.StatusUnauthorized)
+		}
+		otherUsername := loginTestRequest(router, "192.0.2.10", "different-operator", "wrong-password")
+		if otherUsername.Code != http.StatusUnauthorized {
+			t.Fatalf("different username status = %d, want %d", otherUsername.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("successful login clears prior failures", func(t *testing.T) {
+		router := newRouter()
+		for attempt := 1; attempt <= 4; attempt++ {
+			response := loginTestRequest(router, "198.51.100.20", username, "wrong-password")
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("attempt %d status = %d, want %d", attempt, response.Code, http.StatusUnauthorized)
+			}
+		}
+		if response := loginTestRequest(router, "198.51.100.20", username, password); response.Code != http.StatusOK {
+			t.Fatalf("successful login status = %d, want %d; body=%q", response.Code, http.StatusOK, response.Body.String())
+		}
+		for attempt := 1; attempt <= 5; attempt++ {
+			response := loginTestRequest(router, "198.51.100.20", username, "wrong-password")
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("post-success attempt %d status = %d, want %d", attempt, response.Code, http.StatusUnauthorized)
+			}
+		}
+	})
+}
+
+func TestLoginRejectsOversizedRequestBody(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	handler := NewAuthHandler(database, config.AuthConfig{JWTSecret: authTestJWTSecret, TokenTTL: time.Hour})
+	router := gin.New()
+	router.POST("/auth/login", handler.Login)
+
+	body := `{"username":"operator","password":"` + strings.Repeat("x", 16<<10) + `"}`
+	request := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d; body=%q", response.Code, http.StatusRequestEntityTooLarge, response.Body.String())
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,9 @@ func TestDiscoverUsesCanonicalEcosystemRoutes(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	var response struct {
-		Ecosystems []ecosystemInfo `json:"ecosystems"`
+		Ecosystems             []ecosystemInfo   `json:"ecosystems"`
+		Endpoints              map[string]string `json:"endpoints"`
+		EndpointAuthentication map[string]string `json:"endpoint_authentication"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
@@ -34,6 +37,14 @@ func TestDiscoverUsesCanonicalEcosystemRoutes(t *testing.T) {
 	for index := range want {
 		if response.Ecosystems[index] != want[index] {
 			t.Fatalf("ecosystem[%d] = %#v, want %#v", index, response.Ecosystems[index], want[index])
+		}
+	}
+	if response.Endpoints["public_packages"] != "/api/v1/packages" {
+		t.Fatalf("stable public_packages endpoint = %q", response.Endpoints["public_packages"])
+	}
+	for _, endpoint := range []string{"mcp", "public_packages", "events_stream"} {
+		if !strings.Contains(response.EndpointAuthentication[endpoint], "Bearer") {
+			t.Fatalf("%s authentication = %q, want Bearer guidance", endpoint, response.EndpointAuthentication[endpoint])
 		}
 	}
 }

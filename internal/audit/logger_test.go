@@ -15,7 +15,7 @@ import (
 
 func TestLoggerDrainsAcceptedEntriesOnImmediateCancellation(t *testing.T) {
 	database := newAuditLoggerTestDB(t)
-	auditLogger := NewLogger(database, nil)
+	auditLogger := NewLogger(database)
 	const entries = 250
 	for index := range entries {
 		auditLogger.Log(db.AuditLog{
@@ -40,7 +40,7 @@ func TestLoggerDrainsAcceptedEntriesOnImmediateCancellation(t *testing.T) {
 
 func TestLoggerFlushesPartialBatchOnCancellation(t *testing.T) {
 	database := newAuditLoggerTestDB(t)
-	auditLogger := NewLogger(database, nil)
+	auditLogger := NewLogger(database)
 	auditLogger.Log(db.AuditLog{Ecosystem: "npm", PackageName: "left-pad", Action: "download"})
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -21,6 +23,36 @@ type retentionTestStorage struct {
 	deleteFailures map[string]error
 	existsFailures map[string]error
 	totalFailures  []error
+	stagingListErr error
+	stagingRemoves map[string]error
+}
+
+func (storage *retentionTestStorage) ListStaging(ctx context.Context) ([]ObjectMeta, error) {
+	storage.mu.Lock()
+	err := storage.stagingListErr
+	storage.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	lister, ok := storage.Storage.(StagingObjectStore)
+	if !ok {
+		return nil, nil
+	}
+	return lister.ListStaging(ctx)
+}
+
+func (storage *retentionTestStorage) RemoveStaging(ctx context.Context, key string) (bool, error) {
+	storage.mu.Lock()
+	err := storage.stagingRemoves[key]
+	storage.mu.Unlock()
+	if err != nil {
+		return false, err
+	}
+	stagingStore, ok := storage.Storage.(StagingObjectStore)
+	if !ok {
+		return false, nil
+	}
+	return stagingStore.RemoveStaging(ctx, key)
 }
 
 func (storage *retentionTestStorage) Exists(ctx context.Context, key string) (bool, error) {
@@ -71,6 +103,22 @@ func (storage *retentionTestStorage) failNextTotalSize(err error) {
 	storage.mu.Unlock()
 }
 
+func (storage *retentionTestStorage) failStagingList(err error) {
+	storage.mu.Lock()
+	defer storage.mu.Unlock()
+	storage.stagingListErr = err
+}
+
+func (storage *retentionTestStorage) failStagingRemove(key string, err error) {
+	storage.mu.Lock()
+	defer storage.mu.Unlock()
+	if err == nil {
+		delete(storage.stagingRemoves, key)
+		return
+	}
+	storage.stagingRemoves[key] = err
+}
+
 type retentionFixture struct {
 	retention *Retention
 	manager   *Manager
@@ -95,6 +143,7 @@ func newRetentionFixture(t *testing.T, policy RetentionPolicy) retentionFixture 
 		Storage:        local,
 		deleteFailures: make(map[string]error),
 		existsFailures: make(map[string]error),
+		stagingRemoves: make(map[string]error),
 	}
 	manager := NewManager(storage, database, NewEventBus(), time.Hour)
 	retention, err := NewRetention(manager, policy)
@@ -368,6 +417,202 @@ func TestRetentionReportsUntrackedStorageThatPreventsTarget(t *testing.T) {
 	}
 	if report.Removed != 0 || report.Failed != 0 || report.UsageBefore != 100 || report.UsageAfter != 100 {
 		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestRetentionReclaimsAbandonedTempBeforeTrackedEntries(t *testing.T) {
+	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 80, TargetPercent: 50})
+	now := time.Now().UTC()
+	tracked := seedRetentionEntry(t, fixture, "tracked.tmp", 10, now.Add(time.Hour), now)
+	local, ok := fixture.storage.Storage.(*LocalStorage)
+	if !ok {
+		t.Fatalf("storage = %T, want *LocalStorage", fixture.storage.Storage)
+	}
+	stagingKey, err := localStagingPath("interrupted.tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagingPath := filepath.Join(local.basePath, filepath.FromSlash(stagingKey))
+	if err := os.MkdirAll(filepath.Dir(stagingPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stagingPath, bytes.Repeat([]byte{'x'}, 100), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := local.Put(context.Background(), "published-neighbor", bytes.NewReader([]byte{'x'}), 1, "application/octet-stream"); err != nil {
+		t.Fatalf("publish beside abandoned staging: %v", err)
+	}
+	if err := local.Delete(context.Background(), "published-neighbor"); err != nil {
+		t.Fatalf("delete published neighbor: %v", err)
+	}
+	if _, err := os.Stat(stagingPath); err != nil {
+		t.Fatalf("abandoned staging was disturbed by directory cleanup: %v", err)
+	}
+	restarted, err := NewLocalStorage(local.basePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.storage.Storage = restarted
+
+	report, err := fixture.retention.Reclaim(context.Background(), ReclaimModeCapacity)
+	if err != nil {
+		t.Fatalf("Reclaim abandoned temp: %v (report=%+v)", err, report)
+	}
+	if report.Removed != 0 || report.StagingRemoved != 1 || report.StagingFailures != 0 || report.ReclaimedBytes != 100 || report.UsageBefore != 110 || report.UsageAfter != 10 {
+		t.Fatalf("report = %+v", report)
+	}
+	assertRetentionEntryExists(t, fixture, tracked.ID, true)
+	if _, statErr := os.Stat(stagingPath); !os.IsNotExist(statErr) {
+		t.Fatalf("abandoned staging file still exists: %v", statErr)
+	}
+}
+
+type pauseAfterPayloadReader struct {
+	payload []byte
+	blocked chan struct{}
+	release chan struct{}
+	read    bool
+}
+
+func (reader *pauseAfterPayloadReader) Read(buffer []byte) (int, error) {
+	if !reader.read {
+		reader.read = true
+		return copy(buffer, reader.payload), nil
+	}
+	close(reader.blocked)
+	<-reader.release
+	return 0, io.EOF
+}
+
+func TestRetentionDoesNotReclaimActiveLocalStaging(t *testing.T) {
+	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 80, TargetPercent: 50})
+	reader := &pauseAfterPayloadReader{
+		payload: bytes.Repeat([]byte{'x'}, 100),
+		blocked: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	putDone := make(chan error, 1)
+	go func() {
+		putDone <- fixture.storage.Put(context.Background(), "active.tmp", reader, 100, "application/octet-stream")
+	}()
+	<-reader.blocked
+
+	report, reclaimErr := fixture.retention.Reclaim(context.Background(), ReclaimModeCapacity)
+	if reclaimErr != nil && !errors.Is(reclaimErr, ErrReclaimTargetNotReached) {
+		close(reader.release)
+		t.Fatalf("Reclaim active staging: %v (report=%+v)", reclaimErr, report)
+	}
+	if report.StagingRemoved != 0 {
+		close(reader.release)
+		t.Fatalf("active staging was reclaimed: %+v", report)
+	}
+	close(reader.release)
+	if err := <-putDone; err != nil {
+		t.Fatalf("active Put failed after retention: %v", err)
+	}
+	exists, existsErr := fixture.storage.Exists(context.Background(), "active.tmp")
+	if existsErr != nil || !exists {
+		t.Fatalf("published active object Exists = %v, %v; want true, nil", exists, existsErr)
+	}
+}
+
+func TestRetentionPreservesPublishedDotTmpObjectBeforeMetadataCommit(t *testing.T) {
+	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 80, TargetPercent: 50})
+	const key = "published.tmp"
+	unlock, err := fixture.manager.lockMutation(context.Background(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if err := fixture.storage.Put(
+		context.Background(),
+		key,
+		bytes.NewReader(bytes.Repeat([]byte{'x'}, 100)),
+		100,
+		"application/octet-stream",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	report, reclaimErr := fixture.retention.Reclaim(context.Background(), ReclaimModeCapacity)
+	if reclaimErr != nil && !errors.Is(reclaimErr, ErrReclaimTargetNotReached) {
+		t.Fatalf("Reclaim publication window: %v (report=%+v)", reclaimErr, report)
+	}
+	if report.StagingRemoved != 0 {
+		t.Fatalf("published .tmp object was treated as staging: %+v", report)
+	}
+	exists, existsErr := fixture.storage.Exists(context.Background(), key)
+	if existsErr != nil || !exists {
+		t.Fatalf("published object Exists = %v, %v; want true, nil", exists, existsErr)
+	}
+}
+
+func TestRetentionStagingListFailureFailsClosed(t *testing.T) {
+	for _, mode := range []ReclaimMode{ReclaimModeCapacity, ReclaimModeManual} {
+		t.Run(string(mode), func(t *testing.T) {
+			fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 80, TargetPercent: 50})
+			now := time.Now().UTC()
+			formal := seedRetentionEntry(t, fixture, "healthy-formal", 100, now.Add(time.Hour), now)
+			listErr := errors.New("injected staging list failure")
+			fixture.storage.failStagingList(listErr)
+
+			report, err := fixture.retention.Reclaim(context.Background(), mode)
+			if !errors.Is(err, listErr) {
+				t.Fatalf("Reclaim error = %v, want staging list failure (report=%+v)", err, report)
+			}
+			if report.StagingFailures != 1 || report.Examined != 0 || report.Removed != 0 || report.ExpiredRemoved != 0 || report.LRURemoved != 0 {
+				t.Fatalf("formal cache was examined after staging list failure: %+v", report)
+			}
+			assertRetentionEntryExists(t, fixture, formal.ID, true)
+			exists, existsErr := fixture.storage.Exists(context.Background(), formal.StoragePath)
+			if existsErr != nil || !exists {
+				t.Fatalf("formal object Exists = %v, %v; want true, nil", exists, existsErr)
+			}
+		})
+	}
+}
+
+func TestRetentionStagingRemovalFailureFailsClosed(t *testing.T) {
+	for _, mode := range []ReclaimMode{ReclaimModeCapacity, ReclaimModeManual} {
+		t.Run(string(mode), func(t *testing.T) {
+			fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 80, TargetPercent: 50})
+			now := time.Now().UTC()
+			formal := seedRetentionEntry(t, fixture, "expired-formal", 100, now.Add(-time.Hour), now)
+			local, ok := fixture.storage.Storage.(*LocalStorage)
+			if !ok {
+				t.Fatalf("storage = %T, want *LocalStorage", fixture.storage.Storage)
+			}
+			const stagingKey = "failed-orphan"
+			stagingRelativePath, err := localStagingPath(stagingKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stagingPath := filepath.Join(local.basePath, filepath.FromSlash(stagingRelativePath))
+			if err := os.MkdirAll(filepath.Dir(stagingPath), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(stagingPath, bytes.Repeat([]byte{'x'}, 10), 0644); err != nil {
+				t.Fatal(err)
+			}
+			removeErr := errors.New("injected staging removal failure")
+			fixture.storage.failStagingRemove(stagingKey, removeErr)
+
+			report, err := fixture.retention.Reclaim(context.Background(), mode)
+			if !errors.Is(err, removeErr) {
+				t.Fatalf("Reclaim error = %v, want staging removal failure (report=%+v)", err, report)
+			}
+			if report.StagingFailures != 1 || report.Examined != 0 || report.Removed != 0 || report.ExpiredRemoved != 0 || report.LRURemoved != 0 {
+				t.Fatalf("formal cache was examined after staging removal failure: %+v", report)
+			}
+			assertRetentionEntryExists(t, fixture, formal.ID, true)
+			exists, existsErr := fixture.storage.Exists(context.Background(), formal.StoragePath)
+			if existsErr != nil || !exists {
+				t.Fatalf("formal object Exists = %v, %v; want true, nil", exists, existsErr)
+			}
+			if _, err := os.Stat(stagingPath); err != nil {
+				t.Fatalf("failed staging candidate was removed: %v", err)
+			}
+		})
 	}
 }
 

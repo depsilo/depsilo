@@ -3,14 +3,39 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
+
+type firstReadGate struct {
+	reader  io.Reader
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (reader *firstReadGate) Read(buffer []byte) (int, error) {
+	reader.once.Do(func() {
+		close(reader.started)
+		<-reader.release
+	})
+	return reader.reader.Read(buffer)
+}
+
+func closeTestSignal(signal chan struct{}) {
+	select {
+	case <-signal:
+	default:
+		close(signal)
+	}
+}
 
 func TestLocalStorageLifecycle(t *testing.T) {
 	t.Parallel()
@@ -80,6 +105,184 @@ func TestLocalStorageLifecycle(t *testing.T) {
 	}
 }
 
+func TestLocalStorageConcurrentPrefixKeysDoNotShareStaging(t *testing.T) {
+	storage, err := NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gate := &firstReadGate{
+		reader:  strings.NewReader("plain payload"),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	plainDone := make(chan error, 1)
+	go func() {
+		plainDone <- storage.Put(context.Background(), "foo", gate, 13, "text/plain")
+	}()
+	<-gate.started
+
+	if err := storage.Put(context.Background(), "foo.tmp", strings.NewReader("tmp payload"), 11, "text/plain"); err != nil {
+		close(gate.release)
+		t.Fatalf("Put foo.tmp: %v", err)
+	}
+	close(gate.release)
+	if err := <-plainDone; err != nil {
+		t.Fatalf("Put foo: %v", err)
+	}
+
+	for key, want := range map[string]string{
+		"foo":     "plain payload",
+		"foo.tmp": "tmp payload",
+	} {
+		reader, _, err := storage.Get(context.Background(), key)
+		if err != nil {
+			t.Fatalf("Get %s: %v", key, err)
+		}
+		got, readErr := io.ReadAll(reader)
+		closeErr := reader.Close()
+		if readErr != nil || closeErr != nil {
+			t.Fatalf("read %s = %v, close = %v", key, readErr, closeErr)
+		}
+		if string(got) != want {
+			t.Fatalf("Get %s = %q, want %q", key, got, want)
+		}
+	}
+}
+
+func TestLocalStorageCleansSharedLongKeyStagingDirectoriesAfterConcurrentPuts(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "cache")
+	storage, err := NewLocalStorage(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commonPrefix := strings.Repeat("shared-prefix-", 8)
+	firstKey := commonPrefix + "first"
+	secondKey := commonPrefix + "second"
+	firstStaging, err := localStagingPath(firstKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondStaging, err := localStagingPath(secondKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstParts := strings.Split(firstStaging, "/")
+	secondParts := strings.Split(secondStaging, "/")
+	if len(firstParts) < 4 || len(secondParts) < 4 || firstParts[1] != secondParts[1] {
+		t.Fatalf("staging paths do not share a chunk directory: %q, %q", firstStaging, secondStaging)
+	}
+
+	firstGate := &firstReadGate{
+		reader:  strings.NewReader("first payload"),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	secondGate := &firstReadGate{
+		reader:  strings.NewReader("second payload"),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	defer closeTestSignal(firstGate.release)
+	defer closeTestSignal(secondGate.release)
+	firstDone := make(chan error, 1)
+	secondDone := make(chan error, 1)
+	go func() {
+		firstDone <- storage.Put(context.Background(), firstKey, firstGate, 13, "text/plain")
+	}()
+	go func() {
+		secondDone <- storage.Put(context.Background(), secondKey, secondGate, 14, "text/plain")
+	}()
+	<-firstGate.started
+	<-secondGate.started
+
+	closeTestSignal(firstGate.release)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first Put: %v", err)
+	}
+	secondStagingPath := filepath.Join(base, filepath.FromSlash(secondStaging))
+	if _, err := os.Stat(secondStagingPath); err != nil {
+		t.Fatalf("second active staging file was disturbed: %v", err)
+	}
+
+	closeTestSignal(secondGate.release)
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second Put: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(base, localStagingNamespace)); !os.IsNotExist(err) {
+		t.Fatalf("empty staging namespace remains after concurrent Puts: %v", err)
+	}
+}
+
+func TestLocalStorageStagingDirectoryInodesDoNotAccumulate(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "cache")
+	storage, err := NewLocalStorage(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for index := 0; index < 100; index++ {
+		key := fmt.Sprintf("artifact-%03d", index)
+		if err := storage.Put(context.Background(), key, strings.NewReader("x"), 1, "application/octet-stream"); err != nil {
+			t.Fatalf("Put %q: %v", key, err)
+		}
+		if err := storage.Delete(context.Background(), key); err != nil {
+			t.Fatalf("Delete %q: %v", key, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(base, localStagingNamespace)); !os.IsNotExist(err) {
+		t.Fatalf("staging directory inodes accumulated after sequential Puts: %v", err)
+	}
+}
+
+func TestLocalStorageStagingCleanupStateStaysBoundedDuringLongPut(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "cache")
+	storage, err := NewLocalStorage(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gate := &firstReadGate{
+		reader:  strings.NewReader("long payload"),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	longDone := make(chan error, 1)
+	go func() {
+		longDone <- storage.Put(context.Background(), "long-running", gate, 12, "application/octet-stream")
+	}()
+	<-gate.started
+	released := false
+	defer func() {
+		if !released {
+			close(gate.release)
+		}
+	}()
+
+	for index := 0; index < 100; index++ {
+		key := fmt.Sprintf("short-%03d", index)
+		if err := storage.Put(context.Background(), key, strings.NewReader("x"), 1, "application/octet-stream"); err != nil {
+			t.Fatalf("Put %q: %v", key, err)
+		}
+	}
+	storage.stagingMu.Lock()
+	activeCount := len(storage.activeStaging)
+	cleanupNeeded := storage.stagingCleanupNeeded
+	storage.stagingMu.Unlock()
+	if activeCount != 1 || !cleanupNeeded {
+		t.Fatalf("staging state while long Put is active = active:%d cleanup:%v, want 1,true", activeCount, cleanupNeeded)
+	}
+
+	close(gate.release)
+	released = true
+	if err := <-longDone; err != nil {
+		t.Fatalf("long Put: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(base, localStagingNamespace)); !os.IsNotExist(err) {
+		t.Fatalf("staging namespace remains after the final active Put: %v", err)
+	}
+}
+
 func TestPrivateLocalStoragePermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows does not expose Unix owner/group/other permission bits")
@@ -105,11 +308,8 @@ func TestPrivateLocalStoragePermissions(t *testing.T) {
 	}
 
 	const key = "v1/team/ab/artifact"
-	tempPath := filepath.Join(base, filepath.FromSlash(key+".tmp"))
-	if err := os.WriteFile(tempPath, []byte("stale"), 0666); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(tempPath, 0666); err != nil {
+	neighborPath := filepath.Join(base, filepath.FromSlash(key+".tmp"))
+	if err := os.WriteFile(neighborPath, []byte("neighbor"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,8 +332,62 @@ func TestPrivateLocalStoragePermissions(t *testing.T) {
 		assertFilePermissions(t, dir, 0700)
 	}
 	assertFilePermissions(t, filepath.Join(base, filepath.FromSlash(key)), 0600)
-	if _, err := os.Stat(tempPath); !os.IsNotExist(err) {
-		t.Fatalf("temporary file still exists after Put: %v", err)
+	neighbor, err := os.ReadFile(neighborPath)
+	if err != nil {
+		t.Fatalf("read neighboring .tmp object: %v", err)
+	}
+	if string(neighbor) != "neighbor" {
+		t.Fatalf("neighboring .tmp object changed to %q", neighbor)
+	}
+	assertFilePermissions(t, neighborPath, 0600)
+}
+
+func TestPrivateLocalStorageStagingPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose Unix owner/group/other permission bits")
+	}
+
+	base := filepath.Join(t.TempDir(), "compile-cache")
+	storage, err := NewPrivateLocalStorage(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const key = "v1/team/private-artifact"
+	gate := &firstReadGate{
+		reader:  strings.NewReader("private payload"),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	putDone := make(chan error, 1)
+	go func() {
+		putDone <- storage.Put(context.Background(), key, gate, 15, "application/octet-stream")
+	}()
+	<-gate.started
+	released := false
+	defer func() {
+		if !released {
+			close(gate.release)
+		}
+	}()
+
+	stagingKey, err := localStagingPath(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagingPath := filepath.Join(base, filepath.FromSlash(stagingKey))
+	assertFilePermissions(t, stagingPath, 0600)
+	for dir := filepath.Dir(stagingPath); dir != base; dir = filepath.Dir(dir) {
+		assertFilePermissions(t, dir, 0700)
+	}
+	assertFilePermissions(t, base, 0700)
+
+	close(gate.release)
+	released = true
+	if err := <-putDone; err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := os.Stat(stagingPath); !os.IsNotExist(err) {
+		t.Fatalf("staging file still exists after publication: %v", err)
 	}
 }
 
@@ -172,6 +426,8 @@ func TestLocalStorageRejectsNonCanonicalKeys(t *testing.T) {
 		`\\server\share\file`,
 		"C:/windows/path",
 		`C:\windows\path`,
+		localStagingNamespace,
+		localStagingNamespace + "/object",
 	}
 
 	operations := []struct {
@@ -272,32 +528,30 @@ func TestLocalStorageRejectsSymlinkEscape(t *testing.T) {
 	}
 }
 
-func TestLocalStorageRejectsSymlinkTempFileEscape(t *testing.T) {
+func TestLocalStorageRejectsSymlinkStagingNamespaceEscape(t *testing.T) {
 	base := filepath.Join(t.TempDir(), "cache")
 	storage, err := NewLocalStorage(base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(base, "safe"), 0755); err != nil {
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "victim")
+	if err := os.WriteFile(victim, []byte("original"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	outside := filepath.Join(t.TempDir(), "victim")
-	if err := os.WriteFile(outside, []byte("original"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(outside, filepath.Join(base, "safe", "file.tmp")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(base, localStagingNamespace)); err != nil {
 		t.Skipf("symlinks are not available: %v", err)
 	}
 
 	err = storage.Put(context.Background(), "safe/file", strings.NewReader("overwritten"), 11, "text/plain")
 	if err == nil {
-		t.Fatal("Put unexpectedly followed a temporary-file symlink outside the storage root")
+		t.Fatal("Put unexpectedly followed the staging-namespace symlink outside the storage root")
 	}
-	got, readErr := os.ReadFile(outside)
+	got, readErr := os.ReadFile(victim)
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
 	if string(got) != "original" {
-		t.Fatalf("outside temp target changed to %q", got)
+		t.Fatalf("outside target changed to %q", got)
 	}
 }

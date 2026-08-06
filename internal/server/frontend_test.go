@@ -11,7 +11,50 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const testFrontendDocument = `<!doctype html><html><body><div id="root"></div></body></html>`
+const testFrontendDocument = `<!doctype html><html><head><script>document.documentElement.dataset.theme = "dark";</script></head><body><div id="root"></div></body></html>`
+
+func TestFrontendResponsesSetBrowserSecurityHeaders(t *testing.T) {
+	engine := newFrontendTestEngine()
+	const inlineThemeHash = "'sha256-RH/36EFn2TnZtn39Gf6aq1rnKqEXnEQbfAXoYkwhRP0='"
+
+	for _, requestPath := range []string{"/", "/admin/upstreams", "/assets/app-123.js", "/favicon.svg"} {
+		t.Run(requestPath, func(t *testing.T) {
+			headers := map[string]string(nil)
+			if requestPath == "/admin/upstreams" {
+				headers = map[string]string{"Accept": "text/html"}
+			}
+			response := serveFrontendRequest(engine, http.MethodGet, requestPath, headers)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d; body=%q", response.Code, http.StatusOK, response.Body.String())
+			}
+
+			policy := response.Header().Get("Content-Security-Policy")
+			for _, directive := range []string{
+				"default-src 'self'",
+				"frame-ancestors 'none'",
+				"object-src 'none'",
+				"script-src 'self' " + inlineThemeHash,
+				"connect-src 'self'",
+			} {
+				if !strings.Contains(policy, directive) {
+					t.Fatalf("Content-Security-Policy = %q, want directive %q", policy, directive)
+				}
+			}
+			if strings.Contains(policy, "script-src 'self' 'unsafe-inline'") {
+				t.Fatalf("script-src permits unsafe-inline: %q", policy)
+			}
+			if got := response.Header().Get("X-Frame-Options"); got != "DENY" {
+				t.Fatalf("X-Frame-Options = %q, want DENY", got)
+			}
+			if got := response.Header().Get("Referrer-Policy"); got != "no-referrer" {
+				t.Fatalf("Referrer-Policy = %q, want no-referrer", got)
+			}
+			if got := response.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+				t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+			}
+		})
+	}
+}
 
 func TestFrontendFallbackDoesNotCaptureMachineRoutes(t *testing.T) {
 	engine := newFrontendTestEngine("/private-index")

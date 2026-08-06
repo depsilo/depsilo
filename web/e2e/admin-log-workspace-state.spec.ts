@@ -75,6 +75,40 @@ test('Audit Logs deep-links every applied filter and returns to prior filter sta
   await expect(page.getByLabel(/按包名搜索审计日志|Search audit logs by package/)).toHaveValue('')
 })
 
+test('Audit Logs renders successful management actions with their actor', async ({ page }) => {
+  const requests: Array<Record<string, string>> = []
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/audit-logs': (request: Request) => {
+      requests.push(requestParams(request))
+      return {
+        items: [{
+          id: 1,
+          ecosystem: 'admin',
+          package_name: 'license',
+          version: '',
+          action: 'license.set',
+          cache_result: 'success',
+          client_ip: '',
+          user_agent: 'operator:7',
+          upstream_url: '',
+          latency_ms: 0,
+          bytes_sent: 0,
+          status_code: 200,
+          created_at: new Date().toISOString(),
+        }],
+        total: 1,
+        page: 1,
+      }
+    },
+  })
+
+  await page.goto('/admin/audit?ecosystem=admin&result=success')
+  await expect.poll(() => requests.at(-1)).toMatchObject({ ecosystem: 'admin', result: 'success' })
+  await expect(page.getByText('license.set')).toBeVisible()
+  await expect(page.getByText('operator:7')).toBeVisible()
+  await expect(page.getByLabel(/审计日志表格|Audit logs table/).getByText(/成功|Success/)).toBeVisible()
+})
+
 for (const malformedCase of [
   {
     name: 'Access Logs',

@@ -83,6 +83,12 @@ type ProbeResult struct {
 }
 
 func (h *healthState) applyProbe(result ProbeResult) {
+	// Probe work can complete out of order (for example an automatic probe can
+	// overlap an operator-triggered check). Once a newer observation is visible,
+	// an older result must not rewind runtime health or its rolling counters.
+	if !result.CheckedAt.IsZero() && !h.lastCheckedAt.IsZero() && result.CheckedAt.Before(h.lastCheckedAt) {
+		return
+	}
 	h.totalReqs++
 	if result.Healthy {
 		h.successReqs++
@@ -101,6 +107,9 @@ func (h *healthState) applyProbe(result ProbeResult) {
 
 // FetchResult holds the response from an upstream fetch.
 type FetchResult struct {
+	// Body remains part of the exchange lifecycle: a complete EOF records a
+	// successful origin response, while an early Close or read error records a
+	// failure. Callers must always close it.
 	Body         io.ReadCloser
 	ContentType  string
 	Size         int64
@@ -305,31 +314,26 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), err)
 	}
-	if recovery {
-		defer u.finishPassiveRecovery()
-	}
 
 	start := time.Now()
 	resp, err := client.Do(req)
 	latency := time.Since(start)
 
 	if err != nil {
-		if report {
-			u.Report(latency, false)
-		}
+		u.finishExchange(latency, report, recovery, false)
 		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), redactedTransportError{cause: err})
 	}
+	u.observeResponseBody(resp, latency, report, recovery, resp.StatusCode < 500)
 
 	if resp.StatusCode >= 400 {
-		resp.Body.Close()
-		if report {
-			u.Report(latency, resp.StatusCode < 500)
+		// A client error still says the origin is reachable, but it only counts
+		// as a successful exchange if its small response body is complete.
+		if resp.StatusCode < 500 && (report || recovery) {
+			drainErrorResponse(resp.Body)
+		} else {
+			_ = resp.Body.Close()
 		}
 		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
-	}
-
-	if report {
-		u.Report(latency, true)
 	}
 
 	return &FetchResult{
@@ -371,26 +375,25 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 	if err != nil {
 		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), err)
 	}
-	if recovery {
-		defer u.finishPassiveRecovery()
-	}
 
 	start := time.Now()
 	resp, err := client.Do(req)
 	latency := time.Since(start)
 
 	if err != nil {
-		u.Report(latency, false)
+		u.finishExchange(latency, true, recovery, false)
 		return nil, fmt.Errorf("fetch %s: %w", safeURLOrigin(reqURL), redactedTransportError{cause: err})
 	}
+	u.observeResponseBody(resp, latency, true, recovery, resp.StatusCode < 500)
 
 	if resp.StatusCode >= 400 {
-		resp.Body.Close()
-		u.Report(latency, resp.StatusCode < 500)
+		if resp.StatusCode < 500 {
+			drainErrorResponse(resp.Body)
+		} else {
+			_ = resp.Body.Close()
+		}
 		return nil, fmt.Errorf("upstream %s returned %d for %s", u.Name, resp.StatusCode, safeURLOrigin(reqURL))
 	}
-
-	u.Report(latency, true)
 
 	return &FetchResult{
 		Body:         resp.Body,

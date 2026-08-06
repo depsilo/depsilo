@@ -3,7 +3,6 @@ package public
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -30,16 +29,18 @@ import (
 // translate into actions — MCP tools give the agent structured function
 // calls it can invoke directly.
 //
-// All current tools are read-only. depsilo_warmup returns a request template
+// All current tools are read-only and the router requires an authenticated
+// read capability (JWT or API token). depsilo_warmup returns a request template
 // for the authenticated Admin API; it does not execute the mutation itself.
 type MCPHandler struct {
 	DB         *gorm.DB
 	Ecosystems []string
 	UseRollup  bool
+	stats      *StatsHandler
 }
 
-func NewMCPHandler(db *gorm.DB, ecosystems []string, useRollup bool) *MCPHandler {
-	return &MCPHandler{DB: db, Ecosystems: ecosystems, UseRollup: useRollup}
+func NewMCPHandler(db *gorm.DB, ecosystems []string, useRollup bool, stats *StatsHandler) *MCPHandler {
+	return &MCPHandler{DB: db, Ecosystems: ecosystems, UseRollup: useRollup, stats: stats}
 }
 
 // ── JSON-RPC framing ──────────────────────────────────────────────────
@@ -333,10 +334,12 @@ func jsonResult(v any) any {
 }
 
 func (h *MCPHandler) toolStatus(c *gin.Context) (any, error) {
-	// Use the live request to figure out our base URL so the values we
-	// return are usable from the caller's perspective.
-	base := requestBase(c)
+	return jsonResult(h.statusSnapshot(requestBase(c))), nil
+}
 
+// statusSnapshot builds the status tool result in-process. base is
+// client-visible output only and is never used as a network destination.
+func (h *MCPHandler) statusSnapshot(base string) map[string]any {
 	var hits, misses, totalFiles int64
 	var totalSize int64
 	now := time.Now().UTC()
@@ -368,7 +371,7 @@ func (h *MCPHandler) toolStatus(c *gin.Context) (any, error) {
 		hitRate = float64(hits) / float64(requests)
 	}
 
-	return jsonResult(map[string]any{
+	return map[string]any{
 		"service": map[string]any{
 			"version": version.Version,
 			"url":     base,
@@ -385,7 +388,7 @@ func (h *MCPHandler) toolStatus(c *gin.Context) (any, error) {
 			"size_bytes": totalSize,
 		},
 		"ecosystems": h.Ecosystems,
-	}), nil
+	}
 }
 
 type doctorCheck struct {
@@ -644,22 +647,24 @@ func (h *MCPHandler) resourceDefinitions() []map[string]any {
 }
 
 func (h *MCPHandler) readResource(c *gin.Context, uri string) (map[string]any, error) {
-	base := requestBase(c)
 	switch uri {
 	case "depsilo://discover":
-		body, err := fetchLocal(base + "/api/v1/discover")
-		if err != nil {
-			return nil, err
-		}
-		return map[string]any{"uri": uri, "mimeType": "application/json", "text": body}, nil
+		return resourceContent(uri, "application/json", NewDiscoverHandler(h.Ecosystems).catalog(requestBase(c)))
 	case "depsilo://stats":
-		body, err := fetchLocal(base + "/api/v1/stats")
-		if err != nil {
-			return nil, err
+		if h.stats == nil {
+			return nil, fmt.Errorf("stats resource is unavailable")
 		}
-		return map[string]any{"uri": uri, "mimeType": "application/json", "text": body}, nil
+		return resourceContent(uri, "application/json", h.stats.snapshot(time.Now()))
 	}
 	return nil, fmt.Errorf("unknown resource URI: %s", uri)
+}
+
+func resourceContent(uri, mimeType string, value any) (map[string]any, error) {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"uri": uri, "mimeType": mimeType, "text": string(body)}, nil
 }
 
 // ── Prompts ───────────────────────────────────────────────────────────
@@ -678,46 +683,14 @@ func (h *MCPHandler) getPrompt(c *gin.Context, name string) (any, error) {
 	if name != "setup" {
 		return nil, fmt.Errorf("unknown prompt: %s", name)
 	}
-	text, err := fetchLocal(requestBase(c) + "/api/v1/agent-prompt")
-	if err != nil {
-		return nil, err
-	}
 	return map[string]any{
 		"description": "Depsilo setup instructions",
 		"messages": []map[string]any{{
 			"role": "user",
 			"content": map[string]any{
 				"type": "text",
-				"text": text,
+				"text": NewDiscoverHandler(h.Ecosystems).agentPrompt(requestBase(c)),
 			},
 		}},
 	}, nil
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────
-
-func requestBase(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	return fmt.Sprintf("%s://%s", scheme, c.Request.Host)
-}
-
-var localClient = &http.Client{Timeout: 5 * time.Second}
-
-func fetchLocal(url string) (string, error) {
-	resp, err := localClient.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
 }

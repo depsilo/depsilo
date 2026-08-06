@@ -277,7 +277,7 @@ export interface AuditLog {
   package_name: string
   version: string
   action: string
-  cache_result: 'hit' | 'miss' | 'error'
+  cache_result: 'hit' | 'miss' | 'success' | 'error'
   client_ip: string
   user_agent: string
   upstream_url: string
@@ -293,7 +293,7 @@ export interface AuditLogQuery {
   ecosystem?: string
   package?: string
   ip?: string
-  result?: 'hit' | 'miss' | 'error'
+  result?: 'hit' | 'miss' | 'success' | 'error'
   start?: string
   end?: string
 }

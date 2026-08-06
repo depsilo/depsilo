@@ -283,8 +283,9 @@ Idempotent — re-running updates only the content inside the markers.
 
 Depsilo ships a built-in Model Context Protocol server at `POST /mcp`
 (JSON-RPC 2.0 over Streamable HTTP). MCP clients get structured tool
-calls instead of parsing free-form prompts. Point your client at
-`http://localhost:23333/mcp`. Available tools:
+calls instead of parsing free-form prompts. Create a read-only API token in
+**Admin > Users**, point your client at `http://localhost:23333/mcp`, and set
+`Authorization: Bearer <token>` on the connection. Available tools:
 
 | Tool | Effect |
 | --- | --- |

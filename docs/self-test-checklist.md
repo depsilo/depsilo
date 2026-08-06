@@ -117,6 +117,7 @@ Clean Setup Wizard 配置不会写入 `[[huggingface.upstreams]]` 或
 ```bash
 curl -sf -X POST http://localhost:23333/mcp \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${DEPSILO_READ_TOKEN:?set a readonly API token}" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | jq .
 ```
 

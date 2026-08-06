@@ -276,19 +276,13 @@ func persistCheckedProbe(database *gorm.DB, u *Upstream, result ProbeResult) err
 	next.applyProbe(result)
 
 	err := database.Transaction(func(tx *gorm.DB) error {
-		if u.ID != 0 {
-			updated := tx.Model(&db.UpstreamRecord{}).Where("id = ?", u.ID).Updates(map[string]any{
-				"healthy":         next.healthy,
-				"avg_latency_ms":  next.avgLatency.Milliseconds(),
-				"success_rate":    next.successRate,
-				"last_checked_at": next.lastCheckedAt,
-			})
-			if updated.Error != nil {
-				return updated.Error
-			}
-			if updated.RowsAffected != 1 {
-				return fmt.Errorf("persist upstream %d: expected one row, updated %d", u.ID, updated.RowsAffected)
-			}
+		if err := persistHealthSnapshot(tx, u, HealthSnapshot{
+			Healthy:       next.healthy,
+			AvgLatency:    next.avgLatency,
+			SuccessRate:   next.successRate,
+			LastCheckedAt: next.lastCheckedAt,
+		}); err != nil {
+			return err
 		}
 		return tx.Create(&db.UpstreamLatencyLog{
 			UpstreamID: u.ID,

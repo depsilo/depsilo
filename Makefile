@@ -133,7 +133,7 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-race test-integration test-ui test-compiler-cache
+.PHONY: test test-race test-integration test-ui test-ui-production test-compiler-cache
 
 test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
 	go test -short $(GO_TEST_PKGS)
@@ -146,6 +146,9 @@ test-integration: prepare-go    ## 运行集成测试（启动服务 + mock 上�
 
 test-ui:                        ## 快速浏览器冒烟测试（首次需安装 Playwright Chromium）
 	$(NPM_RUN) test:ui:smoke
+
+test-ui-production: build       ## 用 Go 嵌入的生产前端运行最小浏览器冒烟测试
+	$(NPM_RUN) test:ui:production
 
 test-compiler-cache:              ## 用官方 ccache + sccache 验证已运行的编译缓存
 	@bash scripts/test-compiler-cache.sh

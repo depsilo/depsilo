@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"depsilo/internal/audit"
 	"depsilo/internal/db"
 )
 
@@ -82,19 +83,6 @@ func (m *Manager) Activate(ctx context.Context, userID uint, fromIP string) (*db
 		return nil, ErrTrialAlreadyUsed
 	}
 
-	// Defensive re-check against the DB in case another process raced us.
-	var count int64
-	if err := m.database.WithContext(ctx).Model(&db.TrialRecord{}).Count(&count).Error; err != nil {
-		return nil, err
-	}
-	if count > 0 {
-		var rec db.TrialRecord
-		if err := m.database.WithContext(ctx).Order("id ASC").First(&rec).Error; err == nil {
-			m.record = &rec
-		}
-		return nil, ErrTrialAlreadyUsed
-	}
-
 	now := time.Now().UTC()
 	rec := &db.TrialRecord{
 		ActivatedAt:   now,
@@ -102,13 +90,39 @@ func (m *Manager) Activate(ctx context.Context, userID uint, fromIP string) (*db
 		ActivatedBy:   userID,
 		ActivatedFrom: fromIP,
 	}
-	if err := m.database.WithContext(ctx).Create(rec).Error; err != nil {
+	var existing db.TrialRecord
+	err := m.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Defensive re-check against durable state in case another manager raced us.
+		var count int64
+		if err := tx.Model(&db.TrialRecord{}).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			if err := tx.Order("id ASC").First(&existing).Error; err != nil {
+				return err
+			}
+			return ErrTrialAlreadyUsed
+		}
+		if err := tx.Create(rec).Error; err != nil {
+			return err
+		}
+		return audit.RecordManagementEvent(ctx, tx, audit.ManagementEvent{
+			ActorID:  userID,
+			Action:   "trial.activate",
+			Target:   "trial",
+			Success:  true,
+			ClientIP: fromIP,
+			Detail:   rec.ExpiresAt.Format(time.RFC3339),
+		})
+	})
+	if errors.Is(err, ErrTrialAlreadyUsed) {
+		m.record = &existing
+		return nil, ErrTrialAlreadyUsed
+	}
+	if err != nil {
 		return nil, err
 	}
 	m.record = rec
-
-	// TODO: write management event audit log (deferred — current AuditLog model
-	// is request-shaped; see plan front matter "Known deviation").
 
 	return rec, nil
 }

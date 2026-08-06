@@ -388,7 +388,8 @@ not use GOPROXY "|direct", which would also bypass Depsilo's 451 enforcement.
 For machine-readable access:
   GET %s/api/v1/discover     - service catalog
   GET %s/api/v1/stats        - cache metrics
-  POST %s/mcp                - MCP server (initialize / tools/call)
+  POST %s/mcp                - MCP server; send Authorization: Bearer with a
+                               read-only API token created in Admin > Users
 `,
 		base, base,
 		base, base, base, base, base, base, base, base, base, base, base, base,

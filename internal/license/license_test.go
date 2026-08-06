@@ -3,6 +3,8 @@ package license_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -57,7 +59,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open in-memory sqlite: %v", err)
 	}
-	if err := d.AutoMigrate(&db.LicenseStorage{}); err != nil {
+	if err := d.AutoMigrate(&db.LicenseStorage{}, &db.AuditLog{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return d
@@ -89,6 +91,36 @@ func TestSetKey_PersistsAndUpdatesState(t *testing.T) {
 	}
 }
 
+func TestSetKey_RecordsSuccessfulManagementAuditWithoutLicenseKey(t *testing.T) {
+	d := newTestDB(t)
+	m := license.NewManager(config.LicenseConfig{}, d)
+	const rawKey = "depsilo-super-secret-key"
+
+	if err := m.SetKey(context.Background(), rawKey, 7); err != nil {
+		t.Fatalf("SetKey: %v", err)
+	}
+
+	var entry db.AuditLog
+	if err := d.Where("action = ?", "license.set").First(&entry).Error; err != nil {
+		t.Fatalf("find license management audit: %v", err)
+	}
+	if entry.Ecosystem != "admin" || entry.PackageName != "license" {
+		t.Fatalf("audit target = %q/%q, want admin/license", entry.Ecosystem, entry.PackageName)
+	}
+	if entry.UserAgent != "operator:7" {
+		t.Fatalf("audit actor = %q, want operator:7", entry.UserAgent)
+	}
+	if entry.CacheResult != "success" || entry.StatusCode != 200 {
+		t.Fatalf("audit result = %q status=%d, want success/200", entry.CacheResult, entry.StatusCode)
+	}
+	if entry.CreatedAt.IsZero() {
+		t.Fatal("audit CreatedAt is zero")
+	}
+	if strings.Contains(fmt.Sprintf("%+v", entry), rawKey) || strings.Contains(fmt.Sprintf("%+v", entry), "super-secret") {
+		t.Fatalf("audit entry leaked license key material: %+v", entry)
+	}
+}
+
 func TestClearKey_RemovesPersistenceAndResetsStatus(t *testing.T) {
 	d := newTestDB(t)
 	if err := d.Create(&db.LicenseStorage{ID: 1, Key: "depsilo-stale", UpdatedBy: 1}).Error; err != nil {
@@ -115,6 +147,33 @@ func TestClearKey_RemovesPersistenceAndResetsStatus(t *testing.T) {
 	}
 	if m.IsPro() {
 		t.Error("IsPro() = true after ClearKey, want false")
+	}
+}
+
+func TestClearKey_RecordsSuccessfulManagementAuditWithoutPriorLicenseKey(t *testing.T) {
+	d := newTestDB(t)
+	const rawKey = "depsilo-prior-secret-key"
+	if err := d.Create(&db.LicenseStorage{ID: 1, Key: rawKey, UpdatedBy: 1}).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	m := license.NewManager(config.LicenseConfig{}, d)
+
+	if err := m.ClearKey(context.Background(), 9); err != nil {
+		t.Fatalf("ClearKey: %v", err)
+	}
+
+	var entry db.AuditLog
+	if err := d.Where("action = ?", "license.clear").First(&entry).Error; err != nil {
+		t.Fatalf("find license management audit: %v", err)
+	}
+	if entry.Ecosystem != "admin" || entry.PackageName != "license" || entry.UserAgent != "operator:9" {
+		t.Fatalf("audit identity = ecosystem:%q target:%q actor:%q", entry.Ecosystem, entry.PackageName, entry.UserAgent)
+	}
+	if entry.CacheResult != "success" || entry.StatusCode != 200 {
+		t.Fatalf("audit result = %q status=%d, want success/200", entry.CacheResult, entry.StatusCode)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", entry), rawKey) || strings.Contains(fmt.Sprintf("%+v", entry), "prior-secret") {
+		t.Fatalf("audit entry leaked prior license key material: %+v", entry)
 	}
 }
 

@@ -118,10 +118,16 @@ type packageScan struct {
 }
 
 const (
-	hitUpdateQueueSize = 4096
-	scanQueueSize      = 256
-	scanWorkerCount    = 2
-	refreshWorkerLimit = 16
+	hitUpdateQueueSize         = 4096
+	hitUpdatePendingLimit      = 1024
+	hitUpdateFlushBatchSize    = 256
+	hitUpdateFlushInterval     = 50 * time.Millisecond
+	hitUpdateRetryInitial      = 100 * time.Millisecond
+	hitUpdateRetryMax          = 5 * time.Second
+	hitUpdateCloseFlushTimeout = 5 * time.Second
+	scanQueueSize              = 256
+	scanWorkerCount            = 2
+	refreshWorkerLimit         = 16
 )
 
 // inflightFetch tracks a miss-path fetch that is currently streaming. Followers
@@ -278,13 +284,20 @@ type mergedHitCount struct {
 	lastAccessed time.Time
 }
 
-func mergeHitCount(pending map[uint]mergedHitCount, update hitCountUpdate) {
-	merged := pending[update.entryID]
+// mergeHitCount keeps the advisory hit-count backlog bounded while preserving
+// updates for IDs already admitted. A sustained database write failure must
+// not turn otherwise healthy cache-hit traffic into unbounded process memory.
+func mergeHitCount(pending map[uint]mergedHitCount, update hitCountUpdate) bool {
+	merged, exists := pending[update.entryID]
+	if !exists && len(pending) >= hitUpdatePendingLimit {
+		return false
+	}
 	merged.count++
 	if update.lastAccessed.After(merged.lastAccessed) {
 		merged.lastAccessed = update.lastAccessed
 	}
 	pending[update.entryID] = merged
+	return true
 }
 
 func (m *Manager) flushHitCounts(ctx context.Context, pending map[uint]mergedHitCount) error {
@@ -312,25 +325,59 @@ func (m *Manager) flushHitCounts(ctx context.Context, pending map[uint]mergedHit
 }
 
 func (m *Manager) runHitCountWorker(ctx context.Context) {
-	const flushInterval = 50 * time.Millisecond
-	ticker := time.NewTicker(flushInterval)
+	ticker := time.NewTicker(hitUpdateFlushInterval)
 	defer ticker.Stop()
 	pending := make(map[uint]mergedHitCount)
+	retryDelay := hitUpdateRetryInitial
+	var retryAt time.Time
+	var dropped uint64
+	merge := func(update hitCountUpdate) {
+		if mergeHitCount(pending, update) {
+			return
+		}
+		if dropped == 0 {
+			zap.L().Debug("cache hit-count backlog full; dropping new advisory IDs",
+				zap.Int("pending_ids", len(pending)),
+				zap.Int("pending_limit", hitUpdatePendingLimit),
+			)
+		}
+		dropped++
+	}
 	flush := func(flushCtx context.Context) {
 		if err := m.flushHitCounts(flushCtx, pending); err != nil {
 			zap.L().Debug("cache hit-count batch update failed", zap.Error(err))
+			retryAt = time.Now().Add(retryDelay)
+			if retryDelay >= hitUpdateRetryMax/2 {
+				retryDelay = hitUpdateRetryMax
+			} else {
+				retryDelay *= 2
+			}
+			return
+		}
+		retryAt = time.Time{}
+		retryDelay = hitUpdateRetryInitial
+		if dropped > 0 {
+			zap.L().Debug("cache hit-count backlog recovered after dropping advisory IDs",
+				zap.Uint64("dropped_updates", dropped),
+			)
+			dropped = 0
 		}
 	}
 
 	for {
 		select {
 		case update := <-m.hitUpdates:
-			mergeHitCount(pending, update)
-			if len(pending) >= 256 {
+			merge(update)
+			// Once a flush fails, only the timed retry path below may touch the
+			// database. Incoming hits continue to coalesce without turning every
+			// event into another failed transaction.
+			if retryAt.IsZero() && len(pending) >= hitUpdateFlushBatchSize {
 				flush(ctx)
 			}
 		case <-ticker.C:
-			flush(ctx)
+			if retryAt.IsZero() || !time.Now().Before(retryAt) {
+				flush(ctx)
+			}
 		case <-ctx.Done():
 			// recordHit and Close serialize on lifecycleMu. Once cancellation is
 			// observed, no producer can add another accepted event, so draining
@@ -338,11 +385,21 @@ func (m *Manager) runHitCountWorker(ctx context.Context) {
 			for {
 				select {
 				case update := <-m.hitUpdates:
-					mergeHitCount(pending, update)
+					merge(update)
 				default:
-					flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-					flush(flushCtx)
+					flushCtx, cancel := context.WithTimeout(
+						context.WithoutCancel(ctx),
+						hitUpdateCloseFlushTimeout,
+					)
+					if err := m.flushHitCounts(flushCtx, pending); err != nil {
+						zap.L().Debug("cache hit-count final batch update failed", zap.Error(err))
+					}
 					cancel()
+					if dropped > 0 {
+						zap.L().Debug("cache hit-count shutdown dropped advisory updates",
+							zap.Uint64("dropped_updates", dropped),
+						)
+					}
 					return
 				}
 			}

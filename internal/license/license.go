@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/asyncruntime"
+	"depsilo/internal/audit"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 )
@@ -219,12 +220,22 @@ func (m *Manager) SetKey(ctx context.Context, newKey string, userID uint) error 
 
 	m.mu.Lock()
 	if m.database != nil {
-		if err := m.database.WithContext(ctx).Save(&db.LicenseStorage{
-			ID:        licenseStorageSingletonID,
-			Key:       newKey,
-			UpdatedBy: userID,
-			UpdatedAt: time.Now().UTC(),
-		}).Error; err != nil {
+		if err := m.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Save(&db.LicenseStorage{
+				ID:        licenseStorageSingletonID,
+				Key:       newKey,
+				UpdatedBy: userID,
+				UpdatedAt: time.Now().UTC(),
+			}).Error; err != nil {
+				return err
+			}
+			return audit.RecordManagementEvent(ctx, tx, audit.ManagementEvent{
+				ActorID: userID,
+				Action:  "license.set",
+				Target:  "license",
+				Success: true,
+			})
+		}); err != nil {
 			m.mu.Unlock()
 			return fmt.Errorf("persist license key: %w", err)
 		}
@@ -236,9 +247,6 @@ func (m *Manager) SetKey(ctx context.Context, newKey string, userID uint) error 
 		m.status.KeyMasked = ""
 	}
 	m.mu.Unlock()
-
-	// TODO: write management event audit log (deferred — current AuditLog
-	// model is request-shaped; see plan front matter "Known deviation").
 
 	if newKey == "" {
 		return nil
@@ -256,7 +264,17 @@ func (m *Manager) ClearKey(ctx context.Context, userID uint) error {
 	defer m.mu.Unlock()
 
 	if m.database != nil {
-		if err := m.database.WithContext(ctx).Where("id = ?", licenseStorageSingletonID).Delete(&db.LicenseStorage{}).Error; err != nil {
+		if err := m.database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("id = ?", licenseStorageSingletonID).Delete(&db.LicenseStorage{}).Error; err != nil {
+				return err
+			}
+			return audit.RecordManagementEvent(ctx, tx, audit.ManagementEvent{
+				ActorID: userID,
+				Action:  "license.clear",
+				Target:  "license",
+				Success: true,
+			})
+		}); err != nil {
 			return fmt.Errorf("delete license key: %w", err)
 		}
 	}
@@ -267,9 +285,6 @@ func (m *Manager) ClearKey(ctx context.Context, userID uint) error {
 		LastChecked: time.Now().UTC(),
 	}
 
-	// TODO: write management event audit log (deferred — current AuditLog
-	// model is request-shaped; see plan front matter "Known deviation").
-	_ = userID
 	return nil
 }
 

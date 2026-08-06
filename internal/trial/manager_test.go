@@ -18,7 +18,7 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open in-memory sqlite: %v", err)
 	}
-	if err := d.AutoMigrate(&db.TrialRecord{}); err != nil {
+	if err := d.AutoMigrate(&db.TrialRecord{}, &db.AuditLog{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	return d
@@ -119,6 +119,36 @@ func TestActivate_FirstCallSucceeds(t *testing.T) {
 	}
 	if !m.IsActive() {
 		t.Error("IsActive() = false after Activate, want true")
+	}
+}
+
+func TestActivate_RecordsSuccessfulManagementAudit(t *testing.T) {
+	d := newTestDB(t)
+	m, err := trial.NewManager(d)
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	rec, err := m.Activate(context.Background(), 42, "127.0.0.1")
+	if err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	var entry db.AuditLog
+	if err := d.Where("action = ?", "trial.activate").First(&entry).Error; err != nil {
+		t.Fatalf("find trial management audit: %v", err)
+	}
+	if entry.Ecosystem != "admin" || entry.PackageName != "trial" {
+		t.Fatalf("audit target = %q/%q, want admin/trial", entry.Ecosystem, entry.PackageName)
+	}
+	if entry.UserAgent != "operator:42" || entry.ClientIP != "127.0.0.1" {
+		t.Fatalf("audit actor = %q ip=%q", entry.UserAgent, entry.ClientIP)
+	}
+	if entry.CacheResult != "success" || entry.StatusCode != 200 {
+		t.Fatalf("audit result = %q status=%d, want success/200", entry.CacheResult, entry.StatusCode)
+	}
+	if entry.Version != rec.ExpiresAt.Format(time.RFC3339) {
+		t.Fatalf("audit detail = %q, want expiry %q", entry.Version, rec.ExpiresAt.Format(time.RFC3339))
 	}
 }
 

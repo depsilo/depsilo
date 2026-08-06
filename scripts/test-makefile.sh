@@ -19,7 +19,7 @@ assert_contains() {
 make_db=$(make -C "$ROOT" -pn help)
 required_targets=(
     setup setup-ui version build run run-pro dev stop logs
-    test test-race test-integration test-ui test-e2e test-compiler-cache test-clean
+    test test-race test-integration test-ui test-ui-production test-e2e test-compiler-cache test-clean
     lint lint-i18n check verify security clean clean-all help verify-scripts
     tray app-macos install-linux autostart-linux
 )
@@ -120,6 +120,13 @@ assert_contains "$setup_dry_run" 'npm --prefix web ci'
 
 setup_ui_dry_run=$(make -n -C "$ROOT" setup-ui)
 assert_contains "$setup_ui_dry_run" 'npx --no-install playwright install chromium'
+
+production_ui_dry_run=$(make -n -C "$ROOT" test-ui-production)
+assert_contains "$production_ui_dry_run" 'go build'
+assert_contains "$production_ui_dry_run" 'npm --prefix web run test:ui:production'
+
+dockerfile_healthcheck=$(grep -A1 -E '^HEALTHCHECK ' "$ROOT/Dockerfile" || true)
+assert_contains "$dockerfile_healthcheck" 'http://127.0.0.1:${DEPSILO_SERVER_PORT:-23333}/ready'
 
 outside_version=$(cd "$TMP" && make -s -f "$ROOT/Makefile" version | sed -n '1p')
 [[ "$outside_version" == 'version=dev' ]] \

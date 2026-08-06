@@ -8,22 +8,18 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
-	"depsilo/internal/entitlement"
 )
 
 // Logger batches and writes audit log entries asynchronously.
-// Entries are only recorded when a Pro entitlement is active.
 type Logger struct {
 	database *gorm.DB
-	checker  *entitlement.Checker
 	queue    chan db.AuditLog
 }
 
 // NewLogger creates a new audit Logger.
-func NewLogger(database *gorm.DB, checker *entitlement.Checker) *Logger {
+func NewLogger(database *gorm.DB) *Logger {
 	return &Logger{
 		database: database,
-		checker:  checker,
 		queue:    make(chan db.AuditLog, 1000),
 	}
 }
@@ -79,10 +75,7 @@ func (l *Logger) flush(batch []db.AuditLog) {
 // Log enqueues an audit log entry. As of the 2026-06-28 pricing reset
 // audit logging is an open-source primitive — a self-hosted control
 // point needs an audit trail from day one — so the previous
-// `if !IsPro()` gate is gone. The checker field is retained for now
-// to keep the constructor signature stable; future Pro-only audit
-// extensions (e.g. long-retention storage) can re-introduce a
-// granular check at that layer.
+// `if !IsPro()` gate and its checker dependency are gone.
 func (l *Logger) Log(entry db.AuditLog) {
 	select {
 	case l.queue <- entry:

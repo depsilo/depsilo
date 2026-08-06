@@ -30,8 +30,9 @@ type RequestOptions struct {
 
 // Request performs one raw HTTP exchange against this upstream's configured
 // origin. It returns all HTTP statuses unchanged, never follows redirects, and
-// records the exchange in the origin's health statistics. The caller owns and
-// must close the returned response body.
+// records the exchange in the origin's health statistics. Success is recorded
+// only after the body reaches a complete EOF; an early Close or read error is a
+// failure. The caller owns and must close the returned response body.
 func (u *Upstream) Request(ctx context.Context, path string, opts RequestOptions) (*http.Response, error) {
 	reqURL, err := originRequestURL(u.URL, path)
 	if err != nil {
@@ -119,22 +120,21 @@ func (u *Upstream) request(
 	if err != nil {
 		return nil, fmt.Errorf("request %s: %w", safeURLOrigin(reqURL), err)
 	}
-	if recovery {
-		defer u.finishPassiveRecovery()
-	}
 
 	start := time.Now()
 	resp, err := client.Do(req)
 	latency := time.Since(start)
 	if err != nil {
-		if reportHealth {
-			u.Report(latency, false)
-		}
+		u.finishExchange(latency, reportHealth, recovery, false)
 		return nil, fmt.Errorf("request %s: %w", safeURLOrigin(reqURL), redactedTransportError{cause: err})
 	}
-	if reportHealth {
-		u.Report(latency, resp.StatusCode < http.StatusInternalServerError)
-	}
+	u.observeResponseBody(
+		resp,
+		latency,
+		reportHealth,
+		recovery,
+		resp.StatusCode < http.StatusInternalServerError,
+	)
 	return resp, nil
 }
 
