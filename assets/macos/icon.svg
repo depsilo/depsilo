@@ -1,29 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <!--
-    Depsilo macOS app icon (1024x1024).
-    - Rounded square ~22% radius (macOS Big Sur convention).
-    - Teal gradient background, matching the in-app brand (oklch hue 200).
-    - Three horizontal "cache strip" bars in white with descending opacity:
-      visualises the layered cache.
-    - Lightning bolt clipped over the bars: cache layers + speed.
-  -->
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0c6e76"/>
-      <stop offset="100%" stop-color="#1aa3a6"/>
-    </linearGradient>
-    <clipPath id="bolt">
-      <polygon points="460.8,80 950,80 540,540 820,540 200,944 460.8,580 200,580"/>
-    </clipPath>
-  </defs>
-
-  <rect width="1024" height="1024" rx="225" fill="url(#bg)"/>
-
-  <rect x="96" y="296" width="832" height="92" fill="#ffffff" opacity="0.95"/>
-  <rect x="96" y="424" width="832" height="92" fill="#ffffff" opacity="0.70"/>
-  <rect x="96" y="552" width="832" height="92" fill="#ffffff" opacity="0.45"/>
-
-  <g clip-path="url(#bolt)">
-    <rect width="1024" height="1024" fill="#ffffff"/>
+  <title>Depsilo</title>
+  <rect width="1024" height="1024" rx="225" fill="#0A8654"/>
+  <g transform="scale(8)" fill="none" stroke="#FFFFFF" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 26H38C51 26 60 35 60 48V60"/>
+    <path d="M12 60H114"/>
+    <path d="M30 102H42C52 102 58 94 58 82V76C58 66 64 60 74 60"/>
+    <path d="M94 60V88H74"/>
   </g>
 </svg>

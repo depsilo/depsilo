@@ -92,7 +92,12 @@ function SidebarContent({
           className="stripe-focus-ring flex min-w-0 items-center gap-2.5 rounded-[6px] no-underline transition-opacity duration-150 hover:opacity-75"
         >
           <Logo size={26} />
-          <span className="text-[15px] font-[700]" style={{ color: 'var(--text)' }}>depsilo</span>
+          <span
+            className="text-[15px] font-[700]"
+            style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
+          >
+            Depsilo
+          </span>
         </Link>
         <span
           className="ml-auto inline-flex min-w-16 items-center justify-center rounded-[4px] border px-1.5 py-0.5 font-mono text-[11px] tabular-nums"

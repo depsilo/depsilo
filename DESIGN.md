@@ -1,6 +1,6 @@
 # Depsilo Design System
 
-> Status: current implementation reference, updated 2026-07-29. The source of
+> Status: current implementation reference, updated 2026-08-05. The source of
 > truth is `web/src/index.css`, `web/src/components/`, `web/src/portal/`, and
 > `web/src/admin/`. When this document and code differ, update this document in
 > the same change.
@@ -28,11 +28,40 @@ The active visual system is **Instrument**:
 - Light mode uses a pure-white page canvas without ambient grain. Dark mode
   retains one subtle global grain layer mounted by `App`.
 - Surfaces are neutral gray/green-black, with restrained borders and shadows.
-- Gradients are limited green sweeps retained for a few brand accents. Purple
-  Aurora backgrounds are not part of the current design.
+- Restrained green sweeps may appear on rare decorative product surfaces, but
+  never inside the Logo. Purple Aurora backgrounds are not part of the current
+  design.
 
 Do not use the old purple/OKLCH examples, `/status` route, shadcn components,
 `CardV2`, or `MetricCardV2`. They belonged to an earlier design iteration.
+
+## Brand Mark
+
+The canonical mark is **Pocket Switch / 旁仓岔**. Three staggered request tracks
+merge into one dominant horizontal route. A short blind siding below that route
+is the local cache and retained-artifact pocket. The open topology deliberately
+avoids a letter, enclosing container, package cube, shield, lightning bolt, and
+other category-default silhouettes.
+
+- `docs/brand/` is the master source. Web, favicon, desktop, and documentation
+  assets must derive from it rather than forming separate identities.
+- Use flat `#0A8654` for the mark on light backgrounds and `#3DDC91` on dark
+  backgrounds. The paired wordmark follows the foreground (`#14181A` light,
+  `#E9ECEE` dark). Do not add gradients, lightning shapes, shadows, glows, or
+  an attached tagline.
+- Application-tile assets are the contained exception: use a `#0A8654` field
+  with the mark reversed in white. The favicon uses a theme-aware 16px optical
+  master that keeps the main route and blind pocket while omitting one inlet.
+- The formal wordmark is always **Depsilo**. “依仓” may accompany it as
+  localized copy, but is not a replacement wordmark.
+- Preserve the mark's aspect ratio and at least one base-stroke of clear space.
+  Do not equalize the three inlet lengths, close the route into a loop, or turn
+  the blind pocket into an arrow: that asymmetry is part of the identity.
+  The full mark uses a 13-unit round-cap, round-join stroke on its 128-unit
+  grid; the 16px optical master uses 16 units. Verify every revision at 16,
+  24, 28, and 32px before judging it only at presentation size.
+- Use the matching light/dark asset for its background. Theme-aware documents
+  should provide both and fall back to the light-background asset.
 
 ## Token Source
 

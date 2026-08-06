@@ -1,18 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <defs>
-    <clipPath id="bolt">
-      <polygon points="57.6,0 128,0 70.4,57.6 108.8,57.6 19.2,128 57.6,70.4 19.2,70.4"/>
-    </clipPath>
-  </defs>
-  <!-- Background -->
-  <rect width="128" height="128" rx="24" fill="#042C53"/>
-  <rect width="128" height="128" rx="24" fill="none" stroke="#ffffff" stroke-width="1" stroke-opacity="0.1"/>
-  <!-- Color bars -->
-  <rect x="12" y="37" width="104" height="14" rx="0" fill="#1D9E75"/>
-  <rect x="12" y="55" width="104" height="14" rx="0" fill="#378ADD" opacity="0.85"/>
-  <rect x="12" y="73" width="104" height="14" rx="0" fill="#85B7EB" opacity="0.60"/>
-  <!-- Lightning bolt (white) -->
-  <g clip-path="url(#bolt)">
-    <rect x="24" y="14" width="80" height="100" fill="#ffffff"/>
+  <title>Depsilo Pocket Switch mark</title>
+  <g fill="none" stroke="#3DDC91" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 26H38C51 26 60 35 60 48V60"/>
+    <path d="M12 60H114"/>
+    <path d="M30 102H42C52 102 58 94 58 82V76C58 66 64 60 74 60"/>
+    <path d="M94 60V88H74"/>
   </g>
 </svg>

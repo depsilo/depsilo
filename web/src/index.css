@@ -118,6 +118,7 @@
   --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --logo-mark: #0A8654;
 
   /* Surfaces — old names */
   --bg-page:   #FFFFFF;
@@ -251,6 +252,7 @@
 /* ── Dark mode — Instrument default ────────────────────── */
 html.dark,
 [data-theme="dark"] {
+  --logo-mark: #3DDC91;
   --bg-page:   #0B0D0F;
   --bg-panel:  #14181C;
   --bg-card:   #14181C;
@@ -356,6 +358,7 @@ html.dark,
    the two paths in lockstep. */
 @media (prefers-color-scheme: dark) {
   html:not(.light):not([data-theme="light"]) {
+    --logo-mark: #3DDC91;
     --bg-page:   #0B0D0F;
     --bg-panel:  #14181C;
     --bg-card:   #14181C;
@@ -706,15 +709,11 @@ html.dark .page-wash::before,
   border-radius: var(--r-shell);
 }
 
-/* ── Logo theme switching ── */
-.logo-icon-dark { display: none; }
-html.dark .logo-icon-dark,
-[data-theme="dark"] .logo-icon-dark { display: block; }
-html.dark .logo-icon-light,
-[data-theme="dark"] .logo-icon-light { display: none; }
-@media (prefers-color-scheme: dark) {
-  html:not(.light):not([data-theme="light"]) .logo-icon-dark { display: block; }
-  html:not(.light):not([data-theme="light"]) .logo-icon-light { display: none; }
+/* ── Depsilo brand mark ── */
+.depsilo-logo-mark {
+  display: block;
+  flex: none;
+  color: var(--logo-mark);
 }
 
 .divider-h {

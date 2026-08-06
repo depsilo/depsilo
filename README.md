@@ -1,6 +1,10 @@
 <div align="center">
 
-<img src="docs/brand/logo-stacked-dark.svg" alt="Depsilo" width="200">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-stacked-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/brand/logo-stacked-light.svg">
+  <img src="docs/brand/logo-stacked-light.svg" alt="Depsilo" width="200">
+</picture>
 
 **Supply-chain enforcement layer for your package installs.**
 

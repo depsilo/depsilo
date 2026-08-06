@@ -6,9 +6,13 @@
 **[English](../README.md) | [中文](README_zh.md)**
 
 <p align="center">
-  <img src="brand/logo-stacked-dark.svg" alt="Depsilo" height="120">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo-stacked-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="brand/logo-stacked-light.svg">
+    <img src="brand/logo-stacked-light.svg" alt="Depsilo" height="120">
+  </picture>
   <br>
-  <strong>依仓 · Depsilo</strong>
+  <strong>依仓</strong>
   <br>
   <em>依赖安装链路上的供应链策略执行层</em>
 </p>

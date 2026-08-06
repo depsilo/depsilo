@@ -151,12 +151,13 @@ export default function LoginV2() {
               <Logo size={28} />
               <span
                 style={{
+                  fontFamily: 'var(--font-display)',
                   fontSize: 17,
                   fontWeight: 600,
                   color: 'var(--text)',
                 }}
               >
-                depsilo
+                Depsilo
               </span>
             </div>
             <h1

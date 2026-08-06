@@ -107,8 +107,13 @@ be defined.
 - Product behavior and integration guidance must be transparent, reviewable,
   and honest about what is changed, blocked, cached, or not yet implemented.
 - Depsilo does not phone home or collect anonymous telemetry.
-- Existing light/dark `Lightning Stack` logo assets under `docs/brand/` are the
-  canonical brand assets unless the brand is deliberately revised.
+- The canonical brand mark is **Pocket Switch**: three staggered request tracks
+  merge into one dominant route, while a short blind siding represents the
+  local cache and retained-artifact pocket. The masters under `docs/brand/` are
+  authoritative for every product surface.
+- Use the formal wordmark **Depsilo**. The mark is flat `#0A8654` on light
+  backgrounds and `#3DDC91` on dark backgrounds; the wordmark uses the matching
+  neutral foreground. The mark has no lightning, gradient, or attached tagline.
 - Avoid claims that imply enterprise scale, certification, customer adoption,
   or capabilities that the project cannot currently demonstrate.
 

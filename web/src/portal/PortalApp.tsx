@@ -218,6 +218,7 @@ export default function PortalAppV2() {
             <span
               className="portal-brand-name"
               style={{
+                fontFamily: 'var(--font-display)',
                 fontSize: 15,
                 fontWeight: 700,
                 letterSpacing: '-0.025em',

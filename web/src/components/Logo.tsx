@@ -1,15 +1,29 @@
-import iconLight from '@/assets/icon-light.svg'
-import iconDark from '@/assets/icon-dark.svg'
-
 interface Props {
   size?: number
 }
 
 export default function Logo({ size = 28 }: Props) {
   return (
-    <>
-      <img src={iconDark} width={size} height={size} alt="depsilo" className="logo-icon-light" />
-      <img src={iconLight} width={size} height={size} alt="" aria-hidden className="logo-icon-dark" />
-    </>
+    <svg
+      aria-hidden="true"
+      className="depsilo-logo-mark"
+      focusable="false"
+      height={size}
+      viewBox="0 0 128 128"
+      width={size}
+    >
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="13"
+      >
+        <path d="M16 26H38C51 26 60 35 60 48V60" />
+        <path d="M12 60H114" />
+        <path d="M30 102H42C52 102 58 94 58 82V76C58 66 64 60 74 60" />
+        <path d="M94 60V88H74" />
+      </g>
+    </svg>
   )
 }
