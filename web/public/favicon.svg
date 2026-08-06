@@ -1,12 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
   <title>Depsilo</title>
   <style>
-    .mark { stroke: #0A8654; }
-    @media (prefers-color-scheme: dark) { .mark { stroke: #3DDC91; } }
+    .mark { fill: #0A8654; }
+    @media (prefers-color-scheme: dark) { .mark { fill: #3DDC91; } }
   </style>
-  <g class="mark" transform="scale(.375)" fill="none" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M16 26H38C51 26 60 35 60 48V60"/>
-    <path d="M12 60H114"/>
-    <path d="M94 60V88H74"/>
+  <g class="mark" transform="scale(.375)">
+    <path d="M26 16H88V40H26A12 12 0 0 1 26 16Z"/>
+    <path d="M42 52H88V76H42A12 12 0 0 1 42 52Z"/>
+    <path d="M58 88H88V112H58A12 12 0 0 1 58 88Z"/>
+    <path d="M80 16H90C103.3 16 114 26.7 114 40V88C114 101.3 103.3 112 90 112H80Z"/>
   </g>
 </svg>

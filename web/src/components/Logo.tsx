@@ -12,17 +12,11 @@ export default function Logo({ size = 28 }: Props) {
       viewBox="0 0 128 128"
       width={size}
     >
-      <g
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="13"
-      >
-        <path d="M16 26H38C51 26 60 35 60 48V60" />
-        <path d="M12 60H114" />
-        <path d="M30 102H42C52 102 58 94 58 82V76C58 66 64 60 74 60" />
-        <path d="M94 60V88H74" />
+      <g fill="currentColor">
+        <path d="M25 18H88V40H25A11 11 0 0 1 25 18Z" />
+        <path d="M39 53H88V75H39A11 11 0 0 1 39 53Z" />
+        <path d="M53 88H88V110H53A11 11 0 0 1 53 88Z" />
+        <path d="M82 18H91C102.6 18 112 27.4 112 39V89C112 100.6 102.6 110 91 110H82Z" />
       </g>
     </svg>
   )

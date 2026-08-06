@@ -37,11 +37,12 @@ Do not use the old purple/OKLCH examples, `/status` route, shadcn components,
 
 ## Brand Mark
 
-The canonical mark is **Pocket Switch / 旁仓岔**. Three staggered request tracks
-merge into one dominant horizontal route. A short blind siding below that route
-is the local cache and retained-artifact pocket. The open topology deliberately
-avoids a letter, enclosing container, package cube, shield, lightning bolt, and
-other category-default silhouettes.
+The canonical mark is **Dependency Shelf / 层仓栈**. Three dependency layers
+shorten and step inward as they feed a continuous curved repository spine. The
+layers represent direct and transitive dependencies converging on one indexed,
+cached artifact store—the product name made visible as “dependencies in a
+silo.” The silhouette deliberately avoids a letter, database cylinder, package
+cube, network node, shield, lightning bolt, and other category-default motifs.
 
 - `docs/brand/` is the master source. Web, favicon, desktop, and documentation
   assets must derive from it rather than forming separate identities.
@@ -51,15 +52,16 @@ other category-default silhouettes.
   an attached tagline.
 - Application-tile assets are the contained exception: use a `#0A8654` field
   with the mark reversed in white. The favicon uses a theme-aware 16px optical
-  master that keeps the main route and blind pocket while omitting one inlet.
+  master that keeps all three layers while thickening and grid-aligning them.
 - The formal wordmark is always **Depsilo**. “依仓” may accompany it as
   localized copy, but is not a replacement wordmark.
-- Preserve the mark's aspect ratio and at least one base-stroke of clear space.
-  Do not equalize the three inlet lengths, close the route into a loop, or turn
-  the blind pocket into an arrow: that asymmetry is part of the identity.
-  The full mark uses a 13-unit round-cap, round-join stroke on its 128-unit
-  grid; the 16px optical master uses 16 units. Verify every revision at 16,
-  24, 28, and 32px before judging it only at presentation size.
+- Preserve the mark's aspect ratio and at least one layer-height of clear space.
+  Keep the three layers long-to-short, their left edges staggered, and the right
+  repository spine continuous with a curved outer wall. The full mark is a
+  filled construction on a 128-unit grid with 22-unit layers and 11-unit round
+  ends; it does not use a stroke. The 16px optical master uses 24-unit layers.
+  Verify every revision at 16, 24, 28, and 32px before judging it only at
+  presentation size.
 - Use the matching light/dark asset for its background. Theme-aware documents
   should provide both and fall back to the light-background asset.
 
