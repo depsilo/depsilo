@@ -25,7 +25,8 @@ async function expectSettingsPageChrome(page: Page) {
     '查看配置来源与实际生效值，修改可写的运行设置并管理 Webhook 通知。',
   )
   await expect(page.locator('h1:visible')).toHaveCount(1)
-  await expect(page.locator('[data-admin-topbar] h1')).toHaveText('系统设置')
+  await expect(adminPage.locator('[data-admin-page-title]')).toHaveText('系统设置')
+  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
 }
 
 test('keeps stable Admin page chrome while settings load and after success', async ({ page }) => {

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-// Bare KPI primitive — centered label + tabular value (+ optional delta).
+// Bare KPI primitive — label + tabular value (+ optional delta).
 // Use it inline on the page (no Card / Box wrapper); group with a parent grid.
 
 export type MetricChangeIntent = 'neutral' | 'higher-is-better' | 'lower-is-better'
@@ -17,6 +17,8 @@ interface MetricProps {
   valueTone?: 'default' | 'ok'
   /** Override default 40 (top-row KPI) — pass 28 for "secondary" metric rows. */
   size?: CSSProperties['fontSize']
+  /** Operational summaries scan left-to-right; legacy report grids remain centered. */
+  align?: 'start' | 'center'
 }
 
 export default function Metric({
@@ -26,6 +28,7 @@ export default function Metric({
   changeIntent = 'neutral',
   valueTone = 'default',
   size = 40,
+  align = 'center',
 }: MetricProps) {
   const changeTone = typeof change !== 'number' || change === 0 || changeIntent === 'neutral'
     ? 'neutral'
@@ -34,7 +37,10 @@ export default function Metric({
       : 'negative'
 
   return (
-    <div className="flex flex-col items-center text-center" data-metric-label={label}>
+    <div
+      className={`flex flex-col ${align === 'start' ? 'items-start text-left' : 'items-center text-center'}`}
+      data-metric-label={label}
+    >
       <span
         className="text-[11px] font-[600]"
         style={{ color: 'var(--text-subtle)' }}

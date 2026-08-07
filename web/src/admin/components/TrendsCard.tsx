@@ -19,7 +19,8 @@ import {
 } from 'recharts'
 import type { TooltipContentProps, TooltipValueType } from 'recharts'
 
-import EmptyState from '@/components/EmptyState'
+import ButtonV2 from '@/components/Button'
+import Icon from '@/components/Icon'
 import SectionHeader from '@/components/SectionHeader'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { formatBytes } from '@/lib/utils'
@@ -107,6 +108,8 @@ interface Props {
   raw: RawTrendPoint[]
   range: TrendsRange
   dataRange: TrendsRange
+  isStale?: boolean
+  onRetry?: () => void
   onRangeChange: (r: TrendsRange) => void
 }
 
@@ -134,8 +137,8 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
   const formattedLabel = typeof label === 'number' ? fmtTooltipTime(label, dataRange) : label
   return (
     <div
-      className="rounded-[4px] px-3 py-2 text-[12px]"
-      style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+      className="rounded-[6px] px-3 py-2 text-[12px]"
+      style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-pop)' }}
     >
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{formattedLabel}</p>
       {payload.map((entry) => {
@@ -166,7 +169,14 @@ const axisProps = {
   tickLine: false as const,
 }
 
-export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Props) {
+export default function TrendsCard({
+  raw,
+  range,
+  dataRange,
+  isStale = false,
+  onRetry,
+  onRangeChange,
+}: Props) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<TrendsTab>('requests')
   const isMobile = useMediaQuery('(max-width: 640px)')
@@ -191,96 +201,107 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
   })
 
   return (
-    <section>
-      <SectionHeader
-        title={t('dashboard.hitMissTrend')}
-        action={
-          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-3">
-            {/* Tabs */}
-            <div
-              className="grid grid-cols-4 gap-0.5 rounded-[7px] border-[0.5px] border-[var(--border)] bg-[var(--bg-soft)] p-1 sm:flex"
-              role="group"
-              aria-label={t('dashboard.trendMetricGroup')}
-            >
-              {TABS.map(tb => {
-                const active = tab === tb.value
-                return (
-                  <button
-                    key={tb.value}
-                    type="button"
-                    onClick={() => setTab(tb.value)}
-                    aria-pressed={active}
-                    className="stripe-focus-ring min-h-[40px] min-w-0 whitespace-nowrap rounded-[5px] px-2 text-[11px] font-[500] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] cursor-pointer sm:px-2.5"
-                    style={{
-                      background: active ? 'var(--bg-card)' : 'transparent',
-                      color: active ? 'var(--text)' : 'var(--text-soft)',
-                      border: active ? '0.5px solid var(--border-strong)' : '0.5px solid transparent',
-                    }}
-                  >
-                    {t(`dashboard.${tb.key}`)}
-                  </button>
-                )
-              })}
+    <section className="admin-primary-panel min-w-0 overflow-hidden">
+      <div className="px-4 pt-4">
+        <SectionHeader
+          title={t('dashboard.hitMissTrend')}
+          divider={false}
+          action={
+            <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-4">
+              <div
+                className="grid grid-cols-4 gap-1 sm:flex"
+                role="group"
+                aria-label={t('dashboard.trendMetricGroup')}
+              >
+                {TABS.map(tb => {
+                  const active = tab === tb.value
+                  return (
+                    <button
+                      key={tb.value}
+                      type="button"
+                      onClick={() => setTab(tb.value)}
+                      aria-pressed={active}
+                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-[3px] px-2 text-[11px] transition-[color,border-color] duration-150 sm:px-2.5"
+                      style={{
+                        background: 'transparent',
+                        color: active ? 'var(--text)' : 'var(--text-soft)',
+                        border: '0 solid transparent',
+                        borderBottomWidth: 2,
+                        borderBottomColor: active ? 'var(--brand)' : 'transparent',
+                        fontWeight: active ? 650 : 500,
+                      }}
+                    >
+                      {t(`dashboard.${tb.key}`)}
+                    </button>
+                  )
+                })}
+              </div>
+              <div
+                data-trend-range-control
+                className="grid grid-cols-4 overflow-hidden rounded-[7px] border-[0.5px] border-[var(--border)] bg-[var(--bg-soft)] sm:flex"
+                role="group"
+                aria-label={t('dashboard.hitMissTrend')}
+              >
+                {RANGES.map(r => {
+                  const active = range === r.value
+                  return (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => onRangeChange(r.value)}
+                      aria-pressed={active}
+                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-[5px] px-2 text-[11px] font-[500] transition-[background,color,border-color] duration-150 sm:px-2.5"
+                      style={{
+                        background: active ? 'var(--bg-card)' : 'transparent',
+                        color: active ? 'var(--text)' : 'var(--text-soft)',
+                        border: active ? '1px solid var(--border-strong)' : '1px solid transparent',
+                      }}
+                    >
+                      {t(`dashboard.${r.key}`)}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            {/* Range selector */}
-            <div
-              className="grid grid-cols-4 gap-0.5 rounded-[7px] border-[0.5px] border-[var(--border)] bg-[var(--bg-soft)] p-1 sm:flex"
-              role="group"
-              aria-label={t('dashboard.hitMissTrend')}
-            >
-              {RANGES.map(r => {
-                const active = range === r.value
-                return (
-                  <button
-                    key={r.value}
-                    type="button"
-                    onClick={() => onRangeChange(r.value)}
-                    aria-pressed={active}
-                    className="stripe-focus-ring min-h-[40px] min-w-0 whitespace-nowrap rounded-[5px] px-2 text-[11px] font-[500] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] cursor-pointer sm:px-2.5"
-                    style={{
-                      background: active ? 'var(--hit)' : 'transparent',
-                      color: active ? 'var(--on-hit)' : 'var(--text-soft)',
-                      border: active ? 'none' : '1px solid transparent',
-                    }}
-                  >
-                    {t(`dashboard.${r.key}`)}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        }
-      />
+          }
+        />
+      </div>
+
+      {isStale && (
+        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-[var(--warn-fill)] px-3 py-2 text-[11px] text-[var(--warn-text)]" role="status">
+          <span>{t('now.staleData')}</span>
+          {onRetry && (
+            <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRetry}>
+              {t('now.refresh')}
+            </ButtonV2>
+          )}
+        </div>
+      )}
 
       {allEmpty ? (
-        <EmptyState
-          icon="show_chart"
-          title={t('dashboard.emptyTrendTitle')}
-          hint={t('dashboard.emptyTrendHint')}
-          minHeight={180}
-        />
-      ) : (
-        <ResponsiveContainer width="100%" height={240}>
-          <ComposedChart
-            data={points}
-            margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
-            desc={chartDescription}
+        <div className="flex min-h-24 items-center justify-center gap-3 px-4 pb-4 text-left">
+          <span
+            aria-hidden
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--bg-soft)] text-[var(--text-subtle)]"
           >
-            <defs>
-              <linearGradient id="trBrand" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.32} />
-                <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="trDanger" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--danger)" stopOpacity={0.24} />
-                <stop offset="100%" stopColor="var(--danger)" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="trOk" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--ok)" stopOpacity={0.32} />
-                <stop offset="100%" stopColor="var(--ok)" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+            <Icon name="show_chart" size="sm" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-[12px] font-[650] text-[var(--text)]">{t('dashboard.emptyTrendTitle')}</h3>
+            <p className="mt-1 max-w-[52ch] text-[11px] leading-[1.5] text-[var(--text-soft)]">
+              {t('dashboard.emptyTrendHint')}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="px-2 pb-3">
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart
+              data={points}
+              margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
+              desc={chartDescription}
+            >
+            <CartesianGrid stroke="var(--grid)" vertical={false} />
             <XAxis
               dataKey="bucket"
               type="number"
@@ -291,23 +312,23 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
               {...axisProps}
             />
             <Tooltip content={props => <ChartTooltip {...props} dataRange={dataRange} />} />
-            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+            <Legend wrapperStyle={{ color: 'var(--text-soft)', fontSize: 11, paddingTop: 6 }} />
 
             {tab === 'requests' && (
               <>
                 <YAxis yAxisId="count" {...axisProps} width={36} />
                 <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} {...axisProps} width={36} />
-                <Area yAxisId="count" type="linear" dataKey="hits" stroke="var(--brand)" strokeWidth={1.5} fill="url(#trBrand)" name={t('dashboard.hits')} isAnimationActive={false} />
-                <Area yAxisId="count" type="linear" dataKey="misses" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.misses')} isAnimationActive={false} />
-                <Line yAxisId="rate" type="linear" dataKey="hit_rate_pct" stroke="var(--warn-text)" name={t('dashboard.hitRate2')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" isAnimationActive={false} />
+                <Area yAxisId="count" type="linear" dataKey="hits" stroke="var(--brand)" strokeWidth={1.8} fill="var(--brand)" fillOpacity={0.08} name={t('dashboard.hits')} isAnimationActive={false} />
+                <Area yAxisId="count" type="linear" dataKey="misses" stroke="var(--danger)" strokeOpacity={0.72} strokeWidth={1.35} fill="var(--danger)" fillOpacity={0.05} name={t('dashboard.misses')} isAnimationActive={false} />
+                <Line yAxisId="rate" type="linear" dataKey="hit_rate_pct" stroke="var(--warn-text)" strokeOpacity={0.74} name={t('dashboard.hitRate2')} strokeWidth={1.4} dot={false} strokeDasharray="4 4" isAnimationActive={false} />
               </>
             )}
 
             {tab === 'bandwidth' && (
               <>
                 <YAxis yAxisId="bytes" tickFormatter={(v: number) => formatBytes(v)} {...axisProps} width={56} />
-                <Area yAxisId="bytes" type="linear" dataKey="bytes_hit" stroke="var(--ok)" strokeWidth={1.5} fill="url(#trOk)" name={t('dashboard.bytesHit')} stackId="bw" isAnimationActive={false} />
-                <Area yAxisId="bytes" type="linear" dataKey="bytes_miss" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.bytesMiss')} stackId="bw" isAnimationActive={false} />
+                <Area yAxisId="bytes" type="linear" dataKey="bytes_hit" stroke="var(--ok)" strokeWidth={1.5} fill="var(--ok)" fillOpacity={0.1} name={t('dashboard.bytesHit')} stackId="bw" isAnimationActive={false} />
+                <Area yAxisId="bytes" type="linear" dataKey="bytes_miss" stroke="var(--danger)" strokeWidth={1.5} fill="var(--danger)" fillOpacity={0.08} name={t('dashboard.bytesMiss')} stackId="bw" isAnimationActive={false} />
               </>
             )}
 
@@ -322,12 +343,13 @@ export default function TrendsCard({ raw, range, dataRange, onRangeChange }: Pro
               <>
                 <YAxis yAxisId="count" {...axisProps} width={36} />
                 <YAxis yAxisId="rate" orientation="right" domain={[0, 'auto']} tickFormatter={(v: number) => `${v}%`} {...axisProps} width={42} />
-                <Area yAxisId="count" type="linear" dataKey="errors" stroke="var(--danger)" strokeWidth={1.5} fill="url(#trDanger)" name={t('dashboard.trendTabErrors')} isAnimationActive={false} />
+                <Area yAxisId="count" type="linear" dataKey="errors" stroke="var(--danger)" strokeWidth={1.5} fill="var(--danger)" fillOpacity={0.08} name={t('dashboard.trendTabErrors')} isAnimationActive={false} />
                 <Line yAxisId="rate" type="linear" dataKey="error_rate_pct" stroke="var(--warn-text)" name={t('dashboard.errorRate')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" isAnimationActive={false} />
               </>
             )}
-          </ComposedChart>
-        </ResponsiveContainer>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </section>
   )

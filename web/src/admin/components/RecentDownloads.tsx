@@ -18,6 +18,7 @@ const MAX_RECENT_DOWNLOADS = 20
 
 interface RecentDownloadsProps {
   limit?: number
+  variant?: 'grid' | 'rail'
 }
 
 type DownloadOutcome = {
@@ -82,7 +83,7 @@ function exactTime(value: string, locale: string) {
   }).format(timestamp)
 }
 
-export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
+export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentDownloadsProps) {
   const { t, i18n } = useTranslation()
   const safeLimit = normalizeLimit(limit)
   const query = useQuery({
@@ -101,6 +102,7 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
   const hasStaleData = query.isRefetchError && query.data !== undefined
   const hasConnectionError = hasStaleData || query.isError
   const locale = i18n.resolvedLanguage === 'en' ? 'en-US' : 'zh-CN'
+  const isRail = variant === 'rail'
 
   return (
     <section
@@ -108,25 +110,25 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
       data-query-key="dashboard-recent-downloads"
       aria-labelledby="recent-downloads-title"
       aria-busy={query.isPending || undefined}
-      className="overflow-hidden rounded-[var(--r-card)] border-[0.5px] border-[var(--border)] bg-[var(--bg-card)]"
+      className="admin-secondary-panel min-w-0 overflow-hidden rounded-[var(--r-card)]"
     >
-      <header className="flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2">
+      <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden
             className={`h-1.5 w-1.5 shrink-0 rounded-full ${hasConnectionError ? '' : 'live-download-pulse'}`}
             style={{ background: hasConnectionError ? 'var(--warn-text)' : 'var(--live)' }}
           />
-          <h2 id="recent-downloads-title" className="text-[12px] font-[650] text-[var(--text)]">
+          <h2 id="recent-downloads-title" className="text-[13px] font-[680] text-[var(--text)]">
             {t('recentDownloads.title')}
           </h2>
-          <span className="text-[10px] text-[var(--text-subtle)]">
+          <span className="text-[11px] text-[var(--text-soft)]">
             {hasConnectionError ? t('recentDownloads.retrying') : t('recentDownloads.liveRefresh')}
           </span>
         </div>
         <Link
           to={getAdminRouteHref('auditLogs')}
-          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-[11px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-hover)]"
+          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-card)]"
         >
           {t('recentDownloads.viewAudit')}
           <span aria-hidden>→</span>
@@ -136,16 +138,20 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
       <div className={`live-download-flow ${hasConnectionError ? 'live-download-flow-paused' : ''}`} aria-hidden />
 
       {query.isPending ? (
-        <div aria-hidden="true" className="live-download-grid">
+        <div aria-hidden="true" className={isRail ? 'grid grid-cols-1' : 'live-download-grid'}>
           {Array.from({ length: safeLimit }, (_, index) => (
-            <div key={index} className="live-download-item space-y-2 px-3 py-2.5">
+            <div
+              key={index}
+              className={`${isRail ? '' : 'live-download-item'} space-y-2 px-4 py-3`}
+              style={isRail && index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
+            >
               <div className="h-3 w-3/4 animate-pulse rounded bg-[var(--bg-soft)]" />
               <div className="h-2.5 w-1/2 animate-pulse rounded bg-[var(--bg-soft)]" />
             </div>
           ))}
         </div>
       ) : query.isError && !query.data ? (
-        <div role="alert" className="flex min-h-14 flex-wrap items-center justify-between gap-2 px-3 py-2 text-[12px] text-[var(--warn-text)]">
+        <div role="alert" className="flex min-h-20 flex-wrap items-center justify-between gap-2 px-4 py-3 text-[12px] text-[var(--warn-text)]">
           <span>
             {getApiError(query.error).status === 403
               ? t('common.permissionDenied')
@@ -156,7 +162,7 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
           </ButtonV2>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex min-h-14 items-center gap-2 px-3 py-2 text-[12px] text-[var(--text-soft)]">
+        <div className="flex min-h-24 items-center gap-2 px-4 py-3 text-[12px] text-[var(--text-soft)]">
           <Icon name="download" size="sm" aria-hidden />
           <span>{t('recentDownloads.empty')}</span>
         </div>
@@ -170,8 +176,8 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
               </button>
             </div>
           )}
-          <ol className="live-download-grid" aria-label={t('recentDownloads.listLabel')}>
-            {items.map(item => {
+          <ol className={isRail ? 'grid grid-cols-1' : 'live-download-grid'} aria-label={t('recentDownloads.listLabel')}>
+            {items.map((item, index) => {
               const outcome = downloadOutcome(item, t)
               const packageName = item.package_name || t('recentDownloads.unknownPackage')
               const when = relativeTime(item.created_at, t)
@@ -182,7 +188,8 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
                 <li
                   key={item.id}
                   data-download-id={item.id}
-                  className="live-download-item live-download-row min-w-0 px-3 py-2.5"
+                  className={`${isRail ? '' : 'live-download-item'} live-download-row min-w-0 px-4 py-3`}
+                  style={isRail && index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
                   aria-label={t('recentDownloads.itemLabel', {
                     ecosystem,
                     package: fullPackageName,
@@ -198,26 +205,25 @@ export default function RecentDownloads({ limit = 3 }: RecentDownloadsProps) {
                     ) : (
                       <Icon name="package_2" size="sm" aria-hidden />
                     )}
-                    <span className="shrink-0 font-mono text-[10px] uppercase text-[var(--text-subtle)]">
-                      {ecosystem}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-[var(--text)]" title={fullPackageName}>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-[550] text-[var(--text)]" title={fullPackageName}>
                       {packageName}
                       {item.version && <span className="text-[var(--text-subtle)]">@{item.version}</span>}
+                    </span>
+                    <BadgeV2 variant={outcome.variant} className="shrink-0">{outcome.label}</BadgeV2>
+                  </div>
+                  <div className="mt-1.5 flex min-w-0 items-center gap-1.5 pl-[21px] text-[11px] text-[var(--text-subtle)]">
+                    <span className="shrink-0 font-[550] uppercase">{ecosystem}</span>
+                    <span aria-hidden>·</span>
+                    <span className="min-w-0 flex-1 truncate font-mono tabular-nums text-[var(--text-soft)]">
+                      {size} · {item.latency_ms} ms
                     </span>
                     <time
                       dateTime={item.created_at}
                       title={exactTime(item.created_at, locale)}
-                      className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--text-subtle)]"
+                      className="shrink-0 font-mono tabular-nums"
                     >
                       {when}
                     </time>
-                  </div>
-                  <div className="mt-1.5 flex min-w-0 items-center gap-2 pl-[21px]">
-                    <BadgeV2 variant={outcome.variant} className="shrink-0">{outcome.label}</BadgeV2>
-                    <span className="truncate font-mono text-[10px] tabular-nums text-[var(--text-soft)]">
-                      {size} · {item.latency_ms} ms
-                    </span>
                   </div>
                 </li>
               )

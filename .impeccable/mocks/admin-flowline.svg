@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960">
+  <style>
+    text { font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #14181a }
+    .muted { fill: #657078 }
+    .subtle { fill: #899198 }
+    .mono { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums }
+    .label { font-size: 12px; font-weight: 600 }
+    .small { font-size: 11px }
+    .section { font-size: 14px; font-weight: 650 }
+    .metric { font-size: 28px; font-weight: 620 }
+  </style>
+  <rect width="1440" height="960" fill="#ffffff"/>
+  <rect width="232" height="960" fill="#f6f8f7"/>
+  <line x1="231.5" y1="0" x2="231.5" y2="960" stroke="#dfe4e1"/>
+
+  <g transform="translate(20 17) scale(.22)" fill="#0a8654">
+    <path d="M25 18H88V40H25A11 11 0 0 1 25 18Z"/><path d="M39 53H88V75H39A11 11 0 0 1 39 53Z"/>
+    <path d="M53 88H88V110H53A11 11 0 0 1 53 88Z"/><path d="M82 18H91C102.6 18 112 27.4 112 39V89C112 100.6 102.6 110 91 110H82Z"/>
+  </g>
+  <text x="52" y="39" font-size="15" font-weight="700">Depsilo</text>
+  <text x="20" y="82" class="small muted">dev · 本地实例</text>
+
+  <g>
+    <rect x="12" y="104" width="208" height="40" rx="7" fill="#dff3e9"/>
+    <circle cx="30" cy="124" r="4" fill="#0a8654"/>
+    <text x="46" y="129" class="label" fill="#075d3e">总览</text>
+    <text x="196" y="129" class="small" text-anchor="end" fill="#075d3e">⌘1</text>
+    <text x="46" y="178" class="label muted">历史</text>
+    <text x="46" y="226" class="label muted">源与缓存</text>
+    <text x="46" y="274" class="label muted">安全治理</text>
+    <text x="46" y="322" class="label muted">系统</text>
+  </g>
+  <line x1="20" y1="360" x2="212" y2="360" stroke="#dfe4e1"/>
+  <text x="20" y="390" class="small subtle">当前状态</text>
+  <circle cx="26" cy="420" r="4" fill="#b5770e"/>
+  <text x="40" y="424" class="label">部分降级</text>
+  <text x="20" y="448" class="small muted">1 个上游需要处理</text>
+  <g transform="translate(20 884)">
+    <circle cx="16" cy="16" r="16" fill="#0a8654"/><text x="16" y="21" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">A</text>
+    <text x="44" y="13" class="label">admin</text><text x="44" y="30" class="small muted">管理员</text>
+  </g>
+
+  <line x1="232" y1="56" x2="1440" y2="56" stroke="#e4e8e6"/>
+  <text x="268" y="34" class="small muted">总览  /  运行状态</text>
+  <rect x="1202" y="12" width="64" height="32" rx="7" fill="#fff" stroke="#dfe4e1"/>
+  <text x="1234" y="33" class="small" text-anchor="middle">中文</text>
+  <rect x="1274" y="12" width="104" height="32" rx="7" fill="#fff" stroke="#dfe4e1"/>
+  <text x="1326" y="33" class="small" text-anchor="middle">☼ 浅色</text>
+
+  <text x="268" y="104" font-size="25" font-weight="650">运行总览</text>
+  <text x="268" y="129" font-size="13" class="muted">确认请求链路是否健康，并处理影响开发者安装的问题。</text>
+  <text x="1272" y="107" class="small muted" text-anchor="end">刚刚更新</text>
+  <rect x="1284" y="84" width="94" height="36" rx="7" fill="#fff" stroke="#cfd6d2"/>
+  <text x="1331" y="107" class="label" text-anchor="middle">↻ 刷新</text>
+
+  <rect x="268" y="154" width="1110" height="242" rx="13" fill="#f8faf9" stroke="#d9dfdc"/>
+  <circle cx="292" cy="181" r="5" fill="#b5770e"/>
+  <text x="307" y="186" font-size="16" font-weight="650">部分降级</text>
+  <text x="406" y="185" class="small muted">请求仍可用 · Debian Security 无法连接</text>
+  <text x="1050" y="185" class="small muted">运行 2 天 11 小时</text>
+  <rect x="1260" y="167" width="96" height="28" rx="6" fill="#fff4dd"/>
+  <text x="1308" y="185" class="small" text-anchor="middle" fill="#895b08">处理问题 →</text>
+  <line x1="290" y1="208" x2="1356" y2="208" stroke="#e0e5e2"/>
+
+  <text x="292" y="236" class="small subtle">实时依赖流线</text>
+  <g>
+    <text x="315" y="270" class="label muted">客户端入口</text><text x="315" y="303" class="metric mono">42</text><text x="357" y="303" class="small muted">请求/分钟</text>
+    <line x1="465" y1="289" x2="570" y2="289" stroke="#9bcbb7" stroke-width="2"/><circle cx="492" cy="289" r="4" fill="#0fa86f"/><circle cx="530" cy="289" r="4" fill="#0fa86f"/>
+    <text x="602" y="270" class="label muted">Depsilo 缓存</text><text x="602" y="303" class="metric mono">76.0%</text><text x="602" y="325" class="small muted">命中 · 68.4% 容量</text>
+    <line x1="790" y1="289" x2="895" y2="289" stroke="#9bcbb7" stroke-width="2"/><circle cx="818" cy="289" r="4" fill="#0fa86f"/><circle cx="856" cy="289" r="4" fill="#0fa86f"/>
+    <text x="927" y="270" class="label muted">上游源</text><text x="927" y="303" class="metric mono">2 / 3</text><text x="927" y="325" class="small" fill="#a96c06">1 个故障</text>
+  </g>
+  <rect x="1120" y="222" width="236" height="150" rx="9" fill="#fff" stroke="#e0e5e2"/>
+  <text x="1140" y="249" class="section">待处理</text><text x="1336" y="249" class="small" text-anchor="end" fill="#0a704a">全部 3 →</text>
+  <line x1="1140" y1="264" x2="1336" y2="264" stroke="#e5e9e7"/>
+  <circle cx="1146" cy="287" r="4" fill="#cf4444"/><text x="1160" y="291" class="label">Debian Security</text><text x="1336" y="291" class="small muted" text-anchor="end">故障</text>
+  <circle cx="1146" cy="319" r="4" fill="#b5770e"/><text x="1160" y="323" class="label">缓存接近阈值</text><text x="1336" y="323" class="small muted" text-anchor="end">68%</text>
+  <circle cx="1146" cy="351" r="4" fill="#0fa86f"/><text x="1160" y="355" class="label">安全策略</text><text x="1336" y="355" class="small muted" text-anchor="end">正常</text>
+
+  <g transform="translate(268 424)">
+    <text x="0" y="0" class="small subtle">近 24 小时</text>
+    <text x="0" y="34" class="metric mono">18,724</text><text x="0" y="55" class="small muted">请求量 · +13.5%</text>
+    <line x1="238" y1="0" x2="238" y2="64" stroke="#e2e6e4"/>
+    <text x="274" y="34" class="metric mono">216.2 MB</text><text x="274" y="55" class="small muted">已服务流量 · +14.5%</text>
+    <line x1="548" y1="0" x2="548" y2="64" stroke="#e2e6e4"/>
+    <text x="584" y="34" class="metric mono">184 ms</text><text x="584" y="55" class="small muted">平均延迟 · -16.7%</text>
+    <line x1="822" y1="0" x2="822" y2="64" stroke="#e2e6e4"/>
+    <text x="858" y="34" class="metric mono">99.4%</text><text x="858" y="55" class="small muted">请求成功率</text>
+  </g>
+  <line x1="268" y1="504" x2="1378" y2="504" stroke="#e2e6e4"/>
+
+  <rect x="268" y="536" width="714" height="330" rx="12" fill="#fff" stroke="#dce2df"/>
+  <text x="290" y="568" class="section">活动趋势</text><text x="960" y="568" class="small muted" text-anchor="end">请求量  ·  24 小时</text>
+  <line x1="290" y1="595" x2="960" y2="595" stroke="#edf0ef"/>
+  <line x1="310" y1="650" x2="950" y2="650" stroke="#eef1ef"/><line x1="310" y1="714" x2="950" y2="714" stroke="#eef1ef"/><line x1="310" y1="778" x2="950" y2="778" stroke="#eef1ef"/>
+  <path d="M310 790 C365 760 405 775 455 720 S555 690 620 730 S720 655 780 680 S870 610 950 625" fill="none" stroke="#0a8654" stroke-width="2.5"/>
+  <path d="M310 790 C365 760 405 775 455 720 S555 690 620 730 S720 655 780 680 S870 610 950 625 L950 820 L310 820Z" fill="#e7f5ee" opacity=".7"/>
+  <text x="310" y="842" class="small subtle">00:00</text><text x="610" y="842" class="small subtle">12:00</text><text x="950" y="842" class="small subtle" text-anchor="end">现在</text>
+
+  <rect x="1002" y="536" width="376" height="330" rx="12" fill="#fff" stroke="#dce2df"/>
+  <text x="1024" y="568" class="section">最近活动</text><text x="1356" y="568" class="small" text-anchor="end" fill="#0a704a">查看历史 →</text>
+  <line x1="1024" y1="595" x2="1356" y2="595" stroke="#edf0ef"/>
+  <g class="small">
+    <text x="1024" y="625" class="mono subtle">10:38:12</text><text x="1095" y="625">torch@2.8.0</text><text x="1356" y="625" text-anchor="end" fill="#0a704a">缓存命中</text>
+    <line x1="1024" y1="642" x2="1356" y2="642" stroke="#edf0ef"/>
+    <text x="1024" y="675" class="mono subtle">10:37:45</text><text x="1095" y="675">react@19.2.0</text><text x="1356" y="675" text-anchor="end" fill="#895b08">上游拉取</text>
+    <line x1="1024" y1="692" x2="1356" y2="692" stroke="#edf0ef"/>
+    <text x="1024" y="725" class="mono subtle">10:36:58</text><text x="1095" y="725">上游健康检查</text><text x="1356" y="725" text-anchor="end" fill="#cf4444">失败</text>
+    <line x1="1024" y1="742" x2="1356" y2="742" stroke="#edf0ef"/>
+    <text x="1024" y="775" class="mono subtle">10:34:21</text><text x="1095" y="775">缓存清理完成</text><text x="1356" y="775" text-anchor="end" fill="#0a704a">完成</text>
+  </g>
+</svg>

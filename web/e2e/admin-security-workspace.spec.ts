@@ -32,13 +32,14 @@ test('Security uses stable Operator page chrome with one page heading across tab
     /查看漏洞情报与拦截建议|Review vulnerability intelligence/,
   )
   await expect(page.locator('h1:visible')).toHaveCount(1)
-  await expect(page.locator('[data-admin-topbar] h1')).toHaveText(/包安全|Package Security/)
+  await expect(adminPage.locator('[data-admin-page-title]')).toHaveText(/包安全|Package Security/)
+  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
 
   for (const tabName of [/漏洞列表|Vulnerabilities/, /建议规则|Suggested Rules/, /策略配置|Policies/]) {
     await page.getByRole('tab', { name: tabName }).click()
     await expect(adminPage).toHaveCount(1)
     await expect(page.locator('h1:visible')).toHaveCount(1)
-    await expect(page.locator('[data-admin-topbar] h1')).toHaveText(/包安全|Package Security/)
+    await expect(adminPage.locator('[data-admin-page-title]')).toHaveText(/包安全|Package Security/)
   }
 })
 

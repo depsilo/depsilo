@@ -113,6 +113,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   gpp_bad: ShieldX,
   grid_view: LayoutGrid,
   group: Users,
+  history: History,
   inbox: Inbox,
   info: Info,
   inventory_2: Package,

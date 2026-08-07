@@ -1,6 +1,6 @@
 # Depsilo Design System
 
-> Status: current implementation reference, updated 2026-08-05. The source of
+> Status: current implementation reference, updated 2026-08-07. The source of
 > truth is `web/src/index.css`, `web/src/components/`, `web/src/portal/`, and
 > `web/src/admin/`. When this document and code differ, update this document in
 > the same change.
@@ -187,23 +187,87 @@ navigation shell. Admin pages use compact headings, stable table/control sizes,
 clear empty/loading/error states, and explicit confirmation for destructive
 commands.
 
-The Dashboard is capped at 1440px inside the wider Admin outlet to keep
-operational scanning distances reasonable. Its live service strip and recent
-downloads precede the KPI/trend view; lower-priority package and bandwidth
-summaries may share a two-column row only when each remains readable.
+The **Dependency Flowline** shell organizes work into five Operator domains:
+**Overview**, **History**, **Sources & Cache**, **Security Governance**, and
+**System**. The persistent sidebar is 232px wide. All five domains remain
+visible. On desktop, every multi-page domain defaults open and can be folded
+independently with a dedicated disclosure control; the workspace label remains
+a separate navigation link. The narrow-screen drawer defaults to the active
+domain only and lets operators reveal the others on demand, keeping short
+viewports usable. **Needs Attention** is integrated into Overview rather than
+presented as a primary navigation destination. Its legacy `/admin/attention`
+URL remains reachable so bookmarks and direct links do not break, as do all
+other established Admin URLs.
 
-Admin uses a hybrid information architecture. Expert pages remain the source
-of truth for investigation and configuration; **Needs Attention** is the
-lightweight operational inbox for unhealthy Upstreams, security suggestions,
-cache pressure, and recent supply-chain decisions. It links to those expert
-pages rather than duplicating their full workflows. An incomplete refresh must
-be identified as unknown or stale and must never be presented as “all clear.”
+The light Admin canvas remains pure white, while its persistent workspace rail
+uses a dedicated mint porcelain surface (`#F3F8F5`) and hover
+(`#EAF3EE`). This near-white, brand-adjacent tint separates navigation from the
+canvas without reusing the darker global inset surface. Dark mode retains its
+existing rail and hover appearance. Parent workspaces communicate active
+context through their icon and label; only the current leaf destination
+receives a filled selection, so a nested route never produces two equally
+strong active rows. Child destinations use indentation alone: do not add
+connector rails, guide lines, or bullet dots to explain hierarchy. Language
+and appearance remain adjacent in the utility bar, but each is a flat button
+separated by quiet spacing; do not wrap them in a tinted, bordered preference
+card.
+
+The top bar is a quiet utility layer: it contains the workspace/page
+breadcrumb, language, and appearance controls, plus the navigation trigger on
+narrow screens. It never repeats service status or renders the page `h1`.
+On desktop, Overview omits its redundant single-level breadcrumb because the
+page heading already names the destination; nested pages retain the workspace
+and page breadcrumb.
+`AdminPage` owns the content title, optional description, page actions, and
+readable/fluid width below that bar.
+
+The Dashboard uses the Admin's default fluid canvas, capped at 1840px. Its page
+heading and all Dashboard regions use the full same width and left baseline;
+do not center a narrower content wrapper beneath a wider heading. On wide
+screens, the main instrument column is fluid and the supporting rail remains
+approximately 380px wide. The first row pairs a live request path—**Client
+ingress → Depsilo cache → Upstreams**—with a compact queue for unhealthy
+Upstreams and cache-capacity pressure. Four left-aligned KPIs form the next
+scanning layer. The final row contains one multi-metric trend view and at most
+three recent downloads; complete popular package, Upstream, and bandwidth detail
+belongs on the relevant History or Sources & Cache expert page instead of being
+duplicated on Overview.
+
+Dashboard panel headers use one concise title/status row. Do not repeat generic
+explanatory copy as a visible subtitle when the structure already communicates
+the panel's purpose; keep useful context as screen-reader-only text when it is
+needed for accessible naming. Runtime state is an inline semantic dot plus text,
+not a filled badge or a second card inside the header.
+
+The request path is the Admin's signature instrument: one continuous axis and
+one moving signal segment connect all three stages. On narrow screens the same
+axis turns vertical and each stage becomes a compact label/value row rather
+than three stacked metric blocks. `NowStrip` and `TrendsCard` are open sections,
+not bordered rectangles: do not add header and footer rules merely to frame
+them, and do not use rounded card silhouettes, shadows, or nested card
+surfaces. Keep only the top-bar divider, the request axis, list-row and metadata
+separators, and necessary data-grid divisions; remove duplicate full-width
+rules between a title and its content or between neighboring Dashboard regions.
+The supporting attention and recent-download regions are quiet inset rails,
+not primary cards. The four KPIs remain one bare, internally divided data rail.
+Trend metrics use unboxed text tabs with an understated active underline. The
+time range is the only segmented control in that toolbar: its outer frame stays
+approximately 41px high around 40px buttons, without extra vertical padding.
+
+On narrow screens the request path becomes a vertical flowline, followed by the
+attention queue, so the first viewport communicates current service state and
+the first actionable problem. Every Dashboard region owns an honest initial
+loading, initial error, successful-empty, and cached-but-stale state. A failed
+or incomplete refresh must never be presented as healthy or “all clear.”
 
 Current admin-specific components are:
 
 - `MainLayout`
+- `AdminPage`
 - `NowStrip`
+- `DashboardAttention`
 - `TrendsCard`
+- `RecentDownloads`
 - `WebhookTab`
 - `ProRequiredCallout`
 - `ConfirmActionDialog`
@@ -233,11 +297,11 @@ applies when an icon button is pending or disabled.
 
 | Width | Admin behavior |
 | --- | --- |
-| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids |
+| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer defaults to the active workspace and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
 | `sm` 640 | Forms may use two columns; ordinary toolbars may share a row and long action groups wrap |
-| `md` 768 | Settings uses its 180px vertical tab rail; the top bar and extended status content use desktop composition |
-| `lg` 1024 | The persistent 220px navigation sidebar appears; KPI grids may use four columns |
-| `xl` 1280 | Analytics sections may use three columns; information density does not grow beyond this point |
+| `md` 768 | Settings uses its 180px vertical tab rail; the Dashboard request flow becomes horizontal |
+| `lg` 1024 | The persistent 232px workspace sidebar appears with all multi-page workspaces open by default and independently collapsible; KPI grids may use four columns |
+| `xl` 1280 | Dashboard flow/attention and trend/recent-activity rows use a fluid main column plus an approximately 380px supporting rail; they stack when that rail would crowd the primary task |
 | 1840+ | The Admin outlet is capped at 1840px and centered within the remaining main area |
 
 The document viewport must never scroll horizontally. Wide tables scroll only

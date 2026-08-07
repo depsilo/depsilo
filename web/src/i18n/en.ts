@@ -44,6 +44,13 @@ const en = {
     nav: {
       monitor: 'Monitor',
       manage: 'Manage',
+      workspaces: {
+        overview: 'Overview',
+        history: 'History',
+        sourcesCache: 'Sources & Cache',
+        governance: 'Security Governance',
+        system: 'System',
+      },
       groups: {
         operations: 'Operations',
         cacheUpstreams: 'Cache & Upstreams',
@@ -71,6 +78,8 @@ const en = {
       openNavigation: 'Open navigation',
       closeNavigation: 'Close navigation',
       adminNavigation: 'Admin navigation',
+      expandWorkspace: 'Expand {{workspace}}',
+      collapseWorkspace: 'Collapse {{workspace}}',
     },
 
     // Login
@@ -123,6 +132,19 @@ const en = {
       adminAction: 'Back to Admin overview',
     },
     dashboard: {
+      requestPath: 'Live dependency flow',
+      requestPathHint: 'Client requests pass through cache and reach upstreams only when needed.',
+      clientIngress: 'Client ingress',
+      depsiloCache: 'Depsilo cache',
+      upstreamStage: 'Upstreams',
+      needsAttention: 'Needs attention',
+      attentionCount: '{{count}} items need attention',
+      attentionHint: 'Current upstream and cache-capacity signals that may affect dependency delivery.',
+      noActiveIssues: 'No active issues',
+      noActiveIssuesHint: 'The request path, upstreams, and cache capacity are operating normally.',
+      cacheHitRate: 'Cache hit rate',
+      upstreamHealth: 'Upstream health',
+      flowlineDescription: 'Requests enter through the client endpoint, pass through Depsilo cache, and reach upstreams on a miss.',
       loadFailedHint: 'Check whether the Depsilo server is reachable, then retry.',
       todayRequests: 'Requests Today',
       last24hRequests: 'Requests (24h)',
@@ -149,6 +171,7 @@ const en = {
       trendTabErrors: 'Errors',
       trendChartDescription: '{{metric}} trend for {{range}}. Use the left and right arrow keys to inspect time points.',
       performanceSnapshot: 'Performance snapshot',
+      comparisonShort: 'vs previous 24h',
       comparisonHint: 'Last 24 hours; changes compare with the preceding 24 hours',
       upstreamStatus: 'Upstream Status',
       upstreamWarning: '{{count}} upstreams need attention: {{names}}',
@@ -248,6 +271,7 @@ const en = {
     // Bandwidth Report
     bandwidth: {
       title: 'Bandwidth Report',
+      subtitle: 'Review traffic and time saved by cache, then locate transfer costs by range, ecosystem, and upstream.',
       totalTraffic: 'Total Traffic',
       trafficSaved: 'Traffic Saved',
       savingsRate: 'Savings Rate',
@@ -563,6 +587,7 @@ const en = {
       latency: 'Latency',
       clientIp: 'Client IP',
       noLogs: 'No logs',
+      noLogsHint: 'Access records will appear here after dependency requests pass through Depsilo.',
       export: 'Export CSV',
       exporting: 'Exporting…',
       exportSuccess: 'Exported {{filename}}',
@@ -693,6 +718,7 @@ const en = {
       latency: 'Latency',
       bytes: 'Bytes',
       noLogs: 'No audit logs',
+      noLogsHint: 'Package access, policy decisions, and administrative actions will appear here.',
     },
 
     // Rules

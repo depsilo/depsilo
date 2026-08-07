@@ -225,7 +225,7 @@ test('Dashboard trends keep the previous chart while an uncached range loads', a
   await expectTrendTooltipLabel(page, chart, oneHourLabel, thirtyDayLabel)
 
   response.resolve({ points: nextPoints })
-  await expect(trends).toHaveAttribute('aria-busy', 'false')
+  await expect(trends).not.toHaveAttribute('aria-busy', 'true')
   await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(async () => {
     const path = await chart.locator('.recharts-area-curve').first().getAttribute('d')
@@ -261,7 +261,7 @@ test('Dashboard trends keep the previous chart and warn when an uncached range f
   await expect(trends).toHaveAttribute('aria-busy', 'true')
 
   response.resolve({ status: 500, body: { code: 'FAILED', message: 'fixture range failure' } })
-  await expect(trends).toHaveAttribute('aria-busy', 'false')
+  await expect(trends).not.toHaveAttribute('aria-busy', 'true')
   await expect(chart).toBeVisible()
   await expect(ranges).toBeVisible()
   await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
@@ -411,13 +411,23 @@ test('Blocklist status stays visible when overrides initially return 500', async
   await expect(page.getByRole('alert')).toContainText('fixture overrides failure')
 })
 
-test('Dashboard bandwidth failure is explicit while dashboard siblings remain visible', async ({ page }) => {
+test('Dashboard does not load the standalone bandwidth summary and keeps its focused regions visible', async ({ page }) => {
+  let bandwidthCalls = 0
   await mockAdminApi(page, {
-    'GET /api/v1/admin/bandwidth': { status: 500, body: { code: 'FAILED', message: 'fixture dashboard bandwidth failure' } },
+    'GET /api/v1/admin/bandwidth': () => {
+      bandwidthCalls += 1
+      return adminApiDefaults['GET /api/v1/admin/bandwidth']
+    },
   })
   await page.goto('/admin')
-  await expect(page.getByRole('alert').filter({ hasText: 'fixture dashboard bandwidth failure' })).toBeVisible()
-  await expect(page.getByText(/热门包|Top packages/)).toBeVisible()
+
+  await expect(page.locator('[data-query-key="now"]')).toBeVisible()
+  await expect(page.locator('section[aria-labelledby="dashboard-attention-title"]')).toBeVisible()
+  await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
+  await expect(page.locator('[data-recent-downloads]')).toBeVisible()
+  expect(bandwidthCalls).toBe(0)
+  await expect(page.getByRole('heading', { name: /热门包 TOP 10|Top 10 Packages/ })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: /上游源状态|Upstream Status/ })).toHaveCount(0)
 })
 
 test('Dashboard snapshot failure keeps independent live and analytics regions mounted', async ({ page }) => {
@@ -433,7 +443,7 @@ test('Dashboard snapshot failure keeps independent live and analytics regions mo
   await expect(page.locator('[data-query-key="now"]')).toBeVisible()
   await expect(page.locator('[data-recent-downloads]')).toBeVisible()
   await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
-  await expect(page.getByRole('heading', { name: /带宽节省|Bandwidth Savings/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /性能快照|Performance snapshot/ })).toHaveCount(0)
 })
 
 test('Cache distribution failure is explicit while cache entries remain visible', async ({ page }) => {

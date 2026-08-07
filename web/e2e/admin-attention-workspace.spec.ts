@@ -54,7 +54,8 @@ test('attention workspace brings operational risks into one direct queue', async
 
   await page.goto('/admin/attention')
 
-  await expect(page.locator('[data-admin-topbar] h1')).toHaveText(/待处理|Needs Attention/)
+  await expect(page.locator('[data-admin-page-title]')).toHaveText(/待处理|Needs Attention/)
+  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
   await expect(page.getByText(/上游源需要关注|Upstreams need attention/)).toBeVisible()
   await expect(page.getByText(/有待决安全建议|Security suggestions are waiting/)).toBeVisible()
   await expect(page.getByText(/缓存容量偏高|Cache capacity is running high/)).toBeVisible()
@@ -209,12 +210,13 @@ test('attention keeps cached results visible when background refreshes fail', as
   await page.waitForTimeout(25)
 
   failRefresh = true
-  await page.getByRole('link', { name: /系统设置|Settings/ }).click()
+  const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
+  await navigation.getByRole('link', { name: /系统设置|Settings/ }).click()
   await expect(page).toHaveURL(/\/admin\/settings$/)
-  await expect(page.locator('[data-admin-topbar] h1')).toHaveText(/系统设置|Settings/)
+  await expect(page.locator('[data-admin-page-title]')).toHaveText(/系统设置|Settings/)
   await page.goBack()
   await expect(page).toHaveURL(/\/admin\/attention$/)
-  await expect(page.locator('[data-admin-topbar] h1')).toHaveText(/待处理|Needs Attention/)
+  await expect(page.locator('[data-admin-page-title]')).toHaveText(/待处理|Needs Attention/)
   await expect.poll(() => Math.min(dashboardCalls, suggestionCalls, quarantineCalls)).toBeGreaterThan(1)
 
   const queue = page.locator('section[aria-labelledby="attention-queue-title"]')

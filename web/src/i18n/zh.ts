@@ -44,6 +44,13 @@ const zh = {
     nav: {
       monitor: '监控',
       manage: '管理',
+      workspaces: {
+        overview: '总览',
+        history: '历史',
+        sourcesCache: '源与缓存',
+        governance: '安全治理',
+        system: '系统',
+      },
       groups: {
         operations: '运行',
         cacheUpstreams: '缓存与上游',
@@ -71,6 +78,8 @@ const zh = {
       openNavigation: '打开导航',
       closeNavigation: '关闭导航',
       adminNavigation: '管理导航',
+      expandWorkspace: '展开{{workspace}}',
+      collapseWorkspace: '折叠{{workspace}}',
     },
 
     // Login
@@ -123,6 +132,19 @@ const zh = {
       adminAction: '返回管理总览',
     },
     dashboard: {
+      requestPath: '实时依赖流线',
+      requestPathHint: '客户端请求经过缓存并在需要时访问上游源。',
+      clientIngress: '客户端入口',
+      depsiloCache: 'Depsilo 缓存',
+      upstreamStage: '上游源',
+      needsAttention: '待处理',
+      attentionCount: '{{count}} 项待处理',
+      attentionHint: '当前上游与缓存容量信号；这些问题可能影响依赖交付。',
+      noActiveIssues: '当前没有需要处理的问题',
+      noActiveIssuesHint: '请求链路、上游源和缓存容量均处于正常状态。',
+      cacheHitRate: '缓存命中率',
+      upstreamHealth: '上游健康',
+      flowlineDescription: '请求从客户端入口进入 Depsilo 缓存，并在未命中时访问上游源。',
       loadFailedHint: '请确认 Depsilo 服务可达后重试。',
       todayRequests: '今日请求',
       last24hRequests: '近 24 小时请求',
@@ -149,6 +171,7 @@ const zh = {
       trendTabErrors: '错误',
       trendChartDescription: '{{range}}范围内的{{metric}}趋势图。可使用左右方向键浏览时间点。',
       performanceSnapshot: '性能快照',
+      comparisonShort: '对比前 24 小时',
       comparisonHint: '近 24 小时；变化值对比此前 24 小时',
       upstreamStatus: '上游源状态',
       upstreamWarning: '{{count}} 个上游需要关注：{{names}}',
@@ -248,6 +271,7 @@ const zh = {
     // Bandwidth Report
     bandwidth: {
       title: '带宽报告',
+      subtitle: '查看缓存节省的流量与时间，并按时间、生态和上游定位传输开销。',
       totalTraffic: '总流量',
       trafficSaved: '节省流量',
       savingsRate: '节省率',
@@ -563,6 +587,7 @@ const zh = {
       latency: '耗时',
       clientIp: '客户端 IP',
       noLogs: '暂无日志',
+      noLogsHint: '新的依赖请求通过 Depsilo 后，访问记录会显示在这里。',
       export: '导出 CSV',
       exporting: '正在导出…',
       exportSuccess: '已导出 {{filename}}',
@@ -693,6 +718,7 @@ const zh = {
       latency: '耗时',
       bytes: '字节数',
       noLogs: '暂无审计日志',
+      noLogsHint: '发生包访问、策略决策或管理操作后，审计记录会显示在这里。',
     },
 
     // Rules

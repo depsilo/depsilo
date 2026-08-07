@@ -129,7 +129,8 @@ test('client navigation to Upstreams does not load the simple-icons barrel', asy
     'GET /api/v1/admin/upstreams/latency': { series: [] },
   })
   await page.goto('/admin/users')
-  await expect(page.locator('[data-admin-topbar] h1')).toHaveText('用户管理')
+  await expect(page.locator('[data-admin-page-title]')).toHaveText('用户管理')
+  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
 
   page.on('request', request => {
     if (request.resourceType() === 'script') loadedScripts.push(request.url())

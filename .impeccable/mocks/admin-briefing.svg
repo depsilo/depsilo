@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960">
+  <style>
+    text { font-family: Inter, "PingFang SC", sans-serif; fill:#14181a } .muted{fill:#667078}.subtle{fill:#8a9297}.mono{font-family:"JetBrains Mono",monospace}.small{font-size:11px}.label{font-size:12px;font-weight:600}.section{font-size:14px;font-weight:650}.metric{font-size:30px;font-weight:620}
+  </style>
+  <rect width="1440" height="960" fill="#fff"/><rect width="72" height="960" fill="#101514"/><rect x="72" width="192" height="960" fill="#f6f8f7"/><line x1="263.5" y1="0" x2="263.5" y2="960" stroke="#dfe4e1"/>
+  <g transform="translate(21 17) scale(.24)" fill="#3ddc91"><path d="M25 18H88V40H25A11 11 0 0 1 25 18Z"/><path d="M39 53H88V75H39A11 11 0 0 1 39 53Z"/><path d="M53 88H88V110H53A11 11 0 0 1 53 88Z"/><path d="M82 18H91C102.6 18 112 27.4 112 39V89C112 100.6 102.6 110 91 110H82Z"/></g>
+  <g fill="#aeb7b2" text-anchor="middle" font-size="18"><text x="36" y="130">▦</text><text x="36" y="190">◷</text><text x="36" y="250">⇄</text><text x="36" y="310">◇</text><text x="36" y="370">⚙</text></g><rect x="8" y="102" width="56" height="44" rx="9" fill="#183d30"/><circle cx="36" cy="124" r="5" fill="#3ddc91"/>
+  <text x="92" y="38" font-size="16" font-weight="700">总览</text><text x="92" y="83" class="small subtle">工作区</text>
+  <rect x="84" y="100" width="168" height="38" rx="7" fill="#dff3e9"/><text x="104" y="124" class="label" fill="#075d3e">运行简报</text>
+  <text x="104" y="171" class="label muted">待处理事项</text><text x="232" y="171" class="small" text-anchor="end" fill="#a96c06">3</text>
+  <text x="104" y="215" class="label muted">基础设施</text><text x="104" y="259" class="label muted">最近活动</text>
+  <line x1="92" y1="292" x2="244" y2="292" stroke="#dfe4e1"/><text x="92" y="320" class="small subtle">快速前往</text><text x="104" y="355" class="label muted">请求历史</text><text x="104" y="397" class="label muted">上游源配置</text>
+
+  <line x1="264" y1="56" x2="1440" y2="56" stroke="#e4e8e6"/><text x="300" y="34" class="small muted">Depsilo / 运行简报</text><text x="1370" y="34" class="small muted" text-anchor="end">中文 · 浅色</text>
+  <text x="300" y="108" font-size="26" font-weight="650">早上好，admin</text><text x="300" y="134" font-size="13" class="muted">这里是当前服务需要知道的全部信息。</text>
+  <rect x="300" y="160" width="1070" height="198" rx="14" fill="#121817"/>
+  <circle cx="330" cy="193" r="5" fill="#e0a53c"/><text x="347" y="199" font-size="18" font-weight="650" fill="#f5f7f6">部分降级</text><text x="347" y="224" class="small" fill="#aeb8b3">服务仍可用，1 个上游连接失败</text>
+  <text x="1308" y="198" class="small" text-anchor="end" fill="#aeb8b3">运行 2 天 11 小时</text>
+  <line x1="330" y1="246" x2="1340" y2="246" stroke="#29312e"/>
+  <g><text x="330" y="278" class="small" fill="#8e9993">请求/分钟</text><text x="330" y="323" class="metric mono" fill="#f5f7f6">42</text><text x="555" y="278" class="small" fill="#8e9993">缓存命中</text><text x="555" y="323" class="metric mono" fill="#3ddc91">76.0%</text><text x="780" y="278" class="small" fill="#8e9993">平均延迟</text><text x="780" y="323" class="metric mono" fill="#f5f7f6">184 ms</text><text x="1005" y="278" class="small" fill="#8e9993">上游健康</text><text x="1005" y="323" class="metric mono" fill="#e0a53c">2 / 3</text></g>
+  <rect x="1198" y="276" width="142" height="42" rx="7" fill="#0a8654"/><text x="1269" y="302" class="label" text-anchor="middle" fill="#fff">查看故障源 →</text>
+
+  <text x="300" y="408" class="section">需要处理</text><text x="820" y="408" class="section">实时活动</text><text x="1120" y="408" class="section">基础设施</text>
+  <rect x="300" y="428" width="488" height="248" rx="12" fill="#fff" stroke="#dce2df"/>
+  <g class="label"><circle cx="328" cy="463" r="5" fill="#cf4444"/><text x="346" y="467">Debian Security 无法连接</text><text x="762" y="467" text-anchor="end" fill="#0a704a">处理 →</text><line x1="324" y1="490" x2="764" y2="490" stroke="#edf0ef"/><circle cx="328" cy="522" r="5" fill="#b5770e"/><text x="346" y="526">缓存使用率达到 68.4%</text><text x="762" y="526" text-anchor="end" fill="#0a704a">查看 →</text><line x1="324" y1="549" x2="764" y2="549" stroke="#edf0ef"/><circle cx="328" cy="581" r="5" fill="#b5770e"/><text x="346" y="585">2 条安全策略建议</text><text x="762" y="585" text-anchor="end" fill="#0a704a">审查 →</text></g>
+  <rect x="820" y="428" width="268" height="248" rx="12" fill="#fff" stroke="#dce2df"/>
+  <g class="small"><text x="842" y="463" class="mono subtle">10:38:12</text><text x="842" y="484">torch@2.8.0</text><text x="1066" y="484" text-anchor="end" fill="#0a704a">命中</text><line x1="842" y1="504" x2="1066" y2="504" stroke="#edf0ef"/><text x="842" y="535" class="mono subtle">10:37:45</text><text x="842" y="556">react@19.2.0</text><text x="1066" y="556" text-anchor="end" fill="#895b08">拉取</text><line x1="842" y1="576" x2="1066" y2="576" stroke="#edf0ef"/><text x="842" y="607" class="mono subtle">10:36:58</text><text x="842" y="628">上游健康检查</text><text x="1066" y="628" text-anchor="end" fill="#cf4444">失败</text></g>
+  <rect x="1120" y="428" width="250" height="248" rx="12" fill="#f7f9f8" stroke="#dce2df"/>
+  <g><text x="1142" y="463" class="small muted">上游源</text><text x="1348" y="463" class="label mono" text-anchor="end">2 / 3</text><line x1="1142" y1="484" x2="1348" y2="484" stroke="#e3e7e5"/><text x="1142" y="519" class="small muted">制品缓存</text><text x="1348" y="519" class="label mono" text-anchor="end">13.7 GB</text><line x1="1142" y1="540" x2="1348" y2="540" stroke="#e3e7e5"/><text x="1142" y="575" class="small muted">索引状态</text><text x="1348" y="575" class="label" text-anchor="end" fill="#0a704a">正常</text><line x1="1142" y1="596" x2="1348" y2="596" stroke="#e3e7e5"/><text x="1142" y="631" class="small muted">编译缓存</text><text x="1348" y="631" class="label" text-anchor="end" fill="#0a704a">已启用</text></g>
+  <text x="300" y="728" class="section">24 小时请求趋势</text><text x="1370" y="728" class="small muted" text-anchor="end">18,724 个请求 · 76.0% 命中</text>
+  <rect x="300" y="748" width="1070" height="170" rx="12" fill="#fff" stroke="#dce2df"/><line x1="324" y1="795" x2="1346" y2="795" stroke="#edf0ef"/><line x1="324" y1="850" x2="1346" y2="850" stroke="#edf0ef"/><path d="M324 874 C400 840 458 864 530 823 S670 798 755 829 S905 770 1010 803 S1200 745 1346 770" fill="none" stroke="#0a8654" stroke-width="2.5"/>
+</svg>

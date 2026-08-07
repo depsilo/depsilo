@@ -5,13 +5,15 @@ interface SectionHeaderProps {
   action?: ReactNode
   /** Subtle subtitle under the title (e.g. range descriptor). */
   hint?: string
+  /** Keep dense dashboard sections grouped by spacing instead of another rule. */
+  divider?: boolean
 }
 
-export default function SectionHeader({ title, action, hint }: SectionHeaderProps) {
+export default function SectionHeader({ title, action, hint, divider = true }: SectionHeaderProps) {
   return (
-    <header className="mb-4 flex flex-col gap-3 border-b border-[var(--border)] pb-2 sm:flex-row sm:items-end sm:justify-between">
+    <header className={`mb-4 flex flex-col gap-3 pb-2 sm:flex-row sm:items-end sm:justify-between ${divider ? 'border-b border-[var(--border)]' : ''}`}>
       <div className="min-w-0">
-        <h2 className="text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
+        <h2 className="text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
           {title}
         </h2>
         {hint && (

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import AdminPage from '@/admin/components/AdminPage'
 import { adminApi } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
 import Metric from '@/components/Metric'
@@ -120,29 +121,36 @@ export default function BandwidthReport() {
 
   if (queryEnabled && isPending) {
     return (
-      <div aria-busy="true" className="space-y-12">
-        <div aria-hidden="true">
-        <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="flex flex-col items-center gap-3">
-              <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
-              <div className="h-11 w-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+      <AdminPage description={t('bandwidth.subtitle')}>
+        <div aria-busy="true" className="space-y-12">
+          <div aria-hidden="true">
+            <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-3">
+                  <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+                  <div className="h-11 w-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+                </div>
+              ))}
             </div>
-          ))}
+            <div className="h-80 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+          </div>
         </div>
-        <div className="h-80 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
-        </div>
-      </div>
+      </AdminPage>
     )
   }
 
   if (queryEnabled && isError && !data) {
     const normalized = getApiError(error)
-    return <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void refetch() }} />
+    return (
+      <AdminPage description={t('bandwidth.subtitle')}>
+        <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void refetch() }} />
+      </AdminPage>
+    )
   }
 
   return (
-    <div className="space-y-12">
+    <AdminPage description={t('bandwidth.subtitle')}>
+      <div className="space-y-12">
       {data && isRefetchError && (
         <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
       )}
@@ -344,6 +352,7 @@ export default function BandwidthReport() {
           <EmptyState icon="speed" title={t('noData')} minHeight={200} />
         )}
       </section>
-    </div>
+      </div>
+    </AdminPage>
   )
 }

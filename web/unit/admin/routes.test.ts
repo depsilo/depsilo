@@ -28,10 +28,11 @@ const expectedRoutes = {
 } as const
 
 const expectedGroups = [
-  { id: 'operations', routes: ['dashboard', 'attention', 'bandwidth', 'accessLogs', 'auditLogs'] },
-  { id: 'cacheUpstreams', routes: ['cache', 'cacheIndexes', 'compileCache', 'upstreams', 'upstreamUpdates'] },
-  { id: 'supplyChain', routes: ['quarantine', 'rules', 'security', 'projects'] },
-  { id: 'system', routes: ['users', 'license', 'settings'] },
+  { id: 'overview', routes: ['dashboard'] },
+  { id: 'history', routes: ['accessLogs', 'upstreamUpdates', 'auditLogs', 'bandwidth'] },
+  { id: 'sourcesCache', routes: ['upstreams', 'cache', 'cacheIndexes', 'compileCache'] },
+  { id: 'governance', routes: ['security', 'quarantine', 'rules', 'projects'] },
+  { id: 'system', routes: ['users', 'settings', 'license'] },
 ] as const
 
 describe('Admin route manifest', () => {
@@ -42,7 +43,7 @@ describe('Admin route manifest', () => {
     expect(adminRouteManifest.find(route => route.id === 'projects')?.pro).toBe(true)
   })
 
-  it('covers every route once in stable Operator-task order', () => {
+  it('covers every visible route once in stable Operator-task order', () => {
     expect(adminNavigationGroups.every(group => group.routes.length > 0)).toBe(true)
     expect(adminNavigationGroups.map(group => ({
       id: group.id,
@@ -50,8 +51,20 @@ describe('Admin route manifest', () => {
     }))).toEqual(expectedGroups)
 
     const groupedRouteIds = adminNavigationGroups.flatMap(group => group.routes.map(route => route.id))
-    expect(groupedRouteIds).toEqual(adminRouteManifest.map(route => route.id))
-    expect(new Set(groupedRouteIds).size).toBe(adminRouteManifest.length)
+    const visibleRouteIds = adminRouteManifest
+      .filter(route => !route.hiddenFromNavigation)
+      .map(route => route.id)
+    expect(groupedRouteIds).toEqual(visibleRouteIds)
+    expect(new Set(groupedRouteIds).size).toBe(visibleRouteIds.length)
+  })
+
+  it('keeps attention directly reachable without exposing it in primary navigation', () => {
+    expect(resolveAdminRoute('/admin/attention')).toMatchObject({
+      id: 'attention',
+      hiddenFromNavigation: true,
+      navGroup: 'overview',
+    })
+    expect(adminNavigationGroups.flatMap(group => group.routes).some(route => route.id === 'attention')).toBe(false)
   })
 
   it('normalizes case and trailing slashes without masking unknown paths', () => {

@@ -295,13 +295,13 @@ export default function AuditLogsV2() {
             <StaleDataNotice onRefresh={() => { void refetch() }} />
           )}
           {items.length === 0 ? (
-            <EmptyState icon="receipt_long" title={t('audit.noLogs')} minHeight={200} />
+            <EmptyState icon="receipt_long" title={t('audit.noLogs')} hint={t('audit.noLogsHint')} minHeight={240} />
           ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
                 {headers.map(h => (
-                  <th key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <th key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </th>
                 ))}

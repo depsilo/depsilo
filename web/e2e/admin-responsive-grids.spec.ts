@@ -62,10 +62,13 @@ test('Dashboard trend controls keep a touch-safe segmented layout on mobile', as
     return { width: rect.width, height: rect.height }
   }))
   expect(Math.min(...sizes.map(size => size.height))).toBeGreaterThanOrEqual(40)
+  const rangeControl = page.locator('[data-trend-range-control]')
+  await expect(rangeControl).toBeVisible()
+  expect(await rangeControl.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(42)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 })
 
-test('Dashboard turns degraded operations into direct actions and includes every ecosystem in Top 10', async ({ page }) => {
+test('Dashboard turns degraded operations into flowline actions without restoring summary lists', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/now': {
       status: 'degraded',
@@ -106,10 +109,21 @@ test('Dashboard turns degraded operations into direct actions and includes every
   })
   await page.goto('/admin')
 
+  const flowline = page.locator('[data-query-key="now"]')
+  await expect(flowline.getByRole('heading', { name: '实时依赖流线' })).toBeVisible()
+  await expect(flowline.getByRole('group', { name: /请求从客户端入口进入 Depsilo 缓存/ })).toBeVisible()
+  await expect(flowline.getByText('客户端入口', { exact: true })).toBeVisible()
+  await expect(flowline.getByText('Depsilo 缓存', { exact: true })).toBeVisible()
+  await expect(flowline.getByText('上游源', { exact: true })).toBeVisible()
+
+  const attention = page.locator('section[aria-labelledby="dashboard-attention-title"]')
+  await expect(attention.getByRole('heading', { name: '待处理' })).toBeVisible()
   await expect(page.getByText('2 个上游需要关注：npmjs、PyPI')).toBeVisible()
   await expect(page.getByRole('link', { name: '查看上游源', exact: true })).toHaveAttribute('href', '/admin/upstreams')
   await expect(page.getByRole('link', { name: '管理缓存', exact: true })).toHaveAttribute('href', '/admin/cache')
   await expect(page.getByRole('link', { name: /4.*6 个上游健康/ })).toHaveAttribute('href', '/admin/upstreams')
-  await expect(page.getByText('@depsilo/ui', { exact: true })).toBeVisible()
-  await expect(page.getByText('org.example:core', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /热门包 TOP 10|Top 10 Packages/ })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: /上游源状态|Upstream Status/ })).toHaveCount(0)
+  await expect(page.getByText('@depsilo/ui', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('org.example:core', { exact: true })).toHaveCount(0)
 })
