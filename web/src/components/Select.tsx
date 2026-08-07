@@ -36,7 +36,6 @@ export default function SelectV2({
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
         color: 'var(--text)',
-        outline: 'none',
         ...style,
       }}
     >

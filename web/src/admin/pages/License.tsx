@@ -64,8 +64,8 @@ export default function License() {
 
   const statusQuery = useQuery({
     queryKey: ['license', 'status'],
-    queryFn: async () => {
-      const res = await licenseApi.status()
+    queryFn: async ({ signal }) => {
+      const res = await licenseApi.status({ signal })
       return res.data as EntitlementStatus
     },
     refetchOnWindowFocus: true,

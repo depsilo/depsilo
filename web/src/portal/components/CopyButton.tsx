@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTransientFlag } from '@/hooks/useTransientFlag'
 import { copyText } from '@/lib/clipboard'
 
 interface Props {
@@ -8,12 +8,11 @@ interface Props {
 
 export default function CopyButton({ text }: Props) {
   const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
+  const [copied, showCopied] = useTransientFlag()
 
   async function copy() {
     if (await copyText(text)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      showCopied()
     }
   }
 

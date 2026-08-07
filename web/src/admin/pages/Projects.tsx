@@ -19,19 +19,20 @@ import QueryErrorState from '@/components/QueryErrorState'
 import ProRequiredCallout from '@/admin/components/ProRequiredCallout'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
+import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
+import { useTransientFlag } from '@/hooks/useTransientFlag'
 import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
 
 function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, showCopied] = useTransientFlag()
   async function handleClick() {
     if (await copyText(text)) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      showCopied()
     }
   }
   return (
@@ -53,7 +54,7 @@ export default function ProjectsV2() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ name: '', description: '' })
   const [tokenData, setTokenData] = useState<{ token: string; proxy_url: string } | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ProjectSummary | null>(null)
   const [pkgPage, setPkgPage] = useState(1)
   const [pkgEcosystem, setPkgEcosystem] = useState('')
   const [sbomFormat, setSbomFormat] = useState<ProjectSBOMFormat>('spdx')
@@ -76,7 +77,7 @@ export default function ProjectsV2() {
 
   const query = useQuery({
     queryKey: ['admin', 'projects'],
-    queryFn: () => adminApi.listProjects(),
+    queryFn: ({ signal }) => adminApi.listProjects({ signal }),
     retry: false,
   })
   const { data } = query
@@ -84,7 +85,7 @@ export default function ProjectsV2() {
 
   const detailQuery = useQuery({
     queryKey: ['admin', 'projects', selectedProject?.id],
-    queryFn: () => adminApi.getProject(selectedProject!.id),
+    queryFn: ({ signal }) => adminApi.getProject(selectedProject!.id, { signal }),
     enabled: !!selectedProject,
     retry: false,
   })
@@ -93,7 +94,7 @@ export default function ProjectsV2() {
 
   const packagesQuery = useQuery({
     queryKey: ['admin', 'projects', selectedProject?.id, 'packages', pkgPage, pkgEcosystem],
-    queryFn: () => adminApi.listProjectPackages(selectedProject!.id, { page: pkgPage, per_page: 20, ecosystem: pkgEcosystem || undefined }),
+    queryFn: ({ signal }) => adminApi.listProjectPackages(selectedProject!.id, { page: pkgPage, per_page: 20, ecosystem: pkgEcosystem || undefined }, { signal }),
     enabled: !!selectedProject,
     retry: false,
   })
@@ -116,14 +117,25 @@ export default function ProjectsV2() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminApi.deleteProject(id),
-    onSuccess: () => {
+    onSuccess: (_response, deletedProjectId) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
       setDeleteTarget(null)
-      if (selectedProject && deleteTarget === selectedProject.id) {
+      if (selectedProject?.id === deletedProjectId) {
         setSelectedProject(null)
       }
     },
   })
+
+  function openDeleteDialog(project: ProjectSummary) {
+    deleteMutation.reset()
+    setDeleteTarget(project)
+  }
+
+  function closeDeleteDialog() {
+    if (deleteMutation.isPending) return
+    deleteMutation.reset()
+    setDeleteTarget(null)
+  }
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -361,7 +373,7 @@ export default function ProjectsV2() {
             <Icon name="visibility" size="sm" />
             {t('projects.view')}
           </ButtonV2>
-          {canWrite && <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); setDeleteTarget(row.id) }} />}
+          {canWrite && <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }} />}
         </div>
       ),
     },
@@ -399,7 +411,7 @@ export default function ProjectsV2() {
       )}
 
       {/* Create modal */}
-      <ModalV2 open={createOpen} onClose={() => setCreateOpen(false)} title={t('projects.create')}>
+      <ModalV2 open={createOpen} onClose={() => setCreateOpen(false)} title={t('projects.create')} closeDisabled={createMutation.isPending}>
         <form onSubmit={handleCreate} className="space-y-4">
           <InputV2
             label={t('projects.name')}
@@ -416,7 +428,7 @@ export default function ProjectsV2() {
           />
           {createMutation.isError && <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2">
-            <ButtonV2 type="button" variant="secondary" onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
+            <ButtonV2 type="button" variant="secondary" disabled={createMutation.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
             <ButtonV2 type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>
               {createMutation.isPending ? t('saving') : t('save')}
             </ButtonV2>
@@ -459,16 +471,24 @@ export default function ProjectsV2() {
         )}
       </ModalV2>
 
-      {/* Delete confirmation */}
-      <ModalV2 open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('projects.confirmDelete')}>
-        <p className="text-[14px] mb-2" style={{ color: 'var(--text-soft)' }}>{t('projects.deleteWarning')}</p>
-        <div className="flex justify-end gap-3 pt-4">
-          <ButtonV2 variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" disabled={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
-            {deleteMutation.isPending ? t('deleting') : t('delete')}
-          </ButtonV2>
-        </div>
-      </ModalV2>
+      <ConfirmActionDialog
+        open={deleteTarget !== null}
+        title={t('projects.confirmDelete')}
+        description={t('projects.deleteWarning')}
+        details={deleteTarget ? [
+          { label: t('projects.name'), value: deleteTarget.name },
+          { label: t('projects.slug'), value: deleteTarget.slug, mono: true },
+        ] : []}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('delete')}
+        pendingLabel={t('deleting')}
+        pending={deleteMutation.isPending}
+        errorMessage={deleteTarget && deleteMutation.isError ? getApiError(deleteMutation.error).message : null}
+        onClose={closeDeleteDialog}
+        onConfirm={() => {
+          if (deleteTarget && canWrite) deleteMutation.mutate(deleteTarget.id)
+        }}
+      />
     </div>
     </AdminPage>
   )

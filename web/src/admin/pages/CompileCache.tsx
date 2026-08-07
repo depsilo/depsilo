@@ -19,6 +19,7 @@ import SectionHeader from '@/components/SectionHeader'
 import SelectV2 from '@/components/Select'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
+import { useTransientState } from '@/hooks/useTransientFlag'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import type {
@@ -53,19 +54,19 @@ export default function CompileCache() {
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<CreateCompileCacheCredentialRequest>(DEFAULT_FORM)
   const [clientConfigurations, setClientConfigurations] = useState<OneTimeClientConfigurations | null>(null)
-  const [copiedValue, setCopiedValue] = useState<CopiedValue | null>(null)
+  const [copiedValue, showCopiedValue, resetCopiedValue] = useTransientState<CopiedValue | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<CompileCacheCredential | null>(null)
   const [cleanupOpen, setCleanupOpen] = useState(false)
 
   const statusQuery = useQuery({
     queryKey: ['admin', 'compile-cache', 'status'],
-    queryFn: () => adminApi.getCompileCacheStatus(),
+    queryFn: ({ signal }) => adminApi.getCompileCacheStatus({ signal }),
     retry: false,
     refetchInterval: 30000,
   })
   const credentialsQuery = useQuery({
     queryKey: ['admin', 'compile-cache', 'credentials'],
-    queryFn: () => adminApi.listCompileCacheCredentials(),
+    queryFn: ({ signal }) => adminApi.listCompileCacheCredentials({ signal }),
     retry: false,
   })
 
@@ -151,16 +152,13 @@ export default function CompileCache() {
 
   function closeClientConfigurations() {
     setClientConfigurations(null)
-    setCopiedValue(null)
+    resetCopiedValue()
     createMutation.reset()
   }
 
   async function copyValue(value: string, target: CopiedValue) {
     if (!await copyText(value)) return
-    setCopiedValue(target)
-    window.setTimeout(() => {
-      setCopiedValue(current => current === target ? null : current)
-    }, 2000)
+    showCopiedValue(target)
   }
 
   function refreshAll() {

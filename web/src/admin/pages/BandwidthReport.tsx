@@ -8,6 +8,7 @@ import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
 import ButtonV2 from '@/components/Button'
+import InputV2 from '@/components/Input'
 import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
 import EcosystemIcon from '@/components/EcosystemIcon'
@@ -77,15 +78,16 @@ export default function BandwidthReport() {
   const [range, setRange] = useState('7d')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
+  const invalidCustomRange = !!customStart && !!customEnd && customStart > customEnd
 
   const params = range === 'custom'
     ? { range: 'custom', start: customStart, end: customEnd }
     : { range }
-  const queryEnabled = range !== 'custom' || (!!customStart && !!customEnd)
+  const queryEnabled = range !== 'custom' || (!!customStart && !!customEnd && !invalidCustomRange)
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'bandwidth', params],
-    queryFn: () => adminApi.getBandwidthReport(params),
+    queryFn: ({ signal }) => adminApi.getBandwidthReport(params, { signal }),
     enabled: queryEnabled,
     refetchInterval: 60000,
     retry: false,
@@ -174,21 +176,25 @@ export default function BandwidthReport() {
           )
         })}
         {range === 'custom' && (
-          <div className="flex items-center gap-2 ml-2">
-            <input
+          <div data-bandwidth-custom-range className="grid w-full gap-3 sm:ml-2 sm:w-auto sm:grid-cols-2">
+            <InputV2
+              label={t('bandwidth.startDate')}
               type="date"
               value={customStart}
               onChange={e => setCustomStart(e.target.value)}
-              className="px-2 py-1 text-[12px] rounded-[4px] font-mono"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
+              max={customEnd || undefined}
+              mono
+              className="min-w-[9.5rem]"
             />
-            <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>-</span>
-            <input
+            <InputV2
+              label={t('bandwidth.endDate')}
               type="date"
               value={customEnd}
               onChange={e => setCustomEnd(e.target.value)}
-              className="px-2 py-1 text-[12px] rounded-[4px] font-mono"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
+              min={customStart || undefined}
+              error={invalidCustomRange ? t('bandwidth.invalidDateRange') : undefined}
+              mono
+              className="min-w-[9.5rem]"
             />
           </div>
         )}

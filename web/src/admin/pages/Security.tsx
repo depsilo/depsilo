@@ -54,7 +54,7 @@ function OverviewTab() {
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'dashboard'],
-    queryFn: () => adminApi.getSecurityDashboard(),
+    queryFn: ({ signal }) => adminApi.getSecurityDashboard({ signal }),
     refetchInterval: 60000,
     retry: false,
   })
@@ -189,7 +189,7 @@ function VulnerabilitiesTab() {
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'vulnerabilities', params],
-    queryFn: () => adminApi.listVulnerabilities(params),
+    queryFn: ({ signal }) => adminApi.listVulnerabilities(params, { signal }),
     retry: false,
   })
   const { data } = query
@@ -327,7 +327,7 @@ function SuggestionsTab() {
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'suggestions', { page }],
-    queryFn: () => adminApi.listSuggestions({ page, per_page: 20 }),
+    queryFn: ({ signal }) => adminApi.listSuggestions({ page, per_page: 20 }, { signal }),
     retry: false,
   })
   const { data } = query
@@ -488,7 +488,7 @@ function PoliciesTab() {
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'policies'],
-    queryFn: () => adminApi.listSecurityPolicies(),
+    queryFn: ({ signal }) => adminApi.listSecurityPolicies({ signal }),
     retry: false,
   })
   const { data } = query

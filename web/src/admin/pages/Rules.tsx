@@ -6,6 +6,7 @@ import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
+import TextareaV2 from '@/components/Textarea'
 import Icon from '@/components/Icon'
 import BadgeV2 from '@/components/Badge'
 import ModalV2 from '@/components/Modal'
@@ -21,6 +22,7 @@ import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { RuleListResponse, RuleRecord, RuleRequest, RuleTestResponse } from '@/lib/adminApi.types'
 import AdminPage from '@/admin/components/AdminPage'
+import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 
 const ECOSYSTEM_OPTIONS = [{ value: '*', label: 'All (*)' }, { value: 'pypi', label: 'PyPI' }, { value: 'apt', label: 'APT' }, { value: 'npm', label: 'npm' }, { value: 'go', label: 'Go' }, { value: 'cargo', label: 'Cargo' }, { value: 'maven', label: 'Maven' }, { value: 'rubygems', label: 'RubyGems' }, { value: 'composer', label: 'Composer' }, { value: 'nuget', label: 'NuGet' }, { value: 'conda', label: 'Conda' }, { value: 'cran', label: 'CRAN' }, { value: 'alpine', label: 'Alpine' }, { value: 'helm', label: 'Helm' }]
 
@@ -42,9 +44,9 @@ export default function RulesV2() {
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
   const [dialogOpen, setDialogOpen] = useState(false); const [editId, setEditId] = useState<number | null>(null); const [form, setForm] = useState<RuleForm>(emptyForm)
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null); const [testOpen, setTestOpen] = useState(false); const [testForm, setTestForm] = useState({ ecosystem: 'pypi', package: '', version: '' }); const [testResult, setTestResult] = useState<RuleTestState | null>(null); const [testLoading, setTestLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<RuleRecord | null>(null); const [testOpen, setTestOpen] = useState(false); const [testForm, setTestForm] = useState({ ecosystem: 'pypi', package: '', version: '' }); const [testResult, setTestResult] = useState<RuleTestState | null>(null); const [testLoading, setTestLoading] = useState(false)
 
-  const query = useQuery({ queryKey: ['admin', 'rules'], queryFn: () => adminApi.listRules(), retry: false })
+  const query = useQuery({ queryKey: ['admin', 'rules'], queryFn: ({ signal }) => adminApi.listRules({ signal }), retry: false })
   const { data } = query
   const rulePayload = data?.data
   const items = rulePayload ? (Array.isArray(rulePayload) ? rulePayload : rulePayload.items) : []
@@ -63,11 +65,19 @@ export default function RulesV2() {
       closeDialog()
     },
   })
-  const deleteMutation = useMutation({ mutationFn: (id: number) => adminApi.deleteRule(id), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin', 'rules'] }); setDeleteTarget(null) } })
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => adminApi.deleteRule(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'rules'] })
+      setDeleteTarget(null)
+    },
+  })
 
   function closeDialog() { setDialogOpen(false); setEditId(null); setForm(emptyForm) }
   function openCreate() { createMutation.reset(); setEditId(null); setForm({ ...emptyForm }); setDialogOpen(true) }
   function openEdit(rule: RuleRecord) { updateMutation.reset(); setEditId(rule.id); setForm({ ecosystem: rule.ecosystem || '*', package_name: rule.package_name || '', version: rule.version || '*', action: rule.action || 'deny', reason: rule.reason || '' }); setDialogOpen(true) }
+  function openDeleteDialog(rule: RuleRecord) { deleteMutation.reset(); setDeleteTarget(rule) }
+  function closeDeleteDialog() { if (deleteMutation.isPending) return; deleteMutation.reset(); setDeleteTarget(null) }
   function handleSubmit(e: React.FormEvent) { e.preventDefault(); if (!canWrite) return; if (editId) updateMutation.mutate({ id: editId, data: form }); else createMutation.mutate(form) }
   async function handleTest() { setTestLoading(true); setTestResult(null); try { const res = await adminApi.testRule(testForm); setTestResult(res.data) } catch (error: unknown) { setTestResult({ error: getApiError(error).message }) } finally { setTestLoading(false) } }
   const isSaving = createMutation.isPending || updateMutation.isPending
@@ -84,7 +94,7 @@ export default function RulesV2() {
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="error">{t('rules.deny')}</BadgeV2> },
     { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px]" style={{ color: 'var(--text-soft)' }} title={v as string}>{(v as string) || '-'}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string, 'relative')}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon="delete" label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => setDeleteTarget(row.id)} /></div>) : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon="delete" label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => openDeleteDialog(row)} /></div>) : null },
   ]
 
   return (
@@ -115,30 +125,61 @@ export default function RulesV2() {
         </div>
       )}
 
-      <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('rules.editRule') : t('rules.addRule')}>
+      <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('rules.editRule') : t('rules.addRule')} closeDisabled={isSaving}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <SelectV2 label={t('rules.ecosystem')} value={form.ecosystem} onChange={(e) => setForm({ ...form, ecosystem: e.target.value })}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
           <InputV2 label={t('rules.packageName')} mono value={form.package_name} onChange={(e) => setForm({ ...form, package_name: e.target.value })} placeholder={t('rules.packagePlaceholder')} required />
           <InputV2 label={t('rules.version')} mono value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder={t('rules.versionPlaceholder')} />
-          <div>
-            <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>{t('rules.action')}</label>
+          <fieldset>
+            <legend className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">{t('rules.action')}</legend>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setForm({ ...form, action: 'allow' })} className="flex-1 py-2 text-[14px] font-[400] rounded-[4px] transition-colors cursor-pointer" style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}>{t('rules.allow')}</button>
-              <button type="button" onClick={() => setForm({ ...form, action: 'deny' })} className="flex-1 py-2 text-[14px] font-[400] rounded-[4px] transition-colors cursor-pointer" style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}>{t('rules.deny')}</button>
+              <button
+                type="button"
+                aria-pressed={form.action === 'allow'}
+                onClick={() => setForm({ ...form, action: 'allow' })}
+                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
+                style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}
+              >
+                {t('rules.allow')}
+              </button>
+              <button
+                type="button"
+                aria-pressed={form.action === 'deny'}
+                onClick={() => setForm({ ...form, action: 'deny' })}
+                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
+                style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}
+              >
+                {t('rules.deny')}
+              </button>
             </div>
-          </div>
-          <div><label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>{t('rules.reason')}</label><textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder={t('rules.reasonPlaceholder')} rows={2} className="w-full rounded-[4px] px-3 py-2.5 text-[16px] resize-none" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none' }} /></div>
+          </fieldset>
+          <TextareaV2 label={t('rules.reason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder={t('rules.reasonPlaceholder')} rows={2} className="resize-none" />
           {saveError && <InlineNotice tone="danger">{getApiError(saveError).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" onClick={closeDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</ButtonV2></div>
+          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={isSaving} onClick={closeDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</ButtonV2></div>
         </form>
       </ModalV2>
 
-      <ModalV2 open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={t('rules.confirmDelete')}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('rules.confirmDeleteMsg')}</p>
-        <div className="flex justify-end gap-3"><ButtonV2 variant="secondary" onClick={() => setDeleteTarget(null)}>{t('cancel')}</ButtonV2><ButtonV2 variant="danger" disabled={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>{deleteMutation.isPending ? t('deleting') : t('delete')}</ButtonV2></div>
-      </ModalV2>
+      <ConfirmActionDialog
+        open={deleteTarget !== null}
+        title={t('rules.confirmDelete')}
+        description={t('rules.confirmDeleteMsg')}
+        details={deleteTarget ? [
+          { label: t('rules.packageName'), value: deleteTarget.package_name, mono: true },
+          { label: t('rules.ecosystem'), value: deleteTarget.ecosystem, mono: true },
+          { label: t('rules.version'), value: deleteTarget.version, mono: true },
+        ] : []}
+        cancelLabel={t('cancel')}
+        confirmLabel={t('delete')}
+        pendingLabel={t('deleting')}
+        pending={deleteMutation.isPending}
+        errorMessage={deleteTarget && deleteMutation.isError ? getApiError(deleteMutation.error).message : null}
+        onClose={closeDeleteDialog}
+        onConfirm={() => {
+          if (deleteTarget && canWrite) deleteMutation.mutate(deleteTarget.id)
+        }}
+      />
 
-      <ModalV2 open={testOpen} onClose={() => setTestOpen(false)} title={t('rules.testTitle')}>
+      <ModalV2 open={testOpen} onClose={() => setTestOpen(false)} title={t('rules.testTitle')} closeDisabled={testLoading}>
         <div className="space-y-4">
           <SelectV2 label={t('rules.ecosystem')} value={testForm.ecosystem} onChange={(e) => setTestForm({ ...testForm, ecosystem: e.target.value })}>{ECOSYSTEM_OPTIONS.filter(o => o.value !== '*').map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
           <InputV2 label={t('rules.packageName')} mono value={testForm.package} onChange={(e) => setTestForm({ ...testForm, package: e.target.value })} placeholder={t('rules.packagePlaceholder')} />

@@ -61,6 +61,7 @@ test('light Setup keeps a pure-white canvas through checking, recovery, and firs
     releaseInitialCheck = resolve
   })
 
+  await page.setViewportSize({ width: 390, height: 844 })
   await setUiPreferences(page, 'light', 'zh')
   await mockAdminApi(page, {
     'GET /api/v1/setup/status': () => {
@@ -88,13 +89,14 @@ test('light Setup keeps a pure-white canvas through checking, recovery, and firs
 
   await unavailable.getByRole('button', { name: '重试检查' }).click()
   await expect(page.getByText('Depsilo', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '开始' })).toBeVisible()
-  await page.getByRole('button', { name: '开始' }).click()
-
-  await expect(page.getByRole('heading', { name: '基础设置' })).toBeVisible()
-  await expect(page.getByText('第 2 / 5 步')).toHaveCSS('white-space', 'nowrap')
+  await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '完成初始化' })).toBeVisible()
+  await expect(page.locator('details')).not.toHaveAttribute('open', '')
   await expectPureWhiteCanvas(page)
-  await expectPureWhiteSurface(page.locator('#root > .min-h-screen'))
+  await expectPureWhiteSurface(page.locator('#root > main'))
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+  const submitBox = await page.getByRole('button', { name: '完成初始化' }).boundingBox()
+  expect(submitBox?.height).toBeGreaterThanOrEqual(40)
   expect(
     (await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
@@ -110,31 +112,21 @@ test.describe('without an Admin session', () => {
     { width: 390, height: 430 },
     { width: 1440, height: 900 },
   ]) {
-    test(`light Login uses a pure-white ${width <= 720 ? 'single-column' : 'split'} canvas at ${width}x${height}`, async ({ page }) => {
+    test(`light Login uses a restrained single-column canvas at ${width}x${height}`, async ({ page }) => {
       await page.setViewportSize({ width, height })
       await setUiPreferences(page, 'light', 'zh')
       await page.goto('/admin')
 
       await expect(page).toHaveURL(/\/admin\/login$/)
       await expect(page.getByRole('heading', { name: '管理后台' })).toBeVisible()
-      const brandPanel = page.locator('.login-brand-panel')
-      if (width <= 720) await expect(brandPanel).toBeHidden()
-      else await expect(brandPanel).toBeVisible()
 
       const portalLink = page.getByRole('link', { name: '返回门户' })
       const portalLinkBox = await portalLink.boundingBox()
       expect(portalLinkBox?.height).toBeGreaterThanOrEqual(40)
-      if (height <= 600) {
-        const cardBox = await page.locator('.aurora-rim').boundingBox()
-        expect(
-          (portalLinkBox?.y ?? 0) + (portalLinkBox?.height ?? 0),
-        ).toBeLessThanOrEqual(cardBox?.y ?? 0)
-      }
-
-      const version = page.locator('.login-version')
-      await expect(version).toHaveCount(1)
-      if (height <= 600) await expect(version).toBeHidden()
-      else await expect(version).toBeVisible()
+      const loginSurface = page.getByRole('main').locator(':scope > div')
+      const surfaceBox = await loginSurface.boundingBox()
+      expect(surfaceBox?.width).toBeLessThanOrEqual(420)
+      await expect(page.getByRole('button', { name: '登录' })).toBeVisible()
 
       await expectPureWhiteCanvas(page)
       await expectPureWhiteSurface(page.locator('#root > .min-h-screen'))

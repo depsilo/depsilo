@@ -88,7 +88,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
   const safeLimit = normalizeLimit(limit)
   const query = useQuery({
     queryKey: ['admin', 'dashboard', 'recent-downloads', safeLimit],
-    queryFn: () => adminApi.getRecentDownloads(safeLimit),
+    queryFn: ({ signal }) => adminApi.getRecentDownloads(safeLimit, { signal }),
     refetchInterval: REFRESH_INTERVAL_MS,
     refetchIntervalInBackground: false,
     staleTime: REFRESH_INTERVAL_MS - 1_000,

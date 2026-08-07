@@ -13,8 +13,7 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
 
   function toggle() {
     const next = isZh ? 'en' : 'zh'
-    i18n.changeLanguage(next)
-    localStorage.setItem('lang', next)
+    void i18n.changeLanguage(next)
   }
 
   return (

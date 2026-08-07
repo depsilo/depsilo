@@ -5,6 +5,7 @@ import CompileCacheIntro from '@/portal/components/CompileCacheIntro'
 import EcosystemCatalog from '@/portal/components/EcosystemCatalog'
 import HeroAICTA from '@/portal/components/HeroAICTA'
 import { LANGUAGES } from '@/lib/ecosystemData'
+import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 
 const RECENT_ECOSYSTEMS_KEY = 'depsilo.portal.recent-ecosystems.v1'
 const MAX_RECENT_ECOSYSTEMS = 3
@@ -15,7 +16,7 @@ interface Props {
 
 function readRecentEcosystems(): string[] {
   try {
-    const stored = window.localStorage.getItem(RECENT_ECOSYSTEMS_KEY)
+    const stored = readLocalStorage(RECENT_ECOSYSTEMS_KEY)
     if (!stored) return []
 
     const parsed: unknown = JSON.parse(stored)
@@ -35,12 +36,7 @@ function readRecentEcosystems(): string[] {
 }
 
 function writeRecentEcosystems(ids: string[]) {
-  try {
-    window.localStorage.setItem(RECENT_ECOSYSTEMS_KEY, JSON.stringify(ids))
-  } catch {
-    // Storage may be unavailable in privacy-restricted browsers. Selection
-    // still works for the current visit, so persistence remains optional.
-  }
+  writeLocalStorage(RECENT_ECOSYSTEMS_KEY, JSON.stringify(ids))
 }
 
 export default function QuickStart({ pytorchIndexPath }: Props) {

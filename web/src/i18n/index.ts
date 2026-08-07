@@ -1,7 +1,8 @@
 import i18n, { type BackendModule } from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 
-const savedLang = localStorage.getItem('lang') === 'en' ? 'en' : 'zh'
+const savedLang = readLocalStorage('lang') === 'en' ? 'en' : 'zh'
 const htmlLang = (language: string) => language.startsWith('zh') ? 'zh-CN' : 'en'
 
 const languageResources = {
@@ -34,7 +35,7 @@ await i18n.use(lazyLanguageBackend).use(initReactI18next).init({
 
 document.documentElement.lang = htmlLang(i18n.resolvedLanguage || savedLang)
 i18n.on('languageChanged', language => {
-  localStorage.setItem('lang', language.startsWith('zh') ? 'zh' : 'en')
+  writeLocalStorage('lang', language.startsWith('zh') ? 'zh' : 'en')
   document.documentElement.lang = htmlLang(language)
 })
 

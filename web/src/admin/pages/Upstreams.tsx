@@ -153,7 +153,7 @@ export default function UpstreamsV2() {
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'upstreams'],
-    queryFn: async () => (await adminApi.listUpstreams()).data,
+    queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data,
     retry: false,
   })
   const allUpstreams = useMemo(() => data?.items ?? [], [data])

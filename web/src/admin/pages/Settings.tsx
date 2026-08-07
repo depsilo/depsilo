@@ -112,7 +112,7 @@ export default function SettingsV2() {
 
   const settingsQuery = useQuery<AdminSettingsResponse>({
     queryKey: ['admin', 'settings'],
-    queryFn: async () => (await adminApi.getSettings()).data,
+    queryFn: async ({ signal }) => (await adminApi.getSettings({ signal })).data,
   })
 
   useEffect(() => {

@@ -7,12 +7,17 @@ const emptyStats = {
 }
 
 test('Monitor distinguishes initial loading, failure recovery, and a successful empty response', { tag: '@smoke' }, async ({ page }) => {
+  let latencyRequests = 0
   let releaseStats!: (value: JsonValue) => void
   const pendingStats = new Promise<JsonValue>((resolve) => {
     releaseStats = resolve
   })
   await mockAdminApi(page, {
     'GET /api/v1/stats': () => pendingStats,
+    'GET /api/v1/latency-series': () => {
+      latencyRequests += 1
+      return {}
+    },
   })
 
   await page.goto('/monitor')
@@ -27,6 +32,8 @@ test('Monitor distinguishes initial loading, failure recovery, and a successful 
   await expect(upstreamRegion).not.toHaveAttribute('aria-busy', 'true')
   await expect(upstreamRegion).toContainText('暂无上游源')
   await expect(upstreamRegion).toContainText('当前服务尚未配置可公开查看的上游镜像')
+  await page.waitForLoadState('networkidle')
+  expect(latencyRequests).toBe(0)
 
   let statsAvailable = false
   await mockAdminApi(page, {
@@ -44,6 +51,7 @@ test('Monitor distinguishes initial loading, failure recovery, and a successful 
 })
 
 test('Monitor exposes unified healthy, degraded, and failed status text and a search-empty state', async ({ page }) => {
+  let latencyRequests = 0
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {
     'GET /api/v1/stats': {
@@ -54,6 +62,10 @@ test('Monitor exposes unified healthy, degraded, and failed status text and a se
         { name: 'slow mirror', adapter: 'pypi', url: 'https://slow.example', healthy: true, avg_latency_ms: 150, success_rate: 0.98 },
         { name: 'down mirror', adapter: 'pypi', url: 'https://down.example', healthy: false, avg_latency_ms: 20, success_rate: 0 },
       ],
+    },
+    'GET /api/v1/latency-series': () => {
+      latencyRequests += 1
+      return {}
     },
   })
 
@@ -68,6 +80,7 @@ test('Monitor exposes unified healthy, degraded, and failed status text and a se
   await expect(page.locator('[data-upstream-row][data-upstream-status="failed"]')).toContainText('failed')
   await expect(page.getByText('1/3 healthy')).toBeVisible()
   await expect(page.locator('[data-upstream-heartbeat][aria-label="Latency history for fast mirror"]')).toBeVisible()
+  await expect.poll(() => latencyRequests).toBe(1)
 
   const search = page.getByRole('textbox', { name: 'Search ecosystems / upstreams' })
   await search.fill('missing')

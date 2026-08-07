@@ -115,6 +115,7 @@
    --surface, --hit, --btn, ...) are added alongside so new
    code can use the role-based vocabulary the brief prescribes. */
 :root {
+  color-scheme: light;
   --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -254,6 +255,7 @@
 /* ── Dark mode — Instrument default ────────────────────── */
 html.dark,
 [data-theme="dark"] {
+  color-scheme: dark;
   --logo-mark: #3DDC91;
   --bg-page:   #0B0D0F;
   --bg-panel:  #14181C;
@@ -362,6 +364,7 @@ html.dark,
    the two paths in lockstep. */
 @media (prefers-color-scheme: dark) {
   html:not(.light):not([data-theme="light"]) {
+    color-scheme: dark;
     --logo-mark: #3DDC91;
     --bg-page:   #0B0D0F;
     --bg-panel:  #14181C;
@@ -1076,11 +1079,14 @@ button.portal-header-control {
 .portal-status-pill {
   min-width: 68px;
   padding: 0 10px;
+  border-radius: 0 7px 7px 0;
 }
 .portal-status-pill[data-status='healthy'] { color: var(--ok-text); }
 .portal-status-pill[data-status='degraded'] { color: var(--warn-text); }
 .portal-status-pill[data-status='failed'] { color: var(--danger-text); }
 .portal-status-pill[data-status='unknown'] { color: var(--text-muted); }
+.portal-status-pill[data-status='loading'] { color: var(--text-muted); }
+.portal-status-pill[data-status='unavailable'] { color: var(--danger-text); }
 .portal-status-compact-icon,
 .portal-admin-mobile-label,
 .portal-language-compact-label {
@@ -1139,7 +1145,6 @@ button.portal-header-control {
 
 @media (max-width: 560px) {
   .portal-endpoint-pill,
-  .portal-theme-button,
   .portal-brand-name,
   .portal-admin-label,
   .portal-status-label {
@@ -1156,9 +1161,11 @@ button.portal-header-control {
   .portal-header-nav > a {
     padding-inline: 6px !important;
   }
-  .portal-service-group,
-  .portal-tools-group {
+  .portal-service-group {
     width: 40px;
+  }
+  .portal-tools-group {
+    width: 80px;
   }
   .portal-status-pill {
     width: 40px;
@@ -1168,7 +1175,10 @@ button.portal-header-control {
     border-radius: 7px !important;
   }
   .portal-language-control {
-    border-radius: 7px !important;
+    border-radius: 7px 0 0 7px !important;
+  }
+  .portal-theme-button {
+    border-radius: 0 7px 7px 0 !important;
   }
   .portal-status-dot {
     display: none !important;
@@ -1177,14 +1187,15 @@ button.portal-header-control {
     display: inline-flex;
   }
   .portal-admin-link {
-    min-width: 48px;
-    padding: 0 9px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
   }
   .portal-admin-link .icon {
-    display: none;
+    display: inline-flex;
   }
   .portal-admin-mobile-label {
-    display: inline;
+    display: none;
   }
   .portal-monitor-search {
     width: 100% !important;
@@ -1196,9 +1207,15 @@ button.portal-header-control {
     display: none !important;
   }
   .portal-header-inner {
-    gap: 6px !important;
-    padding-left: max(8px, env(safe-area-inset-left)) !important;
-    padding-right: max(8px, env(safe-area-inset-right)) !important;
+    gap: 2px !important;
+    padding-left: max(4px, env(safe-area-inset-left)) !important;
+    padding-right: max(4px, env(safe-area-inset-right)) !important;
+  }
+  .portal-header-actions {
+    gap: 2px;
+  }
+  .portal-header-nav > a {
+    padding-inline: 4px !important;
   }
 }
 

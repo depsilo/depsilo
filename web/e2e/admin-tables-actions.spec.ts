@@ -46,6 +46,20 @@ async function expectNoFocusableRows(page: Page) {
   await expect(page.locator('tr[tabindex]')).toHaveCount(0)
 }
 
+async function expectWithinViewport(page: Page, selector: string, width: number) {
+  const bounds = await page.locator(selector).boundingBox()
+  expect(bounds).not.toBeNull()
+  expect(bounds!.x).toBeGreaterThanOrEqual(0)
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1)
+}
+
+async function navigateClient(page: Page, path: string) {
+  await page.evaluate((nextPath) => {
+    window.history.pushState({}, '', nextPath)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, path)
+}
+
 for (const routeCase of cases) {
   test(`${routeCase.path} keeps data and row actions accessible at 390px`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
@@ -72,8 +86,8 @@ for (const routeCase of cases) {
       await expect(page.locator('[data-table-viewport]')).toHaveCount(0)
     }
 
-    await expect(page.locator('main [data-icon-button]')).toHaveCount(routeCase.actionCount)
-    const iconButtons = page.locator('[data-icon-button]')
+    const iconButtons = page.locator('main [data-icon-button]:visible')
+    await expect(iconButtons).toHaveCount(routeCase.actionCount)
     for (const action of await iconButtons.all()) {
       await expect(action).toHaveAccessibleName(/.+/)
       const box = await action.boundingBox()
@@ -83,6 +97,82 @@ for (const routeCase of cases) {
     await expectNoFocusableRows(page)
   })
 }
+
+test('wide-table query states stay in the mobile canvas and only data mounts a scroll region', async ({ page }) => {
+  const width = 320
+  let mode: 'loading' | 'empty' | 'error' | 'populated' = 'loading'
+  let releaseLoading!: () => void
+  const loadingResponse = new Promise<AccessLogListResponse>((resolve) => {
+    releaseLoading = () => resolve({ items: [], total: 0, page: 1, page_size: 50 })
+  })
+
+  await page.setViewportSize({ width, height: 844 })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/logs': async () => {
+      if (mode === 'loading') return loadingResponse
+      if (mode === 'error') return { status: 500, body: { code: 'FAILED', message: 'fixture table failure' } }
+      if (mode === 'populated') return populated['GET /api/v1/admin/logs']
+      return { items: [], total: 0, page: 1, page_size: 50 } satisfies AccessLogListResponse
+    },
+  })
+
+  await page.goto('/admin/logs')
+  const loading = page.locator('main [aria-busy="true"]').filter({ hasText: /加载|Loading/ }).last()
+  await expect(loading).toBeVisible()
+  await expect(page.locator('[data-table-viewport]')).toHaveCount(0)
+  await expectWithinViewport(page, 'main [aria-busy="true"]', width)
+
+  mode = 'empty'
+  releaseLoading()
+  await expect(page.getByText(/暂无日志|No logs/, { exact: true })).toBeVisible()
+  await expect(page.locator('[data-table-viewport]')).toHaveCount(0)
+
+  mode = 'error'
+  await navigateClient(page, '/admin/logs?package=fixture-error')
+  const error = page.getByRole('alert').filter({ hasText: 'fixture table failure' })
+  await expect(error).toBeVisible()
+  await expect(page.locator('[data-table-viewport]')).toHaveCount(0)
+  await expectWithinViewport(page, 'main [role="alert"]', width)
+
+  mode = 'populated'
+  await navigateClient(page, '/admin/logs?package=requests')
+  const table = page.getByRole('region', { name: /访问日志表格|Access logs table/ })
+  await expect(table).toBeVisible()
+
+  await navigateClient(page, '/admin/audit')
+  await expect(table).toHaveCount(0)
+  mode = 'error'
+  await navigateClient(page, '/admin/logs?package=requests')
+  const stale = page.getByText(/数据已过期|Stale data/, { exact: true })
+  await expect(stale).toBeVisible()
+  await expect(table).toBeVisible()
+  await expect(table.getByText(/数据已过期|Stale data/, { exact: true })).toHaveCount(0)
+  await expectWithinViewport(page, 'main [class*="rounded-"][class*="border"]:has-text("数据已过期")', width)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+})
+
+test('empty states for wide Admin tables do not create local scroll regions at 320px', async ({ page }) => {
+  const width = 320
+  await page.setViewportSize({ width, height: 844 })
+  const emptyCases = [
+    { path: '/admin/logs', text: /暂无日志|No logs/ },
+    { path: '/admin/audit', text: /暂无审计日志|No audit logs/ },
+    { path: '/admin/cache', text: /暂无缓存数据|No cache entries/ },
+    { path: '/admin/indexes', text: /没有符合条件的索引缓存|No matching cached indexes/ },
+  ]
+
+  for (const emptyCase of emptyCases) {
+    await page.goto(emptyCase.path)
+    const emptyState = page.getByText(emptyCase.text, { exact: true })
+    await expect(emptyState).toBeVisible()
+    await expect(page.locator('[data-table-viewport]')).toHaveCount(0)
+    const bounds = await emptyState.boundingBox()
+    expect(bounds).not.toBeNull()
+    expect(bounds!.x).toBeGreaterThanOrEqual(0)
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+  }
+})
 
 test('project and security tables expose named local scroll regions and explicit actions', async ({ page }) => {
   const duplicateKeyWarnings: string[] = []

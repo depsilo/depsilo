@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import BadgeV2 from '@/components/Badge'
@@ -57,10 +57,21 @@ export default function WebhookTab() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [form, setForm] = useState<WebhookForm>(emptyForm)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const updateNow = () => setNow(Date.now())
+    const interval = window.setInterval(updateNow, 60_000)
+    window.addEventListener('focus', updateNow)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', updateNow)
+    }
+  }, [])
 
   const query = useQuery({
     queryKey: ['admin', 'webhooks'],
-    queryFn: async () => (await webhookApi.list()).data,
+    queryFn: async ({ signal }) => (await webhookApi.list({ signal })).data,
     retry: false,
   })
 
@@ -101,7 +112,11 @@ export default function WebhookTab() {
 
   const testMutation = useMutation({
     mutationFn: (id: number) => webhookApi.test(id),
-    onSuccess: () => toast.show({ tone: 'success', message: t('webhook.testSent') }),
+    onSuccess: () => {
+      setNow(Date.now())
+      void refresh()
+      toast.show({ tone: 'success', message: t('webhook.testSent') })
+    },
     onError: error => showFailure(error, t('webhook.testError')),
   })
 
@@ -143,7 +158,9 @@ export default function WebhookTab() {
 
   const formatLastSent = (timestamp: string | null) => {
     if (timestamp === null) return t('webhook.never')
-    const minutes = Math.max(0, Math.floor((query.dataUpdatedAt - new Date(timestamp).getTime()) / 60_000))
+    const sentAt = Date.parse(timestamp)
+    if (!Number.isFinite(sentAt)) return t('webhook.never')
+    const minutes = Math.max(0, Math.floor((now - sentAt) / 60_000))
     if (minutes < 1) return t('webhook.justNow')
     if (minutes < 60) return t('webhook.minutesAgo', { count: minutes })
     const hours = Math.floor(minutes / 60)
@@ -226,7 +243,7 @@ export default function WebhookTab() {
         )}
       </div>
 
-      <ModalV2 open={formOpen} title={editingId === null ? t('webhook.addWebhook') : t('webhook.editWebhook')} onClose={closeForm}>
+      <ModalV2 open={formOpen} title={editingId === null ? t('webhook.addWebhook') : t('webhook.editWebhook')} onClose={closeForm} closeDisabled={saving}>
         <div className="flex flex-col gap-4">
           <InputV2 label={t('webhook.name')} value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} placeholder={t('webhook.namePlaceholder')} />
           <SelectV2 label={t('webhook.platform')} value={form.platform} onChange={event => setForm(current => ({ ...current, platform: event.target.value as WebhookConfig['platform'] }))}>
@@ -264,7 +281,7 @@ export default function WebhookTab() {
           </fieldset>
           <InputV2 label={t('webhook.cooldown')} type="number" value={form.cooldown_minutes} min={5} max={1440} onChange={event => setForm(current => ({ ...current, cooldown_minutes: Number(event.target.value) || 30 }))} />
           <div className="flex justify-end gap-2 pt-1">
-            <ButtonV2 type="button" variant="secondary" onClick={closeForm}>{t('cancel')}</ButtonV2>
+            <ButtonV2 type="button" variant="secondary" disabled={saving} onClick={closeForm}>{t('cancel')}</ButtonV2>
             <ButtonV2 type="button" aria-busy={saving || undefined} disabled={saving || !form.name.trim() || !form.url.trim() || !hasEvents} onClick={save}>{saving ? t('saving') : t('save')}</ButtonV2>
           </div>
         </div>
@@ -275,10 +292,11 @@ export default function WebhookTab() {
         title={t('webhook.deleteConfirmNamed', { name: deletingWebhook?.name ?? '' })}
         onClose={() => setDeleteId(null)}
         finalFocus={deleteTriggerRef}
+        closeDisabled={deleteMutation.isPending}
       >
         <p className="mb-5 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.deleteWarning')}</p>
         <div className="flex justify-end gap-2">
-          <ButtonV2 type="button" variant="secondary" onClick={() => setDeleteId(null)}>{t('cancel')}</ButtonV2>
+          <ButtonV2 type="button" variant="secondary" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</ButtonV2>
           <ButtonV2 type="button" variant="danger" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>
             {deleteMutation.isPending ? t('deleting') : t('delete')}
           </ButtonV2>

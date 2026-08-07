@@ -87,6 +87,46 @@ test('keeps Test stable while pending and announces queued delivery', async ({ p
   await expect(page.locator('[data-toast-tone="success"]')).toContainText(/测试通知已加入发送队列/)
 })
 
+test('refreshes last sent state after a successful Test', async ({ page }) => {
+  let listRequests = 0
+  const sentAt = new Date().toISOString()
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/webhooks': () => {
+      listRequests += 1
+      return [{
+        ...webhookRows[0],
+        last_sent_at: listRequests === 1 ? null : sentAt,
+      }]
+    },
+    'POST /api/v1/admin/webhooks/1/test': { status: 'test queued' },
+  })
+  await openWebhookTab(page)
+
+  const row = page.locator('article').filter({ hasText: 'ops' })
+  await expect(row).toContainText(/上次发送:从未/)
+  await page.getByRole('button', { name: /测试 ops/ }).click()
+
+  await expect.poll(() => listRequests).toBe(2)
+  await expect(row).toContainText(/刚刚/)
+})
+
+test('advances relative last sent time while the Webhook tab remains open', async ({ page }) => {
+  const now = new Date('2026-08-07T12:00:00Z')
+  await page.clock.install({ time: now })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/webhooks': [{
+      ...webhookRows[0],
+      last_sent_at: new Date(now.getTime() - 60_000).toISOString(),
+    }],
+  })
+  await openWebhookTab(page)
+
+  const row = page.locator('article').filter({ hasText: 'ops' })
+  await expect(row).toContainText(/1 分钟前/)
+  await page.clock.fastForward(120_000)
+  await expect(row).toContainText(/3 分钟前/)
+})
+
 test('shows the service error and no success Toast when Test fails', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/webhooks': [webhookRows[0]],

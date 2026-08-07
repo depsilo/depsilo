@@ -48,7 +48,7 @@ export default function CacheIndexes() {
 
   const query = useQuery({
     queryKey: ['admin', 'cache', 'indexes', params],
-    queryFn: () => adminApi.listCacheIndexes(params),
+    queryFn: ({ signal }) => adminApi.listCacheIndexes(params, { signal }),
     retry: false,
     refetchInterval: 30000,
   })
@@ -192,15 +192,15 @@ export default function CacheIndexes() {
         </ButtonV2>
       </form>
 
-      <TableViewport label={t('cacheIndexes.tableLabel')} minWidth={canWrite ? 1210 : 1160}>
-        {items.length === 0 ? (
-          <EmptyState
-            icon="inventory_2"
-            title={t('cacheIndexes.emptyTitle')}
-            hint={t('cacheIndexes.emptyHint')}
-            minHeight={220}
-          />
-        ) : (
+      {items.length === 0 ? (
+        <EmptyState
+          icon="inventory_2"
+          title={t('cacheIndexes.emptyTitle')}
+          hint={t('cacheIndexes.emptyHint')}
+          minHeight={220}
+        />
+      ) : (
+        <TableViewport label={t('cacheIndexes.tableLabel')} minWidth={canWrite ? 1210 : 1160}>
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -287,8 +287,8 @@ export default function CacheIndexes() {
               ))}
             </tbody>
           </table>
-        )}
-      </TableViewport>
+        </TableViewport>
+      )}
 
       <AdminPagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} />
       </div>

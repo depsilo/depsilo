@@ -1,5 +1,6 @@
-import { useState, useCallback, type ReactNode } from 'react'
+import { useCallback, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTransientState } from '@/hooks/useTransientFlag'
 import { copyText } from '@/lib/clipboard'
 
 interface CodeBlockProps {
@@ -65,18 +66,16 @@ export default function CodeBlock({
   tone = 'light',
 }: CodeBlockProps) {
   const { t } = useTranslation()
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [copyState, showCopyState] = useTransientState<'idle' | 'copied' | 'failed'>('idle')
   const ink = tone === 'ink'
 
   const handleCopy = useCallback(async () => {
     if (await copyText(code)) {
-      setCopyState('copied')
-      setTimeout(() => setCopyState('idle'), 2000)
+      showCopyState('copied', 2_000)
     } else {
-      setCopyState('failed')
-      setTimeout(() => setCopyState('idle'), 3000)
+      showCopyState('failed', 3_000)
     }
-  }, [code])
+  }, [code, showCopyState])
 
   const copied = copyState === 'copied'
 

@@ -48,6 +48,29 @@ const workspaceNavigation = [
   },
 ] as const
 
+test('pending principal check shows an accessible branded loading state', async ({ page }) => {
+  let releasePrincipal: (value: unknown) => void = () => undefined
+  const pendingPrincipal = new Promise<unknown>(resolve => {
+    releasePrincipal = resolve
+  })
+  await mockAdminApi(page, {
+    'GET /api/v1/auth/me': () => pendingPrincipal,
+  })
+  await page.goto('/admin')
+
+  const pending = page.locator('[data-admin-auth-state="pending"]')
+  await expect(pending).toBeVisible()
+  await expect(pending).toHaveAttribute('aria-busy', 'true')
+  await expect(pending.getByRole('status')).toContainText('Depsilo')
+  await expect(pending.getByRole('status')).toContainText('正在验证会话')
+  await expect(pending.locator('.depsilo-logo-mark')).toBeVisible()
+  await expect(page.locator('[data-admin-outlet]')).toHaveCount(0)
+
+  releasePrincipal(adminApiDefaults['GET /api/v1/auth/me'])
+  await expect(pending).toBeHidden()
+  await expect(page.locator('[data-admin-outlet]')).toBeVisible()
+})
+
 test('closed mobile drawer has no focusable offscreen links', async ({ page }) => {
   const longVersion = '0.2.0-126-g43ca7fe-dirty'
   await mockAdminApi(page, {

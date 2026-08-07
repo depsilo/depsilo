@@ -33,7 +33,7 @@ test('expired session and failed login stay in-app, then return to the deep link
   await page.getByLabel('用户名').fill('admin')
   await page.getByLabel('密码').fill('wrong-password')
   await page.getByRole('button', { name: '登录' }).click()
-  await expect(page.getByRole('alert')).toContainText('invalid credentials')
+  await expect(page.getByRole('alert')).toContainText('登录失败，请检查用户名和密码')
   await expect(page).toHaveURL(/\/admin\/login$/)
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('document-load-count'))).toBe('1')
 
@@ -44,7 +44,86 @@ test('expired session and failed login stay in-app, then return to the deep link
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('document-load-count'))).toBe('1')
 })
 
-test('setup exposes named delete actions and times out with a retryable reconnect state', async ({ page }) => {
+test('login stays in place when the browser cannot persist the session', async ({ page }) => {
+  await page.addInitScript(() => {
+    const setItem = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key === 'token' && value === 'cannot-persist-token') {
+        throw new DOMException('Storage is disabled', 'SecurityError')
+      }
+      return setItem.call(this, key, value)
+    }
+  })
+  await mockAdminApi(page, {
+    'POST /api/v1/auth/login': {
+      token: 'cannot-persist-token',
+      expires_at: 1_900_000_000,
+      user: { id: 1, username: 'admin', role: 'admin' },
+    },
+  })
+
+  await page.goto('/admin/login')
+  await page.getByLabel('用户名').fill('admin')
+  await page.getByLabel('密码').fill('correct-password')
+  await page.getByRole('button', { name: '登录' }).click()
+
+  await expect(page).toHaveURL(/\/admin\/login$/)
+  await expect(page.getByRole('alert')).toContainText('浏览器无法保存登录状态')
+})
+
+test('leaving Login cancels the pending request without pulling the user back', async ({ page }) => {
+  let releaseLogin!: (value: unknown) => void
+  const pendingLogin = new Promise(resolve => { releaseLogin = resolve })
+  await mockAdminApi(page, {
+    'POST /api/v1/auth/login': async () => pendingLogin,
+  })
+
+  await page.goto('/admin/login')
+  const tokenBefore = await page.evaluate(() => localStorage.getItem('token'))
+  await page.getByLabel('用户名').fill('admin')
+  await page.getByLabel('密码').fill('correct-password')
+  await page.getByRole('button', { name: '登录' }).click()
+  await expect(page.getByRole('button', { name: '登录中...' })).toHaveAttribute('aria-busy', 'true')
+
+  await page.getByRole('link', { name: '返回门户' }).click()
+  await expect(page).toHaveURL('/')
+
+  releaseLogin({
+    token: 'late-session-token',
+    expires_at: 1_900_000_000,
+    user: { id: 1, username: 'admin', role: 'admin' },
+  })
+  await page.evaluate(() => new Promise<void>(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  }))
+
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('token'))).toBe(tokenBefore)
+})
+
+test('single-page setup explains invalid credentials without disabling the primary action', async ({ page }) => {
+  let setupRequests = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/setup/status': { needs_setup: true, token_required: false },
+    'POST /api/v1/setup/complete': () => {
+      setupRequests += 1
+      return { status: 500, body: { code: 'UNEXPECTED_REQUEST' } }
+    },
+  })
+
+  await page.goto('/')
+  const submit = page.getByRole('button', { name: '完成初始化' })
+  await expect(submit).toBeEnabled()
+  await page.getByLabel('管理员密码').fill('admin-Strong-Pass123!')
+  await page.getByLabel('确认密码').fill('admin-Strong-Pass123!')
+  await submit.click()
+
+  await expect(page.getByRole('alert')).toContainText('密码不能包含管理员用户名')
+  await expect(page.getByLabel('管理员密码')).toBeFocused()
+  expect(setupRequests).toBe(0)
+})
+
+test('single-page setup submits secure defaults and recovers after a reconnect timeout', async ({ page }) => {
   let healthReady = false
   let healthRequests = 0
   const healthURLs: string[] = []
@@ -53,7 +132,17 @@ test('setup exposes named delete actions and times out with a retryable reconnec
     'GET /api/v1/setup/status': { needs_setup: true, token_required: true },
     'POST /api/v1/setup/complete': async (request: Request) => {
       expect(request.headers()['x-depsilo-bootstrap-token']).toBe('bootstrap-token-from-log')
-      expect((request.postDataJSON() as { server: { port: number } }).server.port).toBe(24444)
+      const body = request.postDataJSON() as {
+        server: { port: number }
+        storage: { path: string }
+        admin: { username: string; password: string }
+        ecosystems: Record<string, { enabled: boolean; upstreams: Array<{ name: string; url: string }> }>
+      }
+      expect(body.server.port).toBe(24444)
+      expect(body.storage.path).toBe('./data/cache')
+      expect(body.admin).toEqual({ username: 'admin', password: 'Tr0ub4dor&Correct' })
+      expect(body.ecosystems.npm.enabled).toBe(true)
+      expect(body.ecosystems.npm.upstreams.length).toBeGreaterThan(0)
       return {
         status: 'ok',
         message: 'Configuration saved. Server restarting...',
@@ -76,18 +165,15 @@ test('setup exposes named delete actions and times out with a retryable reconnec
   })
 
   await page.goto('/')
-  await page.getByRole('button', { name: '开始' }).click()
+  await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
+  await page.locator('summary').filter({ hasText: '高级设置' }).click()
   await page.getByLabel('端口').fill('24444')
+  await page.getByRole('button', { name: /npm.*2 个/i }).click()
+  await expect(page.getByRole('button', { name: '删除上游源 npmmirror' })).toBeVisible()
   await page.getByLabel('管理员密码').fill('Tr0ub4dor&Correct')
   await page.getByLabel('确认密码').fill('Tr0ub4dor&Correct')
   await page.getByLabel('首启验证令牌').fill('bootstrap-token-from-log')
-  await page.getByRole('button', { name: '下一步' }).click()
-  await page.getByRole('button', { name: '下一步' }).click()
-
-  await page.getByRole('button', { name: /npm.*2 个上游/i }).click()
-  await expect(page.getByRole('button', { name: '删除上游源 npmmirror' })).toBeVisible()
-  await page.getByRole('button', { name: '下一步' }).click()
-  await page.getByRole('button', { name: '保存并启动' }).click()
+  await page.getByRole('button', { name: '完成初始化' }).click()
   await expect(page.getByText('正在重启服务')).toBeVisible()
 
   for (let elapsed = 0; elapsed < 35_000; elapsed += 1_000) {

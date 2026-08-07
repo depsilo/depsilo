@@ -1,5 +1,4 @@
 import { Routes, Route, Link, NavLink } from 'react-router'
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
@@ -12,6 +11,7 @@ import StatusDot from '@/components/StatusDot'
 import Icon from '@/components/Icon'
 import { lazyRoute } from '@/routing/lazyRoute'
 import RouteNotFound from '@/routing/RouteNotFound'
+import { useTransientState } from '@/hooks/useTransientFlag'
 
 const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
 const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
@@ -26,7 +26,7 @@ interface PortalStats {
 // when its visible label collapses at narrower widths.
 function EndpointPill() {
   const { t } = useTranslation()
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [copyState, showCopyState] = useTransientState<'idle' | 'copied' | 'failed'>('idle')
   const url = window.location.origin
   // Drop the protocol for visual density — the click-to-copy still
   // copies the full URL with scheme.
@@ -34,11 +34,9 @@ function EndpointPill() {
 
   async function handleCopy() {
     if (await copyText(url)) {
-      setCopyState('copied')
-      setTimeout(() => setCopyState('idle'), 2000)
+      showCopyState('copied', 2_000)
     } else {
-      setCopyState('failed')
-      setTimeout(() => setCopyState('idle'), 3000)
+      showCopyState('failed', 3_000)
     }
   }
 
@@ -155,31 +153,77 @@ function NavTab({ to, label }: NavTabProps) {
 export default function PortalAppV2() {
   const { t } = useTranslation()
 
-  const { data } = useQuery<PortalStats>({
+  const { data, isPending, isError, refetch } = useQuery<PortalStats>({
     queryKey: ['stats-status'],
-    queryFn: async () => {
-      const res = await statsApi.getStats()
+    queryFn: async ({ signal }) => {
+      const res = await statsApi.getStats({ signal })
       return res.data
     },
     refetchInterval: 30000,
+    retry: false,
   })
 
-  const serviceStatus = data?.service?.status ?? 'unknown'
-  const dotStatus = serviceStatus === 'healthy'
+  const serviceStatus = data?.service?.status
+  const resolvedStatus = serviceStatus === 'healthy'
     ? 'healthy'
     : serviceStatus === 'degraded'
       ? 'degraded'
       : serviceStatus === 'failed'
         ? 'failed'
         : 'unknown'
-  const statusLabel = dotStatus === 'healthy'
+  const statusTone = isPending
+    ? 'loading'
+    : isError && !data
+      ? 'unavailable'
+      : resolvedStatus
+  const resolvedStatusLabel = resolvedStatus === 'healthy'
     ? t('portal.online')
-    : dotStatus === 'degraded'
+    : resolvedStatus === 'degraded'
       ? t('degraded')
-      : dotStatus === 'failed'
+      : resolvedStatus === 'failed'
         ? t('portal.offline')
         : t('portal.statusUnknown')
+  const statusLabel = statusTone === 'loading'
+    ? t('portal.statusLoading')
+    : statusTone === 'unavailable'
+      ? t('portal.statusUnavailable')
+      : resolvedStatusLabel
+  const statusQueryState = isPending ? 'loading' : isError ? (data ? 'stale' : 'error') : 'success'
+  const statusRetryLabel = data
+    ? t('portal.retryServiceStatusWithFallback', { status: statusLabel })
+    : t('portal.retryServiceStatus')
+  const statusIcon = statusTone === 'loading'
+    ? 'progress_activity'
+    : statusTone === 'unavailable'
+      ? 'refresh'
+      : resolvedStatus === 'healthy'
+        ? 'check'
+        : resolvedStatus === 'degraded'
+          ? 'warning'
+          : resolvedStatus === 'failed'
+            ? 'close'
+            : 'help'
   const pytorchIndexPath = data?.extra_indexes?.find(index => index.kind === 'pytorch')?.path
+
+  const statusContent = (
+    <>
+      <span className="portal-status-dot" aria-hidden="true">
+        <StatusDot
+          status={statusTone === 'loading' || statusTone === 'unavailable' ? 'unknown' : resolvedStatus}
+          size={6}
+          live={resolvedStatus === 'healthy' && !isError}
+        />
+      </span>
+      <span className="portal-status-compact-icon" aria-hidden="true">
+        <Icon
+          name={statusIcon}
+          size="sm"
+          className={statusTone === 'loading' ? 'animate-spin motion-reduce:animate-none' : ''}
+        />
+      </span>
+      <span className="portal-status-label" aria-hidden="true">{statusLabel}</span>
+    </>
+  )
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
@@ -262,31 +306,34 @@ export default function PortalAppV2() {
           <div className="portal-header-actions">
             <div className="portal-header-group portal-service-group" data-portal-control-group="service">
               <EndpointPill />
-              <span
-                className="portal-header-control portal-status-pill"
-                role="status"
-                data-status={dotStatus}
-                aria-label={t('portal.serviceStatusNamed', { status: statusLabel })}
-              >
-                <span className="portal-status-dot" aria-hidden="true">
-                  <StatusDot status={dotStatus} size={6} live={dotStatus === 'healthy'} />
+              {isError ? (
+                <button
+                  type="button"
+                  className="portal-header-control portal-status-pill stripe-focus-ring"
+                  data-status={statusTone}
+                  data-query-state={statusQueryState}
+                  aria-label={statusRetryLabel}
+                  title={statusRetryLabel}
+                  onClick={() => { void refetch() }}
+                >
+                  {statusContent}
+                </button>
+              ) : (
+                <span
+                  className="portal-header-control portal-status-pill"
+                  role="status"
+                  data-status={statusTone}
+                  data-query-state={statusQueryState}
+                  aria-label={t('portal.serviceStatusNamed', { status: statusLabel })}
+                >
+                  {statusContent}
                 </span>
-                <span className="portal-status-compact-icon" aria-hidden="true">
-                  <Icon
-                    name={
-                      dotStatus === 'healthy'
-                        ? 'check'
-                        : dotStatus === 'degraded'
-                          ? 'warning'
-                          : dotStatus === 'failed'
-                            ? 'close'
-                            : 'help'
-                    }
-                    size="sm"
-                  />
+              )}
+              {isError && (
+                <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                  {statusRetryLabel}
                 </span>
-                <span className="portal-status-label" aria-hidden="true">{statusLabel}</span>
-              </span>
+              )}
             </div>
             <div
               className="portal-header-group portal-tools-group"

@@ -20,6 +20,7 @@ import Logo from '@/components/Logo'
 import ThemeToggle from '@/components/ThemeToggle'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { authApi, statsApi } from '@/lib/api'
+import { removeLocalStorage } from '@/lib/storage'
 import { formatVersion } from '@/lib/utils'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
 
@@ -220,7 +221,7 @@ function SidebarContent({
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--text)' }}>{username}</p>
-            <p className="mt-0.5 text-[11px] leading-tight" style={{ color: 'var(--text-subtle)' }}>
+            <p className="mt-0.5 text-[11px] leading-tight" style={{ color: 'var(--text-muted)' }}>
               {canWrite ? t('nav.admin') : t('nav.readonly')}
             </p>
           </div>
@@ -249,7 +250,7 @@ export default function MainLayoutV2() {
 
   const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
     queryKey: ['stats-status'],
-    queryFn: async () => (await statsApi.getStats()).data,
+    queryFn: async ({ signal }) => (await statsApi.getStats({ signal })).data,
     refetchInterval: 30000,
     staleTime: 30000,
   })
@@ -280,7 +281,7 @@ export default function MainLayoutV2() {
 
   const handleLogout = async () => {
     try { await authApi.logout() } catch { /* logout remains local when the server is unavailable */ }
-    localStorage.removeItem('token')
+    removeLocalStorage('token')
     queryClient.clear()
     navigate('/admin/login', { replace: true })
   }

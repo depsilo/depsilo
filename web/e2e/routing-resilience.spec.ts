@@ -120,7 +120,8 @@ test('setup-required status owns an Admin deep link before auth or page data can
 
   await page.goto('/admin/cache?source=setup#blocked')
 
-  await expect(page.getByRole('button', { name: '开始' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '完成初始化' })).toBeVisible()
   await expect(page).toHaveURL(/\/admin\/cache\?source=setup#blocked$/)
   expect(authRequests).toBe(0)
   expect(statsRequests).toBe(0)
@@ -174,7 +175,7 @@ test('authenticated Admin unknown paths render 404 inside the shell without dash
   await page.goto('/admin/does-not-exist?source=404#missing')
 
   await expect(page.locator('[data-admin-shell]')).toBeVisible()
-  await expect(page.locator('header').getByRole('heading', { name: '页面不存在' })).toBeVisible()
+  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('页面不存在')
   const notFound = page.locator('[data-route-state="not-found"]')
   await expect(notFound.getByRole('heading', { name: '页面不存在' })).toBeVisible()
   await expect(notFound).toBeFocused()
@@ -191,7 +192,7 @@ test('authenticated Admin unknown paths render 404 inside the shell without dash
 test('Admin title derivation follows case-insensitive route matching', async ({ page }) => {
   await page.goto('/ADMIN/CACHE')
 
-  await expect(page.locator('header').getByRole('heading', { name: '缓存管理' })).toBeVisible()
+  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('缓存管理')
   await expect(page.locator('[data-route-state="not-found"]')).toHaveCount(0)
 })
 

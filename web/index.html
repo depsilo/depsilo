@@ -13,7 +13,13 @@
       // when neither exists (Instrument default).
       (function(){
         var KEY = 'depsilo-theme';
-        var t = localStorage.getItem(KEY) || localStorage.getItem('theme');
+        var t = 'dark';
+        try {
+          t = window.localStorage.getItem(KEY) || window.localStorage.getItem('theme') || t;
+        } catch (_) {
+          // Storage may be blocked in hardened browser contexts. Theme
+          // persistence is optional, so keep the Instrument default.
+        }
         if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'dark';
         var resolved = t;
         if (t === 'system') {

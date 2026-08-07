@@ -7,34 +7,9 @@ import { Link } from 'react-router'
 import { getAdminRouteHref } from '@/admin/routes'
 import ButtonV2 from '@/components/Button'
 import QueryErrorState from '@/components/QueryErrorState'
+import type { NowResponse } from '@/lib/adminApi.types'
 import { statsApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
-
-interface LastActivity {
-  seconds_ago: number
-  adapter_type: string
-  hit: boolean
-  package_name?: string
-}
-
-interface NowData {
-  status: 'healthy' | 'degraded' | 'down'
-  uptime_seconds: number
-  now_unix: number
-  version: string
-  last_activity?: LastActivity
-  rate: {
-    requests_per_min: number
-    egress_bps: number
-    ingress_bps: number
-    has_data: boolean
-  }
-  upstreams: {
-    total: number
-    healthy: number
-  }
-  sparkline: Array<{ t: number; requests: number; hits: number }>
-}
 
 const flowMotion = `
 @keyframes dependencyFlowX {
@@ -157,7 +132,7 @@ const flowMotion = `
 }
 `
 
-function statusColor(status: NowData['status']): string {
+function statusColor(status: NowResponse['status']): string {
   if (status === 'healthy') return 'var(--ok)'
   if (status === 'degraded') return 'var(--warn-text)'
   return 'var(--danger)'
@@ -226,11 +201,11 @@ export default function NowStrip({
   cacheDataPending = false,
 }: NowStripProps) {
   const { t } = useTranslation()
-  const query = useQuery<NowData>({
+  const query = useQuery<NowResponse>({
     queryKey: ['admin', 'now'],
-    queryFn: async () => {
-      const response = await statsApi.getNow()
-      return response.data as NowData
+    queryFn: async ({ signal }) => {
+      const response = await statsApi.getNow({ signal })
+      return response.data
     },
     refetchInterval: 5_000,
     refetchIntervalInBackground: false,

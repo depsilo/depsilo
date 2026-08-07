@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next'
 import Icon from '@/components/Icon'
 import Modal from '@/components/Modal'
 import CopyButton from '@/portal/components/CopyButton'
+import { useTransientFlag } from '@/hooks/useTransientFlag'
 import { copyText } from '@/lib/clipboard'
 
 export default function HeroAICTA() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, showCopied] = useTransientFlag()
   const [copyFailed, setCopyFailed] = useState(false)
 
   const {
@@ -19,8 +20,8 @@ export default function HeroAICTA() {
     refetch,
   } = useQuery<string>({
     queryKey: ['integration-prompt'],
-    queryFn: async () => {
-      const response = await fetch('/api/v1/integration-prompt')
+    queryFn: async ({ signal }) => {
+      const response = await fetch('/api/v1/integration-prompt', { signal })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       return response.text()
     },
@@ -40,8 +41,7 @@ export default function HeroAICTA() {
     if (!text) return
 
     if (await copyText(text)) {
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
+      showCopied()
     } else {
       setCopyFailed(true)
     }

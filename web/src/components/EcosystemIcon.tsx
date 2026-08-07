@@ -14,6 +14,7 @@ import rubySvg from 'simple-icons/icons/ruby.svg?raw'
 import rustSvg from 'simple-icons/icons/rust.svg?raw'
 import ubuntuSvg from 'simple-icons/icons/ubuntu.svg?raw'
 import type { EcosystemType } from '@/lib/ecosystemTypes'
+import { useResolvedTheme } from '@/lib/theme'
 
 export type { EcosystemType } from '@/lib/ecosystemTypes'
 
@@ -89,16 +90,12 @@ export default function EcosystemIcon({
   decorative = false,
   label,
 }: EcosystemIconProps) {
+  const resolvedTheme = useResolvedTheme()
   const icon = iconMap[type]
   if (!icon) return null
 
   const brandColor = `#${icon.hex}`
-  const isDarkMode =
-    typeof document !== 'undefined' &&
-    (document.documentElement.getAttribute('data-theme') === 'dark' ||
-      document.documentElement.classList.contains('dark'))
-
-  const shouldFallback = isDarkMode && darkColorIcons.has(type)
+  const shouldFallback = resolvedTheme === 'dark' && darkColorIcons.has(type)
   const color = useColor && !shouldFallback ? brandColor : 'currentColor'
 
   return (

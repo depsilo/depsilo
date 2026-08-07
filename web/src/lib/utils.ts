@@ -27,32 +27,66 @@ export function formatBps(bytesPerSecond: number): string {
 
 export type FormatTimeMode = 'auto' | 'time' | 'relative'
 
+function resolveTimeLocale(locale?: string): 'zh-CN' | 'en-US' {
+  const language = locale || (typeof document !== 'undefined' ? document.documentElement.lang : '')
+  return language.toLowerCase().startsWith('en') ? 'en-US' : 'zh-CN'
+}
+
+function isSameCalendarDay(left: Date, right: Date): boolean {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate()
+}
+
 /**
  * Format ISO timestamp for display. Three modes:
  *   'auto'     (default) — today: "HH:mm:ss", older: "MM-DD HH:mm"
  *   'time'              — always "HH:mm:ss" (for real-time streams)
- *   'relative'          — today: "HH:mm", <30d: "Nd ago", older: "MM-DD"
+ *   'relative'          — today: localized time, <30d: localized relative day, older: localized date
+ * Locale follows the i18n-controlled <html lang> by default and can be
+ * supplied explicitly for pure rendering and tests.
  */
-export function formatTime(ts: string, mode: FormatTimeMode = 'auto'): string {
+export function formatTime(ts: string, mode: FormatTimeMode = 'auto', locale?: string): string {
   if (!ts) return '-'
   const d = new Date(ts)
+  if (!Number.isFinite(d.getTime())) return '-'
   const now = new Date()
+  const resolvedLocale = resolveTimeLocale(locale)
+  const formatClock = (includeSeconds: boolean) => new Intl.DateTimeFormat(resolvedLocale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: includeSeconds ? '2-digit' : undefined,
+    hourCycle: 'h23',
+  }).format(d)
 
   if (mode === 'time') {
-    return d.toLocaleTimeString('zh-CN', { hour12: false })
+    return formatClock(true)
   }
 
   if (mode === 'relative') {
-    const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
-    if (diff === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    if (diff < 30) return `${diff}d ago`
-    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    if (isSameCalendarDay(d, now)) return formatClock(false)
+    const dateStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+    const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    const dayOffset = Math.round((dateStart - nowStart) / 86_400_000)
+    if (Math.abs(dayOffset) < 30) {
+      return new Intl.RelativeTimeFormat(resolvedLocale, { numeric: 'always' }).format(dayOffset, 'day')
+    }
+    return new Intl.DateTimeFormat(resolvedLocale, {
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d)
   }
 
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString('zh-CN', { hour12: false })
+  if (isSameCalendarDay(d, now)) {
+    return formatClock(true)
   }
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return new Intl.DateTimeFormat(resolvedLocale, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(d)
 }
 
 /**

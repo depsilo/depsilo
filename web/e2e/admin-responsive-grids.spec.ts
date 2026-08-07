@@ -8,6 +8,7 @@ test('Dashboard keeps its primary metrics in a compact mobile 2 by 2 grid', asyn
   const grid = page.locator('[data-dashboard-kpis]')
   await expect(grid.locator(':scope > *')).toHaveCount(4)
   expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(2)
+  await expect(page.locator('[data-query-key="now"]')).not.toContainText(/NaN|undefined/)
 })
 
 test('Dashboard metric deltas reflect domain intent instead of raw sign', async ({ page }) => {

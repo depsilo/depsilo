@@ -115,7 +115,7 @@ export default function AuditLogsV2() {
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'audit-logs', appliedSearch, ecosystem, resultFilter, timeRange, page],
-    queryFn: () => adminApi.listAuditLogs(buildParams()),
+    queryFn: ({ signal }) => adminApi.listAuditLogs(buildParams(), { signal }),
     retry: false,
   })
 
@@ -283,20 +283,19 @@ export default function AuditLogsV2() {
         )}
       </form>
 
-      {/* Table — bare */}
-      <TableViewport label={t('audit.table')} minWidth={1180}>
-        {isPending ? (
-          <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
-        ) : isError && !data ? (
-          <QueryErrorState message={errorMessage} onRetry={() => { void refetch() }} />
-        ) : (
-          <div>
-          {data && isRefetchError && (
-            <StaleDataNotice onRefresh={() => { void refetch() }} />
-          )}
+      {isPending ? (
+        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
+          <span aria-hidden="true">{t('loading')}</span>
+        </div>
+      ) : isError && !data ? (
+        <QueryErrorState message={errorMessage} onRetry={() => { void refetch() }} />
+      ) : (
+        <div className="space-y-3">
+          {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
             <EmptyState icon="receipt_long" title={t('audit.noLogs')} hint={t('audit.noLogsHint')} minHeight={240} />
           ) : (
+            <TableViewport label={t('audit.table')} minWidth={1180}>
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -351,10 +350,10 @@ export default function AuditLogsV2() {
               ))}
             </tbody>
           </table>
+            </TableViewport>
           )}
-          </div>
-        )}
-      </TableViewport>
+        </div>
+      )}
 
       {/* Pagination */}
       <AdminPagination page={page} pageSize={50} total={total} onPageChange={setPage} />

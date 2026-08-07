@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | Portal | `/`, `/monitor` | Package-manager setup and public service health |
 | Admin | `/admin/*` | Repeated operational work: cache, upstreams, logs, policy, users, settings |
-| Setup | first-run gate | Port, storage, enabled ecosystems, and upstream configuration |
+| Setup | first-run gate | Secure administrator creation with defaulted service configuration |
 
 The Portal is not a marketing landing page. Quick Start is the first screen;
 Monitor is the second. Admin is dense, quiet, and optimized for scanning and
@@ -179,6 +179,28 @@ mirrors use the service root, because Docker appends `/v2/` itself.
 - 30-second stats refresh and 60-second latency-series refresh.
 
 There is no current Portal package-browser or live-event-stream page.
+
+## Setup
+
+Setup is a single-page security gate, not a product tour. Its primary task is
+to verify the one-time bootstrap token when required, create the first
+administrator, write the durable configuration, and restart the service. The
+administrator fields and one completion command remain visible without an
+introductory welcome step or progress tracker.
+
+Port, storage, enabled Ecosystems, and Upstreams retain working defaults and
+are submitted even when their disclosure is closed. They live in one native
+advanced-settings disclosure because the current Admin control plane cannot
+activate an omitted Ecosystem or edit port and storage after setup. Ecosystem
+selection uses one keyboard-operable pressed button per option; it never nests
+a checkbox inside another interactive control. Upstream editors stack on
+narrow screens and expand only for the Ecosystem the Operator chooses to edit.
+
+Language and appearance controls remain available before initialization.
+Validation names the failed requirement next to the field and never relies on
+a disabled command as the only explanation. Save failures preserve the form;
+restart failures become a focused recovery state with the reconnect target and
+a retry action.
 
 ## Admin
 

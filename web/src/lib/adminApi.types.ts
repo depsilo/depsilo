@@ -30,6 +30,32 @@ export interface LoginResponse {
 
 export interface RefreshResponse { token: string; expires_at: number }
 
+export interface NowLastActivity {
+  seconds_ago: number
+  adapter_type: string
+  hit: boolean
+  package_name?: string
+}
+
+export interface NowResponse {
+  status: 'healthy' | 'degraded' | 'down'
+  uptime_seconds: number
+  now_unix: number
+  version: string
+  last_activity?: NowLastActivity
+  rate: {
+    requests_per_min: number
+    egress_bps: number
+    ingress_bps: number
+    has_data: boolean
+  }
+  upstreams: {
+    total: number
+    healthy: number
+  }
+  sparkline: Array<{ t: number; requests: number; hits: number }>
+}
+
 export type SecuritySeverity = 'critical' | 'high' | 'medium' | 'low' | 'unknown'
 
 export interface SecurityDashboard {

@@ -88,11 +88,11 @@ export default function UpstreamUpdates() {
   const queryKey = ['admin', 'upstream-updates', filterQuery] as const
   const query = useInfiniteQuery({
     queryKey,
-    queryFn: async ({ pageParam }) => (
+    queryFn: async ({ pageParam, signal }) => (
       await adminApi.listUpstreamUpdates({
         ...filterQuery,
         cursor: pageParam ?? undefined,
-      })
+      }, { signal })
     ).data,
     initialPageParam: null as string | null,
     getNextPageParam: lastPage => lastPage.next_cursor || undefined,

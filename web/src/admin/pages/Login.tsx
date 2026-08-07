@@ -1,27 +1,15 @@
-import { useState } from 'react'
-import { useLocation, useNavigate, Link } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import InputV2 from '@/components/Input'
-import ButtonV2 from '@/components/Button'
+
+import Button from '@/components/Button'
+import Icon from '@/components/Icon'
+import Input from '@/components/Input'
 import Logo from '@/components/Logo'
-import EcosystemIcon from '@/components/EcosystemIcon'
-import { authApi, statsApi } from '@/lib/api'
-import { formatVersion } from '@/lib/utils'
-import { LANGUAGES } from '@/lib/ecosystemData'
-import { isAdminEcosystem } from '@/lib/adminApi.types'
-
-interface LoginStats {
-  service?: { version?: string }
-  today?: { total_requests?: number; hit_rate?: number }
-  upstreams?: { healthy: boolean }[]
-}
-
-function formatRequests(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`
-  return String(n)
-}
+import { authApi } from '@/lib/api'
+import { getApiError } from '@/lib/apiError'
+import { writeLocalStorage } from '@/lib/storage'
 
 function loginDestination(state: unknown) {
   if (!state || typeof state !== 'object' || !('from' in state)) return '/admin'
@@ -38,7 +26,7 @@ function loginDestination(state: unknown) {
   return `${candidate.pathname}${search}${hash}`
 }
 
-export default function LoginV2() {
+export default function Login() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
@@ -47,341 +35,117 @@ export default function LoginV2() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const loginRequestRef = useRef<AbortController | null>(null)
 
-  const { data: stats } = useQuery<LoginStats>({
-    queryKey: ['stats-login'],
-    queryFn: async () => (await statsApi.getStats()).data,
-    staleTime: 60 * 1000,
-  })
+  useEffect(() => () => {
+    loginRequestRef.current?.abort()
+    loginRequestRef.current = null
+  }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (loading) return
     setError('')
     setLoading(true)
+    const controller = new AbortController()
+    loginRequestRef.current = controller
     try {
-      const response = await authApi.login({ username, password })
-      localStorage.setItem('token', response.data.token)
+      const response = await authApi.login(
+        { username: username.trim(), password },
+        { signal: controller.signal },
+      )
+      if (controller.signal.aborted) return
+      if (!writeLocalStorage('token', response.data.token)) {
+        setError(t('login.storageUnavailable'))
+        return
+      }
       queryClient.clear()
       navigate(loginDestination(location.state), { replace: true })
-    } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setError(message || t('login.failed'))
+    } catch (requestError: unknown) {
+      if (controller.signal.aborted) return
+      const status = getApiError(requestError).status
+      setError(status === 429
+        ? t('login.rateLimited')
+        : status === 401 || status === 403
+          ? t('login.failed')
+          : t('login.unavailable'))
     } finally {
-      setLoading(false)
+      if (loginRequestRef.current === controller) {
+        loginRequestRef.current = null
+        setLoading(false)
+      }
     }
   }
 
-  const hitRatePct = stats?.today?.hit_rate != null ? (stats.today.hit_rate * 100).toFixed(1) : '-'
-  const requests = stats?.today?.total_requests != null ? formatRequests(stats.today.total_requests) : '-'
-  const healthyUpstreams = stats?.upstreams?.filter(u => u.healthy).length ?? null
-  const totalUpstreams = stats?.upstreams?.length ?? null
-  const mirrorsLabel = healthyUpstreams != null && totalUpstreams != null
-    ? `${healthyUpstreams}/${totalUpstreams}`
-    : '-'
-
   return (
-    <div
-      className="login-page min-h-screen"
-      style={{
-        background: 'var(--bg-page)',
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-      }}
-    >
-      {/* Top-left: back to Portal */}
-      <Link
-        to="/"
-        style={{
-          position: 'absolute',
-          top: 20,
-          left: 24,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          fontSize: 12,
-          color: 'var(--text-muted)',
-          textDecoration: 'none',
-          padding: '4px 8px',
-          minHeight: 40,
-          justifyContent: 'center',
-          borderRadius: 4,
-          zIndex: 10,
-        }}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-          <path d="M6.5 2L2.5 5L6.5 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        {t('login.backToPortal')}
-      </Link>
-
-      {/* Split card */}
-      <div
-        className="aurora-rim fade-up"
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          width: '100%',
-          maxWidth: 820,
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-          background: 'var(--bg-card)',
-          border: '0.5px solid var(--border)',
-          borderRadius: 14,
-          boxShadow: 'var(--shadow-card)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Right: form */}
-        <div
-          style={{
-            padding: '40px 36px 32px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: 24,
-            minHeight: 460,
-            order: 2,
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <Logo size={28} />
-              <span
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 17,
-                  fontWeight: 600,
-                  color: 'var(--text)',
-                }}
-              >
-                Depsilo
-              </span>
-            </div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 24,
-                fontWeight: 600,
-                color: 'var(--text)',
-                lineHeight: 1.15,
-              }}
-            >
-              {t('login.title')}
-            </h1>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13,
-                lineHeight: 1.5,
-                color: 'var(--text-muted)',
-              }}
-            >
-              {t('login.subtitle')}
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <InputV2
-              label={t('login.username')}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={t('login.usernamePlaceholder')}
-              autoComplete="username"
-              autoFocus
-              required
-            />
-            <InputV2
-              label={t('login.password')}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={t('login.passwordPlaceholder')}
-              autoComplete="current-password"
-              required
-            />
-
-            {error && (
-              <div
-                role="alert"
-                style={{
-                  background: 'var(--danger-fill)',
-                  border: '0.5px solid var(--danger-border)',
-                  borderRadius: 6,
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  color: 'var(--danger-text)',
-                  lineHeight: 1.45,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <ButtonV2 type="submit" className="w-full" disabled={loading}>
-              {loading ? t('login.submitting') : t('login.submit')}
-            </ButtonV2>
-          </form>
-        </div>
-
-        {/* Left: brand panel */}
-        <div
-          className="login-brand-panel"
-          style={{
-            position: 'relative',
-            padding: '40px 36px 32px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 28,
-            background: `
-              radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--brand) 15%, transparent), transparent 55%),
-              radial-gradient(100% 80% at 100% 100%, color-mix(in oklab, var(--brand) 10%, transparent), transparent 55%),
-              var(--bg-soft)
-            `,
-            borderRight: '0.5px solid var(--border)',
-            overflow: 'hidden',
-            minHeight: 460,
-            order: 1,
-          }}
-        >
-          {/* Top: tagline */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span className="eyebrow">depsilo</span>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 22,
-                fontWeight: 600,
-                lineHeight: 1.15,
-                color: 'var(--text)',
-              }}
-            >
-              {t('login.tagline')}
-            </h2>
-            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: 'var(--text-muted)' }}>
-              {t('login.taglineSub')}
-            </p>
-          </div>
-
-          {/* Ecosystem mini wall */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span className="eyebrow">{t('login.ecosystemEyebrow')}</span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 14 }}>
-              {LANGUAGES.map(lang => (
-                <span
-                  key={lang.id}
-                  title={lang.name}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 22,
-                    height: 22,
-                    opacity: 0.72,
-                  }}
-                >
-                  {isAdminEcosystem(lang.iconAdapter) && <EcosystemIcon type={lang.iconAdapter} size={18} useColor />}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Live stats */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 0,
-              marginTop: 'auto',
-              paddingTop: 16,
-              borderTop: '0.5px solid var(--border)',
-            }}
+    <main className="grid min-h-screen place-items-center bg-[var(--bg-page)] px-4 py-16 sm:px-6">
+      <div className="w-full max-w-[420px]">
+        <div className="mb-12 flex items-center justify-between gap-4">
+          <Link
+            to="/"
+            aria-label="Depsilo"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-[6px] text-[var(--text)] no-underline transition-opacity duration-150 hover:opacity-75"
           >
-            {[
-              { label: t('login.statHitRate'), value: hitRatePct, unit: '%' },
-              { label: t('login.statRequests'), value: requests, unit: '' },
-              { label: t('login.statMirrors'), value: mirrorsLabel, unit: '' },
-            ].map((s, i) => (
-              <div
-                key={s.label}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 4,
-                  paddingLeft: i === 0 ? 0 : 14,
-                  borderLeft: i === 0 ? 'none' : '0.5px solid var(--border)',
-                }}
-              >
-                <span style={{ fontSize: 10.5, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>
-                  {s.label}
-                </span>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: 22,
-                    fontWeight: 600,
-                    color: 'var(--text)',
-                    lineHeight: 1,
-                  }}
-                >
-                  {s.value}
-                  {s.unit && (
-                    <span style={{ fontSize: 13, color: 'var(--text-soft)', fontWeight: 400, marginLeft: 2 }}>
-                      {s.unit}
-                    </span>
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
+            <Logo size={28} />
+            <span className="font-display text-[16px] font-[700]">Depsilo</span>
+          </Link>
+          <Link
+            to="/"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-2 text-[12px] font-[550] text-[var(--text-muted)] no-underline transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+          >
+            <Icon name="arrow_back" size="sm" />
+            {t('login.backToPortal')}
+          </Link>
         </div>
+
+        <header className="mb-8">
+          <h1 className="m-0 font-display text-[30px] font-[650] leading-[1.1] text-[var(--text)]">
+            {t('login.title')}
+          </h1>
+          <p className="mt-2 max-w-[46ch] text-[14px] leading-6 text-[var(--text-muted)]">
+            {t('login.subtitle')}
+          </p>
+        </header>
+
+        <form onSubmit={handleSubmit} className="space-y-5" aria-busy={loading || undefined}>
+          <Input
+            label={t('login.username')}
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            placeholder={t('login.usernamePlaceholder')}
+            autoComplete="username"
+            autoFocus
+            required
+          />
+          <Input
+            label={t('login.password')}
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder={t('login.passwordPlaceholder')}
+            autoComplete="current-password"
+            required
+          />
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded-[6px] border border-[var(--danger-border)] bg-[var(--danger-fill)] px-3 py-2.5 text-[13px] leading-5 text-[var(--danger-text)]"
+            >
+              {error}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            className="min-h-10 w-full"
+            aria-busy={loading || undefined}
+            disabled={loading || !username.trim() || !password}
+          >
+            {loading ? t('login.submitting') : t('login.submit')}
+          </Button>
+        </form>
       </div>
-
-      {/* Bottom-right: version */}
-      {stats?.service?.version && (
-        <span
-          className="login-version mono"
-          title={stats.service.version}
-          style={{
-            position: 'absolute',
-            bottom: 16,
-            right: 20,
-            fontSize: 11,
-            color: 'var(--text-subtle)',
-            padding: '2px 6px',
-            border: '0.5px solid var(--border)',
-            borderRadius: 4,
-            background: 'var(--bg-card)',
-            zIndex: 1,
-          }}
-        >
-          {formatVersion(stats.service.version)}
-        </span>
-      )}
-
-      {/* Responsive: collapse brand panel on narrow screens */}
-      <style>{`
-        @media (max-width: 720px) {
-          .login-brand-panel {
-            display: none !important;
-          }
-          .aurora-rim {
-            grid-template-columns: 1fr !important;
-            max-width: 420px !important;
-          }
-        }
-        @media (max-height: 600px) {
-          .login-page {
-            align-items: flex-start !important;
-            padding-top: 72px !important;
-          }
-          .login-version {
-            display: none !important;
-          }
-        }
-      `}</style>
-    </div>
+    </main>
   )
 }

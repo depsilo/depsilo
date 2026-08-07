@@ -344,7 +344,7 @@ export function UpstreamGroupedPanel({
     refetch: refetchLatencies,
   } = useQuery({
     queryKey: ['admin', 'upstreams', 'latencies', '24h'],
-    queryFn: () => adminApi.getUpstreamLatencies('24h'),
+    queryFn: ({ signal }) => adminApi.getUpstreamLatencies('24h', { signal }),
     staleTime: 55_000,
     refetchInterval: 60000,
     retry: false,

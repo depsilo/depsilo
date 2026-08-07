@@ -247,8 +247,8 @@ export default function MonitorPage() {
   const [query, setQuery] = useState('')
   const statsQuery = useQuery<StatsData>({
     queryKey: ['stats-monitor'],
-    queryFn: async () => {
-      const res = await statsApi.getStats()
+    queryFn: async ({ signal }) => {
+      const res = await statsApi.getStats({ signal })
       return res.data
     },
     refetchInterval: 30000,
@@ -258,10 +258,11 @@ export default function MonitorPage() {
   // Latency series loaded separately (heavy query, ~160KB)
   const latencyQuery = useQuery<Record<string, LatencyPoint[]>>({
     queryKey: ['latency-series'],
-    queryFn: async () => {
-      const res = await statsApi.getLatencySeries()
+    queryFn: async ({ signal }) => {
+      const res = await statsApi.getLatencySeries({ signal })
       return res.data
     },
+    enabled: statsQuery.isSuccess && (statsQuery.data?.upstreams.length ?? 0) > 0,
     refetchInterval: 60000,
     retry: false,
   })
@@ -429,7 +430,7 @@ export default function MonitorPage() {
                 </div>
               </InlineNotice>
             )}
-            {latencyQuery.isError && (
+            {upstreamItems.length > 0 && latencyQuery.isError && (
               <InlineNotice tone="warning">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>{t('monitor.historyUnavailable')}</span>

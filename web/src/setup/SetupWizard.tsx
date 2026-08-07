@@ -1,23 +1,42 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
-import ButtonV2 from '../components/Button'
-import InputV2 from '../components/Input'
-import Icon from '../components/Icon'
-import EcosystemIcon, { type EcosystemType } from '../components/EcosystemIcon'
-import { ecosystemDefaults, type UpstreamDefault } from '../setup/defaults'
-import { setupApi } from '../lib/api'
 import axios from 'axios'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import Button from '../components/Button'
+import EcosystemIcon, { type EcosystemType } from '../components/EcosystemIcon'
+import Icon from '../components/Icon'
+import Input from '../components/Input'
+import LangToggle from '../components/LangToggle'
+import Logo from '../components/Logo'
+import ThemeToggle from '../components/ThemeToggle'
+import { setupApi } from '../lib/api'
+import { ecosystemDefaults, type UpstreamDefault } from './defaults'
 
 interface SetupWizardProps {
   tokenRequired?: boolean
 }
 
 type SetupPhase = 'editing' | 'saving' | 'restarting' | 'failed' | 'ready'
+type PasswordIssue =
+  | 'required'
+  | 'too_short'
+  | 'too_long'
+  | 'control_character'
+  | 'weak'
+  | 'contains_username'
+  | 'common'
+  | null
 
 const reconnectTimeoutMs = 30_000
 const reconnectInitialDelayMs = 1_500
 const reconnectIntervalMs = 1_000
 const reconnectAttemptTimeoutMs = 2_500
+const commonPasswords = new Set([
+  'adminadminadmin',
+  'password123!',
+  'change-me-in-production',
+  'qwerty123456',
+])
 
 function abortableDelay(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -82,23 +101,44 @@ function resolveReconnectURL(reportedURL: string) {
   return target.toString()
 }
 
-function strongEnoughPassword(username: string, password: string) {
+function usernameValid(username: string) {
+  return /^[\p{L}\p{N}][\p{L}\p{N}._-]{2,63}$/u.test(username)
+}
+
+function passwordIssue(username: string, password: string): PasswordIssue {
+  if (!password) return 'required'
   const characters = Array.from(password).length
+  if (characters < 12) return 'too_short'
+  if (new TextEncoder().encode(password).length > 72) return 'too_long'
+  if (/\p{Cc}/u.test(password)) return 'control_character'
+
   const classes = [
     /\p{Ll}/u.test(password),
     /\p{Lu}/u.test(password),
     /\p{N}/u.test(password),
     /[^\p{L}\p{N}]/u.test(password),
   ].filter(Boolean).length
-  return characters >= 12 && new TextEncoder().encode(password).length <= 72 &&
-    (characters >= 20 || classes >= 3) &&
-    !password.toLocaleLowerCase().includes(username.toLocaleLowerCase())
+  if (characters < 20 && classes < 3) return 'weak'
+
+  const normalizedPassword = password.toLocaleLowerCase()
+  if (username && normalizedPassword.includes(username.toLocaleLowerCase())) {
+    return 'contains_username'
+  }
+  if (commonPasswords.has(normalizedPassword)) return 'common'
+  return null
+}
+
+function validHTTPURL(value: string) {
+  try {
+    const parsed = new URL(value)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.host)
+  } catch {
+    return false
+  }
 }
 
 export default function SetupWizard({ tokenRequired = false }: SetupWizardProps) {
   const { t } = useTranslation()
-
-  const [step, setStep] = useState(1)
   const [port, setPort] = useState(23333)
   const [storagePath, setStoragePath] = useState('./data/cache')
   const [adminUsername, setAdminUsername] = useState('admin')
@@ -106,25 +146,52 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
   const [confirmPassword, setConfirmPassword] = useState('')
   const [bootstrapToken, setBootstrapToken] = useState('')
   const [selectedEcosystems, setSelectedEcosystems] = useState<Set<string>>(
-    () => new Set(ecosystemDefaults.map((e) => e.key))
+    () => new Set(ecosystemDefaults.map((ecosystem) => ecosystem.key)),
   )
   const [upstreams, setUpstreams] = useState<Record<string, UpstreamDefault[]>>(() => {
-    const map: Record<string, UpstreamDefault[]> = {}
-    for (const eco of ecosystemDefaults) {
-      map[eco.key] = eco.upstreams.map((u) => ({ ...u }))
+    const defaults: Record<string, UpstreamDefault[]> = {}
+    for (const ecosystem of ecosystemDefaults) {
+      defaults[ecosystem.key] = ecosystem.upstreams.map((upstream) => ({ ...upstream }))
     }
-    return map
+    return defaults
   })
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [expandedEcosystem, setExpandedEcosystem] = useState<string | null>(null)
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false)
   const [phase, setPhase] = useState<SetupPhase>('editing')
   const [submitError, setSubmitError] = useState('')
   const [reconnectURL, setReconnectURL] = useState('')
+  const formRef = useRef<HTMLFormElement>(null)
   const reconnectAbortRef = useRef<AbortController | null>(null)
   const redirectTimerRef = useRef<number | null>(null)
 
-  const totalSteps = 5
   const submitting = phase === 'saving'
-  const restarting = phase === 'restarting' || phase === 'ready'
+  const reconnecting = phase === 'restarting' || phase === 'ready'
+  const selectedList = ecosystemDefaults.filter((ecosystem) => selectedEcosystems.has(ecosystem.key))
+
+  const usernameError = attemptedSubmit && !usernameValid(adminUsername)
+    ? t('setup.admin_username_error')
+    : undefined
+  const currentPasswordIssue = passwordIssue(adminUsername, adminPassword)
+  const passwordError = (attemptedSubmit || adminPassword.length > 0) && currentPasswordIssue
+    ? t(`setup.password_${currentPasswordIssue}`)
+    : undefined
+  const confirmPasswordError = attemptedSubmit || confirmPassword.length > 0
+    ? !confirmPassword
+      ? t('setup.confirm_password_required')
+      : adminPassword !== confirmPassword
+        ? t('setup.password_mismatch')
+        : undefined
+    : undefined
+  const bootstrapTokenError = attemptedSubmit && tokenRequired && !bootstrapToken.trim()
+    ? t('setup.bootstrap_token_required')
+    : undefined
+  const portError = attemptedSubmit && (port < 1 || port > 65535)
+    ? t('setup.port_error')
+    : undefined
+  const storageError = attemptedSubmit && !storagePath.trim()
+    ? t('setup.storage_path_error')
+    : undefined
 
   useEffect(() => () => {
     reconnectAbortRef.current?.abort()
@@ -132,44 +199,72 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
   }, [])
 
   const toggleEcosystem = useCallback((key: string) => {
-    setSelectedEcosystems((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
+    setSelectedEcosystems((previous) => {
+      const next = new Set(previous)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }, [])
 
   const updateUpstream = useCallback(
-    (ecoKey: string, index: number, field: keyof UpstreamDefault, value: string | number) => {
-      setUpstreams((prev) => {
-        const list = [...(prev[ecoKey] || [])]
+    (ecosystemKey: string, index: number, field: keyof UpstreamDefault, value: string | number) => {
+      setUpstreams((previous) => {
+        const list = [...(previous[ecosystemKey] || [])]
         list[index] = { ...list[index], [field]: value }
-        return { ...prev, [ecoKey]: list }
+        return { ...previous, [ecosystemKey]: list }
       })
     },
-    []
+    [],
   )
 
-  const addUpstream = useCallback((ecoKey: string) => {
-    setUpstreams((prev) => {
-      const list = [...(prev[ecoKey] || [])]
-      const priority = list.length > 0 ? Math.max(...list.map((u) => u.priority)) + 1 : 1
+  const addUpstream = useCallback((ecosystemKey: string) => {
+    setUpstreams((previous) => {
+      const list = [...(previous[ecosystemKey] || [])]
+      const priority = list.length > 0 ? Math.max(...list.map((upstream) => upstream.priority)) + 1 : 1
       list.push({ name: '', url: '', priority })
-      return { ...prev, [ecoKey]: list }
+      return { ...previous, [ecosystemKey]: list }
     })
   }, [])
 
-  const removeUpstream = useCallback((ecoKey: string, index: number) => {
-    setUpstreams((prev) => {
-      const list = [...(prev[ecoKey] || [])]
+  const removeUpstream = useCallback((ecosystemKey: string, index: number) => {
+    setUpstreams((previous) => {
+      const list = [...(previous[ecosystemKey] || [])]
       list.splice(index, 1)
-      return { ...prev, [ecoKey]: list }
+      return { ...previous, [ecosystemKey]: list }
     })
   }, [])
+
+  function firstConfigurationIssue() {
+    if (port < 1 || port > 65535) return { message: t('setup.port_error') }
+    if (!storagePath.trim()) return { message: t('setup.storage_path_error') }
+    if (selectedEcosystems.size === 0) return { message: t('setup.ecosystem_required') }
+
+    for (const ecosystem of selectedList) {
+      const sources = upstreams[ecosystem.key] || []
+      if (sources.length === 0) {
+        return {
+          message: t('setup.upstream_required', { name: ecosystem.label }),
+          ecosystemKey: ecosystem.key,
+        }
+      }
+      for (const source of sources) {
+        if (!source.name.trim() || !validHTTPURL(source.url.trim()) || source.priority < 1) {
+          return {
+            message: t('setup.upstream_invalid', { name: ecosystem.label }),
+            ecosystemKey: ecosystem.key,
+          }
+        }
+      }
+    }
+    return null
+  }
+
+  function focusFirstInvalidField() {
+    window.requestAnimationFrame(() => {
+      formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    })
+  }
 
   const monitorReconnect = async (target: string) => {
     reconnectAbortRef.current?.abort()
@@ -193,34 +288,48 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
     }
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAttemptedSubmit(true)
+    setSubmitError('')
+
+    const configurationIssue = firstConfigurationIssue()
+    const accountInvalid = !usernameValid(adminUsername) || currentPasswordIssue !== null ||
+      adminPassword !== confirmPassword || !confirmPassword ||
+      (tokenRequired && !bootstrapToken.trim())
+    if (accountInvalid || configurationIssue) {
+      if (configurationIssue) {
+        setAdvancedOpen(true)
+        if (configurationIssue.ecosystemKey) setExpandedEcosystem(configurationIssue.ecosystemKey)
+      }
+      setSubmitError(configurationIssue?.message || '')
+      focusFirstInvalidField()
+      return
+    }
+
     reconnectAbortRef.current?.abort()
     setPhase('saving')
-    setSubmitError('')
     setReconnectURL('')
     try {
       const ecosystems: Record<string, { enabled: boolean; upstreams: UpstreamDefault[] }> = {}
-      for (const eco of ecosystemDefaults) {
-        const enabled = selectedEcosystems.has(eco.key)
-        ecosystems[eco.key] = {
+      for (const ecosystem of ecosystemDefaults) {
+        const enabled = selectedEcosystems.has(ecosystem.key)
+        ecosystems[ecosystem.key] = {
           enabled,
-          upstreams: enabled ? upstreams[eco.key] || [] : [],
+          upstreams: enabled ? upstreams[ecosystem.key] || [] : [],
         }
       }
 
       const response = await setupApi.complete(
         {
           server: { port },
-          storage: { path: storagePath },
+          storage: { path: storagePath.trim() },
           admin: { username: adminUsername, password: adminPassword },
           ecosystems,
         },
-        bootstrapToken.trim() || undefined
+        bootstrapToken.trim() || undefined,
       )
 
-      // Keep the browser-visible scheme and hostname. A reverse proxy may
-      // rewrite Host/TLS before the request reaches Go; the response supplies
-      // the newly configured port, which is the only part that must change.
       const target = resolveReconnectURL(response.data.reconnect_url)
       setReconnectURL(target)
       if (response.data.restart_strategy === 'supervisor_required') {
@@ -239,420 +348,358 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
     }
   }
 
-  const canNext = () => {
-    if (step === 2) {
-      const usernameValid = /^[\p{L}\p{N}][\p{L}\p{N}._-]{2,63}$/u.test(adminUsername)
-      return port > 0 && storagePath.trim() !== '' && usernameValid &&
-        strongEnoughPassword(adminUsername, adminPassword) &&
-        adminPassword === confirmPassword && (!tokenRequired || bootstrapToken.trim() !== '')
-    }
-    if (step === 3) return selectedEcosystems.size > 0
-    return true
-  }
-
-  // Step 1: Welcome
-  const renderWelcome = () => (
-    <div className="text-center py-8">
-      <div
-        className="text-[48px] font-[700] mb-2"
-        style={{ color: 'var(--text)' }}
-      >
-        Depsilo
-      </div>
-      <p
-        className="text-[16px] mb-8 max-w-md mx-auto"
-        style={{ color: 'var(--text-soft)' }}
-      >
-        {t('setup.welcome_description')}
-      </p>
-      <ButtonV2 onClick={() => setStep(2)}>
-        <Icon name="arrow_forward" size="sm" />
-        {t('setup.get_started')}
-      </ButtonV2>
-    </div>
-  )
-
-  // Step 2: Basic Settings
-  const renderBasicSettings = () => (
-    <div className="space-y-6">
-      <h2 className="text-[20px] font-[600]" style={{ color: 'var(--text)' }}>
-        {t('setup.basic_settings')}
-      </h2>
-      <InputV2
-        label={t('setup.port')}
-        type="number"
-        value={port}
-        min={1}
-        max={65535}
-        onChange={(e) => setPort(Number(e.target.value))}
-      />
-      <InputV2
-        label={t('setup.storage_path')}
-        value={storagePath}
-        mono
-        onChange={(e) => setStoragePath(e.target.value)}
-      />
-      <div className="pt-2" style={{ borderTop: '1px solid var(--border)' }}>
-        <h3 className="text-[15px] font-[600] mb-3" style={{ color: 'var(--text)' }}>
-          {t('setup.admin_account')}
-        </h3>
-        <div className="space-y-4">
-          <InputV2
-            label={t('setup.admin_username')}
-            autoComplete="username"
-            value={adminUsername}
-            onChange={(e) => setAdminUsername(e.target.value)}
-          />
-          <InputV2
-            label={t('setup.admin_password')}
-            hint={t('setup.admin_password_hint')}
-            type="password"
-            autoComplete="new-password"
-            value={adminPassword}
-            onChange={(e) => setAdminPassword(e.target.value)}
-          />
-          <InputV2
-            label={t('setup.confirm_password')}
-            error={confirmPassword && adminPassword !== confirmPassword ? t('setup.password_mismatch') : undefined}
-            type="password"
-            autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-          {tokenRequired && (
-            <InputV2
-              label={t('setup.bootstrap_token')}
-              hint={t('setup.bootstrap_token_hint')}
-              type="password"
-              autoComplete="off"
-              mono
-              value={bootstrapToken}
-              onChange={(e) => setBootstrapToken(e.target.value)}
-            />
-          )}
-        </div>
-      </div>
-    </div>
-  )
-
-  // Step 3: Select Ecosystems
-  const renderSelectEcosystems = () => (
-    <div>
-      <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--text)' }}>
-        {t('setup.select_ecosystems')}
-      </h2>
-      <p className="text-[14px] mb-4" style={{ color: 'var(--text-soft)' }}>
-        {t('setup.select_ecosystems_hint')}
-      </p>
-      <div className="grid grid-cols-4 gap-3">
-        {ecosystemDefaults.map((eco) => {
-          const checked = selectedEcosystems.has(eco.key)
-          return (
-            <button
-              key={eco.key}
-              type="button"
-              className="flex items-center gap-2 rounded-[4px] px-3 py-2.5 text-left cursor-pointer transition-[background,border-color,transform] duration-150 active:scale-[0.96]"
-              style={{
-                border: `1px solid ${checked ? 'var(--brand)' : 'var(--border)'}`,
-                background: checked ? 'var(--brand-soft)' : 'var(--bg-card)',
-                color: 'var(--text)',
-              }}
-              onClick={() => toggleEcosystem(eco.key)}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                readOnly
-                className="accent-[var(--brand)] pointer-events-none"
-              />
-              <EcosystemIcon type={eco.key as EcosystemType} size={16} />
-              <span className="text-[13px] font-[400] truncate">{eco.label}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-
-  // Step 4: Configure Upstreams
-  const renderConfigureUpstreams = () => {
-    const selected = ecosystemDefaults.filter((e) => selectedEcosystems.has(e.key))
-    return (
-      <div>
-        <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--text)' }}>
-          {t('setup.configure_upstreams')}
-        </h2>
-        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-          {selected.map((eco) => {
-            const expanded = expandedEcosystem === eco.key
-            const ecoUpstreams = upstreams[eco.key] || []
-            return (
-              <div
-                key={eco.key}
-                className="rounded-[4px]"
-                style={{ border: '1px solid var(--border)' }}
-              >
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-4 py-3 cursor-pointer"
-                  style={{ background: 'var(--bg-card)', color: 'var(--text)' }}
-                  onClick={() => setExpandedEcosystem(expanded ? null : eco.key)}
-                >
-                  <Icon name={expanded ? 'expand_more' : 'chevron_right'} size="sm" />
-                  <EcosystemIcon type={eco.key as EcosystemType} size={16} />
-                  <span className="text-[14px] font-[500] flex-1 text-left">{eco.label}</span>
-                  <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                    {ecoUpstreams.length} {t('setup.upstreams_count')}
-                  </span>
-                </button>
-                {expanded && (
-                  <div className="px-4 pb-4 space-y-3" style={{ borderTop: '1px solid var(--border)' }}>
-                    {ecoUpstreams.map((upstream, idx) => (
-                      <div key={idx} className="flex items-end gap-2 mt-3">
-                        <div className="flex-1 min-w-0">
-                          <InputV2
-                            label={t('setup.upstream_name')}
-                            value={upstream.name}
-                            onChange={(e) => updateUpstream(eco.key, idx, 'name', e.target.value)}
-                          />
-                        </div>
-                        <div className="flex-[2] min-w-0">
-                          <InputV2
-                            label={t('setup.upstream_url')}
-                            value={upstream.url}
-                            mono
-                            onChange={(e) => updateUpstream(eco.key, idx, 'url', e.target.value)}
-                          />
-                        </div>
-                        <div className="w-16">
-                          <InputV2
-                            label={t('setup.priority')}
-                            type="number"
-                            value={upstream.priority}
-                            min={1}
-                            onChange={(e) =>
-                              updateUpstream(eco.key, idx, 'priority', Number(e.target.value))
-                            }
-                          />
-                        </div>
-                        <ButtonV2
-                          variant="danger"
-                          size="sm"
-                          aria-label={t('setup.remove_upstream', { name: upstream.name || `${eco.label} ${idx + 1}` })}
-                          onClick={() => removeUpstream(eco.key, idx)}
-                        >
-                          <Icon name="delete" size="sm" />
-                        </ButtonV2>
-                      </div>
-                    ))}
-                    <ButtonV2 variant="ghost" size="sm" onClick={() => addUpstream(eco.key)}>
-                      <Icon name="add" size="sm" />
-                      {t('setup.add_upstream')}
-                    </ButtonV2>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
-
-  // Step 5: Complete
-  const renderComplete = () => {
-    if (restarting) {
+  function renderReconnectState() {
+    if (reconnecting) {
       return (
-        <div className="text-center py-12">
-          <div
-            className="text-[20px] font-[600] mb-4"
-            style={{ color: 'var(--text)' }}
-          >
+        <section
+          role="status"
+          aria-live="polite"
+          aria-busy={phase === 'restarting'}
+          className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center"
+        >
+          <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-[var(--brand-soft)] text-[var(--brand-text)]">
+            <Icon name={phase === 'ready' ? 'check_circle' : 'sync'} className={phase === 'ready' ? '' : 'animate-spin'} />
+          </span>
+          <h1 className="text-[24px] font-[650] text-[var(--text)]">
             {phase === 'ready' ? t('setup.ready') : t('setup.restarting')}
-          </div>
-          <p className="text-[14px]" style={{ color: 'var(--text-soft)' }}>
+          </h1>
+          <p className="mt-2 max-w-[52ch] text-[13px] leading-6 text-[var(--text-muted)]">
             {phase === 'ready' ? t('setup.ready_hint') : t('setup.restarting_hint', { url: reconnectURL })}
           </p>
-        </div>
+        </section>
       )
     }
-
-    if (phase === 'failed') {
-      return (
-        <div className="text-center py-10">
-          <h2 className="text-[20px] font-[600] mb-3" style={{ color: 'var(--danger-text)' }}>
-              {reconnectURL
-                ? t('setup.restart_failed_title')
-                : t('setup.save_failed_title')}
-          </h2>
-          <p role="alert" className="text-[14px] mb-4" style={{ color: 'var(--text-soft)' }}>
-            {submitError}
-          </p>
-          {reconnectURL && (
-            <p className="font-mono text-[12px] mb-5 break-all" style={{ color: 'var(--text-muted)' }}>
-              {t('setup.reconnect_target', { url: reconnectURL })}
-            </p>
-          )}
-          <div className="flex justify-center gap-3">
-            {reconnectURL ? (
-              <ButtonV2 onClick={() => { void monitorReconnect(reconnectURL) }}>
-                <Icon name="refresh" size="sm" />
-                {t('setup.retry_connection')}
-              </ButtonV2>
-            ) : (
-              <ButtonV2 onClick={() => setPhase('editing')}>
-                <Icon name="arrow_back" size="sm" />
-                {t('setup.return_to_settings')}
-              </ButtonV2>
-            )}
-          </div>
-        </div>
-      )
-    }
-
-    const selectedList = ecosystemDefaults.filter((e) => selectedEcosystems.has(e.key))
 
     return (
-      <div>
-        <h2 className="text-[20px] font-[600] mb-4" style={{ color: 'var(--text)' }}>
-          {t('setup.complete')}
-        </h2>
-        <div className="space-y-3 mb-6">
-          <div className="flex justify-between text-[14px]" style={{ color: 'var(--text-soft)' }}>
-            <span>{t('setup.port')}</span>
-            <span className="font-mono" style={{ color: 'var(--text)' }}>
-              {port}
-            </span>
-          </div>
-          <div className="flex justify-between text-[14px]" style={{ color: 'var(--text-soft)' }}>
-            <span>{t('setup.admin_username')}</span>
-            <span style={{ color: 'var(--text)' }}>{adminUsername}</span>
-          </div>
-          <div className="flex justify-between text-[14px]" style={{ color: 'var(--text-soft)' }}>
-            <span>{t('setup.storage_path')}</span>
-            <span className="font-mono" style={{ color: 'var(--text)' }}>
-              {storagePath}
-            </span>
-          </div>
-          <div
-            className="text-[14px] pt-2"
-            style={{ color: 'var(--text-soft)', borderTop: '1px solid var(--border)' }}
-          >
-            <span>{t('setup.enabled_ecosystems')}</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {selectedList.map((eco) => (
-              <span
-                key={eco.key}
-                className="inline-flex items-center gap-1.5 text-[13px] px-2.5 py-1 rounded-full"
-                style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
-              >
-                <EcosystemIcon type={eco.key as EcosystemType} size={14} />
-                {eco.label}
-              </span>
-            ))}
-          </div>
-        </div>
-        {submitError && phase === 'editing' && (
-          <p role="alert" className="mb-3 text-[13px] text-[var(--danger-text)]">
-            {submitError}
+      <section className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
+        <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-[var(--danger-fill)] text-[var(--danger-text)]">
+          <Icon name="warning" />
+        </span>
+        <h1 className="text-[24px] font-[650] text-[var(--text)]">
+          {t('setup.restart_failed_title')}
+        </h1>
+        <p role="alert" className="mt-2 max-w-[52ch] text-[13px] leading-6 text-[var(--text-muted)]">
+          {submitError}
+        </p>
+        {reconnectURL && (
+          <p className="mt-3 max-w-full break-all font-mono text-[12px] text-[var(--text-soft)]">
+            {t('setup.reconnect_target', { url: reconnectURL })}
           </p>
         )}
-        <ButtonV2 onClick={handleSubmit} disabled={submitting} className="w-full">
-          {submitting ? t('setup.saving') : t('setup.save_and_start')}
-        </ButtonV2>
-      </div>
+        <Button className="mt-6" type="button" onClick={() => { void monitorReconnect(reconnectURL) }}>
+          <Icon name="refresh" size="sm" />
+          {t('setup.retry_connection')}
+        </Button>
+      </section>
     )
   }
 
-  const renderStep = () => {
-    switch (step) {
-      case 1:
-        return renderWelcome()
-      case 2:
-        return renderBasicSettings()
-      case 3:
-        return renderSelectEcosystems()
-      case 4:
-        return renderConfigureUpstreams()
-      case 5:
-        return renderComplete()
-      default:
-        return null
-    }
+  function renderAdvancedSettings() {
+    return (
+      <details
+        open={advancedOpen}
+        onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+        className="border-t border-[var(--border)]"
+      >
+        <summary className="stripe-focus-ring flex min-h-[52px] cursor-pointer list-none items-center gap-3 rounded-[6px] px-1 text-left [&::-webkit-details-marker]:hidden">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-[var(--bg-soft)] text-[var(--text-muted)]">
+            <Icon name="tune" size="sm" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-[600] text-[var(--text)]">{t('setup.advanced_settings')}</span>
+            <span className="mt-0.5 block truncate text-[12px] text-[var(--text-muted)]">
+              {t('setup.advanced_summary', { port, count: selectedEcosystems.size })}
+            </span>
+          </span>
+          <Icon
+            name="expand_more"
+            size="sm"
+            className={`shrink-0 transition-transform duration-150 ${advancedOpen ? 'rotate-180' : ''}`}
+          />
+        </summary>
+
+        <div className="pb-2 pt-5">
+          <p className="mb-5 max-w-[68ch] text-[13px] leading-6 text-[var(--text-muted)]">
+            {t('setup.advanced_hint')}
+          </p>
+
+          <section aria-labelledby="setup-runtime-heading">
+            <h2 id="setup-runtime-heading" className="mb-3 text-[14px] font-[600] text-[var(--text)]">
+              {t('setup.runtime_settings')}
+            </h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                label={t('setup.port')}
+                error={portError}
+                type="number"
+                value={port}
+                min={1}
+                max={65535}
+                disabled={submitting}
+                onChange={(event) => setPort(Number(event.target.value))}
+              />
+              <Input
+                label={t('setup.storage_path')}
+                error={storageError}
+                value={storagePath}
+                disabled={submitting}
+                mono
+                onChange={(event) => setStoragePath(event.target.value)}
+              />
+            </div>
+          </section>
+
+          <section aria-labelledby="setup-ecosystems-heading" className="mt-7">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 id="setup-ecosystems-heading" className="text-[14px] font-[600] text-[var(--text)]">
+                  {t('setup.select_ecosystems')}
+                </h2>
+                <p className="mt-1 text-[12px] text-[var(--text-muted)]">{t('setup.select_ecosystems_hint')}</p>
+              </div>
+              <span className="font-mono text-[11px] text-[var(--text-soft)]">
+                {t('setup.enabled_count', { count: selectedEcosystems.size })}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
+              {ecosystemDefaults.map((ecosystem) => {
+                const selected = selectedEcosystems.has(ecosystem.key)
+                return (
+                  <button
+                    key={ecosystem.key}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={submitting}
+                    className="stripe-focus-ring flex min-h-[48px] items-center gap-2 rounded-[6px] border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
+                    style={{
+                      borderColor: selected ? 'var(--brand)' : 'var(--border)',
+                      background: selected ? 'var(--brand-soft)' : 'var(--bg-card)',
+                      color: selected ? 'var(--brand-text)' : 'var(--text)',
+                    }}
+                    onClick={() => toggleEcosystem(ecosystem.key)}
+                  >
+                    <EcosystemIcon type={ecosystem.key as EcosystemType} size={17} decorative />
+                    <span className="min-w-0 flex-1 text-[12px] font-[500] leading-4">{ecosystem.label}</span>
+                    <Icon name={selected ? 'check' : 'add'} size="sm" />
+                  </button>
+                )
+              })}
+            </div>
+            {attemptedSubmit && selectedEcosystems.size === 0 && (
+              <p role="alert" className="mt-2 text-[12px] text-[var(--danger-text)]">
+                {t('setup.ecosystem_required')}
+              </p>
+            )}
+          </section>
+
+          <section aria-labelledby="setup-upstreams-heading" className="mt-7">
+            <div className="mb-3">
+              <h2 id="setup-upstreams-heading" className="text-[14px] font-[600] text-[var(--text)]">
+                {t('setup.configure_upstreams')}
+              </h2>
+              <p className="mt-1 text-[12px] text-[var(--text-muted)]">{t('setup.configure_upstreams_hint')}</p>
+            </div>
+            <div className="space-y-2">
+              {selectedList.map((ecosystem) => {
+                const expanded = expandedEcosystem === ecosystem.key
+                const ecosystemUpstreams = upstreams[ecosystem.key] || []
+                const panelId = `setup-${ecosystem.key}-upstreams`
+                return (
+                  <div key={ecosystem.key} className="overflow-hidden rounded-[6px] border border-[var(--border)]">
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      aria-controls={panelId}
+                      disabled={submitting}
+                      className="stripe-focus-ring flex min-h-[44px] w-full items-center gap-2.5 px-3 text-left text-[var(--text)] transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+                      onClick={() => setExpandedEcosystem(expanded ? null : ecosystem.key)}
+                    >
+                      <EcosystemIcon type={ecosystem.key as EcosystemType} size={16} decorative />
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-[500]">{ecosystem.label}</span>
+                      <span className="text-[11px] text-[var(--text-muted)]">
+                        {t('setup.upstreams_count_value', { count: ecosystemUpstreams.length })}
+                      </span>
+                      <Icon name="expand_more" size="sm" className={`transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expanded && (
+                      <div id={panelId} className="space-y-4 border-t border-[var(--border)] bg-[var(--bg-soft)] p-3 sm:p-4">
+                        {ecosystemUpstreams.map((upstream, index) => (
+                          <div
+                            key={`${ecosystem.key}-${index}`}
+                            className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_80px_40px] sm:items-end"
+                          >
+                            <Input
+                              label={t('setup.upstream_name')}
+                              value={upstream.name}
+                              disabled={submitting}
+                              onChange={(event) => updateUpstream(ecosystem.key, index, 'name', event.target.value)}
+                            />
+                            <Input
+                              label={t('setup.upstream_url')}
+                              value={upstream.url}
+                              disabled={submitting}
+                              mono
+                              onChange={(event) => updateUpstream(ecosystem.key, index, 'url', event.target.value)}
+                            />
+                            <Input
+                              label={t('setup.priority')}
+                              type="number"
+                              value={upstream.priority}
+                              min={1}
+                              disabled={submitting}
+                              onChange={(event) => updateUpstream(ecosystem.key, index, 'priority', Number(event.target.value))}
+                            />
+                            <Button
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              className="min-h-[40px] min-w-[40px] px-2"
+                              disabled={submitting}
+                              aria-label={t('setup.remove_upstream', {
+                                name: upstream.name || `${ecosystem.label} ${index + 1}`,
+                              })}
+                              onClick={() => removeUpstream(ecosystem.key, index)}
+                            >
+                              <Icon name="delete" size="sm" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={submitting}
+                          onClick={() => addUpstream(ecosystem.key)}
+                        >
+                          <Icon name="add" size="sm" />
+                          {t('setup.add_upstream')}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        </div>
+      </details>
+    )
   }
 
+  const reconnectFailure = phase === 'failed' && Boolean(reconnectURL)
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'var(--bg-page)' }}
-    >
-      <div className="w-full max-w-[720px]">
-        {/* Progress indicator */}
-        {step > 1 && phase === 'editing' && (
-          <div className="mb-6 flex items-center justify-center gap-[6px]">
-            {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
-              <div key={s} className="flex items-center gap-[6px]">
-                <div
-                  className="flex h-[28px] w-[28px] items-center justify-center rounded-full text-[12px] font-[500]"
-                  style={{
-                    background: s <= step ? 'var(--hit)' : 'var(--bg-soft)',
-                    color: s <= step ? 'var(--on-hit)' : 'var(--text-muted)',
-                    border: s <= step ? 'none' : '1px solid var(--border)',
-                  }}
-                >
-                  {s}
-                </div>
-                {s < totalSteps && (
-                  <div
-                    className="h-[2px] w-[18px] sm:w-[32px]"
-                    style={{
-                      background: s < step ? 'var(--brand)' : 'var(--border)',
-                    }}
-                  />
-                )}
-              </div>
-            ))}
-            <span className="ml-2 whitespace-nowrap text-[13px]" style={{ color: 'var(--text-muted)' }}>
-              {t('setup.step_of', { current: step, total: totalSteps })}
-            </span>
+    <main className="min-h-[100dvh] bg-[var(--bg-page)] px-4 py-5 sm:px-6 sm:py-8">
+      <div className="mx-auto w-full max-w-[720px]">
+        <header className="mb-5 flex min-h-[40px] items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 text-[var(--text)]">
+            <span className="text-[var(--brand-text)]"><Logo size={29} /></span>
+            <span className="text-[16px] font-[650]">Depsilo</span>
           </div>
-        )}
+          <div className="flex items-center gap-1">
+            <LangToggle />
+            <ThemeToggle />
+          </div>
+        </header>
 
         <div
-          className="p-5"
-          style={{
-            background: 'var(--bg-card)',
-            border: '0.5px solid var(--border)',
-            borderRadius: 'var(--r-card)',
-            boxShadow: 'var(--shadow-card)',
-          }}
+          data-setup-surface="single-page"
+          className="overflow-hidden rounded-[var(--r-card)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-card)]"
         >
-          {renderStep()}
+          {reconnecting || reconnectFailure ? renderReconnectState() : (
+            <form ref={formRef} noValidate onSubmit={handleSubmit}>
+              <div className="px-5 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-8">
+                <header className="mb-7">
+                  <h1 className="text-balance text-[26px] font-[680] leading-tight text-[var(--text)] sm:text-[30px]">
+                    {t('setup.title')}
+                  </h1>
+                  <p className="mt-2 max-w-[62ch] text-[13px] leading-6 text-[var(--text-muted)]">
+                    {t('setup.description')}
+                  </p>
+                </header>
 
-          {/* Navigation buttons */}
-          {step > 1 && step < 5 && phase === 'editing' && (
-            <div className="flex justify-between mt-6 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-              <ButtonV2 variant="ghost" onClick={() => setStep(step - 1)}>
-                <Icon name="arrow_back" size="sm" />
-                {t('setup.prev')}
-              </ButtonV2>
-              <ButtonV2 onClick={() => setStep(step + 1)} disabled={!canNext()}>
-                {t('setup.next')}
-                <Icon name="arrow_forward" size="sm" />
-              </ButtonV2>
-            </div>
-          )}
-          {step === 5 && phase === 'editing' && (
-            <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-              <ButtonV2 variant="ghost" onClick={() => setStep(4)}>
-                <Icon name="arrow_back" size="sm" />
-                {t('setup.prev')}
-              </ButtonV2>
-            </div>
+                <section aria-labelledby="setup-admin-heading" className="mb-7">
+                  <h2 id="setup-admin-heading" className="text-[15px] font-[600] text-[var(--text)]">
+                    {t('setup.admin_account')}
+                  </h2>
+                  <p className="mb-4 mt-1 text-[12px] leading-5 text-[var(--text-muted)]">
+                    {t('setup.admin_account_hint')}
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <Input
+                      label={t('setup.admin_username')}
+                      error={usernameError}
+                      autoComplete="username"
+                      value={adminUsername}
+                      disabled={submitting}
+                      onChange={(event) => setAdminUsername(event.target.value)}
+                    />
+                    {tokenRequired && (
+                      <Input
+                        label={t('setup.bootstrap_token')}
+                        hint={bootstrapTokenError ? undefined : t('setup.bootstrap_token_hint')}
+                        error={bootstrapTokenError}
+                        type="password"
+                        autoComplete="off"
+                        mono
+                        value={bootstrapToken}
+                        disabled={submitting}
+                        onChange={(event) => setBootstrapToken(event.target.value)}
+                      />
+                    )}
+                    <Input
+                      label={t('setup.admin_password')}
+                      hint={passwordError ? undefined : t('setup.admin_password_hint')}
+                      error={passwordError}
+                      type="password"
+                      autoComplete="new-password"
+                      value={adminPassword}
+                      disabled={submitting}
+                      onChange={(event) => setAdminPassword(event.target.value)}
+                    />
+                    <Input
+                      label={t('setup.confirm_password')}
+                      error={confirmPasswordError}
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      disabled={submitting}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                    />
+                  </div>
+                </section>
+
+                {renderAdvancedSettings()}
+
+                {submitError && !reconnectURL && (
+                  <p role="alert" className="mt-5 rounded-[6px] bg-[var(--danger-fill)] px-3 py-2.5 text-[12px] leading-5 text-[var(--danger-text)]">
+                    {submitError}
+                  </p>
+                )}
+
+                <div className="mt-6 flex flex-col gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] leading-5 text-[var(--text-muted)]">
+                    {t('setup.submit_hint')}
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={submitting}
+                    aria-busy={submitting || undefined}
+                    className="min-h-[40px] w-full shrink-0 sm:w-auto"
+                  >
+                    {submitting ? (
+                      <Icon name="sync" size="sm" className="animate-spin" />
+                    ) : (
+                      <Icon name="arrow_forward" size="sm" />
+                    )}
+                    {submitting ? t('setup.saving') : t('setup.save_and_start')}
+                  </Button>
+                </div>
+              </div>
+            </form>
           )}
         </div>
       </div>
-    </div>
+    </main>
   )
 }

@@ -48,15 +48,15 @@ export default function DashboardV2() {
 
   const dashboardQuery = useQuery({
     queryKey: ['admin', 'dashboard'],
-    queryFn: () => adminApi.getDashboard(),
+    queryFn: ({ signal }) => adminApi.getDashboard({ signal }),
     refetchInterval: 30_000,
     retry: false,
   })
 
   const trendsQuery = useQuery({
     queryKey: ['admin', 'dashboard', 'trends', range],
-    queryFn: async (): Promise<TrendQueryData> => ({
-      response: await adminApi.getDashboardTrends(range),
+    queryFn: async ({ signal }): Promise<TrendQueryData> => ({
+      response: await adminApi.getDashboardTrends(range, { signal }),
       range,
     }),
     placeholderData: keepPreviousData,

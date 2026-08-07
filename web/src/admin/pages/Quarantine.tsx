@@ -138,8 +138,8 @@ export default function Quarantine() {
 
   const eventsQ = useQuery({
     queryKey: ['admin', 'quarantine', 'events', eventsParams],
-    queryFn: async () => {
-      const res = await adminApi.listQuarantineEvents(eventsParams)
+    queryFn: async ({ signal }) => {
+      const res = await adminApi.listQuarantineEvents(eventsParams, { signal })
       return res.data as { items: QuarantineEvent[]; total: number }
     },
     enabled: tab === 'events',
@@ -149,8 +149,8 @@ export default function Quarantine() {
 
   const approvalsQ = useQuery({
     queryKey: ['admin', 'quarantine', 'approvals'],
-    queryFn: async () => {
-      const res = await adminApi.listQuarantineApprovals({ limit: 200 })
+    queryFn: async ({ signal }) => {
+      const res = await adminApi.listQuarantineApprovals({ limit: 200 }, { signal })
       return res.data as { items: ApprovedVersion[]; total: number }
     },
     enabled: tab === 'approvals',
@@ -588,13 +588,13 @@ function BlocklistTab() {
 
   const statusQ = useQuery({
     queryKey: ['admin', 'blocklist', 'status'],
-    queryFn: async () => (await adminApi.getBlocklistStatus()).data as BlocklistStatus,
+    queryFn: async ({ signal }) => (await adminApi.getBlocklistStatus({ signal })).data as BlocklistStatus,
     refetchInterval: 15_000,
     retry: false,
   })
   const overridesQ = useQuery({
     queryKey: ['admin', 'blocklist', 'overrides'],
-    queryFn: async () => (await adminApi.listBlocklistOverrides()).data as { items: MalwareOverride[]; now: string },
+    queryFn: async ({ signal }) => (await adminApi.listBlocklistOverrides({ signal })).data as { items: MalwareOverride[]; now: string },
     refetchInterval: 30_000,
     retry: false,
   })

@@ -3,8 +3,11 @@ import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import QueryErrorState from '@/components/QueryErrorState'
+import Icon from '@/components/Icon'
+import Logo from '@/components/Logo'
 import { useTranslation } from 'react-i18next'
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api'
+import { readLocalStorage } from '@/lib/storage'
 import { lazyRoute } from '@/routing/lazyRoute'
 import RouteNotFound from '@/routing/RouteNotFound'
 import { adminRouteManifest, type AdminRouteId } from './routes'
@@ -49,6 +52,38 @@ const routeElements = {
   settings: <SettingsV2 />,
 } satisfies Readonly<Record<AdminRouteId, ReactElement>>
 
+function AdminAuthPending() {
+  const { t } = useTranslation()
+
+  return (
+    <main
+      data-admin-auth-state="pending"
+      aria-busy="true"
+      className="grid min-h-screen place-items-center bg-[var(--bg-page)] p-6"
+    >
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="flex min-h-12 items-center gap-3 text-[var(--text)]"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand-text)]">
+          <Logo size={26} />
+        </span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="font-display text-[15px] font-[700] leading-5">Depsilo</span>
+          <span className="text-[12px] leading-4 text-[var(--text-muted)]">{t('auth.verifyingSession')}</span>
+        </span>
+        <Icon
+          name="progress_activity"
+          size="sm"
+          className="ml-2 shrink-0 animate-spin text-[var(--text-subtle)] motion-reduce:animate-none"
+        />
+      </div>
+    </main>
+  )
+}
+
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation()
   const location = useLocation()
@@ -64,11 +99,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleExpiredSession)
   }, [queryClient])
 
-  const token = localStorage.getItem('token')
+  const token = readLocalStorage('token')
   const { principal, isPending, isError, refetch } = usePrincipal(Boolean(token))
 
   if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
-  if (isPending) return <div aria-busy="true" className="min-h-screen" />
+  if (isPending) return <AdminAuthPending />
   if (isError || !principal) {
     return (
       <main className="grid min-h-screen place-items-center p-4">

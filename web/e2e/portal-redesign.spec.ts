@@ -345,6 +345,64 @@ test('Portal header groups equal-height controls by purpose', async ({ page }) =
   expect(new Set(geometry.map(item => item.center)).size).toBe(1)
 })
 
+test('Portal theme changes recolor theme-sensitive ecosystem icons immediately', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': populatedStats,
+  })
+  await page.goto('/')
+
+  const goIcon = page.getByRole('button', { name: /^Go\b/ }).locator('svg').first()
+  await expect(goIcon).toHaveAttribute('fill', '#00ADD8')
+
+  await page.locator('[data-theme-toggle="portal"]').click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(goIcon).toHaveAttribute('fill', 'currentColor')
+})
+
+test('Portal service status distinguishes loading, unknown, and recoverable failure', async ({ page }) => {
+  let releaseStats: (value: unknown) => void = () => undefined
+  const pendingStats = new Promise<unknown>(resolve => {
+    releaseStats = resolve
+  })
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': () => pendingStats,
+  })
+  await page.goto('/')
+
+  const loading = page.locator('.portal-status-pill[data-query-state="loading"]')
+  await expect(loading).toHaveAttribute('role', 'status')
+  await expect(loading).toHaveAccessibleName(/Checking/i)
+  await expect(loading).not.toHaveAccessibleName(/unknown/i)
+
+  releaseStats({
+    ...populatedStats,
+    service: { ...populatedStats.service, status: 'mystery' },
+  })
+  const unknown = page.locator('.portal-status-pill[data-query-state="success"]')
+  await expect(unknown).toHaveAttribute('data-status', 'unknown')
+  await expect(unknown).toHaveAccessibleName(/Status unknown/i)
+
+  let calls = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': () => {
+      calls += 1
+      return calls === 1
+        ? { status: 503, body: { code: 'UNAVAILABLE', message: 'stats unavailable' } }
+        : populatedStats
+    },
+  })
+  await page.reload()
+
+  const retry = page.locator('button.portal-status-pill[data-query-state="error"]')
+  await expect(retry).toHaveAccessibleName(/unavailable.*retry/i)
+  await expect(retry).not.toHaveAccessibleName(/unknown/i)
+  await retry.click()
+  await expect.poll(() => calls).toBe(2)
+  await expect(page.locator('.portal-status-pill[data-query-state="success"]')).toHaveAccessibleName(/Online/i)
+})
+
 for (const width of [320, 375, 390]) {
   test(`Portal header keeps every visible control in view at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 })
@@ -360,6 +418,12 @@ for (const width of [320, 375, 390]) {
     await expect(status.locator('.portal-status-label')).toBeAttached()
     await expect(status.locator('.portal-status-compact-icon')).toBeVisible()
     await expect(status.locator('.portal-status-dot')).toBeHidden()
+
+    const theme = page.locator('[data-theme-toggle="portal"]')
+    await expect(theme).toBeVisible()
+    const themeBox = await theme.boundingBox()
+    expect(themeBox?.width).toBe(40)
+    expect(themeBox?.height).toBe(40)
 
     const admin = page.locator('.portal-admin-link')
     await expect(admin).toHaveAccessibleName(/Admin/i)

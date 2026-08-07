@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { readLocalStorage, removeLocalStorage } from './storage'
 import type {
   AccessLogListResponse,
   AccessLogQuery,
@@ -40,6 +41,7 @@ import type {
   DashboardTrendsResponse,
   DismissSuggestionResponse,
   LoginResponse,
+  NowResponse,
   Principal,
   Project,
   ProjectDetail,
@@ -77,6 +79,10 @@ import type {
 
 const api = axios.create({ baseURL: '/api/v1' })
 
+export interface ApiGetOptions {
+  signal?: AbortSignal
+}
+
 export const AUTH_SESSION_EXPIRED_EVENT = 'depsilo:auth-session-expired'
 
 function isLoginRequest(url?: string) {
@@ -90,7 +96,7 @@ function isLoginRequest(url?: string) {
 
 // Request interceptor: attach JWT from localStorage
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
+  const token = readLocalStorage('token')
   if (token && !isLoginRequest(config.url)) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -105,9 +111,9 @@ api.interceptors.response.use(
   (error: unknown) => {
     if (axios.isAxiosError(error) && error.response?.status === 401 && !isLoginRequest(error.config?.url)) {
       const authorization = error.config?.headers?.get?.('Authorization')
-      const currentToken = localStorage.getItem('token')
+      const currentToken = readLocalStorage('token')
       if (currentToken && typeof authorization === 'string' && authorization === `Bearer ${currentToken}`) {
-        localStorage.removeItem('token')
+        removeLocalStorage('token')
         window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT))
       }
     }
@@ -120,132 +126,133 @@ api.interceptors.response.use(
 )
 
 export const statsApi = {
-  getStats: () => api.get('/stats'),
-  getNow: () => api.get('/now'),
-  getLatencySeries: () => api.get('/latency-series'),
+  getStats: (options: ApiGetOptions = {}) => api.get('/stats', options),
+  getNow: (options: ApiGetOptions = {}) => api.get<NowResponse>('/now', options),
+  getLatencySeries: (options: ApiGetOptions = {}) => api.get('/latency-series', options),
 }
 
 export const packagesApi = {
-  list: (params?: { q?: string; type?: string; sort?: string; page?: number; per_page?: number }) =>
-    api.get('/packages', { params }),
-  detail: (type: string, name: string) =>
-    api.get(`/packages/${type}/${name}`),
+  list: (params?: { q?: string; type?: string; sort?: string; page?: number; per_page?: number }, options: ApiGetOptions = {}) =>
+    api.get('/packages', { ...options, params }),
+  detail: (type: string, name: string, options: ApiGetOptions = {}) =>
+    api.get(`/packages/${type}/${name}`, options),
 }
 
 export const authApi = {
-  login: (data: { username: string; password: string }) => api.post<LoginResponse>('/auth/login', data),
+  login: (data: { username: string; password: string }, options: ApiGetOptions = {}) =>
+    api.post<LoginResponse>('/auth/login', data, options),
   logout: () => api.post<{ message: string }>('/auth/logout'),
-  me: () => api.get<Principal>('/auth/me'),
+  me: (options: ApiGetOptions = {}) => api.get<Principal>('/auth/me', options),
   refresh: () => api.post<RefreshResponse>('/auth/refresh'),
 }
 
 export const adminApi = {
-  getDashboard: () => api.get<DashboardResponse>('/admin/dashboard'),
-  getRecentDownloads: (limit: number = 3) =>
-    api.get<RecentDownloadsResponse>('/admin/dashboard/recent-downloads', { params: { limit } }),
-  getDashboardTrends: (range_: string = '7d') =>
-    api.get<DashboardTrendsResponse>('/admin/dashboard/trends', { params: { range: range_ } }),
+  getDashboard: (options: ApiGetOptions = {}) => api.get<DashboardResponse>('/admin/dashboard', options),
+  getRecentDownloads: (limit: number = 3, options: ApiGetOptions = {}) =>
+    api.get<RecentDownloadsResponse>('/admin/dashboard/recent-downloads', { ...options, params: { limit } }),
+  getDashboardTrends: (range_: string = '7d', options: ApiGetOptions = {}) =>
+    api.get<DashboardTrendsResponse>('/admin/dashboard/trends', { ...options, params: { range: range_ } }),
 
   // Cache
-  listCache: (params: CacheQuery) => api.get<CacheListResponse>('/admin/cache', { params }),
+  listCache: (params: CacheQuery, options: ApiGetOptions = {}) => api.get<CacheListResponse>('/admin/cache', { ...options, params }),
   deleteCache: (id: number) => api.delete<CacheDeleteResponse>(`/admin/cache/${id}`),
   cleanupCache: () => api.post<CacheCleanupResponse>('/admin/cache/cleanup'),
-  getCacheDistribution: () => api.get<CacheDistributionResponse>('/admin/cache/distribution'),
-  listCacheIndexes: (params: CacheIndexQuery) => api.get<CacheIndexListResponse>('/admin/cache/indexes', { params }),
+  getCacheDistribution: (options: ApiGetOptions = {}) => api.get<CacheDistributionResponse>('/admin/cache/distribution', options),
+  listCacheIndexes: (params: CacheIndexQuery, options: ApiGetOptions = {}) => api.get<CacheIndexListResponse>('/admin/cache/indexes', { ...options, params }),
   refreshCacheIndex: (id: number) => api.post<CacheIndexRefreshResponse>(`/admin/cache/indexes/${id}/refresh`),
   warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post('/admin/cache/warmup', data),
 
   // Compiler cache
-  getCompileCacheStatus: () => api.get<CompileCacheStatusResponse>('/admin/compile-cache/status'),
-  listCompileCacheCredentials: () => api.get<CompileCacheCredentialListResponse>('/admin/compile-cache/credentials'),
+  getCompileCacheStatus: (options: ApiGetOptions = {}) => api.get<CompileCacheStatusResponse>('/admin/compile-cache/status', options),
+  listCompileCacheCredentials: (options: ApiGetOptions = {}) => api.get<CompileCacheCredentialListResponse>('/admin/compile-cache/credentials', options),
   createCompileCacheCredential: (data: CreateCompileCacheCredentialRequest) =>
     api.post<CreateCompileCacheCredentialResponse>('/admin/compile-cache/credentials', data),
   deleteCompileCacheCredential: (id: number) => api.delete(`/admin/compile-cache/credentials/${id}`),
   cleanupCompileCache: () => api.post<CompileCacheCleanupResponse>('/admin/compile-cache/cleanup'),
 
   // Upstreams
-  listUpstreams: () => api.get<AdminUpstreamListResponse>('/admin/upstreams'),
+  listUpstreams: (options: ApiGetOptions = {}) => api.get<AdminUpstreamListResponse>('/admin/upstreams', options),
   createUpstream: (data: UpstreamMutationRequest) => api.post<AdminUpstream>('/admin/upstreams', data),
   updateUpstream: (id: number, data: UpstreamMutationRequest) => api.put<AdminUpstream>(`/admin/upstreams/${id}`, data),
   deleteUpstream: (id: number) => api.delete<DeleteUpstreamResponse>(`/admin/upstreams/${id}`),
   checkUpstream: (id: number) => api.post<CheckUpstreamResponse>(`/admin/upstreams/${id}/check`),
-  getUpstreamLatencies: (range_: string = '24h') =>
-    api.get<AdminUpstreamLatenciesResponse>('/admin/upstreams/latency', { params: { range: range_ } }),
-  listUpstreamUpdates: (params: AdminUpstreamUpdateQuery) =>
-    api.get<AdminUpstreamUpdateListResponse>('/admin/upstream-updates', { params }),
+  getUpstreamLatencies: (range_: string = '24h', options: ApiGetOptions = {}) =>
+    api.get<AdminUpstreamLatenciesResponse>('/admin/upstreams/latency', { ...options, params: { range: range_ } }),
+  listUpstreamUpdates: (params: AdminUpstreamUpdateQuery, options: ApiGetOptions = {}) =>
+    api.get<AdminUpstreamUpdateListResponse>('/admin/upstream-updates', { ...options, params }),
 
   // Logs
-  listLogs: (params: AccessLogQuery) => api.get<AccessLogListResponse>('/admin/logs', { params }),
-  exportLogs: (params: AccessLogQuery) => api.get<Blob>('/admin/logs/export', { params, responseType: 'blob' }),
+  listLogs: (params: AccessLogQuery, options: ApiGetOptions = {}) => api.get<AccessLogListResponse>('/admin/logs', { ...options, params }),
+  exportLogs: (params: AccessLogQuery, options: ApiGetOptions = {}) => api.get<Blob>('/admin/logs/export', { ...options, params, responseType: 'blob' }),
 
   // Users
-  listUsers: () => api.get<AdminUser[]>('/admin/users'),
+  listUsers: (options: ApiGetOptions = {}) => api.get<AdminUser[]>('/admin/users', options),
   createUser: (data: CreateUserRequest) => api.post<AdminUser>('/admin/users', data),
   updateUser: (id: number, data: UpdateUserRequest) => api.put<AdminUser>(`/admin/users/${id}`, data),
   deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
 
   // Tokens
-  listTokens: () => api.get<APITokenSummary[]>('/admin/tokens'),
+  listTokens: (options: ApiGetOptions = {}) => api.get<APITokenSummary[]>('/admin/tokens', options),
   createToken: (data: CreateAPITokenRequest) => api.post<CreateAPITokenResponse>('/admin/tokens', data),
   deleteToken: (id: number) => api.delete(`/admin/tokens/${id}`),
 
   // Settings
-  getSettings: () => api.get<AdminSettingsResponse>('/admin/settings'),
+  getSettings: (options: ApiGetOptions = {}) => api.get<AdminSettingsResponse>('/admin/settings', options),
   updateSettings: (data: UpdateAdminSettingsRequest) => api.put<UpdateAdminSettingsResponse>('/admin/settings', data),
 
   // Audit Logs (open source)
-  listAuditLogs: (params: AuditLogQuery) => api.get<AuditLogListResponse>('/admin/audit-logs', { params }),
-  exportAuditLogs: (params: AuditLogQuery) => api.get<Blob>('/admin/audit-logs/export', { params, responseType: 'blob' }),
+  listAuditLogs: (params: AuditLogQuery, options: ApiGetOptions = {}) => api.get<AuditLogListResponse>('/admin/audit-logs', { ...options, params }),
+  exportAuditLogs: (params: AuditLogQuery, options: ApiGetOptions = {}) => api.get<Blob>('/admin/audit-logs/export', { ...options, params, responseType: 'blob' }),
 
   // Package Rules (Pro)
-  listRules: () => api.get<RuleListResponse>('/admin/rules'),
+  listRules: (options: ApiGetOptions = {}) => api.get<RuleListResponse>('/admin/rules', options),
   createRule: (data: RuleRequest) => api.post<RuleRecord>('/admin/rules', data),
   updateRule: (id: number, data: RuleRequest) => api.put<RuleRecord>(`/admin/rules/${id}`, data),
   deleteRule: (id: number) => api.delete(`/admin/rules/${id}`),
   testRule: (data: RuleTestRequest) => api.post<RuleTestResponse>('/admin/rules/test', data),
 
   // Bandwidth report
-  getBandwidthReport: (params: { range?: string; start?: string; end?: string }) =>
-    api.get<BandwidthReportResponse>('/admin/bandwidth', { params }),
+  getBandwidthReport: (params: { range?: string; start?: string; end?: string }, options: ApiGetOptions = {}) =>
+    api.get<BandwidthReportResponse>('/admin/bandwidth', { ...options, params }),
 
   // Package Security (Pro)
-  getSecurityDashboard: () => api.get<SecurityDashboard>('/admin/security/dashboard'),
-  listVulnerabilities: (params: SecurityQuery) => api.get<SecurityVulnerabilityPage>('/admin/security/vulnerabilities', { params }),
-  listVulnerablePackages: (params: SecurityBaseQuery) => api.get<SecurityPackagePage>('/admin/security/packages', { params }),
-  listSuggestions: (params: SecurityBaseQuery) => api.get<SecuritySuggestionPage>('/admin/security/suggestions', { params }),
+  getSecurityDashboard: (options: ApiGetOptions = {}) => api.get<SecurityDashboard>('/admin/security/dashboard', options),
+  listVulnerabilities: (params: SecurityQuery, options: ApiGetOptions = {}) => api.get<SecurityVulnerabilityPage>('/admin/security/vulnerabilities', { ...options, params }),
+  listVulnerablePackages: (params: SecurityBaseQuery, options: ApiGetOptions = {}) => api.get<SecurityPackagePage>('/admin/security/packages', { ...options, params }),
+  listSuggestions: (params: SecurityBaseQuery, options: ApiGetOptions = {}) => api.get<SecuritySuggestionPage>('/admin/security/suggestions', { ...options, params }),
   approveSuggestion: (vulnerabilityID: number, data: ApproveSuggestionRequest = {}) => api.post<ApproveSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/approve`, data),
   dismissSuggestion: (vulnerabilityID: number) => api.post<DismissSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/dismiss`),
   triggerSecurityScan: () => api.post<SecurityScanResponse>('/admin/security/scan'),
   importVulnerabilities: (formData: FormData) => api.post<SecurityImportResponse>('/admin/security/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  listSecurityPolicies: () => api.get<SecurityPolicy[]>('/admin/security/policies'),
+  listSecurityPolicies: (options: ApiGetOptions = {}) => api.get<SecurityPolicy[]>('/admin/security/policies', options),
   updateSecurityPolicy: (ecosystem: string, data: UpdateSecurityPolicyRequest) => api.put<SecurityPolicy>(`/admin/security/policies/${ecosystem}`, data),
 
   // Supply-chain quarantine (open-source wedge — NOT Pro)
-  listQuarantineEvents: (params: QuarantineQuery) => api.get('/admin/quarantine/events', { params }),
-  listQuarantineApprovals: (params: QuarantineQuery) => api.get('/admin/quarantine/approvals', { params }),
+  listQuarantineEvents: (params: QuarantineQuery, options: ApiGetOptions = {}) => api.get('/admin/quarantine/events', { ...options, params }),
+  listQuarantineApprovals: (params: QuarantineQuery, options: ApiGetOptions = {}) => api.get('/admin/quarantine/approvals', { ...options, params }),
   approveQuarantine: (data: { ecosystem: string; package: string; version: string; reason: string }) =>
     api.post('/admin/quarantine/approve', data),
   revokeQuarantineApproval: (id: number, data: { reason: string }) =>
     api.delete(`/admin/quarantine/approvals/${id}`, { data }),
 
   // Known-malicious blocklist (open-source, DIRECTION Task 2)
-  getBlocklistStatus: () => api.get('/admin/blocklist/status'),
+  getBlocklistStatus: (options: ApiGetOptions = {}) => api.get('/admin/blocklist/status', options),
   triggerBlocklistSync: () => api.post('/admin/blocklist/sync'),
-  listBlocklistOverrides: () => api.get('/admin/blocklist/overrides'),
+  listBlocklistOverrides: (options: ApiGetOptions = {}) => api.get('/admin/blocklist/overrides', options),
   createBlocklistOverride: (data: { ecosystem: string; package: string; version: string; reason: string }) =>
     api.post('/admin/blocklist/overrides', data),
   revokeBlocklistOverride: (id: number, data: { reason: string }) =>
     api.delete(`/admin/blocklist/overrides/${id}`, { data }),
 
   // Projects (Pro)
-  listProjects: () => api.get<ProjectListResponse>('/admin/projects'),
+  listProjects: (options: ApiGetOptions = {}) => api.get<ProjectListResponse>('/admin/projects', options),
   createProject: (data: CreateProjectRequest) => api.post<CreateProjectResponse>('/admin/projects', data),
-  getProject: (id: number) => api.get<ProjectDetail>(`/admin/projects/${id}`),
+  getProject: (id: number, options: ApiGetOptions = {}) => api.get<ProjectDetail>(`/admin/projects/${id}`, options),
   updateProject: (id: number, data: UpdateProjectRequest) => api.put<Project>(`/admin/projects/${id}`, data),
   deleteProject: (id: number) => api.delete<DeleteProjectResponse>(`/admin/projects/${id}`),
-  listProjectPackages: (id: number, params: ProjectPackageQuery) => api.get<ProjectPackagesResponse>(`/admin/projects/${id}/packages`, { params }),
+  listProjectPackages: (id: number, params: ProjectPackageQuery, options: ApiGetOptions = {}) => api.get<ProjectPackagesResponse>(`/admin/projects/${id}/packages`, { ...options, params }),
   regenerateProjectToken: (id: number) => api.post<RegenerateProjectTokenResponse>(`/admin/projects/${id}/token`),
-  exportSbom: (id: number, params: ProjectSBOMQuery) => api.get<Blob>(`/admin/projects/${id}/sbom`, { params, responseType: 'blob' }),
+  exportSbom: (id: number, params: ProjectSBOMQuery, options: ApiGetOptions = {}) => api.get<Blob>(`/admin/projects/${id}/sbom`, { ...options, params, responseType: 'blob' }),
 }
 
 // Setup wizard (no auth)
@@ -295,7 +302,7 @@ export interface EntitlementStatus {
 }
 
 export const licenseApi = {
-  status:        () => api.get<EntitlementStatus>('/admin/license/status'),
+  status:        (options: ApiGetOptions = {}) => api.get<EntitlementStatus>('/admin/license/status', options),
   revalidate:    () => api.post('/admin/license/revalidate'),
   activateTrial: () => api.post<EntitlementStatus>('/admin/license/trial/activate'),
   setKey:        (key: string) => api.put<EntitlementStatus>('/admin/license/key', { key }),
@@ -317,7 +324,7 @@ export interface WebhookConfig {
 }
 
 export const webhookApi = {
-  list:   () => api.get<WebhookConfig[]>('/admin/webhooks'),
+  list:   (options: ApiGetOptions = {}) => api.get<WebhookConfig[]>('/admin/webhooks', options),
   create: (data: Partial<WebhookConfig>) => api.post<WebhookConfig>('/admin/webhooks', data),
   update: (id: number, data: Partial<WebhookConfig>) => api.put(`/admin/webhooks/${id}`, data),
   delete: (id: number) => api.delete(`/admin/webhooks/${id}`),

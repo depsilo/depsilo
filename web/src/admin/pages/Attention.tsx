@@ -91,20 +91,20 @@ export default function Attention() {
 
   const dashboardQuery = useQuery({
     queryKey: ['admin', 'dashboard'],
-    queryFn: () => adminApi.getDashboard(),
+    queryFn: ({ signal }) => adminApi.getDashboard({ signal }),
     refetchInterval: 30_000,
     retry: false,
   })
   const suggestionsQuery = useQuery({
     queryKey: ['admin', 'security', 'suggestions', ATTENTION_SUGGESTIONS_PAGE],
-    queryFn: () => adminApi.listSuggestions(ATTENTION_SUGGESTIONS_PARAMS),
+    queryFn: ({ signal }) => adminApi.listSuggestions(ATTENTION_SUGGESTIONS_PARAMS, { signal }),
     refetchInterval: 30_000,
     retry: false,
   })
   const quarantineQuery = useQuery({
     queryKey: ['admin', 'quarantine', 'events', ATTENTION_QUARANTINE_PARAMS],
-    queryFn: async () => {
-      const response = await adminApi.listQuarantineEvents(ATTENTION_QUARANTINE_PARAMS)
+    queryFn: async ({ signal }) => {
+      const response = await adminApi.listQuarantineEvents(ATTENTION_QUARANTINE_PARAMS, { signal })
       return response.data as { items: AttentionQuarantineEvent[]; total: number }
     },
     refetchInterval: 30_000,

@@ -8,6 +8,7 @@ import { formatBytes, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import SelectV2 from '@/components/Select'
+import TextareaV2 from '@/components/Textarea'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import EcosystemIcon from '@/components/EcosystemIcon'
@@ -63,7 +64,7 @@ export default function CacheManageV2() {
 
   const distributionQuery = useQuery({
     queryKey: ['admin', 'cache', 'distribution'],
-    queryFn: () => adminApi.getCacheDistribution(),
+    queryFn: ({ signal }) => adminApi.getCacheDistribution({ signal }),
     refetchInterval: 30000,
     retry: false,
   })
@@ -72,7 +73,7 @@ export default function CacheManageV2() {
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'cache', params],
-    queryFn: () => adminApi.listCache(params),
+    queryFn: ({ signal }) => adminApi.listCache(params, { signal }),
     retry: false,
   })
 
@@ -244,20 +245,19 @@ export default function CacheManageV2() {
         </SelectV2>
       </div>
 
-      {/* ── Cache entries table (bare) ───────────────────────────── */}
-      <TableViewport label={t('cache.table')} minWidth={820}>
-        {isPending ? (
-          <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
-        ) : isError && !data ? (
-          <QueryErrorState message={errorMessage} onRetry={() => { void refetch() }} />
-        ) : (
-          <div className="space-y-3">
-            {data && isRefetchError && (
-              <StaleDataNotice onRefresh={() => { void refetch() }} />
-            )}
-            {items.length === 0 ? (
+      {isPending ? (
+        <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
+          <span aria-hidden="true">{t('loading')}</span>
+        </div>
+      ) : isError && !data ? (
+        <QueryErrorState message={errorMessage} onRetry={() => { void refetch() }} />
+      ) : (
+        <div className="space-y-3">
+          {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
+          {items.length === 0 ? (
             <EmptyState icon="inbox" title={t('cache.noCache')} minHeight={200} />
-            ) : (
+          ) : (
+            <TableViewport label={t('cache.table')} minWidth={820}>
             <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -303,10 +303,10 @@ export default function CacheManageV2() {
               ))}
             </tbody>
             </table>
-            )}
-          </div>
-        )}
-      </TableViewport>
+            </TableViewport>
+          )}
+        </div>
+      )}
 
       {/* Pagination */}
       <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
@@ -316,7 +316,7 @@ export default function CacheManageV2() {
         if (deleteMutation.isPending) return
         deleteMutation.reset()
         setDeleteTarget(null)
-      }} title={t('cache.confirmDelete')}>
+      }} title={t('cache.confirmDelete')} closeDisabled={deleteMutation.isPending}>
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p>
         {deleteMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(deleteMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
@@ -335,7 +335,7 @@ export default function CacheManageV2() {
         if (cleanupMutation.isPending) return
         cleanupMutation.reset()
         setCleanupOpen(false)
-      }} title={t('cache.cleanExpiredTitle')}>
+      }} title={t('cache.cleanExpiredTitle')} closeDisabled={cleanupMutation.isPending}>
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
         {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
@@ -350,30 +350,26 @@ export default function CacheManageV2() {
       </ModalV2>
 
       {/* Warmup Modal */}
-      <ModalV2 open={warmupOpen} onClose={() => setWarmupOpen(false)} title={t('cache.warmupTitle')}>
+      <ModalV2 open={warmupOpen} onClose={() => setWarmupOpen(false)} title={t('cache.warmupTitle')} closeDisabled={warmupLoading}>
         <div className="space-y-4">
           <SelectV2 label={t('cache.warmupEcosystem')} value={warmupEco} onChange={(e) => setWarmupEco(e.target.value)}>
             {WARMUP_ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
           </SelectV2>
-          <div>
-            <label className="block text-[14px] font-[400] mb-1" style={{ color: 'var(--text-muted)' }}>
-              {t(warmupEco === 'npm' ? 'cache.warmupPackagesNpm' : 'cache.warmupPackages')}
-            </label>
-            <textarea
-              className="w-full rounded-[4px] px-3 py-2 text-[13px] font-mono resize-none"
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none', height: 160 }}
-              placeholder={t(warmupEco === 'npm' ? 'cache.warmupPlaceholderNpm' : 'cache.warmupPlaceholder')}
-              value={warmupText}
-              onChange={(e) => setWarmupText(e.target.value)}
-            />
-          </div>
+          <TextareaV2
+            label={t(warmupEco === 'npm' ? 'cache.warmupPackagesNpm' : 'cache.warmupPackages')}
+            className="resize-none font-mono"
+            style={{ height: 160 }}
+            placeholder={t(warmupEco === 'npm' ? 'cache.warmupPlaceholderNpm' : 'cache.warmupPlaceholder')}
+            value={warmupText}
+            onChange={(e) => setWarmupText(e.target.value)}
+          />
           {warmupResult && (
             <div className="rounded-[4px] px-3 py-2 text-[13px]" style={{ background: 'var(--ok-fill)', color: 'var(--ok-text)', border: '1px solid var(--ok-border)' }}>
               {warmupResult}
             </div>
           )}
           <div className="flex justify-end gap-3">
-            <ButtonV2 variant="secondary" onClick={() => setWarmupOpen(false)}>{t('cancel')}</ButtonV2>
+            <ButtonV2 variant="secondary" disabled={warmupLoading} onClick={() => setWarmupOpen(false)}>{t('cancel')}</ButtonV2>
             <ButtonV2
               disabled={warmupLoading || !warmupText.trim()}
               onClick={async () => {

@@ -11,7 +11,7 @@ export function canWrite(principal: Principal | undefined): boolean {
 export function usePrincipal(enabled = true) {
   const query = useQuery({
     queryKey: principalQueryKey,
-    queryFn: async () => (await authApi.me()).data,
+    queryFn: async ({ signal }) => (await authApi.me({ signal })).data,
     enabled,
     retry: false,
     staleTime: 30_000,

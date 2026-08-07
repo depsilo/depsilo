@@ -1,16 +1,40 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gzipSync } from 'node:zlib'
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = path.join(webRoot, 'dist')
 const assetsDir = path.join(distDir, 'assets')
 const entryBudgetBytes = 450_000
 const chunkBudgetBytes = 500_000
+const initialAssetsBudgetBytes = 650_000
+const initialAssetsTransferBudgetBytes = 320_000
 const lazyModules = ['PortalApp-', 'SetupWizard-', 'AdminApp-', 'AdminShell-']
 
 function formatBytes(bytes) {
   return `${(bytes / 1000).toFixed(2)} kB`
+}
+
+function cssAssetReferences(css, ownerName) {
+  const references = []
+  for (const match of css.matchAll(/url\(\s*(?:"([^"]+)"|'([^']+)'|([^'")\s]+))\s*\)/g)) {
+    const reference = match[1] || match[2] || match[3]
+    if (!reference || /^(?:data:|https?:|\/\/|#)/.test(reference)) continue
+
+    const withoutSuffix = reference.split(/[?#]/, 1)[0]
+    const name = withoutSuffix.startsWith('/assets/')
+      ? withoutSuffix.slice('/assets/'.length)
+      : path.posix.normalize(path.posix.join(path.posix.dirname(ownerName), withoutSuffix))
+    if (name && !name.startsWith('../')) references.push(name)
+  }
+  return references
+}
+
+function estimatedTransferBytes(name, contents) {
+  return /\.(?:css|html|js|json|svg|txt)$/.test(name)
+    ? gzipSync(contents).byteLength
+    : contents.byteLength
 }
 
 async function main() {
@@ -21,6 +45,7 @@ async function main() {
   }
 
   const assetNames = await readdir(assetsDir)
+  const assetNameSet = new Set(assetNames)
   const chunkNames = assetNames.filter((name) => name.endsWith('.js'))
   const chunks = await Promise.all(chunkNames.map(async (name) => ({
     name,
@@ -29,6 +54,46 @@ async function main() {
   chunks.sort((left, right) => right.bytes - left.bytes)
 
   const failures = []
+  const directInitialAssetNames = [
+    ...new Set(
+      [...html.matchAll(/(?:src|href)="\/assets\/([^"?]+)"/g)].map((match) => match[1]),
+    ),
+  ]
+  const initialAssets = []
+  const pendingInitialAssetNames = [...directInitialAssetNames]
+  const seenInitialAssetNames = new Set()
+  while (pendingInitialAssetNames.length > 0) {
+    const name = pendingInitialAssetNames.shift()
+    if (!name || seenInitialAssetNames.has(name)) continue
+    if (!assetNameSet.has(name)) {
+      throw new Error(`initial asset ${name} is missing from dist/assets`)
+    }
+
+    seenInitialAssetNames.add(name)
+    const contents = await readFile(path.join(assetsDir, name))
+    initialAssets.push({
+      name,
+      bytes: contents.byteLength,
+      transferBytes: estimatedTransferBytes(name, contents),
+    })
+    if (name.endsWith('.css')) {
+      pendingInitialAssetNames.push(...cssAssetReferences(contents.toString('utf8'), name))
+    }
+  }
+  const initialBytes = initialAssets.reduce((total, asset) => total + asset.bytes, 0)
+  const initialTransferBytes = initialAssets.reduce((total, asset) => total + asset.transferBytes, 0)
+
+  if (initialBytes > initialAssetsBudgetBytes) {
+    failures.push(
+      `initial asset graph is ${formatBytes(initialBytes)}; budget is ${formatBytes(initialAssetsBudgetBytes)}`,
+    )
+  }
+  if (initialTransferBytes > initialAssetsTransferBudgetBytes) {
+    failures.push(
+      `initial asset graph is ${formatBytes(initialTransferBytes)} estimated transfer; budget is ${formatBytes(initialAssetsTransferBudgetBytes)}`,
+    )
+  }
+
   const entryName = entryMatch[1]
   const entry = chunks.find((chunk) => chunk.name === entryName)
   if (!entry) {
@@ -65,6 +130,7 @@ async function main() {
   const largest = chunks[0]
   console.log(
     `bundle budget OK: entry ${entry.name} ${formatBytes(entry.bytes)}, ` +
+      `initial ${formatBytes(initialBytes)} / ${formatBytes(initialTransferBytes)} estimated transfer, ` +
       `largest ${largest.name} ${formatBytes(largest.bytes)}, ${lazyModules.length} lazy seams preserved`,
   )
 }
