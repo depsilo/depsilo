@@ -1,3 +1,5 @@
+import type { IconName } from '@/components/Icon'
+
 const navGroupDefinitions = [
   { id: 'overview', titleKey: 'nav.workspaces.overview', icon: 'dashboard', landingRouteId: 'dashboard' },
   { id: 'history', titleKey: 'nav.workspaces.history', icon: 'history', landingRouteId: 'accessLogs' },
@@ -12,7 +14,7 @@ interface AdminRouteDefinition {
   id: string
   path: string
   titleKey: string
-  icon: string
+  icon: IconName
   navGroup: AdminNavGroup
   pro?: true
   hiddenFromNavigation?: true
@@ -47,7 +49,7 @@ export interface AdminRoute {
   /** Canonical absolute URL used by navigation and exact title matching. */
   href: string
   titleKey: string
-  icon: string
+  icon: IconName
   navGroup: AdminNavGroup
   index: boolean
   pro: boolean
@@ -67,7 +69,7 @@ export const adminRouteManifest: readonly AdminRoute[] = Object.freeze(
 export interface AdminNavigationGroup {
   id: AdminNavGroup
   titleKey: string
-  icon: string
+  icon: IconName
   href: string
   routes: readonly AdminRoute[]
 }

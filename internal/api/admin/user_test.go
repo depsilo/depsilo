@@ -22,6 +22,8 @@ import (
 	"depsilo/internal/middleware"
 )
 
+const userTestJWTSecret = "0123456789abcdef0123456789abcdef"
+
 func newUserTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	t.Helper()
 	r, database, _ := newUserTestRouterWithHandler(t)
@@ -181,14 +183,14 @@ func TestUserListCreateAndUpdateUseSafeDTO(t *testing.T) {
 		assertSafeUserObject(t, item)
 	}
 
-	createRec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"new-reader","password":"create-secret","role":"readonly"}`, actor.ID)
+	createRec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"new-reader","password":"Cr3ate&Secret","role":"readonly"}`, actor.ID)
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("create status=%d body=%s", createRec.Code, createRec.Body.String())
 	}
 	assertSafeUserObject(t, createRec.Body.Bytes())
 
 	path := "/users/" + strconv.FormatUint(uint64(target.ID), 10)
-	updateRec := userMutationRequest(r, http.MethodPut, path, `{"password":"update-secret"}`, actor.ID)
+	updateRec := userMutationRequest(r, http.MethodPut, path, `{"password":"Upd4te&Secret"}`, actor.ID)
 	if updateRec.Code != http.StatusOK {
 		t.Fatalf("update status=%d body=%s", updateRec.Code, updateRec.Body.String())
 	}
@@ -209,7 +211,7 @@ func TestUserCannotLockOutSelfButCanChangePassword(t *testing.T) {
 	if deleteRec.Code != http.StatusConflict || responseCode(t, deleteRec) != "SELF_LOCKOUT" {
 		t.Fatalf("self delete status=%d body=%s", deleteRec.Code, deleteRec.Body.String())
 	}
-	passwordRec := userMutationRequest(r, http.MethodPut, path, `{"password":"new-password"}`, admin.ID)
+	passwordRec := userMutationRequest(r, http.MethodPut, path, `{"password":"N3w&Password!"}`, admin.ID)
 	if passwordRec.Code != http.StatusOK {
 		t.Fatalf("password status=%d body=%s", passwordRec.Code, passwordRec.Body.String())
 	}
@@ -217,7 +219,7 @@ func TestUserCannotLockOutSelfButCanChangePassword(t *testing.T) {
 	if err := database.First(&saved, admin.ID).Error; err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(saved.PasswordHash), []byte("new-password")); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(saved.PasswordHash), []byte("N3w&Password!")); err != nil {
 		t.Fatalf("password not updated: %v", err)
 	}
 	if saved.Role != "admin" || !saved.Enabled {
@@ -450,7 +452,7 @@ func TestUserRequestValidation(t *testing.T) {
 		{name: "empty update", method: http.MethodPut, path: path, body: `{}`},
 		{name: "null update", method: http.MethodPut, path: path, body: `{"role":null}`},
 		{name: "malformed update", method: http.MethodPut, path: path, body: `{`},
-		{name: "create invalid role", method: http.MethodPost, path: "/users", body: `{"username":"new","password":"valid-password","role":"owner"}`},
+		{name: "create invalid role", method: http.MethodPost, path: "/users", body: `{"username":"new","password":"V4lid&Password","role":"owner"}`},
 		{name: "create short password", method: http.MethodPost, path: "/users", body: `{"username":"new","password":"abc","role":"readonly"}`},
 	}
 	for _, tc := range tests {
@@ -461,6 +463,113 @@ func TestUserRequestValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUserPasswordMutationsUseCredentialPolicy(t *testing.T) {
+	t.Run("create", func(t *testing.T) {
+		r, database := newUserTestRouter(t)
+		actor := createUserForMutationTest(t, database, "owner", "admin", true)
+		rec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"new-reader","password":"Ab1!","role":"readonly"}`, actor.ID)
+		if rec.Code != http.StatusBadRequest || responseCode(t, rec) != "BAD_REQUEST" {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("update", func(t *testing.T) {
+		r, database := newUserTestRouter(t)
+		actor := createUserForMutationTest(t, database, "owner", "admin", true)
+		target := createUserForMutationTest(t, database, "target", "readonly", true)
+		path := "/users/" + strconv.FormatUint(uint64(target.ID), 10)
+		rec := userMutationRequest(r, http.MethodPut, path, `{"password":"Ab1!"}`, actor.ID)
+		if rec.Code != http.StatusBadRequest || responseCode(t, rec) != "BAD_REQUEST" {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestUserSecurityMutationsRevokeExistingJWT(t *testing.T) {
+	tests := []struct {
+		name      string
+		mutations []string
+	}{
+		{name: "password changed", mutations: []string{`{"password":"N3w&SecurePassphrase"}`}},
+		{name: "role changed", mutations: []string{`{"role":"admin"}`}},
+		{name: "disable then re-enable", mutations: []string{`{"enabled":false}`, `{"enabled":true}`}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			adminRouter, database := newUserTestRouter(t)
+			actor := createUserForMutationTest(t, database, "owner", "admin", true)
+			target := createUserForMutationTest(t, database, "target", "readonly", true)
+			token, err := middleware.GenerateJWT(userTestJWTSecret, target, time.Hour)
+			if err != nil {
+				t.Fatalf("generate JWT: %v", err)
+			}
+			authRouter := gin.New()
+			authRouter.GET("/protected", middleware.Authenticate(userTestJWTSecret, database), func(c *gin.Context) {
+				c.Status(http.StatusNoContent)
+			})
+			if rec := apiTokenRequest(authRouter, token); rec.Code != http.StatusNoContent {
+				t.Fatalf("pre-mutation status=%d body=%s", rec.Code, rec.Body.String())
+			}
+
+			path := "/users/" + strconv.FormatUint(uint64(target.ID), 10)
+			for _, body := range test.mutations {
+				rec := userMutationRequest(adminRouter, http.MethodPut, path, body, actor.ID)
+				if rec.Code != http.StatusOK {
+					t.Fatalf("mutation %s status=%d body=%s", body, rec.Code, rec.Body.String())
+				}
+			}
+			if rec := apiTokenRequest(authRouter, token); rec.Code != http.StatusUnauthorized {
+				t.Fatalf("post-mutation status=%d body=%s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestUserSecurityMutationVersionIsMonotonic(t *testing.T) {
+	r, database := newUserTestRouter(t)
+	actor := createUserForMutationTest(t, database, "owner", "admin", true)
+	target := createUserForMutationTest(t, database, "target", "readonly", true)
+	path := "/users/" + strconv.FormatUint(uint64(target.ID), 10)
+
+	assertVersion := func(want uint64) {
+		t.Helper()
+		var saved db.User
+		if err := database.First(&saved, target.ID).Error; err != nil {
+			t.Fatalf("reload target: %v", err)
+		}
+		if saved.CredentialVersion != want {
+			t.Fatalf("credential version = %d, want %d", saved.CredentialVersion, want)
+		}
+	}
+	mutate := func(body string) {
+		t.Helper()
+		rec := userMutationRequest(r, http.MethodPut, path, body, actor.ID)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("mutation %s status=%d body=%s", body, rec.Code, rec.Body.String())
+		}
+	}
+
+	assertVersion(db.InitialCredentialVersion)
+	mutate(`{"role":"readonly","enabled":true}`)
+	assertVersion(db.InitialCredentialVersion)
+	mutate(`{"password":"N3w&SecurePassphrase"}`)
+	assertVersion(db.InitialCredentialVersion + 1)
+	mutate(`{"role":"admin"}`)
+	assertVersion(db.InitialCredentialVersion + 2)
+	mutate(`{"enabled":false}`)
+	assertVersion(db.InitialCredentialVersion + 3)
+	mutate(`{"enabled":true}`)
+	assertVersion(db.InitialCredentialVersion + 4)
+}
+
+func apiTokenRequest(router http.Handler, token string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
 }
 
 func TestUserLookupsDistinguishMissingFromDatabaseFailure(t *testing.T) {
@@ -512,7 +621,7 @@ func TestUserCreateDistinguishesConflictFromDatabaseFailure(t *testing.T) {
 		r, database := newUserTestRouter(t)
 		actor := createUserForMutationTest(t, database, "owner", "admin", true)
 		createUserForMutationTest(t, database, "duplicate", "readonly", true)
-		rec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"duplicate","password":"valid-password","role":"readonly"}`, actor.ID)
+		rec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"duplicate","password":"V4lid&Password","role":"readonly"}`, actor.ID)
 		if rec.Code != http.StatusConflict || responseCode(t, rec) != "CONFLICT" {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -522,7 +631,7 @@ func TestUserCreateDistinguishesConflictFromDatabaseFailure(t *testing.T) {
 		r, database := newUserTestRouter(t)
 		actor := createUserForMutationTest(t, database, "owner", "admin", true)
 		injectUserGORMFailure(t, database, "create", "users", 1)
-		rec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"new-user","password":"valid-password","role":"readonly"}`, actor.ID)
+		rec := userMutationRequest(r, http.MethodPost, "/users", `{"username":"new-user","password":"V4lid&Password","role":"readonly"}`, actor.ID)
 		if rec.Code != http.StatusInternalServerError || responseCode(t, rec) != "DB_ERROR" {
 			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 		}
@@ -534,7 +643,7 @@ func TestUserUpdateFailureDoesNotReportSuccessOrPersistPartialChanges(t *testing
 	actor := createUserForMutationTest(t, database, "owner", "admin", true)
 	target := createUserForMutationTest(t, database, "target", "readonly", true)
 	injectUserGORMFailure(t, database, "update", "users", 1)
-	rec := userMutationRequest(r, http.MethodPut, "/users/"+strconv.FormatUint(uint64(target.ID), 10), `{"password":"new-password","role":"admin"}`, actor.ID)
+	rec := userMutationRequest(r, http.MethodPut, "/users/"+strconv.FormatUint(uint64(target.ID), 10), `{"password":"N3w&Password!","role":"admin"}`, actor.ID)
 	if rec.Code != http.StatusInternalServerError || responseCode(t, rec) != "DB_ERROR" {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -542,7 +651,7 @@ func TestUserUpdateFailureDoesNotReportSuccessOrPersistPartialChanges(t *testing
 	if err := database.First(&saved, target.ID).Error; err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if saved.Role != "readonly" || bcrypt.CompareHashAndPassword([]byte(saved.PasswordHash), []byte("old-password")) != nil {
+	if saved.Role != "readonly" || saved.CredentialVersion != db.InitialCredentialVersion || bcrypt.CompareHashAndPassword([]byte(saved.PasswordHash), []byte("old-password")) != nil {
 		t.Fatalf("partial update persisted: %#v", saved)
 	}
 }
@@ -560,8 +669,8 @@ func TestUserUpdateRollsBackWhenReloadFails(t *testing.T) {
 	if err := database.First(&saved, target.ID).Error; err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if saved.Role != "readonly" {
-		t.Fatalf("role persisted despite rollback: %q", saved.Role)
+	if saved.Role != "readonly" || saved.CredentialVersion != db.InitialCredentialVersion {
+		t.Fatalf("mutation persisted despite rollback: %#v", saved)
 	}
 }
 

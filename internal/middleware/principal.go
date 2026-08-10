@@ -14,13 +14,14 @@ const (
 )
 
 type Principal struct {
-	ID               uint    `json:"id"`
-	Username         string  `json:"username"`
-	Role             string  `json:"role"`
-	Enabled          bool    `json:"enabled"`
-	AuthMethod       string  `json:"auth_method"`
-	TokenPermissions *string `json:"token_permissions"`
-	CanWrite         bool    `json:"can_write"`
+	ID                uint    `json:"id"`
+	Username          string  `json:"username"`
+	Role              string  `json:"role"`
+	Enabled           bool    `json:"enabled"`
+	AuthMethod        string  `json:"auth_method"`
+	TokenPermissions  *string `json:"token_permissions"`
+	CanWrite          bool    `json:"can_write"`
+	CredentialVersion uint64  `json:"-"`
 }
 
 func PrincipalFromContext(c *gin.Context) (Principal, bool) {

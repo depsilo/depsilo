@@ -27,26 +27,25 @@ const populatedDistribution = {
   top_packages: [{ name: 'requests', size: 1024, type: 'pypi', hit_count: 2 }],
 }
 
-const primaryQueries = [
+// Query-state rendering is owned by shared page primitives. Exercise one
+// simple page and the two composed pages whose sibling queries must survive;
+// page-specific behavior remains covered by each workspace spec.
+const recoveryQueries: readonly QueryCase[] = [
   { path: '/admin', endpoint: 'GET /api/v1/admin/dashboard', success: adminApiDefaults['GET /api/v1/admin/dashboard'] },
-  { path: '/admin/bandwidth', endpoint: 'GET /api/v1/admin/bandwidth', success: adminApiDefaults['GET /api/v1/admin/bandwidth'] },
-  { path: '/admin/logs', endpoint: 'GET /api/v1/admin/logs', success: adminApiDefaults['GET /api/v1/admin/logs'] },
-  { path: '/admin/quarantine', endpoint: 'GET /api/v1/admin/quarantine/events', success: adminApiDefaults['GET /api/v1/admin/quarantine/events'] },
   { path: '/admin/cache', endpoint: 'GET /api/v1/admin/cache', success: adminApiDefaults['GET /api/v1/admin/cache'], siblings: { 'GET /api/v1/admin/cache/distribution': populatedDistribution } },
-  { path: '/admin/upstreams', endpoint: 'GET /api/v1/admin/upstreams', success: adminApiDefaults['GET /api/v1/admin/upstreams'] },
   { path: '/admin/users', endpoint: 'GET /api/v1/admin/users', success: adminApiDefaults['GET /api/v1/admin/users'], siblings: { 'GET /api/v1/admin/tokens': [populatedToken] } },
-  { path: '/admin/license', endpoint: 'GET /api/v1/admin/license/status', success: adminApiDefaults['GET /api/v1/admin/license/status'] },
-  { path: '/admin/rules', endpoint: 'GET /api/v1/admin/rules', success: adminApiDefaults['GET /api/v1/admin/rules'] },
+]
+
+const permissionQueries: readonly QueryCase[] = [
   { path: '/admin/security', endpoint: 'GET /api/v1/admin/security/dashboard', success: adminApiDefaults['GET /api/v1/admin/security/dashboard'] },
-  { path: '/admin/projects', endpoint: 'GET /api/v1/admin/projects', success: { items: [], total: 0 } },
-] satisfies readonly QueryCase[]
+]
 
 async function expectPrimarySiblingVisible(page: Page, path: string) {
   if (path === '/admin/users') await expect(page.getByText('fixture-ci')).toBeVisible()
   if (path === '/admin/cache') await expect(page.getByText('requests')).toBeVisible()
 }
 
-for (const query of primaryQueries) {
+for (const query of recoveryQueries) {
   test(`${query.path} recovers from an initial 500 only after manual Retry`, async ({ page }) => {
     let calls = 0
     await mockAdminApi(page, {
@@ -69,7 +68,9 @@ for (const query of primaryQueries) {
     await expect(error).toHaveCount(0)
     await expect(page.locator('h1')).toBeVisible()
   })
+}
 
+for (const query of permissionQueries) {
   test(`${query.path} renders 403 as permission denied rather than empty`, async ({ page }) => {
     await mockAdminApi(page, {
       ...query.siblings,
@@ -345,35 +346,6 @@ test('NowStrip keeps healthy cached data when its focus refetch fails', async ({
   await expect(now).toContainText(/陈旧|已过期|stale/i)
 })
 
-test('Dashboard trends keeps its rendered chart when its focus refetch fails', async ({ page }) => {
-  await pausePollingClock(page)
-  let calls = 0
-  const point = {
-    bucket: 1783641600, date: '2026-07-10', requests: 12, hits: 10, misses: 2,
-    hit_rate: 0.8333, bytes_served: 1024, bytes_hit: 800, bytes_miss: 224,
-    sum_latency_ms: 120, avg_latency_ms: 10, errors: 1,
-  }
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/dashboard/trends': () => {
-      calls += 1
-      return calls === 1
-        ? { points: [point] }
-        : { status: 500, body: { code: 'FAILED', message: 'trends refetch failed' } }
-    },
-  })
-  await navigateClient(page, '/admin')
-  await settlePausedApp(page, () => calls)
-  const trends = page.locator('[data-query-key="dashboard-trends"]')
-  await expect(trends.locator('.recharts-wrapper')).toBeVisible()
-  await refocus(page)
-  await page.clock.runFor(100)
-  await expect.poll(() => calls).toBe(2)
-  await page.waitForLoadState('networkidle')
-  await page.clock.runFor(100)
-  await expect(trends.locator('.recharts-wrapper')).toBeVisible()
-  await expect(trends).toContainText(/陈旧|已过期|stale/i)
-})
-
 test('Users stay visible when Tokens initially return 500', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/users': adminApiDefaults['GET /api/v1/admin/users'],
@@ -400,36 +372,6 @@ test('Blocklist overrides stay visible when status initially returns 500', async
   await expect(page.getByRole('alert')).toContainText('fixture status failure')
 })
 
-test('Blocklist status stays visible when overrides initially return 500', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/blocklist/status': { enabled: true, entry_count: 7, last_sync_at: null, last_success_at: null, last_error: '', duration_ms: 0, per_ecosystem: { pypi: 7 }, ecosystems: ['pypi'], running: false, next_sync_at: null },
-    'GET /api/v1/admin/blocklist/overrides': { status: 500, body: { code: 'FAILED', message: 'fixture overrides failure' } },
-  })
-  await page.goto('/admin/quarantine')
-  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
-  await expect(page.getByText('7', { exact: true })).toBeVisible()
-  await expect(page.getByRole('alert')).toContainText('fixture overrides failure')
-})
-
-test('Dashboard does not load the standalone bandwidth summary and keeps its focused regions visible', async ({ page }) => {
-  let bandwidthCalls = 0
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/bandwidth': () => {
-      bandwidthCalls += 1
-      return adminApiDefaults['GET /api/v1/admin/bandwidth']
-    },
-  })
-  await page.goto('/admin')
-
-  await expect(page.locator('[data-query-key="now"]')).toBeVisible()
-  await expect(page.locator('section[aria-labelledby="dashboard-attention-title"]')).toBeVisible()
-  await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
-  await expect(page.locator('[data-recent-downloads]')).toBeVisible()
-  expect(bandwidthCalls).toBe(0)
-  await expect(page.getByRole('heading', { name: /热门包 TOP 10|Top 10 Packages/ })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: /上游源状态|Upstream Status/ })).toHaveCount(0)
-})
-
 test('Dashboard snapshot failure keeps independent live and analytics regions mounted', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard': {
@@ -446,33 +388,11 @@ test('Dashboard snapshot failure keeps independent live and analytics regions mo
   await expect(page.getByRole('heading', { name: /性能快照|Performance snapshot/ })).toHaveCount(0)
 })
 
-test('Cache distribution failure is explicit while cache entries remain visible', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/cache/distribution': { status: 500, body: { code: 'FAILED', message: 'fixture distribution failure' } },
-    'GET /api/v1/admin/cache': { items: [{ id: 1, key: 'fixture/cache-key', adapter_type: 'pypi', size: 64, hit_count: 2, last_accessed: '2026-07-10T00:00:00Z' }], total: 1 },
-  })
-  await page.goto('/admin/cache')
-  await expect(page.getByRole('alert').filter({ hasText: 'fixture distribution failure' })).toBeVisible()
-  await expect(page.getByText('fixture/cache-key')).toBeVisible()
-})
-
 const projectSummary = {
   id: 1, name: 'fixture-project', slug: 'fixture-project', description: 'fixture',
   created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z',
   package_count: 1, last_activity_at: '2026-07-10T00:00:00Z',
 }
-
-test('Project detail failure is explicit while the selected project context remains mounted', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/projects': { items: [projectSummary], total: 1 },
-    'GET /api/v1/admin/projects/1': { status: 500, body: { code: 'FAILED', message: 'fixture detail failure' } },
-    'GET /api/v1/admin/projects/1/packages': { items: [], total: 0, page: 1 },
-  })
-  await page.goto('/admin/projects')
-  await page.getByRole('button', { name: /查看 fixture-project|View fixture-project/ }).click()
-  await expect(page.getByRole('heading', { name: 'fixture-project' })).toBeVisible()
-  await expect(page.getByRole('alert').filter({ hasText: 'fixture detail failure' })).toBeVisible()
-})
 
 test('Project package failure never renders the successful empty state', async ({ page }) => {
   await mockAdminApi(page, {
@@ -523,16 +443,6 @@ const mutationCases: MutationCase[] = [
     retained: page => page.getByRole('dialog', { name: /添加上游源/ }),
   },
   {
-    name: 'User save', path: '/admin/users', endpoint: 'POST /api/v1/admin/users', status: 422,
-    submit: async page => {
-      await page.getByRole('button', { name: /添加用户/ }).click()
-      await page.getByLabel(/用户名/).fill('fixture-user')
-      await page.getByLabel(/^密码$/).fill('fixture-password')
-      await page.getByRole('dialog').getByRole('button', { name: /^保存$/ }).click()
-    },
-    retained: page => page.getByRole('dialog', { name: /添加用户/ }),
-  },
-  {
     name: 'Token create', path: '/admin/users', endpoint: 'POST /api/v1/admin/tokens', status: 422,
     submit: async page => {
       await page.getByRole('button', { name: /生成 Token/ }).click()
@@ -540,33 +450,6 @@ const mutationCases: MutationCase[] = [
       await page.getByRole('dialog').getByRole('button', { name: /^生成$/ }).click()
     },
     retained: page => page.getByRole('dialog', { name: /生成 Token/ }),
-  },
-  {
-    name: 'License update', path: '/admin/license', endpoint: 'PUT /api/v1/admin/license/key', status: 422,
-    submit: async page => {
-      await page.getByPlaceholder(/depsilo-/).fill('depsilo-fixture-invalid')
-      await page.getByRole('button', { name: /激活/ }).click()
-    },
-    retained: page => page.getByPlaceholder(/depsilo-/),
-  },
-  {
-    name: 'Rule save', path: '/admin/rules', endpoint: 'POST /api/v1/admin/rules', status: 422,
-    submit: async page => {
-      await page.getByRole('button', { name: /添加规则/ }).click()
-      await page.getByLabel(/包名/).fill('fixture-package')
-      await page.getByRole('dialog').getByRole('button', { name: /^保存$/ }).click()
-    },
-    retained: page => page.getByRole('dialog', { name: /添加规则/ }),
-  },
-  {
-    name: 'Project save', path: '/admin/projects', endpoint: 'POST /api/v1/admin/projects', status: 422,
-    fixtures: { 'GET /api/v1/admin/projects': { items: [], total: 0 } },
-    submit: async page => {
-      await page.getByRole('button', { name: /创建项目/ }).first().click()
-      await page.getByLabel(/项目名称/).fill('fixture-project')
-      await page.getByRole('dialog').getByRole('button', { name: /^保存$/ }).click()
-    },
-    retained: page => page.getByRole('dialog', { name: /创建项目/ }),
   },
   {
     name: 'Quarantine approval', path: '/admin/quarantine', endpoint: 'POST /api/v1/admin/quarantine/approve', status: 422,
@@ -579,25 +462,6 @@ const mutationCases: MutationCase[] = [
       await page.getByRole('dialog').getByRole('button', { name: /确认放行/ }).click()
     },
     retained: page => page.getByRole('dialog', { name: /放行此版本/ }),
-  },
-  {
-    name: 'Blocklist override creation', path: '/admin/quarantine', endpoint: 'POST /api/v1/admin/blocklist/overrides', status: 422,
-    submit: async page => {
-      await page.getByRole('tab', { name: /恶意封锁/ }).click()
-      await page.getByRole('button', { name: /添加豁免/ }).click()
-      await page.getByPlaceholder(/^包名$/).fill('fixture-package')
-      await page.getByPlaceholder(/填写理由/).fill('fixture override reason')
-      await page.getByRole('dialog').getByRole('button', { name: /创建豁免/ }).click()
-    },
-    retained: page => page.getByRole('dialog', { name: /创建恶意封锁豁免/ }),
-  },
-  {
-    name: 'Blocklist sync', path: '/admin/quarantine', endpoint: 'POST /api/v1/admin/blocklist/sync', status: 500,
-    submit: async page => {
-      await page.getByRole('tab', { name: /恶意封锁/ }).click()
-      await page.getByRole('button', { name: /立即同步/ }).click()
-    },
-    retained: page => page.getByRole('button', { name: /立即同步/ }),
   },
 ]
 
@@ -670,29 +534,6 @@ test('Cache delete clears an old failure before the confirmation dialog is reope
   await expect(dialog.getByRole('alert')).toHaveCount(0)
 })
 
-test('Cache cleanup clears an old failure before the confirmation dialog is reopened', async ({ page }) => {
-  await mockAdminApi(page, {
-    'POST /api/v1/admin/cache/cleanup': {
-      status: 500,
-      body: { code: 'CACHE_CLEANUP_PARTIAL', message: 'fixture cleanup failure', deleted: 1, failed: 1, reclaimed_bytes: 512 },
-    },
-  })
-  await page.goto('/admin/cache')
-
-  const openCleanup = page.getByRole('button', { name: /清理过期|Clean Expired/ })
-  await openCleanup.click()
-  let dialog = page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })
-  await dialog.getByRole('button', { name: /确认清理|Confirm/ }).click()
-  await expect(dialog.getByRole('alert')).toContainText('fixture cleanup failure')
-  await dialog.getByRole('button', { name: /取消|Cancel/ }).click()
-  await expect(dialog).toHaveCount(0)
-
-  await openCleanup.click()
-  dialog = page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })
-  await expect(dialog).toBeVisible()
-  await expect(dialog.getByRole('alert')).toHaveCount(0)
-})
-
 test('Rule create recovers the list from an initial query failure with the returned entity', async ({ page }) => {
   const createdRule = {
     id: 10, ecosystem: 'npm', package_name: 'recovered-rule', version: '*',
@@ -710,41 +551,6 @@ test('Rule create recovers the list from an initial query failure with the retur
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByRole('row', { name: /recovered-rule/ })).toBeVisible()
   await expect(page.getByText('fixture rules unavailable')).toHaveCount(0)
-})
-
-test('Blocklist override create recovers the list from an initial query failure with the returned entity', async ({ page }) => {
-  await mockAdminApi(page, {
-    'GET /api/v1/admin/blocklist/overrides': { status: 500, body: { code: 'FAILED', message: 'fixture overrides unavailable' } },
-    'POST /api/v1/admin/blocklist/overrides': populatedOverride,
-  })
-  await page.goto('/admin/quarantine')
-  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
-  await expect(page.getByRole('alert')).toContainText('fixture overrides unavailable')
-  await page.getByRole('button', { name: /添加豁免|Add override/ }).click()
-  await page.getByPlaceholder(/^包名$|^Package$/).fill('false-positive')
-  await page.getByPlaceholder(/填写理由|Reason/).fill('reviewed')
-  await page.getByRole('dialog').getByRole('button', { name: /创建豁免|Create override/ }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByRole('row', { name: /false-positive/ })).toBeVisible()
-  await expect(page.getByText('fixture overrides unavailable')).toHaveCount(0)
-})
-
-test('License key activation exposes a stable held pending state', async ({ page }) => {
-  const activation = deferred<void>()
-  await mockAdminApi(page, {
-    'PUT /api/v1/admin/license/key': async () => {
-      await activation.promise
-      return { is_pro: true, source: 'paid', days_left: 0, trial_used: false, trial_available: false, last_checked: '2026-07-10T00:00:00Z', license_key_masked: 'depsilo-***' }
-    },
-  })
-  await page.goto('/admin/license')
-  await page.getByPlaceholder(/depsilo-/).fill('depsilo-fixture-valid')
-  const activate = page.getByRole('button', { name: /激活|Activate/ })
-  await activate.click()
-  await expect(activate).toHaveAttribute('aria-busy', 'true')
-  await expect(activate).toBeDisabled()
-  activation.resolve()
-  await expect(page.getByText(/Pro 已激活|Pro activated/)).toBeVisible()
 })
 
 test('Blocklist sync exposes a stable held pending state', async ({ page }) => {

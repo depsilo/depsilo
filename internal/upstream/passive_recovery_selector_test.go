@@ -73,6 +73,39 @@ func TestPassiveRecoverySelectorPrefersHealthyUpstream(t *testing.T) {
 	}
 }
 
+func TestPassiveRecoverySelectorSelectExcludingUsesHealthyAlternative(t *testing.T) {
+	pool, err := NewPoolFromRecords([]db.UpstreamRecord{
+		{
+			ID: 1, AdapterType: "huggingface", Name: "primary",
+			URL: "https://primary.example", Priority: 1, ProbeMode: "passive",
+			ProbeInterval: "30m", Healthy: true,
+		},
+		{
+			ID: 2, AdapterType: "huggingface", Name: "secondary",
+			URL: "https://secondary.example", Priority: 2, ProbeMode: "passive",
+			ProbeInterval: "30m", Healthy: true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	selector := NewPassiveRecoverySelector(pool)
+	excluding, ok := any(selector).(interface {
+		SelectExcluding(context.Context, *Upstream) (*Upstream, error)
+	})
+	if !ok {
+		t.Fatal("passive recovery selector does not preserve request-local failure exclusion")
+	}
+	selected, err := excluding.SelectExcluding(context.Background(), pool.Snapshot()[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.Name != "secondary" {
+		t.Fatalf("selected %q, want secondary", selected.Name)
+	}
+}
+
 func TestPassiveRecoverySelectorDoesNotRecoverActiveUpstream(t *testing.T) {
 	pool, err := NewPoolFromRecords([]db.UpstreamRecord{{
 		ID: 1, AdapterType: "pypi", Name: "active",

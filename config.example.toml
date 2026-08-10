@@ -149,7 +149,7 @@ proxy    = "http://127.0.0.1:7890"
 
 [[cargo.upstreams]]
 name     = "rsproxy"
-url      = "https://rsproxy.cn/index"
+url      = "https://rsproxy.cn/index/"
 priority = 1
 
 [[cargo.upstreams]]
@@ -165,13 +165,13 @@ priority = 1
 
 [[maven.upstreams]]
 name     = "central"
-url      = "https://repo1.maven.org/maven2"
+url      = "https://repo.maven.apache.org/maven2/"
 priority = 2
 proxy    = "http://127.0.0.1:7890"
 
 [[rubygems.upstreams]]
-name     = "ruby-china"
-url      = "https://gems.ruby-china.com"
+name     = "tuna"
+url      = "https://mirrors.tuna.tsinghua.edu.cn/rubygems/"
 priority = 1
 
 [[rubygems.upstreams]]
@@ -182,7 +182,7 @@ proxy    = "http://127.0.0.1:7890"
 
 [[composer.upstreams]]
 name     = "aliyun"
-url      = "https://mirrors.aliyun.com/composer"
+url      = "https://mirrors.aliyun.com/composer/"
 priority = 1
 
 [[composer.upstreams]]

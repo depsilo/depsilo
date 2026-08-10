@@ -63,7 +63,7 @@ func mavenArtifactURL(pkg, version string) (string, error) {
 	}
 	group := strings.ReplaceAll(pkg[:colon], ".", "/")
 	artifact := pkg[colon+1:]
-	return fmt.Sprintf("https://repo1.maven.org/maven2/%s/%s/%s/%s-%s.jar",
+	return fmt.Sprintf("https://repo.maven.apache.org/maven2/%s/%s/%s/%s-%s.jar",
 		group, artifact, version, artifact, version), nil
 }
 

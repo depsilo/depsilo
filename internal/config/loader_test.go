@@ -68,6 +68,31 @@ func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
 	if cfg.SupplyChain.MinReleaseAgeEnabled == nil || *cfg.SupplyChain.MinReleaseAgeEnabled {
 		t.Fatal("config.example.toml must explicitly default minimum release age to disabled")
 	}
+
+	currentDefaultUpstreams := []struct {
+		ecosystem string
+		upstreams []UpstreamConfig
+		index     int
+		name      string
+		url       string
+		priority  int
+	}{
+		{ecosystem: "cargo", upstreams: cfg.Cargo.Upstreams, index: 0, name: "rsproxy", url: "https://rsproxy.cn/index/", priority: 1},
+		{ecosystem: "maven", upstreams: cfg.Maven.Upstreams, index: 1, name: "central", url: "https://repo.maven.apache.org/maven2/", priority: 2},
+		{ecosystem: "rubygems", upstreams: cfg.RubyGems.Upstreams, index: 0, name: "tuna", url: "https://mirrors.tuna.tsinghua.edu.cn/rubygems/", priority: 1},
+		{ecosystem: "composer", upstreams: cfg.Composer.Upstreams, index: 0, name: "aliyun", url: "https://mirrors.aliyun.com/composer/", priority: 1},
+	}
+	for _, expected := range currentDefaultUpstreams {
+		t.Run(expected.ecosystem+"/"+expected.name, func(t *testing.T) {
+			if len(expected.upstreams) <= expected.index {
+				t.Fatalf("%s defaults contain %d upstreams, want index %d", expected.ecosystem, len(expected.upstreams), expected.index)
+			}
+			upstream := expected.upstreams[expected.index]
+			if upstream.Name != expected.name || upstream.URL != expected.url || upstream.Priority != expected.priority {
+				t.Fatalf("%s default upstream %d = %#v, want name=%q url=%q priority=%d", expected.ecosystem, expected.index, upstream, expected.name, expected.url, expected.priority)
+			}
+		})
+	}
 }
 
 func TestLoadRejectsUnknownConfigKey(t *testing.T) {

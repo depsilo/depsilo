@@ -153,11 +153,88 @@ test('keeps dirty input and never reports success after 422', async ({ page }) =
   })
   await openCacheSettings(page)
   const ttl = page.getByLabel(/索引 TTL/)
-  await ttl.fill('bad')
+  await ttl.fill('999999999999999999999999h')
   await page.getByRole('button', { name: /^保存$/ }).click()
   await expect(page.getByRole('alert')).toContainText('bad ttl')
-  await expect(ttl).toHaveValue('bad')
+  await expect(ttl).toHaveValue('999999999999999999999999h')
   await expect(page.getByText(/^已保存$/)).toHaveCount(0)
+})
+
+test('validates cache constraints locally and focuses the first invalid field', async ({ page }) => {
+  let updateRequests = 0
+  await mockAdminApi(page, {
+    'PUT /api/v1/admin/settings': () => {
+      updateRequests += 1
+      return updateResponse
+    },
+  })
+  await openCacheSettings(page)
+
+  const maxSize = page.getByLabel(/最大缓存容量|Max Cache Size/)
+  const threshold = page.getByLabel(/清理阈值|Cleanup Threshold/)
+  const indexTTL = page.getByLabel(/索引 TTL|Index TTL/)
+  const blobTTL = page.getByLabel(/文件 TTL|File TTL/)
+  await maxSize.fill('0')
+  await threshold.fill('101')
+  await indexTTL.fill('7d')
+  await blobTTL.fill('')
+  await page.getByRole('button', { name: /^保存$|^Save$/ }).click()
+
+  expect(updateRequests).toBe(0)
+  await expect(maxSize).toBeFocused()
+  await expect(maxSize).toHaveAttribute('aria-invalid', 'true')
+  await expect(threshold).toHaveAttribute('aria-invalid', 'true')
+  await expect(indexTTL).toHaveAttribute('aria-invalid', 'true')
+  await expect(blobTTL).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByText(/请输入大于 0 的整数|whole number greater than zero/)).toBeVisible()
+  await expect(page.getByText(/请输入 1 到 100 之间的整数|whole number from 1 to 100/)).toBeVisible()
+  await expect(page.getByText(/请输入有效的 Go duration|valid Go duration/)).toHaveCount(2)
+
+  await maxSize.fill('24')
+  await expect(maxSize).not.toHaveAttribute('aria-invalid', 'true')
+})
+
+test('rejects unsupported token never and submits a valid duration with Enter', async ({ page }) => {
+  let updateRequests = 0
+  let releaseUpdate!: (value: unknown) => void
+  const pendingUpdate = new Promise<unknown>((resolve) => { releaseUpdate = resolve })
+  const authUpdateResponse = {
+    ...snapshot,
+    configured: { ...configured, auth: { token_ttl: '24h' } },
+    effective: { ...configured, auth: { token_ttl: '24h' } },
+    changed: ['auth.token_ttl'] as const,
+    applied_now: ['auth.token_ttl'] as const,
+    restart_required: [] as const,
+    blocked_by_override: [] as const,
+  }
+  await mockAdminApi(page, {
+    'PUT /api/v1/admin/settings': (request: Request) => {
+      updateRequests += 1
+      expect(request.postDataJSON()).toEqual({ auth: { token_ttl: '24h' } })
+      return pendingUpdate
+    },
+  })
+  await page.goto('/admin/settings')
+  await page.getByRole('tab', { name: /认证与安全|Auth & Security/ }).click()
+
+  const tokenTTL = page.getByLabel(/Token 有效期|Token Validity/)
+  await tokenTTL.fill('never')
+  await page.keyboard.press('Enter')
+  expect(updateRequests).toBe(0)
+  await expect(tokenTTL).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByText(/不支持.*never|never.*not supported/i)).toBeVisible()
+
+  await tokenTTL.fill('24h')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => updateRequests).toBe(1)
+  const save = page.getByRole('button', { name: /保存中|Saving/ })
+  await expect(save).toHaveAttribute('aria-busy', 'true')
+  await expect(save).toBeDisabled()
+  await expect(tokenTTL).toBeDisabled()
+
+  releaseUpdate(authUpdateResponse)
+  await expect(page.getByText(/已立即生效|Applied now/).first()).toBeVisible()
+  await expect(tokenTTL).toHaveValue('24h')
 })
 
 test('renders applied-now results from the update response', async ({ page }) => {

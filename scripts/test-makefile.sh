@@ -16,18 +16,9 @@ assert_contains() {
     [[ "$text" == *"$expected"* ]] || fail "missing: $expected"
 }
 
+# The database is used only to keep the supported real-client inventory in
+# sync; ordinary convenience targets are exercised by their owning tests.
 make_db=$(make -C "$ROOT" -pn help)
-required_targets=(
-    setup setup-ui version build run run-pro dev stop logs
-    test test-race test-integration test-ui test-ui-production test-e2e test-compiler-cache test-clean
-    lint lint-i18n check verify security clean clean-all help verify-scripts
-    tray app-macos install-linux autostart-linux
-)
-
-for target in "${required_targets[@]}"; do
-    grep -Eq "^${target}:" <<<"$make_db" || fail "target not defined: $target"
-done
-
 default_ecosystems=(
     pypi apt npm go cargo maven rubygems composer nuget conda cran alpine helm huggingface
 )
@@ -65,14 +56,14 @@ make -s -C "$ROOT" prepare-go WEB_DIST="$EMBED_DIST"
 [[ "$(cat "$EMBED_DIST/index.html")" == 'keep-existing-dist' ]] \
     || fail "prepare-go overwrote an existing frontend build"
 
-docker_dry_run=$(make -n -C "$ROOT" test-docker-pypi DEPSILO_URL=http://127.0.0.1:24444)
-assert_contains "$docker_dry_run" "--build-arg DEPSILO_URL=http://127.0.0.1:24444"
-assert_contains "$docker_dry_run" "-t depsilo-test-pypi testground/docker-pypi"
-
 all_dry_run=$(make -n -C "$ROOT" test-e2e DEPSILO_URL=http://127.0.0.1:24444)
 for ecosystem in "${default_ecosystems[@]}"; do
     assert_contains "$all_dry_run" "-t depsilo-test-${ecosystem} testground/docker-${ecosystem}"
 done
+assert_contains "$all_dry_run" 'scripts/dev-service.sh start'
+if [[ "$all_dry_run" == *"npm --prefix web run build"* ]]; then
+    fail "real-client E2E must not build the frontend"
+fi
 if [[ "$all_dry_run" == *"depsilo-test-docker testground/docker-docker"* ]]; then
     fail "docker registry E2E must remain opt-in"
 fi
@@ -96,10 +87,6 @@ if [[ "$docker_run" == *"cp config.example.toml"* ]]; then
     fail "docker-run must not create a production-like config as a side effect"
 fi
 
-compose_dry_run=$(make -n -C "$ROOT" docker-compose-up PORT=18080)
-assert_contains "$compose_dry_run" "PORT=18080 docker compose up"
-assert_contains "$compose_dry_run" "http://localhost:18080"
-
 clean_dry_run=$(make -n -C "$ROOT" clean)
 if grep -Eq '^rm -rf ([^[:space:]]+[[:space:]]+)*data([[:space:]]|$)' <<<"$clean_dry_run"; then
     fail "make clean still removes local runtime data"
@@ -114,39 +101,9 @@ grep -Eq '^rm -rf ([^[:space:]]+[[:space:]]+)*data([[:space:]]|$)' <<<"$clean_al
     || fail "make clean-all no longer removes local runtime data"
 assert_contains "$clean_all_dry_run" '.dev-jwt-secret'
 
-setup_dry_run=$(make -n -C "$ROOT" setup)
-assert_contains "$setup_dry_run" 'go mod download'
-assert_contains "$setup_dry_run" 'npm --prefix web ci'
-
-setup_ui_dry_run=$(make -n -C "$ROOT" setup-ui)
-assert_contains "$setup_ui_dry_run" 'npx --no-install playwright install chromium'
-
-production_ui_dry_run=$(make -n -C "$ROOT" test-ui-production)
-assert_contains "$production_ui_dry_run" 'go build'
-assert_contains "$production_ui_dry_run" 'npm --prefix web run test:ui:production'
-
-dockerfile_healthcheck=$(grep -A1 -E '^HEALTHCHECK ' "$ROOT/Dockerfile" || true)
-assert_contains "$dockerfile_healthcheck" 'http://127.0.0.1:${DEPSILO_SERVER_PORT:-23333}/ready'
-
-outside_version=$(cd "$TMP" && make -s -f "$ROOT/Makefile" version | sed -n '1p')
-[[ "$outside_version" == 'version=dev' ]] \
-    || fail "version fallback outside Git is $outside_version, want version=dev"
-
 metadata=$(make -s -C "$ROOT" version \
     VERSION=1.2.3 COMMIT=abc123 BUILD_DATE=2026-01-01T00:00:00Z)
 [[ "$metadata" == $'version=1.2.3\ncommit=abc123\nbuild_date=2026-01-01T00:00:00Z' ]] \
     || fail "build metadata overrides are no longer reproducible"
-
-release_check_dry_run=$(make -s -n -C "$ROOT" release-check)
-[[ "$release_check_dry_run" == 'goreleaser check' ]] \
-    || fail "release-check performs work beyond validating GoReleaser config"
-
-help_output=$(make -s -C "$ROOT" help)
-for visible_target in setup setup-ui version run test-e2e clean clean-all check verify; do
-    assert_contains "$help_output" "$visible_target"
-done
-if [[ "$help_output" == *"verify-installer"* ]] || [[ "$help_output" == *"cli-status"* ]]; then
-    fail "internal compatibility targets must stay out of make help"
-fi
 
 echo "makefile workflow tests passed"

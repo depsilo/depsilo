@@ -1007,6 +1007,13 @@ a:focus:not(:focus-visible) {
   align-items: center;
   gap: 8px;
 }
+.portal-header-brand {
+  min-width: 40px;
+  min-height: 40px;
+}
+.portal-nav-compact-label {
+  display: none;
+}
 .portal-header-group {
   display: inline-flex;
   height: 40px;
@@ -1145,13 +1152,12 @@ button.portal-header-control {
 
 @media (max-width: 560px) {
   .portal-endpoint-pill,
-  .portal-brand-name,
   .portal-admin-label,
   .portal-status-label {
     display: none !important;
   }
   .portal-header-inner {
-    gap: 8px !important;
+    gap: 4px !important;
     padding-left: max(10px, env(safe-area-inset-left)) !important;
     padding-right: max(10px, env(safe-area-inset-right)) !important;
   }
@@ -1159,7 +1165,21 @@ button.portal-header-control {
     gap: 4px;
   }
   .portal-header-nav > a {
-    padding-inline: 6px !important;
+    min-width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding-inline: 4px !important;
+  }
+  .portal-nav-label {
+    display: none;
+  }
+  .portal-nav-compact-label {
+    display: inline;
+  }
+  .portal-nav-active-indicator {
+    right: 8px !important;
+    bottom: -6px !important;
+    left: 8px !important;
   }
   .portal-service-group {
     width: 40px;
@@ -1202,10 +1222,13 @@ button.portal-header-control {
   }
 }
 
-@media (max-width: 340px) {
-  .portal-header-brand {
+@media (max-width: 380px) {
+  .portal-brand-name {
     display: none !important;
   }
+}
+
+@media (max-width: 340px) {
   .portal-header-inner {
     gap: 2px !important;
     padding-left: max(4px, env(safe-area-inset-left)) !important;

@@ -29,6 +29,22 @@ response field are masked by the server.
 The service rejects self-delete, self-disable, and self-demotion with `409 SELF_LOCKOUT`.
 It also rejects removing the final enabled administrator with `409 LAST_ADMIN`.
 
+## Operator credentials
+
+Initial setup, Admin user creation, and Admin password changes share one password policy:
+at least 12 characters and three character classes, or a passphrase of at least 20
+characters, with a 72-byte bcrypt limit. Passwords cannot contain the username. Initial
+setup separately applies its stricter administrator-username shape rules; Admin user
+creation does not inherit first-run administrator existence checks.
+
+JWTs carry the user's persistent credential version. A password change, role change, or
+enabled-state change increments that version in the same transaction as the mutation, so
+every older JWT is rejected immediately and cannot become valid again after re-enabling a
+user. Schema version 2 initializes existing users at credential version 1; pre-upgrade
+JWTs have no matching claim and are invalidated once. API tokens are intentionally not
+bound to the JWT credential version and continue to use their own expiry and permissions
+plus the owner's current enabled state and role.
+
 ## Contract compatibility
 
 `GET /api/v1/admin/security/vulnerabilities` uses `package`; the deprecated `q` alias
@@ -67,6 +83,16 @@ The first upgraded start imports ordinary configured upstreams and records the a
 ecosystems. After that seed, the database is authoritative for active ecosystems; restart
 does not restore a row deleted through Admin. Adding config upstreams for a previously
 inactive supported ecosystem activates and imports that ecosystem on the next restart.
+Versioned endpoint repairs are the narrow exception: an upgrade may rewrite an exact
+legacy built-in adapter/name/URL triple once, while preserving its ID, proxy, priority,
+and probe settings. Custom URLs are never matched, and later Admin edits remain
+authoritative. Because probe history belongs to the old target, a matched row starts a
+new health history after the rewrite.
+
+Active probe workers check once when they start and then continue on their configured
+interval. Request selection always prefers the highest-priority healthy Upstream.
+Only when none is healthy may an unhealthy passive Upstream receive one cooldown-limited
+half-open request. A critical protocol-failure latch is never eligible for recovery.
 
 `GET /api/v1/admin/upstreams` returns `{items,total}` runtime resources. Create and full
 Update return the resulting runtime resource; Delete returns `{deleted_id,adapter_type}`.

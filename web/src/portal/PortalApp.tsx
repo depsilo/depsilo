@@ -98,13 +98,15 @@ function EndpointPill() {
 interface NavTabProps {
   to: string
   label: string
+  compactLabel: string
 }
 
-function NavTab({ to, label }: NavTabProps) {
+function NavTab({ to, label, compactLabel }: NavTabProps) {
   return (
     <NavLink
       to={to}
       end
+      aria-label={label}
       className="hit-extend stripe-focus-ring"
       style={({ isActive }) => ({
         display: 'inline-flex',
@@ -129,9 +131,11 @@ function NavTab({ to, label }: NavTabProps) {
     >
       {({ isActive }) => (
         <>
-          {label}
+          <span className="portal-nav-label">{label}</span>
+          <span className="portal-nav-compact-label" aria-hidden="true">{compactLabel}</span>
           {isActive && (
             <span
+              className="portal-nav-active-indicator"
               aria-hidden="true"
               style={{
                 position: 'absolute',
@@ -294,8 +298,16 @@ export default function PortalAppV2() {
             className="portal-header-nav"
             style={{ display: 'flex', alignItems: 'center', gap: 2 }}
           >
-            <NavTab to="/" label={t('portal.quickStart')} />
-            <NavTab to="/monitor" label={t('portal.monitor')} />
+            <NavTab
+              to="/"
+              label={t('portal.quickStart')}
+              compactLabel={t('portal.quickStartShort')}
+            />
+            <NavTab
+              to="/monitor"
+              label={t('portal.monitor')}
+              compactLabel={t('portal.monitorShort')}
+            />
           </nav>
 
           {/* Spacer */}

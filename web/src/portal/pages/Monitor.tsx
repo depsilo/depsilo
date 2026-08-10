@@ -31,6 +31,7 @@ interface LatencyPoint {
 }
 
 interface UpstreamInfo {
+  id: number
   name: string
   adapter: string
   url: string
@@ -271,7 +272,7 @@ export default function MonitorPage() {
   const rawUpstreams = statsQuery.data?.upstreams ?? []
   const upstreams = rawUpstreams.map(u => ({
     ...u,
-    latency_series: latencyQuery.data?.[u.name],
+    latency_series: latencyQuery.data?.[String(u.id)],
   }))
   const week = statsQuery.data?.week
 

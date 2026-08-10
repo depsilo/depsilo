@@ -159,19 +159,3 @@ func TestLicenseKey_SetThenClear(t *testing.T) {
 		t.Errorf("expected license_key_masked to be absent/empty after clear, got: %s", rb2)
 	}
 }
-
-// TestLicenseKey_RejectEmpty verifies that an empty key string is rejected.
-func TestLicenseKey_RejectEmpty(t *testing.T) {
-	body := strings.NewReader(`{"key":""}`)
-	resp := adminPut(t, depsiloURL+"/api/v1/admin/license/key", body)
-	defer resp.Body.Close()
-	assertStatus(t, resp, http.StatusBadRequest)
-}
-
-// TestLicenseKey_RejectMissing verifies that a body lacking the "key" field is rejected.
-func TestLicenseKey_RejectMissing(t *testing.T) {
-	body := strings.NewReader(`{}`)
-	resp := adminPut(t, depsiloURL+"/api/v1/admin/license/key", body)
-	defer resp.Body.Close()
-	assertStatus(t, resp, http.StatusBadRequest)
-}

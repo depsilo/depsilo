@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import type { Locator, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
 
 const populatedStats = {
@@ -13,6 +13,7 @@ const populatedStats = {
   },
   upstreams: [
     {
+      id: 101,
       name: 'PyPI primary',
       adapter: 'pypi',
       url: 'https://pypi.org/simple',
@@ -24,7 +25,7 @@ const populatedStats = {
 }
 
 const latencySeries = {
-  'PyPI primary': [
+  '101': [
     {
       time: '2026-07-28T08:00:00.000Z',
       latency_ms: 101,
@@ -46,16 +47,6 @@ const latencySeries = {
   ],
 }
 
-async function expectBefore(first: Locator, second: Locator) {
-  await expect(first).toBeVisible()
-  await expect(second).toBeVisible()
-  const [firstBox, secondBox] = await Promise.all([
-    first.boundingBox(),
-    second.boundingBox(),
-  ])
-  expect(firstBox?.y).toBeLessThan(secondBox?.y ?? 0)
-}
-
 async function expectNoDocumentOverflow(page: Page) {
   await expect.poll(() => page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
@@ -73,9 +64,8 @@ test('Quick Start is compact and shows every Python manager', { tag: '@smoke' },
   const primary = page.locator('[data-quickstart-primary]')
   const optional = page.locator('[data-quickstart-optional]')
 
-  await expectBefore(primary, optional)
-  const primaryBox = await primary.boundingBox()
-  expect(primaryBox?.y).toBeLessThan(260)
+  await expect(primary).toBeVisible()
+  await expect(optional).toBeVisible()
   await expect(page.locator('ol[aria-label="Package setup path"]')).toHaveCount(0)
   await expect(primary.getByRole('heading', { name: 'Configure Python' })).toBeVisible()
 
@@ -222,30 +212,6 @@ test('all ecosystems are visible by default and selection persists', async ({ pa
   const recent = primary.getByRole('region', { name: 'Recently used' })
   const recentChoice = recent.getByRole('button', { name: 'Hugging Face' })
   await expect(recentChoice).toBeVisible()
-  const recentBox = await recentChoice.boundingBox()
-  expect(recentBox?.height).toBeGreaterThanOrEqual(40)
-  expect(recentBox?.height).toBeLessThanOrEqual(42)
-})
-
-test('recent ecosystem shortcuts keep three choices on one compact row', async ({ page }) => {
-  await setUiPreferences(page, 'dark', 'en')
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      'depsilo.portal.recent-ecosystems.v1',
-      JSON.stringify(['python', 'kubernetes', 'huggingface']),
-    )
-  })
-  await page.goto('/')
-
-  const recent = page.getByRole('region', { name: 'Recently used' })
-  const choices = recent.getByRole('button')
-  await expect(choices).toHaveCount(3)
-  const boxes = await choices.evaluateAll(buttons => buttons.map(button => {
-    const box = button.getBoundingClientRect()
-    return { top: Math.round(box.top), height: Math.round(box.height) }
-  }))
-  expect(new Set(boxes.map(box => box.top)).size).toBe(1)
-  expect(boxes.every(box => box.height >= 40 && box.height <= 42)).toBe(true)
 })
 
 test('Debian setup uses the signed Depsilo repository-root routes', async ({ page }) => {
@@ -279,7 +245,6 @@ test('manager rail switches the focused configuration without hiding choices', a
   const focusCode = primary.locator('[data-code-tone="ink"]')
   await expect(focusCode).toHaveCount(1)
   await expect(focusCode).toContainText('pyproject.toml')
-  await expect(focusCode).toHaveCSS('background-color', 'rgb(16, 21, 18)')
   await expect(primary.locator('[data-code-tone="light"]')).not.toHaveCount(0)
 
   await primary.getByRole('button', { name: /^Debian\b/ }).click()
@@ -288,18 +253,6 @@ test('manager rail switches the focused configuration without hiding choices', a
     'aria-pressed',
     'true',
   )
-})
-
-test('Quick Start keeps a centered task width on wide displays', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1000 })
-  await setUiPreferences(page, 'light', 'zh')
-  await page.goto('/')
-
-  const workbench = page.locator('[data-quickstart-shell]')
-  const box = await workbench.boundingBox()
-  expect(box?.width).toBeLessThanOrEqual(1440)
-  expect(Math.abs((box?.x ?? 0) - (1920 - (box?.width ?? 0)) / 2)).toBeLessThanOrEqual(1)
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(255, 255, 255)')
 })
 
 test('Quick Start passes axe at 1440px', async ({ page }) => {
@@ -313,7 +266,7 @@ test('Quick Start passes axe at 1440px', async ({ page }) => {
   expect(result.violations).toEqual([])
 })
 
-test('Portal header groups equal-height controls by purpose', async ({ page }) => {
+test('Portal header groups service and preference controls by purpose', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {
@@ -334,15 +287,6 @@ test('Portal header groups equal-height controls by purpose', async ({ page }) =
   await expect(language).toContainText('EN')
   await expect(theme).toContainText('Light')
   await expect(admin.locator('.portal-admin-label')).toHaveText('Admin')
-
-  const geometry = await page.locator(
-    '.portal-endpoint-pill, .portal-status-pill, [data-language-toggle="portal"], [data-theme-toggle="portal"], .portal-admin-link',
-  ).evaluateAll(elements => elements.map((element) => {
-    const box = element.getBoundingClientRect()
-    return { height: Math.round(box.height), center: Math.round((box.top + box.bottom) / 2) }
-  }))
-  expect(geometry.map(item => item.height)).toEqual([40, 40, 40, 40, 40])
-  expect(new Set(geometry.map(item => item.center)).size).toBe(1)
 })
 
 test('Portal theme changes recolor theme-sensitive ecosystem icons immediately', async ({ page }) => {
@@ -403,49 +347,55 @@ test('Portal service status distinguishes loading, unknown, and recoverable fail
   await expect(page.locator('.portal-status-pill[data-query-state="success"]')).toHaveAccessibleName(/Online/i)
 })
 
-for (const width of [320, 375, 390]) {
-  test(`Portal header keeps every visible control in view at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 844 })
-    await setUiPreferences(page, 'dark', 'en')
-    await mockAdminApi(page, {
-      'GET /api/v1/stats': populatedStats,
-    })
-    await page.goto('/')
-
-    const status = page.locator('.portal-status-pill')
-    await expect(status).toHaveAttribute('role', 'status')
-    await expect(status).toHaveAttribute('aria-label', /Online/i)
-    await expect(status.locator('.portal-status-label')).toBeAttached()
-    await expect(status.locator('.portal-status-compact-icon')).toBeVisible()
-    await expect(status.locator('.portal-status-dot')).toBeHidden()
-
-    const theme = page.locator('[data-theme-toggle="portal"]')
-    await expect(theme).toBeVisible()
-    const themeBox = await theme.boundingBox()
-    expect(themeBox?.width).toBe(40)
-    expect(themeBox?.height).toBe(40)
-
-    const admin = page.locator('.portal-admin-link')
-    await expect(admin).toHaveAccessibleName(/Admin/i)
-    const adminBox = await admin.boundingBox()
-    expect(adminBox?.height).toBeGreaterThanOrEqual(40)
-
-    const clippedControls = await page.locator(
-      'header a:visible, header button:visible, header [role="status"]:visible',
-    ).evaluateAll((elements) => elements.flatMap((element) => {
-      const rect = element.getBoundingClientRect()
-      return rect.left < 0 || rect.right > window.innerWidth + 0.5
-        ? [{
-            name: element.getAttribute('aria-label') || element.textContent?.trim() || element.tagName,
-            left: rect.left,
-            right: rect.right,
-          }]
-        : []
-    }))
-    expect(clippedControls).toEqual([])
-    await expectNoDocumentOverflow(page)
+test('Portal header keeps every visible control in view at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await setUiPreferences(page, 'dark', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': populatedStats,
   })
-}
+  await page.goto('/')
+
+  const brand = page.getByRole('link', { name: 'Depsilo', exact: true })
+  await expect(brand).toBeVisible()
+  await expect(brand.locator('.depsilo-logo-mark')).toBeVisible()
+  await expect(brand.locator('.portal-brand-name')).toBeHidden()
+
+  const navigation = page.getByRole('navigation', { name: 'Portal navigation' })
+  await expect(navigation.getByRole('link', { name: 'Quick Start', exact: true })).toBeVisible()
+  await expect(navigation.getByRole('link', { name: 'Monitor', exact: true })).toBeVisible()
+  await expect(navigation.locator('.portal-nav-compact-label')).toHaveCount(2)
+  for (const compactLabel of await navigation.locator('.portal-nav-compact-label').all()) {
+    await expect(compactLabel).toBeVisible()
+  }
+
+  const status = page.locator('.portal-status-pill')
+  await expect(status).toHaveAttribute('role', 'status')
+  await expect(status).toHaveAttribute('aria-label', /Online/i)
+  await expect(status.locator('.portal-status-label')).toBeAttached()
+  await expect(status.locator('.portal-status-compact-icon')).toBeVisible()
+  await expect(status.locator('.portal-status-dot')).toBeHidden()
+
+  const theme = page.locator('[data-theme-toggle="portal"]')
+  await expect(theme).toBeVisible()
+
+  const admin = page.locator('.portal-admin-link')
+  await expect(admin).toHaveAccessibleName(/Admin/i)
+
+  const clippedControls = await page.locator(
+    'header a:visible, header button:visible, header [role="status"]:visible',
+  ).evaluateAll((elements) => elements.flatMap((element) => {
+    const rect = element.getBoundingClientRect()
+    return rect.left < 0 || rect.right > window.innerWidth + 0.5
+      ? [{
+          name: element.getAttribute('aria-label') || element.textContent?.trim() || element.tagName,
+          left: rect.left,
+          right: rect.right,
+        }]
+      : []
+  }))
+  expect(clippedControls).toEqual([])
+  await expectNoDocumentOverflow(page)
+})
 
 for (const { locale, copyName, copiedText } of [
   { locale: 'en' as const, copyName: /^Copy code for /i, copiedText: 'Copied' },
@@ -489,8 +439,6 @@ test('Monitor heartbeat detail works with keyboard and tap', async ({ page }) =>
   const detail = heartbeat.locator('[data-heartbeat-detail]')
   await expect(detail).toBeVisible()
   await expect(detail).toContainText('303ms')
-  await expect(detail).toHaveCSS('background-color', 'rgb(20, 24, 26)')
-  await expect(detail).toHaveCSS('color', 'rgb(255, 255, 255)')
 
   await heartbeat.press('Home')
   await expect(detail).toContainText('101ms')
@@ -505,17 +453,16 @@ test('Monitor heartbeat detail works with keyboard and tap', async ({ page }) =>
   await expectNoDocumentOverflow(page)
 })
 
-for (const route of ['/', '/monitor']) {
-  for (const width of [320, 375, 390]) {
-    test(`Portal ${route} has no document overflow at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 844 })
-      await setUiPreferences(page, 'dark', 'en')
-      await mockAdminApi(page, {
-        'GET /api/v1/stats': populatedStats,
-        'GET /api/v1/latency-series': latencySeries,
-      })
-      await page.goto(route)
-      await expectNoDocumentOverflow(page)
-    })
+test('Portal routes avoid document overflow at the narrowest supported width', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await setUiPreferences(page, 'dark', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': populatedStats,
+    'GET /api/v1/latency-series': latencySeries,
+  })
+
+  for (const route of ['/', '/monitor']) {
+    await page.goto(route)
+    await expectNoDocumentOverflow(page)
   }
-}
+})

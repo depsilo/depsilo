@@ -55,8 +55,9 @@ func TestWarmupMissPersistsNonEmptyBodyBeforeCompleting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pool, err := upstream.NewPool([]config.UpstreamConfig{{
-		Name: "mock", URL: server.URL, Priority: 1, ProbeMode: "passive",
+	pool, err := upstream.NewPoolFromRecords([]db.UpstreamRecord{{
+		ID: 1, AdapterType: "pypi", Name: "mock", URL: server.URL,
+		Priority: 1, ProbeMode: "passive", ProbeInterval: "30m", Healthy: false,
 	}})
 	if err != nil {
 		t.Fatal(err)

@@ -38,6 +38,16 @@ is_expected_process() {
     esac
 }
 
+is_zombie_process() {
+    local pid=$1
+    local state
+    state=$(ps -p "$pid" -o stat= 2>/dev/null || true)
+    case "$state" in
+        Z*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 stop_service() {
     local binary=$1
     local pid_file=$2
@@ -49,6 +59,11 @@ stop_service() {
     fi
     if ! kill -0 "$pid" 2>/dev/null; then
         rm -f "$pid_file"
+        return 0
+    fi
+    if is_zombie_process "$pid"; then
+        rm -f "$pid_file"
+        echo ">>> stopped pid=$pid"
         return 0
     fi
     if ! is_expected_process "$pid" "$binary"; then

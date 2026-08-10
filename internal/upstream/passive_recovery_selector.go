@@ -3,7 +3,6 @@ package upstream
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 )
 
@@ -20,8 +19,8 @@ type PassiveRecoverySelector struct {
 	now      func() time.Time
 }
 
-// NewPassiveRecoverySelector creates a selector for pools whose passive
-// upstreams have no background probe to restore their health.
+// NewPassiveRecoverySelector creates a selector that gives passive upstreams
+// a bounded request-time path back to healthy state.
 func NewPassiveRecoverySelector(pool *Pool) *PassiveRecoverySelector {
 	return newPassiveRecoverySelector(pool, DefaultPassiveRecoveryCooldown, time.Now)
 }
@@ -36,21 +35,32 @@ func newPassiveRecoverySelector(pool *Pool, cooldown time.Duration, now func() t
 
 // Select returns the highest-priority healthy upstream, or an unhealthy
 // passive upstream when the pool has no healthy member.
-func (s *PassiveRecoverySelector) Select(_ context.Context) (*Upstream, error) {
-	upstreams := s.pool.Snapshot()
-	sort.Slice(upstreams, func(i, j int) bool {
-		return upstreams[i].Priority < upstreams[j].Priority
-	})
+func (s *PassiveRecoverySelector) Select(ctx context.Context) (*Upstream, error) {
+	return s.selectCandidate(ctx, nil)
+}
+
+// SelectExcluding keeps request-local retries away from the source that just
+// failed. Healthy alternatives remain preferred; an unhealthy passive
+// alternative may enter half-open recovery only when no healthy one exists.
+func (s *PassiveRecoverySelector) SelectExcluding(ctx context.Context, excluded *Upstream) (*Upstream, error) {
+	return s.selectCandidate(ctx, excluded)
+}
+
+func (s *PassiveRecoverySelector) selectCandidate(_ context.Context, excluded *Upstream) (*Upstream, error) {
+	upstreams := orderedUpstreams(s.pool)
 
 	for _, candidate := range upstreams {
-		if candidate.IsHealthy() {
+		if candidate != excluded && candidate.IsHealthy() {
 			return candidate, nil
 		}
 	}
 	for _, candidate := range upstreams {
-		if candidate.reservePassiveRecovery(s.now(), s.cooldown) {
+		if candidate != excluded && candidate.reservePassiveRecovery(s.now(), s.cooldown) {
 			return candidate, nil
 		}
+	}
+	if excluded != nil {
+		return nil, fmt.Errorf("no healthy alternate upstream")
 	}
 	return nil, fmt.Errorf("all upstreams are unhealthy")
 }

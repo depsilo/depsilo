@@ -34,7 +34,7 @@ func newReadAuthRouter(t *testing.T) (*gin.Engine, string, string) {
 	if err := database.Create(&user).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
-	jwtToken, err := middleware.GenerateJWT(authTestJWTSecret, user.ID, user.Username, user.Role, time.Hour)
+	jwtToken, err := middleware.GenerateJWT(authTestJWTSecret, user, time.Hour)
 	if err != nil {
 		t.Fatalf("generate JWT: %v", err)
 	}

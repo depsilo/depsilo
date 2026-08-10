@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 
 import { getAdminRouteHref } from '@/admin/routes'
 import ButtonV2 from '@/components/Button'
-import Icon from '@/components/Icon'
+import Icon, { type IconName } from '@/components/Icon'
 import QueryErrorState from '@/components/QueryErrorState'
 import type { DashboardUpstream } from '@/lib/adminApi.types'
 import { upstreamStatus } from '@/lib/upstreamStatus'
@@ -19,7 +19,7 @@ interface DashboardAttentionProps {
 }
 
 interface AttentionItemProps {
-  icon: string
+  icon: IconName
   title: string
   detail: string
   tone: 'danger' | 'warning'

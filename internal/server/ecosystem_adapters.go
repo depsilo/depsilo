@@ -141,7 +141,7 @@ func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definiti
 		if pool == nil {
 			return fmt.Errorf("active ecosystem %s has no pool", definition.name)
 		}
-		handler := definition.factory(cacheMgr, upstream.NewPrioritySelector(pool), cacheConfig, database)
+		handler := definition.factory(cacheMgr, upstream.NewPassiveRecoverySelector(pool), cacheConfig, database)
 		handler.Register(root.Group(definition.route))
 		handler.Register(project.Group(definition.route))
 	}

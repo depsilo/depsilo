@@ -3,6 +3,12 @@ import AxeBuilder from '@axe-core/playwright'
 import { test, expect, mockAdminApi } from './fixtures/admin-api'
 
 async function expectNoDialogAxeViolations(page: import('@playwright/test').Page) {
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  // Axe blends translucent text with every layer behind the dialog. Wait for
+  // the 160ms entry transition to finish so contrast is measured at the state
+  // an Operator actually reads, not at an arbitrary animation frame.
+  await expect(dialog).toHaveCSS('opacity', '1')
   const results = await new AxeBuilder({ page })
     .include('[role="dialog"]')
     .withTags(['wcag2a', 'wcag2aa'])

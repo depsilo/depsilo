@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -19,6 +18,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/config"
+	"depsilo/internal/credential"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 )
@@ -186,7 +186,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	h.loginLimiter.clear(clientIP, req.Username)
 
-	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, user.ID, user.Username, user.Role, h.cfg.TokenTTL)
+	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, user, h.cfg.TokenTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "failed to generate token"})
 		return
@@ -228,7 +228,10 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "valid JWT required"})
 		return
 	}
-	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, principal.ID, principal.Username, principal.Role, h.cfg.TokenTTL)
+	token, err := middleware.GenerateJWT(h.cfg.JWTSecret, db.User{
+		ID: principal.ID, Username: principal.Username, Role: principal.Role,
+		CredentialVersion: principal.CredentialVersion,
+	}, h.cfg.TokenTTL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "failed to generate token"})
 		return
@@ -236,9 +239,8 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": time.Now().Add(h.cfg.TokenTTL).Unix()})
 }
 
-// ValidateInitialAdminCredentials applies the first-run credential policy. A
-// long passphrase is accepted without arbitrary composition rules; shorter
-// passwords must use at least three character classes.
+// ValidateInitialAdminCredentials combines the stricter first-run username
+// rules with the shared interactive credential policy.
 func ValidateInitialAdminCredentials(username, password string) error {
 	if username != strings.TrimSpace(username) {
 		return errors.New("administrator username must not start or end with whitespace")
@@ -252,50 +254,7 @@ func ValidateInitialAdminCredentials(username, password string) error {
 			return errors.New("administrator username may contain letters, numbers, dots, underscores, and hyphens, and must start with a letter or number")
 		}
 	}
-	if !utf8.ValidString(password) {
-		return errors.New("administrator password must be valid UTF-8")
-	}
-	passwordRunes := utf8.RuneCountInString(password)
-	if passwordRunes < 12 {
-		return errors.New("administrator password must be at least 12 characters")
-	}
-	if len(password) > 72 {
-		return errors.New("administrator password must be at most 72 bytes")
-	}
-	classes := 0
-	hasLower, hasUpper, hasDigit, hasSymbol := false, false, false, false
-	for _, character := range password {
-		switch {
-		case unicode.IsControl(character):
-			return errors.New("administrator password must not contain control characters")
-		case unicode.IsLower(character):
-			hasLower = true
-		case unicode.IsUpper(character):
-			hasUpper = true
-		case unicode.IsDigit(character):
-			hasDigit = true
-		default:
-			hasSymbol = true
-		}
-	}
-	for _, present := range []bool{hasLower, hasUpper, hasDigit, hasSymbol} {
-		if present {
-			classes++
-		}
-	}
-	if passwordRunes < 20 && classes < 3 {
-		return errors.New("administrator password must use at least three character classes or be a passphrase of at least 20 characters")
-	}
-	lowerPassword := strings.ToLower(password)
-	if strings.Contains(lowerPassword, strings.ToLower(username)) {
-		return errors.New("administrator password must not contain the username")
-	}
-	for _, common := range []string{"adminadminadmin", "password123!", "change-me-in-production", "qwerty123456"} {
-		if lowerPassword == common {
-			return errors.New("administrator password is too common")
-		}
-	}
-	return nil
+	return credential.CredentialPolicy.ValidatePassword(username, password)
 }
 
 // CreateInitialAdmin creates the first administrator with operator-provided
@@ -317,10 +276,11 @@ func CreateInitialAdmin(database *gorm.DB, username, password string) error {
 		return fmt.Errorf("hash administrator password: %w", err)
 	}
 	user := db.User{
-		Username:     username,
-		PasswordHash: string(hash),
-		Role:         "admin",
-		Enabled:      true,
+		Username:          username,
+		PasswordHash:      string(hash),
+		Role:              "admin",
+		Enabled:           true,
+		CredentialVersion: db.InitialCredentialVersion,
 	}
 	if err := database.Create(&user).Error; err != nil {
 		return fmt.Errorf("create administrator: %w", err)

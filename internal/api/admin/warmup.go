@@ -111,7 +111,7 @@ func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packa
 	packages = normalized
 	warmupContext, cancelWarmup := context.WithTimeout(parent, maxWarmupDuration)
 	defer cancelWarmup()
-	selector := upstream.NewPrioritySelector(pool)
+	selector := upstream.NewPassiveRecoverySelector(pool)
 	ttl := h.cfg.Cache.TTLIndex
 
 	for _, pkg := range packages {

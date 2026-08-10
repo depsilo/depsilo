@@ -8,7 +8,7 @@ import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import EmptyState from '@/components/EmptyState'
-import Icon from '@/components/Icon'
+import Icon, { type IconName } from '@/components/Icon'
 import InlineNotice from '@/components/InlineNotice'
 import SectionHeader from '@/components/SectionHeader'
 import { adminApi } from '@/lib/api'
@@ -32,7 +32,7 @@ const ATTENTION_SUGGESTIONS_PARAMS = { page: 1, per_page: 20 } as const
 const ATTENTION_QUARANTINE_PARAMS = { limit: 100 } as const
 
 interface QueueItemProps {
-  icon: string
+  icon: IconName
   title: string
   detail: string
   count?: number

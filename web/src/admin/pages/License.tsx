@@ -6,7 +6,7 @@ import type { EntitlementStatus } from '@/lib/api'
 import { proAccessUrl } from '@/lib/buy'
 import ButtonV2 from '@/components/Button'
 import InputV2 from '@/components/Input'
-import Icon from '@/components/Icon'
+import Icon, { type IconName } from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
 import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
@@ -25,7 +25,7 @@ function StatePanel({
   children,
 }: {
   tone: 'brand' | 'ok' | 'danger'
-  icon: string
+  icon: IconName
   title: React.ReactNode
   description?: React.ReactNode
   children?: React.ReactNode

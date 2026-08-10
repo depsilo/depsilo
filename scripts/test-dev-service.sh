@@ -5,6 +5,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP=$(mktemp -d)
 cleanup() {
     [ -z "${sleep_pid:-}" ] || kill "$sleep_pid" 2>/dev/null || true
+    [ -z "${zombie_parent_pid:-}" ] || kill "$zombie_parent_pid" 2>/dev/null || true
     [ -z "${service_pid:-}" ] || kill "$service_pid" 2>/dev/null || true
     rm -rf "$TMP"
 }
@@ -63,5 +64,48 @@ if [ -e "$PID_FILE" ]; then
     echo "stale PID file was not removed" >&2
     exit 1
 fi
+
+# Ctrl-C reaches every member of make dev-ui's foreground process group. The
+# backend can therefore finish just before the lifecycle helper asks the
+# service manager to stop it. Treat that short-lived zombie as already stopped,
+# not as an unrelated live process.
+ZOMBIE_PID_FILE="$TMP/zombie.pid"
+python3 - "$ZOMBIE_PID_FILE" <<'PY' &
+import os
+import pathlib
+import sys
+import time
+
+child = os.fork()
+if child == 0:
+    os._exit(0)
+pathlib.Path(sys.argv[1]).write_text(f"{child}\n", encoding="utf-8")
+time.sleep(30)
+PY
+zombie_parent_pid=$!
+for _ in $(seq 1 100); do
+    [ -s "$ZOMBIE_PID_FILE" ] && break
+    sleep 0.02
+done
+[ -s "$ZOMBIE_PID_FILE" ] || { echo "failed to create zombie fixture" >&2; exit 1; }
+zombie_pid=$(cat "$ZOMBIE_PID_FILE")
+for _ in $(seq 1 100); do
+    state=$(ps -p "$zombie_pid" -o stat= 2>/dev/null || true)
+    [[ "$state" == Z* ]] && break
+    sleep 0.02
+done
+[[ "${state:-}" == Z* ]] || { echo "zombie fixture did not enter Z state" >&2; exit 1; }
+zombie_output=$(bash "$ROOT/scripts/dev-service.sh" stop "$FAKE_BINARY" "$ZOMBIE_PID_FILE" 2>&1)
+if [[ "$zombie_output" == *"another process"* ]]; then
+    echo "finished development service was reported as an unrelated process" >&2
+    exit 1
+fi
+if [ -e "$ZOMBIE_PID_FILE" ]; then
+    echo "finished development service PID file was not removed" >&2
+    exit 1
+fi
+kill "$zombie_parent_pid" 2>/dev/null || true
+wait "$zombie_parent_pid" 2>/dev/null || true
+zombie_parent_pid=
 
 echo "development service manager tests passed"

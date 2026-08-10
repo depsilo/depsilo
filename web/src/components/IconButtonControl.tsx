@@ -1,8 +1,8 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
-import Icon from './Icon'
+import Icon, { type IconName } from './Icon'
 
 export interface IconButtonControlProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  icon: string
+  icon: IconName
   label: string
   tone?: 'neutral' | 'danger'
   loading?: boolean

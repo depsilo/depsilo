@@ -50,7 +50,7 @@ func TestStatsPublicUpstreamURLDoesNotExposeCredentials(t *testing.T) {
 	}
 }
 
-func TestAllUpstreamLatencySeriesFoldsRowsByResponseName(t *testing.T) {
+func TestAllUpstreamLatencySeriesKeepsSameNamedRecordsIsolatedByID(t *testing.T) {
 	database := newStatsTestDB(t)
 	for _, record := range []db.UpstreamRecord{
 		{ID: 11, AdapterType: "pypi", Name: "shared", URL: "https://one.example"},
@@ -78,27 +78,37 @@ func TestAllUpstreamLatencySeriesFoldsRowsByResponseName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(series) != 1 {
+	if len(series) != 3 {
 		t.Fatalf("series keys=%v", mapKeys(series))
 	}
-	points := series["shared"]
-	if len(points) != latencyBuckets {
-		t.Fatalf("points=%d want=%d", len(points), latencyBuckets)
-	}
-	if got := points[0]["requests"]; got != int64(6) {
-		t.Fatalf("requests=%#v want=6", got)
-	}
-	if got := points[0]["latency_ms"]; got != int64(33) {
-		t.Fatalf("latency_ms=%#v want=33", got)
-	}
-	if got := points[0]["healthy"]; got != false {
-		t.Fatalf("healthy=%#v want=false", got)
+	for key, want := range map[string]struct {
+		requests int64
+		latency  int64
+		healthy  bool
+	}{
+		"11":            {requests: 1, latency: 10, healthy: false},
+		"22":            {requests: 3, latency: 30, healthy: true},
+		"legacy:shared": {requests: 2, latency: 50, healthy: false},
+	} {
+		points := series[key]
+		if len(points) != latencyBuckets {
+			t.Fatalf("series[%q] points=%d want=%d; keys=%v", key, len(points), latencyBuckets, mapKeys(series))
+		}
+		if got := points[0]["requests"]; got != want.requests {
+			t.Fatalf("series[%q] requests=%#v want=%d", key, got, want.requests)
+		}
+		if got := points[0]["latency_ms"]; got != want.latency {
+			t.Fatalf("series[%q] latency_ms=%#v want=%d", key, got, want.latency)
+		}
+		if got := points[0]["healthy"]; got != want.healthy {
+			t.Fatalf("series[%q] healthy=%#v want=%t", key, got, want.healthy)
+		}
 	}
 	startBucket := (since.Unix() / int64(latencyIntervalMin*60)) * int64(latencyIntervalMin*60)
-	assertSeriesTimes(t, points, startBucket)
+	assertSeriesTimes(t, series["11"], startBucket)
 }
 
-func TestAllUpstreamLatencySeriesUsesCurrentAndFallbackNames(t *testing.T) {
+func TestAllUpstreamLatencySeriesUsesStableIDsAndExplicitLegacyKeys(t *testing.T) {
 	database := newStatsTestDB(t)
 	record := db.UpstreamRecord{ID: 33, AdapterType: "pypi", Name: "current", URL: "https://current.example"}
 	if err := database.Create(&record).Error; err != nil {
@@ -120,14 +130,92 @@ func TestAllUpstreamLatencySeriesUsesCurrentAndFallbackNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, latency := range map[string]int64{"current": 11, "deleted": 22, "extra-one": 33, "extra-two": 44} {
-		points, ok := series[name]
+	for key, latency := range map[string]int64{"33": 11, "44": 22, "legacy:extra-one": 33, "legacy:extra-two": 44} {
+		points, ok := series[key]
 		if !ok || len(points) != latencyBuckets || points[0]["latency_ms"] != latency {
-			t.Fatalf("series[%q]=%#v", name, points)
+			t.Fatalf("series[%q]=%#v; keys=%v", key, points, mapKeys(series))
 		}
 	}
-	if _, exists := series["before-rename"]; exists {
-		t.Fatalf("old name retained: %v", mapKeys(series))
+	for _, unstableName := range []string{"current", "before-rename", "deleted", "extra-one", "extra-two"} {
+		if _, exists := series[unstableName]; exists {
+			t.Fatalf("name-keyed series %q retained: %v", unstableName, mapKeys(series))
+		}
+	}
+}
+
+func TestStatsServiceStatusReflectsUpstreamHealth(t *testing.T) {
+	tests := []struct {
+		name    string
+		records []db.UpstreamRecord
+		want    string
+	}{
+		{name: "no upstreams", want: "healthy"},
+		{
+			name: "all healthy",
+			records: []db.UpstreamRecord{
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 149},
+				{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Healthy: true, AvgLatencyMs: 149},
+			},
+			want: "healthy",
+		},
+		{
+			name: "available but slow",
+			records: []db.UpstreamRecord{
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 150},
+			},
+			want: "degraded",
+		},
+		{
+			name: "partial outage",
+			records: []db.UpstreamRecord{
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true},
+				{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Healthy: false},
+			},
+			want: "degraded",
+		},
+		{
+			name: "slow source keeps failed pool available",
+			records: []db.UpstreamRecord{
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 200},
+				{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Healthy: false},
+			},
+			want: "degraded",
+		},
+		{
+			name: "complete outage",
+			records: []db.UpstreamRecord{
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: false},
+				{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Healthy: false},
+			},
+			want: "failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			database := newStatsTestDB(t)
+			if err := database.AutoMigrate(&db.AccessLog{}, &db.CacheEntry{}); err != nil {
+				t.Fatal(err)
+			}
+			pools := map[string]*upstream.Pool{}
+			ecosystems := []string(nil)
+			if len(tt.records) > 0 {
+				pool, err := upstream.NewPoolFromRecords(tt.records)
+				if err != nil {
+					t.Fatal(err)
+				}
+				pools["pypi"] = pool
+				ecosystems = []string{"pypi"}
+			}
+			snapshot := NewStatsHandler(database, nil, pools, ecosystems, nil, false).snapshot(time.Now())
+			service, ok := snapshot["service"].(gin.H)
+			if !ok {
+				t.Fatalf("service=%#v", snapshot["service"])
+			}
+			if got := service["status"]; got != tt.want {
+				t.Fatalf("status=%#v want=%q", got, tt.want)
+			}
+		})
 	}
 }
 

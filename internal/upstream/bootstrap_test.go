@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"depsilo/internal/config"
 	dbmodel "depsilo/internal/db"
@@ -124,6 +125,342 @@ func TestReconcileBootstrap_SeededConfigActivatesOnlyNewEcosystem(t *testing.T) 
 	database.Model(&dbmodel.UpstreamRecord{}).Where("adapter_type = ?", "pypi").Count(&pypiCount)
 	if npmCount != 1 || pypiCount != 1 {
 		t.Fatalf("npm=%d pypi=%d", npmCount, pypiCount)
+	}
+}
+
+func TestReconcileBootstrap_MigratesExactLegacyBuiltInUpstreamURLs(t *testing.T) {
+	database := bootstrapDB(t)
+	tests := []struct {
+		adapter  string
+		name     string
+		wantName string
+		oldURL   string
+		wantURL  string
+	}{
+		{adapter: "cargo", name: "rsproxy", wantName: "rsproxy", oldURL: "https://rsproxy.cn/index", wantURL: "https://rsproxy.cn/index/"},
+		{adapter: "maven", name: "central", wantName: "central", oldURL: "https://repo1.maven.org/maven2", wantURL: "https://repo.maven.apache.org/maven2/"},
+		{adapter: "rubygems", name: "ruby-china", wantName: "tuna", oldURL: "https://gems.ruby-china.com", wantURL: "https://mirrors.tuna.tsinghua.edu.cn/rubygems/"},
+		{adapter: "composer", name: "aliyun", wantName: "aliyun", oldURL: "https://mirrors.aliyun.com/composer", wantURL: "https://mirrors.aliyun.com/composer/"},
+	}
+
+	checkedAt := time.Date(2026, time.August, 1, 12, 0, 0, 0, time.UTC)
+	ids := make([]uint, 0, len(tests))
+	for index, test := range tests {
+		record := dbmodel.UpstreamRecord{
+			AdapterType:   test.adapter,
+			Name:          test.name,
+			URL:           test.oldURL,
+			Proxy:         "http://proxy.example",
+			Priority:      index + 3,
+			ProbeMode:     "passive",
+			ProbeInterval: "17m",
+		}
+		if err := database.Create(&record).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.Model(&record).UpdateColumns(map[string]any{
+			"healthy":         false,
+			"avg_latency_ms":  912,
+			"success_rate":    0.2,
+			"last_checked_at": checkedAt,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.Create(&dbmodel.UpstreamLatencyLog{
+			UpstreamID: record.ID, Name: record.Name, LatencyMs: 912, Healthy: false, CreatedAt: checkedAt,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, record.ID)
+	}
+	for _, state := range []dbmodel.ControlPlaneState{
+		{Key: SeedMarkerKey, Value: "true"},
+		{Key: ActiveEcosystemsKey, Value: `["cargo","maven","rubygems","composer"]`},
+	} {
+		if err := database.Create(&state).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	bootstrap, err := ReconcileBootstrap(database, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, test := range tests {
+		var record dbmodel.UpstreamRecord
+		if err := database.First(&record, ids[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+		if record.Name != test.wantName {
+			t.Errorf("%s/%s name=%q want=%q", test.adapter, test.name, record.Name, test.wantName)
+		}
+		if record.URL != test.wantURL {
+			t.Errorf("%s/%s URL=%q want=%q", test.adapter, test.name, record.URL, test.wantURL)
+		}
+		if record.Proxy != "http://proxy.example" || record.Priority != index+3 || record.ProbeMode != "passive" || record.ProbeInterval != "17m" {
+			t.Errorf("%s/%s operator fields changed: %#v", test.adapter, test.name, record)
+		}
+		if !record.Healthy || record.AvgLatencyMs != 0 || record.SuccessRate != 1 || !record.LastCheckedAt.IsZero() {
+			t.Errorf("%s/%s retained health from the old target: %#v", test.adapter, test.name, record)
+		}
+	}
+	var migrationState dbmodel.ControlPlaneState
+	if err := database.First(&migrationState, "key = ?", "upstreams_builtin_defaults_version").Error; err != nil {
+		t.Fatal(err)
+	}
+	if migrationState.Value != "1" {
+		t.Fatalf("built-in defaults version=%q want=1", migrationState.Value)
+	}
+	registry, err := NewRegistry(database, bootstrap.ActiveEcosystems)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pools := registry.Pools()
+	for _, test := range tests {
+		snapshot := pools[test.adapter].Snapshot()
+		if len(snapshot) != 1 || snapshot[0].Name != test.wantName || snapshot[0].URL != test.wantURL {
+			t.Errorf("%s first registry snapshot=%#v want name=%q URL=%q", test.adapter, snapshot, test.wantName, test.wantURL)
+		}
+	}
+	var retainedHistory int64
+	if err := database.Model(&dbmodel.UpstreamLatencyLog{}).Count(&retainedHistory).Error; err != nil {
+		t.Fatal(err)
+	}
+	if retainedHistory != 0 {
+		t.Fatalf("migrated target retained %d stale latency log(s)", retainedHistory)
+	}
+
+	var afterFirst []dbmodel.UpstreamRecord
+	if err := database.Order("id").Find(&afterFirst).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReconcileBootstrap(database, nil); err != nil {
+		t.Fatal(err)
+	}
+	var afterSecond []dbmodel.UpstreamRecord
+	if err := database.Order("id").Find(&afterSecond).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(afterSecond, afterFirst) {
+		t.Fatalf("second reconciliation was not idempotent:\nfirst:  %#v\nsecond: %#v", afterFirst, afterSecond)
+	}
+}
+
+func TestReconcileBootstrap_DoesNotMigrateCustomizedUpstreamURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		adapter  string
+		upstream string
+		url      string
+	}{
+		{name: "custom cargo URL", adapter: "cargo", upstream: "rsproxy", url: "https://cargo.example/index"},
+		{name: "custom cargo name", adapter: "cargo", upstream: "private", url: "https://rsproxy.cn/index"},
+		{name: "different adapter", adapter: "pypi", upstream: "rsproxy", url: "https://rsproxy.cn/index"},
+		{name: "rubygems trailing slash differs", adapter: "rubygems", upstream: "ruby-china", url: "https://gems.ruby-china.com/"},
+		{name: "composer already canonical", adapter: "composer", upstream: "aliyun", url: "https://mirrors.aliyun.com/composer/"},
+		{name: "maven trailing slash differs", adapter: "maven", upstream: "central", url: "https://repo1.maven.org/maven2/"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			database := bootstrapDB(t)
+			record := dbmodel.UpstreamRecord{
+				AdapterType:   test.adapter,
+				Name:          test.upstream,
+				URL:           test.url,
+				Proxy:         "http://operator-proxy.example",
+				Priority:      9,
+				ProbeMode:     "passive",
+				ProbeInterval: "11m",
+			}
+			if err := database.Create(&record).Error; err != nil {
+				t.Fatal(err)
+			}
+			for _, state := range []dbmodel.ControlPlaneState{
+				{Key: SeedMarkerKey, Value: "true"},
+				{Key: ActiveEcosystemsKey, Value: `["` + test.adapter + `"]`},
+			} {
+				if err := database.Create(&state).Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			var before dbmodel.UpstreamRecord
+			if err := database.First(&before, record.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ReconcileBootstrap(database, nil); err != nil {
+				t.Fatal(err)
+			}
+			var after dbmodel.UpstreamRecord
+			if err := database.First(&after, record.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(after, before) {
+				t.Fatalf("customized upstream changed:\nbefore: %#v\nafter:  %#v", before, after)
+			}
+		})
+	}
+}
+
+func TestReconcileBootstrap_LegacyRubyGemsRenameConflictFallsBackToURLOnly(t *testing.T) {
+	database := bootstrapDB(t)
+	legacy := dbmodel.UpstreamRecord{
+		AdapterType: "rubygems", Name: "ruby-china", URL: "https://gems.ruby-china.com",
+		Proxy: "http://legacy-proxy.example", Priority: 1, ProbeMode: "passive", ProbeInterval: "13m",
+	}
+	operator := dbmodel.UpstreamRecord{
+		AdapterType: "rubygems", Name: "tuna", URL: "https://operator-tuna.example/rubygems/",
+		Proxy: "http://operator-proxy.example", Priority: 2, ProbeMode: "active", ProbeInterval: "19m",
+	}
+	if err := database.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&operator).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, log := range []dbmodel.UpstreamLatencyLog{
+		{UpstreamID: legacy.ID, Name: legacy.Name, LatencyMs: 100, Healthy: false},
+		{UpstreamID: operator.ID, Name: operator.Name, LatencyMs: 20, Healthy: true},
+	} {
+		if err := database.Create(&log).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, state := range []dbmodel.ControlPlaneState{
+		{Key: SeedMarkerKey, Value: "true"},
+		{Key: ActiveEcosystemsKey, Value: `["rubygems"]`},
+	} {
+		if err := database.Create(&state).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var legacyBefore, operatorBefore dbmodel.UpstreamRecord
+	if err := database.First(&legacyBefore, legacy.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.First(&operatorBefore, operator.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ReconcileBootstrap(database, nil); err != nil {
+		t.Fatal(err)
+	}
+	var legacyAfter, operatorAfter dbmodel.UpstreamRecord
+	if err := database.First(&legacyAfter, legacy.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.First(&operatorAfter, operator.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacyAfter.Name != legacyBefore.Name || legacyAfter.URL != "https://mirrors.tuna.tsinghua.edu.cn/rubygems/" ||
+		legacyAfter.Proxy != legacyBefore.Proxy || legacyAfter.Priority != legacyBefore.Priority ||
+		legacyAfter.ProbeMode != legacyBefore.ProbeMode || legacyAfter.ProbeInterval != legacyBefore.ProbeInterval {
+		t.Fatalf("conflicting legacy row was not safely migrated: %#v", legacyAfter)
+	}
+	if !reflect.DeepEqual(operatorAfter, operatorBefore) {
+		t.Fatalf("operator tuna row changed:\nbefore: %#v\nafter:  %#v", operatorBefore, operatorAfter)
+	}
+	var legacyHistory, operatorHistory int64
+	if err := database.Model(&dbmodel.UpstreamLatencyLog{}).Where("upstream_id = ?", legacy.ID).Count(&legacyHistory).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&dbmodel.UpstreamLatencyLog{}).Where("upstream_id = ?", operator.ID).Count(&operatorHistory).Error; err != nil {
+		t.Fatal(err)
+	}
+	if legacyHistory != 0 || operatorHistory != 1 {
+		t.Fatalf("history counts legacy=%d operator=%d want 0/1", legacyHistory, operatorHistory)
+	}
+}
+
+func TestReconcileBootstrap_BuiltInURLMigrationDoesNotOverrideLaterAdminEdit(t *testing.T) {
+	database := bootstrapDB(t)
+	record := dbmodel.UpstreamRecord{AdapterType: "cargo", Name: "rsproxy", URL: "https://rsproxy.cn/index", Priority: 1}
+	if err := database.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []dbmodel.ControlPlaneState{
+		{Key: SeedMarkerKey, Value: "true"},
+		{Key: ActiveEcosystemsKey, Value: `["cargo"]`},
+	} {
+		if err := database.Create(&state).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := ReconcileBootstrap(database, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&record).UpdateColumns(map[string]any{
+		"url":             "https://rsproxy.cn/index",
+		"healthy":         false,
+		"avg_latency_ms":  88,
+		"success_rate":    0.5,
+		"last_checked_at": time.Date(2026, time.August, 2, 12, 0, 0, 0, time.UTC),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ReconcileBootstrap(database, nil); err != nil {
+		t.Fatal(err)
+	}
+	var after dbmodel.UpstreamRecord
+	if err := database.First(&after, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if after.URL != "https://rsproxy.cn/index" || after.Healthy || after.AvgLatencyMs != 88 || after.SuccessRate != 0.5 {
+		t.Fatalf("later Admin edit was overwritten on restart: %#v", after)
+	}
+}
+
+func TestReconcileBootstrap_FirstSeedPreservesExplicitOldConfigDefaults(t *testing.T) {
+	database := bootstrapDB(t)
+	got, err := ReconcileBootstrap(database, []SeedSource{source("cargo", config.UpstreamConfig{
+		Name: "rsproxy", URL: "https://rsproxy.cn/index", Priority: 1,
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.ActiveEcosystems, []string{"cargo"}) {
+		t.Fatalf("active=%v want=[cargo]", got.ActiveEcosystems)
+	}
+	var record dbmodel.UpstreamRecord
+	if err := database.Where("adapter_type = ? AND name = ?", "cargo", "rsproxy").First(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	if record.URL != "https://rsproxy.cn/index" {
+		t.Fatalf("first seed rewrote explicit config URL %q", record.URL)
+	}
+	var migrationState dbmodel.ControlPlaneState
+	if err := database.First(&migrationState, "key = ?", "upstreams_builtin_defaults_version").Error; err != nil {
+		t.Fatal(err)
+	}
+	if migrationState.Value != "1" {
+		t.Fatalf("built-in defaults version=%q want=1", migrationState.Value)
+	}
+}
+
+func TestReconcileBootstrap_FirstSeedMigratesPreexistingLegacyRow(t *testing.T) {
+	database := bootstrapDB(t)
+	record := dbmodel.UpstreamRecord{
+		AdapterType: "cargo", Name: "rsproxy", URL: "https://rsproxy.cn/index", Priority: 1,
+	}
+	if err := database.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReconcileBootstrap(database, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.ActiveEcosystems, []string{"cargo"}) {
+		t.Fatalf("active=%v want=[cargo]", got.ActiveEcosystems)
+	}
+	var after dbmodel.UpstreamRecord
+	if err := database.First(&after, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if after.URL != "https://rsproxy.cn/index/" {
+		t.Fatalf("preexisting legacy URL=%q want canonical URL", after.URL)
 	}
 }
 
@@ -308,6 +645,49 @@ func TestReconcileBootstrap_RejectsCorruptPersistedState(t *testing.T) {
 	}
 }
 
+func TestReconcileBootstrap_RejectsInvalidBuiltInDefaultsVersionWithoutWriting(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		value   string
+		wantErr string
+	}{
+		{name: "non-numeric", value: "latest", wantErr: `invalid built-in upstream defaults version "latest"`},
+		{name: "negative", value: "-1", wantErr: `invalid built-in upstream defaults version "-1"`},
+		{name: "future", value: "2", wantErr: "unsupported built-in upstream defaults version 2"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := bootstrapDB(t)
+			record := dbmodel.UpstreamRecord{
+				AdapterType: "cargo", Name: "rsproxy", URL: "https://rsproxy.cn/index", Priority: 1,
+			}
+			if err := database.Create(&record).Error; err != nil {
+				t.Fatal(err)
+			}
+			if err := database.Create(&dbmodel.ControlPlaneState{Key: builtInDefaultsVersionKey, Value: test.value}).Error; err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := ReconcileBootstrap(database, nil); err == nil || err.Error() != test.wantErr {
+				t.Fatalf("err=%v want=%q", err, test.wantErr)
+			}
+			var after dbmodel.UpstreamRecord
+			if err := database.First(&after, record.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if after.URL != record.URL {
+				t.Fatalf("invalid version changed URL to %q", after.URL)
+			}
+			var version dbmodel.ControlPlaneState
+			if err := database.First(&version, "key = ?", builtInDefaultsVersionKey).Error; err != nil {
+				t.Fatal(err)
+			}
+			if version.Value != test.value {
+				t.Fatalf("version=%q want=%q", version.Value, test.value)
+			}
+		})
+	}
+}
+
 func TestReconcileBootstrap_CanonicalizesPersistedActiveOrderAndAcceptsEmpty(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -366,6 +746,80 @@ func TestReconcileBootstrap_StateSaveFailureRollsBackRowsAndMarker(t *testing.T)
 	}
 	if rows != 0 || states != 0 {
 		t.Fatalf("transaction was not rolled back: rows=%d states=%d", rows, states)
+	}
+}
+
+func TestReconcileBootstrap_LaterStateSaveFailureRollsBackBuiltInMigrationAndVersion(t *testing.T) {
+	database := bootstrapDB(t)
+	record := dbmodel.UpstreamRecord{
+		AdapterType:   "cargo",
+		Name:          "rsproxy",
+		URL:           "https://rsproxy.cn/index",
+		Proxy:         "http://operator-proxy.example",
+		Priority:      7,
+		ProbeMode:     "passive",
+		ProbeInterval: "23m",
+	}
+	if err := database.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	checkedAt := time.Date(2026, time.August, 3, 12, 0, 0, 0, time.UTC)
+	if err := database.Model(&record).UpdateColumns(map[string]any{
+		"healthy":         false,
+		"avg_latency_ms":  144,
+		"success_rate":    0.25,
+		"last_checked_at": checkedAt,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&dbmodel.UpstreamLatencyLog{
+		UpstreamID: record.ID, Name: record.Name, LatencyMs: 144, Healthy: false, CreatedAt: checkedAt,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []dbmodel.ControlPlaneState{
+		{Key: SeedMarkerKey, Value: "true"},
+		{Key: ActiveEcosystemsKey, Value: `["cargo"]`},
+	} {
+		if err := database.Create(&state).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var before dbmodel.UpstreamRecord
+	if err := database.First(&before, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	trigger := `CREATE TRIGGER fail_active_state_update BEFORE UPDATE ON control_plane_states
+		WHEN OLD.key = '` + ActiveEcosystemsKey + `'
+		BEGIN SELECT RAISE(ABORT, 'injected active state update failure'); END`
+	if err := database.Exec(trigger).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReconcileBootstrap(database, nil); err == nil {
+		t.Fatal("expected injected state-save error")
+	}
+
+	var after dbmodel.UpstreamRecord
+	if err := database.First(&after, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("migration was not rolled back:\nbefore: %#v\nafter:  %#v", before, after)
+	}
+	var migrationVersions int64
+	if err := database.Model(&dbmodel.ControlPlaneState{}).Where("key = ?", builtInDefaultsVersionKey).Count(&migrationVersions).Error; err != nil {
+		t.Fatal(err)
+	}
+	if migrationVersions != 0 {
+		t.Fatalf("built-in defaults version survived rollback: count=%d", migrationVersions)
+	}
+	var history int64
+	if err := database.Model(&dbmodel.UpstreamLatencyLog{}).Where("upstream_id = ?", record.ID).Count(&history).Error; err != nil {
+		t.Fatal(err)
+	}
+	if history != 1 {
+		t.Fatalf("latency history deletion was not rolled back: count=%d", history)
 	}
 }
 

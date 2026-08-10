@@ -1,6 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
 import type { Page } from '@playwright/test'
-import { adminRouteManifest } from '../src/admin/routes'
 import {
   expect,
   expectResolvedUiPreferences,
@@ -36,17 +35,15 @@ async function assertAccessibleRoute(page: Page, testCase: AccessibilityCase) {
   expect(result.violations).toEqual([])
 }
 
-for (const route of adminRouteManifest.map(item => item.href)) {
-  test(`${route} mobile light zh passes the Admin accessibility contract`, async ({ page }) => {
-    await assertAccessibleRoute(page, { route, width: 390, theme: 'light', locale: 'zh' })
-  })
-}
-
-for (const testCase of [
+const representativeAdminCases = [
+  { route: '/admin', width: 390, theme: 'light', locale: 'zh' },
+  { route: '/admin/upstreams', width: 390, theme: 'light', locale: 'zh' },
+  { route: '/admin/security', width: 390, theme: 'light', locale: 'zh' },
+  { route: '/admin/settings', width: 390, theme: 'light', locale: 'zh' },
   { route: '/admin', width: 1440, theme: 'dark', locale: 'en' },
-  { route: '/admin/settings', width: 768, theme: 'light', locale: 'en' },
-  { route: '/admin/security', width: 320, theme: 'dark', locale: 'zh' },
-] satisfies readonly AccessibilityCase[]) {
+] satisfies readonly AccessibilityCase[]
+
+for (const testCase of representativeAdminCases) {
   test(`${testCase.route} ${testCase.width} ${testCase.theme} ${testCase.locale} passes the Admin accessibility contract`, async ({ page }) => {
     await assertAccessibleRoute(page, testCase)
   })

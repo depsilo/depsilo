@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { useThemePreference, type ThemePreference } from '@/lib/theme'
-import Icon from './Icon'
+import Icon, { type IconName } from './Icon'
 import IconButtonControl from './IconButtonControl'
 
 const CYCLE: ThemePreference[] = ['system', 'light', 'dark']
 
-const ICONS: Record<ThemePreference, string> = {
+const ICONS: Record<ThemePreference, IconName> = {
   light: 'light_mode',
   dark: 'dark_mode',
   system: 'computer',

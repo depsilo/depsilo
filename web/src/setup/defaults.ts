@@ -48,7 +48,7 @@ export const ecosystemDefaults: EcosystemDefault[] = [
     key: 'cargo',
     label: 'Cargo (Rust)',
     upstreams: [
-      { name: 'rsproxy', url: 'https://rsproxy.cn/index', priority: 1 },
+      { name: 'rsproxy', url: 'https://rsproxy.cn/index/', priority: 1 },
       { name: 'crates-io', url: 'https://index.crates.io', priority: 2 },
     ],
   },
@@ -57,14 +57,14 @@ export const ecosystemDefaults: EcosystemDefault[] = [
     label: 'Maven (Java)',
     upstreams: [
       { name: 'aliyun', url: 'https://maven.aliyun.com/repository/public', priority: 1 },
-      { name: 'central', url: 'https://repo1.maven.org/maven2', priority: 2 },
+      { name: 'central', url: 'https://repo.maven.apache.org/maven2/', priority: 2 },
     ],
   },
   {
     key: 'rubygems',
     label: 'RubyGems',
     upstreams: [
-      { name: 'ruby-china', url: 'https://gems.ruby-china.com', priority: 1 },
+      { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn/rubygems/', priority: 1 },
       { name: 'rubygems', url: 'https://rubygems.org', priority: 2 },
     ],
   },
@@ -72,7 +72,7 @@ export const ecosystemDefaults: EcosystemDefault[] = [
     key: 'composer',
     label: 'Composer (PHP)',
     upstreams: [
-      { name: 'aliyun', url: 'https://mirrors.aliyun.com/composer', priority: 1 },
+      { name: 'aliyun', url: 'https://mirrors.aliyun.com/composer/', priority: 1 },
       { name: 'packagist', url: 'https://repo.packagist.org', priority: 2 },
     ],
   },

@@ -12,10 +12,13 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestAutoMigrateEmptyDatabaseCreatesFrozenSchemaV1(t *testing.T) {
+func TestBaselineMigrationCreatesFrozenSchemaV1(t *testing.T) {
 	database := openCompileCacheMigrationTestDB(t)
-	if err := AutoMigrate(database); err != nil {
-		t.Fatalf("migrate empty database: %v", err)
+	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
+		t.Fatalf("create migration ledger: %v", err)
+	}
+	if err := applySchemaMigration(database, schemaMigrations[0], time.Now().UTC()); err != nil {
+		t.Fatalf("apply baseline migration: %v", err)
 	}
 
 	const wantFingerprint = "284780462bfb5e3de93b703f78526671955f7852caf112606a047fc77d6231f0"
@@ -26,29 +29,13 @@ func TestAutoMigrateEmptyDatabaseCreatesFrozenSchemaV1(t *testing.T) {
 	}
 }
 
-func TestSchemaV1SnapshotMatchesVersionOneDomainModels(t *testing.T) {
-	if CurrentSchemaVersion != 1 {
-		t.Fatal("replace version-one parity coverage with fresh/install upgrade convergence tests before adding schema v2")
-	}
-
+func TestSchemaV1SnapshotIsFrozen(t *testing.T) {
 	frozen := openCompileCacheMigrationTestDB(t)
 	if err := frozen.AutoMigrate(schemaV1Models()...); err != nil {
 		t.Fatalf("create frozen schema v1: %v", err)
 	}
 	if err := ensureSchemaV1Invariants(frozen); err != nil {
 		t.Fatalf("enforce frozen schema v1 invariants: %v", err)
-	}
-
-	current := openCompileCacheMigrationTestDB(t)
-	if err := current.AutoMigrate(currentSchemaV1ModelsForTest()...); err != nil {
-		t.Fatalf("create schema from current domain models: %v", err)
-	}
-	if err := ensureCurrentSchemaInvariants(current); err != nil {
-		t.Fatalf("enforce current schema invariants: %v", err)
-	}
-
-	if got, want := schemaV1Snapshot(t, frozen, false), schemaV1Snapshot(t, current, false); got != want {
-		t.Fatalf("frozen schema v1 differs from current version-one models\nfrozen:\n%s\ncurrent:\n%s", got, want)
 	}
 
 	models := schemaV1Models()
@@ -72,14 +59,9 @@ func TestSchemaV1SnapshotMatchesVersionOneDomainModels(t *testing.T) {
 	}
 }
 
-func TestAutoMigrateUpgradesExistingPreLedgerSchemaV1WithoutChangingData(t *testing.T) {
-	if CurrentSchemaVersion != 1 {
-		t.Fatal("replace the live-model v1 fixture with a checked-in schema-v1 database before adding schema v2")
-	}
+func TestAutoMigrateUpgradesExistingPreLedgerSchemaV1PreservingData(t *testing.T) {
 	database := openCompileCacheMigrationTestDB(t)
-	// This is the exact path used before the numbered migration ledger existed:
-	// AutoMigrate the then-current domain models and run the repair steps.
-	if err := database.AutoMigrate(currentSchemaV1ModelsForTest()...); err != nil {
+	if err := database.AutoMigrate(schemaV1Models()...); err != nil {
 		t.Fatalf("create pre-ledger schema v1: %v", err)
 	}
 	if err := ensureSchemaV1Invariants(database); err != nil {
@@ -99,20 +81,24 @@ func TestAutoMigrateUpgradesExistingPreLedgerSchemaV1WithoutChangingData(t *test
 	`, time.Unix(10, 0).UTC(), time.Unix(11, 0).UTC(), time.Unix(12, 0).UTC(), time.Unix(13, 0).UTC()).Error; err != nil {
 		t.Fatalf("seed schema v1 row: %v", err)
 	}
-	before := semanticSchemaV1Snapshot(t, database, false)
+	if err := database.Exec(`
+		INSERT INTO users
+			(id, username, password_hash, role, enabled, created_at, updated_at)
+		VALUES
+			(9, 'legacy-operator', 'legacy-hash', 'admin', true, ?, ?)
+	`, time.Unix(14, 0).UTC(), time.Unix(15, 0).UTC()).Error; err != nil {
+		t.Fatalf("seed schema v1 user: %v", err)
+	}
 
 	if err := AutoMigrate(database); err != nil {
 		t.Fatalf("upgrade existing pre-ledger schema v1: %v", err)
-	}
-	if after := semanticSchemaV1Snapshot(t, database, false); after != before {
-		t.Fatalf("reopening schema v1 changed its schema\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 	var records []schemaMigrationRecord
 	if err := database.Find(&records).Error; err != nil {
 		t.Fatalf("read schema migration ledger: %v", err)
 	}
-	if len(records) != 1 || records[0].Version != 1 || records[0].Name != "baseline" {
-		t.Fatalf("schema migration ledger = %#v, want one baseline record", records)
+	if len(records) != CurrentSchemaVersion || records[len(records)-1].Version != CurrentSchemaVersion {
+		t.Fatalf("schema migration ledger = %#v, want versions through %d", records, CurrentSchemaVersion)
 	}
 
 	var row struct {
@@ -125,6 +111,54 @@ func TestAutoMigrateUpgradesExistingPreLedgerSchemaV1WithoutChangingData(t *test
 	}
 	if row.Key != "pypi/files/demo-1.0.whl" || row.PackageName != "demo" || row.HitCount != 3 {
 		t.Fatalf("schema v1 row changed: %+v", row)
+	}
+	var user User
+	if err := database.First(&user, 9).Error; err != nil {
+		t.Fatalf("read migrated user: %v", err)
+	}
+	if user.Username != "legacy-operator" || user.PasswordHash != "legacy-hash" || user.CredentialVersion != InitialCredentialVersion {
+		t.Fatalf("migrated user = %#v", user)
+	}
+}
+
+func TestFreshAndSchemaV1UpgradeConverge(t *testing.T) {
+	fresh := openCompileCacheMigrationTestDB(t)
+	if err := AutoMigrate(fresh); err != nil {
+		t.Fatalf("migrate fresh database: %v", err)
+	}
+
+	upgraded := openCompileCacheMigrationTestDB(t)
+	if err := upgraded.AutoMigrate(schemaV1Models()...); err != nil {
+		t.Fatalf("create frozen schema v1: %v", err)
+	}
+	if err := ensureSchemaV1Invariants(upgraded); err != nil {
+		t.Fatalf("enforce frozen schema v1 invariants: %v", err)
+	}
+	if err := AutoMigrate(upgraded); err != nil {
+		t.Fatalf("upgrade frozen schema v1: %v", err)
+	}
+
+	if got, want := semanticSchemaV1Snapshot(t, upgraded, false), semanticSchemaV1Snapshot(t, fresh, false); got != want {
+		t.Fatalf("fresh and upgraded schemas differ\nupgraded:\n%s\nfresh:\n%s", got, want)
+	}
+}
+
+func TestCurrentSchemaMatchesDomainModels(t *testing.T) {
+	migrated := openCompileCacheMigrationTestDB(t)
+	if err := AutoMigrate(migrated); err != nil {
+		t.Fatalf("apply numbered migrations: %v", err)
+	}
+
+	domain := openCompileCacheMigrationTestDB(t)
+	if err := domain.AutoMigrate(currentSchemaModelsForTest()...); err != nil {
+		t.Fatalf("create schema from domain models: %v", err)
+	}
+	if err := ensureCurrentSchemaInvariants(domain); err != nil {
+		t.Fatalf("enforce current schema invariants: %v", err)
+	}
+
+	if got, want := semanticSchemaV1Snapshot(t, migrated, false), semanticSchemaV1Snapshot(t, domain, false); got != want {
+		t.Fatalf("numbered migrations differ from current domain models\nmigrated:\n%s\ndomain:\n%s", got, want)
 	}
 }
 
@@ -183,13 +217,13 @@ func semanticSchemaV1Snapshot(t *testing.T, database *gorm.DB, includeLedger boo
 	// to double quotes even when columns, constraints, defaults and indexes are
 	// unchanged. Ignore that serialization-only difference for compatibility;
 	// the immutable fingerprint test above intentionally remains byte-exact.
-	return strings.NewReplacer("`", "", `"`, "").Replace(schemaV1Snapshot(t, database, includeLedger))
+	normalized := strings.NewReplacer("`", "", `"`, "").Replace(schemaV1Snapshot(t, database, includeLedger))
+	return strings.ReplaceAll(normalized, ", ", ",")
 }
 
-// currentSchemaV1ModelsForTest deliberately mirrors the pre-ledger
-// AutoMigrate list. While version 1 is current, the parity test makes any live
-// model drift fail until a new numbered migration is added.
-func currentSchemaV1ModelsForTest() []any {
+// currentSchemaModelsForTest is the live domain-model schema. Comparing it to
+// the numbered migration output makes an unversioned model field fail tests.
+func currentSchemaModelsForTest() []any {
 	return []any{
 		&CacheEntry{},
 		&HuggingFaceRefPin{},

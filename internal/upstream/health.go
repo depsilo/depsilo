@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -56,7 +57,8 @@ func RestoreFromDB(pool *Pool, database *gorm.DB) {
 }
 
 // StartHealthCheck runs one goroutine per active-mode upstream and blocks until
-// they all stop. Passive-mode upstreams rely on request-time Report() calls.
+// they all stop. Each worker probes immediately and then on its configured
+// interval. Passive-mode upstreams rely on request-time Report() calls.
 func StartHealthCheck(ctx context.Context, pool *Pool, database *gorm.DB, defaultInterval time.Duration) {
 	var workers sync.WaitGroup
 	for _, u := range pool.Snapshot() {
@@ -82,6 +84,24 @@ func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB,
 	zap.L().Info("starting health check goroutine",
 		zap.String("upstream", u.Name),
 		zap.Duration("interval", interval))
+	check := func() {
+		result := probe(ctx, u)
+		u.applyProbe(result)
+		if err := persistProbe(ctx, database, u, result); err != nil {
+			zap.L().Warn("persist upstream probe", zap.Uint("upstream_id", u.ID), zap.Error(err))
+		}
+	}
+
+	// Probe once as soon as the worker starts. Persisted unhealthy state must
+	// not leave a recovered active upstream unavailable for a full interval
+	// after every service restart or runtime worker replacement.
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+	check()
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -90,11 +110,7 @@ func runUpstreamHealthCheck(ctx context.Context, u *Upstream, database *gorm.DB,
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			result := probe(ctx, u)
-			u.applyProbe(result)
-			if err := persistProbe(ctx, database, u, result); err != nil {
-				zap.L().Warn("persist upstream probe", zap.Uint("upstream_id", u.ID), zap.Error(err))
-			}
+			check()
 		}
 	}
 }
@@ -103,7 +119,15 @@ func probe(ctx context.Context, u *Upstream) ProbeResult {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.URL, nil)
+	// Upstream URLs are directory bases for adapter-relative requests. Probe
+	// the canonical directory form directly: several mirrors redirect a
+	// slashless path to legacy or internal hosts even though child resources
+	// under that same base are healthy.
+	targetURL := u.URL
+	if !strings.HasSuffix(targetURL, "/") {
+		targetURL += "/"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, targetURL, nil)
 	if err != nil {
 		return ProbeResult{CheckedAt: time.Now().UTC(), Err: err}
 	}

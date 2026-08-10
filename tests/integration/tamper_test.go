@@ -26,31 +26,26 @@ func TestTamper_UpstreamSwapDetectedAndFirstSeenKept(t *testing.T) {
 	// Simulate an upstream silently swapping the artifact bytes.
 	mockServer.SetTamperBody("EVIL-SWAPPED-BYTES")
 
-	// Let the 2s blob TTL lapse, then hit it repeatedly: the stale hit
-	// serves cache immediately and triggers a background refresh, which
-	// verifies-not-overwrites and raises the event.
-	time.Sleep(3 * time.Second)
-	for i := 0; i < 3; i++ {
+	// Poll through the 2s blob TTL boundary. The first stale hit triggers a
+	// background refresh; every response must keep serving the first-seen bytes
+	// until that refresh records the tamper event.
+	deadline := time.Now().Add(7 * time.Second)
+	for {
 		resp := httpGet(t, url)
 		body := readBody(t, resp)
 		if body != "ORIGINAL-BYTES" {
 			t.Fatalf("client got swapped bytes %q — first-seen not protected", body)
 		}
-		time.Sleep(500 * time.Millisecond)
-	}
 
-	// A tamper_detected event must have been recorded.
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		resp := adminGet(t, depsiloURL+"/api/v1/admin/quarantine/events?action=tamper_detected")
+		eventResp := adminGet(t, depsiloURL+"/api/v1/admin/quarantine/events?action=tamper_detected")
 		var payload struct {
 			Items []struct {
 				Package string `json:"package"`
 				Action  string `json:"action"`
 			} `json:"items"`
 		}
-		raw, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		raw, _ := io.ReadAll(eventResp.Body)
+		eventResp.Body.Close()
 		_ = json.Unmarshal(raw, &payload)
 		if len(payload.Items) > 0 && payload.Items[0].Action == "tamper_detected" {
 			if !strings.Contains(payload.Items[0].Package, "tamperpkg") {
@@ -61,6 +56,6 @@ func TestTamper_UpstreamSwapDetectedAndFirstSeenKept(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("no tamper_detected event; last response: %s", raw)
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }

@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 
 import BadgeV2 from '@/components/Badge'
 import DrawerV2 from '@/components/Drawer'
-import Icon from '@/components/Icon'
+import Icon, { type IconName } from '@/components/Icon'
 import IconButton from '@/components/IconButton'
 import LangToggle from '@/components/LangToggle'
 import Logo from '@/components/Logo'
@@ -33,7 +33,7 @@ interface NavItem {
 interface NavSection {
   id: string
   label: string
-  icon: string
+  icon: IconName
   href: string
   active: boolean
   current: boolean

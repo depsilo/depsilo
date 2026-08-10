@@ -23,9 +23,10 @@ const (
 )
 
 type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	UserID            uint   `json:"user_id"`
+	Username          string `json:"username"`
+	Role              string `json:"role"`
+	CredentialVersion uint64 `json:"credential_version"`
 	jwt.RegisteredClaims
 }
 
@@ -82,9 +83,14 @@ func resolveJWTPrincipal(secret string, database *gorm.DB, tokenString string) (
 	if user.Role != "admin" && user.Role != "readonly" {
 		return Principal{}, errors.New("unsupported user role")
 	}
+	if claims.CredentialVersion == 0 || user.CredentialVersion == 0 ||
+		claims.Role != user.Role || claims.CredentialVersion != user.CredentialVersion {
+		return Principal{}, errors.New("stale JWT credential state")
+	}
 	return Principal{
 		ID: user.ID, Username: user.Username, Role: user.Role, Enabled: true,
 		AuthMethod: AuthMethodJWT, TokenPermissions: nil, CanWrite: user.Role == "admin",
+		CredentialVersion: user.CredentialVersion,
 	}, nil
 }
 
@@ -119,16 +125,21 @@ func resolveAPITokenPrincipal(database *gorm.DB, tokenString string) (Principal,
 	return Principal{
 		ID: user.ID, Username: user.Username, Role: user.Role, Enabled: true,
 		AuthMethod: AuthMethodAPIToken, TokenPermissions: &permissions,
-		CanWrite: user.Role == "admin" && permissions == "readwrite",
+		CanWrite:          user.Role == "admin" && permissions == "readwrite",
+		CredentialVersion: user.CredentialVersion,
 	}, nil
 }
 
 // GenerateJWT creates a new JWT token for a user.
-func GenerateJWT(secret string, userID uint, username, role string, ttl time.Duration) (string, error) {
+func GenerateJWT(secret string, user db.User, ttl time.Duration) (string, error) {
+	if user.CredentialVersion == 0 {
+		return "", errors.New("user credential version is not initialized")
+	}
 	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		Role:     role,
+		UserID:            user.ID,
+		Username:          user.Username,
+		Role:              user.Role,
+		CredentialVersion: user.CredentialVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

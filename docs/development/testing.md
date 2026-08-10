@@ -10,16 +10,19 @@ the changed interface.
 | --- | --- | --- | --- |
 | Focused Go | `go test ./internal/<module> -run TestName -count=1` | No | One backend module interface |
 | Fast Go | `make test` | No | Short-mode production and cross-module Go packages, with cache |
+| Full Go | `make test-full` | No | Every production and cross-module Go package, uncached and without race instrumentation |
+| Race-sensitive Go | `make test-race` | No | Concurrency, streaming, scheduler, and lifecycle owners under the race detector |
 | Frontend unit | `npm --prefix web run test:unit` | No | Pure state/model/manifest logic |
 | UI smoke | `make test-ui` | No | Critical Portal/Admin/setup routes with mocked APIs |
 | Production UI smoke | `make test-ui-production` | No | One browser flow against the built Go binary and its embedded frontend |
 | Tagged integration | `make test-integration` | No | Local Depsilo process plus mock Upstream over HTTP |
 | Normal gate | `make check` | No | Lint, fast Go, frontend unit/build/bundle, binary, UI smoke |
-| Complete gate | `make verify` | No | Race, integration, full Playwright, scripts, build and module checks |
+| Complete gate | `make verify` | No | Full Go plus focused race coverage, integration, full Playwright, scripts, build and module checks |
 | Dependency security | `make security` | Yes | Go vulnerability data and npm production audit |
 | One real client | `make test-docker-<ecosystem>` | Yes | Native package manager against live Upstreams |
 | All real clients | `make test-e2e` | Yes | Scheduled/opt-in package-client matrix |
 | Compiler clients | `make test-compiler-cache` | Client-dependent | Installed ccache and sccache against a running service |
+| Development scripts | `make verify-scripts` | No | Make workflows, paired Vite/backend lifecycle, and development proxy coverage |
 
 Docker Registry remains a separate privileged dind check:
 `make test-docker-docker`.
@@ -29,7 +32,8 @@ Docker Registry remains a separate privileged dind check:
 | Changed seam | During iteration | Before handoff |
 | --- | --- | --- |
 | Backend implementation inside one module | focused `go test` | `make test`; `make check` for normal changes |
-| Cache, concurrency, lifecycle, auth, or migration | focused test with `-race` where useful | `make verify` |
+| Cache, concurrency, or lifecycle | focused test with `-race` where useful | `make verify` |
+| Auth or migration | focused owning-package test | `make verify` |
 | HTTP/package protocol | adjacent Go tests + tagged integration case | `make verify` and relevant `make test-docker-<ecosystem>` when network is available |
 | Pure frontend model/manifest | focused Vitest file | `make check` |
 | Portal/Admin interaction | focused Playwright file | `make check`; full `make verify` for shared shell/primitives |
@@ -43,6 +47,10 @@ Docker Registry remains a separate privileged dind check:
 - Put Go behavior tests next to the owning module. Keep `tests/unit/` only for
   cross-module behavior that cannot be expressed through one package's public
   interface.
+- `make test-full` is the all-package correctness gate. Add a package to
+  `GO_RACE_PKGS` when it begins owning goroutines, shared mutable state,
+  streaming lifecycles, or a background scheduler; do not expand race coverage
+  merely because a package calls into one of those owners.
 - Use `tests/integration/` for observable HTTP behavior requiring a running
   local server and mock Upstream. Do not repeat internal state assertions there.
 - Put pure TypeScript state, catalogs, and route-manifest tests in `web/unit/`.
@@ -51,6 +59,15 @@ Docker Registry remains a separate privileged dind check:
   Do not launch a browser to test a pure array or function.
 - Real-client Docker fixtures prove native client compatibility. They should
   stay small and network-dependent rather than being disguised as unit tests.
+
+For changes to local hot reload, run the focused lifecycle and route contracts
+before the aggregate script gate:
+
+```bash
+bash scripts/test-dev-ui.sh
+node scripts/test-vite-proxy-routes.mjs
+make verify-scripts
+```
 
 ## Keep the suite lean
 

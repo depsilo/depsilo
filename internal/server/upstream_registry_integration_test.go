@@ -534,6 +534,61 @@ func TestRegisterActiveAdaptersAddsOnlyStandardAndProjectPyPIRoutes(t *testing.T
 	}
 }
 
+func TestRegisteredStandardAdapterRecoversUnhealthyPassiveUpstream(t *testing.T) {
+	var upstreamHits atomic.Int64
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamHits.Add(1)
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<a href="package.whl">package</a>`)
+	}))
+	defer target.Close()
+
+	database := serverTestDB(t)
+	record := db.UpstreamRecord{
+		AdapterType: "pypi", Name: "recovering", URL: target.URL, Priority: 1,
+		ProbeMode: "passive", ProbeInterval: "30m", Healthy: false,
+	}
+	if err := database.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	// GORM applies the model's default=true tag when a false bool is inserted,
+	// so persist the unhealthy runtime fixture explicitly after creation.
+	if err := database.Model(&record).Updates(map[string]any{
+		"healthy": false, "success_rate": 0,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry, err := upstream.NewRegistry(database, []string{"pypi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions, err := activeDefinitions(standardEcosystemDefinitions(&config.Config{}), []string{"pypi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := gin.New()
+	if err := registerActiveAdapters(
+		engine,
+		engine.Group("/p/:slug"),
+		definitions,
+		registry.Pools(),
+		testCacheManager(t, database),
+		config.CacheConfig{},
+		database,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	requestUniquePyPIPath(t, engine, "/pypi/simple/recovery-check/")
+	if upstreamHits.Load() != 1 {
+		t.Fatalf("upstream hits=%d, want 1", upstreamHits.Load())
+	}
+	selected := registry.Pools()["pypi"].Snapshot()[0]
+	if !selected.IsHealthy() {
+		t.Fatal("successful half-open request did not restore passive upstream health")
+	}
+}
+
 func containsString(items []string, wanted string) bool {
 	for _, item := range items {
 		if item == wanted {

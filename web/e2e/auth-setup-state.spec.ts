@@ -136,13 +136,24 @@ test('single-page setup submits secure defaults and recovers after a reconnect t
         server: { port: number }
         storage: { path: string }
         admin: { username: string; password: string }
-        ecosystems: Record<string, { enabled: boolean; upstreams: Array<{ name: string; url: string }> }>
+        ecosystems: Record<string, {
+          enabled: boolean
+          upstreams: Array<{ name: string; url: string; priority: number }>
+        }>
       }
       expect(body.server.port).toBe(24444)
       expect(body.storage.path).toBe('./data/cache')
       expect(body.admin).toEqual({ username: 'admin', password: 'Tr0ub4dor&Correct' })
       expect(body.ecosystems.npm.enabled).toBe(true)
       expect(body.ecosystems.npm.upstreams.length).toBeGreaterThan(0)
+      for (const expected of [
+        { ecosystem: 'cargo', index: 0, upstream: { name: 'rsproxy', url: 'https://rsproxy.cn/index/', priority: 1 } },
+        { ecosystem: 'maven', index: 1, upstream: { name: 'central', url: 'https://repo.maven.apache.org/maven2/', priority: 2 } },
+        { ecosystem: 'rubygems', index: 0, upstream: { name: 'tuna', url: 'https://mirrors.tuna.tsinghua.edu.cn/rubygems/', priority: 1 } },
+        { ecosystem: 'composer', index: 0, upstream: { name: 'aliyun', url: 'https://mirrors.aliyun.com/composer/', priority: 1 } },
+      ]) {
+        expect(body.ecosystems[expected.ecosystem].upstreams[expected.index]).toEqual(expected.upstream)
+      }
       return {
         status: 'ok',
         message: 'Configuration saved. Server restarting...',

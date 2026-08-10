@@ -1,9 +1,9 @@
-import Icon from '@/components/Icon'
+import Icon, { type IconName } from '@/components/Icon'
 import { proAccessUrl } from '@/lib/buy'
 
 interface ProRequiredCalloutProps {
-  /** Material symbol name (e.g. "lock", "shield", "security", "folder_managed") */
-  icon: string
+  /** Registered project icon name. */
+  icon: IconName
   /** Already-translated title text */
   title: string
   /** Already-translated description text */

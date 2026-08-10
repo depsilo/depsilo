@@ -150,14 +150,10 @@ func TestAuthMeAndRefreshUseCurrentPrincipal(t *testing.T) {
 	r := gin.New()
 	r.GET("/auth/me", middleware.Authenticate(cfg.JWTSecret, database), h.Me)
 	r.POST("/auth/refresh", middleware.JWTOnly(cfg.JWTSecret, database), h.Refresh)
-	token, err := middleware.GenerateJWT(cfg.JWTSecret, user.ID, user.Username, "admin", time.Hour)
+	token, err := middleware.GenerateJWT(cfg.JWTSecret, user, time.Hour)
 	if err != nil {
 		t.Fatalf("generate JWT: %v", err)
 	}
-	if err := database.Model(&user).Update("role", "readonly").Error; err != nil {
-		t.Fatalf("downgrade: %v", err)
-	}
-
 	me := apiAuthRequest(r, http.MethodGet, "/auth/me", token)
 	if me.Code != http.StatusOK {
 		t.Fatalf("me status = %d, body = %s", me.Code, me.Body.String())
@@ -179,7 +175,7 @@ func TestAuthMeAndRefreshUseCurrentPrincipal(t *testing.T) {
 	if err := json.Unmarshal(me.Body.Bytes(), &principal); err != nil {
 		t.Fatalf("decode principal: %v", err)
 	}
-	if principal.Role != "readonly" || !principal.Enabled || principal.AuthMethod != "jwt" || principal.TokenPermissions != nil || principal.CanWrite {
+	if principal.Role != "admin" || !principal.Enabled || principal.AuthMethod != "jwt" || principal.TokenPermissions != nil || !principal.CanWrite {
 		t.Fatalf("principal = %#v", principal)
 	}
 
@@ -201,7 +197,7 @@ func TestAuthMeAndRefreshUseCurrentPrincipal(t *testing.T) {
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 		jwt.WithExpirationRequired(),
 	)
-	if err != nil || !parsed.Valid || parsed.Method.Alg() != jwt.SigningMethodHS256.Alg() || claims.ExpiresAt == nil || claims.Role != "readonly" {
+	if err != nil || !parsed.Valid || parsed.Method.Alg() != jwt.SigningMethodHS256.Alg() || claims.ExpiresAt == nil || claims.Role != "admin" || claims.CredentialVersion != user.CredentialVersion {
 		t.Fatalf("refreshed claims = %#v, err = %v", claims, err)
 	}
 }

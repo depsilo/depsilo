@@ -14,10 +14,37 @@ PID_FILE   := .server.pid
 DEV_LOG    := .dev.log
 PORT       ?= 23333
 DEV_URL    ?= http://localhost:$(PORT)
+UI_HOST    ?= 127.0.0.1
+UI_PORT    ?= 5173
 TEST_DIR   := testground
 NPM_RUN    := npm --prefix $(WEB_DIR) run
+VITE_BIN   ?= $(WEB_DIR)/node_modules/.bin/vite
 GO_PROD_PKGS := ./cmd/... ./internal/... ./web
 GO_TEST_PKGS := $(GO_PROD_PKGS) ./tests/unit/... ./tests/mock/...
+# Race detection is intentionally concentrated on packages that own goroutines,
+# shared mutable state, streaming lifecycles, or background schedulers. The full
+# non-race suite still covers every production and cross-module package.
+GO_RACE_PKGS := \
+	./internal/accesslog/... \
+	./internal/adapter \
+	./internal/adapter/huggingface/... \
+	./internal/api/... \
+	./internal/asyncruntime/... \
+	./internal/audit/... \
+	./internal/blocklist/... \
+	./internal/cache/... \
+	./internal/compilecache/... \
+	./internal/config/... \
+	./internal/db/... \
+	./internal/license/... \
+	./internal/middleware/... \
+	./internal/notify/... \
+	./internal/quarantine/... \
+	./internal/security/... \
+	./internal/server/... \
+	./internal/trial/... \
+	./internal/upstream/... \
+	./internal/upstreamupdates/...
 
 # ─── 版本注入 ─────────────────────────────────
 # Match only semver-style tags (v0.2.3) to avoid descriptive tags like
@@ -33,7 +60,7 @@ LDFLAGS    := -X depsilo/internal/version.Version=$(VERSION) \
 GO_BUILD   := CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags "$(LDFLAGS)"
 
 # ─── 初始化与构建 ─────────────────────────────
-.PHONY: setup setup-ui version prepare-go frontend build build-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
+.PHONY: setup setup-ui version prepare-go frontend build build-dev-server build-server tray app-macos install-linux uninstall-linux autostart-linux unautostart-linux
 
 setup:                          ## 安装 Go 与前端开发依赖
 	go mod download
@@ -63,6 +90,9 @@ $(BIN_DIR):
 build: frontend | $(BIN_DIR)    ## 构建前端 + 编译后端
 	$(GO_BUILD) -o $(BIN) ./cmd/depsilo
 
+build-dev-server: prepare-go | $(BIN_DIR)  # 内部：为 Vite 热更新仅编译后端
+	$(GO_BUILD) -o $(BIN) ./cmd/depsilo
+
 build-server: frontend | $(BIN_DIR)  # 兼容：构建纯服务器入口
 	$(GO_BUILD) -o $(BIN)-server ./cmd/server
 
@@ -85,7 +115,7 @@ install-linux uninstall-linux autostart-linux unautostart-linux:
 	@bash scripts/install-linux.sh $(LINUX_ACTION_$@)
 
 # ─── 运行 ─────────────────────────────────────
-.PHONY: run run-pro dev stop logs
+.PHONY: run run-pro dev dev-ui stop logs
 
 run: build                      ## 编译并前台运行（自动复用本地开发 JWT）
 run-pro: build                  ## 编译并前台运行（开启全部 Pro 功能）
@@ -96,6 +126,15 @@ run run-pro:
 dev: build stop                 ## 编译并后台运行（dev 模式）
 	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/dev-service.sh start \
 		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" --port "$(PORT)"
+
+dev-ui: build-dev-server        ## 同时运行后端与 Vite 热更新（Ctrl-C 一并停止）
+	@bash scripts/dev-service.sh stop "./$(BIN)" "$(PID_FILE)"
+	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/dev-service.sh start \
+		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" --port "$(PORT)"
+	@bash scripts/dev-ui.sh scripts/dev-service.sh \
+		"./$(BIN)" "$(PID_FILE)" "$(DEV_URL)" -- \
+		"$(VITE_BIN)" "$(WEB_DIR)" --config "$(WEB_DIR)/vite.config.ts" \
+		--host "$(UI_HOST)" --port "$(UI_PORT)" --strictPort
 
 stop:                           ## 停止后台 dev 服务
 	@bash scripts/dev-service.sh stop "./$(BIN)" "$(PID_FILE)"
@@ -133,13 +172,16 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-race test-integration test-ui test-ui-production test-compiler-cache
+.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache
 
 test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
 	go test -short $(GO_TEST_PKGS)
 
-test-race: prepare-go           ## 使用 race detector 运行 Go 测试
-	go test -race -count=1 $(GO_TEST_PKGS)
+test-full: prepare-go           ## 完整 Go 测试（全包、非 race、不使用结果缓存）
+	go test -count=1 $(GO_TEST_PKGS)
+
+test-race: prepare-go           ## 对并发与生命周期高风险包运行 race detector
+	go test -race -count=1 $(GO_RACE_PKGS)
 
 test-integration: prepare-go    ## 运行集成测试（启动服务 + mock 上游）
 	go test ./tests/integration/... -count=1 -timeout 300s -tags integration
@@ -163,14 +205,18 @@ TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget c
 TEST_DOCKER_ALL_TARGETS := $(addprefix test-docker-,$(TEST_DOCKER_ALL_ECOS))
 TEST_DOCKER_ECOS        := $(TEST_DOCKER_ALL_ECOS) docker
 
-.PHONY: $(TEST_DOCKER_ALL_TARGETS) test-docker-docker test-e2e test-clean
+.PHONY: test-e2e-server $(TEST_DOCKER_ALL_TARGETS) test-docker-docker test-e2e test-clean
 
-$(TEST_DOCKER_ALL_TARGETS): test-docker-%: dev
+test-e2e-server: build-dev-server stop  # 内部：仅启动真实客户端测试所需的后端
+	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/dev-service.sh start \
+		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" --port "$(PORT)"
+
+$(TEST_DOCKER_ALL_TARGETS): test-docker-%: test-e2e-server
 	@echo "=== [$*] real-client E2E ==="
 	docker build $(DOCKER_E2E_BUILD_FLAGS) --build-arg DEPSILO_URL=$(DEPSILO_URL) \
 		-t depsilo-test-$* $(TEST_DIR)/docker-$*
 
-test-docker-docker: dev         # opt-in：Docker Registry dind E2E
+test-docker-docker: test-e2e-server  # opt-in：Docker Registry dind E2E
 	@echo "=== [docker] docker pull alpine (dind) ==="
 	docker build $(DOCKER_E2E_BUILD_FLAGS) --build-arg DEPSILO_URL=$(DEPSILO_URL) \
 		-t depsilo-test-docker $(TEST_DIR)/docker-docker
@@ -317,13 +363,15 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	bash scripts/test-makefile.sh
 	bash scripts/test-make-dev-run.sh
 	bash scripts/test-dev-service.sh
+	bash scripts/test-dev-ui.sh
+	node scripts/test-vite-proxy-routes.mjs
 	bash scripts/test-release-tag.sh
 
 verify-installer: verify-scripts # 兼容别名
 
 check: lint test verify-web verify-build test-ui  ## 日常提交前快速检查
 
-verify: lint verify-modules test-race test-integration verify-web verify-build verify-ui verify-scripts  ## 完整离线验证
+verify: lint verify-modules test-full test-race test-integration verify-web verify-build verify-ui verify-scripts  ## 完整离线验证
 
 # These aggregate targets share web/dist between Vite and Go's embed package.
 # Keep their prerequisites serialized even when a caller passes `make -j`.

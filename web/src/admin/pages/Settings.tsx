@@ -36,6 +36,44 @@ interface SettingsDraft {
   tokenTTL: string
 }
 
+type ValidatedDraftKey = Exclude<keyof SettingsDraft, 'logLevel'>
+type SettingsValidationMessage =
+  | 'settings.validation.positiveInteger'
+  | 'settings.validation.thresholdRange'
+  | 'settings.validation.duration'
+  | 'settings.validation.tokenNever'
+type SettingsValidationErrors = Partial<Record<ValidatedDraftKey, SettingsValidationMessage>>
+
+const goDurationPattern = /^(?:0|[+-]?(?:(?:\d+(?:\.\d*)?|\.\d+)(?:ns|us|µs|μs|ms|s|m|h))+)$/
+const validationOrder: ValidatedDraftKey[] = ['maxSizeGB', 'lruThreshold', 'ttlIndex', 'ttlBlob', 'tokenTTL']
+const validationLocations: Record<ValidatedDraftKey, { tab: TabKey; id: string }> = {
+  maxSizeGB: { tab: 'cache', id: 'setting-cache-max-size' },
+  lruThreshold: { tab: 'cache', id: 'setting-cache-lru-threshold' },
+  ttlIndex: { tab: 'cache', id: 'setting-cache-ttl-index' },
+  ttlBlob: { tab: 'cache', id: 'setting-cache-ttl-blob' },
+  tokenTTL: { tab: 'auth', id: 'setting-auth-token-ttl' },
+}
+
+function validateDraft(draft: SettingsDraft): SettingsValidationErrors {
+  const errors: SettingsValidationErrors = {}
+  const maxSize = Number(draft.maxSizeGB)
+  const threshold = Number(draft.lruThreshold)
+  if (!draft.maxSizeGB.trim() || !Number.isSafeInteger(maxSize) || maxSize <= 0) {
+    errors.maxSizeGB = 'settings.validation.positiveInteger'
+  }
+  if (!draft.lruThreshold.trim() || !Number.isInteger(threshold) || threshold < 1 || threshold > 100) {
+    errors.lruThreshold = 'settings.validation.thresholdRange'
+  }
+  if (!goDurationPattern.test(draft.ttlIndex)) errors.ttlIndex = 'settings.validation.duration'
+  if (!goDurationPattern.test(draft.ttlBlob)) errors.ttlBlob = 'settings.validation.duration'
+  if (draft.tokenTTL === 'never') {
+    errors.tokenTTL = 'settings.validation.tokenNever'
+  } else if (!goDurationPattern.test(draft.tokenTTL)) {
+    errors.tokenTTL = 'settings.validation.duration'
+  }
+  return errors
+}
+
 const draftFrom = (settings: AdminSettingsSnapshot): SettingsDraft => ({
   logLevel: settings.server.log_level,
   maxSizeGB: String(settings.cache.max_size_gb),
@@ -106,6 +144,7 @@ export default function SettingsV2() {
   const { canWrite } = usePrincipal()
   const [activeTab, setActiveTab] = useState<TabKey>('basic')
   const [draft, setDraft] = useState<SettingsDraft | null>(null)
+  const [validationErrors, setValidationErrors] = useState<SettingsValidationErrors>({})
   const [inlineError, setInlineError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<UpdateAdminSettingsResponse | null>(null)
   const configuredRef = useRef<AdminSettingsSnapshot | null>(null)
@@ -133,6 +172,7 @@ export default function SettingsV2() {
       queryClient.setQueryData<AdminSettingsResponse>(['admin', 'settings'], response)
       configuredRef.current = response.configured
       setDraft(draftFrom(response.configured))
+      setValidationErrors({})
       setInlineError(null)
       setLastResult(response)
       const tone = response.blocked_by_override.length || response.restart_required.length ? 'warning' : 'success'
@@ -216,12 +256,30 @@ export default function SettingsV2() {
   )
   const updateDraft = <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]) => {
     setDraft(current => current ? { ...current, [key]: value } : current)
+    setValidationErrors(current => {
+      if (!current[key as ValidatedDraftKey]) return current
+      const next = { ...current }
+      delete next[key as ValidatedDraftKey]
+      return next
+    })
     setInlineError(null)
     setLastResult(null)
   }
   const save = () => {
+    const errors = validateDraft(draft)
+    setValidationErrors(errors)
+    const firstInvalid = validationOrder.find(key => errors[key])
+    if (firstInvalid) {
+      setInlineError(null)
+      setLastResult(null)
+      const location = validationLocations[firstInvalid]
+      setActiveTab(location.tab)
+      window.requestAnimationFrame(() => document.getElementById(location.id)?.focus())
+      return
+    }
     const request = buildPatch(draft, data.configured)
     if (!request) {
+      setValidationErrors({})
       setInlineError(null)
       setLastResult(null)
       toast.show({ tone: 'success', message: t('settings.noChanges') })
@@ -229,13 +287,29 @@ export default function SettingsV2() {
     }
     updateMutation.mutate(request)
   }
+  const settingsForm = (tab: Exclude<TabKey, 'webhooks'>, children: ReactNode) => (
+    <form
+      id={`settings-form-${tab}`}
+      noValidate
+      onSubmit={event => {
+        event.preventDefault()
+        save()
+      }}
+    >
+      {children}
+    </form>
+  )
+  const fieldError = (key: ValidatedDraftKey) => {
+    const message = validationErrors[key]
+    return message ? t(message) : undefined
+  }
 
   const tabs = [
     {
       key: 'basic',
       label: t('settings.basic'),
       icon: <Icon name="tune" size="sm" />,
-      content: section(t('settings.basic'), (
+      content: settingsForm('basic', section(t('settings.basic'), (
         <div className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} />
@@ -254,46 +328,46 @@ export default function SettingsV2() {
             <option value="error">error</option>
           </SelectV2>
         </div>
-      )),
+      ))),
     },
     {
       key: 'cache',
       label: t('settings.cachePolicy'),
       icon: <Icon name="cached" size="sm" />,
-      content: section(t('settings.cachePolicy'), (
+      content: settingsForm('cache', section(t('settings.cachePolicy'), (
         <div className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InputV2 label={fieldLabel('cache.max_size_gb')} type="number" value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} hint={fieldHint('cache.max_size_gb')} />
-            <InputV2 label={fieldLabel('cache.lru_threshold')} type="number" value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} hint={fieldHint('cache.lru_threshold')} />
+            <InputV2 id="setting-cache-max-size" label={fieldLabel('cache.max_size_gb')} type="number" min={1} step={1} required value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} hint={fieldHint('cache.max_size_gb')} error={fieldError('maxSizeGB')} />
+            <InputV2 id="setting-cache-lru-threshold" label={fieldLabel('cache.lru_threshold')} type="number" min={1} max={100} step={1} required value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} hint={fieldHint('cache.lru_threshold')} error={fieldError('lruThreshold')} />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InputV2 label={fieldLabel('cache.ttl_index')} mono value={draft.ttlIndex} onChange={event => updateDraft('ttlIndex', event.target.value)} disabled={isDisabled('cache.ttl_index')} hint={fieldHint('cache.ttl_index', t('settings.durationHint'))} />
-            <InputV2 label={fieldLabel('cache.ttl_blob')} mono value={draft.ttlBlob} onChange={event => updateDraft('ttlBlob', event.target.value)} disabled={isDisabled('cache.ttl_blob')} hint={fieldHint('cache.ttl_blob', t('settings.durationHint'))} />
+            <InputV2 id="setting-cache-ttl-index" label={fieldLabel('cache.ttl_index')} mono required value={draft.ttlIndex} onChange={event => updateDraft('ttlIndex', event.target.value)} disabled={isDisabled('cache.ttl_index')} hint={fieldHint('cache.ttl_index', t('settings.durationHint'))} error={fieldError('ttlIndex')} />
+            <InputV2 id="setting-cache-ttl-blob" label={fieldLabel('cache.ttl_blob')} mono required value={draft.ttlBlob} onChange={event => updateDraft('ttlBlob', event.target.value)} disabled={isDisabled('cache.ttl_blob')} hint={fieldHint('cache.ttl_blob', t('settings.durationHint'))} error={fieldError('ttlBlob')} />
           </div>
         </div>
-      )),
+      ))),
     },
     {
       key: 'storage',
       label: t('settings.storageBackend'),
       icon: <Icon name="database" size="sm" />,
-      content: section(t('settings.storageBackend'), (
+      content: settingsForm('storage', section(t('settings.storageBackend'), (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} />
           <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} />
           <InputV2 label={fieldLabel('database.driver')} value={data.configured.database.driver} readOnly hint={fieldHint('database.driver')} />
         </div>
-      )),
+      ))),
     },
     {
       key: 'auth',
       label: t('settings.authSecurity'),
       icon: <Icon name="shield" size="sm" />,
-      content: section(t('settings.authSecurity'), (
+      content: settingsForm('auth', section(t('settings.authSecurity'), (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <InputV2 label={fieldLabel('auth.token_ttl')} mono value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} hint={fieldHint('auth.token_ttl', t('settings.durationHint'))} />
+          <InputV2 id="setting-auth-token-ttl" label={fieldLabel('auth.token_ttl')} mono required value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} hint={fieldHint('auth.token_ttl', t('settings.durationHint'))} error={fieldError('tokenTTL')} />
         </div>
-      )),
+      ))),
     },
     {
       key: 'webhooks',
@@ -309,7 +383,7 @@ export default function SettingsV2() {
     <AdminPage
       description={t('settings.subtitle')}
       actions={configurationTab ? (
-        <ButtonV2 type="button" size="sm" onClick={save} disabled={globallyReadOnly || updateMutation.isPending}>
+        <ButtonV2 type="submit" form={`settings-form-${activeTab}`} size="sm" aria-busy={updateMutation.isPending || undefined} disabled={globallyReadOnly || updateMutation.isPending}>
           <Icon name="save" size="sm" />
           {updateMutation.isPending ? t('saving') : t('save')}
         </ButtonV2>

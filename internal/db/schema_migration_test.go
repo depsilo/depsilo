@@ -56,11 +56,14 @@ func TestAutoMigrateRecordsAndReusesCurrentSchemaVersion(t *testing.T) {
 	if err := database.Order("version ASC").Find(&records).Error; err != nil {
 		t.Fatalf("read schema migration records: %v", err)
 	}
-	if len(records) != 1 {
-		t.Fatalf("schema migration record count = %d, want 1", len(records))
+	if len(records) != CurrentSchemaVersion {
+		t.Fatalf("schema migration record count = %d, want %d", len(records), CurrentSchemaVersion)
 	}
-	if records[0].Version != CurrentSchemaVersion || records[0].Name != "baseline" {
-		t.Fatalf("schema migration record = %#v, want current baseline", records[0])
+	if records[0].Version != 1 || records[0].Name != "baseline" {
+		t.Fatalf("baseline migration record = %#v", records[0])
+	}
+	if last := records[len(records)-1]; last.Version != CurrentSchemaVersion || last.Name != "user credential version" {
+		t.Fatalf("current migration record = %#v", last)
 	}
 }
 

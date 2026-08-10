@@ -49,6 +49,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   and tamper detection are unaffected.
 
 ### Fixed
+- Public service status now reflects actual Upstream health instead of always
+  reporting healthy. Public latency history is keyed by stable Upstream ID so
+  same-named sources in different ecosystems no longer share a graph;
+  pre-ID rows remain isolated under `legacy:<name>` keys.
+- Unified interactive password validation across setup and Admin user
+  mutations, and added persistent JWT credential generations so password,
+  role, and enabled-state changes immediately revoke older login sessions
+  without revoking API tokens.
+- Active Upstream workers now probe immediately at startup instead of waiting
+  for the first interval. When every standard-pool source is unhealthy,
+  passive sources receive a cooldown-limited half-open request so ordinary
+  network failures can recover without admitting critical protocol failures.
+- Built-in Upstreams now use canonical, live endpoints for RsProxy, Maven
+  Central, TUNA RubyGems, and the Aliyun Composer mirror. Exact legacy seeded
+  adapter/name/URL triples are upgraded once on restart; custom URLs and all
+  other operator-managed fields are preserved.
 - Blocklist import semantics hardened by adversarial review against
   the LIVE dataset: bounded-range advisories without version lists
   (fsevents, @solana/web3.js) are skipped instead of blocking every

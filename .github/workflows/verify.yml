@@ -7,20 +7,8 @@ permissions:
   contents: read
 
 jobs:
-  release-tag:
-    name: Release tag
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Validate SemVer tag
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: bash scripts/validate-release-tag.sh "$GITHUB_REF_NAME"
-
   backend:
     name: Backend
-    needs: release-tag
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -45,10 +33,10 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
           "$(go env GOPATH)/bin/govulncheck" ./cmd/... ./internal/... ./web
 
-      - name: Workflow script tests
-        run: make verify-scripts
+      - name: Go tests (full)
+        run: make test-full
 
-      - name: Go tests (race)
+      - name: Go tests (race-sensitive packages)
         run: make test-race
 
       - name: Integration tests
@@ -59,7 +47,6 @@ jobs:
 
   frontend:
     name: Frontend
-    needs: release-tag
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -81,7 +68,13 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
+
+      # This gate loads the real Vite config, so keep it in the job that owns
+      # the locked frontend dependencies instead of installing them twice.
+      - name: Workflow script tests
+        working-directory: .
+        run: make verify-scripts
 
       - name: Audit dependencies
         run: npm audit --audit-level=moderate
@@ -95,21 +88,21 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
-      - name: Build
-        run: npm run build
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Builds the frontend and Go binary once, then proves the embedded
+      # production surface. The resulting web/dist is reused by the budget
+      # check below rather than running a second production build.
+      - name: Embedded production frontend smoke
+        working-directory: .
+        run: make test-ui-production
 
       - name: Check bundle budget
         run: npm run check:bundle
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
       - name: Browser tests
         run: npm run test:ui
-
-      - name: Embedded production frontend smoke
-        working-directory: .
-        run: make test-ui-production
 
       - name: i18n audit
         working-directory: .

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,13 +17,30 @@ import (
 )
 
 const (
-	SeedMarkerKey       = "upstreams_seeded_v1"
-	ActiveEcosystemsKey = "upstreams_active_ecosystems_v1"
+	SeedMarkerKey             = "upstreams_seeded_v1"
+	ActiveEcosystemsKey       = "upstreams_active_ecosystems_v1"
+	builtInDefaultsVersionKey = "upstreams_builtin_defaults_version"
+	builtInDefaultsV1         = 1
 )
 
 var supportedEcosystems = standardUpstreamNames()
 
 var bootstrapMu sync.Mutex
+
+type builtInUpstreamURLMigration struct {
+	adapter string
+	name    string
+	newName string
+	oldURL  string
+	newURL  string
+}
+
+var builtInUpstreamURLMigrations = []builtInUpstreamURLMigration{
+	{adapter: "cargo", name: "rsproxy", oldURL: "https://rsproxy.cn/index", newURL: "https://rsproxy.cn/index/"},
+	{adapter: "maven", name: "central", oldURL: "https://repo1.maven.org/maven2", newURL: "https://repo.maven.apache.org/maven2/"},
+	{adapter: "rubygems", name: "ruby-china", newName: "tuna", oldURL: "https://gems.ruby-china.com", newURL: "https://mirrors.tuna.tsinghua.edu.cn/rubygems/"},
+	{adapter: "composer", name: "aliyun", oldURL: "https://mirrors.aliyun.com/composer", newURL: "https://mirrors.aliyun.com/composer/"},
+}
 
 type SeedSource struct {
 	Ecosystem string
@@ -51,6 +69,21 @@ func ReconcileBootstrap(database *gorm.DB, sources []SeedSource) (BootstrapResul
 		seeded := markerErr == nil
 		if seeded && marker.Value != "true" {
 			return fmt.Errorf("invalid seed marker value %q", marker.Value)
+		}
+		defaultsVersion, err := loadBuiltInDefaultsVersion(tx)
+		if err != nil {
+			return err
+		}
+		if defaultsVersion < builtInDefaultsV1 {
+			// Rewrite only rows that already existed when this start began. Running
+			// before config import keeps explicit config authoritative while still
+			// repairing records persisted by older Depsilo releases.
+			if err := migrateBuiltInUpstreamURLs(tx); err != nil {
+				return err
+			}
+			if err := tx.Save(&db.ControlPlaneState{Key: builtInDefaultsVersionKey, Value: strconv.Itoa(builtInDefaultsV1)}).Error; err != nil {
+				return fmt.Errorf("save built-in upstream defaults version: %w", err)
+			}
 		}
 		if seeded {
 			var state db.ControlPlaneState
@@ -108,7 +141,6 @@ func ReconcileBootstrap(database *gorm.DB, sources []SeedSource) (BootstrapResul
 				}
 			}
 		}
-
 		for _, ecosystem := range active {
 			var count int64
 			if err := tx.Model(&db.UpstreamRecord{}).Where("adapter_type = ?", ecosystem).Count(&count).Error; err != nil {
@@ -131,6 +163,72 @@ func ReconcileBootstrap(database *gorm.DB, sources []SeedSource) (BootstrapResul
 		return BootstrapResult{}, err
 	}
 	return BootstrapResult{ActiveEcosystems: append(make([]string, 0, len(active)), active...)}, nil
+}
+
+func loadBuiltInDefaultsVersion(tx *gorm.DB) (int, error) {
+	var state db.ControlPlaneState
+	err := tx.First(&state, "key = ?", builtInDefaultsVersionKey).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("load built-in upstream defaults version: %w", err)
+	}
+	version, err := strconv.Atoi(state.Value)
+	if err != nil || version < 0 {
+		return 0, fmt.Errorf("invalid built-in upstream defaults version %q", state.Value)
+	}
+	if version > builtInDefaultsV1 {
+		return 0, fmt.Errorf("unsupported built-in upstream defaults version %d", version)
+	}
+	return version, nil
+}
+
+func migrateBuiltInUpstreamURLs(tx *gorm.DB) error {
+	for _, migration := range builtInUpstreamURLMigrations {
+		var record db.UpstreamRecord
+		err := tx.Where("adapter_type = ? AND name = ? AND url = ?", migration.adapter, migration.name, migration.oldURL).First(&record).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("load built-in upstream %s/%s: %w", migration.adapter, migration.name, err)
+		}
+		if migration.newName != "" && migration.newName != migration.name {
+			var conflicts int64
+			if err := tx.Model(&db.UpstreamRecord{}).
+				Where("adapter_type = ? AND name = ? AND id <> ?", migration.adapter, migration.newName, record.ID).
+				Count(&conflicts).Error; err != nil {
+				return fmt.Errorf("check built-in upstream rename %s/%s: %w", migration.adapter, migration.name, err)
+			}
+			if conflicts == 0 {
+				record.Name = migration.newName
+			}
+		}
+		updates := map[string]any{
+			"url":             migration.newURL,
+			"healthy":         true,
+			"avg_latency_ms":  int64(0),
+			"success_rate":    float64(1),
+			"last_checked_at": time.Time{},
+		}
+		if record.Name != migration.name {
+			updates["name"] = record.Name
+		}
+		result := tx.Model(&db.UpstreamRecord{}).
+			Where("id = ? AND adapter_type = ? AND name = ? AND url = ?", record.ID, migration.adapter, migration.name, migration.oldURL).
+			Updates(updates)
+		if result.Error != nil {
+			return fmt.Errorf("migrate built-in upstream %s/%s: %w", migration.adapter, migration.name, result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("migrate built-in upstream %s/%s: expected one row, updated %d", migration.adapter, migration.name, result.RowsAffected)
+		}
+		if err := tx.Where("upstream_id = ?", record.ID).Delete(&db.UpstreamLatencyLog{}).Error; err != nil {
+			return fmt.Errorf("clear migrated upstream history %s/%s: %w", migration.adapter, migration.name, err)
+		}
+	}
+	return nil
 }
 
 func indexSeedSources(sources []SeedSource) (map[string]SeedSource, error) {

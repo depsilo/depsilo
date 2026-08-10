@@ -2,6 +2,7 @@ package admin
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"depsilo/internal/credential"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 )
@@ -114,13 +116,17 @@ func (h *UserHandler) List(c *gin.Context) {
 
 type createUserRequest struct {
 	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required,min=4"`
+	Password string `json:"password" binding:"required"`
 	Role     string `json:"role" binding:"required,oneof=admin readonly"`
 }
 
 func (h *UserHandler) Create(c *gin.Context) {
 	var req createUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		writeBadUserRequest(c, err.Error())
+		return
+	}
+	if err := credential.CredentialPolicy.ValidatePassword(req.Username, req.Password); err != nil {
 		writeBadUserRequest(c, err.Error())
 		return
 	}
@@ -132,10 +138,11 @@ func (h *UserHandler) Create(c *gin.Context) {
 	}
 
 	user := db.User{
-		Username:     req.Username,
-		PasswordHash: string(hash),
-		Role:         req.Role,
-		Enabled:      true,
+		Username:          req.Username,
+		PasswordHash:      string(hash),
+		Role:              req.Role,
+		Enabled:           true,
+		CredentialVersion: db.InitialCredentialVersion,
 	}
 	if err := h.db.Create(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) || strings.Contains(strings.ToLower(err.Error()), "unique constraint") {
@@ -156,10 +163,16 @@ type updateUserRequest struct {
 }
 
 var (
-	errSelfLockout = errors.New("self lockout")
-	errLastAdmin   = errors.New("last enabled admin")
-	errUserMissing = errors.New("user not found")
+	errSelfLockout  = errors.New("self lockout")
+	errLastAdmin    = errors.New("last enabled admin")
+	errUserMissing  = errors.New("user not found")
+	errPasswordHash = errors.New("password hash failed")
 )
+
+type invalidCredentialError struct{ cause error }
+
+func (e *invalidCredentialError) Error() string { return e.cause.Error() }
+func (e *invalidCredentialError) Unwrap() error { return e.cause }
 
 func parseUserID(value string) (uint, error) {
 	id, err := strconv.ParseUint(value, 10, strconv.IntSize)
@@ -172,9 +185,6 @@ func parseUserID(value string) (uint, error) {
 func validateUpdateUserRequest(req updateUserRequest) error {
 	if req.Password == nil && req.Role == nil && req.Enabled == nil {
 		return errors.New("at least one update field is required")
-	}
-	if req.Password != nil && len(*req.Password) < 4 {
-		return errors.New("password must be at least 4 characters")
 	}
 	if req.Role != nil && *req.Role != "admin" && *req.Role != "readonly" {
 		return errors.New("role must be admin or readonly")
@@ -207,7 +217,12 @@ func writeBadUserRequest(c *gin.Context, message string) {
 }
 
 func writeUserMutationError(c *gin.Context, err error) {
+	var credentialErr *invalidCredentialError
 	switch {
+	case errors.As(err, &credentialErr):
+		writeBadUserRequest(c, credentialErr.Error())
+	case errors.Is(err, errPasswordHash):
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "failed to hash password"})
 	case errors.Is(err, errSelfLockout):
 		c.JSON(http.StatusConflict, gin.H{"code": "SELF_LOCKOUT", "message": "current user cannot delete, disable, or demote itself"})
 	case errors.Is(err, errLastAdmin):
@@ -243,14 +258,6 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 
 	updates := map[string]any{}
-	if req.Password != nil {
-		hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "failed to hash password"})
-			return
-		}
-		updates["password_hash"] = string(hash)
-	}
 	if req.Role != nil {
 		updates["role"] = *req.Role
 	}
@@ -270,6 +277,27 @@ func (h *UserHandler) Update(c *gin.Context) {
 				return errUserMissing
 			}
 			return err
+		}
+		credentialChanged := false
+		if req.Password != nil {
+			if err := credential.CredentialPolicy.ValidatePassword(target.Username, *req.Password); err != nil {
+				return &invalidCredentialError{cause: err}
+			}
+			hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
+			if err != nil {
+				return fmt.Errorf("%w: %v", errPasswordHash, err)
+			}
+			updates["password_hash"] = string(hash)
+			credentialChanged = true
+		}
+		if req.Role != nil && *req.Role != target.Role {
+			credentialChanged = true
+		}
+		if req.Enabled != nil && *req.Enabled != target.Enabled {
+			credentialChanged = true
+		}
+		if credentialChanged {
+			updates["credential_version"] = gorm.Expr("credential_version + ?", 1)
 		}
 
 		selfDisable := req.Enabled != nil && !*req.Enabled

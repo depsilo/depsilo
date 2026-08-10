@@ -32,11 +32,7 @@ func (s *PrioritySelector) SelectExcluding(ctx context.Context, excluded *Upstre
 }
 
 func (s *PrioritySelector) selectHealthy(_ context.Context, excluded *Upstream) (*Upstream, error) {
-	ups := s.pool.Snapshot()
-
-	sort.Slice(ups, func(i, j int) bool {
-		return ups[i].Priority < ups[j].Priority
-	})
+	ups := orderedUpstreams(s.pool)
 
 	for _, u := range ups {
 		if u != excluded && u.IsHealthy() {
@@ -47,4 +43,12 @@ func (s *PrioritySelector) selectHealthy(_ context.Context, excluded *Upstream) 
 		return nil, fmt.Errorf("no healthy alternate upstream")
 	}
 	return nil, fmt.Errorf("all upstreams are unhealthy")
+}
+
+func orderedUpstreams(pool *Pool) []*Upstream {
+	upstreams := pool.Snapshot()
+	sort.SliceStable(upstreams, func(i, j int) bool {
+		return upstreams[i].Priority < upstreams[j].Priority
+	})
+	return upstreams
 }

@@ -168,15 +168,18 @@ type UpstreamRecord struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+const InitialCredentialVersion uint64 = 1
+
 type User struct {
-	ID           uint       `gorm:"primarykey" json:"id"`
-	Username     string     `gorm:"uniqueIndex;size:64" json:"username"`
-	PasswordHash string     `gorm:"size:256" json:"-"`
-	Role         string     `gorm:"size:16;default:'readonly'" json:"role"`
-	Enabled      bool       `gorm:"default:true" json:"enabled"`
-	LastLoginAt  *time.Time `json:"last_login_at"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID                uint       `gorm:"primarykey" json:"id"`
+	Username          string     `gorm:"uniqueIndex;size:64" json:"username"`
+	PasswordHash      string     `gorm:"size:256" json:"-"`
+	Role              string     `gorm:"size:16;default:'readonly'" json:"role"`
+	Enabled           bool       `gorm:"default:true" json:"enabled"`
+	LastLoginAt       *time.Time `json:"last_login_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+	CredentialVersion uint64     `gorm:"not null;default:1" json:"-"`
 }
 
 type APIToken struct {

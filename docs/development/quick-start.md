@@ -57,16 +57,25 @@ make run-pro       # foreground run with local development entitlements
 
 ## Frontend hot reload
 
-Keep the backend running, then start Vite separately:
+Use one command to build and start the backend, then keep Vite in the
+foreground:
 
 ```bash
-make dev
-npm --prefix web run dev
+make dev-ui
 ```
 
-Open `http://localhost:5173`. The Vite proxy covers the routes configured in
-`web/vite.config.ts`; test package protocols against the backend port unless
-that route is explicitly proxied.
+Open `http://localhost:5173`. Pressing Ctrl-C stops both Vite and the backend
+owned by that command. Port overrides stay paired, for example:
+
+```bash
+PORT=18080 UI_PORT=15173 make dev-ui
+```
+
+The Vite origin is a complete local test entry: it forwards the fixed package
+protocol catalog, Docker and project-scoped routes, compiler-cache routes, and
+the current runtime extra-index paths to the selected backend. This keeps
+configuration copied from the Portal valid when it contains the Vite origin.
+Use `make stop` if the terminal is terminated without allowing cleanup to run.
 
 ## First-run and local state
 

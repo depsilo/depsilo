@@ -1,11 +1,11 @@
 import { type ReactNode } from 'react'
-import Icon from './Icon'
+import Icon, { type IconName } from './Icon'
 
 // Friendly empty state used inline on the page (no Card wrapper).
 // Icon + title + optional hint; optional CTA underneath.
 
 interface EmptyStateProps {
-  icon?: string
+  icon?: IconName
   title: string
   hint?: string
   action?: ReactNode

@@ -4,7 +4,9 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,19 +18,22 @@ import (
 )
 
 var (
-	depsiloURL    string
-	mockServer    *mock.MockUpstream
-	testDir       string
-	depsiloCancel context.CancelFunc
+	depsiloURL string
+	mockServer *mock.MockUpstream
+	testDir    string
 )
 
 func TestMain(m *testing.M) {
+	os.Exit(runIntegrationTests(m))
+}
+
+func runIntegrationTests(m *testing.M) int {
 	// 1. Create temp dir
 	var err error
 	testDir, err = os.MkdirTemp("", "depsilo-test-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create temp dir: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer os.RemoveAll(testDir)
 
@@ -44,14 +49,21 @@ func TestMain(m *testing.M) {
 
 	// 4. Start Depsilo in background with cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
-	depsiloCancel = cancel
-	go startDepsilo(ctx, testDir)
+	depsiloDone, err := startDepsilo(ctx, testDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "start depsilo: %v\n", err)
+		cancel()
+		return 1
+	}
 
 	// 5. Wait for ready
 	if err := waitForReady(depsiloURL+"/health", 15*time.Second); err != nil {
 		fmt.Fprintf(os.Stderr, "depsilo not ready: %v\n", err)
 		cancel()
-		os.Exit(1)
+		if shutdownErr := waitForDepsiloShutdown(depsiloDone); shutdownErr != nil {
+			fmt.Fprintf(os.Stderr, "stop depsilo after readiness failure: %v\n", shutdownErr)
+		}
+		return 1
 	}
 
 	// 6. Run tests
@@ -59,9 +71,12 @@ func TestMain(m *testing.M) {
 
 	// 7. Shutdown Depsilo before mock server closes
 	cancel()
-	time.Sleep(500 * time.Millisecond)
+	if err := waitForDepsiloShutdown(depsiloDone); err != nil {
+		fmt.Fprintf(os.Stderr, "stop depsilo: %v\n", err)
+		code = 1
+	}
 
-	os.Exit(code)
+	return code
 }
 
 func writeTestConfig(dir, upstreamURL string, port int) {
@@ -189,16 +204,25 @@ url = "%s"
 	os.WriteFile(dir+"/config.toml", []byte(cfg), 0644)
 }
 
-func startDepsilo(ctx context.Context, dir string) {
+func startDepsilo(ctx context.Context, dir string) (<-chan error, error) {
 	// Resolve project root
 	root, _ := os.Getwd()
 	if _, err := os.Stat(root + "/go.mod"); err != nil {
 		root, _ = filepath.Abs(root + "/../..")
 	}
 
+	// Build once, then run the actual CLI binary. Using `go run` here leaves its
+	// compiled child alive when CommandContext only terminates the Go wrapper.
+	binary := filepath.Join(dir, "depsilo-integration")
+	build := exec.Command("go", "build", "-o", binary, "./cmd/depsilo")
+	build.Dir = root
+	if output, err := build.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("build integration binary: %w: %s", err, output)
+	}
+
 	// Exercise the same public CLI entry point documented for operators instead
 	// of the legacy server-only compatibility binary.
-	cmd := exec.CommandContext(ctx, "go", "run", "./cmd/depsilo", "serve")
+	cmd := exec.CommandContext(ctx, binary, "serve")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(),
 		"DEPSILO_CONFIG="+dir+"/config.toml",
@@ -206,11 +230,37 @@ func startDepsilo(ctx context.Context, dir string) {
 		"DEPSILO_ADMIN_USERNAME=admin",
 		"DEPSILO_ADMIN_PASSWORD="+integrationAdminPassword,
 	)
-	// Discard output to avoid "I/O incomplete" on test exit
-	devNull, _ := os.Open(os.DevNull)
-	cmd.Stdout = devNull
-	cmd.Stderr = devNull
-	// Use process group so we can kill all child processes
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Run()
+	// Discard output to avoid "I/O incomplete" on test exit. Give the server a
+	// short graceful-shutdown window before CommandContext force-kills it.
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	cmd.Cancel = func() error {
+		err := cmd.Process.Signal(syscall.SIGTERM)
+		if errors.Is(err, os.ErrProcessDone) {
+			return nil
+		}
+		return err
+	}
+	cmd.WaitDelay = 5 * time.Second
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start integration binary: %w", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+		close(done)
+	}()
+	return done, nil
+}
+
+func waitForDepsiloShutdown(done <-chan error) error {
+	select {
+	case <-done:
+		// Cancellation normally surfaces as context.Canceled or a signal exit.
+		// Either result is expected after TestMain initiates shutdown.
+		return nil
+	case <-time.After(10 * time.Second):
+		return fmt.Errorf("timed out waiting for integration server shutdown")
+	}
 }

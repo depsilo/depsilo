@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -118,8 +119,14 @@ func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
 const latencyBuckets = 90
 const latencyIntervalMin = 16
 
+// Keep aligned with the shared Portal rule in web/src/lib/upstreamStatus.ts
+// and DESIGN.md: an available upstream becomes degraded at 150 ms.
+const publicUpstreamDegradedLatency = 150 * time.Millisecond
+
 // allUpstreamLatencySeries runs a single query for ALL upstreams and returns
-// a map of name → 90-point series. This replaces N per-upstream queries.
+// a map of stable upstream identity → 90-point series. Persisted upstreams use
+// their database ID; pre-ID legacy rows remain available under legacy:<name>.
+// This replaces N per-upstream queries without merging same-named records.
 func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]gin.H, error) {
 	type bucketRow struct {
 		UpstreamID uint
@@ -149,7 +156,7 @@ func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]g
 	}
 
 	type bucketKey struct {
-		name   string
+		series string
 		bucket int64
 	}
 	type bucketAggregate struct {
@@ -158,10 +165,11 @@ func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]g
 		requests     int64
 	}
 	lookup := make(map[bucketKey]*bucketAggregate, len(rows))
-	nameSet := make(map[string]struct{})
+	seriesSet := make(map[string]struct{})
 	for i := range rows {
 		row := &rows[i]
-		key := bucketKey{name: row.Name, bucket: row.Bucket}
+		seriesKey := upstreamLatencySeriesKey(row.UpstreamID, row.Name)
+		key := bucketKey{series: seriesKey, bucket: row.Bucket}
 		aggregate := lookup[key]
 		if aggregate == nil {
 			aggregate = &bucketAggregate{}
@@ -170,18 +178,18 @@ func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]g
 		aggregate.latencyTotal += row.AvgLat * float64(row.Requests)
 		aggregate.healthyTotal += row.AvgHP * float64(row.Requests)
 		aggregate.requests += row.Requests
-		nameSet[row.Name] = struct{}{}
+		seriesSet[seriesKey] = struct{}{}
 	}
-	names := make([]string, 0, len(nameSet))
-	for name := range nameSet {
-		names = append(names, name)
+	seriesKeys := make([]string, 0, len(seriesSet))
+	for seriesKey := range seriesSet {
+		seriesKeys = append(seriesKeys, seriesKey)
 	}
-	sort.Strings(names)
+	sort.Strings(seriesKeys)
 
 	startBucket := (since.Unix() / int64(latencyIntervalMin*60)) * int64(latencyIntervalMin*60)
 
-	result := make(map[string][]gin.H, len(names))
-	for _, name := range names {
+	result := make(map[string][]gin.H, len(seriesKeys))
+	for _, seriesKey := range seriesKeys {
 		points := make([]gin.H, 0, latencyBuckets)
 		for i := 0; i < latencyBuckets; i++ {
 			ts := startBucket + int64(i*latencyIntervalMin*60)
@@ -192,16 +200,23 @@ func (h *StatsHandler) allUpstreamLatencySeries(since time.Time) (map[string][]g
 				"healthy":    true,
 				"requests":   int64(0),
 			}
-			if aggregate, ok := lookup[bucketKey{name: name, bucket: ts}]; ok && aggregate.requests > 0 {
+			if aggregate, ok := lookup[bucketKey{series: seriesKey, bucket: ts}]; ok && aggregate.requests > 0 {
 				p["latency_ms"] = int64(math.Round(aggregate.latencyTotal / float64(aggregate.requests)))
 				p["healthy"] = aggregate.healthyTotal/float64(aggregate.requests) > 0.5
 				p["requests"] = aggregate.requests
 			}
 			points = append(points, p)
 		}
-		result[name] = points
+		result[seriesKey] = points
 	}
 	return result, nil
+}
+
+func upstreamLatencySeriesKey(upstreamID uint, name string) string {
+	if upstreamID != 0 {
+		return strconv.FormatUint(uint64(upstreamID), 10)
+	}
+	return "legacy:" + name
 }
 
 // GetLatencySeries returns all upstream latency series in one response (public, no auth).
@@ -318,6 +333,8 @@ func (h *StatsHandler) snapshot(now time.Time) gin.H {
 
 	// Upstream status
 	upstreams := make([]gin.H, 0)
+	healthyUpstreams := 0
+	hasDegradedServiceCondition := false
 	for _, name := range h.ecosystems {
 		pool := h.pools[name]
 		if pool == nil {
@@ -325,6 +342,12 @@ func (h *StatsHandler) snapshot(now time.Time) gin.H {
 		}
 		for _, u := range pool.Snapshot() {
 			health := u.HealthSnapshot()
+			if health.Healthy {
+				healthyUpstreams++
+			}
+			if !health.Healthy || health.AvgLatency >= publicUpstreamDegradedLatency {
+				hasDegradedServiceCondition = true
+			}
 			upstreams = append(upstreams, gin.H{
 				"id":             u.ID,
 				"name":           u.Name,
@@ -334,6 +357,13 @@ func (h *StatsHandler) snapshot(now time.Time) gin.H {
 				"avg_latency_ms": health.AvgLatency.Milliseconds(),
 				"success_rate":   health.SuccessRate,
 			})
+		}
+	}
+	serviceStatus := "healthy"
+	if len(upstreams) > 0 && hasDegradedServiceCondition {
+		serviceStatus = "degraded"
+		if healthyUpstreams == 0 {
+			serviceStatus = "failed"
 		}
 	}
 
@@ -351,7 +381,7 @@ func (h *StatsHandler) snapshot(now time.Time) gin.H {
 		"service": gin.H{
 			"version":        version.Version,
 			"uptime_seconds": int64(now.Sub(h.startTime).Seconds()),
-			"status":         "healthy",
+			"status":         serviceStatus,
 		},
 		"today": gin.H{
 			"total_requests": totalRequests,

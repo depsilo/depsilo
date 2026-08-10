@@ -256,7 +256,7 @@ export default function UsersV2() {
       <ModalV2 open={userDialogOpen} onClose={closeUserDialog} title={editUserId ? t('users.editUser') : t('users.addUser')} closeDisabled={isUserSaving}>
         <form onSubmit={handleUserSubmit} className="space-y-4">
           <InputV2 label={t('login.username')} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
-          <InputV2 label={editUserId ? t('users.newPasswordHint') : t('login.password')} type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
+          <InputV2 label={editUserId ? t('users.newPasswordHint') : t('login.password')} hint={t('users.passwordPolicy')} type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
           <SelectV2 label={t('users.role')} value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">admin</option><option value="readonly">readonly</option></SelectV2>
           {userSaveError && <InlineNotice tone="danger">{getApiError(userSaveError).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={isUserSaving} onClick={closeUserDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</ButtonV2></div>

@@ -145,4 +145,32 @@ if grep -Fq 'DEPSILO_DEV_PRO=1' <<<"$dev_dry_run"; then
     exit 1
 fi
 
+dev_ui_dry_run=$(make -n -C "$ROOT" dev-ui \
+    BIN="$FAKE_BIN" CONFIG="$CONFIG_FILE" DEV_JWT_SECRET="$SECRET_FILE" \
+    PORT=24444 UI_PORT=15173)
+if ! grep -Fq 'scripts/dev-ui.sh' <<<"$dev_ui_dry_run"; then
+    echo "make dev-ui does not use the paired frontend/backend lifecycle manager" >&2
+    exit 1
+fi
+if ! grep -Fq 'scripts/dev-service.sh start' <<<"$dev_ui_dry_run"; then
+    echo "make dev-ui does not start its backend" >&2
+    exit 1
+fi
+if ! grep -Fq 'http://localhost:24444' <<<"$dev_ui_dry_run"; then
+    echo "make dev-ui does not pass the selected backend port to Vite" >&2
+    exit 1
+fi
+if ! grep -Fq '"web/node_modules/.bin/vite" "web" --config "web/vite.config.ts"' <<<"$dev_ui_dry_run"; then
+    echo "make dev-ui does not give Vite the web root and config" >&2
+    exit 1
+fi
+if ! grep -Fq -- '--port "15173" --strictPort' <<<"$dev_ui_dry_run"; then
+    echo "make dev-ui does not keep the requested Vite port strict" >&2
+    exit 1
+fi
+if grep -Fq 'npm --prefix web run build' <<<"$dev_ui_dry_run"; then
+    echo "make dev-ui still performs a production frontend build before hot reload" >&2
+    exit 1
+fi
+
 echo "make development runner tests passed"

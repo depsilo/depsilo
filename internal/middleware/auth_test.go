@@ -109,10 +109,10 @@ func assertGenericForbidden(t *testing.T, rec *httptest.ResponseRecorder, token 
 	}
 }
 
-func TestJWTUsesCurrentRoleAndRejectsDisabledUser(t *testing.T) {
+func TestJWTRejectsStaleRoleAndDisabledUser(t *testing.T) {
 	database := newAuthTestDB(t)
 	user := createAuthTestUser(t, database, "operator", "admin", true)
-	token, err := GenerateJWT(authTestSecret, user.ID, user.Username, user.Role, time.Hour)
+	token, err := GenerateJWT(authTestSecret, user, time.Hour)
 	if err != nil {
 		t.Fatalf("generate JWT: %v", err)
 	}
@@ -126,7 +126,17 @@ func TestJWTUsesCurrentRoleAndRejectsDisabledUser(t *testing.T) {
 	if err := database.Model(&user).Update("role", "readonly").Error; err != nil {
 		t.Fatalf("downgrade user: %v", err)
 	}
-	readRec := authRequest(r, http.MethodGet, "/read", token)
+	if rec := authRequest(r, http.MethodGet, "/read", token); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("stale-role JWT status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if err := database.First(&user, user.ID).Error; err != nil {
+		t.Fatalf("reload user: %v", err)
+	}
+	currentToken, err := GenerateJWT(authTestSecret, user, time.Hour)
+	if err != nil {
+		t.Fatalf("generate current JWT: %v", err)
+	}
+	readRec := authRequest(r, http.MethodGet, "/read", currentToken)
 	if readRec.Code != http.StatusOK {
 		t.Fatalf("read status = %d, body = %s", readRec.Code, readRec.Body.String())
 	}
@@ -137,13 +147,13 @@ func TestJWTUsesCurrentRoleAndRejectsDisabledUser(t *testing.T) {
 	if principal.Role != "readonly" || principal.CanWrite || principal.AuthMethod != AuthMethodJWT || principal.TokenPermissions != nil {
 		t.Fatalf("principal = %#v", principal)
 	}
-	if rec := authRequest(r, http.MethodPost, "/write", token); rec.Code != http.StatusForbidden {
-		t.Fatalf("stale admin JWT write status = %d, body = %s", rec.Code, rec.Body.String())
+	if rec := authRequest(r, http.MethodPost, "/write", currentToken); rec.Code != http.StatusForbidden {
+		t.Fatalf("readonly JWT write status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	if err := database.Model(&user).Update("enabled", false).Error; err != nil {
 		t.Fatalf("disable user: %v", err)
 	}
-	if rec := authRequest(r, http.MethodGet, "/read", token); rec.Code != http.StatusUnauthorized {
+	if rec := authRequest(r, http.MethodGet, "/read", currentToken); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("disabled JWT status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 }
@@ -195,7 +205,7 @@ func TestJWTOnlyRejectsAPIToken(t *testing.T) {
 func TestAuthenticationAcceptsTokensOnlyFromBearerHeader(t *testing.T) {
 	database := newAuthTestDB(t)
 	admin := createAuthTestUser(t, database, "admin", "admin", true)
-	jwtToken, err := GenerateJWT(authTestSecret, admin.ID, admin.Username, admin.Role, time.Hour)
+	jwtToken, err := GenerateJWT(authTestSecret, admin, time.Hour)
 	if err != nil {
 		t.Fatalf("generate JWT: %v", err)
 	}
@@ -230,7 +240,7 @@ func TestAuthenticationAcceptsTokensOnlyFromBearerHeader(t *testing.T) {
 func TestAuthenticateRejectsInvalidCredentialState(t *testing.T) {
 	database := newAuthTestDB(t)
 	user := createAuthTestUser(t, database, "operator", "admin", true)
-	jwtToken, err := GenerateJWT(authTestSecret, user.ID, user.Username, user.Role, time.Hour)
+	jwtToken, err := GenerateJWT(authTestSecret, user, time.Hour)
 	if err != nil {
 		t.Fatalf("generate JWT: %v", err)
 	}
@@ -259,11 +269,13 @@ func TestAuthenticateRejectsInvalidCredentialState(t *testing.T) {
 func TestAuthenticateSetsLegacyKeysFromCurrentUser(t *testing.T) {
 	database := newAuthTestDB(t)
 	user := createAuthTestUser(t, database, "original", "admin", true)
-	token, err := GenerateJWT(authTestSecret, user.ID, "stale-name", "readonly", time.Hour)
+	tokenUser := user
+	tokenUser.Username = "stale-name"
+	token, err := GenerateJWT(authTestSecret, tokenUser, time.Hour)
 	if err != nil {
 		t.Fatalf("generate JWT: %v", err)
 	}
-	if err := database.Model(&user).Updates(map[string]any{"username": "current-name", "role": "admin"}).Error; err != nil {
+	if err := database.Model(&user).Update("username", "current-name").Error; err != nil {
 		t.Fatalf("update user: %v", err)
 	}
 	r := gin.New()
@@ -302,7 +314,7 @@ func TestJWTRequiresValidExpiration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign JWT without expiry: %v", err)
 	}
-	expiredToken, err := GenerateJWT(authTestSecret, user.ID, user.Username, user.Role, -time.Minute)
+	expiredToken, err := GenerateJWT(authTestSecret, user, -time.Minute)
 	if err != nil {
 		t.Fatalf("generate expired JWT: %v", err)
 	}
@@ -312,6 +324,48 @@ func TestJWTRequiresValidExpiration(t *testing.T) {
 		if rec := authRequest(r, http.MethodGet, "/", token); rec.Code != http.StatusUnauthorized {
 			t.Fatalf("invalid-expiration JWT status = %d, body = %s", rec.Code, rec.Body.String())
 		}
+	}
+}
+
+func TestJWTRejectsCredentialVersionFromBeforeSchemaV2(t *testing.T) {
+	database := newAuthTestDB(t)
+	user := createAuthTestUser(t, database, "operator", "admin", true)
+	legacyClaims := Claims{
+		UserID: user.ID, Username: user.Username, Role: user.Role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}
+	legacyToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, legacyClaims).SignedString([]byte(authTestSecret))
+	if err != nil {
+		t.Fatalf("sign legacy JWT: %v", err)
+	}
+	r := gin.New()
+	r.GET("/", Authenticate(authTestSecret, database), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	if rec := authRequest(r, http.MethodGet, "/", legacyToken); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("legacy JWT status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGenerateJWTRequiresInitializedCredentialVersion(t *testing.T) {
+	_, err := GenerateJWT(authTestSecret, db.User{ID: 1, Username: "operator", Role: "admin"}, time.Hour)
+	if err == nil {
+		t.Fatal("GenerateJWT accepted a user without a credential version")
+	}
+}
+
+func TestAPITokenDoesNotDependOnJWTCredentialVersion(t *testing.T) {
+	database := newAuthTestDB(t)
+	user := createAuthTestUser(t, database, "operator", "admin", true)
+	const rawToken = "persistent-api-token"
+	createAuthTestAPIToken(t, database, user.ID, rawToken, "readwrite")
+	if err := database.Model(&user).Update("credential_version", gorm.Expr("credential_version + ?", 1)).Error; err != nil {
+		t.Fatalf("increment credential version: %v", err)
+	}
+	r := gin.New()
+	r.POST("/", Authenticate(authTestSecret, database), WriteRequired(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	if rec := authRequest(r, http.MethodPost, "/", rawToken); rec.Code != http.StatusNoContent {
+		t.Fatalf("API token status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -353,7 +407,7 @@ func TestAuthenticateRejectsInvalidUsersAndJWTSignatures(t *testing.T) {
 		{
 			name: "JWT unsupported current role",
 			setup: func(t *testing.T, database *gorm.DB, user db.User) string {
-				token, err := GenerateJWT(authTestSecret, user.ID, user.Username, "admin", time.Hour)
+				token, err := GenerateJWT(authTestSecret, user, time.Hour)
 				if err != nil {
 					t.Fatalf("generate JWT: %v", err)
 				}
@@ -377,7 +431,7 @@ func TestAuthenticateRejectsInvalidUsersAndJWTSignatures(t *testing.T) {
 		{
 			name: "JWT wrong signature",
 			setup: func(t *testing.T, _ *gorm.DB, user db.User) string {
-				token, err := GenerateJWT("abcdef0123456789abcdef0123456789", user.ID, user.Username, user.Role, time.Hour)
+				token, err := GenerateJWT("abcdef0123456789abcdef0123456789", user, time.Hour)
 				if err != nil {
 					t.Fatalf("generate wrong-signature JWT: %v", err)
 				}
@@ -487,7 +541,7 @@ func TestAuthenticateDatabaseFailuresAreGeneric(t *testing.T) {
 		{
 			name: "JWT user lookup failure",
 			setup: func(t *testing.T, database *gorm.DB, user db.User) string {
-				token, err := GenerateJWT(authTestSecret, user.ID, user.Username, user.Role, time.Hour)
+				token, err := GenerateJWT(authTestSecret, user, time.Hour)
 				if err != nil {
 					t.Fatalf("generate JWT: %v", err)
 				}

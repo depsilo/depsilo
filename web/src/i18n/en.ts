@@ -886,6 +886,7 @@ const en = {
       createdAt: 'Created',
       noUsers: 'No users',
       newPasswordHint: 'New password (leave empty to keep current)',
+      passwordPolicy: 'Use 12+ characters with three character types, or a 20+ character passphrase. Do not include the username; 72 bytes maximum.',
       generateToken: 'Generate Token',
       noTokens: 'No tokens',
       permissions: 'Permissions',
@@ -938,7 +939,13 @@ const en = {
       loadError: 'Unable to load settings.',
       saveError: 'Unable to save settings',
       noChanges: 'No changes',
-      durationHint: 'Use a valid Go duration such as 10m, 24h, or 7d.',
+      durationHint: 'Use a valid Go duration such as 10m, 24h, or 168h.',
+      validation: {
+        positiveInteger: 'Enter a whole number greater than zero.',
+        thresholdRange: 'Enter a whole number from 1 to 100.',
+        duration: 'Enter a valid Go duration such as 10m, 24h, or 168h.',
+        tokenNever: '“never” is not supported. Enter a duration such as 168h.',
+      },
       fields: {
         'server.host': 'Listen Address',
         'server.port': 'Listen Port',
@@ -993,7 +1000,9 @@ const en = {
     portal: {
       navigation: 'Portal navigation',
       quickStart: 'Quick Start',
+      quickStartShort: 'Start',
       monitor: 'Monitor',
+      monitorShort: 'Monitor',
       adminPanel: 'Admin',
       adminShort: 'Admin',
       backLink: 'Back to Portal',

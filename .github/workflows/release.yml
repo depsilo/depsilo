@@ -13,7 +13,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-tag:
+    name: Release tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Validate SemVer tag
+        shell: bash
+        run: bash scripts/validate-release-tag.sh "$GITHUB_REF_NAME"
+
   verify:
+    needs: release-tag
     uses: ./.github/workflows/verify.yml
 
   # Job 1: Cross-platform CLI binaries via GoReleaser (6 platforms), plus

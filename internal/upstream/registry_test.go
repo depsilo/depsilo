@@ -321,6 +321,86 @@ func TestProbeUsesUpstreamProxy(t *testing.T) {
 	}
 }
 
+func TestRunUpstreamHealthCheckProbesImmediately(t *testing.T) {
+	probed := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+		probed <- struct{}{}
+	}))
+	defer server.Close()
+
+	pool, err := NewPoolFromRecords([]db.UpstreamRecord{{
+		ID: 1, AdapterType: "pypi", Name: "recovering", URL: server.URL,
+		Priority: 1, ProbeMode: "active", ProbeInterval: "1h", Healthy: false,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	u := pool.Snapshot()[0]
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		runUpstreamHealthCheck(ctx, u, nil, time.Hour)
+		close(done)
+	}()
+
+	select {
+	case <-probed:
+	case <-time.After(300 * time.Millisecond):
+		cancel()
+		t.Fatal("active health worker did not probe on startup")
+	}
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for !u.IsHealthy() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !u.IsHealthy() {
+		cancel()
+		t.Fatal("startup probe did not restore active upstream health")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("active health worker did not stop after cancellation")
+	}
+}
+
+func TestProbeCanonicalizesDirectoryBaseURLBeforeHead(t *testing.T) {
+	var nonCanonicalHits atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/index/":
+			if request.Method != http.MethodHead {
+				t.Errorf("request method=%s want=HEAD", request.Method)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case "/index":
+			nonCanonicalHits.Add(1)
+			http.Redirect(w, request, "http://127.0.0.1:1/index/", http.StatusMovedPermanently)
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	pool, err := NewPoolFromRecords([]db.UpstreamRecord{{
+		ID: 1, AdapterType: "cargo", Name: "directory", URL: server.URL + "/index",
+		Priority: 1, ProbeMode: "active", ProbeInterval: "1s", Healthy: true,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := probe(context.Background(), pool.Snapshot()[0])
+	if result.Err != nil || !result.Healthy {
+		t.Fatalf("result=%#v", result)
+	}
+	if nonCanonicalHits.Load() != 0 {
+		t.Fatalf("probe requested non-canonical directory URL %d time(s)", nonCanonicalHits.Load())
+	}
+}
+
 func TestPersistProbeRejectsMissingNonzeroUpstreamWithoutLog(t *testing.T) {
 	database := bootstrapDB(t)
 	pool, err := NewPoolFromRecords([]db.UpstreamRecord{{

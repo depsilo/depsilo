@@ -19,6 +19,7 @@ import {
   CircleCheck,
   CircleHelp,
   CircleX,
+  CloudOff,
   CloudSync,
   Copy,
   Cpu,
@@ -44,7 +45,9 @@ import {
   Menu,
   Monitor,
   Moon,
+  Network,
   Package,
+  Package2,
   Pencil,
   Plus,
   Radar,
@@ -58,6 +61,7 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  ShieldQuestion,
   ShieldUser,
   ShieldX,
   SlidersHorizontal,
@@ -80,7 +84,7 @@ import {
  * tree-shakeable inline SVGs. Unknown names intentionally get a visible,
  * fixed-size fallback instead of leaking the icon name as text.
  */
-const ICONS: Readonly<Record<string, LucideIcon>> = {
+const ICONS = {
   add: Plus,
   admin_panel_settings: ShieldUser,
   arrow_back: ArrowLeft,
@@ -95,6 +99,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   chevron_left: ChevronLeft,
   chevron_right: ChevronRight,
   close: X,
+  cloud_off: CloudOff,
   cloud_sync: CloudSync,
   computer: Monitor,
   content_copy: Copy,
@@ -111,9 +116,12 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   expand_more: ChevronDown,
   folder_managed: FolderCog,
   gpp_bad: ShieldX,
+  gpp_maybe: ShieldQuestion,
   grid_view: LayoutGrid,
   group: Users,
   history: History,
+  help: CircleHelp,
+  hub: Network,
   inbox: Inbox,
   info: Info,
   inventory_2: Package,
@@ -125,8 +133,10 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   logout: LogOut,
   menu: Menu,
   memory: Cpu,
+  monitoring: ChartNoAxesCombined,
   notifications: Bell,
   notifications_off: BellOff,
+  package_2: Package2,
   person: User,
   person_add: UserPlus,
   person_off: UserRoundX,
@@ -148,6 +158,7 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   star: Star,
   storage: HardDrive,
   sync: RefreshCw,
+  task_alt: CircleCheck,
   tune: SlidersHorizontal,
   undo: Undo2,
   update: History,
@@ -157,17 +168,23 @@ const ICONS: Readonly<Record<string, LucideIcon>> = {
   visibility: Eye,
   warning: TriangleAlert,
   workspace_premium: Award,
-}
+} as const satisfies Readonly<Record<string, LucideIcon>>
+
+export type IconName = keyof typeof ICONS
 
 interface IconProps {
-  name: string
+  name: IconName
   className?: string
   size?: 'sm' | 'md' | 'lg'
   style?: CSSProperties
 }
 
 export default function Icon({ name, className = '', size = 'md', style }: IconProps) {
-  const Glyph = ICONS[name] ?? CircleHelp
+  // Keep a visible fallback for untyped JavaScript and stale persisted values.
+  // TypeScript call sites are constrained to IconName, so this branch should
+  // only be reached at an external/runtime boundary.
+  const Glyph: LucideIcon = ICONS[name] ?? CircleHelp
+  const usesFallback = !ICONS[name]
   const sizeClass = size === 'sm' ? 'icon-sm' : size === 'lg' ? 'icon-lg' : ''
 
   return (
@@ -175,6 +192,7 @@ export default function Icon({ name, className = '', size = 'md', style }: IconP
       aria-hidden="true"
       focusable="false"
       data-icon={name}
+      data-icon-fallback={usesFallback || undefined}
       className={`icon ${sizeClass} ${className}`}
       style={style}
     />

@@ -55,6 +55,16 @@ test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
   await expect(tooltip).toHaveCSS('color', 'rgb(255, 255, 255)')
 })
 
+test('user credential dialog explains the enforced password policy', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'zh')
+  await page.goto('/admin/users')
+  await page.getByRole('button', { name: /添加用户/ }).click()
+
+  const dialog = page.getByRole('dialog', { name: /添加用户/ })
+  const password = dialog.getByLabel(/^密码$/)
+  await expect(password).toHaveAccessibleDescription(/至少 12 个字符.*三类字符.*至少 20 个字符.*72 字节/)
+})
+
 test('a pending mutation locks every dialog close path until completion', async ({ page }) => {
   let release!: (value: unknown) => void
   const response = new Promise(resolve => { release = resolve })

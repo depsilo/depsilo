@@ -886,6 +886,7 @@ const zh = {
       createdAt: '创建时间',
       noUsers: '暂无用户',
       newPasswordHint: '新密码（留空不修改）',
+      passwordPolicy: '使用至少 12 个字符并包含三类字符，或使用至少 20 个字符的口令短语；不得包含用户名，最多 72 字节。',
       generateToken: '生成 Token',
       noTokens: '暂无 Token',
       permissions: '权限',
@@ -938,7 +939,13 @@ const zh = {
       loadError: '无法加载设置。',
       saveError: '无法保存设置',
       noChanges: '没有变更',
-      durationHint: '请输入有效的 Go duration，例如 10m、24h 或 7d。',
+      durationHint: '请输入有效的 Go duration，例如 10m、24h 或 168h。',
+      validation: {
+        positiveInteger: '请输入大于 0 的整数。',
+        thresholdRange: '请输入 1 到 100 之间的整数。',
+        duration: '请输入有效的 Go duration，例如 10m、24h 或 168h。',
+        tokenNever: '不支持“never”，请输入如 168h 的有效时长。',
+      },
       fields: {
         'server.host': '监听地址',
         'server.port': '监听端口',
@@ -993,7 +1000,9 @@ const zh = {
     portal: {
       navigation: '门户导航',
       quickStart: '快速开始',
+      quickStartShort: '开始',
       monitor: '监控',
+      monitorShort: '监控',
       adminPanel: '管理后台',
       adminShort: '管理',
       backLink: '返回门户',

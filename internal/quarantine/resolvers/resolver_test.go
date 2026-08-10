@@ -393,8 +393,8 @@ func TestMavenArtifactURL(t *testing.T) {
 		pkg, ver, want string
 		isErr          bool
 	}{
-		{"org.apache.commons:commons-lang3", "3.14.0", "https://repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar", false},
-		{"junit:junit", "4.13.2", "https://repo1.maven.org/maven2/junit/junit/4.13.2/junit-4.13.2.jar", false},
+		{"org.apache.commons:commons-lang3", "3.14.0", "https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar", false},
+		{"junit:junit", "4.13.2", "https://repo.maven.apache.org/maven2/junit/junit/4.13.2/junit-4.13.2.jar", false},
 		{"nogroup", "1.0", "", true},
 		{"group:", "1.0", "", true},
 	}

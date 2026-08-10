@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	composerAdapter "depsilo/internal/adapter/composer"
 	"depsilo/internal/adapter/npm"
 	nugetAdapter "depsilo/internal/adapter/nuget"
 	"depsilo/internal/adapter/pypi"
@@ -137,23 +136,6 @@ func TestURLRewrite_Npm_InvalidJSON(t *testing.T) {
 	_, err := npm.RewriteTarballURLs([]byte("not json"), "http://localhost:8080")
 	if err == nil {
 		t.Error("expected error for invalid JSON")
-	}
-}
-
-// ---------- Composer URL Rewrite ----------
-
-func TestURLRewrite_Composer_PreservesPackages(t *testing.T) {
-	input := `{"packages":{"test/pkg":[]},"metadata-url":"/p2/%package%.json"}`
-	result, err := composerAdapter.RewritePackagesJSON([]byte(input), "http://localhost:8080")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]interface{}
-	if err := json.Unmarshal(result, &doc); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := doc["packages"]; !ok {
-		t.Error("packages field not preserved")
 	}
 }
 
