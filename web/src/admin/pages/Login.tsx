@@ -42,6 +42,14 @@ export default function Login() {
     loginRequestRef.current = null
   }, [])
 
+  const cancelLoginForPortalNavigation = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    // Modified clicks keep the Login page open while opening a second tab, so
+    // only cancel when this browsing context is actually leaving the route.
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    loginRequestRef.current?.abort()
+    loginRequestRef.current = null
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (loading) return
@@ -49,12 +57,17 @@ export default function Login() {
     setLoading(true)
     const controller = new AbortController()
     loginRequestRef.current = controller
+    const submittedFrom = `${window.location.pathname}${window.location.search}${window.location.hash}`
     try {
       const response = await authApi.login(
         { username: username.trim(), password },
         { signal: controller.signal },
       )
-      if (controller.signal.aborted) return
+      const currentLocation = `${window.location.pathname}${window.location.search}${window.location.hash}`
+      // React Router updates history before a concurrent route transition has
+      // necessarily unmounted Login. Ignore a response that wins that narrow
+      // cleanup race instead of storing its token and pulling the user back.
+      if (controller.signal.aborted || currentLocation !== submittedFrom) return
       if (!writeLocalStorage('token', response.data.token)) {
         setError(t('login.storageUnavailable'))
         return
@@ -84,6 +97,7 @@ export default function Login() {
           <Link
             to="/"
             aria-label="Depsilo"
+            onClick={cancelLoginForPortalNavigation}
             className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-[6px] text-[var(--text)] no-underline transition-opacity duration-150 hover:opacity-75"
           >
             <Logo size={28} />
@@ -91,6 +105,7 @@ export default function Login() {
           </Link>
           <Link
             to="/"
+            onClick={cancelLoginForPortalNavigation}
             className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-2 text-[12px] font-[550] text-[var(--text-muted)] no-underline transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
           >
             <Icon name="arrow_back" size="sm" />

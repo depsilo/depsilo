@@ -10,7 +10,9 @@ export default defineConfig({
   testDir: './e2e',
   testIgnore: '**/production-binary.spec.ts',
   fullyParallel: false,
-  workers: process.env.CI ? 1 : undefined,
+  // Keep cases within a spec serial, but distribute independent spec files
+  // across the four cores available on GitHub's public Linux runners.
+  workers: process.env.CI ? 4 : undefined,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['html', { open: 'never' }], ['line']] : 'line',

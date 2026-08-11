@@ -12,6 +12,11 @@ test('Portal mounts and language switching works when Web Storage is blocked', a
       removeItem: { configurable: true, value: blocked },
     })
   })
+  await page.route('**/api/v1/setup/status', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ needs_setup: false, token_required: false }),
+  }))
   await page.route('**/api/v1/stats', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
