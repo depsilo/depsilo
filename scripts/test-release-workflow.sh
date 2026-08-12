@@ -44,4 +44,23 @@ for index in "${!installers[@]}"; do
     fi
 done
 
+step_line() {
+    local name=$1
+    local line
+    line=$(grep -n -m1 -- "- name: $name" "$WORKFLOW" | cut -d: -f1) || true
+    if [ -z "$line" ]; then
+        echo "release workflow is missing step: $name" >&2
+        exit 1
+    fi
+    printf '%s\n' "$line"
+}
+
+goreleaser_line=$(step_line "Run GoReleaser")
+stage_source_line=$(step_line "Stage source SBOMs")
+download_tray_line=$(step_line "Download tray bundles")
+if [ "$stage_source_line" -lt "$goreleaser_line" ] || [ "$download_tray_line" -lt "$goreleaser_line" ]; then
+    echo "release assets must be staged after GoReleaser validates the clean worktree" >&2
+    exit 1
+fi
+
 echo "release workflow tests passed"
