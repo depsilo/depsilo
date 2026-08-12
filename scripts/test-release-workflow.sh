@@ -24,8 +24,17 @@ if ! sed -n '/^  container_candidate:/,/^  publish:/p' "$WORKFLOW" |
 fi
 smoke_step=$(sed -n '/- name: Smoke-test image and readiness endpoint/,/- name: Install cosign/p' "$WORKFLOW")
 if ! grep -q 'for platform in linux/amd64 linux/arm64; do' <<<"$smoke_step" ||
-    ! grep -q 'docker run --rm --platform "$platform"' <<<"$smoke_step"; then
-    echo "release smoke must execute the amd64 and arm64 images" >&2
+    ! grep -q 'docker buildx imagetools inspect' <<<"$smoke_step" ||
+    ! grep -q '\.manifests\[\]' <<<"$smoke_step" ||
+    ! grep -q '\.platform\.os' <<<"$smoke_step" ||
+    ! grep -q '\.platform\.architecture' <<<"$smoke_step" ||
+    ! grep -q 'docker run --rm --platform "$platform"' <<<"$smoke_step" ||
+    ! grep -q '@${platform_digest}" version' <<<"$smoke_step"; then
+    echo "release smoke must execute each platform child manifest" >&2
+    exit 1
+fi
+if grep -q '@${IMAGE_DIGEST}" version' <<<"$smoke_step"; then
+    echo "release smoke cannot reuse the multi-platform index digest" >&2
     exit 1
 fi
 

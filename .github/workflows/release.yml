@@ -350,9 +350,18 @@ jobs:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
+          image="ghcr.io/depsilo/depsilo"
+          index="$(docker buildx imagetools inspect "${image}@${IMAGE_DIGEST}" --raw)"
           for platform in linux/amd64 linux/arm64; do
+            os="${platform%/*}"
+            arch="${platform#*/}"
+            platform_digest="$(jq -er --arg os "$os" --arg arch "$arch" \
+              '[.manifests[] | select(.platform.os == $os and .platform.architecture == $arch)]
+               | if length == 1 then .[0].digest else error("expected one platform manifest") end' \
+              <<<"$index")"
+            [[ "$platform_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
             docker run --rm --platform "$platform" \
-              "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}" version
+              "${image}@${platform_digest}" version
           done
           container_id=""
           cleanup() {
