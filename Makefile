@@ -366,6 +366,7 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	bash scripts/test-dev-ui.sh
 	node scripts/test-vite-proxy-routes.mjs
 	bash scripts/test-release-tag.sh
+	bash scripts/test-release-workflow.sh
 
 verify-installer: verify-scripts # 兼容别名
 
