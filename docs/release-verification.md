@@ -120,7 +120,7 @@ is retained as an inline comment in each workflow.
 | `docker/login-action` | `v3.7.0` | `c94ce9fb468520275223c153574b00df6fe4bcc9` |
 | `docker/metadata-action` | `v5.10.0` | `c299e40c65443455700f0fdfc63efafe5b349051` |
 | `docker/build-push-action` | `v5.4.0` | `ca052bb54ab0790a636c9b5f226502c73d547a25` |
-| `sigstore/cosign-installer` | `v3.9.1` | `398d4b0eeef1380460a10c8013a76f728fb906ac` |
+| `sigstore/cosign-installer` | `v4.1.2` | `6f9f17788090df1f26f669e9d70d6ae9567deba6` |
 
 The SHAs above were resolved only from each action's official GitHub repository:
 
