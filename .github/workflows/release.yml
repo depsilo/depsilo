@@ -258,6 +258,7 @@ jobs:
   # release-asset upload have all succeeded.
   container_candidate:
     needs: release
+    timeout-minutes: 45
     permissions:
       contents: write
       id-token: write
@@ -349,6 +350,10 @@ jobs:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
+          for platform in linux/amd64 linux/arm64; do
+            docker run --rm --platform "$platform" \
+              "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}" version
+          done
           container_id=""
           cleanup() {
             if [ -n "$container_id" ]; then

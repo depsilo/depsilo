@@ -3,6 +3,31 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 WORKFLOW="$ROOT/.github/workflows/release.yml"
+DOCKERFILE="$ROOT/Dockerfile"
+
+if [ "$(grep -c '^FROM --platform=\$BUILDPLATFORM .* AS \(frontend\|backend\)$' "$DOCKERFILE")" -ne 2 ] ||
+    ! grep -qx 'ARG TARGETOS' "$DOCKERFILE" ||
+    ! grep -qx 'ARG TARGETARCH' "$DOCKERFILE" ||
+    ! grep -q 'CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build' "$DOCKERFILE"; then
+    echo "Dockerfile builders must cross-compile on BUILDPLATFORM" >&2
+    exit 1
+fi
+if grep -q '^FROM --platform=\$BUILDPLATFORM alpine:' "$DOCKERFILE"; then
+    echo "Dockerfile runtime stage must remain on TARGETPLATFORM" >&2
+    exit 1
+fi
+
+if ! sed -n '/^  container_candidate:/,/^  publish:/p' "$WORKFLOW" |
+    grep -qx '    timeout-minutes: 45'; then
+    echo "container candidate job must have a bounded timeout" >&2
+    exit 1
+fi
+smoke_step=$(sed -n '/- name: Smoke-test image and readiness endpoint/,/- name: Install cosign/p' "$WORKFLOW")
+if ! grep -q 'for platform in linux/amd64 linux/arm64; do' <<<"$smoke_step" ||
+    ! grep -q 'docker run --rm --platform "$platform"' <<<"$smoke_step"; then
+    echo "release smoke must execute the amd64 and arm64 images" >&2
+    exit 1
+fi
 
 installers=()
 while IFS= read -r installer; do
