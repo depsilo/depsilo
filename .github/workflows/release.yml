@@ -436,7 +436,9 @@ jobs:
             cosign attest --yes --type cyclonedx --predicate "$cyclonedx" \
               "${image}@${IMAGE_DIGEST}"
           done
-          for sbom in depsilo-${RELEASE_TAG}-image.*.json; do
+          for sbom in \
+            "depsilo-${RELEASE_TAG}-image.cdx.json" \
+            "depsilo-${RELEASE_TAG}-image.spdx.json"; do
             cosign sign-blob --yes --bundle "${sbom}.sigstore.json" "$sbom"
           done
 
@@ -460,7 +462,9 @@ jobs:
               --certificate-oidc-issuer "$OIDC_ISSUER" \
               "${image}@${IMAGE_DIGEST}" >/dev/null
           done
-          for sbom in depsilo-${RELEASE_TAG}-image.*.json; do
+          for sbom in \
+            "depsilo-${RELEASE_TAG}-image.cdx.json" \
+            "depsilo-${RELEASE_TAG}-image.spdx.json"; do
             cosign verify-blob \
               --bundle "${sbom}.sigstore.json" \
               --certificate-identity "$CERT_IDENTITY" \

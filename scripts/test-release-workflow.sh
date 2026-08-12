@@ -38,6 +38,20 @@ if grep -q '@${IMAGE_DIGEST}" version' <<<"$smoke_step"; then
     exit 1
 fi
 
+if grep -q 'for sbom in depsilo-${RELEASE_TAG}-image\.\*\.json' "$WORKFLOW"; then
+    echo "release SBOM loops must not match generated signature bundles" >&2
+    exit 1
+fi
+sign_sbom_step=$(sed -n '/- name: Attest image SBOM and sign SBOM files/,/- name: Verify candidate trust gate/p' "$WORKFLOW")
+verify_sbom_step=$(sed -n '/- name: Verify candidate trust gate/,/- name: Upload image SBOMs to release/p' "$WORKFLOW")
+for format in cdx spdx; do
+    sbom="depsilo-\${RELEASE_TAG}-image.${format}.json"
+    if ! grep -q "$sbom" <<<"$sign_sbom_step" || ! grep -q "$sbom" <<<"$verify_sbom_step"; then
+        echo "release must sign and verify the explicit $format SBOM" >&2
+        exit 1
+    fi
+done
+
 installers=()
 while IFS= read -r installer; do
     installers[${#installers[@]}]=$installer
