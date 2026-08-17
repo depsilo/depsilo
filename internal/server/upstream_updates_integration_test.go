@@ -48,6 +48,9 @@ func TestStartServerRecordsProactiveMetadataRefresh(t *testing.T) {
 	defer upstreamServer.Close()
 
 	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	databasePath := filepath.Join(dir, "server.db")
 	storagePath := filepath.Join(dir, "cache")
 	configPath := filepath.Join(dir, "config.toml")

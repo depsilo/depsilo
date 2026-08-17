@@ -182,6 +182,9 @@ func TestHoldDatabaseUsesStableIdentityAcrossSymlinkAliases(t *testing.T) {
 		t.Skip("symlink creation normally requires an elevated Windows token")
 	}
 	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	realPath := filepath.Join(root, "real.db")
 	if err := os.WriteFile(realPath, nil, 0o600); err != nil {
 		t.Fatal(err)

@@ -20,6 +20,9 @@ import (
 
 func TestCreateCapturesCommittedWALDataAndRecordsChecksums(t *testing.T) {
 	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	configPath := filepath.Join(root, "config.toml")
 	databasePath := filepath.Join(root, "depsilo.db")
 	archivePath := filepath.Join(root, "backup.tar.gz")
@@ -260,6 +263,9 @@ func TestRestorePublishesValidatedStateWithPrivatePermissions(t *testing.T) {
 
 func TestRestoreRefusesDatabaseHeldByRunningServer(t *testing.T) {
 	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	sourceConfig := filepath.Join(root, "source.toml")
 	sourceDatabase := filepath.Join(root, "source.db")
 	archivePath := filepath.Join(root, "backup.tar.gz")

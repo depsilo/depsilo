@@ -26,7 +26,11 @@ func TestHoldDatabaseRejectsWritableSharedParent(t *testing.T) {
 }
 
 func TestDatabaseLeaseDetectsLockInodeReplacement(t *testing.T) {
-	databasePath := filepath.Join(t.TempDir(), "depsilo.db")
+	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	databasePath := filepath.Join(root, "depsilo.db")
 	closer, err := HoldDatabase(databasePath)
 	if err != nil {
 		t.Fatal(err)

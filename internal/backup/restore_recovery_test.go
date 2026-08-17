@@ -24,6 +24,9 @@ func TestInterruptedRestoreConvergesOnNextDatabaseHold(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.checkpoint, func(t *testing.T) {
 			root := t.TempDir()
+			if err := os.Chmod(root, 0o700); err != nil {
+				t.Fatal(err)
+			}
 			sourceConfig := filepath.Join(root, "new-config.toml")
 			sourceDatabase := filepath.Join(root, "new.db")
 			targetConfig := filepath.Join(root, "config.toml")
@@ -97,6 +100,9 @@ func TestInterruptedRestoreConvergesOnNextDatabaseHold(t *testing.T) {
 
 func TestDatabasePublishFailureLeavesRecoverableNewPair(t *testing.T) {
 	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	sourceConfig := filepath.Join(root, "new-config.toml")
 	sourceDatabase := filepath.Join(root, "new.db")
 	targetConfig := filepath.Join(root, "config.toml")
