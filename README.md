@@ -157,9 +157,8 @@ with `PORT=18080 make dev`.
 
 The reason Depsilo exists. Three primitives, all open source.
 
-Release status: `v0.8.0` includes minimum release age. The malicious
-blocklist and tamper detection are implemented on `master` and will ship in
-the next release.
+Release status: `v0.9.0` includes the known-malicious blocklist and tamper
+detection; `v0.8.0` shipped minimum release age.
 
 ### Minimum release age (quarantine)
 
@@ -437,10 +436,12 @@ See [Admin Control Plane](docs/admin-control-plane.md) for Settings persistence,
 
 ## Roadmap
 
-Released through v0.8.0:
+Released through v0.9.0:
 - [x] 14 package-ecosystem proxies + Docker OCI
 - [x] Web portal + admin dashboard
 - [x] Minimum release age quarantine (Shai-Hulud mitigation)
+- [x] Known-malicious blocklist (OSV MAL advisories + 24h audited override)
+- [x] Tamper detection (first-seen SHA-256 + critical alert)
 - [x] Quarantine audit log + admin approve / revoke
 - [x] Webhook fire on quarantine blocks
 - [x] Prometheus metrics
@@ -450,10 +451,6 @@ Released through v0.8.0:
 - [x] Native MCP server for AI agents
 - [x] OSV vulnerability scanning + Settings → Security dashboard
 - [x] CycloneDX + SPDX source and container-image SBOM release artifacts
-
-Landed on `master` (unreleased):
-- [x] Known-malicious blocklist (OSV MAL advisories + 24h audited override)
-- [x] Tamper detection (first-seen SHA-256 + critical alert)
 - [x] Cosign keyless signatures, image SBOM attestations, and release smoke tests
 
 Next up:

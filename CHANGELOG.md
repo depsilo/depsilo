@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-12
+
 ### Added
 - **Compiler cache service**: adds namespace-scoped remote caching for official
   ccache HTTP and sccache WebDAV clients, with read-only/read-write build

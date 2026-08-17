@@ -1,8 +1,7 @@
 # Depsilo 自测前置清单
 
-> 部署前后可重复执行的最小验证路径。示例使用 `v0.8.0`、端口
-> `23333` 和单节点 SQLite。`master` 上尚未发布的 blocklist / tamper
-> detection 不包含在 `v0.8.0` 镜像中。
+> 部署前后可重复执行的最小验证路径。示例使用 `v0.9.0`、端口
+> `23333` 和单节点 SQLite。`v0.9.0` 已包含 blocklist / tamper detection。
 
 ## 0. 部署前
 
@@ -28,7 +27,7 @@ docker run -d --name depsilo \
   -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
   -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
   --restart unless-stopped \
-  depsilo/depsilo:0.8.0
+  depsilo/depsilo:0.9.0
 ```
 
 - [ ] `curl -sf http://localhost:23333/health | jq .` 返回 healthy
@@ -171,7 +170,7 @@ docker run --rm \
   -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
   -v "$PWD/depsilo-state:/root/.depsilo" \
   -v "$PWD/backups:/backup" \
-  depsilo/depsilo:0.8.0 \
+  depsilo/depsilo:0.9.0 \
   backup --out /backup/depsilo-backup.tar.gz
 tar -tzf backups/depsilo-backup.tar.gz
 ```
@@ -193,7 +192,7 @@ docker run --rm \
   -e DEPSILO_CONFIG=/state/config.toml \
   -e DEPSILO_DATABASE_DSN=/state/data/depsilo.db \
   -v "$PWD/restore-drill:/state" \
-  depsilo/depsilo:0.8.0 \
+  depsilo/depsilo:0.9.0 \
   restore /state/depsilo-backup.tar.gz
 
 test -s restore-drill/config.toml

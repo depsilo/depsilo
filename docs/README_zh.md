@@ -37,8 +37,7 @@
 - 🪶 **约 50 MB 内存**，单二进制文件，默认 SQLite
 - 🐳 **一行命令 Docker 部署**
 
-版本说明：`v0.8.0` 已发布最小发布年龄隔离；恶意包阻断与篡改检测已合入
-`master`，将在下一版本正式发布。
+版本说明：`v0.9.0` 已发布恶意包阻断与篡改检测；`v0.8.0` 已发布最小发布年龄隔离。
 
 ## 🚀 快速开始
 
@@ -321,18 +320,16 @@ depsilo_cache_files_total
 
 ## 🗺 路线图
 
-已随 `v0.8.0` 发布：
+已随 `v0.9.0` 发布：
 - [x] 14 个常规生态代理 + Docker OCI
 - [x] Web 管理界面（门户 + 管理后台）
 - [x] Prometheus 监控指标
 - [x] Docker 部署
 - [x] 审计日志与包级 Allow/Deny 规则
 - [x] 最小发布年龄隔离与审批流
-- [x] CycloneDX + SPDX 源码和容器镜像 SBOM 发布附件
-
-已合入 `master`，尚未发布：
 - [x] OSV 已知恶意包阻断与 24 小时审计 override
 - [x] 不可变制品篡改检测与 critical Webhook
+- [x] CycloneDX + SPDX 源码和容器镜像 SBOM 发布附件
 - [x] Cosign keyless 签名、镜像 SBOM attestation 与发布冒烟测试
 
 下一步：
