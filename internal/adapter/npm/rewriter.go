@@ -1,6 +1,7 @@
 package npm
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 )
@@ -50,4 +51,16 @@ func RewriteTarballURLs(data []byte, baseURL string) ([]byte, error) {
 	}
 
 	return json.Marshal(doc)
+}
+
+// ApplyBaseURL rewrites the relative tarball URLs produced by
+// RewriteTarballURLs(data, "") so they point back at this Depsilo instance.
+// It targets only the JSON "tarball" values instead of substituting every
+// occurrence of "/npm/" in the document, which would corrupt unrelated text
+// such as a package description or readme that happens to mention that path.
+func ApplyBaseURL(data []byte, baseURL string) []byte {
+	baseURL = strings.TrimRight(baseURL, "/")
+	needle := []byte(`"tarball":"/npm/`)
+	replacement := []byte(`"tarball":"` + baseURL + `/npm/`)
+	return bytes.ReplaceAll(data, needle, replacement)
 }

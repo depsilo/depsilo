@@ -114,15 +114,15 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 		return
 	}
 
-	// Apply runtime base URL to cached tarball paths
-	content := strings.ReplaceAll(string(body), `"/npm/`, `"`+baseURL+`/npm/`)
+	// Apply the runtime base URL only to the rewritten tarball paths.
+	content := ApplyBaseURL(body, baseURL)
 
 	ct := result.ContentType
 	if ct == "" {
 		ct = "application/json"
 	}
 	c.Header("Content-Type", ct)
-	c.String(http.StatusOK, content)
+	c.String(http.StatusOK, string(content))
 
 	adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))
 }
