@@ -41,58 +41,40 @@
 
 ## 🚀 快速开始
 
+### Binary（Linux / macOS）
+
+```bash
+curl -fsSL https://depsilo.com/install.sh | bash
+depsilo serve
+```
+
+然后打开 `http://127.0.0.1:23333`。首次启动摘要会显示完成初始化所需的
+一次性 bootstrap token。
+
 ### Docker（推荐）
 
 ```bash
-# Docker Hub
 docker run -d \
   --name depsilo \
   -p 23333:23333 \
-  -v depsilo-state:/root/.depsilo \
-  -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
-  -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
+  -v depsilo-data:/root/.depsilo \
   --restart unless-stopped \
-  depsilo/depsilo:latest
-
+  ghcr.io/depsilo/depsilo:latest
 ```
 
-当前 GHCR package 需要登录后拉取；匿名部署请使用上面的 Docker Hub 镜像。
 首次打开 Portal 时，先用 `docker logs depsilo` 取得启动日志中的一次性
-bootstrap token，再在 Setup Wizard 中设置管理员用户名和强密码。上述 volume 持久化向导生成的配置，
-两个绝对路径环境变量保证向导重写 `config.toml` 后，SQLite 数据库和本地缓存
-仍落在同一个 volume 中。
+bootstrap token，再在 Setup Wizard 中设置管理员用户名和强密码。上述 volume
+会持久化生成的配置、SQLite 数据库、本地缓存和其他状态。
 
 当前向导不会生成 Docker registry block 或 Hugging Face upstream。测试这两个
 安装入口前，先按 `config.example.toml` 手工补齐对应配置并重启 Depsilo。
 
-### docker-compose
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  depsilo:
-    image: depsilo/depsilo:latest
-    ports:
-      - "23333:23333"
-    volumes:
-      - ./data:/app/data
-      - ./config.toml:/app/config.toml
-    environment:
-      - DEPSILO_CONFIG=/app/config.toml
-      - DEPSILO_AUTH_JWT_SECRET=${DEPSILO_AUTH_JWT_SECRET:?set a random secret}
-      - DEPSILO_ADMIN_USERNAME=${DEPSILO_ADMIN_USERNAME:-admin}
-      - DEPSILO_ADMIN_PASSWORD=${DEPSILO_ADMIN_PASSWORD:?set a strong password}
-    restart: unless-stopped
-```
+### Compose
 
 ```bash
-# 下载示例配置并启动
-curl -O https://raw.githubusercontent.com/depsilo/depsilo/master/config.example.toml
-mv config.example.toml config.toml
-export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
-export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
-docker-compose up -d
+curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.yaml
+docker compose up -d
+docker compose logs depsilo
 ```
 
 ### 从源码构建
@@ -102,9 +84,6 @@ git clone https://github.com/depsilo/depsilo.git
 cd depsilo
 make setup
 make build
-cp config.example.toml config.toml
-export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
-export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
 ./bin/depsilo serve
 ```
 
@@ -118,7 +97,7 @@ export DEPSILO_ADMIN_PASSWORD='请设置一个强初始密码'
 `DEPSILO_AUTH_JWT_SECRET` 时，首次运行会生成权限为 0600 的
 `.dev-jwt-secret`，之后重启继续复用。项目根目录没有 `config.toml` 时不会
 再强制传入缺失路径，而是继续使用 CLI 的用户目录配置或内置默认配置。
-生产部署仍须显式提供自己的 JWT 密钥。需要强制使用自定义配置路径时，请运行
+已有显式配置的无头部署仍须提供自己的 JWT 密钥。需要强制使用自定义配置路径时，请运行
 `DEPSILO_CONFIG=/etc/depsilo.toml make run`。后台开发服务会让实际监听端口与健康
 检查端口保持一致；需要改端口时使用 `PORT=18080 make dev`。
 

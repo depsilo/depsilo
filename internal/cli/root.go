@@ -51,6 +51,7 @@ func PrintHelp() {
 Usage:
     depsilo <command> [flags]
     depsilo <command> --help        Show flags for a specific command
+    depsilo --version               Print version
 
 Commands:
     serve [flags]               Start HTTP server in foreground (see ` + "`depsilo serve --help`" + `)
@@ -72,7 +73,7 @@ Commands:
 
 Common serve flags (use depsilo serve --help for full detail):
     --port, -p N                Listen port (overrides config; default 23333)
-    --host H                    Listen host (overrides config; default 0.0.0.0)
+    --host H                    Listen host (overrides config; default 127.0.0.1)
     --config, -c PATH           Path to config.toml
     --log-level L               debug | info | warn | error
 

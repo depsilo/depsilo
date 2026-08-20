@@ -58,6 +58,20 @@ archive_binary_name() {
     fi
 }
 
+print_install_success() {
+    local version="$1"
+    local install_path="$2"
+
+    ok "Depsilo ${version} installed"
+    printf '\n  %s\n\n' "$install_path"
+    printf "${BOLD}Get started:${NC}\n\n"
+    printf '  depsilo serve\n\n'
+    printf "${BOLD}Then open:${NC}\n\n"
+    printf '  http://127.0.0.1:23333\n\n'
+    printf "${BOLD}Docs:${NC}\n\n"
+    printf '  https://github.com/depsilo/depsilo#quick-start\n'
+}
+
 verify_checksum() {
     local archive="$1"
     local checksum_file="$2"
@@ -186,15 +200,4 @@ else
     chmod +x "$INSTALL_DIR/$INSTALL_BIN" 2>/dev/null || true
 fi
 
-ok "Depsilo ${VERSION} installed to ${INSTALL_DIR}/${INSTALL_BIN}"
-
-# --- quick start ---
-echo ""
-printf "${BOLD}Quick start:${NC}\n"
-echo "  cp config.example.toml config.toml"
-echo "  depsilo serve"
-echo ""
-printf "${BOLD}Or run in Docker:${NC}\n"
-echo "  docker run -d --name depsilo -p 23333:23333 -v depsilo-data:/app/data depsilo/depsilo:latest"
-echo ""
-printf "Open ${CYAN}http://localhost:23333${NC} — the portal shows copy-paste config for all 14 ecosystems.\n"
+print_install_success "$VERSION" "${INSTALL_DIR}/${INSTALL_BIN}"

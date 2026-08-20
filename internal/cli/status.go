@@ -80,7 +80,7 @@ func runStatus(args []string) int {
 		fmt.Fprintln(os.Stderr, "Make sure Depsilo is running. Use one of:")
 		fmt.Fprintln(os.Stderr, "  depsilo start --daemon    (start in background)")
 		fmt.Fprintln(os.Stderr, "  depsilo serve             (start in foreground)")
-		fmt.Fprintln(os.Stderr, "  docker run -d -p 23333:23333 depsilo/depsilo")
+		fmt.Fprintln(os.Stderr, "  docker run -d --name depsilo -p 23333:23333 -v depsilo-data:/root/.depsilo ghcr.io/depsilo/depsilo:latest")
 		return 1
 	}
 	if status != 200 || health.Status != "healthy" {

@@ -72,47 +72,58 @@ per-package overrides via the allow list (glob / pin / range syntax).
 
 ## Quick start
 
-Every interactive first run requires the one-time bootstrap token printed in
-the server startup log, including requests from localhost. This keeps setup
-protected when Depsilo sits behind a local reverse proxy. The wizard then asks
-you to create the initial administrator; there is no default password.
+Every interactive first run requires a one-time bootstrap token, including
+requests from localhost. Depsilo generates and prints one in the startup log by
+default; an explicitly configured `DEPSILO_BOOTSTRAP_TOKEN` is used without
+echoing its value. The wizard then asks you to create the initial administrator;
+there is no default password.
 
 ### One-liner (Linux / macOS)
 
 ```bash
 curl -fsSL https://depsilo.com/install.sh | bash
+depsilo serve
 ```
+
+Then open `http://127.0.0.1:23333`. The startup summary shows the one-time
+bootstrap token needed to finish setup.
 
 ### Docker
 
 ```bash
-docker run -d --name depsilo -p 23333:23333 \
-  -v depsilo-state:/root/.depsilo \
-  -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
-  -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
-  depsilo/depsilo:latest
+docker run -d \
+  --name depsilo \
+  -p 23333:23333 \
+  -v depsilo-data:/root/.depsilo \
+  --restart unless-stopped \
+  ghcr.io/depsilo/depsilo:latest
 ```
 
-Open `http://localhost:23333` for the portal — it ships copy-paste config
-for all 14 ecosystems. On first run, copy the one-time bootstrap token from
-`docker logs depsilo`, enter it when the wizard asks, and choose the initial
-administrator username and a strong password. The named volume persists the
-generated config; the two absolute path overrides keep the SQLite database and
-local cache in that same volume after the wizard rewrites `config.toml`.
+Open `http://127.0.0.1:23333` for the portal. Run `docker logs depsilo` to
+find the Portal URL and one-time bootstrap token, then finish setup in the
+browser. The named volume persists Depsilo's generated configuration, SQLite
+database, local cache, and other state.
 
 The current wizard does not generate a Docker registry block or a Hugging Face
 upstream. Add those sections from `config.example.toml` and restart Depsilo
 before testing those two install surfaces.
+
+### Compose
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.yaml
+docker compose up -d
+docker compose logs depsilo
+```
+
+Open `http://127.0.0.1:23333` and use the bootstrap token from the logs.
 
 ### Manual download
 
 ```bash
 # Grab the binary archive for your platform from GitHub Releases
 tar xzf depsilo_*_linux_amd64.tar.gz
-cp config.example.toml config.toml
-export DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
-export DEPSILO_ADMIN_PASSWORD='choose-a-strong-initial-password'
-./depsilo serve --port 23333
+./depsilo serve
 ```
 
 Configured/headless deployments create the initial administrator from

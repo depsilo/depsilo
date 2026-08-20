@@ -364,23 +364,25 @@ jobs:
               "${image}@${platform_digest}" version
           done
           container_id=""
+          state_volume="depsilo-release-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           cleanup() {
             if [ -n "$container_id" ]; then
               docker rm -f "$container_id" >/dev/null 2>&1 || true
             fi
+            docker volume rm "$state_volume" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          test -f scripts/release-smoke.toml
+          docker volume create "$state_volume" >/dev/null
           container_id="$(docker run --detach \
             --publish 127.0.0.1::23333 \
-            --volume "$GITHUB_WORKSPACE/scripts/release-smoke.toml:/app/config.toml:ro" \
-            --env DEPSILO_CONFIG=/app/config.toml \
-            --env DEPSILO_AUTH_JWT_SECRET=release-smoke-only-0123456789abcdef0123456789abcdef \
+            --volume "$state_volume:/root/.depsilo" \
             "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}")"
           port="$(docker port "$container_id" 23333/tcp | sed 's/.*://')"
+          ready=false
           for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error "http://127.0.0.1:${port}/ready"; then
-              exit 0
+              ready=true
+              break
             fi
             if ! docker inspect --format '{{.State.Running}}' "$container_id" | grep -qx true; then
               docker logs "$container_id"
@@ -388,8 +390,16 @@ jobs:
             fi
             sleep 2
           done
-          docker logs "$container_id"
-          exit 1
+          if [ "$ready" != true ]; then
+            docker logs "$container_id"
+            exit 1
+          fi
+          logs="$(docker logs "$container_id" 2>&1)"
+          grep -q 'Portal:' <<<"$logs"
+          grep -Eq 'Bootstrap token: [A-Za-z0-9_-]{24,}' <<<"$logs"
+          docker exec "$container_id" test -f /root/.depsilo/data/depsilo.db
+          docker exec "$container_id" test -d /root/.depsilo/data/cache
+          docker exec "$container_id" sh -c 'test "$(command -v depsilo)" = /usr/local/bin/depsilo'
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2

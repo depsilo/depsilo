@@ -11,6 +11,7 @@ type Config struct {
 	IsDefault                  bool               `mapstructure:"-" json:"-"` // true when no config file found
 	ConfigPath                 string             `mapstructure:"-" json:"-"` // resolved path for config file
 	BootstrapToken             string             `mapstructure:"-" json:"-"` // ephemeral first-run authorization token
+	BootstrapTokenGenerated    bool               `mapstructure:"-" json:"-"` // safe to reveal in the first-run console summary
 	ExplicitUpstreamEcosystems map[string]bool    `mapstructure:"-" json:"-"`
 	Server                     ServerConfig       `mapstructure:"server"`
 	Database                   DatabaseConfig     `mapstructure:"database"`

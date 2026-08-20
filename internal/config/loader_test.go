@@ -14,6 +14,76 @@ func setTestJWTSecret(t *testing.T) {
 	t.Setenv("DEPSILO_AUTH_JWT_SECRET", "test-only-0123456789abcdef0123456789abcdef")
 }
 
+func TestLoadMissingConfigUsesHomeStateDefaultsWithoutBlockingEnvironmentOverrides(t *testing.T) {
+	home := t.TempDir()
+	t.Chdir(t.TempDir())
+	t.Setenv("HOME", home)
+	t.Setenv("DEPSILO_CONFIG", "")
+	t.Setenv("DEPSILO_SERVER_HOST", "")
+	t.Setenv("DEPSILO_DATABASE_DSN", filepath.Join(home, "custom", "database.db"))
+	t.Setenv("DEPSILO_STORAGE_PATH", filepath.Join(home, "custom", "package-cache"))
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_PATH", filepath.Join(home, "custom", "compile-cache"))
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "test-bootstrap-token-0123456789")
+	setTestJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load without config: %v", err)
+	}
+	if !cfg.IsDefault {
+		t.Fatal("Load without config did not report default setup state")
+	}
+	if cfg.BootstrapTokenGenerated {
+		t.Fatal("explicit DEPSILO_BOOTSTRAP_TOKEN was marked safe to reveal")
+	}
+	if got, want := cfg.ConfigPath, filepath.Join(home, ".depsilo", "config.toml"); got != want {
+		t.Errorf("ConfigPath = %q, want %q", got, want)
+	}
+	if got, want := cfg.Server.Host, "127.0.0.1"; got != want {
+		t.Errorf("Server.Host = %q, want %q", got, want)
+	}
+	if got, want := cfg.Database.DSN, filepath.Join(home, "custom", "database.db"); got != want {
+		t.Errorf("Database.DSN = %q, want environment override %q", got, want)
+	}
+	if got, want := cfg.Storage.Path, filepath.Join(home, "custom", "package-cache"); got != want {
+		t.Errorf("Storage.Path = %q, want environment override %q", got, want)
+	}
+	if got, want := cfg.CompileCache.Storage.Path, filepath.Join(home, "custom", "compile-cache"); got != want {
+		t.Errorf("CompileCache.Storage.Path = %q, want environment override %q", got, want)
+	}
+}
+
+func TestLoadMissingConfigPlacesAllLocalStateUnderHome(t *testing.T) {
+	home := t.TempDir()
+	t.Chdir(t.TempDir())
+	t.Setenv("HOME", home)
+	t.Setenv("DEPSILO_CONFIG", "")
+	t.Setenv("DEPSILO_SERVER_HOST", "")
+	t.Setenv("DEPSILO_DATABASE_DSN", "")
+	t.Setenv("DEPSILO_STORAGE_PATH", "")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_PATH", "")
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "")
+	setTestJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load without config: %v", err)
+	}
+	if !cfg.BootstrapTokenGenerated || len(cfg.BootstrapToken) < 24 {
+		t.Fatalf("automatic bootstrap token was not marked for the first-run summary")
+	}
+	stateDir := filepath.Join(home, ".depsilo")
+	if got, want := cfg.Database.DSN, filepath.Join(stateDir, "data", "depsilo.db"); got != want {
+		t.Errorf("Database.DSN = %q, want %q", got, want)
+	}
+	if got, want := cfg.Storage.Path, filepath.Join(stateDir, "data", "cache"); got != want {
+		t.Errorf("Storage.Path = %q, want %q", got, want)
+	}
+	if got, want := cfg.CompileCache.Storage.Path, filepath.Join(stateDir, "data", "compile-cache"); got != want {
+		t.Errorf("CompileCache.Storage.Path = %q, want %q", got, want)
+	}
+}
+
 func TestLoadEnvironmentOverridesWizardStoragePaths(t *testing.T) {
 	setTestJWTSecret(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
@@ -285,6 +355,9 @@ func TestSetDefaultsIncludesAlpineUpstreams(t *testing.T) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		t.Fatalf("unmarshal defaults: %v", err)
+	}
+	if cfg.Server.Host != "127.0.0.1" {
+		t.Fatalf("Server.Host = %q, want loopback default", cfg.Server.Host)
 	}
 
 	if len(cfg.Alpine.Upstreams) != 2 {

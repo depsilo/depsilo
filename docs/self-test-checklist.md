@@ -1,7 +1,8 @@
 # Depsilo 自测前置清单
 
-> 部署前后可重复执行的最小验证路径。示例使用 `v0.9.0`、端口
-> `23333` 和单节点 SQLite。`v0.9.0` 已包含 blocklist / tamper detection。
+> 部署前后可重复执行的最小验证路径。示例使用官方 `latest` 镜像、端口
+> `23333` 和单节点 SQLite；正式环境可将镜像 tag 固定为具体 `X.Y.Z` 版本。
+> `v0.9.0` 起已包含 blocklist / tamper detection。
 
 ## 0. 部署前
 
@@ -15,19 +16,15 @@
 
 ## 1. 首次部署
 
-空配置部署要同时固定配置、数据库和缓存路径。Setup Wizard 会把默认相对路径
-写回 `config.toml`；下面的环境变量将它们覆盖为 volume 内的绝对路径，避免
-容器重建后落到未挂载的 `/app/data`。
+空配置部署只需将 Depsilo 的统一 state root 挂载为一个 volume。生成的配置、
+SQLite 数据库、本地缓存和其他状态都会保存在该 volume 中。
 
 ```bash
-mkdir -p depsilo-state
 docker run -d --name depsilo \
   -p 23333:23333 \
-  -v "$PWD/depsilo-state:/root/.depsilo" \
-  -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
-  -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
+  -v depsilo-data:/root/.depsilo \
   --restart unless-stopped \
-  depsilo/depsilo:0.9.0
+  ghcr.io/depsilo/depsilo:latest
 ```
 
 - [ ] `curl -sf http://localhost:23333/health | jq .` 返回 healthy
@@ -39,7 +36,7 @@ docker run -d --name depsilo \
 - [ ] doctor 没有 fail：
 
 ```bash
-docker exec depsilo /app/depsilo doctor --json \
+docker exec depsilo depsilo doctor --json \
   | jq '.checks[] | select(.level == "fail")'
 ```
 
@@ -165,12 +162,9 @@ restore 只接受完成校验的 v2 归档；旧 v1 归档应先在隔离环境�
 ```bash
 mkdir -p backups
 docker run --rm \
-  -e DEPSILO_CONFIG=/root/.depsilo/config.toml \
-  -e DEPSILO_DATABASE_DSN=/root/.depsilo/data/depsilo.db \
-  -e DEPSILO_STORAGE_PATH=/root/.depsilo/data/cache \
-  -v "$PWD/depsilo-state:/root/.depsilo" \
+  -v depsilo-data:/root/.depsilo \
   -v "$PWD/backups:/backup" \
-  depsilo/depsilo:0.9.0 \
+  ghcr.io/depsilo/depsilo:latest \
   backup --out /backup/depsilo-backup.tar.gz
 tar -tzf backups/depsilo-backup.tar.gz
 ```
@@ -192,7 +186,7 @@ docker run --rm \
   -e DEPSILO_CONFIG=/state/config.toml \
   -e DEPSILO_DATABASE_DSN=/state/data/depsilo.db \
   -v "$PWD/restore-drill:/state" \
-  depsilo/depsilo:0.9.0 \
+  ghcr.io/depsilo/depsilo:latest \
   restore /state/depsilo-backup.tar.gz
 
 test -s restore-drill/config.toml

@@ -1,12 +1,98 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/spf13/viper"
 )
+
+func TestWriteConfigAnchorsGeneratedStateToConfigDirectory(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(root, "state", ".depsilo")
+	path := filepath.Join(configDir, "config.toml")
+	req := SetupRequest{}
+	req.Server.Port = 23333
+	req.Storage.Path = "./data/cache"
+
+	if err := WriteConfig(path, req); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read generated config: %v", err)
+	}
+
+	v := viper.New()
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(bytes.NewReader(document)); err != nil {
+		t.Fatalf("read generated TOML: %v", err)
+	}
+	dataDir := filepath.Join(configDir, "data")
+	wants := map[string]string{
+		"server.host":                "127.0.0.1",
+		"database.dsn":               filepath.Join(dataDir, "depsilo.db"),
+		"storage.path":               filepath.Join(dataDir, "cache"),
+		"compile_cache.storage.type": "local",
+		"compile_cache.storage.path": filepath.Join(dataDir, "compile-cache"),
+	}
+	for key, want := range wants {
+		if !v.InConfig(key) {
+			t.Errorf("generated config does not explicitly contain %s", key)
+			continue
+		}
+		if got := v.GetString(key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+		if strings.HasSuffix(key, ".path") || key == "database.dsn" {
+			if !filepath.IsAbs(v.GetString(key)) {
+				t.Errorf("%s = %q, want an absolute path", key, v.GetString(key))
+			}
+		}
+	}
+	if !v.InConfig("compile_cache.enabled") {
+		t.Fatal("generated config does not explicitly disable the compiler cache")
+	}
+	if v.GetBool("compile_cache.enabled") {
+		t.Fatal("generated config enables the compiler cache")
+	}
+}
+
+func TestWriteConfigPreservesAbsoluteStoragePath(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".depsilo", "config.toml")
+	storagePath := filepath.Join(root, "external", "artifacts")
+	req := SetupRequest{}
+	req.Server.Port = 23333
+	req.Storage.Path = storagePath
+
+	if err := WriteConfig(path, req); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read generated config: %v", err)
+	}
+	v := viper.New()
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(bytes.NewReader(document)); err != nil {
+		t.Fatalf("read generated TOML: %v", err)
+	}
+	if got := v.GetString("storage.path"); got != storagePath {
+		t.Fatalf("storage.path = %q, want preserved absolute path %q", got, storagePath)
+	}
+	stateDataDir := filepath.Join(root, ".depsilo", "data")
+	if got, want := v.GetString("database.dsn"), filepath.Join(stateDataDir, "depsilo.db"); got != want {
+		t.Fatalf("database.dsn = %q, want %q", got, want)
+	}
+	if got, want := v.GetString("compile_cache.storage.path"), filepath.Join(stateDataDir, "compile-cache"); got != want {
+		t.Fatalf("compile_cache.storage.path = %q, want %q", got, want)
+	}
+}
 
 func TestWriteConfigCommentsDefaultProxyLine(t *testing.T) {
 	dir := t.TempDir()

@@ -37,6 +37,17 @@ if grep -q '@${IMAGE_DIGEST}" version' <<<"$smoke_step"; then
     echo "release smoke cannot reuse the multi-platform index digest" >&2
     exit 1
 fi
+if ! grep -q -- '--volume "$state_volume:/root/.depsilo"' <<<"$smoke_step" ||
+    ! grep -q 'Bootstrap token:' <<<"$smoke_step" ||
+    ! grep -q '/root/.depsilo/data/depsilo.db' <<<"$smoke_step" ||
+    ! grep -q '/root/.depsilo/data/cache' <<<"$smoke_step"; then
+    echo "release smoke must cover zero-config startup and the single state volume" >&2
+    exit 1
+fi
+if grep -q 'release-smoke.toml\|DEPSILO_CONFIG=/app/config.toml' <<<"$smoke_step"; then
+    echo "release smoke must not bypass image defaults with a prepared config" >&2
+    exit 1
+fi
 
 if grep -q 'for sbom in depsilo-${RELEASE_TAG}-image\.\*\.json' "$WORKFLOW"; then
     echo "release SBOM loops must not match generated signature bundles" >&2

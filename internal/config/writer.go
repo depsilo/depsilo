@@ -45,6 +45,22 @@ func WriteConfig(path string, req SetupRequest) error {
 	if err := ensureConfigDirectory(dir); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
+	absoluteConfigDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolve config directory: %w", err)
+	}
+	storagePath := req.Storage.Path
+	if storagePath == "" {
+		storagePath = "./data/cache"
+	}
+	if !filepath.IsAbs(storagePath) {
+		storagePath = filepath.Join(absoluteConfigDir, storagePath)
+	}
+	storagePath = filepath.Clean(storagePath)
+	stateDataDir := filepath.Join(absoluteConfigDir, "data")
+	dbPath := filepath.Join(stateDataDir, "depsilo.db")
+	compileCachePath := filepath.Join(stateDataDir, "compile-cache")
+
 	jwtSecret, err := NewSecureToken()
 	if err != nil {
 		return fmt.Errorf("generate JWT secret: %w", err)
@@ -59,22 +75,17 @@ func WriteConfig(path string, req SetupRequest) error {
 		port = 23333
 	}
 	b.WriteString("[server]\n")
-	b.WriteString(fmt.Sprintf("host = \"0.0.0.0\"\n"))
+	b.WriteString("host = \"127.0.0.1\"\n")
 	b.WriteString(fmt.Sprintf("port = %d\n", port))
 	b.WriteString("\n")
 
 	// Database section
-	dbPath := filepath.Join(filepath.Dir(req.Storage.Path), "depsilo.db")
 	b.WriteString("[database]\n")
 	b.WriteString("driver = \"sqlite\"\n")
 	b.WriteString(fmt.Sprintf("dsn = %q\n", dbPath))
 	b.WriteString("\n")
 
 	// Storage section
-	storagePath := req.Storage.Path
-	if storagePath == "" {
-		storagePath = "./data/cache"
-	}
 	b.WriteString("[storage]\n")
 	b.WriteString("type = \"local\"\n")
 	b.WriteString(fmt.Sprintf("path = %q\n", storagePath))
@@ -86,6 +97,17 @@ func WriteConfig(path string, req SetupRequest) error {
 	b.WriteString("ttl_index = \"5m\"\n")
 	b.WriteString("ttl_blob = \"72h\"\n")
 	b.WriteString("lru_threshold = 90\n")
+	b.WriteString("\n")
+
+	// Compiler artifacts use a separate namespace but share the same durable
+	// data root. Keeping the disabled default explicit prevents a later opt-in
+	// from silently placing objects relative to the process working directory.
+	b.WriteString("[compile_cache]\n")
+	b.WriteString("enabled = false\n")
+	b.WriteString("\n")
+	b.WriteString("[compile_cache.storage]\n")
+	b.WriteString("type = \"local\"\n")
+	b.WriteString(fmt.Sprintf("path = %q\n", compileCachePath))
 	b.WriteString("\n")
 
 	// Auth section

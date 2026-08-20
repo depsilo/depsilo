@@ -1,0 +1,12 @@
+services:
+  depsilo:
+    image: ghcr.io/depsilo/depsilo:latest
+    container_name: depsilo
+    ports:
+      - "${PORT:-23333}:23333"
+    volumes:
+      - depsilo-data:/root/.depsilo
+    restart: unless-stopped
+
+volumes:
+  depsilo-data:

@@ -283,7 +283,7 @@ docker-status:                  # 兼容：查看容器状态
 	@curl -sf http://localhost:$(PORT)/health 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "health: unreachable"
 
 docker-compose-up:              # 兼容：使用 Docker Compose 启动
-	PORT=$(PORT) $(COMPOSE) up -d --build
+	PORT=$(PORT) $(COMPOSE) up -d
 	@echo ">>> running at http://localhost:$(PORT)"
 
 docker-compose-down:            # 兼容：停止 Docker Compose

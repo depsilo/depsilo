@@ -25,7 +25,7 @@ import (
 // place (the loader) instead of fanning out into every consumer.
 type ServeOptions struct {
 	Port       int    // 0 = use config / DEPSILO_SERVER_PORT / default 23333
-	Host       string // empty = use config / DEPSILO_SERVER_HOST / default 0.0.0.0
+	Host       string // empty = use config / DEPSILO_SERVER_HOST / default 127.0.0.1
 	ConfigPath string // empty = search standard paths (./config.toml, ~/.depsilo/...)
 	LogLevel   string // empty = use config / default info
 }
@@ -46,7 +46,7 @@ func ParseServeFlags(args []string, out io.Writer) (*ServeOptions, error) {
 
 	fs.IntVar(&opts.Port, "port", 0, "Listen port (overrides config; default 23333)")
 	fs.IntVar(&opts.Port, "p", 0, "Alias for --port")
-	fs.StringVar(&opts.Host, "host", "", "Listen host (overrides config; default 0.0.0.0)")
+	fs.StringVar(&opts.Host, "host", "", "Listen host (overrides config; default 127.0.0.1)")
 	fs.StringVar(&opts.ConfigPath, "config", "", "Path to config.toml (overrides DEPSILO_CONFIG and the standard search paths)")
 	fs.StringVar(&opts.ConfigPath, "c", "", "Alias for --config")
 	fs.StringVar(&opts.LogLevel, "log-level", "", "Log level: debug | info | warn | error (overrides config; default info)")

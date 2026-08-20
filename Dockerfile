@@ -12,7 +12,7 @@ WORKDIR /app
 
 # Version stamped into the binary so `depsilo version` / the topbar version
 # pill / Prometheus labels match the image tag. Pass at build time:
-#   docker build --build-arg VERSION=0.8.0 --build-arg COMMIT=$(git rev-parse --short HEAD) -t depsilo/depsilo:0.8.0 .
+#   docker build --build-arg VERSION=0.9.0 --build-arg COMMIT=<commit> -t ghcr.io/depsilo/depsilo:0.9.0 .
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
@@ -26,7 +26,7 @@ COPY --from=frontend /app/web/dist ./web/dist
 
 # Unified cmd/depsilo entry — server mode when run with no args, otherwise
 # dispatches to CLI subcommands (doctor / backup / restore / init-agent / ...).
-# Lets `docker exec <container> /app/depsilo doctor` work inside production
+# Lets `docker exec <container> depsilo doctor` work inside production
 # deployments, which the self-test checklist relies on.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -buildvcs=false \
     -ldflags="-s -w \
@@ -39,7 +39,12 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -buil
 FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=backend /app/depsilo .
+COPY --from=backend /app/depsilo /app/depsilo
+RUN ln -s /app/depsilo /usr/local/bin/depsilo
+
+# Binary installs default to loopback. A container must listen on every
+# interface so publishing 23333 reaches the service from the host.
+ENV DEPSILO_SERVER_HOST=0.0.0.0
 EXPOSE 23333
 
 # Keep container health independent from the host and orchestration layer.
@@ -48,10 +53,10 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
     CMD wget -q -O /dev/null "http://127.0.0.1:${DEPSILO_SERVER_PORT:-23333}/ready" || exit 1
 
 # ENTRYPOINT (not CMD) so `docker run image doctor` works the same as
-# `docker exec container /app/depsilo doctor` — args get appended to the
+# `docker exec container depsilo doctor` — args get appended to the
 # binary instead of replacing it. With CMD form, `docker run image version`
 # tried to exec "version" as the entrypoint and failed.
-ENTRYPOINT ["./depsilo"]
+ENTRYPOINT ["/app/depsilo"]
 # Default arg = "serve" so `docker run image` starts the server. Override
 # with `docker run image doctor` / `version` / etc. for one-shot CLI use.
 # (Bare `./depsilo` with no args prints help by design — cmd/depsilo/main.go.)

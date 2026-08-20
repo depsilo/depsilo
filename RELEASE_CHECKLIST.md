@@ -38,16 +38,16 @@ git push origin vX.Y.Z
 - [ ] Sigstore bundles uploaded for checksums, installer, tray bundles, and SBOMs
 
 ### Docker
-- [ ] Docker image pushed to Docker Hub (`depsilo/depsilo`)
-- [ ] Docker image pushed to GHCR (`ghcr.io/depsilo/depsilo`)
-- [ ] Stable release tags published: `X.Y.Z`, `X.Y`, `X`, and metadata-action's automatic `latest`
+- [ ] Canonical image pushed to GHCR (`ghcr.io/depsilo/depsilo`)
+- [ ] Mirror image pushed to Docker Hub (`depsilo/depsilo`)
+- [ ] Stable release tags published: `X.Y.Z`, `X.Y`, `latest`, and `X` for 1.x or newer
 - [ ] GHCR package is public and an anonymous `docker pull ghcr.io/depsilo/depsilo:X.Y.Z` succeeds
 - [ ] Both registry digests have keyless signatures and CycloneDX attestations
-- [ ] Published image starts and `/health` succeeds in the automated smoke test
+- [ ] Published image starts and `/ready` succeeds in the automated smoke test
 
 ### Post-release
 - [ ] `curl -fsSL https://depsilo.com/install.sh | bash` works on clean machine
-- [ ] `docker run depsilo/depsilo:latest` starts successfully
+- [ ] `docker run ghcr.io/depsilo/depsilo:latest` starts successfully
 - [ ] Release notes published on GitHub Releases
 
 ## Known release gaps
@@ -55,4 +55,3 @@ git push origin vX.Y.Z
 - Homebrew formula generation runs locally in GoReleaser, but tap publishing is
   disabled with `skip_upload: true` until `depsilo/homebrew-tap` exists.
 - There is no Windows NSIS/tray installer job; Windows CLI zip archives are published.
-- The GHCR package currently requires authentication; Docker Hub is the anonymous pull path.

@@ -19,6 +19,8 @@ func main() {
 			os.Exit(cli.RunServe(os.Args[2:]))
 		case "status", "doctor", "init-agent", "prompt", "activate", "start", "stop", "warmup", "flush", "backup", "restore", "version":
 			os.Exit(cli.Run(cmd, os.Args[2:]))
+		case "--version", "-v":
+			os.Exit(cli.Run("version", os.Args[2:]))
 		case "help", "--help", "-h":
 			cli.PrintHelp()
 			os.Exit(0)

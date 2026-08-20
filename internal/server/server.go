@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +37,7 @@ import (
 	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
 	"depsilo/internal/upstreamupdates"
+	"depsilo/internal/version"
 )
 
 // StartServer initializes all components and starts the HTTP server.
@@ -61,6 +64,12 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 	logLevel.SetLevel(parsed.Level())
 	settingsStore := config.NewStore(cfg.ConfigPath, cfg, logLevel)
+	// Gin defaults to debug mode when GIN_MODE is absent, which prints every
+	// registered route before the useful startup summary. Production starts use
+	// quiet release mode by default while preserving an explicit GIN_MODE=debug.
+	if gin.Mode() == gin.DebugMode && strings.TrimSpace(os.Getenv(gin.EnvGinMode)) == "" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	r := gin.New()
 	if err := configureTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("configure server.trusted_proxies: %w", err)
@@ -649,13 +658,27 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 	registry.Start(serverCtx)
 
-	go func() {
-		zap.L().Info("starting server", zap.String("addr", addr))
-		serveHTTP(srv, listener)
-	}()
+	go serveHTTP(srv, listener)
 	started = true
 	if shutdownTrigger.Done() != nil {
 		go shutdownWhenContextEnds(shutdownTrigger, serverCtx, srv)
+	}
+
+	summary := newStartupSummary(
+		version.Version,
+		cfg.Server.Host,
+		listenerPort(listener.Addr(), cfg.Server.Port),
+		cfg.IsDefault,
+		cfg.BootstrapToken,
+		cfg.BootstrapTokenGenerated,
+	)
+	zap.L().Info("server ready",
+		zap.String("addr", listener.Addr().String()),
+		zap.String("portal_url", summary.PortalURL),
+		zap.Bool("setup_required", summary.SetupRequired),
+	)
+	if err := writeStartupSummary(os.Stderr, summary); err != nil {
+		zap.L().Warn("failed to write startup summary", zap.Error(err))
 	}
 
 	return srv, nil

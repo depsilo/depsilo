@@ -38,7 +38,7 @@ archives:
           - zip
     files:
       - config.example.toml
-      - docker-compose.yml
+      - compose.yaml
       - README.md
       - LICENSE
     name_template: "depsilo_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

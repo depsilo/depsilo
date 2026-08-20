@@ -42,6 +42,7 @@ func Load() (*Config, error) {
 	configPath := os.Getenv("DEPSILO_CONFIG")
 	isDefault := false
 	resolvedPath := ""
+	depsiloDir, hasDepsiloDir := defaultDepsiloDir()
 
 	if configPath != "" {
 		v.SetConfigFile(configPath)
@@ -52,8 +53,7 @@ func Load() (*Config, error) {
 		v.AddConfigPath(".")
 		v.AddConfigPath("/app")
 		// Also search ~/.depsilo/
-		if usr, err := user.Current(); err == nil {
-			depsiloDir := filepath.Join(usr.HomeDir, ".depsilo")
+		if hasDepsiloDir {
 			v.AddConfigPath(depsiloDir)
 			resolvedPath = filepath.Join(depsiloDir, "config.toml")
 		}
@@ -68,14 +68,13 @@ func Load() (*Config, error) {
 		// Pin the missing-document version so DEPSILO_CONFIG_VERSION cannot
 		// fabricate or mask an on-disk schema version.
 		v.Set("config_version", 0)
-		zap.L().Warn("config file not found, using defaults — visit the web UI to run setup")
+		zap.L().Info("config file not found, using defaults — visit the web UI to run setup")
 
-		// When no config file, use ~/.depsilo/ paths as defaults
-		if usr, err := user.Current(); err == nil {
-			depsiloDir := filepath.Join(usr.HomeDir, ".depsilo")
-			v.Set("database.dsn", filepath.Join(depsiloDir, "data", "depsilo.db"))
-			v.Set("storage.path", filepath.Join(depsiloDir, "data", "cache"))
-			v.Set("compile_cache.storage.path", filepath.Join(depsiloDir, "data", "compile-cache"))
+		// Keep first-run state together under ~/.depsilo without turning those
+		// paths into Viper overrides. Explicit environment variables must remain
+		// authoritative even before the setup wizard writes config.toml.
+		if hasDepsiloDir {
+			setDefaultStatePaths(v, depsiloDir)
 			if resolvedPath == "" {
 				resolvedPath = filepath.Join(depsiloDir, "config.toml")
 			}
@@ -101,6 +100,7 @@ func Load() (*Config, error) {
 			return nil, err
 		}
 		cfg.BootstrapToken = bootstrapToken
+		cfg.BootstrapTokenGenerated = generated
 
 		// The placeholder must never become a usable signing key, even during
 		// setup or when an existing database survives a lost config file.
@@ -111,10 +111,10 @@ func Load() (*Config, error) {
 			}
 		}
 
-		if generated {
-			zap.L().Warn("initial setup requires this one-time bootstrap token",
-				zap.String("bootstrap_token", bootstrapToken))
-		} else {
+		// The generated token is intentionally emitted only by the final startup
+		// summary, after every dependency is ready. Avoid an earlier duplicate
+		// secret-bearing log entry that can be buried in initialization noise.
+		if !generated {
 			zap.L().Info("initial setup is protected by DEPSILO_BOOTSTRAP_TOKEN")
 		}
 	}
@@ -139,6 +139,26 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func defaultDepsiloDir() (string, bool) {
+	if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+		return filepath.Join(home, ".depsilo"), true
+	}
+	// HOME may be absent in a minimal service environment. Preserve the
+	// previous passwd-based fallback so those deployments still get a durable
+	// per-user state directory.
+	if usr, err := user.Current(); err == nil && strings.TrimSpace(usr.HomeDir) != "" {
+		return filepath.Join(usr.HomeDir, ".depsilo"), true
+	}
+	return "", false
+}
+
+func setDefaultStatePaths(v *viper.Viper, depsiloDir string) {
+	dataDir := filepath.Join(depsiloDir, "data")
+	v.SetDefault("database.dsn", filepath.Join(dataDir, "depsilo.db"))
+	v.SetDefault("storage.path", filepath.Join(dataDir, "cache"))
+	v.SetDefault("compile_cache.storage.path", filepath.Join(dataDir, "compile-cache"))
 }
 
 func isLoopbackHost(host string) bool {
@@ -390,7 +410,7 @@ func pinDocumentConfigVersion(v *viper.Viper, document []byte) error {
 }
 
 func setDefaults(v *viper.Viper) {
-	v.SetDefault("server.host", "0.0.0.0")
+	v.SetDefault("server.host", "127.0.0.1")
 	v.SetDefault("server.port", 23333)
 	v.SetDefault("server.log_level", "info")
 	v.SetDefault("server.trusted_proxies", []string{})
