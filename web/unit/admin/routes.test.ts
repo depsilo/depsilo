@@ -9,6 +9,7 @@ import {
 
 const expectedRoutes = {
   dashboard: '/admin',
+  connect: '/admin/connect',
   attention: '/admin/attention',
   bandwidth: '/admin/bandwidth',
   accessLogs: '/admin/logs',
@@ -65,6 +66,8 @@ describe('Admin route manifest', () => {
       navGroup: 'overview',
     })
     expect(adminNavigationGroups.flatMap(group => group.routes).some(route => route.id === 'attention')).toBe(false)
+    expect(resolveAdminRoute('/admin/connect')).toMatchObject({ id: 'connect', hiddenFromNavigation: true })
+    expect(adminNavigationGroups.flatMap(group => group.routes).some(route => route.id === 'connect')).toBe(false)
   })
 
   it('normalizes case and trailing slashes without masking unknown paths', () => {

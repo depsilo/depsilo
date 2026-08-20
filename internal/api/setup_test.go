@@ -90,6 +90,9 @@ func newSetupTestHandler(t *testing.T) (*SetupHandler, *config.Config, string, *
 		BootstrapToken: "bootstrap-token-0123456789abcdef",
 	}
 	database := newAPIAuthTestDB(t)
+	if err := database.AutoMigrate(&db.ControlPlaneState{}); err != nil {
+		t.Fatalf("migrate setup state: %v", err)
+	}
 	restarts := 0
 	handler := NewSetupHandler(cfg, database)
 	handler.scheduleRestart = func() { restarts++ }
@@ -149,6 +152,10 @@ func TestSetupCompleteCreatesAdminAndProtectedConfig(t *testing.T) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("Tr0ub4dor&Correct")); err != nil {
 		t.Fatalf("administrator password mismatch: %v", err)
+	}
+	status, err := loadOnboardingStatus(t.Context(), handler.db)
+	if err != nil || status != onboardingStatusNotStarted {
+		t.Fatalf("fresh setup onboarding status = %q, err=%v, want not_started", status, err)
 	}
 }
 
@@ -380,6 +387,37 @@ func TestSetupRecoveryRequiresExistingAdministratorCredentials(t *testing.T) {
 	}
 	if *restarts != 0 {
 		t.Fatalf("restart count = %d, want 0", *restarts)
+	}
+}
+
+func TestSetupRecoveryDoesNotOverwriteExistingOnboardingState(t *testing.T) {
+	handler, cfg, root, restarts := newSetupTestHandler(t)
+	const username = "existing-admin"
+	const password = "Existing&Secure123"
+	if err := CreateInitialAdmin(handler.db, username, password); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveOnboardingStatus(t.Context(), handler.db, onboardingStatusSkipped); err != nil {
+		t.Fatal(err)
+	}
+	request := decodeValidSetupRequest(t, root)
+	request.Admin.Username = username
+	request.Admin.Password = password
+	body, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, body)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if *restarts != 1 {
+		t.Fatalf("restart count = %d, want 1", *restarts)
+	}
+	status, err := loadOnboardingStatus(t.Context(), handler.db)
+	if err != nil || status != onboardingStatusSkipped {
+		t.Fatalf("recovery onboarding status = %q, err=%v, want skipped", status, err)
 	}
 }
 

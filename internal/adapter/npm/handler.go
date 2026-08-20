@@ -103,6 +103,7 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 
 	if err != nil {
 		zap.L().Error("failed to get npm metadata", zap.String("package", fullName), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -175,6 +176,7 @@ func (h *Handler) proxyTarball(c *gin.Context, fullName, filename, cacheKey, ups
 
 	if err != nil {
 		zap.L().Error("failed to get npm tarball", zap.String("package", fullName), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}

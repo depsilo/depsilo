@@ -223,6 +223,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 			status = http.StatusNotFound
 			code = "NOT_FOUND"
 		}
+		adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
 		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}
@@ -333,6 +334,7 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 			status = http.StatusNotFound
 			code = "NOT_FOUND"
 		}
+		adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, false, "", time.Since(start), status, c.ClientIP(), 0)
 		c.JSON(status, gin.H{"code": code, "message": err.Error()})
 		return
 	}

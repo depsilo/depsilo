@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/adapter"
 	"depsilo/internal/db"
 	ecosystemcatalog "depsilo/internal/ecosystem"
 )
@@ -216,6 +217,47 @@ func TestMiddlewareEnforcesArtifactVersionsButNotUnknownMetadataVersions(t *test
 				t.Fatalf("GET %s status = %d, want %d; body = %s", test.path, recorder.Code, test.wantStatus, recorder.Body.String())
 			}
 		})
+	}
+}
+
+type ruleAuditCapture struct {
+	entries []db.AuditLog
+}
+
+func (capture *ruleAuditCapture) Log(entry db.AuditLog) {
+	capture.entries = append(capture.entries, entry)
+}
+
+func TestMiddlewareRecordsPolicyBlockAsHandledRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := newRulesTestDB(t)
+	if err := database.Create(&db.PackageRule{
+		Ecosystem: "pypi", PackageName: "requests", Version: "< 2.0.0", Action: "deny",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	audit := &ruleAuditCapture{}
+	release := adapter.InstallAccessHooks(nil, audit)
+	t.Cleanup(release)
+
+	router := gin.New()
+	router.Use(Middleware(NewEngine(NewStore(database), nil)))
+	router.GET("/*path", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	request := httptest.NewRequest(http.MethodGet, "/pypi/files/requests-1.9.0.tar.gz", nil)
+	request.RemoteAddr = "192.0.2.20:4321"
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, body=%s", response.Code, response.Body.String())
+	}
+	if len(audit.entries) != 1 {
+		t.Fatalf("audit entries = %#v", audit.entries)
+	}
+	entry := audit.entries[0]
+	if entry.Ecosystem != "pypi" || entry.PackageName != "requests" || entry.Version != "1.9.0" ||
+		entry.Action != "download" || entry.CacheResult != "blocked" || entry.StatusCode != http.StatusForbidden {
+		t.Fatalf("audit entry = %#v", entry)
 	}
 }
 

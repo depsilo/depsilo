@@ -303,7 +303,7 @@ export interface AuditLog {
   package_name: string
   version: string
   action: string
-  cache_result: 'hit' | 'miss' | 'success' | 'error'
+  cache_result: 'hit' | 'miss' | 'success' | 'error' | 'blocked'
   client_ip: string
   user_agent: string
   upstream_url: string
@@ -319,7 +319,7 @@ export interface AuditLogQuery {
   ecosystem?: string
   package?: string
   ip?: string
-  result?: 'hit' | 'miss' | 'success' | 'error'
+  result?: 'hit' | 'miss' | 'success' | 'error' | 'blocked'
   start?: string
   end?: string
 }
@@ -530,6 +530,32 @@ export interface SetupCompleteResponse {
   message: string
   reconnect_url: string
   restart_strategy: 'exec' | 'supervisor_required'
+}
+
+export type OnboardingStatus = 'not_started' | 'completed' | 'skipped'
+export type OnboardingTerminalStatus = Exclude<OnboardingStatus, 'not_started'>
+
+export interface OnboardingEvent {
+  id: number
+  ecosystem: string
+  package_name: string
+  version: string
+  outcome: 'hit' | 'miss' | 'blocked' | 'error' | string
+  status_code: number
+  created_at: string
+}
+
+export interface OnboardingStatusResponse {
+  status: OnboardingStatus
+  started_at: string
+  next_after_id: number
+  events: OnboardingEvent[]
+  has_more: boolean
+}
+
+export interface OnboardingStatusQuery {
+  after_id?: number
+  started_at?: string
 }
 
 export interface AdminUpstreamListResponse { items: AdminUpstream[]; total: number }

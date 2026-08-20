@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"depsilo/internal/adapter"
 )
 
 // Middleware returns a Gin middleware that checks package rules before proxying.
@@ -32,6 +34,14 @@ func Middleware(engine *Engine) gin.HandlerFunc {
 			if rule != nil && rule.Reason != "" {
 				reason = rule.Reason
 			}
+			adapter.LogPolicyBlock(
+				c.Request.Context(),
+				target.Ecosystem,
+				target.PackageName,
+				target.Version,
+				http.StatusForbidden,
+				c.ClientIP(),
+			)
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    "PACKAGE_DENIED",
 				"message": reason,

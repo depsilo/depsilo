@@ -379,6 +379,12 @@ export default function NowStrip({
                 {isEmpty ? t('now.emptyHint') : t('dashboard.flowlineDescription')}
               </span>
             )}
+            <Link
+              to={getAdminRouteHref('connect')}
+              className="stripe-focus-ring inline-flex min-h-8 shrink-0 items-center rounded-[5px] px-2 font-[600] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
+            >
+              {t('onboarding.connectProject')}
+            </Link>
             {data && (
               <span className="ml-auto shrink-0 font-mono tabular-nums">
                 {t('now.uptime')} {formatUptime(data.uptime_seconds, t)}

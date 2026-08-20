@@ -42,6 +42,9 @@ import type {
   DismissSuggestionResponse,
   LoginResponse,
   NowResponse,
+  OnboardingStatusQuery,
+  OnboardingStatusResponse,
+  OnboardingTerminalStatus,
   Principal,
   Project,
   ProjectDetail,
@@ -148,6 +151,10 @@ export const authApi = {
 
 export const adminApi = {
   getDashboard: (options: ApiGetOptions = {}) => api.get<DashboardResponse>('/admin/dashboard', options),
+  getOnboardingStatus: (params: OnboardingStatusQuery = {}, options: ApiGetOptions = {}) =>
+    api.get<OnboardingStatusResponse>('/admin/onboarding/status', { ...options, params }),
+  updateOnboardingStatus: (status: OnboardingTerminalStatus) =>
+    api.put<{ status: OnboardingTerminalStatus }>('/admin/onboarding', { status }),
   getRecentDownloads: (limit: number = 3, options: ApiGetOptions = {}) =>
     api.get<RecentDownloadsResponse>('/admin/dashboard/recent-downloads', { ...options, params: { limit } }),
   getDashboardTrends: (range_: string = '7d', options: ApiGetOptions = {}) =>

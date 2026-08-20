@@ -111,6 +111,7 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 		})
 		return
 	}
+	createdInitialAdmin := false
 	if err := CreateInitialAdmin(tx, req.Admin.Username, req.Admin.Password); err != nil {
 		if errors.Is(err, ErrInitialAdminExists) {
 			if verifyErr := VerifyExistingAdminCredentials(tx, req.Admin.Username, req.Admin.Password); verifyErr != nil {
@@ -127,6 +128,19 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"code":    "ADMIN_CREATE_FAILED",
 				"message": "Failed to create the initial administrator",
+			})
+			return
+		}
+	} else {
+		createdInitialAdmin = true
+	}
+	if createdInitialAdmin {
+		if err := saveOnboardingStatus(c.Request.Context(), tx, onboardingStatusNotStarted); err != nil {
+			tx.Rollback()
+			zap.L().Error("failed to initialize onboarding state", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code":    "ADMIN_CREATE_FAILED",
+				"message": "Failed to initialize the first-run experience",
 			})
 			return
 		}

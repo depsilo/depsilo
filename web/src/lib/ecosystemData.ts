@@ -98,8 +98,12 @@ export interface ManagerConfig {
   name: string
   hint: string
   quick: { lang: string; body: string }
+  /** A transparent persistent setup command when the manager provides one. */
+  configure?: { lang: string; body: string }
   methods?: { label: string; lang: string; body: string }[]
   persistent: { file: string; lang: string; body: string }
+  /** A small, real package request suitable for first-run verification. */
+  test?: { lang: string; body: string }
   verify: { lang: string; body: string }
   paths: ManagerPath[]
   tutorial: string[]
@@ -126,17 +130,21 @@ export interface Language {
   group: LanguageGroup
   /** i18n key under `quickstart.subtitle` — short, direct ("Ruby 包" / "Ruby packages"). */
   subtitleKey: string
+  /** Optional first-run prominence; lower values appear first. */
+  onboardingRank?: number
   managers: ManagerConfig[]
 }
 
-export const LANGUAGES: Language[] = [
+const LANGUAGE_DEFINITIONS: Language[] = [
   {
     id: 'python', name: 'Python', glyph: 'PY', iconAdapter: 'pypi',
-    group: 'lang', subtitleKey: 'python',
+    group: 'lang', subtitleKey: 'python', onboardingRank: 1,
     managers: [
       {
         id: 'pip', name: 'pip', hint: 'PyPA package installer',
         quick:      { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
+        configure:  { lang: 'sh', body: 'pip config set global.index-url {URL}/pypi/simple/\npip config set global.trusted-host {HOST}' },
+        test:       { lang: 'sh', body: 'pip install --dry-run --ignore-installed --no-cache-dir --no-deps --index-url {URL}/pypi/simple/ six' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'PIP_INDEX_URL={URL}/pypi/simple/ pip install requests' },
@@ -160,6 +168,7 @@ export const LANGUAGES: Language[] = [
       {
         id: 'uv', name: 'uv', hint: 'astral.sh fast resolver',
         quick:      { lang: 'sh', body: 'UV_INDEX_URL={URL}/pypi/simple/ uv pip install requests' },
+        test:       { lang: 'sh', body: "printf 'six\\n' | uv pip compile --default-index {URL}/pypi/simple/ --no-cache --no-deps -" },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'uv pip install --index-url {URL}/pypi/simple/ requests' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'UV_INDEX_URL={URL}/pypi/simple/ uv pip install requests' },
@@ -182,6 +191,7 @@ export const LANGUAGES: Language[] = [
       {
         id: 'venv', name: 'venv', hint: 'Project-local virtualenv',
         quick:      { lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate && pip install -i {URL}/pypi/simple/ requests' },
+        test:       { lang: 'sh', body: 'pip install --dry-run --ignore-installed --no-cache-dir --no-deps --index-url {URL}/pypi/simple/ six' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate\npip install -i {URL}/pypi/simple/ requests' },
         ],
@@ -202,6 +212,8 @@ export const LANGUAGES: Language[] = [
       {
         id: 'poetry', name: 'Poetry', hint: 'Dependency manager',
         quick:      { lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
+        configure:  { lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
+        test:       { lang: 'sh', body: 'poetry --no-cache add --dry-run six' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
         ],
@@ -241,6 +253,8 @@ export const LANGUAGES: Language[] = [
       {
         id: 'pdm', name: 'PDM', hint: 'PEP 517 manager',
         quick:      { lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
+        configure:  { lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
+        test:       { lang: 'sh', body: 'pdm --no-cache add --dry-run six' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
         ],
@@ -284,11 +298,13 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'node', name: 'Node.js', glyph: 'JS', iconAdapter: 'npm',
-    group: 'lang', subtitleKey: 'node',
+    group: 'lang', subtitleKey: 'node', onboardingRank: 2,
     managers: [
       {
         id: 'npm', name: 'npm', hint: 'Default Node registry client',
         quick:      { lang: 'sh', body: 'npm install --registry={URL}/npm/ lodash' },
+        configure:  { lang: 'sh', body: 'npm config set registry {URL}/npm/' },
+        test:       { lang: 'sh', body: 'npm view --registry={URL}/npm/ --prefer-online is-number version' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'npm install --registry={URL}/npm/ lodash' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ npm install lodash' },
@@ -312,6 +328,8 @@ export const LANGUAGES: Language[] = [
       {
         id: 'pnpm', name: 'pnpm', hint: 'Hard-linked store',
         quick:      { lang: 'sh', body: 'pnpm install --registry={URL}/npm/ lodash' },
+        configure:  { lang: 'sh', body: 'pnpm config set registry {URL}/npm/' },
+        test:       { lang: 'sh', body: 'pnpm view --registry={URL}/npm/ is-number version' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pnpm install --registry={URL}/npm/ lodash' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ pnpm install lodash' },
@@ -371,11 +389,12 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'java', name: 'Java', glyph: 'JV', iconAdapter: 'maven',
-    group: 'lang', subtitleKey: 'java',
+    group: 'lang', subtitleKey: 'java', onboardingRank: 4,
     managers: [
       {
         id: 'maven', name: 'Maven', hint: 'Apache Maven',
         quick:      { lang: 'sh', body: 'mvn -B dependency:get -Dartifact=com.google.guava:guava:32.1.3-jre' },
+        test:       { lang: 'sh', body: 'mvn -B -U dependency:get -Dartifact=org.slf4j:slf4j-api:2.0.16 -Dtransitive=false' },
         methods: [],
         persistent: { file: '~/.m2/settings.xml', lang: 'xml',
           body: '<settings>\n  <mirrors>\n    <mirror>\n      <id>depsilo</id>\n      <url>{URL}/maven/</url>\n      <mirrorOf>*</mirrorOf>\n    </mirror>\n  </mirrors>\n</settings>' },
@@ -430,11 +449,12 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'rust', name: 'Rust', glyph: 'RS', iconAdapter: 'cargo',
-    group: 'lang', subtitleKey: 'rust',
+    group: 'lang', subtitleKey: 'rust', onboardingRank: 3,
     managers: [
       {
         id: 'cargo', name: 'Cargo', hint: 'Rust package manager',
         quick:      { lang: 'sh', body: 'cargo install --index sparse+{URL}/crates/ ripgrep' },
+        test:       { lang: 'sh', body: 'cargo info --index sparse+{URL}/crates/ itoa' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'cargo install --index sparse+{URL}/crates/ ripgrep' },
         ],
@@ -456,11 +476,13 @@ export const LANGUAGES: Language[] = [
   },
   {
     id: 'go', name: 'Go', glyph: 'GO', iconAdapter: 'go',
-    group: 'lang', subtitleKey: 'go',
+    group: 'lang', subtitleKey: 'go', onboardingRank: 5,
     managers: [
       {
         id: 'goenv', name: 'go env', hint: 'Persistent Go proxy setting',
         quick:      { lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
+        configure:  { lang: 'sh', body: 'go env -w GOPROXY={URL}/go/,direct' },
+        test:       { lang: 'sh', body: 'GOPROXY={URL}/go/ go list -m -versions rsc.io/quote' },
         methods: [
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
         ],
@@ -480,6 +502,7 @@ export const LANGUAGES: Language[] = [
       {
         id: 'shell', name: 'GOPROXY env', hint: 'Shell-level',
         quick:      { lang: 'sh', body: 'GOPROXY={URL}/go/,direct go build ./...' },
+        test:       { lang: 'sh', body: 'GOPROXY={URL}/go/ go list -m -versions rsc.io/quote' },
         methods: [
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go build ./...' },
         ],
@@ -570,6 +593,7 @@ export const LANGUAGES: Language[] = [
       {
         id: 'helm', name: 'Helm', hint: 'Chart registry',
         quick:      { lang: 'sh', body: 'helm repo add depsilo {URL}/helm/\nhelm repo update\nhelm search repo depsilo | head' },
+        configure:  { lang: 'sh', body: 'helm repo add depsilo {URL}/helm/\nhelm repo update' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'helm repo add depsilo {URL}/helm/\nhelm repo update' },
         ],
@@ -613,6 +637,7 @@ export const LANGUAGES: Language[] = [
       {
         id: 'bundler', name: 'Bundler', hint: 'bundle config',
         quick:      { lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
+        configure:  { lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'bundle config mirror.https://rubygems.org {URL}/rubygems/' },
         ],
@@ -637,6 +662,7 @@ export const LANGUAGES: Language[] = [
       {
         id: 'cli', name: 'dotnet CLI', hint: 'nuget add source',
         quick:      { lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
+        configure:  { lang: 'sh', body: 'dotnet nuget add source {URL}/nuget/v3/index.json -n depsilo' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'dotnet restore --source {URL}/nuget/v3/index.json' },
         ],
@@ -739,6 +765,7 @@ export const LANGUAGES: Language[] = [
       {
         id: 'composer', name: 'Composer', hint: 'PHP package manager',
         quick:      { lang: 'sh', body: 'composer config -g secure-http false\ncomposer config -g repo.packagist composer {URL}/composer/' },
+        configure:  { lang: 'sh', body: 'composer config -g secure-http false\ncomposer config -g repo.packagist composer {URL}/composer/' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'composer config -g secure-http false\ncomposer config -g repo.packagist composer {URL}/composer/' },
         ],
@@ -828,3 +855,15 @@ export const LANGUAGES: Language[] = [
     ],
   },
 ]
+
+/**
+ * Canonical package-manager catalog shared by Portal quick start and Admin
+ * onboarding. A manager only exposes `test` when the command is known to be
+ * small, non-mutating, and capable of producing a real proxy request.
+ */
+export const LANGUAGES: Language[] = LANGUAGE_DEFINITIONS
+
+/** The five ecosystems promoted during first-run, projected from the catalog. */
+export const ONBOARDING_LANGUAGES: Language[] = LANGUAGES
+  .filter(language => language.onboardingRank !== undefined)
+  .sort((left, right) => (left.onboardingRank ?? 0) - (right.onboardingRank ?? 0))

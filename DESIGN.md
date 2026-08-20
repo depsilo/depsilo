@@ -1,6 +1,6 @@
 # Depsilo Design System
 
-> Status: current implementation reference, updated 2026-08-07. The source of
+> Status: current implementation reference, updated 2026-08-20. The source of
 > truth is `web/src/index.css`, `web/src/components/`, `web/src/portal/`, and
 > `web/src/admin/`. When this document and code differ, update this document in
 > the same change.
@@ -10,7 +10,7 @@
 | Surface | Routes | Purpose |
 | --- | --- | --- |
 | Portal | `/`, `/monitor` | Package-manager setup and public service health |
-| Admin | `/admin/*` | Repeated operational work: cache, upstreams, logs, policy, users, settings |
+| Admin | `/admin/*` | First-project connection plus repeated operational work: cache, upstreams, logs, policy, users, settings |
 | Setup | first-run gate | Secure administrator creation with defaulted service configuration |
 
 The Portal is not a marketing landing page. Quick Start is the first screen;
@@ -201,6 +201,29 @@ Validation names the failed requirement next to the field and never relies on
 a disabled command as the only explanation. Save failures preserve the form;
 restart failures become a focused recovery state with the reconnect target and
 a retry action.
+
+After a fresh Setup creates the first administrator, the restarted service
+continues to the authenticated `/admin/connect` route. A same-origin restart
+may sign in with the credentials still held by the Setup form; a port or origin
+change falls back to Login while preserving the destination. Bootstrap tokens
+never become Admin or package credentials.
+
+`/admin/connect` is the optional first-project loop: choose an Ecosystem and its
+package manager, copy configuration generated from the browser-visible origin,
+run a small dependency request when a safe client command exists, then observe
+the request and an optional real cache hit. Python, Node.js, Rust, Java, and Go
+are projected as the initial five choices from the same catalog used by Portal;
+the full catalog remains available without a second support list. Wildcard bind
+addresses are replaced with a client-usable localhost origin, while LAN hosts,
+reverse-proxy hosts, ports, and HTTPS are preserved.
+
+Verification uses an authenticated AuditLog cursor captured when the page
+opens. It polls only the bounded event tail, pauses while the document is
+hidden, and stops after a real `hit`; `miss`, policy `blocked`, and upstream
+`error` are all handled requests. Continue writes `completed` or `skipped`, so
+cache-hit confirmation never blocks Dashboard access. Missing onboarding state
+means completed for upgrade compatibility; only fresh administrator creation
+writes `not_started`.
 
 ## Admin
 

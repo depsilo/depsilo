@@ -9,7 +9,9 @@ import Input from '../components/Input'
 import LangToggle from '../components/LangToggle'
 import Logo from '../components/Logo'
 import ThemeToggle from '../components/ThemeToggle'
-import { setupApi } from '../lib/api'
+import { adminApi, authApi, setupApi } from '../lib/api'
+import { adminLoginURL } from '../lib/adminLoginDestination'
+import { writeLocalStorage } from '../lib/storage'
 import { ecosystemDefaults, type UpstreamDefault } from './defaults'
 
 interface SetupWizardProps {
@@ -100,6 +102,8 @@ function resolveReconnectURL(reportedURL: string) {
   target.hash = ''
   return target.toString()
 }
+
+const onboardingPath = '/admin/connect?new=1'
 
 function usernameValid(username: string) {
   return /^[\p{L}\p{N}][\p{L}\p{N}._-]{2,63}$/u.test(username)
@@ -276,7 +280,31 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
       await waitForReconnect(target, controller.signal)
       if (controller.signal.aborted) return
       setPhase('ready')
-      redirectTimerRef.current = window.setTimeout(() => window.location.replace(target), 300)
+      let destination = adminLoginURL(target)
+      if (new URL(target).origin === window.location.origin) {
+        try {
+          const response = await authApi.login(
+            { username: adminUsername.trim(), password: adminPassword },
+            { signal: controller.signal },
+          )
+          if (writeLocalStorage('token', response.data.token)) {
+            let nextPath = onboardingPath
+            try {
+              const onboarding = await adminApi.getOnboardingStatus({}, { signal: controller.signal })
+              if (onboarding.data.status !== 'not_started') nextPath = '/admin'
+            } catch {
+              // If the optional status lookup is unavailable, keep the safe
+              // first-project destination; Admin itself remains fail-open.
+            }
+            destination = new URL(nextPath, target).toString()
+          }
+        } catch {
+          // Setup succeeded. A failed convenience sign-in must not strand the
+          // operator; the login page re-enters through the durable Admin gate.
+        }
+      }
+      if (controller.signal.aborted) return
+      redirectTimerRef.current = window.setTimeout(() => window.location.replace(destination), 300)
     } catch (error) {
       if (controller.signal.aborted) return
       setPhase('failed')

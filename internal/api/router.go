@@ -174,6 +174,13 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite := adminGroup.Group("")
 	adminWrite.Use(middleware.WriteRequired())
 
+	// First-project onboarding is authenticated because its status exposes a
+	// narrow view of package request history. Existing deployments default to
+	// completed when no durable onboarding state exists.
+	onboardingHandler := NewOnboardingHandler(deps.DB)
+	adminRead.GET("/onboarding/status", onboardingHandler.Status)
+	adminWrite.PUT("/onboarding", onboardingHandler.Update)
+
 	// Dashboard
 	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Pools, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled, deps.Config.Cache.MaxSizeGB)
 	adminRead.GET("/dashboard", dashHandler.GetDashboard)

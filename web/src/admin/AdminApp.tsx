@@ -1,12 +1,13 @@
 import { useEffect, useReducer, type ReactElement } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import QueryErrorState from '@/components/QueryErrorState'
 import Icon from '@/components/Icon'
 import Logo from '@/components/Logo'
 import { useTranslation } from 'react-i18next'
-import { AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api'
+import { adminApi, AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api'
+import { ONBOARDING_GATE_QUERY_KEY } from '@/lib/onboarding'
 import { readLocalStorage } from '@/lib/storage'
 import { lazyRoute } from '@/routing/lazyRoute'
 import RouteNotFound from '@/routing/RouteNotFound'
@@ -15,6 +16,7 @@ import { adminRouteManifest, type AdminRouteId } from './routes'
 const LoginV2 = lazyRoute(() => import('./pages/Login'), { surface: 'page' })
 const AdminShell = lazyRoute(() => import('./AdminShell'), { surface: 'page' })
 const DashboardV2 = lazyRoute(() => import('./pages/Dashboard'))
+const ConnectProject = lazyRoute(() => import('./pages/ConnectProject'))
 const Attention = lazyRoute(() => import('./pages/Attention'))
 const BandwidthReportV2 = lazyRoute(() => import('./pages/BandwidthReport'))
 const CacheManageV2 = lazyRoute(() => import('./pages/CacheManage'))
@@ -34,6 +36,7 @@ const SettingsV2 = lazyRoute(() => import('./pages/Settings'))
 
 const routeElements = {
   dashboard: <DashboardV2 />,
+  connect: <ConnectProject />,
   attention: <Attention />,
   bandwidth: <BandwidthReportV2 />,
   cache: <CacheManageV2 />,
@@ -101,6 +104,13 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
   const token = readLocalStorage('token')
   const { principal, isPending, isError, refetch } = usePrincipal(Boolean(token))
+  const onboarding = useQuery({
+    queryKey: ONBOARDING_GATE_QUERY_KEY,
+    queryFn: async ({ signal }) => (await adminApi.getOnboardingStatus({}, { signal })).data,
+    enabled: Boolean(token && principal),
+    staleTime: 30_000,
+    retry: false,
+  })
 
   if (!token) return <Navigate to="/admin/login" state={{ from: location }} replace />
   if (isPending) return <AdminAuthPending />
@@ -110,6 +120,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
         <QueryErrorState message={t('auth.principalLoadError')} onRetry={() => { void refetch() }} />
       </main>
     )
+  }
+  if (onboarding.isPending) return <AdminAuthPending />
+  if (onboarding.data?.status === 'not_started' && location.pathname !== '/admin/connect') {
+    return <Navigate to="/admin/connect?new=1" replace />
   }
   return <>{children}</>
 }

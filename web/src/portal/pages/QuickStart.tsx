@@ -5,6 +5,7 @@ import CompileCacheIntro from '@/portal/components/CompileCacheIntro'
 import EcosystemCatalog from '@/portal/components/EcosystemCatalog'
 import HeroAICTA from '@/portal/components/HeroAICTA'
 import { LANGUAGES } from '@/lib/ecosystemData'
+import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 
 const RECENT_ECOSYSTEMS_KEY = 'depsilo.portal.recent-ecosystems.v1'
@@ -41,7 +42,7 @@ function writeRecentEcosystems(ids: string[]) {
 
 export default function QuickStart({ pytorchIndexPath }: Props) {
   const { t } = useTranslation()
-  const endpoint = window.location.origin
+  const endpoint = resolveServiceOrigin()
   const [recentEcosystems, setRecentEcosystems] = useState(readRecentEcosystems)
   const [language, setLanguage] = useState(() => recentEcosystems[0] ?? 'python')
 

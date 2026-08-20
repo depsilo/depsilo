@@ -148,6 +148,9 @@ func ExtractName(adapterType, key string) string {
 		return fname
 	case "nuget":
 		trimmed := strings.TrimPrefix(key, "nuget/")
+		if id, _ := ParseNugetPath(trimmed); id != "" {
+			return id
+		}
 		if strings.HasPrefix(trimmed, "v3/package/") {
 			parts := strings.SplitN(strings.TrimPrefix(trimmed, "v3/package/"), "/", 2)
 			if len(parts) >= 1 {
@@ -289,7 +292,11 @@ func ExtractVersion(adapterType, key string) string {
 			}
 		}
 	case "nuget":
-		parts := strings.Split(strings.TrimPrefix(key, "nuget/"), "/")
+		trimmed := strings.TrimPrefix(key, "nuget/")
+		if _, version := ParseNugetPath(trimmed); version != "" {
+			return version
+		}
+		parts := strings.Split(trimmed, "/")
 		if len(parts) >= 3 && strings.HasPrefix(parts[0], "v3/package") {
 			return parts[2]
 		}

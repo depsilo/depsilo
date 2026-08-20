@@ -8,23 +8,9 @@ import Icon from '@/components/Icon'
 import Input from '@/components/Input'
 import Logo from '@/components/Logo'
 import { authApi } from '@/lib/api'
+import { loginDestination } from '@/lib/adminLoginDestination'
 import { getApiError } from '@/lib/apiError'
 import { writeLocalStorage } from '@/lib/storage'
-
-function loginDestination(state: unknown) {
-  if (!state || typeof state !== 'object' || !('from' in state)) return '/admin'
-  const from = (state as { from?: unknown }).from
-  if (!from || typeof from !== 'object') return '/admin'
-  const candidate = from as { pathname?: unknown; search?: unknown; hash?: unknown }
-  if (typeof candidate.pathname !== 'string' ||
-      (candidate.pathname !== '/admin' && !candidate.pathname.startsWith('/admin/')) ||
-      candidate.pathname === '/admin/login') {
-    return '/admin'
-  }
-  const search = typeof candidate.search === 'string' ? candidate.search : ''
-  const hash = typeof candidate.hash === 'string' ? candidate.hash : ''
-  return `${candidate.pathname}${search}${hash}`
-}
 
 export default function Login() {
   const { t } = useTranslation()
@@ -73,7 +59,7 @@ export default function Login() {
         return
       }
       queryClient.clear()
-      navigate(loginDestination(location.state), { replace: true })
+      navigate(loginDestination(location.state, location.search), { replace: true })
     } catch (requestError: unknown) {
       if (controller.signal.aborted) return
       const status = getApiError(requestError).status

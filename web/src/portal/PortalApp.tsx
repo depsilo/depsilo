@@ -12,6 +12,7 @@ import Icon from '@/components/Icon'
 import { lazyRoute } from '@/routing/lazyRoute'
 import RouteNotFound from '@/routing/RouteNotFound'
 import { useTransientState } from '@/hooks/useTransientFlag'
+import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
 
 const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
 const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
@@ -27,7 +28,7 @@ interface PortalStats {
 function EndpointPill() {
   const { t } = useTranslation()
   const [copyState, showCopyState] = useTransientState<'idle' | 'copied' | 'failed'>('idle')
-  const url = window.location.origin
+  const url = resolveServiceOrigin()
   // Drop the protocol for visual density — the click-to-copy still
   // copies the full URL with scheme.
   const compact = url.replace(/^https?:\/\//, '')

@@ -104,6 +104,25 @@ func (m *MockUpstream) RegisterNpm() {
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Write([]byte("FAKE_NPM_TARBALL"))
 	})
+	// Dedicated onboarding fixtures must stay isolated from the ordinary npm
+	// cases because the integration suite shares one server and cache. The
+	// success artifact therefore always starts as a real miss in the onboarding
+	// test, while the failure endpoint exercises the proxy's upstream-error
+	// observation path without relying on public network behavior.
+	m.mux.HandleFunc("/onboarding-fixture/", func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "/onboarding-fixture/-/onboarding-fixture-1.0."
+		patch := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, prefix), ".tgz")
+		if !strings.HasPrefix(r.URL.Path, prefix) || !strings.HasSuffix(r.URL.Path, ".tgz") ||
+			patch == "" || strings.Trim(patch, "0123456789") != "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/gzip")
+		_, _ = w.Write([]byte("FAKE_ONBOARDING_NPM_TARBALL"))
+	})
+	m.mux.HandleFunc("/onboarding-error/-/onboarding-error-1.0.0.tgz", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "onboarding upstream unavailable", http.StatusServiceUnavailable)
+	})
 }
 
 // RegisterGoModules adds Go module proxy endpoints.

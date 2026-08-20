@@ -54,6 +54,17 @@ type captureAuditEntries struct {
 	entries []db.AuditLog
 }
 
+type timestampAccessRecorder struct {
+	event accesslog.Event
+}
+
+func (recorder *timestampAccessRecorder) Record(event accesslog.Event) {
+	recorder.event = event
+}
+
+func (*timestampAccessRecorder) Flush(context.Context) error { return nil }
+func (*timestampAccessRecorder) Close(context.Context) error { return nil }
+
 func (l *captureAuditEntries) Log(entry db.AuditLog) {
 	l.entries = append(l.entries, entry)
 }
@@ -150,6 +161,58 @@ func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
 		if audit.entries[index].CreatedAt.IsZero() {
 			t.Errorf("%s %q has zero event timestamp", test.ecosystem, test.cacheKey)
 		}
+	}
+}
+
+func TestLogPolicyBlockUsesUnifiedAuditOutcome(t *testing.T) {
+	accessHooks.Store(nil)
+	t.Cleanup(func() { accessHooks.Store(nil) })
+
+	audit := &captureAuditEntries{}
+	InstallAccessHooks(nil, audit)
+	LogPolicyBlock(context.Background(), "pypi", "requests", "", http.StatusForbidden, "192.0.2.1")
+	LogPolicyBlock(context.Background(), "npm", "blocked-package", "1.0.0", http.StatusUnavailableForLegalReasons, "192.0.2.2")
+
+	if len(audit.entries) != 2 {
+		t.Fatalf("audit entries = %d, want 2", len(audit.entries))
+	}
+	for index, entry := range audit.entries {
+		if entry.CacheResult != "blocked" || entry.PackageName == "" || entry.CreatedAt.IsZero() {
+			t.Errorf("entry %d = %#v", index, entry)
+		}
+	}
+	if audit.entries[0].Action != "metadata" || audit.entries[0].StatusCode != http.StatusForbidden {
+		t.Errorf("metadata block = %#v", audit.entries[0])
+	}
+	if audit.entries[1].Action != "download" || audit.entries[1].StatusCode != http.StatusUnavailableForLegalReasons {
+		t.Errorf("artifact block = %#v", audit.entries[1])
+	}
+}
+
+func TestLogAccessAttributesAuditEventToRequestStart(t *testing.T) {
+	accessHooks.Store(nil)
+	t.Cleanup(func() { accessHooks.Store(nil) })
+
+	recorder := &timestampAccessRecorder{}
+	audit := &captureAuditEntries{}
+	InstallAccessHooks(recorder, audit)
+	const latency = 2750 * time.Millisecond
+	before := time.Now().UTC()
+	LogAccess(context.Background(), nil, "npm", "GET", "npm/is-number/metadata.json", false, "primary", latency, http.StatusBadGateway, "192.0.2.8", 0)
+	after := time.Now().UTC()
+
+	if len(audit.entries) != 1 {
+		t.Fatalf("audit entries = %#v", audit.entries)
+	}
+	auditTime := audit.entries[0].CreatedAt
+	if got := recorder.event.At.Sub(auditTime); got != latency {
+		t.Fatalf("access completion - audit request start = %s, want %s", got, latency)
+	}
+	if recorder.event.At.Before(before) || recorder.event.At.After(after) {
+		t.Fatalf("access event time %s is not completion time in [%s, %s]", recorder.event.At, before, after)
+	}
+	if auditTime.Before(before.Add(-latency)) || auditTime.After(after.Add(-latency)) {
+		t.Fatalf("audit event time %s is not request start in [%s, %s]", auditTime, before.Add(-latency), after.Add(-latency))
 	}
 }
 

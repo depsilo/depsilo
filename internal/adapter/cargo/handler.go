@@ -100,6 +100,7 @@ func (h *Handler) handleConfig(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch cargo config.json", zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, ConfigCacheKey(), false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -164,6 +165,7 @@ func (h *Handler) handleIndex(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch crate index", zap.String("crate", crateName), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -222,6 +224,7 @@ func (h *Handler) handleDownload(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch crate", zap.String("crate", crateName), zap.String("version", version), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "cargo", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}

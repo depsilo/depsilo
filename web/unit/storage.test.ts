@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../src/lib/storage'
+import {
+  readLocalStorage,
+  readSessionStorage,
+  removeLocalStorage,
+  removeSessionStorage,
+  writeLocalStorage,
+  writeSessionStorage,
+} from '../src/lib/storage'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -34,11 +41,15 @@ describe('safe local storage', () => {
       setItem: (key: string, value: string) => { values.set(key, value) },
       removeItem: (key: string) => { values.delete(key) },
     } as unknown as Storage
-    vi.stubGlobal('window', { localStorage: storage })
+    vi.stubGlobal('window', { localStorage: storage, sessionStorage: storage })
 
     expect(writeLocalStorage('lang', 'en')).toBe(true)
     expect(readLocalStorage('lang')).toBe('en')
     expect(removeLocalStorage('lang')).toBe(true)
     expect(readLocalStorage('lang')).toBeNull()
+    expect(writeSessionStorage('cursor', '12')).toBe(true)
+    expect(readSessionStorage('cursor')).toBe('12')
+    expect(removeSessionStorage('cursor')).toBe(true)
+    expect(readSessionStorage('cursor')).toBeNull()
   })
 })

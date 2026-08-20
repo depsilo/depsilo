@@ -94,6 +94,7 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch nuget service index", zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -140,6 +141,7 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch nuget resource", zap.String("path", path), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "nuget", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}

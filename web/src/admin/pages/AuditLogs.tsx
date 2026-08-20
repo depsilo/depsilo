@@ -32,6 +32,7 @@ function resultBadge(result: string, t: (k: string) => string) {
   if (result === 'hit') return <BadgeV2 variant="success">{t('audit.hit')}</BadgeV2>
   if (result === 'success') return <BadgeV2 variant="success">{t('audit.success')}</BadgeV2>
   if (result === 'error') return <BadgeV2 variant="error">{t('audit.error')}</BadgeV2>
+  if (result === 'blocked') return <BadgeV2 variant="warning">{t('audit.blocked')}</BadgeV2>
   if (result === 'miss') return <BadgeV2>{t('audit.miss')}</BadgeV2>
   return <BadgeV2>{result || '-'}</BadgeV2>
 }
@@ -61,7 +62,7 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   else next.delete('ecosystem')
 
   const result = current.get('result')
-  if (result === 'hit' || result === 'miss' || result === 'success' || result === 'error') next.set('result', result)
+  if (result === 'hit' || result === 'miss' || result === 'success' || result === 'error' || result === 'blocked') next.set('result', result)
   else next.delete('result')
 
   const range = current.get('range')
@@ -110,6 +111,7 @@ export default function AuditLogsV2() {
     if (resultFilter === 'miss') params.result = 'miss'
     if (resultFilter === 'success') params.result = 'success'
     if (resultFilter === 'error') params.result = 'error'
+    if (resultFilter === 'blocked') params.result = 'blocked'
     return params
   }
 
@@ -247,6 +249,7 @@ export default function AuditLogsV2() {
             <option value="miss">{t('audit.miss')}</option>
             <option value="success">{t('audit.success')}</option>
             <option value="error">{t('audit.error')}</option>
+            <option value="blocked">{t('audit.blocked')}</option>
           </SelectV2>
         </div>
 

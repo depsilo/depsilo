@@ -205,3 +205,29 @@ func TestQuarantineGateScopedNilCheckerDoesNotFallBackToGlobal(t *testing.T) {
 		t.Fatalf("scoped nil checker fell back to global checker: calls=%d", got)
 	}
 }
+
+func TestQuarantineGateRecordsBlockedAuditOutcome(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	quarantineHooks.Store(nil)
+	accessHooks.Store(nil)
+	t.Cleanup(func() {
+		quarantineHooks.Store(nil)
+		accessHooks.Store(nil)
+	})
+
+	audit := &captureAuditEntries{}
+	InstallAccessHooks(nil, audit)
+	InstallQuarantineChecker(&recordingQuarantineChecker{owner: 7})
+	blocked, recorder := runQuarantineGate(t, "unsafe-package")
+	if !blocked || recorder.Code != http.StatusUnavailableForLegalReasons {
+		t.Fatalf("blocked=%v status=%d body=%s", blocked, recorder.Code, recorder.Body.String())
+	}
+	if len(audit.entries) != 1 {
+		t.Fatalf("audit entries = %#v", audit.entries)
+	}
+	entry := audit.entries[0]
+	if entry.Ecosystem != "npm" || entry.PackageName != "unsafe-package" || entry.Version != "1.0.0" ||
+		entry.Action != "download" || entry.CacheResult != "blocked" || entry.StatusCode != http.StatusUnavailableForLegalReasons {
+		t.Fatalf("audit entry = %#v", entry)
+	}
+}

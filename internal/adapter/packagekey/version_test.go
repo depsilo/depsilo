@@ -142,6 +142,16 @@ func TestParseNugetPath(t *testing.T) {
 	}
 }
 
+func TestExtractNugetFlatContainerIdentity(t *testing.T) {
+	key := "nuget/v3-flatcontainer/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg"
+	if got := ExtractName("nuget", key); got != "newtonsoft.json" {
+		t.Fatalf("ExtractName(nuget, %q) = %q", key, got)
+	}
+	if got := ExtractVersion("nuget", key); got != "13.0.3" {
+		t.Fatalf("ExtractVersion(nuget, %q) = %q", key, got)
+	}
+}
+
 func TestParseCondaPath(t *testing.T) {
 	cases := []struct {
 		path         string

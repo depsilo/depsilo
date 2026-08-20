@@ -21,7 +21,7 @@ import (
 func newReadAuthRouter(t *testing.T) (*gin.Engine, string, string) {
 	t.Helper()
 	database := newAPIAuthTestDB(t)
-	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}); err != nil {
+	if err := database.AutoMigrate(&db.CacheEntry{}, &db.AccessLog{}, &db.AuditLog{}, &db.ControlPlaneState{}); err != nil {
 		t.Fatalf("migrate package history: %v", err)
 	}
 
@@ -220,6 +220,40 @@ func TestPortalDiscoveryAndAggregateStatusRemainAnonymous(t *testing.T) {
 			router.ServeHTTP(response, request)
 			if response.Code != http.StatusOK {
 				t.Fatalf("anonymous Portal endpoint returned %d, want %d: %q", response.Code, http.StatusOK, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestOnboardingRoutesRequireAdminCapabilities(t *testing.T) {
+	router, jwtToken, apiToken := newReadAuthRouter(t)
+
+	for _, test := range []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		token  string
+		want   int
+	}{
+		{name: "anonymous read", method: http.MethodGet, path: "/api/v1/admin/onboarding/status", want: http.StatusUnauthorized},
+		{name: "JWT read", method: http.MethodGet, path: "/api/v1/admin/onboarding/status", token: jwtToken, want: http.StatusOK},
+		{name: "readonly token read", method: http.MethodGet, path: "/api/v1/admin/onboarding/status", token: apiToken, want: http.StatusOK},
+		{name: "readonly token write", method: http.MethodPut, path: "/api/v1/admin/onboarding", body: `{"status":"skipped"}`, token: apiToken, want: http.StatusForbidden},
+		{name: "JWT write", method: http.MethodPut, path: "/api/v1/admin/onboarding", body: `{"status":"skipped"}`, token: jwtToken, want: http.StatusOK},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(test.method, test.path, strings.NewReader(test.body))
+			if test.body != "" {
+				request.Header.Set("Content-Type", "application/json")
+			}
+			if test.token != "" {
+				request.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			router.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("status = %d, want %d; body=%q", response.Code, test.want, response.Body.String())
 			}
 		})
 	}

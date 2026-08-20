@@ -89,6 +89,7 @@ func (h *Handler) handlePackagesJSON(c *gin.Context) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch composer packages.json", zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -122,10 +123,13 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 		return
 	}
 	fullName := vendor + "/" + pkg
+	start := time.Now()
+	cacheKey := DistCacheKey(vendor, pkg, reference, ext)
 
 	entry, err := h.resolveDistEntry(c.Request.Context(), vendor, pkg, versionNorm, reference)
 	if err != nil {
 		zap.L().Error("failed to resolve composer dist metadata", zap.String("package", fullName), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -146,6 +150,7 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 	// so metadata can't point the proxy at other schemes.
 	distURL := entry.Dist.URL
 	if !strings.HasPrefix(distURL, "https://") && !strings.HasPrefix(distURL, "http://") {
+		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_ERROR", "message": "unsupported dist url scheme"})
 		return
 	}
@@ -159,9 +164,6 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 	if blocked := adapter.QuarantineGate(c, "composer", fullName, entry.Version); blocked {
 		return
 	}
-
-	start := time.Now()
-	cacheKey := DistCacheKey(vendor, pkg, reference, ext)
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "composer", h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
@@ -189,6 +191,7 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 
 	if err != nil {
 		zap.L().Error("failed to fetch composer dist", zap.String("package", fullName), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}
@@ -293,6 +296,7 @@ func (h *Handler) proxyPassthrough(c *gin.Context, path string, ttl time.Duratio
 
 	if err != nil {
 		zap.L().Error("failed to fetch composer resource", zap.String("path", path), zap.Error(err))
+		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
 		c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
 		return
 	}

@@ -123,6 +123,14 @@ func QuarantineGate(c *gin.Context, ecosystem, pkg, version string) bool {
 	if code == "" {
 		code = "QUARANTINED"
 	}
+	LogPolicyBlock(
+		c.Request.Context(),
+		ecosystem,
+		pkg,
+		version,
+		http.StatusUnavailableForLegalReasons,
+		c.ClientIP(),
+	)
 	c.JSON(http.StatusUnavailableForLegalReasons, gin.H{
 		"code":      code,
 		"message":   d.Reason,

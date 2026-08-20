@@ -148,29 +148,67 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 		}
 	}
 
+	action := "download"
+	if db.ClassifyCacheKind(adapterType, cacheKey) == db.CacheKindMetadata {
+		action = "metadata"
+	}
+	cacheResult := "miss"
+	if hit {
+		cacheResult = "hit"
+	}
+	if statusCode >= 500 {
+		cacheResult = "error"
+	}
+	logAuditOutcome(hooks, db.AuditLog{
+		Ecosystem:   adapterType,
+		PackageName: pkgName,
+		Version:     packagekey.ExtractVersion(adapterType, cacheKey),
+		Action:      action,
+		CacheResult: cacheResult,
+		ClientIP:    clientIP,
+		LatencyMs:   latency.Milliseconds(),
+		BytesSent:   bytesSent,
+		StatusCode:  statusCode,
+		// AuditLog is the request-event source used by session baselines.
+		// Attribute the event to request start, not completion, so a slow
+		// request already in flight when onboarding begins cannot look new.
+		CreatedAt: now.Add(-latency),
+	})
+}
+
+// LogPolicyBlock records a request that reached Depsilo but was refused before
+// the cache/upstream path. Keeping policy outcomes in AuditLog gives Admin UX a
+// single source for miss, hit, error, and blocked request results without
+// changing the policy response or writing a synthetic cache access.
+func LogPolicyBlock(ctx context.Context, ecosystem, packageName, version string, statusCode int, clientIP string) {
+	if ctx != nil {
+		if suppressed, _ := ctx.Value(suppressAccessLoggingContextKey{}).(bool); suppressed {
+			return
+		}
+	}
+	hooks := accessHooks.Load()
+	if scope, ok := requestScopeFromContext(ctx); ok {
+		// A scoped nil audit logger is authoritative for its server owner.
+		hooks = &scope.access
+	}
+	action := "metadata"
+	if version != "" {
+		action = "download"
+	}
+	logAuditOutcome(hooks, db.AuditLog{
+		Ecosystem:   ecosystem,
+		PackageName: packageName,
+		Version:     version,
+		Action:      action,
+		CacheResult: "blocked",
+		ClientIP:    clientIP,
+		StatusCode:  statusCode,
+		CreatedAt:   time.Now().UTC(),
+	})
+}
+
+func logAuditOutcome(hooks *accessHookSnapshot, entry db.AuditLog) {
 	if hooks != nil && hooks.audit != nil {
-		action := "download"
-		if db.ClassifyCacheKind(adapterType, cacheKey) == db.CacheKindMetadata {
-			action = "metadata"
-		}
-		cacheResult := "miss"
-		if hit {
-			cacheResult = "hit"
-		}
-		if statusCode >= 500 {
-			cacheResult = "error"
-		}
-		hooks.audit.Log(db.AuditLog{
-			Ecosystem:   adapterType,
-			PackageName: pkgName,
-			Version:     packagekey.ExtractVersion(adapterType, cacheKey),
-			Action:      action,
-			CacheResult: cacheResult,
-			ClientIP:    clientIP,
-			LatencyMs:   latency.Milliseconds(),
-			BytesSent:   bytesSent,
-			StatusCode:  statusCode,
-			CreatedAt:   now,
-		})
+		hooks.audit.Log(entry)
 	}
 }

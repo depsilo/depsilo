@@ -4,6 +4,7 @@ import CodeBlock from '@/portal/components/CodeBlock'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import { LANGUAGES, type ManagerConfig } from '@/lib/ecosystemData'
+import { renderManagerTemplate, resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import PyTorchIndexNotice from '@/portal/components/PyTorchIndexNotice'
 
 interface Props {
@@ -238,6 +239,8 @@ export default function ConfigurePane({
 
   if (!language) return null
 
+  const resolvedEndpoint = resolveServiceOrigin(endpoint)
+
   const manager =
     language.managers.find(item => item.id === managerId) ?? language.managers[0]
   if (!manager) return null
@@ -249,18 +252,7 @@ export default function ConfigurePane({
         ? 'pip'
         : null
 
-  const host = endpoint.replace(/^https?:\/\//, '')
-  const plainHTTP = /^http:\/\//i.test(endpoint)
-  const fill = (source: string) => {
-    let value = source.replace(/\{URL\}/g, endpoint).replace(/\{HOST\}/g, host)
-    if (!plainHTTP) {
-      value = value
-        .replace(/\ntrusted-host = [^\n]*/g, '')
-        .replace(/,\n\s*"insecure-registries": \[[^\n]*\]/g, '')
-        .replace(/\ninsecure = true/g, '')
-    }
-    return value
-  }
+  const fill = (source: string) => renderManagerTemplate(source, resolvedEndpoint)
 
   return (
     <div
@@ -297,12 +289,12 @@ export default function ConfigurePane({
         <div
           className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-[6px] px-2.5 py-1.5 min-[640px]:flex"
           style={{ background: 'var(--bg-soft)' }}
-          title={endpoint}
+          title={resolvedEndpoint}
         >
           <Icon name="link" size="sm" className="shrink-0 text-[var(--text-subtle)]" />
           <span className="sr-only">{t('quickstart.endpointLabel')}</span>
           <span className="truncate font-[var(--font-mono)] text-[11px] text-[var(--text-muted)]">
-            {endpoint}
+            {resolvedEndpoint}
           </span>
         </div>
       </div>
@@ -392,7 +384,7 @@ export default function ConfigurePane({
 
           {language.id === 'python' && pytorchClient && pytorchIndexPath && (
             <PyTorchIndexNotice
-              endpoint={endpoint}
+              endpoint={resolvedEndpoint}
               path={pytorchIndexPath}
               client={pytorchClient}
             />
