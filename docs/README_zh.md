@@ -1,45 +1,66 @@
-[![Go](https://img.shields.io/badge/Go-1.26.5+-00ADD8?logo=go&logoColor=white)](https://go.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../LICENSE)
-[![Docker Pulls](https://img.shields.io/docker/pulls/depsilo/depsilo)](https://hub.docker.com/r/depsilo/depsilo)
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="brand/logo-stacked-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="brand/logo-stacked-light.svg">
+  <img src="brand/logo-stacked-light.svg" alt="Depsilo" width="200">
+</picture>
+
+**为个人和小团队打造的自托管依赖代理、缓存与供应链策略服务。**
+
+用一个服务承接 14 个包生态和 Docker OCI。缓存重复下载、管理上游、查看依赖流量，
+并在依赖安装链路上执行供应链策略。
+
 [![Release](https://img.shields.io/github/v/release/depsilo/depsilo)](https://github.com/depsilo/depsilo/releases)
+[![Verify](https://github.com/depsilo/depsilo/actions/workflows/verify.yml/badge.svg)](https://github.com/depsilo/depsilo/actions/workflows/verify.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../LICENSE)
 
-**[English](../README.md) | [中文](README_zh.md)**
+[网站](https://depsilo.com) &bull;
+[快速开始](#快速开始) &bull;
+[文档导航](#文档导航) &bull;
+[容器镜像](https://github.com/depsilo/depsilo/pkgs/container/depsilo) &bull;
+[English](../README.md)
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="brand/logo-stacked-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="brand/logo-stacked-light.svg">
-    <img src="brand/logo-stacked-light.svg" alt="Depsilo" height="120">
-  </picture>
-  <br>
-  <strong>依仓</strong>
-  <br>
-  <em>依赖安装链路上的供应链策略执行层</em>
-</p>
+</div>
 
 ---
 
-<!-- 截图：Web UI 仪表盘 -->
-<!-- TODO: 首次部署后添加截图 -->
+## Depsilo 能做什么
 
-## ✨ 特性
+```text
+包管理器 / CI / 编码 Agent
+            │
+            ▼
+         Depsilo
+     缓存 · 策略 · 审计
+            │
+            ▼
+           上游
+```
 
-- 🚀 **14 个常规生态代理缓存 + Docker OCI** — pip, apt, npm, Go, cargo, Maven, RubyGems, Composer, NuGet, Conda, CRAN, Helm, Alpine, Hugging Face
-- 🛡️ **最小发布年龄隔离** — 默认关闭；可按生态启用新版本冷却窗口
-- ⛔ **已知恶意包阻断** — 每 6 小时同步 8 个生态的 OSV MAL 精确版本/全版本记录，命中返回 451
-- 🔐 **篡改检测** — 首次抓取记录 SHA-256；后台刷新不一致时保留缓存，LRU 淘汰后重取会缓存/返回新字节并告警
-- 🧾 **审计与 Webhook** — block / bypass / approve / revoke / override 均可追踪；阻断和篡改信号可推送到 Slack / 钉钉 / 企微 / 飞书
-- ⚡ **并发请求合并** — 100 个相同 miss 请求只触发 1 次回源
-- 🌐 **多上游源**，支持为每个源单独配置 HTTP 代理
-- 🔄 **自动健康检查**，按优先级选择健康上游；健康状态影响后续请求
-- 💾 **本地文件系统或 S3 兼容**存储
-- 📊 **Web 管理界面** + Prometheus `/metrics`
-- 🪶 **约 50 MB 内存**，单二进制文件，默认 SQLite
-- 🐳 **一行命令 Docker 部署**
+- **缓存**：将制品流式写入本地或 S3 兼容存储，合并并发缓存未命中请求，并在上游
+  不可用时继续提供符合条件的已缓存制品。
+- **管理上游**：按生态配置多个上游、监控健康状态，并可为每个上游单独设置 HTTP
+  代理。
+- **执行策略**：阻断运维者定义的包规则、已知恶意版本，以及违反已启用冷却期的
+  新版本。
+- **校验与审计**：记录首次发现的哈希，提示制品篡改，并在管理后台、API、日志、
+  Webhook 和 Prometheus 指标中呈现请求及策略决策。
 
-版本说明：`v0.9.0` 已发布恶意包阻断与篡改检测；`v0.8.0` 已发布最小发布年龄隔离。
+Depsilo 采用 MIT 许可证，不包含遥测；它是基于 SQLite 的轻量单实例服务，不是
+多节点制品库或高可用控制面。
 
-## 🚀 快速开始
+> 本 README 描述当前 `master` 分支。使用带版本标签的发行版时，请以该发行版附带的
+> README 和配置参考为准。
+
+## 快速开始
+
+> **发行说明：**统一状态路径、启动摘要和首次项目接入在 `v0.9.0` 之后进入
+> `master`。新版发布并移动 `latest` 之前，请对 `v0.9.0` 使用该版本附带的 README，
+> 或从当前 `master` 构建。本提示可在下一个版本发布后删除。
+
+从 Binary 或容器安装中任选一种。首次启动不需要克隆仓库，不需要提前准备
+`config.toml`，也不需要设置数据库和缓存路径环境变量。
 
 ### Binary（Linux / macOS）
 
@@ -48,10 +69,13 @@ curl -fsSL https://depsilo.com/install.sh | bash
 depsilo serve
 ```
 
-然后打开 `http://127.0.0.1:23333`。首次启动摘要会显示完成初始化所需的
-一次性 bootstrap token。
+打开 <http://127.0.0.1:23333>。安装器会校验发行包 checksum；如需固定版本或选择
+其他安装目录，可分别设置 `DEPSILO_VERSION` 和 `DEPSILO_INSTALL_DIR`。
 
-### Docker（推荐）
+也可以直接从 [GitHub Releases](https://github.com/depsilo/depsilo/releases)
+下载对应平台的压缩包。
+
+### Docker
 
 ```bash
 docker run -d \
@@ -60,16 +84,17 @@ docker run -d \
   -v depsilo-data:/root/.depsilo \
   --restart unless-stopped \
   ghcr.io/depsilo/depsilo:latest
+
+docker logs depsilo
 ```
 
-首次打开 Portal 时，先用 `docker logs depsilo` 取得启动日志中的一次性
-bootstrap token，再在 Setup Wizard 中设置管理员用户名和强密码。上述 volume
-会持久化生成的配置、SQLite 数据库、本地缓存和其他状态。
+打开 <http://127.0.0.1:23333>。命名 Volume 会保存自动生成的配置、SQLite 数据库、
+缓存制品和其他运行状态，重启或重建容器不会丢失这些数据。
 
-当前向导不会生成 Docker registry block 或 Hugging Face upstream。测试这两个
-安装入口前，先按 `config.example.toml` 手工补齐对应配置并重启 Depsilo。
+长期运行时，请将 `latest` 替换为完整的 `X.Y.Z` 发行标签。GHCR 是官方主镜像仓库，
+Docker Hub 作为镜像源同步维护。
 
-### Compose
+### Docker Compose
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.yaml
@@ -77,7 +102,150 @@ docker compose up -d
 docker compose logs depsilo
 ```
 
-### 从源码构建
+官方 Compose 文件只有一个服务、一个端口和一个持久化 Volume。可通过
+`PORT=18080 docker compose up -d` 修改宿主机端口，然后打开
+<http://127.0.0.1:18080>。启动日志显示的是容器监听地址；浏览器应使用宿主机发布
+端口，日志用于查找 bootstrap token。
+
+### 完成首次启动
+
+启动摘要会告诉你服务器、数据库和缓存是否就绪。新的互动式安装还会显示 Portal
+地址和一次性 bootstrap token。
+
+1. 打开 Portal，输入 bootstrap token。
+2. 创建第一个管理员。Depsilo 没有预设管理员密码。
+3. 进入 **接入第一个项目**。
+4. 选择生态和包管理器，复制自动生成的配置，然后运行建议的依赖命令。
+5. Depsilo 会自动识别真实请求。需要验证缓存时，再运行一次请求；也可以随时跳过并
+   前往总览。
+
+浏览器中的配置以你实际访问 Depsilo 的 URL 为准，会保留局域网地址、反向代理域名、
+自定义端口和 HTTPS。Portal 只提供透明的复制粘贴命令，不会修改本机包管理器配置。
+
+已经配置过的部署在运维者登录 Admin 后不会被强制重新完成接入。以后仍可通过
+**接入项目**重新打开同一个流程。
+
+## 支持的安装入口
+
+| 生态 | 常用客户端 |
+| --- | --- |
+| Python | pip、uv、Poetry、Pipenv、PDM |
+| Debian / Ubuntu | apt |
+| Node.js | npm、pnpm、Yarn、Bun |
+| Go | `go` |
+| Rust | Cargo |
+| Java / Kotlin / Scala | Maven、Gradle、sbt |
+| Ruby | RubyGems、Bundler |
+| PHP | Composer |
+| .NET | `dotnet`、NuGet |
+| 数据科学 | Conda、R / CRAN |
+| 基础设施 | Helm、Alpine apk |
+| 模型与数据集 | Hugging Face `hf`、Transformers |
+| 容器 | Docker、containerd、Podman，通过独立 OCI `/v2/` 路由接入 |
+
+产品共有 14 个带路径前缀的标准生态，加上独立的 Docker OCI 路由，总计 15 个安装
+入口。
+
+OCI 路由是面向客户端 `GET` / `HEAD` 请求的 pull-through cache，不是用于推送或托管
+镜像的通用 Registry。
+
+Portal 已提供 Docker Registry 和 Hugging Face 的客户端说明，但首次 Setup Wizard
+不会为这两者创建上游。在发送这些请求前，请先通过
+[`config.example.toml`](../config.example.toml) 添加对应配置并重启 Depsilo。
+
+## 供应链控制
+
+各项控制彼此独立；启用或关闭其中一项不会隐式改变其他策略。
+
+| 控制 | 默认值 | 行为 |
+| --- | --- | --- |
+| 已知恶意包列表 | 开启 | 为八个覆盖生态同步 OSV MAL 的明确版本和全版本记录，并在返回软件包前阻断命中项。 |
+| 最小发布年龄 | 关闭 | 启用后，将刚发布的版本保留到运维者配置的冷却期结束。 |
+| 篡改检测 | 开启 | 在自然刷新时比较不可变制品与首次发现的 SHA-256，不一致时产生告警；它不会直接阻断请求。 |
+| 包 Allow / Deny 规则 | 运维者定义 | 在请求链路上应用明确的包策略并记录决策。 |
+
+新安装会在首次成功同步恶意包数据集后开始执行对应阻断。后续同步失败时继续使用上一次
+成功的数据，不会因此中断正常包流量。
+
+策略阻断仍然表示请求已经到达 Depsilo，并被 Depsilo 正确处理。Portal 和管理后台会
+区分缓存命中、未命中、策略阻断和上游错误，而不是把所有未安装结果视为同一种失败。
+
+Composer 在镜像分发地址被拒绝后，可能回退到原始分发地址。要求 Composer 严格阻断
+时，还必须限制客户端直接访问该原始地址。
+
+完整策略结构和当前生态默认值见
+[`config.example.toml`](../config.example.toml)。
+
+## 状态、配置与健康检查
+
+Zero-config 安装会把持久状态收拢到同一个根目录：
+
+| 状态 | Binary | Docker |
+| --- | --- | --- |
+| 根目录与生成配置 | `~/.depsilo` | `/root/.depsilo` |
+| SQLite 数据库 | `~/.depsilo/data/depsilo.db` | `/root/.depsilo/data/depsilo.db` |
+| 包缓存 | `~/.depsilo/data/cache` | `/root/.depsilo/data/cache` |
+| 编译缓存 | `~/.depsilo/data/compile-cache` | `/root/.depsilo/data/compile-cache` |
+
+编译缓存默认关闭。高级用户仍可覆盖配置文件、数据库、存储、S3、认证、服务和策略
+设置。配置优先级为：
+
+```text
+CLI 参数 → DEPSILO_* 环境变量 → 配置文件 → 内置默认值
+```
+
+Binary 安装的常用检查：
+
+```bash
+depsilo --version
+depsilo status
+depsilo doctor
+curl -fsS http://127.0.0.1:23333/ready
+```
+
+Docker 或 Compose 使用容器内稳定的二进制路径执行相同检查：
+
+```bash
+docker exec depsilo /app/depsilo status
+docker exec depsilo /app/depsilo doctor
+```
+
+完整部署检查见[自检清单](self-test-checklist.md)。配置持久化、上游权威、权限和 API
+响应语义见 [Admin 控制面说明](admin-control-plane.md)。
+
+## 可选集成
+
+### AI 编码 Agent
+
+```bash
+cd my-project
+depsilo init-agent
+```
+
+`init-agent` 会在检测到的 `AGENTS.md`、`CLAUDE.md` 或 `.cursorrules` 中更新由
+marker 管理的区块。支持 MCP 的客户端可以携带在 Admin 中创建的普通 API Token，
+连接 `POST /mcp`。bootstrap token 只用于首次初始化，不能复用为包或 MCP 凭据。
+
+### 编译缓存
+
+Depsilo 为官方 ccache HTTP 和 sccache WebDAV 客户端提供独立的远程缓存。它不是
+`sccache-dist` 调度器，也不是公共 S3 API。存储隔离、凭据、配额和客户端配置见
+[编译缓存指南](compile-cache.md)。
+
+## 安全与发行完整性
+
+- 互动式 Setup 由一次性 bootstrap token 保护。
+- 管理员会话使用 JWT 认证；API Token 仅存储哈希。
+- 面向互联网的部署应在可信反向代理后提供 TLS，并按需增加外部身份感知访问层；
+  Admin 仍然使用 Depsilo 自己的身份凭据。
+- 已签名的 `checksums.txt` 用于认证发行压缩包；安装器和 SBOM 附件有各自的签名
+  bundle，容器 digest 会被直接签名并附带 CycloneDX attestation。
+- Depsilo 不会向 depsilo.com 上报包名、缓存活动或 onboarding 进度。
+
+让服务暴露到互联网前请阅读 [`SECURITY.md`](../SECURITY.md)。发行产物和镜像的
+验证方式见[发行验证指南](release-verification.md)。
+
+## 从源码开发
 
 ```bash
 git clone https://github.com/depsilo/depsilo.git
@@ -87,251 +255,46 @@ make build
 ./bin/depsilo serve
 ```
 
-源码构建需要 Go 1.26.5+ 与 Node.js 22.22.0+。
+当前 Go 和 Node.js 版本要求、热更新命令、本地生成状态与测试流程见
+[开发快速开始](development/quick-start.md)。
 
-服务默认启动在 `http://localhost:23333`。
-不再提供预设管理员密码；互动安装由向导创建，无头部署则从
-`DEPSILO_ADMIN_*` 环境变量创建。
-
-本地开发也可以直接运行 `make run`，它会完成编译并启动服务。未设置
-`DEPSILO_AUTH_JWT_SECRET` 时，首次运行会生成权限为 0600 的
-`.dev-jwt-secret`，之后重启继续复用。项目根目录没有 `config.toml` 时不会
-再强制传入缺失路径，而是继续使用 CLI 的用户目录配置或内置默认配置。
-已有显式配置的无头部署仍须提供自己的 JWT 密钥。需要强制使用自定义配置路径时，请运行
-`DEPSILO_CONFIG=/etc/depsilo.toml make run`。后台开发服务会让实际监听端口与健康
-检查端口保持一致；需要改端口时使用 `PORT=18080 make dev`。
-
-Depsilo 也可以为本机或团队构建机提供独立的 ccache / sccache 编译缓存。sccache
-入口只是满足官方客户端所需的窄 WebDAV 兼容层，不是 `sccache-dist` 调度器，也
-不是 S3 API。存储隔离、构建凭据、客户端配置和真实客户端回归命令见
-[编译缓存指南](compile-cache.md)。
-
-### AI 工作负载说明
-
-Hugging Face 模型动辄几十 GB。当前适配器缓存普通 HTTP 下载路径（单文件约
-50 GB 以内）；超过客户端该限制的 Xet 原生文件暂不支持。
-如果你主要用 Depsilo 缓存模型，建议把 `config.toml` 里的
-`[cache] max_size_gb` 从默认 20 GB 提到 200 GB 起步。
-
-## 🤖 与 AI Agent 一起使用
-
-有三种接入方式，按自动化程度选择：
-
-1. 在项目根目录运行 `depsilo init-agent`，自动更新 `CLAUDE.md`、`AGENTS.md`
-   或 `.cursorrules` 中由 Depsilo 管理的说明区块。
-2. 在“管理后台 > 用户管理”创建只读 API Token，MCP 客户端携带
-   `Authorization: Bearer <token>` 连接 `http://localhost:23333/mcp`，调用状态、
-   诊断、配置、搜索和最近请求工具。预热工具当前只返回 Admin API 请求模板，
-   不会直接执行。
-3. 非 MCP Agent 获取提示词。Portal 展示的是修改项目构建/CI 配置的版本：
+提交普通改动前运行：
 
 ```bash
-curl -sf http://localhost:23333/api/v1/integration-prompt
+make check
 ```
 
-若要配置当前开发机，则使用 bootstrap 版本：
+完整离线验证入口是 `make verify`。
 
-```bash
-curl -sf http://localhost:23333/api/v1/agent-prompt
-```
+## 文档导航
 
-两个端点都会按当前访问地址生成内容。公网恢复路径取决于具体包管理器：很多客户端
-只接受单一源，需要保留手工回滚说明，不能假设 Depsilo 宕机时会自动切换。
+| 目标 | 阅读 |
+| --- | --- |
+| 配置所有可用设置 | [`config.example.toml`](../config.example.toml) |
+| 验证已经部署的实例 | [自检清单](self-test-checklist.md) |
+| 理解 Admin 和实时配置权威 | [Admin 控制面](admin-control-plane.md) |
+| 配置 ccache 或 sccache | [编译缓存](compile-cache.md) |
+| 验证签名发行版、镜像和 SBOM | [发行验证](release-verification.md) |
+| 查看各版本变化 | [更新日志](../CHANGELOG.md) · [GitHub Releases](https://github.com/depsilo/depsilo/releases) |
+| 理解当前产品范围和约束 | [`PRODUCT.md`](../PRODUCT.md) |
+| 开发或参与贡献 | [文档地图](README.md) · [贡献指南](../CONTRIBUTING.md) |
 
-## ⚙️ 配置
+`docs/specs/` 与 `docs/research/` 中的历史规格和研究属于证据，不代表当前行为。代码、
+测试、Makefile 和当前参考文档仍是权威来源。
 
-将 `config.example.toml` 复制为 `config.toml` 并按需编辑：
+## 参与贡献
 
-```toml
-[server]
-host = "0.0.0.0"
-port = 23333
+欢迎贡献。工作流程见 [`CONTRIBUTING.md`](../CONTRIBUTING.md)。编码 Agent 应从
+[`AGENTS.md`](../AGENTS.md) 开始。
 
-[database]
-driver = "sqlite"           # 当前版本仅支持 sqlite
-dsn    = "./data/depsilo.db"
-
-[storage]
-type = "local"              # local | s3
-path = "./data/cache"
-
-# S3 配置（type = "s3" 时生效）
-# bucket   = "depsilo"
-# endpoint = "http://minio:9000"
-# region   = "us-east-1"
-# access_key = ""
-# secret_key = ""
-
-[cache]
-max_size_gb  = 20
-ttl_index    = "5m"         # PyPI simple / APT Release 等元数据
-ttl_blob     = "72h"        # wheel / .deb 文件
-lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
-
-[supply_chain]
-min_release_age_enabled = false  # 默认关闭；改为 true 后启用推荐冷却阈值
-
-[auth]
-enabled    = true
-# 非 loopback 监听使用此占位值时将拒绝启动；推荐设置 DEPSILO_AUTH_JWT_SECRET。
-jwt_secret = "change-me-in-production"
-token_ttl  = "168h"         # 7 天
-
-[[pypi.upstreams]]
-name     = "tuna"
-url      = "https://pypi.tuna.tsinghua.edu.cn"
-priority = 1
-
-[[pypi.upstreams]]
-name     = "official"
-url      = "https://pypi.org"
-priority = 2
-# proxy  = "http://your-proxy:7890"   # 可选，单独给此上游配 HTTP 代理
-
-[[apt.upstreams]]
-name     = "tuna"
-url      = "https://mirrors.tuna.tsinghua.edu.cn"
-priority = 1
-
-[[apt.upstreams]]
-name     = "aliyun"
-url      = "https://mirrors.aliyun.com"
-priority = 2
-```
-
-配置单上游 HTTP 代理后，重定向产物域名由该代理负责解析。请在代理出口侧默认
-阻断回环、链路本地和私网目标；只有私有制品库确实位于这些网段时才放行。
-Depsilo 直连模式会在进程内执行同等网络边界检查。
-
-`min_release_age_enabled` 只控制“最新版本冷却”门禁。默认开启的 OSV 已知恶意包
-封锁和仅告警的篡改检测不受该开关影响。
-
-升级后的首次启动会把普通生态的上游源导入数据库，并记录已激活生态。完成首次导入后，Admin 与数据库成为权威来源；通过 Admin 删除或修改的上游源不会在重启时被配置文件覆盖。若要启用此前未激活的受支持生态，需要先在配置文件中添加该生态的上游源并重启。Docker Registry 与额外索引仍由配置文件管理，不属于 Admin 上游源 CRUD。
-
-## 📦 使用方法
-
-### pip
-
-**临时使用：**
-
-```bash
-pip install <package> -i http://你的IP:23333/pypi/simple/ --trusted-host 你的IP
-```
-
-**永久配置**（`~/.config/pip/pip.conf`）：
-
-```ini
-[global]
-index-url = http://你的IP:23333/pypi/simple/
-trusted-host = 你的IP
-```
-
-**PyTorch 构建索引：** Depsilo 默认提供
-`/pypi-torch/{channel}/simple/`，无需为每个新 CUDA 版本等待 Depsilo
-更新。将 PyTorch 官方安装地址中 `/whl/` 后的通道填入 URL，即可分别缓存
-CPU、CUDA 和 ROCm wheel。各通道拥有独立缓存，不会与清华 PyPI 的候选
-版本自动混合；索引声明的下载地址会由 Depsilo 签名后代理：
-
-```bash
-PYTORCH_CHANNEL=cpu
-pip install torch torchvision torchaudio \
-  --index-url http://你的IP:23333/pypi-torch/${PYTORCH_CHANNEL}/simple/ \
-  --trusted-host 你的IP
-```
-
-内置上游使用被动探测：没有客户端请求时不会访问 PyTorch。如需关闭：
-
-```toml
-[extra_index_presets]
-disabled = ["pytorch"]
-```
-
-**Docker 构建**（无需修改 Dockerfile）：
-
-```bash
-DOCKER_BUILDKIT=1 docker build --network host \
-  --build-arg PIP_INDEX_URL=http://127.0.0.1:23333/pypi/simple/ \
-  --build-arg PIP_TRUSTED_HOST=127.0.0.1 \
-  -t myapp .
-```
-
-`trusted-host` / `PIP_TRUSTED_HOST` 仅用于上面的 plain HTTP 示例；HTTPS 部署
-必须省略它们并使用正常的 CA 证书校验。
-
-### apt
-
-**添加源配置文件**（`/etc/apt/sources.list.d/depsilo.list`）：
-
-```
-deb http://你的IP:23333/apt/ubuntu noble main restricted universe multiverse
-deb http://你的IP:23333/apt/ubuntu noble-updates main restricted universe multiverse
-```
-
-**一键替换现有源：**
-
-```bash
-sudo sed -i "s|https\?://[^/]*/ubuntu|http://你的IP:23333/apt/ubuntu|g" /etc/apt/sources.list
-sudo apt update
-```
-
-## 🖥 Web 界面
-
-打开 `http://你的IP:23333` 访问用户门户：
-
-- **快速开始** — 一键复制 pip、apt、Docker 配置命令
-- **服务状态** — 上游源健康状态和缓存统计
-
-管理后台地址：`http://你的IP:23333/admin`（需登录）。
-
-Settings 持久化、上游源实时变更、Principal 权限、响应语义和运维验证见 [Admin 控制面说明](admin-control-plane.md)。
-
-## 📊 监控指标
-
-Prometheus 指标暴露在 `/metrics` 端点：
-
-```
-depsilo_requests_total
-depsilo_request_duration_seconds
-depsilo_upstream_requests_total
-depsilo_cache_size_bytes
-depsilo_cache_files_total
-```
-
-## 🗺 路线图
-
-已随 `v0.9.0` 发布：
-- [x] 14 个常规生态代理 + Docker OCI
-- [x] Web 管理界面（门户 + 管理后台）
-- [x] Prometheus 监控指标
-- [x] Docker 部署
-- [x] 审计日志与包级 Allow/Deny 规则
-- [x] 最小发布年龄隔离与审批流
-- [x] OSV 已知恶意包阻断与 24 小时审计 override
-- [x] 不可变制品篡改检测与 critical Webhook
-- [x] CycloneDX + SPDX 源码和容器镜像 SBOM 发布附件
-- [x] Cosign keyless 签名、镜像 SBOM attestation 与发布冒烟测试
-
-下一步：
-- [ ] Freeze / Golden Snapshot
-- [ ] CRA 完整 SBOM
-- [ ] Helm Chart
-
-## 🔓 开源承诺
-
-Depsilo 是 MIT 许可证、自托管、单二进制部署。文档面向运维落地，重点
-说明如何部署、接入和执行供应链策略。
-
-当前开源能力包括 14 种生态代理、缓存与流量分析、上游源管理与健康检查、
-审计日志、包级 Allow/Deny 规则引擎、安全情报 dashboard（OSV / CVE 集中
-视图 + 决策工作流）、公开的 Depsilo 自身 CycloneDX/SPDX release SBOM、Webhook
-告警、Prometheus 指标，以及已落地的供应链策略功能（最小发布年龄、恶意包阻断、
-tamper detection）。运行时的每项目 SBOM 导出当前属于 Pro；Freeze / Snapshot、
-CRA 完整 SBOM 和签名发布仍在路线图中。
-
-## 🤝 参与贡献
-
-欢迎贡献！详见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
-
-## 📄 许可证
+## 许可证
 
 [MIT License](../LICENSE)
+
+---
+
+<div align="center">
+
+[depsilo.com](https://depsilo.com)
+
+</div>
