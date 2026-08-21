@@ -22,6 +22,8 @@ contains the stable repository rules and links into these guides.
   honest capability boundaries.
 - [CONTEXT.md](../CONTEXT.md): domain vocabulary.
 - [DESIGN.md](../DESIGN.md): current Portal and Admin design contract.
+- [Deployment defaults](deployment.md): zero-config state paths, persistence,
+  and advanced overrides.
 - [Admin control plane](admin-control-plane.md): configuration/database
   authority and Admin HTTP contracts.
 - [Compiler cache](compile-cache.md): ccache and sccache deployment contract.

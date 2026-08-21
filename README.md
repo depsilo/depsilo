@@ -34,7 +34,7 @@ Package managers / CI / coding agents
                   │
                   ▼
                Depsilo
-        cache · policy · audit
+    cache · enforce · verify · audit
                   │
                   ▼
                Upstreams
@@ -43,13 +43,12 @@ Package managers / CI / coding agents
 - **Cache** — stream artifacts into local or S3-backed storage, coalesce
   concurrent misses, and serve eligible cached artifacts when an Upstream is
   unavailable.
-- **Manage Upstreams** — configure mirrors per ecosystem, monitor their health,
-  and route each source through an optional HTTP proxy.
-- **Enforce policy** — block operator-defined package rules, known-malicious
+- **Enforce** — block operator-defined package rules, known-malicious
   versions, or releases that violate an enabled cooling period.
-- **Verify and audit** — record first-seen hashes, surface tamper alerts, and
-  keep request and policy decisions visible in the Admin UI, API, logs,
-  webhooks, and Prometheus metrics.
+- **Verify** — record first-seen hashes and surface tamper alerts when immutable
+  artifacts change during a natural refresh.
+- **Audit** — keep requests, policy decisions, and Upstream health visible in
+  the Admin UI, API, logs, webhooks, and Prometheus metrics.
 
 Depsilo is MIT-licensed, has no telemetry, and is designed as a lightweight
 single-instance service backed by SQLite. It is not a multi-node artifact
@@ -141,7 +140,7 @@ Existing configured deployments are not forced into onboarding when an
 operator signs in to Admin. Operators can reopen the same flow later with
 **Connect a project**.
 
-## Supported install surfaces
+## Supported ecosystems
 
 | Ecosystem | Common clients |
 | --- | --- |
@@ -199,44 +198,24 @@ current ecosystem defaults.
 
 ## State, configuration, and health
 
-Zero-config installs keep durable state under one root:
+Zero-config installs keep configuration, SQLite, and local caches under one
+state root: `~/.depsilo` for a binary install and `/root/.depsilo` in the
+official container. Exact paths, persistence rules, and overrides are in the
+[deployment defaults](docs/deployment.md).
 
-| State | Binary | Docker |
-| --- | --- | --- |
-| Root and generated config | `~/.depsilo` | `/root/.depsilo` |
-| SQLite database | `~/.depsilo/data/depsilo.db` | `/root/.depsilo/data/depsilo.db` |
-| Package cache | `~/.depsilo/data/cache` | `/root/.depsilo/data/cache` |
-| Compiler cache | `~/.depsilo/data/compile-cache` | `/root/.depsilo/data/compile-cache` |
-
-The compiler cache is disabled until explicitly configured. Advanced users can
-override the config file, database, storage, S3, authentication, server, and
-policy settings. Precedence is:
+Advanced users can override the config, database, local or S3 storage,
+authentication, server, and policy settings. Precedence is:
 
 ```text
 CLI flag → DEPSILO_* environment → config file → built-in default
 ```
 
-Common binary-install checks:
+Run the built-in diagnosis directly or through the container:
 
 ```bash
-depsilo --version
-depsilo status
 depsilo doctor
-curl -fsS http://127.0.0.1:23333/ready
-```
-
-For Docker or Compose, run the same checks through the binary's stable path in
-the container:
-
-```bash
-docker exec depsilo /app/depsilo status
 docker exec depsilo /app/depsilo doctor
 ```
-
-Use the [self-test checklist (Chinese)](docs/self-test-checklist.md) for a
-deployed-service check and the
-[Admin control-plane guide](docs/admin-control-plane.md) for configuration
-persistence, Upstream ownership, permissions, and API response semantics.
 
 ## Optional integrations
 
@@ -282,27 +261,19 @@ artifacts and images.
 ```bash
 git clone https://github.com/depsilo/depsilo.git
 cd depsilo
-make setup
-make build
+make setup build
 ./bin/depsilo serve
 ```
 
-Current Go and Node.js requirements, hot-reload commands, generated local
-state, and the testing workflow are documented in the
-[development quick start](docs/development/quick-start.md).
-
-Before submitting a normal change:
-
-```bash
-make check
-```
-
-The complete offline verification gate is `make verify`.
+Current tool versions, hot reload, and testing are in the
+[development quick start](docs/development/quick-start.md). Run `make check`
+before a normal change; `make verify` is the complete offline gate.
 
 ## Documentation
 
 | Goal | Read |
 | --- | --- |
+| Deploy and locate persistent state | [Deployment defaults](docs/deployment.md) |
 | Configure every available setting | [`config.example.toml`](config.example.toml) |
 | Verify a deployed instance | [Self-test checklist (Chinese)](docs/self-test-checklist.md) |
 | Understand Admin and live configuration ownership | [Admin control plane](docs/admin-control-plane.md) |
@@ -311,10 +282,6 @@ The complete offline verification gate is `make verify`.
 | See what changed in each release | [Changelog](CHANGELOG.md) · [GitHub Releases](https://github.com/depsilo/depsilo/releases) |
 | Understand current product scope and constraints | [Product](PRODUCT.md) |
 | Develop or contribute | [Documentation map](docs/README.md) · [Contributing](CONTRIBUTING.md) |
-
-Historical specs and research under `docs/specs/` and `docs/research/` are
-evidence, not current behavior. Code, tests, the Makefile, and current reference
-documents remain authoritative.
 
 ## Contributing
 

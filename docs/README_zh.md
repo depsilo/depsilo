@@ -32,20 +32,20 @@
             │
             ▼
          Depsilo
-     缓存 · 策略 · 审计
+   缓存 · 执行 · 校验 · 审计
             │
             ▼
            上游
 ```
 
-- **缓存**：将制品流式写入本地或 S3 兼容存储，合并并发缓存未命中请求，并在上游
-  不可用时继续提供符合条件的已缓存制品。
-- **管理上游**：按生态配置多个上游、监控健康状态，并可为每个上游单独设置 HTTP
-  代理。
-- **执行策略**：阻断运维者定义的包规则、已知恶意版本，以及违反已启用冷却期的
-  新版本。
-- **校验与审计**：记录首次发现的哈希，提示制品篡改，并在管理后台、API、日志、
-  Webhook 和 Prometheus 指标中呈现请求及策略决策。
+- **缓存（Cache）**：将制品流式写入本地或 S3 兼容存储，合并并发缓存未命中请求，
+  并在上游不可用时继续提供符合条件的已缓存制品。
+- **执行（Enforce）**：阻断运维者定义的包规则、已知恶意版本，以及违反已启用
+  冷却期的新版本。
+- **校验（Verify）**：记录首次发现的哈希，并在不可变制品自然刷新发生变化时提示
+  篡改。
+- **审计（Audit）**：在管理后台、API、日志、Webhook 和 Prometheus 指标中呈现
+  请求、策略决策与上游健康状态。
 
 Depsilo 采用 MIT 许可证，不包含遥测；它是基于 SQLite 的轻量单实例服务，不是
 多节点制品库或高可用控制面。
@@ -125,7 +125,7 @@ docker compose logs depsilo
 已经配置过的部署在运维者登录 Admin 后不会被强制重新完成接入。以后仍可通过
 **接入项目**重新打开同一个流程。
 
-## 支持的安装入口
+## 支持的生态
 
 | 生态 | 常用客户端 |
 | --- | --- |
@@ -178,40 +178,23 @@ Composer 在镜像分发地址被拒绝后，可能回退到原始分发地址�
 
 ## 状态、配置与健康检查
 
-Zero-config 安装会把持久状态收拢到同一个根目录：
+Zero-config 安装会把配置、SQLite 和本地缓存收拢到同一个状态根目录：Binary 使用
+`~/.depsilo`，官方容器使用 `/root/.depsilo`。精确路径、持久化规则和覆盖方式见
+[部署默认值（英文）](deployment.md)。
 
-| 状态 | Binary | Docker |
-| --- | --- | --- |
-| 根目录与生成配置 | `~/.depsilo` | `/root/.depsilo` |
-| SQLite 数据库 | `~/.depsilo/data/depsilo.db` | `/root/.depsilo/data/depsilo.db` |
-| 包缓存 | `~/.depsilo/data/cache` | `/root/.depsilo/data/cache` |
-| 编译缓存 | `~/.depsilo/data/compile-cache` | `/root/.depsilo/data/compile-cache` |
-
-编译缓存默认关闭。高级用户仍可覆盖配置文件、数据库、存储、S3、认证、服务和策略
-设置。配置优先级为：
+高级用户仍可覆盖配置文件、数据库、本地或 S3 存储、认证、服务和策略设置。配置
+优先级为：
 
 ```text
 CLI 参数 → DEPSILO_* 环境变量 → 配置文件 → 内置默认值
 ```
 
-Binary 安装的常用检查：
+直接运行内置诊断，或通过容器执行：
 
 ```bash
-depsilo --version
-depsilo status
 depsilo doctor
-curl -fsS http://127.0.0.1:23333/ready
-```
-
-Docker 或 Compose 使用容器内稳定的二进制路径执行相同检查：
-
-```bash
-docker exec depsilo /app/depsilo status
 docker exec depsilo /app/depsilo doctor
 ```
-
-完整部署检查见[自检清单](self-test-checklist.md)。配置持久化、上游权威、权限和 API
-响应语义见 [Admin 控制面说明](admin-control-plane.md)。
 
 ## 可选集成
 
@@ -250,26 +233,18 @@ Depsilo 为官方 ccache HTTP 和 sccache WebDAV 客户端提供独立的远程�
 ```bash
 git clone https://github.com/depsilo/depsilo.git
 cd depsilo
-make setup
-make build
+make setup build
 ./bin/depsilo serve
 ```
 
-当前 Go 和 Node.js 版本要求、热更新命令、本地生成状态与测试流程见
-[开发快速开始](development/quick-start.md)。
-
-提交普通改动前运行：
-
-```bash
-make check
-```
-
-完整离线验证入口是 `make verify`。
+当前工具版本、热更新和测试见[开发快速开始](development/quick-start.md)。提交普通改动
+前运行 `make check`；完整离线验证入口是 `make verify`。
 
 ## 文档导航
 
 | 目标 | 阅读 |
 | --- | --- |
+| 部署并定位持久状态 | [部署默认值（英文）](deployment.md) |
 | 配置所有可用设置 | [`config.example.toml`](../config.example.toml) |
 | 验证已经部署的实例 | [自检清单](self-test-checklist.md) |
 | 理解 Admin 和实时配置权威 | [Admin 控制面](admin-control-plane.md) |
@@ -278,9 +253,6 @@ make check
 | 查看各版本变化 | [更新日志](../CHANGELOG.md) · [GitHub Releases](https://github.com/depsilo/depsilo/releases) |
 | 理解当前产品范围和约束 | [`PRODUCT.md`](../PRODUCT.md) |
 | 开发或参与贡献 | [文档地图](README.md) · [贡献指南](../CONTRIBUTING.md) |
-
-`docs/specs/` 与 `docs/research/` 中的历史规格和研究属于证据，不代表当前行为。代码、
-测试、Makefile 和当前参考文档仍是权威来源。
 
 ## 参与贡献
 
