@@ -32,6 +32,11 @@ const (
 	// Spec: docs/DIRECTION.md §Task 1 "block mode".
 	ModeBlock Mode = "block"
 
+	// ModeWarn records the decision and serves the request anyway.
+	// Operators use it to observe what the gate would have blocked
+	// before switching to ModeBlock.
+	ModeWarn Mode = "warn"
+
 	// ModeServeLastEligible resolves the request to the newest version
 	// that IS older than the threshold and serves that instead. Useful
 	// when CI must keep flowing during a quarantine event but the
@@ -61,7 +66,7 @@ type Policy struct {
 	// already mitigate Shai-Hulud-class poisoning).
 	Default time.Duration
 
-	// Block is the only runtime-supported mode. The legacy
+	// Block and warn are the runtime-supported modes. The legacy
 	// serve_last_eligible value is parsed so startup can reject it clearly.
 	Mode Mode
 
@@ -93,8 +98,9 @@ type Config struct {
 	// — see ParseDuration below.
 	MinReleaseAge map[string]string `mapstructure:"min_release_age"`
 
-	// Mode: only "block" is supported. "serve_last_eligible" is retained as
-	// a recognized legacy value so the checker can return an explicit error.
+	// Mode: "block" and "warn" are supported. "serve_last_eligible" is
+	// retained as a recognized legacy value so the checker can return an
+	// explicit error.
 	Mode string `mapstructure:"mode"`
 
 	// Allow rules — see AllowList for syntax. Each entry is a
@@ -169,10 +175,12 @@ func NewPolicy(cfg Config) (*Policy, error) {
 	switch strings.ToLower(strings.TrimSpace(cfg.Mode)) {
 	case "", "block":
 		mode = ModeBlock
+	case "warn":
+		mode = ModeWarn
 	case "serve_last_eligible":
 		mode = ModeServeLastEligible
 	default:
-		return nil, fmt.Errorf("quarantine: unknown mode %q (want block | serve_last_eligible)", cfg.Mode)
+		return nil, fmt.Errorf("quarantine: unknown mode %q (want block | warn | serve_last_eligible)", cfg.Mode)
 	}
 
 	allow, err := ParseAllowList(cfg.Allow)

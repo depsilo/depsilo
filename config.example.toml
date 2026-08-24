@@ -334,8 +334,11 @@ check_ttl = "24h"
 # Threshold values accept "3d" / "7d" / "2w" / "24h" / "30m" / "0".
 # Set an ecosystem to "0" to exempt it while the global switch is on.
 #
-# Mode: only "block" is implemented. Other values fail at startup so a
-# configuration mistake cannot silently weaken enforcement.
+# Mode controls what happens when the age gate would refuse a version:
+#   block  — return 451 and refuse the request (default)
+#   warn   — record a warning event and serve the request anyway
+# The legacy serve_last_eligible value is recognized but rejected at
+# startup because it is not implemented in this build.
 #
 # Allow rules bypass the check for trusted pins. Three syntaxes:
 #   npm:@scope/internal-*         — glob match on package name
@@ -382,19 +385,23 @@ docker   = "3d"
 huggingface = "3d"
 apt      = "0"     # APT has no quarantine gate yet; keep this at zero
 
-# ── Known-malicious blocklist (hard block, 451 MALICIOUS_BLOCKED) ──
+# ── Known-malicious blocklist ─────────────────────────────────────────
 # Syncs OSV MAL-* records for npm, pypi, cargo, rubygems, composer, nuget,
 # go, and maven. Explicit version lists and all-version advisories are
 # imported; bounded ranges without a version list are skipped.
-# Records may carry GHSA aliases. Matched versions are refused outright.
+# Records may carry GHSA aliases.
 # The quarantine allow-list CANNOT bypass a malware match — the only
 # exemption is an audited admin override that expires after 24h.
+# mode controls the response to a known-malicious match:
+#   block (default) — refuse the request with 451 MALICIOUS_BLOCKED
+#   warn            — serve the request and record malware_warned
 # Enabled by default; sync failures degrade (last good data keeps
 # blocking, an empty local store blocks nothing) and never break the
 # proxy itself.
 [supply_chain.blocklist]
 enabled       = true
 sync_interval = "6h"
+# mode          = "block"
 # mirror_url  = "https://osv-vulnerabilities.storage.googleapis.com"
 # proxy       = "http://127.0.0.1:7890"   # required in mainland China
 

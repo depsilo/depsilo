@@ -315,19 +315,30 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// at all means no malware blocking, never a broken proxy).
 	var blocklistStore *blocklist.Store
 	var blocklistSyncer *blocklist.Syncer
+	blocklistMode := quarantine.ModeBlock
 	blCfg := blocklist.Config{
 		Enabled:      cfg.SupplyChain.Blocklist.Enabled,
 		SyncInterval: cfg.SupplyChain.Blocklist.SyncInterval,
 		MirrorURL:    cfg.SupplyChain.Blocklist.MirrorURL,
 		Proxy:        cfg.SupplyChain.Blocklist.Proxy,
+		Mode:         cfg.SupplyChain.Blocklist.Mode,
 	}
 	if blCfg.IsEnabled() {
+		switch blCfg.Mode {
+		case "", "block":
+			blocklistMode = quarantine.ModeBlock
+		case "warn":
+			blocklistMode = quarantine.ModeWarn
+		default:
+			return nil, fmt.Errorf("blocklist: unsupported mode %q (want block | warn)", blCfg.Mode)
+		}
 		blocklistStore = blocklist.NewStore(database)
 		blocklistSyncer, err = blocklist.NewSyncer(blocklistStore, blCfg)
 		if err != nil {
 			return nil, fmt.Errorf("blocklist: %w", err)
 		}
 		quarantineChecker.SetBlocklist(blocklistStore.QuarantineBridge())
+		quarantineChecker.SetBlocklistMode(blocklistMode)
 		if err := submitBackground("blocklist synchronizer", func(ctx context.Context) {
 			blocklistSyncer.Start(ctx)
 		}); err != nil {
@@ -525,6 +536,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		QuarantineStore:  quarantineStore,
 		BlocklistStore:   blocklistStore,
 		BlocklistSyncer:  blocklistSyncer,
+		BlocklistMode:    string(blocklistMode),
 		Tasks:            background,
 	})
 

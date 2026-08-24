@@ -17,21 +17,24 @@ import (
 
 // BlocklistHandler serves the known-malicious blocklist admin
 // endpoints: sync status, manual sync trigger, and override CRUD.
-// Open-source per docs/DIRECTION.md Task 2 (NOT Pro-gated); blocked /
-// bypassed request events flow through the quarantine events endpoint
-// (action = malware_blocked / malware_bypassed).
+// Open-source per docs/DIRECTION.md Task 2 (NOT Pro-gated); blocked,
+// warned, and bypassed request events flow through the quarantine
+// events endpoint (action = malware_blocked / malware_warned /
+// malware_bypassed).
 type BlocklistHandler struct {
 	store  *blocklist.Store
 	syncer *blocklist.Syncer
 	tasks  asyncruntime.Submitter
+	mode   string
 }
 
 // NewBlocklistHandler binds manual syncs to the server's async runtime.
-func NewBlocklistHandler(tasks asyncruntime.Submitter, store *blocklist.Store, syncer *blocklist.Syncer) *BlocklistHandler {
+func NewBlocklistHandler(tasks asyncruntime.Submitter, store *blocklist.Store, syncer *blocklist.Syncer, mode string) *BlocklistHandler {
 	return &BlocklistHandler{
 		store:  store,
 		syncer: syncer,
 		tasks:  tasks,
+		mode:   mode,
 	}
 }
 
@@ -76,6 +79,7 @@ func (h *BlocklistHandler) Status(c *gin.Context) {
 	}
 	resp := gin.H{
 		"enabled":         true,
+		"mode":            h.mode,
 		"last_sync_at":    st.LastSyncAt,
 		"last_success_at": st.LastSuccessAt,
 		"last_error":      st.LastError,

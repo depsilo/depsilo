@@ -37,6 +37,11 @@ type QuarantineDecision struct {
 	// defaults to QUARANTINED for backward compatibility.
 	Code   string
 	Reason string
+	// Warned is true when the checker observed a policy violation but
+	// the configured mode serves anyway. The gate still returns false
+	// (proceed) because Allowed is true; Warned is informational for
+	// any future response-header / observability work.
+	Warned bool
 }
 
 // quarantineCheckerSnapshot is the compatibility representation for unscoped

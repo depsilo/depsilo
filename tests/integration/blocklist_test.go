@@ -102,6 +102,7 @@ func TestBlocklist_AdminStatusReportsSync(t *testing.T) {
 	}
 	var st struct {
 		Enabled       bool             `json:"enabled"`
+		Mode          string           `json:"mode"`
 		EntryCount    int64            `json:"entry_count"`
 		LastSuccessAt *time.Time       `json:"last_success_at"`
 		PerEcosystem  map[string]int64 `json:"per_ecosystem"`
@@ -111,6 +112,9 @@ func TestBlocklist_AdminStatusReportsSync(t *testing.T) {
 	}
 	if !st.Enabled || st.LastSuccessAt == nil {
 		t.Errorf("unexpected sync state: %+v", st)
+	}
+	if st.Mode != "block" {
+		t.Errorf("mode = %q, want %q", st.Mode, "block")
 	}
 	// The mock archive carries one npm and one Go advisory; importers
 	// keep only their own ecosystem's sections.

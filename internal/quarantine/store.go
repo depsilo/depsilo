@@ -22,6 +22,7 @@ const (
 	ActionBypassed  = "bypassed"         // matched an Allow rule
 	ActionApproved  = "approved"         // admin approved an individual version
 	ActionRevoked   = "approval_revoked" // admin revoked a prior approval
+	ActionWarned    = "warned"           // would have blocked, but observe mode served it
 
 	// Known-malicious blocklist actions (DIRECTION Task 2), written by
 	// Checker step 0. The override CRUD actions (override_created /
@@ -29,6 +30,7 @@ const (
 	// that records them.
 	ActionMalwareBlocked  = "malware_blocked"  // request denied: known-malicious version
 	ActionMalwareBypassed = "malware_bypassed" // served under an unexpired operator override
+	ActionMalwareWarned   = "malware_warned"   // would have blocked, but observe mode served it
 
 	// Tamper detection (DIRECTION T1): an immutable artifact's
 	// re-fetched bytes did not match the first-seen SHA-256. Written

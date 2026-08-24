@@ -85,6 +85,7 @@ type BlocklistConfig struct {
 	SyncInterval string `mapstructure:"sync_interval"` // default 6h
 	MirrorURL    string `mapstructure:"mirror_url"`    // default: official OSV bucket
 	Proxy        string `mapstructure:"proxy"`         // HTTP(S) proxy for sync fetches
+	Mode         string `mapstructure:"mode"`          // block | warn; default block
 }
 
 // TamperConfig is [supply_chain.tamper_detection] (DIRECTION T1).

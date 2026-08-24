@@ -57,10 +57,11 @@ type ApprovedVersion = {
 }
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker', 'huggingface']
-const ACTIONS = ['blocked', 'malware_blocked', 'tamper_detected', 'served_eligible', 'bypassed', 'malware_bypassed', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
+const ACTIONS = ['blocked', 'malware_blocked', 'tamper_detected', 'served_eligible', 'bypassed', 'malware_bypassed', 'warned', 'malware_warned', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
 
 type BlocklistStatus = {
   enabled: boolean
+  mode: string
   last_sync_at: string | null
   last_success_at: string | null
   last_error: string
@@ -97,6 +98,10 @@ function actionBadge(action: string, t: (k: string) => string) {
       return <BadgeV2 variant="success">{t('quarantine.action.bypassed')}</BadgeV2>
     case 'malware_bypassed':
       return <BadgeV2 variant="warning">{t('quarantine.action.malware_bypassed')}</BadgeV2>
+    case 'warned':
+      return <BadgeV2 variant="warning">{t('quarantine.action.warned')}</BadgeV2>
+    case 'malware_warned':
+      return <BadgeV2 variant="warning">{t('quarantine.action.malware_warned')}</BadgeV2>
     case 'approved':
       return <BadgeV2 variant="success">{t('quarantine.action.approved')}</BadgeV2>
     case 'approval_revoked':
@@ -650,8 +655,17 @@ function BlocklistTab() {
               hint={t('quarantine.blocklist.disabled_hint')}
             />
           ) : st ? (
+      <>
+      {st.mode === 'warn' && (
+        <InlineNotice tone="warning">{t('quarantine.blocklist.observe_warning')}</InlineNotice>
+      )}
       <div className="rounded-[8px] border p-4 flex flex-wrap items-center gap-x-8 gap-y-3"
            style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
+        <StatusItem label={t('quarantine.blocklist.mode')}>
+          <BadgeV2 variant={st.mode === 'warn' ? 'warning' : 'success'}>
+            {st.mode === 'warn' ? t('quarantine.blocklist.mode_observe') : t('quarantine.blocklist.mode_enforce')}
+          </BadgeV2>
+        </StatusItem>
         <StatusItem label={t('quarantine.blocklist.entries')}>
           <span className="text-[22px] font-mono font-[600] tabular-nums">{st?.entry_count ?? 0}</span>
         </StatusItem>
@@ -689,6 +703,7 @@ function BlocklistTab() {
         </div>}
         {syncM.isError && <div className="basis-full"><InlineNotice tone="danger">{getApiError(syncM.error).message}</InlineNotice></div>}
       </div>
+      </>
           ) : <EmptyState icon="gpp_bad" title={t('noData')} />}
         </div>
       )}

@@ -434,6 +434,68 @@ func TestChecker_MalwareBlocksBeforeEverything(t *testing.T) {
 	}
 }
 
+func TestChecker_MalwareWarnModeServesAndRecords(t *testing.T) {
+	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+	c := newChecker(t, Config{}, resolvers.Registry{}, now)
+	c.SetBlocklist(fakeBlocklist{match: &BlocklistMatch{SourceID: "MAL-2026-9999", Summary: "credential stealer"}})
+	c.SetBlocklistMode(ModeWarn)
+
+	var hookFired *db.QuarantineEvent
+	c.SetOnBlock(func(ev db.QuarantineEvent) { hookFired = &ev })
+
+	d := c.Check(context.Background(), "npm", "evil", "1.0.0", "10.0.0.1")
+	if !d.Allowed || !d.Warned {
+		t.Fatalf("warn mode should allow and mark warned: %+v", d)
+	}
+	if d.Code != CodeMaliciousBlocked {
+		t.Errorf("Code = %q, want %q", d.Code, CodeMaliciousBlocked)
+	}
+	if !hasEvent(t, c.store, ActionMalwareWarned) {
+		t.Error("expected ActionMalwareWarned event recorded")
+	}
+	if hookFired != nil {
+		t.Errorf("warn mode must not fire OnBlock hook: %+v", hookFired)
+	}
+}
+
+func TestChecker_AgeWarnModeServesAndRecords(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	publishedAt := now.Add(-24 * time.Hour)
+	c := newChecker(t, Config{
+		Mode:          "warn",
+		MinReleaseAge: map[string]string{"npm": "7d"},
+	}, resolvers.Registry{"npm": canned{t: publishedAt}}, now)
+
+	d := c.Check(context.Background(), "npm", "lodash", "4.17.99", "10.0.0.1")
+	if !d.Allowed || !d.Warned {
+		t.Fatalf("warn mode should allow and mark warned: %+v", d)
+	}
+	if d.Code != CodeQuarantined {
+		t.Errorf("Code = %q, want %q", d.Code, CodeQuarantined)
+	}
+	if !hasEvent(t, c.store, ActionWarned) {
+		t.Error("expected ActionWarned event recorded")
+	}
+}
+
+func TestChecker_AgeWarnModeFailClosedServes(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	failClosed := true
+	c := newChecker(t, Config{
+		Mode:          "warn",
+		MinReleaseAge: map[string]string{"npm": "7d"},
+		FailClosed:    &failClosed,
+	}, resolvers.Registry{"npm": canned{err: resolvers.ErrNotFound}}, now)
+
+	d := c.Check(context.Background(), "npm", "ghostpkg", "1.0.0", "10.0.0.1")
+	if !d.Allowed || !d.Warned {
+		t.Fatalf("warn mode should allow fail-closed lookup and mark warned: %+v", d)
+	}
+	if !hasEvent(t, c.store, ActionWarned) {
+		t.Error("expected ActionWarned event recorded for fail-closed lookup")
+	}
+}
+
 func TestChecker_MalwareOverrideFallsThroughToQuarantine(t *testing.T) {
 	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
 	// Override exempts from the malware block — but the version is

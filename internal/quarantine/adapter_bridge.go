@@ -30,5 +30,6 @@ func (a AdapterChecker) Check(ctx context.Context, ecosystem, pkg, version, clie
 		Allowed: d.Allowed,
 		Code:    d.Code,
 		Reason:  d.Reason,
+		Warned:  d.Warned,
 	}
 }

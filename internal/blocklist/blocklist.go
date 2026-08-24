@@ -1,10 +1,10 @@
 // Package blocklist implements the known-malicious package blocklist
 // (DIRECTION Task 2): a locally-synced copy of the OSV
 // malicious-packages dataset (MAL-* advisories) that the quarantine
-// checker consults as its very first step. Matching a row means the
-// request is refused with 451 MALICIOUS_BLOCKED — never served — and
-// the only exemption is an explicit, audited, 24h-expiring operator
-// override.
+// checker consults as its very first step. Matching a row is refused
+// with 451 MALICIOUS_BLOCKED in block mode; warn mode serves the
+// request and records malware_warned instead. The only exemption from
+// block mode is an explicit, audited, 24h-expiring operator override.
 //
 // Deliberately separate from internal/security (CVE scanning): a CVE
 // means "vulnerable, warn and serve"; a MAL advisory means "this
@@ -54,6 +54,10 @@ type Config struct {
 	// storage.googleapis.com is unreachable from mainland China
 	// without one.
 	Proxy string `mapstructure:"proxy"`
+
+	// Mode controls whether a known-malicious match blocks (default)
+	// or merely records a warning and serves the request.
+	Mode string `mapstructure:"mode"`
 }
 
 // IsEnabled applies the default-true semantics.

@@ -67,6 +67,7 @@ type Deps struct {
 	// Both nil when [supply_chain.blocklist] enabled = false.
 	BlocklistStore  *blocklist.Store
 	BlocklistSyncer *blocklist.Syncer
+	BlocklistMode   string
 	Tasks           asyncruntime.Submitter
 }
 
@@ -325,9 +326,10 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 
 	// Known-malicious blocklist (DIRECTION Task 2) — sync status,
 	// manual refresh, and 24h-expiring false-positive overrides.
-	// Open-source like quarantine; blocked-request events surface via
-	// /quarantine/events (action = malware_blocked).
-	blocklistHandler := admin.NewBlocklistHandler(deps.Tasks, deps.BlocklistStore, deps.BlocklistSyncer)
+	// Open-source like quarantine; blocked and observe-mode warning
+	// events surface via /quarantine/events (action = malware_blocked /
+	// malware_warned).
+	blocklistHandler := admin.NewBlocklistHandler(deps.Tasks, deps.BlocklistStore, deps.BlocklistSyncer, deps.BlocklistMode)
 	adminRead.GET("/blocklist/status", blocklistHandler.Status)
 	adminRead.GET("/blocklist/overrides", blocklistHandler.ListOverrides)
 	adminWrite.POST("/blocklist/sync", blocklistHandler.TriggerSync)

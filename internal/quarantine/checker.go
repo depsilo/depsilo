@@ -42,6 +42,12 @@ type Decision struct {
 	// can be empty.
 	Reason string
 
+	// Warned is true when the gate would have blocked this request but
+	// the configured mode is warn. Allowed is true in that case: the
+	// adapter serves normally, and the decision is visible only in the
+	// event stream / Admin UI.
+	Warned bool
+
 	// AgeAtCall is now - publishAt observed at decision time.
 	// Zero when the publish timestamp wasn't determined (e.g.
 	// allow-list match short-circuited the lookup).
@@ -92,6 +98,9 @@ type Checker struct {
 	now       func() time.Time // injectable for tests
 	onBlock   OnBlockFn
 	blocklist Blocklist
+	// blocklistMode controls the known-malicious step independently
+	// from the minimum-release-age policy mode. Defaults to block.
+	blocklistMode Mode
 }
 
 // SetBlocklist installs the known-malicious lookup. Same lifecycle
@@ -109,18 +118,27 @@ func NewChecker(p *Policy, l *Lookup, s *Store) (*Checker, error) {
 	if p == nil {
 		return nil, errors.New("quarantine: nil policy")
 	}
-	if p.Mode == ModeServeLastEligible {
-		return nil, errors.New("quarantine: serve_last_eligible mode is not yet implemented in this build — set mode = \"block\" or omit the field")
-	}
-	if p.Mode != ModeBlock {
+	switch p.Mode {
+	case ModeBlock, ModeWarn:
+	case ModeServeLastEligible:
+		return nil, errors.New("quarantine: serve_last_eligible mode is not yet implemented in this build — set mode = \"block\", \"warn\", or omit the field")
+	default:
 		return nil, fmt.Errorf("quarantine: unsupported mode %q", p.Mode)
 	}
 	return &Checker{
-		policy: p,
-		lookup: l,
-		store:  s,
-		now:    func() time.Time { return time.Now().UTC() },
+		policy:        p,
+		lookup:        l,
+		store:         s,
+		now:           func() time.Time { return time.Now().UTC() },
+		blocklistMode: ModeBlock,
 	}, nil
+}
+
+// SetBlocklistMode sets whether a known-malicious match blocks or
+// merely warns. block is the default; warn serves the request while
+// recording an event.
+func (c *Checker) SetBlocklistMode(m Mode) {
+	c.blocklistMode = m
 }
 
 // Check returns the gating decision for (ecosystem, pkg, version).
@@ -163,14 +181,13 @@ func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP s
 	// (a DB hiccup must not take the proxy down).
 	if c.blocklist != nil && version != "" {
 		match, overridden, err := c.blocklist.Check(ctx, ecosystem, pkg, version)
-		switch {
-		case match != nil && err != nil:
-			zap.L().Warn("quarantine: blocklist override lookup failed — blocking the confirmed match",
+		if match != nil && err != nil {
+			zap.L().Warn("quarantine: blocklist override lookup failed — treating the match as unoverridden",
 				zap.String("ecosystem", ecosystem), zap.String("package", pkg),
 				zap.String("version", version), zap.Error(err))
 			overridden = false
-			fallthrough
-		case match != nil:
+		}
+		if match != nil {
 			if overridden {
 				c.recordEvent(ctx, db.QuarantineEvent{
 					Ecosystem: ecosystem,
@@ -182,22 +199,35 @@ func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP s
 				})
 				// Fall through to the age checks below — an override
 				// exempts from the malware block, not from quarantine.
-				break
+			} else {
+				base := fmt.Sprintf(
+					"%s@%s is a known-malicious version (%s): %s",
+					pkg, version, match.SourceID, match.Summary,
+				)
+				if c.blocklistMode == ModeWarn {
+					reason := base + " — observe mode, serving anyway"
+					c.recordEvent(ctx, db.QuarantineEvent{
+						Ecosystem: ecosystem,
+						Package:   pkg,
+						Version:   version,
+						Action:    ActionMalwareWarned,
+						Reason:    reason,
+						ClientIP:  clientIP,
+					})
+					return Decision{Allowed: true, Warned: true, Code: CodeMaliciousBlocked, Reason: reason}
+				}
+				reason := base + " — refusing to serve"
+				c.recordEvent(ctx, db.QuarantineEvent{
+					Ecosystem: ecosystem,
+					Package:   pkg,
+					Version:   version,
+					Action:    ActionMalwareBlocked,
+					Reason:    reason,
+					ClientIP:  clientIP,
+				})
+				return Decision{Allowed: false, Code: CodeMaliciousBlocked, Reason: reason}
 			}
-			reason := fmt.Sprintf(
-				"%s@%s is a known-malicious version (%s): %s — refusing to serve",
-				pkg, version, match.SourceID, match.Summary,
-			)
-			c.recordEvent(ctx, db.QuarantineEvent{
-				Ecosystem: ecosystem,
-				Package:   pkg,
-				Version:   version,
-				Action:    ActionMalwareBlocked,
-				Reason:    reason,
-				ClientIP:  clientIP,
-			})
-			return Decision{Allowed: false, Code: CodeMaliciousBlocked, Reason: reason}
-		case err != nil:
+		} else if err != nil {
 			zap.L().Warn("quarantine: blocklist lookup failed — continuing without it",
 				zap.String("ecosystem", ecosystem), zap.String("package", pkg), zap.Error(err))
 		}
@@ -271,6 +301,26 @@ func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP s
 			"version %s of %s was published %s ago, which is younger than the configured %s minimum release age for %s",
 			version, pkg, formatAge(age), formatAge(threshold), ecosystem,
 		)
+		if c.policy.Mode == ModeWarn {
+			c.recordEvent(ctx, db.QuarantineEvent{
+				Ecosystem: ecosystem,
+				Package:   pkg,
+				Version:   version,
+				Action:    ActionWarned,
+				Reason:    reason + " — observe mode, serving anyway",
+				Threshold: int64(threshold.Seconds()),
+				AgeAtCall: int64(age.Seconds()),
+				ClientIP:  clientIP,
+			})
+			return Decision{
+				Allowed:   true,
+				Warned:    true,
+				Code:      CodeQuarantined,
+				Reason:    reason + " — observe mode, serving anyway",
+				AgeAtCall: age,
+				Threshold: threshold,
+			}
+		}
 		c.recordEvent(ctx, db.QuarantineEvent{
 			Ecosystem: ecosystem,
 			Package:   pkg,
@@ -346,6 +396,24 @@ func (c *Checker) handleLookupError(
 		)
 	default:
 		reason = fmt.Sprintf("quarantine lookup failed: %v", err)
+	}
+	if c.policy.Mode == ModeWarn {
+		c.recordEvent(ctx, db.QuarantineEvent{
+			Ecosystem: ecosystem,
+			Package:   pkg,
+			Version:   version,
+			Action:    ActionWarned,
+			Reason:    reason + " — observe mode, serving anyway",
+			Threshold: int64(threshold.Seconds()),
+			ClientIP:  clientIP,
+		})
+		return Decision{
+			Allowed:   true,
+			Warned:    true,
+			Code:      CodeQuarantined,
+			Reason:    reason + " — observe mode, serving anyway",
+			Threshold: threshold,
+		}
 	}
 	c.recordEvent(ctx, db.QuarantineEvent{
 		Ecosystem: ecosystem,
