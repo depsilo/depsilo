@@ -6,6 +6,7 @@ WORKFLOW="$ROOT/.github/workflows/release.yml"
 REAL_CLIENT_WORKFLOW="$ROOT/.github/workflows/real-client-e2e.yml"
 VERIFY_WORKFLOW="$ROOT/.github/workflows/verify.yml"
 DOCKERFILE="$ROOT/Dockerfile"
+GIT_ATTRIBUTES="$ROOT/.gitattributes"
 
 workflow_concurrency=$(sed -n '/^concurrency:/,/^jobs:/p' "$WORKFLOW")
 if ! grep -Fqx '  group: release-${{ github.ref }}' <<<"$workflow_concurrency" ||
@@ -48,11 +49,22 @@ if ! grep -q 'uses: ./.github/workflows/real-client-e2e.yml' <<<"$client_contrac
     exit 1
 fi
 windows_cli_job=$(sed -n '/^  windows-cli:/,$p' "$VERIFY_WORKFLOW")
+if ! grep -Fqx 'scripts/prepare-go-embed.sh text eol=lf' "$GIT_ATTRIBUTES"; then
+    echo "the cross-platform Go embed helper must keep LF endings on Windows checkouts" >&2
+    exit 1
+fi
 if ! grep -Fqx '    runs-on: windows-latest' <<<"$windows_cli_job" ||
+    ! grep -Fq 'bash scripts/prepare-go-embed.sh web/dist' <<<"$windows_cli_job" ||
     ! grep -q 'TestDaemonUsesServePortAndWritesPrivateStartupLog' <<<"$windows_cli_job" ||
     ! grep -q 'TestDaemonShutdownContextReceivesNamedEvent' <<<"$windows_cli_job" ||
     ! grep -q 'GOARCH.*arm64' <<<"$windows_cli_job"; then
-    echo "verify workflow must run the detached named-event lifecycle on Windows and cross-build ARM64" >&2
+    echo "verify workflow must prepare Go embed assets, run the detached named-event lifecycle on Windows, and cross-build ARM64" >&2
+    exit 1
+fi
+windows_embed_line=$(grep -n -m1 'bash scripts/prepare-go-embed.sh web/dist' <<<"$windows_cli_job" | cut -d: -f1)
+windows_daemon_line=$(grep -n -m1 'Test detached daemon from an independent process' <<<"$windows_cli_job" | cut -d: -f1)
+if [ "$windows_embed_line" -ge "$windows_daemon_line" ]; then
+    echo "Windows verification must prepare Go embed assets before compiling CLI tests" >&2
     exit 1
 fi
 release_job=$(sed -n '/^  release:/,/^  [a-zA-Z0-9_-]*:/p' "$WORKFLOW")
@@ -73,8 +85,15 @@ if [ "$release_notes_line" -ge "$goreleaser_line" ]; then
     exit 1
 fi
 tray_macos_job=$(sed -n '/^  tray-macos:/,/^  [a-zA-Z0-9_-]*:/p' "$WORKFLOW")
-if ! grep -q 'TestDaemonUsesServePortAndWritesPrivateStartupLog' <<<"$tray_macos_job"; then
-    echo "release qualification must run the detached daemon lifecycle natively on macOS" >&2
+if ! grep -Fq 'bash scripts/prepare-go-embed.sh web/dist' <<<"$tray_macos_job" ||
+    ! grep -q 'TestDaemonUsesServePortAndWritesPrivateStartupLog' <<<"$tray_macos_job"; then
+    echo "release qualification must prepare Go embed assets and run the detached daemon lifecycle natively on macOS" >&2
+    exit 1
+fi
+macos_embed_line=$(grep -n -m1 'bash scripts/prepare-go-embed.sh web/dist' <<<"$tray_macos_job" | cut -d: -f1)
+macos_daemon_line=$(grep -n -m1 'Test detached macOS daemon lifecycle' <<<"$tray_macos_job" | cut -d: -f1)
+if [ "$macos_embed_line" -ge "$macos_daemon_line" ]; then
+    echo "macOS release qualification must prepare Go embed assets before compiling CLI tests" >&2
     exit 1
 fi
 for command in 'make test-e2e' 'make test-docker-docker' 'make test-compiler-cache-qualified' 'make test-s3' 'make test-v090-upgrade' 'make test-v090-compose-upgrade'; do

@@ -182,6 +182,10 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Prepare Go embed assets
+        shell: bash
+        run: bash scripts/prepare-go-embed.sh web/dist
+
       # The launcher process exits before a fresh CLI process requests stop,
       # proving the Setsid-based daemon survives its originating terminal.
       - name: Test detached macOS daemon lifecycle

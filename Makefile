@@ -7,7 +7,6 @@ BIN        := $(BIN_DIR)/$(APP)
 DIST_DIR   := dist
 WEB_DIR    := web
 WEB_DIST   ?= $(WEB_DIR)/dist
-WEB_DIST_INDEX := $(WEB_DIST)/index.html
 CONFIG     := config.toml
 DEV_JWT_SECRET ?= .dev-jwt-secret
 PID_FILE   := .server.pid
@@ -75,11 +74,7 @@ version:                        ## 显示将注入二进制的构建信息
 # Go embeds web/dist. Keep backend-only checks usable on a fresh clone without
 # forcing a complete frontend build; `frontend` replaces this tiny placeholder.
 prepare-go:                     # 内部：确保 Go embed 目录存在
-	@if [ ! -f "$(WEB_DIST_INDEX)" ]; then \
-		mkdir -p "$(WEB_DIST)"; \
-		printf '%s\n' '<!doctype html><title>Depsilo test placeholder</title>' > "$(WEB_DIST_INDEX)"; \
-		echo ">>> prepared $(WEB_DIST_INDEX) for Go embed"; \
-	fi
+	@bash scripts/prepare-go-embed.sh "$(WEB_DIST)"
 
 frontend:                       # 内部：构建前端
 	$(NPM_RUN) build

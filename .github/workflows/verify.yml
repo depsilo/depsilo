@@ -134,6 +134,10 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Prepare Go embed assets
+        shell: bash
+        run: bash scripts/prepare-go-embed.sh web/dist
+
       # The launcher exits before the independent stop process runs. The child
       # has no inherited console, so this exercises the named-event lifecycle
       # that a normal fresh PowerShell/cmd window relies on.
