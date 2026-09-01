@@ -5,6 +5,22 @@
 ### Code Quality
 - [ ] `make verify` passes (lint, race, integration, build, browser, scripts)
 - [ ] `make security` passes (online dependency vulnerability scan)
+- [ ] `make test-ui-production` passes against the embedded production frontend
+- [ ] The production container runs as UID/GID `10001:10001` and `/ready`
+      succeeds with its single state volume
+
+### Release qualification
+- [ ] `make test-e2e` passes with all 14 official package-manager clients
+- [ ] `make test-docker-docker` passes with the Docker Registry client and dind
+- [ ] `make test-compiler-cache-qualified` passes with pinned ccache and sccache
+- [ ] `make test-s3` passes against the pinned MinIO image
+- [ ] `make test-v090-upgrade` reopens v0.9.0 state and preserves config,
+      SQLite identities, password/JWT/API credentials, real npm cache metadata,
+      and an offline cached artifact
+- [ ] `make test-v090-compose-upgrade` upgrades the immutable published v0.9.0
+      image's exact shipped bind layout, explicitly rotates a weak legacy JWT
+      secret, preserves passwords, API tokens, database, license and cache, and
+      proves Admin Settings can atomically rewrite the prepared candidate config
 
 ### Binary
 - [ ] `make build` produces `bin/depsilo` successfully
@@ -27,6 +43,10 @@ git push origin vX.Y.Z
 ```
 
 ### Automated (GitHub Actions)
+- [ ] Release qualification finishes before any release asset is published
+- [ ] Native Windows and macOS detached-daemon lifecycle checks pass
+- [ ] The promotion lock verifies the authoritative tag still resolves to the
+      triggering commit and that its floating-tag decision remains current
 - [ ] GoReleaser builds CLI binaries for 6 platforms
 - [ ] CLI archives uploaded (linux/darwin/windows × amd64/arm64)
 - [ ] Checksums uploaded
@@ -52,6 +72,6 @@ git push origin vX.Y.Z
 
 ## Known release gaps
 
-- Homebrew formula generation runs locally in GoReleaser, but tap publishing is
-  disabled with `skip_upload: true` until `depsilo/homebrew-tap` exists.
+- Homebrew is not generated or published by the current GoReleaser config; the
+  legacy formula is not a supported delivery channel.
 - There is no Windows NSIS/tray installer job; Windows CLI zip archives are published.

@@ -140,7 +140,7 @@ if [ "$VERSION" = "latest" ]; then
         | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
         | head -1)
     if [ -z "$VERSION" ]; then
-        err "Could not determine latest version. Try setting DEPSILO_VERSION=v0.8.0"
+        err "Could not determine latest version. Try setting DEPSILO_VERSION=vX.Y.Z"
     fi
 fi
 

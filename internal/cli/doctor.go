@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"depsilo/internal/version"
@@ -28,6 +29,11 @@ type doctorCheck struct {
 	Level   checkLevel `json:"level"`
 	Message string     `json:"message"`
 	Hint    string     `json:"hint,omitempty"`
+}
+
+type readinessResponse struct {
+	Status string            `json:"status"`
+	Checks map[string]string `json:"checks"`
 }
 
 func runDoctor(args []string) int {
@@ -85,6 +91,30 @@ func runDoctor(args []string) int {
 			Message: health.Status,
 			Hint:    hint,
 		})
+	}
+
+	var readiness readinessResponse
+	readyStatus, readyErr := getJSONAnyStatus(baseURL+"/ready", &readiness)
+	if readyErr == nil && readyStatus == 200 && readiness.Status == "ready" {
+		checks = append(checks, doctorCheck{
+			Name:    "Service readiness",
+			Level:   levelOK,
+			Message: formatReadiness(readiness),
+		})
+	} else {
+		message := formatReadiness(readiness)
+		if readyErr != nil {
+			message = readyErr.Error()
+		} else if message == "" {
+			message = fmt.Sprintf("HTTP %d", readyStatus)
+		}
+		checks = append(checks, doctorCheck{
+			Name:    "Service readiness",
+			Level:   levelFail,
+			Message: message,
+			Hint:    "check database and storage availability in the server logs",
+		})
+		hasFail = true
 	}
 
 	// 2. Version skew (CLI vs server)
@@ -257,6 +287,21 @@ func runDoctor(args []string) int {
 	}
 
 	return finalizeDoctor(checks, jsonMode, baseURL, hasFail)
+}
+
+func formatReadiness(readiness readinessResponse) string {
+	parts := make([]string, 0, len(readiness.Checks))
+	for name, status := range readiness.Checks {
+		parts = append(parts, name+"="+status)
+	}
+	sort.Strings(parts)
+	if len(parts) == 0 {
+		return readiness.Status
+	}
+	if readiness.Status == "" {
+		return strings.Join(parts, ", ")
+	}
+	return readiness.Status + " (" + strings.Join(parts, ", ") + ")"
 }
 
 func finalizeDoctor(checks []doctorCheck, jsonMode bool, baseURL string, hasFail bool) int {

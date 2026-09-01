@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright'
 import { test, expect, mockAdminApi } from './fixtures/admin-api'
 import type { Request } from '@playwright/test'
 
@@ -121,6 +122,21 @@ test('single-page setup explains invalid credentials without disabling the prima
   await expect(page.getByRole('alert')).toContainText('密码不能包含管理员用户名')
   await expect(page.getByLabel('管理员密码')).toBeFocused()
   expect(setupRequests).toBe(0)
+})
+
+test('single-page setup passes axe with advanced settings exposed', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await mockAdminApi(page, {
+    'GET /api/v1/setup/status': { needs_setup: true, token_required: true },
+  })
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: '初始化 Depsilo' })).toBeVisible()
+  await page.locator('summary').filter({ hasText: '高级设置' }).click()
+  await expect(page.locator('details')).toHaveAttribute('open', '')
+
+  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+  expect(result.violations).toEqual([])
 })
 
 test('single-page setup submits secure defaults and recovers after a reconnect timeout', async ({ page }) => {

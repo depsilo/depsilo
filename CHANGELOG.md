@@ -5,6 +5,105 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-01
+
+### Upgrade notes
+- Stop a running v0.9.0 background daemon with the v0.9.0 binary before
+  replacing it. v0.9.1 refuses the unauthenticated PID-only record used by
+  v0.9.0; if replacement already happened, verify that process has exited
+  before removing the legacy PID file manually.
+- The official container now runs as UID/GID `10001:10001`. Operators reusing
+  a root-owned named volume must perform the documented one-time ownership
+  change. Operators using the exact bind-mounted Compose layout shipped in
+  v0.9.0 must use the Linux-only, fail-closed compatibility procedure in
+  `docs/deployment.md`.
+- Non-loopback listeners now require a JWT signing secret of at least 32 bytes
+  with no surrounding whitespace. The v0.9.0 Compose preparer preserves an
+  already-strong secret, or supports an explicitly confirmed rotation from a
+  weak legacy secret using `DEPSILO_ACCEPT_JWT_ROTATION=1`. Rotation invalidates
+  existing browser JWTs and requires a new login, but preserves passwords and
+  API tokens. Signed extra-PyPI
+  metadata must be fetched online once after rotation; cached artifact objects
+  remain reusable.
+- S3 writes larger than 8 MiB now use multipart upload. Restricted bucket
+  policies need the normal object-write permissions plus
+  `s3:AbortMultipartUpload` so failed writes can be cleaned up.
+
+### Added
+- First run now supports a zero-config installation with unified durable state,
+  a startup summary, a single-volume `compose.yaml`, and generated bootstrap
+  credentials.
+- Portal and Admin now guide Operators through connecting and verifying their
+  first real package-manager project.
+- Hugging Face proxying now supports the Xet read-token routes used by current
+  `huggingface_hub` and `hf-xet` clients without caching token responses.
+- Release qualification now blocks artifact publication on all 14 official
+  package-manager clients, the Docker Registry client, pinned ccache and
+  sccache clients, a real MinIO S3 storage contract, and a v0.9.0 state-reopen
+  contract covering config, SQLite identities, passwords and tokens, real npm
+  metadata, cache metadata, and offline cached artifacts. A second contract
+  runs the immutable published v0.9.0 image with its exact shipped Compose bind
+  layout, then proves the fixed-UID release candidate preserves that state.
+- Browser accessibility coverage now derives every Admin route from the route
+  manifest, while Portal tests enforce the anonymous public-API boundary and a
+  single owner for status polling.
+
+### Changed
+- Minimum-release-age quarantine and the known-malicious blocklist now offer an
+  explicit `warn` mode that records the policy match while serving the request;
+  `block` remains the default.
+- The minimum toolchains and container bases are Go 1.26.7, Node.js 22.23.2,
+  and Alpine 3.23.5; Go networking/crypto modules were refreshed with the
+  corresponding security fixes.
+- The official container now runs as fixed non-root UID/GID `10001:10001`
+  while preserving `/root/.depsilo` as its state-volume path. The bind layout
+  shipped in v0.9 has a fail-closed migration that backs up durable state and
+  rejects symlinks, hard links, special files, and nested mounts before changing
+  ownership; other older root-owned named volumes use a separate documented
+  one-time ownership migration.
+- Daemon startup now uses the effective serve configuration, waits for actual
+  dependency readiness, reports a private startup log, and fails non-zero when
+  the child exits or never becomes ready. Daemon records bind a PID to its OS
+  process-creation identity, starts are serialized, Unix children enter a new
+  session, and Windows uses a per-start named shutdown event. Graceful shutdown
+  has a ten-second deadline, and foreground `start` shares the `serve` lifecycle
+  and flags.
+- `depsilo doctor` now checks the database and storage details reported by
+  `/ready` and fails when either dependency is not ready.
+- Release promotion is serialized repository-wide, binds lightweight or
+  recursively peeled annotated tags to the triggering commit, and rechecks the
+  authoritative ref plus the monotonic floating-tag decision immediately before
+  registry mutation and GitHub Release publication.
+
+### Fixed
+- npm metadata rewriting now changes only package `dist.tarball` fields instead
+  of rewriting unrelated strings that happen to contain an Upstream URL.
+- Docker Registry authentication now propagates cancellation, locally
+  validates registry, Bearer-realm, and redirect DNS scopes before direct dials
+  and every explicitly proxied request, strips credentials on cross-origin
+  redirects, bounds response bodies, preserves token parameters, and supports
+  long streamed blobs without a whole-response timeout. Explicit forward-proxy
+  DNS and ACL policy remains the documented final egress boundary. Docker tag
+  pagination, NuGet search queries, and npm `Accept` representations now preserve
+  requests upstream and use representation-safe cache keys.
+- S3 storage signs non-seekable payloads, accepts known- and unknown-length
+  streams with bounded buffering, aborts incomplete multipart uploads, creates
+  regional AWS buckets correctly, and supports object-only credentials for an
+  existing bucket.
+- Package-cache and compiler-cache S3 bucket, endpoint, region, access-key, and
+  secret-key settings now honor explicit `DEPSILO_*` environment-only
+  configuration without requiring matching keys in `config.toml`.
+- Hugging Face canonical relocation from `hf-mirror.com` to the official origin
+  preserves the exact path and query, revalidates each hop, and permanently
+  removes authorization after crossing origins.
+- Generated and example configurations no longer enable a localhost forward
+  proxy for every built-in Upstream.
+- Remote listeners reject empty, short, whitespace-padded, or placeholder JWT
+  signing secrets. Development and daemon logs that can contain first-run
+  credentials are private.
+- Portal Monitor no longer starts a second `/api/v1/stats` poll, and the shared
+  Admin breadcrumb no longer exposes invalid or duplicate navigation semantics.
+
 ## [0.9.0] - 2026-08-12
 
 ### Added

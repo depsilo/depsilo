@@ -57,7 +57,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22.22.0'
+          node-version: '22.23.2'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -118,3 +118,34 @@ jobs:
             web/test-results
           if-no-files-found: ignore
           retention-days: 14
+
+  windows-cli:
+    name: Windows CLI lifecycle
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      # The launcher exits before the independent stop process runs. The child
+      # has no inherited console, so this exercises the named-event lifecycle
+      # that a normal fresh PowerShell/cmd window relies on.
+      - name: Test detached daemon from an independent process
+        shell: pwsh
+        run: >-
+          go test ./internal/cli
+          -run '^(TestDaemonUsesServePortAndWritesPrivateStartupLog|TestRequestDaemonShutdownSignalsNamedEvent|TestRequestDaemonShutdownFailsClosedWithoutEvent|TestConfigureDaemonShutdownCreatesNoWindowAndFreshCapability|TestDaemonShutdownContextReceivesNamedEvent)$'
+          -count=1 -timeout=4m
+
+      - name: Cross-build Windows ARM64 CLI
+        shell: pwsh
+        run: |
+          $env:GOARCH = 'arm64'
+          go build -trimpath -o depsilo-windows-arm64.exe ./cmd/depsilo

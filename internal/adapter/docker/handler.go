@@ -71,7 +71,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	} else if strings.HasPrefix(endpoint, "blobs/") {
 		h.handleBlob(c, reg, imageName, endpoint, start)
 	} else if strings.HasPrefix(endpoint, "tags/") {
-		h.handleTagList(c, reg, imageName, start)
+		h.handleTagList(c, reg, imageName, c.Request.URL.RawQuery, start)
 	} else {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "unsupported endpoint"})
 		adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, "docker/unknown/"+path, false, "", time.Since(start), http.StatusNotFound, c.ClientIP(), 0)
@@ -140,12 +140,16 @@ func (h *Handler) handleBlob(c *gin.Context, reg *Registry, imageName, endpoint 
 	h.streamResponse(c, result, cacheKey, start)
 }
 
-func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName string, start time.Time) {
-	cacheKey := TagListCacheKey(reg.Name, imageName)
+func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName, rawQuery string, start time.Time) {
+	cacheKey := tagListCacheKey(reg.Name, imageName, rawQuery)
 	scope := fmt.Sprintf("repository:%s:pull", imageName)
+	upstreamEndpoint := "tags/list"
+	if rawQuery != "" {
+		upstreamEndpoint += "?" + rawQuery
+	}
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", h.cacheCfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "tags/list", scope, false)
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, upstreamEndpoint, scope, false)
 		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
@@ -160,7 +164,7 @@ func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName string,
 }
 
 func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint, scope, cacheKey string, start time.Time) {
-	token, err := h.auth.GetToken(reg.Client, reg.URL, reg.Name, reg.Username, reg.Password, scope)
+	token, err := h.auth.GetToken(c.Request.Context(), reg.Client, reg.URL, reg.Name, reg.Username, reg.Password, scope)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"code": "AUTH_FAILED", "message": err.Error()})
 		return
@@ -206,7 +210,7 @@ func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint,
 }
 
 func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageName, endpoint, scope string, isManifest bool) (io.ReadCloser, string, int64, error) {
-	token, err := h.auth.GetToken(reg.Client, reg.URL, reg.Name, reg.Username, reg.Password, scope)
+	token, err := h.auth.GetToken(ctx, reg.Client, reg.URL, reg.Name, reg.Username, reg.Password, scope)
 	if err != nil {
 		return nil, "", 0, err
 	}
@@ -236,9 +240,9 @@ func (h *Handler) fetchFromUpstream(ctx context.Context, reg *Registry, imageNam
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		return nil, "", 0, fmt.Errorf("upstream returned %d: %s", resp.StatusCode, string(body))
+		body := readBoundedErrorBody(resp.Body)
+		_ = resp.Body.Close()
+		return nil, "", 0, fmt.Errorf("upstream returned %d: %s", resp.StatusCode, body)
 	}
 
 	return resp.Body, resp.Header.Get("Content-Type"), resp.ContentLength, nil

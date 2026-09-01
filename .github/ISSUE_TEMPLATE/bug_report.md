@@ -26,7 +26,7 @@ What actually happened.
 
 ## Environment
 
-- **Depsilo Version:** (e.g., v0.8.0, or Docker image tag)
+- **Depsilo Version:** (e.g., vX.Y.Z, or Docker image tag)
 - **Deployment Method:** (binary / Docker / docker-compose)
 - **OS:** (e.g., Ubuntu 22.04, macOS 14)
 - **Architecture:** (amd64 / arm64)

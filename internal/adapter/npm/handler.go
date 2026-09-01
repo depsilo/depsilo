@@ -61,6 +61,7 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 	start := time.Now()
 	baseURL := getBaseURL(c)
 	acceptHeader := c.GetHeader("Accept")
+	cacheKey = metadataCacheKeyForAccept(cacheKey, acceptHeader)
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "npm", h.cfg.TTLIndex, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		ups, err := h.selector.Select(ctx)
@@ -123,6 +124,7 @@ func (h *Handler) proxyMetadata(c *gin.Context, fullName, cacheKey, upstreamPath
 		ct = "application/json"
 	}
 	c.Header("Content-Type", ct)
+	c.Header("Vary", "Accept")
 	c.String(http.StatusOK, string(content))
 
 	adapter.LogAccess(c.Request.Context(), h.db, "npm", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(content)))

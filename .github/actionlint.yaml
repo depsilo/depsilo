@@ -1,0 +1,8 @@
+paths:
+  .github/workflows/release.yml:
+    # actionlint v1.7.12 predates GitHub's queue:max concurrency property.
+    # scripts/test-release-workflow.sh separately requires queue:max on both
+    # release serialization boundaries, so this ignores only that stale-schema
+    # diagnostic and not arbitrary workflow errors.
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'

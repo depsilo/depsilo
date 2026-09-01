@@ -336,7 +336,6 @@ export default function MainLayoutV2() {
           </button>
           <div
             data-admin-breadcrumb
-            aria-label={t('nav.adminNavigation')}
             className="min-w-0 flex-1"
           >
             <div

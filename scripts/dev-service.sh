@@ -10,7 +10,7 @@ STOP_DELAY=${DEPSILO_DEV_STOP_DELAY:-0.1}
 usage() {
     cat >&2 <<'EOF'
 usage:
-  dev-service.sh start BINARY CONFIG PID_FILE LOG_FILE HEALTH_URL [serve flags...]
+  dev-service.sh start BINARY CONFIG PID_FILE LOG_FILE BASE_URL [serve flags...]
   dev-service.sh stop  BINARY PID_FILE
   dev-service.sh logs  LOG_FILE
 EOF
@@ -91,7 +91,7 @@ start_service() {
     local config=$2
     local pid_file=$3
     local log_file=$4
-    local health_url=${5%/}/health
+    local ready_url=${5%/}/ready
     shift 5
 
     local existing_pid
@@ -102,8 +102,13 @@ start_service() {
     rm -f "$pid_file"
     mkdir -p "$(dirname "$pid_file")" "$(dirname "$log_file")"
 
-    echo ">>> starting Depsilo; health=$health_url"
-    bash "$SCRIPT_DIR/run-dev.sh" "$binary" "$config" "$@" >"$log_file" 2>&1 &
+    echo ">>> starting Depsilo; readiness=$ready_url"
+    # First-run output can contain a one-time bootstrap credential. Pre-create
+    # and re-secure the log before redirecting so neither umask 022 nor a stale
+    # permissive file exposes it to another local user.
+    (umask 077 && : >"$log_file")
+    chmod 600 "$log_file"
+    bash "$SCRIPT_DIR/run-dev.sh" "$binary" "$config" "$@" >>"$log_file" 2>&1 &
     local pid=$!
     local consecutive_healthy=0
     local pid_tmp="${pid_file}.tmp.$$"
@@ -114,10 +119,10 @@ start_service() {
         if ! kill -0 "$pid" 2>/dev/null; then
             break
         fi
-        if curl -fsS "$health_url" >/dev/null 2>&1; then
+        if curl -fsS "$ready_url" >/dev/null 2>&1; then
             consecutive_healthy=$((consecutive_healthy + 1))
             if [ "$consecutive_healthy" -ge 2 ]; then
-                echo ">>> Depsilo running  pid=$pid  ${health_url%/health}"
+                echo ">>> Depsilo running  pid=$pid  ${ready_url%/ready}"
                 return 0
             fi
         else

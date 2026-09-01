@@ -149,6 +149,20 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	if c.Request.URL.RawQuery != "" {
 		target += "?" + c.Request.URL.RawQuery
 	}
+	if isXetReadToken(parsed) {
+		// Xet connection responses contain short-lived CAS credentials. They are
+		// never shared-cache eligible, even for anonymous public repositories.
+		// The Hub protocol defines only GET for this endpoint; do not generate a
+		// fresh credential on speculative HEAD requests.
+		c.Header("Cache-Control", "no-store")
+		if c.Request.Method != http.MethodGet {
+			c.Header("Allow", http.MethodGet)
+			c.String(http.StatusMethodNotAllowed, "Xet read-token requires GET")
+			return
+		}
+		upstreamName = h.serveDirect(c, target)
+		return
+	}
 	repository, hasRepository := repositoryForParsed(parsed)
 	publicRequest := publicRepositoryRequest(c.Request)
 	if publicRequest && hasRepository && h.repositoryRevoked(repository) {
@@ -615,6 +629,12 @@ func (h *Handler) writeResolved(c *gin.Context, resolved *resolvedResponse) {
 	}
 	defer resolved.Body.Close()
 	copyHTTPHeaders(c.Writer.Header(), clientResponseHeaders(resolved.Header, c.Param("slug")))
+	if isXetReadTokenRequest(c.Request) {
+		// The Hub currently omits Cache-Control on this credential response and
+		// an origin may even provide a reusable directive. Override either case
+		// at the final downstream boundary.
+		c.Header("Cache-Control", "no-store")
+	}
 	if resolved.Size >= 0 && c.Writer.Header().Get("Content-Length") == "" {
 		c.Header("Content-Length", strconv.FormatInt(resolved.Size, 10))
 	}
@@ -625,6 +645,11 @@ func (h *Handler) writeResolved(c *gin.Context, resolved *resolvedResponse) {
 	if _, err := io.Copy(c.Writer, resolved.Body); err != nil {
 		zap.L().Warn("Hugging Face response stream interrupted", zap.Error(err))
 	}
+}
+
+func isXetReadTokenRequest(request *http.Request) bool {
+	path, ok := escapedHuggingFacePath(request)
+	return ok && isXetReadToken(ParseRequestPath(path))
 }
 
 func (h *Handler) writeCacheError(c *gin.Context, err error) string {

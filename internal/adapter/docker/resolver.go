@@ -1,7 +1,7 @@
 package docker
 
 import (
-	"crypto/tls"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -35,23 +35,11 @@ func NewResolver(cfg config.DockerConfig) *Resolver {
 	}
 
 	for _, rc := range cfg.Registries {
-		client := &http.Client{
-			Timeout: 120 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig:     &tls.Config{InsecureSkipVerify: false},
-				MaxIdleConnsPerHost: 10,
-			},
-		}
-
-		if rc.Proxy != "" {
-			proxyURL, err := url.Parse(rc.Proxy)
-			if err == nil {
-				client.Transport = &http.Transport{
-					Proxy:               http.ProxyURL(proxyURL),
-					TLSClientConfig:     &tls.Config{InsecureSkipVerify: false},
-					MaxIdleConnsPerHost: 10,
-				}
-			}
+		dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+		client, clientErr := newRegistryClient(rc.URL, rc.Proxy, net.DefaultResolver, dialer.DialContext)
+		if clientErr != nil {
+			zap.L().Error("docker: invalid registry HTTP configuration", zap.String("registry", rc.Name), zap.Error(clientErr))
+			client = &http.Client{Transport: errorRoundTripper{err: clientErr}}
 		}
 
 		reg := &Registry{

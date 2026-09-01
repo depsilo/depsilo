@@ -35,6 +35,30 @@ func TestHF_DatasetMetadata(t *testing.T) {
 	assertBodyContains(t, resp, `"id":"squad"`)
 }
 
+func TestHF_XetReadTokenIsDirectAndUncached(t *testing.T) {
+	const upstreamPath = "/api/models/acme/model/xet-read-token/main"
+	before := countMockPath(upstreamPath)
+	for index := 1; index <= 2; index++ {
+		resp := httpGet(t, depsiloURL+"/huggingface"+upstreamPath)
+		assertStatus(t, resp, http.StatusOK)
+		body := readBody(t, resp)
+		resp.Body.Close()
+		wantToken := `"accessToken":"mock-xet-token-` + string(rune('0'+index)) + `"`
+		if !strings.Contains(body, wantToken) {
+			t.Fatalf("response %d body = %q, want %q", index, body, wantToken)
+		}
+		if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("response %d Cache-Control = %q, want no-store", index, got)
+		}
+		if got := resp.Header.Get("X-Origin-Secret"); got != "" {
+			t.Fatalf("response %d leaked unlisted origin header %q", index, got)
+		}
+	}
+	if got := countMockPath(upstreamPath) - before; got != 2 {
+		t.Fatalf("upstream token requests = %d, want 2 (no shared-cache reuse)", got)
+	}
+}
+
 func TestHF_ResolveSmallFile(t *testing.T) {
 	resp := httpGet(t, depsiloURL+"/huggingface/bert-base-uncased/resolve/main/config.json")
 	defer resp.Body.Close()

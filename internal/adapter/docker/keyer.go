@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 )
@@ -20,4 +22,17 @@ func BlobCacheKey(registryName, digest string) string {
 
 func TagListCacheKey(registryName, imageName string) string {
 	return fmt.Sprintf("docker/%s/tags/%s/list", registryName, imageName)
+}
+
+func tagListCacheKey(registryName, imageName, rawQuery string) string {
+	if rawQuery == "" {
+		return TagListCacheKey(registryName, imageName)
+	}
+	digest := sha256.Sum256([]byte(rawQuery))
+	return fmt.Sprintf(
+		"docker/%s/__query__/%s/tags/%s/list",
+		registryName,
+		hex.EncodeToString(digest[:]),
+		imageName,
+	)
 }

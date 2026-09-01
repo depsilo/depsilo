@@ -55,9 +55,8 @@ Depsilo 采用 MIT 许可证，不包含遥测；它是基于 SQLite 的轻量�
 
 ## 快速开始
 
-> **发行说明：**统一状态路径、启动摘要和首次项目接入在 `v0.9.0` 之后进入
-> `master`。新版发布并移动 `latest` 之前，请对 `v0.9.0` 使用该版本附带的 README，
-> 或从当前 `master` 构建。本提示可在下一个版本发布后删除。
+> **发行说明：**统一状态路径、启动摘要和首次项目接入从 `v0.9.1` 开始提供。运行
+> `v0.9.0` 时，请以该版本附带的 README 为准。
 
 从 Binary 或容器安装中任选一种。首次启动不需要克隆仓库，不需要提前准备
 `config.toml`，也不需要设置数据库和缓存路径环境变量。
@@ -68,6 +67,10 @@ Depsilo 采用 MIT 许可证，不包含遥测；它是基于 SQLite 的轻量�
 curl -fsSL https://depsilo.com/install.sh | bash
 depsilo serve
 ```
+
+替换以 daemon 模式运行的 v0.9.0 binary 前，必须先用 v0.9.0 binary 执行停止。
+v0.9.1 会拒绝旧版未经认证的纯 PID 记录。如果已经替换 binary，请先确认旧进程确实
+结束，再手动删除 `~/.local/share/depsilo/depsilo.pid`，然后启动 v0.9.1。
 
 打开 <http://127.0.0.1:23333>。安装器会校验发行包 checksum；如需固定版本或选择
 其他安装目录，可分别设置 `DEPSILO_VERSION` 和 `DEPSILO_INSTALL_DIR`。
@@ -93,6 +96,10 @@ docker logs depsilo
 
 长期运行时，请将 `latest` 替换为完整的 `X.Y.Z` 发行标签。GHCR 是官方主镜像仓库，
 Docker Hub 作为镜像源同步维护。
+
+镜像从 v0.9.1 起固定以非 root UID/GID `10001:10001` 运行。复用 v0.9.0 创建的
+旧 Volume 时，必须按[部署指南](deployment.md)完成一次性所有权迁移；使用 v0.9.0
+官方 bind-mount Compose 布局时，必须使用指南中的独立兼容流程。
 
 ### Docker Compose
 
@@ -219,6 +226,8 @@ Depsilo 为官方 ccache HTTP 和 sccache WebDAV 客户端提供独立的远程�
 
 - 互动式 Setup 由一次性 bootstrap token 保护。
 - 管理员会话使用 JWT 认证；API Token 仅存储哈希。
+- 即使 Depsilo 仅监听 loopback 并由反向代理对外提供服务，也应使用至少 32 个随机
+  字节的 JWT 签名密钥。
 - 面向互联网的部署应在可信反向代理后提供 TLS，并按需增加外部身份感知访问层；
   Admin 仍然使用 Depsilo 自己的身份凭据。
 - 已签名的 `checksums.txt` 用于认证发行压缩包；安装器和 SBOM 附件有各自的签名

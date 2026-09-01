@@ -172,7 +172,7 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache
+.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade
 
 test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
 	go test -short $(GO_TEST_PKGS)
@@ -195,6 +195,18 @@ test-ui-production: build       ## 用 Go 嵌入的生产前端运行最小浏�
 test-compiler-cache:              ## 用官方 ccache + sccache 验证已运行的编译缓存
 	@bash scripts/test-compiler-cache.sh
 
+test-compiler-cache-qualified: build-dev-server  # 发布：自举服务与凭据后运行官方编译缓存客户端
+	@bash scripts/test-compiler-cache-qualified.sh
+
+test-s3:                         ## 用固定 MinIO 验证 S3 存储契约
+	@bash scripts/test-s3.sh
+
+test-v090-upgrade: build-dev-server  # 发布：验证 v0.9.0 配置、SQLite、凭据与缓存原地升级
+	@bash scripts/test-v090-upgrade.sh
+
+test-v090-compose-upgrade:          # 发布：验证官方 v0.9.0 Compose bind 布局安全升级
+	@bash scripts/test-v090-compose-upgrade.sh
+
 # ─── Docker E2E ──────────────────────────────
 # Every fixture accepts one DEPSILO_URL build arg and derives its own route.
 # Docker Registry remains opt-in because it additionally requires dind.
@@ -204,12 +216,33 @@ DOCKER_E2E_BUILD_FLAGS  := --no-cache --progress=plain --add-host=$(DOCKER_HOST_
 TEST_DOCKER_ALL_ECOS    := pypi apt npm go cargo maven rubygems composer nuget conda cran alpine helm huggingface
 TEST_DOCKER_ALL_TARGETS := $(addprefix test-docker-,$(TEST_DOCKER_ALL_ECOS))
 TEST_DOCKER_ECOS        := $(TEST_DOCKER_ALL_ECOS) docker
+override E2E_CONFIG          := config.example.toml
+override E2E_STATE_DIR       := $(CURDIR)/.test-e2e-state
+override E2E_HOME            := $(E2E_STATE_DIR)/home
+override E2E_DATA_DIR        := $(E2E_STATE_DIR)/data
+override E2E_DATABASE        := $(E2E_DATA_DIR)/depsilo.db
+override E2E_STORAGE         := $(E2E_DATA_DIR)/cache
+override E2E_COMPILE_STORAGE := $(E2E_DATA_DIR)/compile-cache
+override E2E_JWT_SECRET      := $(E2E_STATE_DIR)/.dev-jwt-secret
+override E2E_PID_FILE        := $(E2E_STATE_DIR)/.server.pid
+override E2E_LOG             := $(E2E_STATE_DIR)/.dev.log
 
 .PHONY: test-e2e-server $(TEST_DOCKER_ALL_TARGETS) test-docker-docker test-e2e test-clean
 
-test-e2e-server: build-dev-server stop  # 内部：仅启动真实客户端测试所需的后端
-	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/dev-service.sh start \
-		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" --port "$(PORT)"
+test-e2e-server: build-dev-server  # 内部：仅启动真实客户端测试所需的后端
+	@set -eu; \
+		bash scripts/e2e-state.sh guard "$(E2E_STATE_DIR)"; \
+		bash scripts/dev-service.sh stop "./$(BIN)" "$(E2E_PID_FILE)"; \
+		bash scripts/e2e-state.sh prepare "$(E2E_STATE_DIR)"; \
+		trap 'bash scripts/dev-service.sh stop "./$(BIN)" "$(E2E_PID_FILE)" >/dev/null 2>&1 || true; bash scripts/e2e-state.sh clean "$(E2E_STATE_DIR)"' EXIT INT TERM; \
+		HOME="$(E2E_HOME)" DEPSILO_CONFIG="$(E2E_CONFIG)" \
+			DEPSILO_DEV_JWT_FILE="$(E2E_JWT_SECRET)" \
+			DEPSILO_DATABASE_DSN="$(E2E_DATABASE)" \
+			DEPSILO_STORAGE_PATH="$(E2E_STORAGE)" \
+			DEPSILO_COMPILE_CACHE_STORAGE_PATH="$(E2E_COMPILE_STORAGE)" \
+			bash scripts/dev-service.sh start "./$(BIN)" "$(E2E_CONFIG)" \
+			"$(E2E_PID_FILE)" "$(E2E_LOG)" "$(DEV_URL)" --port "$(PORT)"; \
+		trap - EXIT INT TERM
 
 $(TEST_DOCKER_ALL_TARGETS): test-docker-%: test-e2e-server
 	@echo "=== [$*] real-client E2E ==="
@@ -226,6 +259,9 @@ test-e2e: $(TEST_DOCKER_ALL_TARGETS)  ## 运行 14 个真实客户端 E2E
 	@echo ">>> ALL 14 ECOSYSTEMS PASSED"
 
 test-clean:                     ## 清理端到端测试环境
+	@bash scripts/e2e-state.sh guard "$(E2E_STATE_DIR)"
+	@bash scripts/dev-service.sh stop "./$(BIN)" "$(E2E_PID_FILE)"
+	@bash scripts/e2e-state.sh clean "$(E2E_STATE_DIR)"
 	@docker rmi $(addprefix depsilo-test-,$(TEST_DOCKER_ECOS)) >/dev/null 2>&1 || true
 	@echo ">>> test env removed"
 
@@ -250,9 +286,11 @@ docker-run: docker-stop         ## 运行本地容器
 		if [ -z "$$secret" ]; then echo "set DEPSILO_AUTH_JWT_SECRET or run make run once" >&2; exit 1; fi; \
 		DEPSILO_AUTH_JWT_SECRET="$$secret" docker run -d \
 			--name $(DOCKER_NAME) \
+			--user "$$(id -u):$$(id -g)" \
 			-p $(PORT):23333 \
 			-v $(CURDIR)/data:/app/data \
 			-v $(abspath $(CONFIG)):/app/config.toml:ro \
+			-e HOME=/tmp/depsilo-home \
 			-e DEPSILO_CONFIG=/app/config.toml \
 			-e DEPSILO_AUTH_JWT_SECRET \
 			--restart unless-stopped \
@@ -366,6 +404,9 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	bash scripts/test-dev-ui.sh
 	node scripts/test-vite-proxy-routes.mjs
 	bash scripts/test-release-tag.sh
+	bash scripts/test-release-notes.sh
+	bash scripts/test-release-promotion.sh
+	bash scripts/test-prepare-v090-compose-upgrade.sh
 	bash scripts/test-release-workflow.sh
 
 verify-installer: verify-scripts # 兼容别名

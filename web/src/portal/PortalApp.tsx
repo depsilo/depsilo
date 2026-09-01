@@ -164,6 +164,7 @@ export default function PortalAppV2() {
       const res = await statsApi.getStats({ signal })
       return res.data
     },
+    staleTime: 30_000,
     refetchInterval: 30000,
     retry: false,
   })

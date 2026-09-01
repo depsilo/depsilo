@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM --platform=$BUILDPLATFORM node:22.22.0-alpine3.23@sha256:e4bf2a82ad0a4037d28035ae71529873c069b13eb0455466ae0bc13363826e34 AS frontend
+FROM --platform=$BUILDPLATFORM node:22.23.2-alpine3.23@sha256:46825fbbd4e996a78b7a2cdc08d75e38a5a505bdab95dcda55605359bf124bc6 AS frontend
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
@@ -7,12 +7,12 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine3.23@sha256:622e56dbc11a8cfe87cafa2331e9a201877271cbff918af53d3be315f3da88cc AS backend
+FROM --platform=$BUILDPLATFORM golang:1.26.7-alpine3.23@sha256:b17af760035fc2f338eed92d448a6c67f2d45438844fc6c60678fa5f99e44b57 AS backend
 WORKDIR /app
 
 # Version stamped into the binary so `depsilo version` / the topbar version
 # pill / Prometheus labels match the image tag. Pass at build time:
-#   docker build --build-arg VERSION=0.9.0 --build-arg COMMIT=<commit> -t ghcr.io/depsilo/depsilo:0.9.0 .
+#   docker build --build-arg VERSION=X.Y.Z --build-arg COMMIT=<commit> -t ghcr.io/depsilo/depsilo:X.Y.Z .
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
@@ -36,11 +36,23 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -buil
     -o depsilo ./cmd/depsilo
 
 # Stage 3: Final image
-FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
+FROM alpine:3.23.5@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=backend /app/depsilo /app/depsilo
-RUN ln -s /app/depsilo /usr/local/bin/depsilo
+RUN addgroup -S -g 10001 depsilo \
+    && adduser -S -D -H -h /root -u 10001 -G depsilo depsilo \
+    && mkdir -p /root/.depsilo /root/.local/share/depsilo /root/.config/depsilo \
+    && chown root:10001 /root \
+    && chmod 0710 /root \
+    && chown -R 10001:10001 /root/.depsilo /root/.local /root/.config \
+    && chmod 0555 /app/depsilo \
+    && ln -s /app/depsilo /usr/local/bin/depsilo
+
+# Preserve the historical /root/.depsilo state path for v0.9 upgrades while
+# running the service itself as an unprivileged, fixed identity.
+ENV HOME=/root
+USER 10001:10001
 
 # Binary installs default to loopback. A container must listen on every
 # interface so publishing 23333 reaches the service from the host.

@@ -1,9 +1,40 @@
 # Release verification and immutable build inputs
 
-Tagged releases stay in draft state until all archives and tray bundles are
-available, the Linux archive executes, its checksum set verifies, the candidate
-container starts, its database and storage pass `/ready`, and signing and
-attestation have completed.
+Tagged releases do not start publishing assets until the offline verification
+workflow and release qualification are green. Qualification exercises all 14
+package-manager clients, Docker OCI, pinned ccache and sccache clients, real
+MinIO S3 behavior, a v0.9.0 tagged-source state reopen, and the bind layout
+shipped by the immutable published v0.9.0 image. Releases then stay
+in draft state until all archives and tray bundles are available, the Linux
+archive executes, its checksum set verifies, the candidate container starts,
+its database and storage pass `/ready`, and signing and attestation have
+completed.
+
+The local equivalents are:
+
+```bash
+make verify
+make security
+make test-ui-production
+make test-e2e
+make test-docker-docker
+make test-compiler-cache-qualified
+make test-s3
+make test-v090-upgrade
+make test-v090-compose-upgrade
+make release-check
+make release-dry-run
+```
+
+The network and privileged checks are intentionally outside `make verify` so
+ordinary development stays deterministic. They are mandatory in the reusable
+workflow when a release tag calls it. One upgrade contract rebuilds the
+annotated v0.9.0 tag source with the current CI toolchain. The second pulls
+`ghcr.io/depsilo/depsilo@sha256:fbc16cae946eccfdbb115ec6523047702bef5d1e3e15359f9c16dcd6a8e6e56e`,
+extracts the exact tagged Compose file, and verifies its real bind layout
+against the UID/GID `10001:10001` candidate, including an explicitly confirmed
+rotation from a weak legacy JWT secret. Together they cover source-level
+compatibility and the immutable artifact users actually ran.
 
 Container publication is a two-job transaction:
 
@@ -15,6 +46,15 @@ Container publication is a two-job transaction:
    promotion job attach the formal `X.Y.Z` tags. Stable releases additionally
    move `X.Y`, `X` (except `0.x`), and `latest`. Prereleases never move floating
    tags. The GitHub draft is published last.
+
+Inside the repository-wide promotion lock, the workflow reads authoritative
+Git refs from the GitHub API and requires the current release tag to resolve to
+the commit SHA that triggered the workflow. Lightweight tags are checked
+directly; annotated tags are recursively peeled with cycle detection and an
+eight-object depth limit. The identity is checked while planning, immediately
+before the first registry-tag mutation, and again before the GitHub draft is
+published. Both later checks recompute the floating-tag plan and fail closed if
+a newer stable ref changed that decision.
 
 Cosign signatures and attestations bind to the digest, so every formal tag
 points at already trusted content from the moment it appears. Promotion checks
@@ -138,18 +178,18 @@ refreshing a pin. For an annotated tag, use the peeled `^{}` commit.
 
 | Stage | Official image tag | Multi-platform digest |
 |---|---|---|
-| Frontend | `node:22.22.0-alpine3.23` | `sha256:e4bf2a82ad0a4037d28035ae71529873c069b13eb0455466ae0bc13363826e34` |
-| Backend | `golang:1.26.5-alpine3.23` | `sha256:622e56dbc11a8cfe87cafa2331e9a201877271cbff918af53d3be315f3da88cc` |
-| Runtime | `alpine:3.23.3` | `sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659` |
+| Frontend | `node:22.23.2-alpine3.23` | `sha256:46825fbbd4e996a78b7a2cdc08d75e38a5a505bdab95dcda55605359bf124bc6` |
+| Backend | `golang:1.26.7-alpine3.23` | `sha256:b17af760035fc2f338eed92d448a6c67f2d45438844fc6c60678fa5f99e44b57` |
+| Runtime | `alpine:3.23.5` | `sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40` |
 
 Resolve replacements from Docker Hub's official-image manifests:
 
 ```bash
-docker buildx imagetools inspect node:22.22.0-alpine3.23 \
+docker buildx imagetools inspect node:22.23.2-alpine3.23 \
   --format '{{json .Manifest}}'
-docker buildx imagetools inspect golang:1.26.5-alpine3.23 \
+docker buildx imagetools inspect golang:1.26.7-alpine3.23 \
   --format '{{json .Manifest}}'
-docker buildx imagetools inspect alpine:3.23.3 \
+docker buildx imagetools inspect alpine:3.23.5 \
   --format '{{json .Manifest}}'
 ```
 

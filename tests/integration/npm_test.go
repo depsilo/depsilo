@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,45 @@ func TestNpm_PackageMetadata(t *testing.T) {
 	}
 	if !strings.Contains(body, depsiloURL+"/npm/testpkg/-/testpkg-1.0.0.tgz") {
 		t.Error("local tarball URL not found")
+	}
+}
+
+func TestNpm_AcceptRepresentationsAreIsolated(t *testing.T) {
+	requestMetadata := func(accept string) *http.Response {
+		t.Helper()
+		request, err := http.NewRequest(http.MethodGet, depsiloURL+"/npm/accept-fixture", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if accept != "" {
+			request.Header.Set("Accept", accept)
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertStatus(t, response, http.StatusOK)
+		return response
+	}
+
+	full := requestMetadata("")
+	if body := readBody(t, full); !strings.Contains(body, `"variant":"full"`) {
+		t.Fatalf("full npm metadata = %s", body)
+	}
+	installAccept := "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8, */*"
+	install := requestMetadata(installAccept)
+	if body := readBody(t, install); !strings.Contains(body, `"variant":"install"`) {
+		t.Fatalf("install npm metadata = %s", body)
+	}
+	if got := install.Header.Get("Vary"); got != "Accept" {
+		t.Fatalf("Vary = %q, want Accept", got)
+	}
+
+	before := mockServer.RequestCount()
+	readBody(t, requestMetadata(""))
+	readBody(t, requestMetadata(installAccept))
+	if got := mockServer.RequestCount(); got != before {
+		t.Fatalf("cached npm representations contacted upstream: before=%d after=%d", before, got)
 	}
 }
 

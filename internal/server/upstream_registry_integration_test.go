@@ -400,7 +400,6 @@ func TestRawShutdownAndCloseFallbackWaitForEnteredHandlers(t *testing.T) {
 func TestProductionEntrypointsAwaitServerShutdownHelper(t *testing.T) {
 	paths := []string{
 		"../cli/serve.go",
-		"../cli/daemon.go",
 		"../../cmd/server/main_server.go",
 		"../../cmd/depsilo-tray/main.go",
 	}
@@ -415,6 +414,26 @@ func TestProductionEntrypointsAwaitServerShutdownHelper(t *testing.T) {
 		if strings.Contains(string(body), "srv.Shutdown(") {
 			t.Errorf("%s still calls raw http.Server.Shutdown", path)
 		}
+	}
+
+	// `depsilo start` has one lifecycle implementation: foreground mode calls
+	// RunServe, while daemon mode starts the same `serve` subcommand in a child.
+	// The shutdown-helper assertion therefore belongs to serve.go; requiring a
+	// duplicate call in daemon.go would recreate the lifecycle drift this test
+	// is intended to prevent.
+	daemonBody, err := os.ReadFile("../cli/daemon.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	daemonSource := string(daemonBody)
+	if !strings.Contains(daemonSource, "return RunServe(serveArgs)") {
+		t.Error("foreground start does not delegate lifecycle ownership to RunServe")
+	}
+	if !strings.Contains(daemonSource, `append([]string{"serve"}, serveArgs...)`) {
+		t.Error("daemon start does not delegate lifecycle ownership to the serve subcommand")
+	}
+	if strings.Contains(daemonSource, "srv.Shutdown(") {
+		t.Error("daemon start still calls raw http.Server.Shutdown")
 	}
 }
 
