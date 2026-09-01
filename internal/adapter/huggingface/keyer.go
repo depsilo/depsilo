@@ -36,15 +36,18 @@ func TTLForRef(ref string) time.Duration {
 type PathKind int
 
 const (
-	PathUnknown            PathKind = iota
-	PathResolve                     // /<repo>/resolve/<ref>/<subpath> — file download (LFS-aware)
-	PathRaw                         // /<repo>/raw/<ref>/<subpath> — small file inline content
-	PathAPIModelInfo                // /api/models/<repo>
-	PathAPIModelRevision            // /api/models/<repo>/revision/<rev>
-	PathAPIModelTree                // /api/models/<repo>/tree/<rev>
-	PathAPIDatasetInfo              // /api/datasets/<repo>
-	PathAPIDatasetRevision          // /api/datasets/<repo>/revision/<rev>
-	PathAPIDatasetTree              // /api/datasets/<repo>/tree/<rev>
+	PathUnknown                PathKind = iota
+	PathResolve                         // /<repo>/resolve/<ref>/<subpath> — file download (LFS-aware)
+	PathRaw                             // /<repo>/raw/<ref>/<subpath> — small file inline content
+	PathAPIModelInfo                    // /api/models/<repo>
+	PathAPIModelRevision                // /api/models/<repo>/revision/<rev>
+	PathAPIModelTree                    // /api/models/<repo>/tree/<rev>
+	PathAPIDatasetInfo                  // /api/datasets/<repo>
+	PathAPIDatasetRevision              // /api/datasets/<repo>/revision/<rev>
+	PathAPIDatasetTree                  // /api/datasets/<repo>/tree/<rev>
+	PathAPIModelXetReadToken            // /api/models/<repo>/xet-read-token/<rev>
+	PathAPIDatasetXetReadToken          // /api/datasets/<repo>/xet-read-token/<rev>
+	PathAPISpaceXetReadToken            // /api/spaces/<repo>/xet-read-token/<rev>
 )
 
 // Parsed holds the structured pieces of a HuggingFace request path.
@@ -74,6 +77,7 @@ type Parsed struct {
 //	/api/models/<repo>/revision/<rev>
 //	/api/models/<repo>/tree/<rev>
 //	/api/datasets/<repo>[/revision|/tree]/<rev>
+//	/api/{models,datasets,spaces}/<repo>/xet-read-token/<rev>
 //
 // Where <repo> is either "owner/name" (two segments) or a single token.
 func ParseRequestPath(path string) Parsed {
@@ -88,7 +92,7 @@ func ParseRequestPath(path string) Parsed {
 		segs[i] = decoded
 	}
 
-	// /api/{models,datasets}/...
+	// /api/{models,datasets,spaces}/...
 	if len(segs) >= 3 && segs[0] == "api" {
 		return parseAPI(segs[1:])
 	}
@@ -200,21 +204,21 @@ func cacheKeyWithOpaqueQuery(p Parsed, base, query string) string {
 }
 
 func parseAPI(segs []string) Parsed {
-	// segs[0] = "models" or "datasets"
+	// segs[0] = "models", "datasets", or "spaces"
 	// segs[1] = first repo segment (and possibly only)
-	// segs[2] = (optional) second repo segment OR "revision" OR "tree"
+	// segs[2] = (optional) second repo segment OR a recognized operation
 	// ...
 	if len(segs) < 2 {
 		return Parsed{Kind: PathUnknown}
 	}
-	kindBase := segs[0] // "models" or "datasets"
-	if kindBase != "models" && kindBase != "datasets" {
+	kindBase := segs[0]
+	if kindBase != "models" && kindBase != "datasets" && kindBase != "spaces" {
 		return Parsed{Kind: PathUnknown}
 	}
 
-	// Find "revision" or "tree" at a valid route boundary. Search from the
+	// Find an operation at a valid route boundary. Search from the
 	// two-segment owner/name boundary first: repository names themselves may
-	// legally be "tree" or "revision".
+	// legally be named after an operation.
 	splitAt := -1
 	splitKind := ""
 	maxSplit := 3
@@ -222,7 +226,7 @@ func parseAPI(segs []string) Parsed {
 		maxSplit = len(segs) - 2
 	}
 	for i := maxSplit; i >= 2; i-- {
-		if segs[i] == "revision" || segs[i] == "tree" {
+		if segs[i] == "revision" || segs[i] == "tree" || segs[i] == "xet-read-token" {
 			splitAt = i
 			splitKind = segs[i]
 			break
@@ -246,7 +250,7 @@ func parseAPI(segs []string) Parsed {
 		}
 		ref = segs[splitAt+1]
 		switch splitKind {
-		case "revision":
+		case "revision", "xet-read-token":
 			if splitAt+2 != len(segs) {
 				return Parsed{Kind: PathUnknown}
 			}
@@ -275,6 +279,12 @@ func parseAPI(segs []string) Parsed {
 		out.Kind = PathAPIDatasetRevision
 	case kindBase == "datasets" && splitKind == "tree":
 		out.Kind = PathAPIDatasetTree
+	case kindBase == "models" && splitKind == "xet-read-token":
+		out.Kind = PathAPIModelXetReadToken
+	case kindBase == "datasets" && splitKind == "xet-read-token":
+		out.Kind = PathAPIDatasetXetReadToken
+	case kindBase == "spaces" && splitKind == "xet-read-token":
+		out.Kind = PathAPISpaceXetReadToken
 	default:
 		out.Kind = PathUnknown
 	}
@@ -314,8 +324,25 @@ func CacheKey(p Parsed) string {
 		return "huggingface/api/datasets/" + repo + "/revision/" + ref
 	case PathAPIDatasetTree:
 		return appendSubpath("huggingface/api/datasets/"+repo+"/tree/"+ref, subpath)
+	case PathAPIModelXetReadToken:
+		return "huggingface/api/models/" + repo + "/xet-read-token/" + ref
+	case PathAPIDatasetXetReadToken:
+		return "huggingface/api/datasets/" + repo + "/xet-read-token/" + ref
+	case PathAPISpaceXetReadToken:
+		return "huggingface/api/spaces/" + repo + "/xet-read-token/" + ref
 	default:
 		return ""
+	}
+}
+
+func isXetReadToken(parsed Parsed) bool {
+	switch parsed.Kind {
+	case PathAPIModelXetReadToken,
+		PathAPIDatasetXetReadToken,
+		PathAPISpaceXetReadToken:
+		return true
+	default:
+		return false
 	}
 }
 

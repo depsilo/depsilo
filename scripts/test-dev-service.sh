@@ -14,7 +14,8 @@ trap cleanup EXIT
 mkdir -p "$TMP/bin"
 FAKE_BINARY="$TMP/bin/depsilo-test-server"
 CAPTURE_ARGS="$TMP/args"
-export CAPTURE_ARGS
+CAPTURE_CURL="$TMP/curl-args"
+export CAPTURE_ARGS CAPTURE_CURL
 
 cat > "$FAKE_BINARY" <<'SH'
 #!/usr/bin/env bash
@@ -26,6 +27,7 @@ chmod +x "$FAKE_BINARY"
 
 cat > "$TMP/bin/curl" <<'SH'
 #!/usr/bin/env bash
+printf '%s\n' "$@" >> "$CAPTURE_CURL"
 exit 0
 SH
 chmod +x "$TMP/bin/curl"
@@ -40,8 +42,16 @@ PATH="$TMP/bin:$PATH" \
 
 service_pid=$(cat "$PID_FILE")
 kill -0 "$service_pid"
+if [ "$(stat -c '%a' "$LOG_FILE")" != 600 ]; then
+    echo "background service log must be private because it can contain bootstrap credentials" >&2
+    exit 1
+fi
 if [ "$(cat "$CAPTURE_ARGS")" != $'serve\n--port\n18080' ]; then
     echo "background service manager changed the serve arguments" >&2
+    exit 1
+fi
+if ! grep -Fxq 'http://localhost:18080/ready' "$CAPTURE_CURL"; then
+    echo "background service manager did not probe the readiness endpoint" >&2
     exit 1
 fi
 

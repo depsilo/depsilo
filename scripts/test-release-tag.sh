@@ -10,7 +10,7 @@ for tag in \
     v1.2.3-alpha \
     v1.2.3-alpha.1 \
     v1.2.3-0.3.7 \
-    v1.2.3-rc-1+build.5; do
+    v1.2.3-rc-1; do
     bash "$VALIDATOR" "$tag"
 done
 
@@ -24,6 +24,8 @@ for tag in \
     v1.2.3-01 \
     v1.2.3-alpha.01 \
     v1.2.3- \
+    v1.2.3+build.5 \
+    v1.2.3-rc.1+build.5 \
     v1.2.3+; do
     if bash "$VALIDATOR" "$tag" >/dev/null 2>&1; then
         echo "invalid release tag was accepted: $tag" >&2

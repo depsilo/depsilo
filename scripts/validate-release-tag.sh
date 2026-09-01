@@ -19,3 +19,10 @@ if [[ ! "${tag#v}" =~ $semver ]]; then
     echo "release tag must be valid SemVer with a v prefix: $tag" >&2
     exit 1
 fi
+
+# OCI distribution tag grammar cannot represent '+'. Sanitizing build metadata
+# would make distinct SemVer tags collide, so automatic releases fail closed.
+if [[ $tag == *+* ]]; then
+    echo "automatic release tags must not contain SemVer build metadata: $tag" >&2
+    exit 1
+fi

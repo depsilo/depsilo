@@ -13,6 +13,6 @@ RUN pip install --no-cache-dir huggingface_hub
 RUN hf download prajjwal1/bert-tiny --local-dir /tmp/m \
     && test -f /tmp/m/config.json \
     && python -c "import json; cfg = json.load(open('/tmp/m/config.json')); \
-                  assert cfg.get('model_type') == 'bert', cfg; print('config.json OK')"
+                  assert cfg.get('hidden_size') == 128, cfg; print('config.json OK')"
 
 CMD ["echo", "depsilo huggingface E2E passed"]

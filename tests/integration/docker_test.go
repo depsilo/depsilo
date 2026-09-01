@@ -106,3 +106,33 @@ func TestDocker_TagList(t *testing.T) {
 		t.Errorf("tags count = %d, want 2", len(result.Tags))
 	}
 }
+
+func TestDocker_TagListQueryIsForwardedAndCachedPerPage(t *testing.T) {
+	const first = "n=1&last=integration-alpha"
+	const second = "n=1&last=integration-beta"
+	before := mockServer.RequestCount()
+	resp := httpGet(t, depsiloURL+"/v2/library/testimg/tags/list?"+first)
+	assertStatus(t, resp, 200)
+	readBody(t, resp)
+	resp = httpGet(t, depsiloURL+"/v2/library/testimg/tags/list?"+second)
+	assertStatus(t, resp, 200)
+	readBody(t, resp)
+
+	seen := map[string]bool{}
+	for _, request := range mockServer.Requests()[before:] {
+		if request.Path == "/v2/library/testimg/tags/list" {
+			seen[request.RawQuery] = true
+		}
+	}
+	if !seen[first] || !seen[second] {
+		t.Fatalf("Docker tag-list queries = %#v, want both pages", seen)
+	}
+
+	before = mockServer.RequestCount()
+	resp = httpGet(t, depsiloURL+"/v2/library/testimg/tags/list?"+first)
+	assertStatus(t, resp, 200)
+	readBody(t, resp)
+	if got := mockServer.RequestCount(); got != before {
+		t.Fatalf("cached Docker tag page contacted upstream: before=%d after=%d", before, got)
+	}
+}

@@ -1,12 +1,15 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func setTestJWTSecret(t *testing.T) {
@@ -115,6 +118,89 @@ path = "./data/cache"
 	}
 	if cfg.SupplyChain.MinReleaseAgeEnabled != nil {
 		t.Fatal("omitted minimum release age switch must remain nil for compatibility resolution")
+	}
+}
+
+func TestLoadPackageS3FieldsFromEnvironment(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("config_version = 1\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_STORAGE_TYPE", "s3")
+	t.Setenv("DEPSILO_STORAGE_BUCKET", "env-package-bucket")
+	t.Setenv("DEPSILO_STORAGE_ENDPOINT", "https://s3.env.example.test")
+	t.Setenv("DEPSILO_STORAGE_REGION", "eu-west-1")
+	t.Setenv("DEPSILO_STORAGE_ACCESS_KEY", "env-package-access")
+	secret := "env-package-secret-not-for-logs"
+	t.Setenv("DEPSILO_STORAGE_SECRET_KEY", secret)
+
+	core, observedLogs := observer.New(zap.DebugLevel)
+	restoreLogger := zap.ReplaceGlobals(zap.New(core))
+	t.Cleanup(restoreLogger)
+
+	cfg, err := Load()
+	if err != nil {
+		if strings.Contains(err.Error(), secret) {
+			t.Fatal("Load exposed the S3 secret in its error")
+		}
+		t.Fatalf("Load package S3 environment: %v", err)
+	}
+	if cfg.Storage.Type != "s3" ||
+		cfg.Storage.Bucket != "env-package-bucket" ||
+		cfg.Storage.Endpoint != "https://s3.env.example.test" ||
+		cfg.Storage.Region != "eu-west-1" ||
+		cfg.Storage.AccessKey != "env-package-access" ||
+		cfg.Storage.SecretKey != secret {
+		t.Fatal("Load did not apply every package S3 environment field")
+	}
+	for _, entry := range observedLogs.All() {
+		if strings.Contains(entry.Message+fmt.Sprint(entry.ContextMap()), secret) {
+			t.Fatal("Load exposed the S3 secret in logs")
+		}
+	}
+}
+
+func TestLoadCompileCacheS3FieldsFromEnvironment(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(configPath, []byte("config_version = 1\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_COMPILE_CACHE_ENABLED", "true")
+	t.Setenv("DEPSILO_COMPILE_CACHE_PUBLIC_URL", "http://127.0.0.1:23333")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_TYPE", "s3")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_BUCKET", "env-compile-bucket")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_ENDPOINT", "https://s3.env.example.test")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_REGION", "ap-southeast-1")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_ACCESS_KEY", "env-compile-access")
+	secret := "env-compile-secret-not-for-logs"
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_SECRET_KEY", secret)
+
+	core, observedLogs := observer.New(zap.DebugLevel)
+	restoreLogger := zap.ReplaceGlobals(zap.New(core))
+	t.Cleanup(restoreLogger)
+
+	cfg, err := Load()
+	if err != nil {
+		if strings.Contains(err.Error(), secret) {
+			t.Fatal("Load exposed the compiler-cache S3 secret in its error")
+		}
+		t.Fatalf("Load compiler-cache S3 environment: %v", err)
+	}
+	storage := cfg.CompileCache.Storage
+	if storage.Type != "s3" ||
+		storage.Bucket != "env-compile-bucket" ||
+		storage.Endpoint != "https://s3.env.example.test" ||
+		storage.Region != "ap-southeast-1" ||
+		storage.AccessKey != "env-compile-access" ||
+		storage.SecretKey != secret {
+		t.Fatal("Load did not apply every compiler-cache S3 environment field")
+	}
+	for _, entry := range observedLogs.All() {
+		if strings.Contains(entry.Message+fmt.Sprint(entry.ContextMap()), secret) {
+			t.Fatal("Load exposed the compiler-cache S3 secret in logs")
+		}
 	}
 }
 
@@ -306,6 +392,37 @@ jwt_secret = "change-me-in-production"
 	t.Setenv("DEPSILO_CONFIG", configPath)
 	if _, err := Load(); err == nil {
 		t.Fatal("Load accepted a known JWT secret on a remote listener")
+	}
+}
+
+func TestLoadRejectsWeakJWTSecretOnRemoteListener(t *testing.T) {
+	tests := []struct {
+		name   string
+		secret string
+	}{
+		{name: "empty", secret: ""},
+		{name: "short", secret: "guessable-secret"},
+		{name: "surrounding whitespace", secret: "  0123456789abcdef0123456789abcdef  "},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.toml")
+			document := []byte(fmt.Sprintf(`[server]
+host = "0.0.0.0"
+
+[auth]
+jwt_secret = %q
+`, tt.secret))
+			if err := os.WriteFile(configPath, document, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("DEPSILO_CONFIG", configPath)
+
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), "auth.jwt_secret") {
+				t.Fatalf("Load error = %v, want auth.jwt_secret rejection", err)
+			}
+		})
 	}
 }
 

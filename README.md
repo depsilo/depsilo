@@ -60,10 +60,8 @@ repository or an HA control plane.
 ## Quick start
 
 > **Release availability:** the unified state paths, startup summary, and
-> first-project onboarding below landed after `v0.9.0`. Until a newer release
-> moves `latest`, use the README bundled with `v0.9.0` for that release or
-> build the current `master` branch. This notice can be removed after the next
-> release.
+> first-project onboarding below are available in `v0.9.1` and later. Use the
+> README bundled with `v0.9.0` when operating that older release.
 
 Choose a binary or container install. A first run does not require a repository
 checkout, `config.toml`, or database and cache environment variables.
@@ -74,6 +72,17 @@ checkout, `config.toml`, or database and cache environment variables.
 curl -fsSL https://depsilo.com/install.sh | bash
 depsilo serve
 ```
+
+For a background process, use `depsilo start --daemon`; a later, independent
+terminal can run `depsilo stop`. Linux/macOS detach from the launching terminal,
+and Windows uses a per-start named shutdown event instead of relying on a shared
+console.
+
+Before replacing a v0.9.0 binary that is running in daemon mode, stop it with the
+v0.9.0 binary. v0.9.1 deliberately refuses the old unauthenticated PID-only
+record. If the binary was already replaced, first verify the recorded process
+has ended, then remove `~/.local/share/depsilo/depsilo.pid` manually before
+starting v0.9.1.
 
 Open <http://127.0.0.1:23333>. The installer verifies the release checksum and
 supports `DEPSILO_VERSION` and `DEPSILO_INSTALL_DIR` when you need to pin a
@@ -116,6 +125,11 @@ volume. Override the host port with `PORT=18080 docker compose up -d`, then open
 <http://127.0.0.1:18080>. The startup log reports the container listener; use
 the published host port in your browser and the logs to find the bootstrap
 token.
+
+The image runs as fixed non-root UID/GID `10001:10001`. See the
+[deployment guide](docs/deployment.md) for the one-time ownership command when
+reusing a named volume created by a v0.9 root-running container or the separate
+compatibility path for v0.9's shipped bind-mount Compose layout.
 
 ### Finish the first run
 
@@ -243,6 +257,8 @@ isolation, credentials, quotas, and client setup.
 - Interactive setup is protected by a one-time bootstrap token.
 - Administrator sessions use JWT authentication; API tokens are stored
   hash-only.
+- Use a JWT signing secret of at least 32 random bytes even when Depsilo binds
+  to loopback behind a reverse proxy.
 - Put Internet-facing deployments behind a trusted reverse proxy for TLS and,
   when needed, an external identity-aware access layer. Admin authentication
   still uses Depsilo credentials.

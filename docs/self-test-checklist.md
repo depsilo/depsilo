@@ -161,11 +161,9 @@ restore 只接受完成校验的 v2 归档；旧 v1 归档应先在隔离环境�
 
 ```bash
 mkdir -p backups
-docker run --rm \
-  -v depsilo-data:/root/.depsilo \
-  -v "$PWD/backups:/backup" \
-  ghcr.io/depsilo/depsilo:latest \
-  backup --out /backup/depsilo-backup.tar.gz
+docker exec depsilo depsilo backup --out /tmp/depsilo-backup.tar.gz
+docker cp depsilo:/tmp/depsilo-backup.tar.gz backups/depsilo-backup.tar.gz
+docker exec depsilo rm /tmp/depsilo-backup.tar.gz
 tar -tzf backups/depsilo-backup.tar.gz
 ```
 
@@ -177,20 +175,25 @@ tar -tzf backups/depsilo-backup.tar.gz
 下面的 disposable container 不启动服务器，因此满足“restore 时服务必须停止”：
 
 ```bash
-rm -rf restore-drill
-mkdir -p restore-drill/data
-tar -xOf backups/depsilo-backup.tar.gz config.toml > restore-drill/config.toml
-cp backups/depsilo-backup.tar.gz restore-drill/
+restore_dir="$(mktemp -d "${TMPDIR:-/tmp}/depsilo-restore-drill.XXXXXX")"
+mkdir -p "$restore_dir/data"
+tar -xOf backups/depsilo-backup.tar.gz config.toml > "$restore_dir/config.toml"
+cp backups/depsilo-backup.tar.gz "$restore_dir/"
 
 docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp/depsilo-home \
   -e DEPSILO_CONFIG=/state/config.toml \
   -e DEPSILO_DATABASE_DSN=/state/data/depsilo.db \
-  -v "$PWD/restore-drill:/state" \
+  -v "$restore_dir:/state" \
   ghcr.io/depsilo/depsilo:latest \
-  restore /state/depsilo-backup.tar.gz
+  restore /state/depsilo-backup.tar.gz \
+    --config-target /state/config.toml \
+    --database-target /state/data/depsilo.db
 
-test -s restore-drill/config.toml
-test -s restore-drill/data/depsilo.db
+test -s "$restore_dir/config.toml"
+test -s "$restore_dir/data/depsilo.db"
+printf 'restore drill retained for inspection: %s\n' "$restore_dir"
 ```
 
 - [ ] 实际恢复前停止 Depsilo；运行锁存在时 restore 必须拒绝覆盖 SQLite

@@ -70,19 +70,32 @@ func (r *resolver) resolve(
 
 	currentTarget := target
 	currentOriginURL := ""
+	relocatedOrigin := false
 	followedSameOriginRedirect := false
 	redirectMetadata := make(http.Header)
 	for hop := 0; ; hop++ {
+		requestHeaders := originRequestHeaders(inbound, cacheable)
+		if relocatedOrigin {
+			// Authorization belongs only to the configured Hub origin. Once a
+			// canonical relocation crosses origins, every later hop stays
+			// credential-free even if the chain redirects back.
+			requestHeaders.Del("Authorization")
+		}
 		options := upstream.RequestOptions{
 			Method:         inbound.Method,
-			Header:         originRequestHeaders(inbound, cacheable),
+			Header:         requestHeaders,
 			SuppressHealth: true,
 		}
 		var originResponse *http.Response
 		var err error
-		if currentOriginURL == "" {
+		switch {
+		case currentOriginURL == "":
 			originResponse, err = selected.Request(ctx, currentTarget, options)
-		} else {
+		case relocatedOrigin:
+			// RequestURL repeats external-target and guarded-dial validation for
+			// each manually inspected hop. Redirect following stays disabled.
+			originResponse, err = selected.RequestURL(ctx, currentOriginURL, options)
+		default:
 			originResponse, err = selected.RequestOriginURL(ctx, currentOriginURL, options)
 		}
 		if err != nil {
@@ -91,7 +104,11 @@ func (r *resolver) resolve(
 		}
 
 		if !isArtifactRedirect(originResponse.StatusCode) {
-			headers := filterResponseHeaders(redirectMetadata, originResponse.Header)
+			headers := filterResponseHeadersForTarget(
+				target,
+				redirectMetadata,
+				originResponse.Header,
+			)
 			if originResponse.StatusCode >= http.StatusBadRequest {
 				for _, name := range hfErrorPassthroughHeaders {
 					copyHeaderValues(headers, originResponse.Header, name)
@@ -144,13 +161,6 @@ func (r *resolver) resolve(
 		)
 		baseURL := originResponse.Request.URL
 		redirectURL, resolveErr := resolveRedirectLocation(baseURL, originResponse.Header.Get("Location"))
-		if resolveErr == nil &&
-			inbound.Method == http.MethodHead &&
-			!sameOrigin(baseURL, redirectURL) {
-			// For LFS HEAD, the Hub redirect is the final logical response.
-			// Freeze latency before draining its small redirect document.
-			health.observeFinalHeaders()
-		}
 		drainAndCloseRedirect(originResponse.Body)
 		if resolveErr != nil {
 			health.report(false)
@@ -169,8 +179,21 @@ func (r *resolver) resolve(
 			followedSameOriginRedirect = true
 			continue
 		}
+		if isCrossOriginCanonicalRelocation(baseURL, redirectURL, redirectMetadata) {
+			if hop+1 >= maxOriginRedirects {
+				health.report(false)
+				return nil, errors.New("Hugging Face origin exceeded redirect limit")
+			}
+			currentOriginURL = redirectURL.String()
+			relocatedOrigin = true
+			followedSameOriginRedirect = true
+			continue
+		}
 
 		if inbound.Method == http.MethodHead {
+			// A metadata-bearing cross-origin LFS redirect is the final logical
+			// HEAD response; never fetch the signed artifact merely for headers.
+			health.observeFinalHeaders()
 			size := int64(-1)
 			if linkedSize, ok := parseResponseSize(redirectMetadata.Get("X-Linked-Size")); ok {
 				// A Hub LFS redirect's Content-Length describes its small
@@ -245,6 +268,27 @@ func (r *resolver) resolve(
 			responseFromSignedArtifact,
 		), nil
 	}
+}
+
+func isCrossOriginCanonicalRelocation(
+	current, target *url.URL,
+	redirectMetadata http.Header,
+) bool {
+	if current == nil || target == nil || sameOrigin(current, target) ||
+		target.User != nil || target.Fragment != "" ||
+		current.EscapedPath() != target.EscapedPath() ||
+		current.RawQuery != target.RawQuery {
+		return false
+	}
+	// A signed artifact redirect carries Hub-asserted repository identity or
+	// size metadata. Only metadata-free, byte-for-byte target relocations are
+	// eligible to become another origin hop.
+	for _, name := range []string{"X-Repo-Commit", "X-Linked-Etag", "X-Linked-Size"} {
+		if redirectMetadata.Get(name) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 // validateCanonicalCommit protects every explicit-commit route, including

@@ -23,6 +23,7 @@ config.toml
 # Test
 web/playwright-report/
 web/test-results/
+/.test-e2e-state/
 
 # IDE
 .idea/

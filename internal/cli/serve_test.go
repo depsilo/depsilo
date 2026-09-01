@@ -83,10 +83,17 @@ func TestParseServeFlags_LogLevelValidation(t *testing.T) {
 	if _, err := ParseServeFlags(bad, &buf); err == nil {
 		t.Errorf("expected error for unknown log level")
 	}
-	// Accept case-insensitively.
-	good := []string{"--log-level", "WARN"}
-	if _, err := ParseServeFlags(good, &buf); err != nil {
-		t.Errorf("WARN should be accepted: %v", err)
+	// Accept case-insensitively and emit the canonical value expected by the
+	// config loader. "warning" is zap's user-facing alias for "warn".
+	for _, input := range []string{"WARN", "warning"} {
+		opts, err := ParseServeFlags([]string{"--log-level", input}, &buf)
+		if err != nil {
+			t.Errorf("%s should be accepted: %v", input, err)
+			continue
+		}
+		if opts.LogLevel != "warn" {
+			t.Errorf("log level %q normalized to %q, want warn", input, opts.LogLevel)
+		}
 	}
 }
 

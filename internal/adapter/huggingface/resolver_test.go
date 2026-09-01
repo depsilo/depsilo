@@ -256,6 +256,192 @@ func TestResolverPreservesOriginAuthorizationAcrossCanonicalRedirect(t *testing.
 	}
 }
 
+func TestResolverFollowsCrossOriginCanonicalRelocationWithoutCredentials(t *testing.T) {
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	const target = "/acme/model/resolve/" + commit + "/config.json?download=true"
+
+	var mirrorAuthorization string
+	type observedRequest struct {
+		method, target, authorization, cookie string
+	}
+	var canonicalRequests []observedRequest
+	canonical := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		canonicalRequests = append(canonicalRequests, observedRequest{
+			method:        r.Method,
+			target:        r.URL.RequestURI(),
+			authorization: r.Header.Get("Authorization"),
+			cookie:        r.Header.Get("Cookie"),
+		})
+		if r.URL.Path != "/api/resolve-cache/config.json" {
+			w.Header().Set("X-Linked-Etag", `"config-etag"`)
+			w.Header().Set("X-Linked-Size", "17")
+			w.Header().Set("X-Repo-Commit", commit)
+			w.Header().Set("Location", "/api/resolve-cache/config.json?etag=config-etag")
+			w.WriteHeader(http.StatusTemporaryRedirect)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", "17")
+		w.Header().Set("ETag", `"config-etag"`)
+		w.Header().Set("X-Repo-Commit", commit)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(canonical.Close)
+
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mirrorAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("Location", canonical.URL+r.URL.RequestURI())
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	t.Cleanup(mirror.Close)
+
+	headers := http.Header{
+		"Authorization": {"Bearer hf_private"},
+		"Cookie":        {"session=must-not-cross-origin"},
+	}
+	result := resolve(t, mirror.URL, http.MethodHead, target, headers, false)
+	defer result.Body.Close()
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", result.StatusCode)
+	}
+	if mirrorAuthorization != "Bearer hf_private" {
+		t.Fatalf("configured origin Authorization = %q", mirrorAuthorization)
+	}
+	wantTargets := []string{target, "/api/resolve-cache/config.json?etag=config-etag"}
+	if len(canonicalRequests) != len(wantTargets) {
+		t.Fatalf("canonical requests = %d, want %d: %+v", len(canonicalRequests), len(wantTargets), canonicalRequests)
+	}
+	for index, request := range canonicalRequests {
+		if request.method != http.MethodHead || request.target != wantTargets[index] {
+			t.Fatalf("canonical request %d = %+v, want HEAD %q", index+1, request, wantTargets[index])
+		}
+		if request.authorization != "" || request.cookie != "" {
+			t.Fatalf("cross-origin canonical request %d leaked credentials: %+v", index+1, request)
+		}
+	}
+	if got := result.Header.Get("X-Repo-Commit"); got != commit {
+		t.Fatalf("X-Repo-Commit = %q, want %q", got, commit)
+	}
+	if got := result.Header.Get("ETag"); got != `"config-etag"` {
+		t.Fatalf("ETag = %q, want config-etag", got)
+	}
+}
+
+func TestResolverCrossOriginCanonicalRelocationStripsProjectToken(t *testing.T) {
+	const target = "/acme/model/resolve/main/config.json"
+	var mirrorAuthorization, canonicalAuthorization string
+	canonical := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		canonicalAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("X-Repo-Commit", "main")
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(canonical.Close)
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mirrorAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("Location", canonical.URL+r.URL.RequestURI())
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	t.Cleanup(mirror.Close)
+
+	result := resolve(
+		t,
+		mirror.URL,
+		http.MethodHead,
+		target,
+		http.Header{"Authorization": {"Bearer depsilo_proj_routing-only"}},
+		false,
+	)
+	defer result.Body.Close()
+	if mirrorAuthorization != "" || canonicalAuthorization != "" {
+		t.Fatalf(
+			"project token escaped: configured=%q canonical=%q",
+			mirrorAuthorization,
+			canonicalAuthorization,
+		)
+	}
+}
+
+func TestResolverDoesNotTreatDifferentPathAsCrossOriginCanonicalRelocation(t *testing.T) {
+	const target = "/acme/model/resolve/main/config.json?download=true"
+	var externalRequests int
+	external := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		externalRequests++
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(external.Close)
+
+	var redirectTarget string
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", redirectTarget)
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	t.Cleanup(mirror.Close)
+
+	for name, location := range map[string]string{
+		"different escaped path": external.URL + "/different/path?download=true",
+		"different raw query":    external.URL + "/acme/model/resolve/main/config.json?download=false",
+	} {
+		t.Run(name, func(t *testing.T) {
+			redirectTarget = location
+			result := resolve(t, mirror.URL, http.MethodHead, target, nil, false)
+			_ = result.Body.Close()
+		})
+	}
+	if externalRequests != 0 {
+		t.Fatalf("non-canonical redirect was followed %d times", externalRequests)
+	}
+}
+
+func TestResolverCrossOriginCanonicalRelocationRejectsUnsafeTarget(t *testing.T) {
+	const target = "/acme/model/resolve/main/config.json"
+	var safeExternalRequests int
+	safeExternal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		safeExternalRequests++
+		w.Header().Set("Location", "http://169.254.169.254"+r.URL.RequestURI())
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	t.Cleanup(safeExternal.Close)
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", safeExternal.URL+r.URL.RequestURI())
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	t.Cleanup(mirror.Close)
+
+	result, err := resolveMaybe(t, mirror.URL, http.MethodHead, target, nil, false)
+	if result != nil {
+		_ = result.Body.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "external target rejected") {
+		t.Fatalf("unsafe canonical target error = %v", err)
+	}
+	if safeExternalRequests != 1 {
+		t.Fatalf("safe external hops = %d, want 1 before unsafe second hop", safeExternalRequests)
+	}
+}
+
+func TestResolverCrossOriginCanonicalRelocationHasFiniteHopLimit(t *testing.T) {
+	const target = "/acme/model/resolve/main/config.json"
+	var first, second *httptest.Server
+	first = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", second.URL+r.URL.RequestURI())
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	t.Cleanup(first.Close)
+	second = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", first.URL+r.URL.RequestURI())
+		w.WriteHeader(http.StatusPermanentRedirect)
+	}))
+	t.Cleanup(second.Close)
+
+	result, err := resolveMaybe(t, first.URL, http.MethodHead, target, nil, false)
+	if result != nil {
+		_ = result.Body.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "redirect limit") {
+		t.Fatalf("canonical redirect loop error = %v", err)
+	}
+}
+
 func TestResolverHonorsRootRelativeRedirectFromBasePathOrigin(t *testing.T) {
 	var requestedPaths []string
 	var server *httptest.Server
@@ -921,6 +1107,22 @@ func resolve(
 	cacheable bool,
 ) *resolvedResponse {
 	t.Helper()
+	result, err := resolveMaybe(t, originURL, method, target, headers, cacheable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func resolveMaybe(
+	t *testing.T,
+	originURL string,
+	method string,
+	target string,
+	headers http.Header,
+	cacheable bool,
+) (*resolvedResponse, error) {
+	t.Helper()
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{
 		Name:      "test-huggingface",
 		URL:       originURL,
@@ -940,8 +1142,5 @@ func resolve(
 		target,
 		cacheable,
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return result
+	return result, err
 }

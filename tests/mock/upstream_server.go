@@ -14,9 +14,10 @@ import (
 
 // RecordedRequest stores details of an HTTP request received by the mock.
 type RecordedRequest struct {
-	Method string
-	Path   string
-	Time   time.Time
+	Method   string
+	Path     string
+	RawQuery string
+	Time     time.Time
 }
 
 // MockUpstream is a configurable mock HTTP server for testing upstream interactions.
@@ -35,7 +36,10 @@ func NewMockUpstream() *MockUpstream {
 	}
 	m.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.mu.Lock()
-		m.requests = append(m.requests, RecordedRequest{Method: r.Method, Path: r.URL.Path, Time: time.Now()})
+		m.requests = append(m.requests, RecordedRequest{
+			Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery,
+			Time: time.Now(),
+		})
 		m.mu.Unlock()
 		m.mux.ServeHTTP(w, r)
 	}))
@@ -99,6 +103,15 @@ func (m *MockUpstream) RegisterNpm() {
 	m.mux.HandleFunc("/testpkg", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"name":"testpkg","dist-tags":{"latest":"1.0.0"},"versions":{"1.0.0":{"name":"testpkg","version":"1.0.0","dist":{"tarball":"%s/testpkg/-/testpkg-1.0.0.tgz","shasum":"abc123","integrity":"sha512-test"}}}}`, m.URL())
+	})
+	m.mux.HandleFunc("/accept-fixture", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		variant := "full"
+		if strings.Contains(r.Header.Get("Accept"), "application/vnd.npm.install-v1+json") {
+			variant = "install"
+			w.Header().Set("Content-Type", "application/vnd.npm.install-v1+json")
+		}
+		fmt.Fprintf(w, `{"name":"accept-fixture","variant":%q,"versions":{}}`, variant)
 	})
 	m.mux.HandleFunc("/testpkg/-/testpkg-1.0.0.tgz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/gzip")
@@ -239,6 +252,14 @@ func (m *MockUpstream) RegisterCRAN() {
 	})
 }
 
+// RegisterAlpine adds the signed repository index path requested by apk.
+func (m *MockUpstream) RegisterAlpine() {
+	m.mux.HandleFunc("/v3.23/main/x86_64/APKINDEX.tar.gz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write([]byte("FAKE_ALPINE_SIGNED_APKINDEX"))
+	})
+}
+
 // RegisterHelm adds Helm chart repository endpoints.
 func (m *MockUpstream) RegisterHelm() {
 	m.mux.HandleFunc("/index.yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -254,6 +275,7 @@ func (m *MockUpstream) RegisterHelm() {
 // "CDN" path served by the same mock server.
 func (m *MockUpstream) RegisterHuggingFace() {
 	const commit = "abc1234abc1234abc1234abc1234abc1234abc12"
+	var xetReadTokens atomic.Int64
 
 	// Model metadata endpoint
 	m.mux.HandleFunc("/api/models/bert-base-uncased", func(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +296,17 @@ func (m *MockUpstream) RegisterHuggingFace() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
 		fmt.Fprint(w, `{"id":"squad","sha":"def5678"}`)
+	})
+
+	// Xet connection credentials are short-lived and must never be served from
+	// Depsilo's shared metadata cache. A changing token makes cache reuse visible
+	// to the public integration test.
+	m.mux.HandleFunc("/api/models/acme/model/xet-read-token/main", func(w http.ResponseWriter, r *http.Request) {
+		sequence := xetReadTokens.Add(1)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set("X-Origin-Secret", "must-not-pass")
+		fmt.Fprintf(w, `{"accessToken":"mock-xet-token-%d","exp":1848535668,"casUrl":"https://cas.example.test"}`, sequence)
 	})
 
 	// Direct 200 file (config.json — not LFS)
@@ -387,6 +420,7 @@ func (m *MockUpstream) RegisterAll() {
 	m.RegisterNuGet()
 	m.RegisterConda()
 	m.RegisterCRAN()
+	m.RegisterAlpine()
 	m.RegisterHelm()
 	m.RegisterHuggingFace()
 	m.RegisterDocker()

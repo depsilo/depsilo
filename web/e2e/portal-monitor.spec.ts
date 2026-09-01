@@ -6,6 +6,68 @@ const emptyStats = {
   upstreams: [],
 }
 
+test.use({ initialToken: null })
+
+test('Monitor reuses the Portal stats poll instead of starting a second poll', async ({ page }) => {
+  let statsRequests = 0
+  await page.clock.install()
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': () => {
+      statsRequests += 1
+      return emptyStats
+    },
+  })
+
+  await page.goto('/monitor')
+  await expect(page.locator('[data-monitor-upstreams]')).toContainText('暂无上游源')
+  await page.waitForLoadState('networkidle')
+
+  expect(statsRequests).toBe(1)
+
+  await page.clock.runFor(30_000)
+  await expect.poll(() => statsRequests).toBe(2)
+})
+
+test('anonymous Monitor uses only public APIs when latency history is empty', async ({ page }) => {
+  const adminRequests: string[] = []
+  let latencyRequests = 0
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname
+    if (pathname.startsWith('/api/v1/admin/')) {
+      adminRequests.push(`${request.method()} ${pathname}`)
+    }
+  })
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': {
+      service: { status: 'healthy' },
+      week: { total_requests: 0, hit_count: 0, hit_rate: 0, bytes_saved: 0 },
+      upstreams: [
+        {
+          id: 101,
+          name: 'public mirror',
+          adapter: 'npm',
+          url: 'https://registry.example',
+          healthy: true,
+          avg_latency_ms: 42,
+          success_rate: 1,
+        },
+      ],
+    },
+    'GET /api/v1/latency-series': () => {
+      latencyRequests += 1
+      return {}
+    },
+  })
+
+  await page.goto('/monitor')
+
+  await expect(page.locator('[data-upstream-row]')).toContainText('public mirror')
+  await expect.poll(() => latencyRequests).toBe(1)
+  await page.waitForLoadState('networkidle')
+  expect(await page.evaluate(() => localStorage.getItem('token'))).toBeNull()
+  expect(adminRequests).toEqual([])
+})
+
 test('Monitor distinguishes initial loading, failure recovery, and a successful empty response', { tag: '@smoke' }, async ({ page }) => {
   let latencyRequests = 0
   let releaseStats!: (value: JsonValue) => void

@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 
 	"depsilo/internal/logging"
 	"depsilo/internal/server"
 )
+
+const gracefulShutdownTimeout = 10 * time.Second
 
 // ServeOptions captures the command-line shape of `depsilo serve`.
 // Flags map 1:1 to config fields under [server]. When a flag is left
@@ -88,9 +89,12 @@ Examples:
 		return nil, fmt.Errorf("--port out of range: %d (want 1-65535)", opts.Port)
 	}
 	if opts.LogLevel != "" {
-		switch strings.ToLower(opts.LogLevel) {
-		case "debug", "info", "warn", "warning", "error":
-			// ok
+		normalized := strings.ToLower(opts.LogLevel)
+		switch normalized {
+		case "debug", "info", "warn", "error":
+			opts.LogLevel = normalized
+		case "warning":
+			opts.LogLevel = "warn"
 		default:
 			return nil, fmt.Errorf("--log-level: unknown level %q (want debug|info|warn|error)", opts.LogLevel)
 		}
@@ -143,18 +147,24 @@ func RunServe(args []string) int {
 	zap.ReplaceGlobals(logger)
 	defer logger.Sync()
 
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel, err := daemonShutdownContext(context.Background())
+	if err != nil {
+		zap.L().Error("failed to initialize shutdown channel", zap.Error(err))
+		return 1
+	}
 	defer cancel()
 
 	srv, err := server.StartServer(ctx, logLevel)
 	if err != nil {
-		zap.L().Fatal("failed to start server", zap.Error(err))
+		zap.L().Error("failed to start server", zap.Error(err))
 		return 1
 	}
 
 	<-ctx.Done()
 	zap.L().Info("shutting down server...")
-	if err := server.Shutdown(context.Background(), srv); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx, srv); err != nil {
 		zap.L().Error("server shutdown error", zap.Error(err))
 		return 1
 	}

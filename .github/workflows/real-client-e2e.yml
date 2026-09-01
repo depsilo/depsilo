@@ -1,6 +1,13 @@
 name: Real client E2E
 
 on:
+  workflow_call:
+    inputs:
+      release_qualification:
+        description: Include OCI, compiler-cache, S3, and v0.9 upgrade contracts
+        required: false
+        default: false
+        type: boolean
   schedule:
     # Weekly: these tests download from 14 live package ecosystems and are
     # intentionally outside the ordinary push/pull_request path.
@@ -36,10 +43,108 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: real-client-server-log
-          path: .dev.log
+          path: .test-e2e-state/.dev.log
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
 
       - name: Clean up
         if: always()
-        run: make stop test-clean
+        run: make test-clean
+
+  docker-registry:
+    name: Docker OCI client
+    if: inputs.release_qualification == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run Docker Registry client
+        run: make test-docker-docker
+
+      - name: Clean up
+        if: always()
+        run: make test-clean
+
+  compiler-cache:
+    name: ccache and sccache clients
+    if: inputs.release_qualification == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install pinned compiler-cache clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          ccache_archive=ccache-4.14-linux-x86_64-musl-static.tar.gz
+          curl --fail --location --silent --show-error \
+            --output "$ccache_archive" \
+            "https://github.com/ccache/ccache/releases/download/v4.14/$ccache_archive"
+          echo '985f575acf84cf6d70e0f4fe86903418df9e7bce11f35faaf8d415e5ff5a9478  ccache-4.14-linux-x86_64-musl-static.tar.gz' | sha256sum --check
+          tar -xzf "$ccache_archive"
+          sudo install -m 0755 "${ccache_archive%.tar.gz}/ccache" /usr/local/bin/ccache
+
+          sccache_archive=sccache-v0.15.0-x86_64-unknown-linux-musl.tar.gz
+          curl --fail --location --silent --show-error \
+            --output "$sccache_archive" \
+            "https://github.com/mozilla/sccache/releases/download/v0.15.0/$sccache_archive"
+          echo '782d2b5dd7ae0a55ebe368ab258114d0928d019ac2d949ab85d5d02f3926709e  sccache-v0.15.0-x86_64-unknown-linux-musl.tar.gz' | sha256sum --check
+          tar -xzf "$sccache_archive"
+          sudo install -m 0755 "${sccache_archive%.tar.gz}/sccache" /usr/local/bin/sccache
+
+      - name: Run official compiler-cache clients
+        run: make test-compiler-cache-qualified
+
+  s3-storage:
+    name: S3 storage contract
+    if: inputs.release_qualification == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run S3-compatible storage contract
+        run: make test-s3
+
+  v090-upgrade:
+    name: v0.9.0 upgrade contracts
+    if: inputs.release_qualification == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Exercise v0.9.0 tagged-source state with the release candidate
+        run: make test-v090-upgrade
+
+      - name: Exercise the immutable v0.9.0 shipped Compose layout
+        run: make test-v090-compose-upgrade

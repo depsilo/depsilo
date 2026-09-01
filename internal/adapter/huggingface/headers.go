@@ -48,6 +48,15 @@ var hfErrorPassthroughHeaders = []string{
 	"X-HF-Warning",
 }
 
+// hfXetConnectionHeaders carry a short-lived CAS credential. They are safe to
+// expose only on the explicitly parsed xet-read-token endpoint, which the
+// handler always serves directly with Cache-Control: no-store.
+var hfXetConnectionHeaders = []string{
+	"X-Xet-Cas-Url",
+	"X-Xet-Access-Token",
+	"X-Xet-Token-Expiration",
+}
+
 // upstreamAuthorization returns only credentials that may be sent to the
 // Hugging Face origin. Depsilo project tokens are routing credentials for this
 // service, never third-party secrets; stripping the whole family also keeps an
@@ -407,6 +416,26 @@ func filterResponseHeaders(sources ...http.Header) http.Header {
 	out := make(http.Header)
 	for _, source := range sources {
 		for _, name := range hfPassthroughHeaders {
+			if values := source.Values(name); len(values) > 0 {
+				out.Del(name)
+				for _, value := range values {
+					out.Add(name, value)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func filterResponseHeadersForTarget(target string, sources ...http.Header) http.Header {
+	out := filterResponseHeaders(sources...)
+	requestURI, err := url.ParseRequestURI(target)
+	if err != nil || requestURI.IsAbs() || requestURI.Host != "" ||
+		!isXetReadToken(ParseRequestPath(requestURI.EscapedPath())) {
+		return out
+	}
+	for _, source := range sources {
+		for _, name := range hfXetConnectionHeaders {
 			if values := source.Values(name); len(values) > 0 {
 				out.Del(name)
 				for _, value := range values {

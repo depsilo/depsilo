@@ -118,7 +118,12 @@ func (h *Handler) handleServiceIndex(c *gin.Context) {
 // handlePassthrough proxies all other NuGet requests (registration, package download, search).
 func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 	start := time.Now()
-	cacheKey := CacheKey(path)
+	rawQuery := c.Request.URL.RawQuery
+	cacheKey := queryCacheKey(path, rawQuery)
+	upstreamPath := "/" + path
+	if rawQuery != "" {
+		upstreamPath += "?" + rawQuery
+	}
 
 	// .nupkg files get long TTL, everything else short
 	ttl := h.cfg.TTLIndex
@@ -132,7 +137,7 @@ func (h *Handler) handlePassthrough(c *gin.Context, path string) {
 			return nil, "", 0, "", err
 		}
 		zap.L().Info("fetching from nuget upstream", zap.String("path", path), zap.String("upstream", ups.Name))
-		fetchResult, err := ups.Fetch(ctx, "/"+path)
+		fetchResult, err := ups.Fetch(ctx, upstreamPath)
 		if err != nil {
 			return nil, "", 0, "", err
 		}

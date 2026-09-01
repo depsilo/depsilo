@@ -35,6 +35,22 @@ func Load() (*Config, error) {
 	if err := v.BindEnv("supply_chain.min_release_age_enabled"); err != nil {
 		return nil, fmt.Errorf("bind minimum release age environment override: %w", err)
 	}
+	for _, key := range []string{
+		"storage.bucket",
+		"storage.endpoint",
+		"storage.region",
+		"storage.access_key",
+		"storage.secret_key",
+		"compile_cache.storage.bucket",
+		"compile_cache.storage.endpoint",
+		"compile_cache.storage.region",
+		"compile_cache.storage.access_key",
+		"compile_cache.storage.secret_key",
+	} {
+		if err := v.BindEnv(key); err != nil {
+			return nil, fmt.Errorf("bind %s environment override: %w", key, err)
+		}
+	}
 
 	setDefaults(v)
 
@@ -124,13 +140,16 @@ func Load() (*Config, error) {
 		cfg.License.Key = envKey
 	}
 
-	// A known signing key on a remotely reachable listener allows forged admin
-	// JWTs. Keep loopback-only development compatible, but fail closed anywhere
-	// the listener can accept remote traffic.
-	if cfg.Auth.JWTSecret == "change-me-in-production" {
-		if !isLoopbackHost(cfg.Server.Host) {
-			return nil, errors.New("auth.jwt_secret must be changed before listening on a non-loopback address; set DEPSILO_AUTH_JWT_SECRET to a cryptographically random value")
+	// A weak signing key on a remotely reachable listener allows forged admin
+	// JWTs. Keep loopback-only development compatible, but require the same
+	// 256-bit minimum used by generated secrets anywhere remote clients can
+	// connect.
+	if !isLoopbackHost(cfg.Server.Host) {
+		secret := cfg.Auth.JWTSecret
+		if secret == "change-me-in-production" || secret != strings.TrimSpace(secret) || len([]byte(secret)) < secureTokenBytes {
+			return nil, errors.New("auth.jwt_secret must be at least 32 bytes with no surrounding whitespace before listening on a non-loopback address; set DEPSILO_AUTH_JWT_SECRET to a cryptographically random value")
 		}
+	} else if cfg.Auth.JWTSecret == "change-me-in-production" {
 		zap.L().Warn("auth.jwt_secret is using the development placeholder; the server is restricted to loopback")
 	}
 

@@ -6,15 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 )
 
-const s3ReadinessMarkerKey = "__depsilo_internal__/readiness-v1"
+const (
+	s3ReadinessMarkerKey = "__depsilo_internal__/readiness-v1"
+	s3MultipartPartSize  = 8 * 1024 * 1024
+	s3MaxUploadParts     = 10_000
+)
 
 // S3Storage implements the Storage interface using an S3-compatible backend.
 type S3Storage struct {
@@ -23,8 +29,8 @@ type S3Storage struct {
 }
 
 // NewS3Storage creates a new S3Storage instance. It configures the client for
-// MinIO compatibility via a custom endpoint and creates the bucket if it does
-// not already exist.
+// MinIO compatibility via a custom endpoint and verifies object access with a
+// stable readiness marker.
 func NewS3Storage(endpoint, bucket, region, accessKey, secretKey string) (*S3Storage, error) {
 	if bucket == "" {
 		return nil, fmt.Errorf("s3: bucket name must not be empty")
@@ -40,17 +46,6 @@ func NewS3Storage(endpoint, bucket, region, accessKey, secretKey string) (*S3Sto
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(bucket),
-	})
-	if err != nil {
-		var alreadyOwned *types.BucketAlreadyOwnedByYou
-		var alreadyExists *types.BucketAlreadyExists
-		if !errors.As(err, &alreadyOwned) && !errors.As(err, &alreadyExists) {
-			return nil, fmt.Errorf("s3: create bucket %q: %w", bucket, err)
-		}
-	}
-
 	storage := &S3Storage{
 		client: client,
 		bucket: bucket,
@@ -59,9 +54,36 @@ func NewS3Storage(endpoint, bucket, region, accessKey, secretKey string) (*S3Sto
 	// requiring ListBucket. It is managed storage metadata rather than a
 	// per-probe temporary object, so readiness remains read-only and cheap.
 	if err := storage.writeReadinessMarker(ctx); err != nil {
-		return nil, fmt.Errorf("s3: initialize readiness marker: %w", err)
+		if !hasS3ErrorCode(err, "NoSuchBucket") {
+			return nil, fmt.Errorf("s3: initialize readiness marker: %w", err)
+		}
+		if err := storage.createBucket(ctx, region); err != nil {
+			return nil, fmt.Errorf("s3: create bucket %q: %w", bucket, err)
+		}
+		if err := storage.writeReadinessMarker(ctx); err != nil {
+			return nil, fmt.Errorf("s3: initialize readiness marker after creating bucket: %w", err)
+		}
 	}
 	return storage, nil
+}
+
+func (s *S3Storage) createBucket(ctx context.Context, region string) error {
+	input := &s3.CreateBucketInput{Bucket: aws.String(s.bucket)}
+	if region != "" && region != "us-east-1" {
+		input.CreateBucketConfiguration = &types.CreateBucketConfiguration{
+			LocationConstraint: types.BucketLocationConstraint(region),
+		}
+	}
+	_, err := s.client.CreateBucket(ctx, input)
+	if err == nil || hasS3ErrorCode(err, "BucketAlreadyOwnedByYou") || hasS3ErrorCode(err, "BucketAlreadyExists") {
+		return nil
+	}
+	return err
+}
+
+func hasS3ErrorCode(err error, code string) bool {
+	var apiErr smithy.APIError
+	return errors.As(err, &apiErr) && strings.EqualFold(strings.TrimSpace(apiErr.ErrorCode()), code)
 }
 
 func (s *S3Storage) writeReadinessMarker(ctx context.Context) error {
@@ -131,19 +153,181 @@ func (s *S3Storage) Get(ctx context.Context, key string) (io.ReadCloser, int64, 
 }
 
 func (s *S3Storage) Put(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
-	input := &s3.PutObjectInput{
-		Bucket:      aws.String(s.bucket),
-		Key:         aws.String(key),
-		Body:        r,
-		ContentType: aws.String(contentType),
-	}
+	var err error
 	if size >= 0 {
-		input.ContentLength = aws.Int64(size)
+		if _, seekable := r.(io.Seeker); seekable {
+			err = s.putObject(ctx, key, r, size, contentType)
+		} else {
+			err = s.putStream(ctx, key, r, &size, contentType)
+		}
+	} else {
+		err = s.putStream(ctx, key, r, nil, contentType)
+	}
+	if err != nil {
+		return fmt.Errorf("s3: put object %q: %w", key, err)
+	}
+	return nil
+}
+
+func (s *S3Storage) putObject(ctx context.Context, key string, r io.Reader, size int64, contentType string) error {
+	input := &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(key),
+		Body:          r,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
 	}
 
 	_, err := s.client.PutObject(ctx, input)
+	return err
+}
+
+// putStream preserves a bounded single pass for readers that cannot be
+// rewound. Small streams are buffered once and signed as a normal PutObject;
+// larger streams use signed multipart requests with one part in memory. A
+// non-nil expectedSize additionally makes truncated or overlong producers fail
+// instead of publishing bytes that disagree with cache metadata.
+func (s *S3Storage) putStream(ctx context.Context, key string, r io.Reader, expectedSize *int64, contentType string) (err error) {
+	if expectedSize != nil && *expectedSize <= s3MultipartPartSize {
+		buffer := make([]byte, int(*expectedSize))
+		n, readErr := io.ReadFull(r, buffer)
+		if readErr != nil {
+			return fmt.Errorf("read known-size upload stream: got %d of %d bytes: %w", n, *expectedSize, readErr)
+		}
+		if err := requireUploadEOF(r); err != nil {
+			return err
+		}
+		return s.putObject(ctx, key, bytes.NewReader(buffer), *expectedSize, contentType)
+	}
+
+	buffer := make([]byte, s3MultipartPartSize)
+	n, readErr := io.ReadFull(r, buffer)
+	if expectedSize == nil {
+		if readErr == io.EOF || readErr == io.ErrUnexpectedEOF {
+			return s.putObject(ctx, key, bytes.NewReader(buffer[:n]), int64(n), contentType)
+		}
+		if readErr != nil {
+			return fmt.Errorf("read upload stream: %w", readErr)
+		}
+	} else {
+		if readErr != nil {
+			return fmt.Errorf("read known-size upload stream: got %d of %d bytes: %w", n, *expectedSize, readErr)
+		}
+		partCount := ((*expectedSize - 1) / s3MultipartPartSize) + 1
+		if partCount > s3MaxUploadParts {
+			return fmt.Errorf("multipart upload needs %d parts, maximum is %d", partCount, s3MaxUploadParts)
+		}
+	}
+
+	created, err := s.client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+	})
 	if err != nil {
-		return fmt.Errorf("s3: put object %q: %w", key, err)
+		return fmt.Errorf("create multipart upload: %w", err)
+	}
+	if created.UploadId == nil || *created.UploadId == "" {
+		return errors.New("create multipart upload returned an empty upload ID")
+	}
+	uploadID := created.UploadId
+	completed := false
+	defer func() {
+		if completed {
+			return
+		}
+		abortCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		_, abortErr := s.client.AbortMultipartUpload(abortCtx, &s3.AbortMultipartUploadInput{
+			Bucket:   aws.String(s.bucket),
+			Key:      aws.String(key),
+			UploadId: uploadID,
+		})
+		if abortErr != nil {
+			err = errors.Join(err, fmt.Errorf("abort multipart upload: %w", abortErr))
+		}
+	}()
+
+	partCapacity := 8
+	remaining := int64(-1)
+	if expectedSize != nil {
+		remaining = *expectedSize
+		partCapacity = int((remaining-1)/s3MultipartPartSize + 1)
+	}
+	parts := make([]types.CompletedPart, 0, partCapacity)
+	for partNumber := int32(1); ; partNumber++ {
+		if partNumber > s3MaxUploadParts {
+			return fmt.Errorf("multipart upload exceeds %d parts", s3MaxUploadParts)
+		}
+		part, uploadErr := s.client.UploadPart(ctx, &s3.UploadPartInput{
+			Bucket:        aws.String(s.bucket),
+			Key:           aws.String(key),
+			UploadId:      uploadID,
+			PartNumber:    aws.Int32(partNumber),
+			Body:          bytes.NewReader(buffer[:n]),
+			ContentLength: aws.Int64(int64(n)),
+		})
+		if uploadErr != nil {
+			return fmt.Errorf("upload part %d: %w", partNumber, uploadErr)
+		}
+		parts = append(parts, types.CompletedPart{ETag: part.ETag, PartNumber: aws.Int32(partNumber)})
+
+		if expectedSize != nil {
+			remaining -= int64(n)
+			if remaining == 0 {
+				if err := requireUploadEOF(r); err != nil {
+					return err
+				}
+				break
+			}
+			nextSize := min(remaining, int64(len(buffer)))
+			n, readErr = io.ReadFull(r, buffer[:int(nextSize)])
+			if readErr != nil {
+				return fmt.Errorf("read known-size upload stream with %d bytes remaining: %w", remaining, readErr)
+			}
+			continue
+		}
+
+		n, readErr = io.ReadFull(r, buffer)
+		if readErr == nil {
+			continue
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr == io.ErrUnexpectedEOF {
+			// The final short part is uploaded on the next loop iteration.
+			continue
+		}
+		return fmt.Errorf("read upload stream: %w", readErr)
+	}
+
+	_, err = s.client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
+		Bucket:   aws.String(s.bucket),
+		Key:      aws.String(key),
+		UploadId: uploadID,
+		MultipartUpload: &types.CompletedMultipartUpload{
+			Parts: parts,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("complete multipart upload: %w", err)
+	}
+	completed = true
+	return nil
+}
+
+func requireUploadEOF(r io.Reader) error {
+	var extra [1]byte
+	n, err := io.ReadFull(r, extra[:])
+	if err == io.EOF {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read upload stream after declared size: %w", err)
+	}
+	if n != 0 {
+		return errors.New("upload stream contains more bytes than its declared size")
 	}
 	return nil
 }

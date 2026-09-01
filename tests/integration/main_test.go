@@ -57,7 +57,7 @@ func runIntegrationTests(m *testing.M) int {
 	}
 
 	// 5. Wait for ready
-	if err := waitForReady(depsiloURL+"/health", 15*time.Second); err != nil {
+	if err := waitForReady(depsiloURL+"/ready", 15*time.Second); err != nil {
 		fmt.Fprintf(os.Stderr, "depsilo not ready: %v\n", err)
 		cancel()
 		if shutdownErr := waitForDepsiloShutdown(depsiloDone); shutdownErr != nil {
@@ -173,13 +173,18 @@ name = "mock"
 url = "%s"
 priority = 1
 
-[[cran.upstreams]]
-name = "mock"
-url = "%s"
-priority = 1
+	[[cran.upstreams]]
+	name = "mock"
+	url = "%s"
+	priority = 1
 
-[[helm.upstreams]]
-name = "mock"
+	[[alpine.upstreams]]
+	name = "mock"
+	url = "%s"
+	priority = 1
+
+	[[helm.upstreams]]
+	name = "mock"
 url = "%s"
 priority = 1
 
@@ -199,7 +204,7 @@ url = "%s"
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
-		upstreamURL, upstreamURL)
+		upstreamURL, upstreamURL, upstreamURL)
 
 	os.WriteFile(dir+"/config.toml", []byte(cfg), 0644)
 }

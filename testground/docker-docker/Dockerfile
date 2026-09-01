@@ -18,9 +18,10 @@ ARG DEPSILO_URL
 # daemon.json points dockerd inside this container at Depsilo as a registry mirror
 RUN registry_host="${DEPSILO_URL#*://}" \
     && mkdir -p /etc/docker \
-    && printf '{\n  "registry-mirrors": ["%s"],\n  "insecure-registries": ["%s"]\n}\n' "${DEPSILO_URL}" "${registry_host}" > /etc/docker/daemon.json
+    && printf '{\n  "registry-mirrors": ["%s"],\n  "insecure-registries": ["%s"]\n}\n' "${DEPSILO_URL}" "${registry_host}" > /etc/docker/daemon.json \
+    && printf '%s\n' "${registry_host}" > /depsilo-registry-host
 
 # Smoke script: start dockerd, pull alpine, stop.
-RUN printf '#!/bin/sh\nset -e\ndockerd >/var/log/dockerd.log 2>&1 &\nfor i in $(seq 1 30); do\n  docker info >/dev/null 2>&1 && break\n  sleep 1\ndone\ndocker info >/dev/null || (echo "dockerd failed to start"; tail /var/log/dockerd.log; exit 1)\ndocker pull alpine:3.18\ndocker image inspect alpine:3.18 >/dev/null\necho "docker: pull alpine OK"\n' > /smoke.sh && chmod +x /smoke.sh
+RUN printf '#!/bin/sh\nset -e\nexport DOCKER_HOST=unix:///var/run/docker.sock\nregistry_host=$(cat /depsilo-registry-host)\nimage="${registry_host}/library/alpine:3.18"\ndockerd >/var/log/dockerd.log 2>&1 &\nfor i in $(seq 1 30); do\n  docker info >/dev/null 2>&1 && break\n  sleep 1\ndone\ndocker info >/dev/null || (echo "dockerd failed to start"; tail /var/log/dockerd.log; exit 1)\ndocker pull "$image"\ndocker image inspect "$image" >/dev/null\necho "docker: pull alpine through Depsilo OK"\n' > /smoke.sh && chmod +x /smoke.sh
 
 CMD ["/smoke.sh"]

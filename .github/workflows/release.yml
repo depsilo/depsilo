@@ -10,6 +10,7 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -27,10 +28,16 @@ jobs:
     needs: release-tag
     uses: ./.github/workflows/verify.yml
 
+  client-contracts:
+    needs: [release-tag, verify]
+    uses: ./.github/workflows/real-client-e2e.yml
+    with:
+      release_qualification: true
+
   # Job 1: Cross-platform CLI binaries via GoReleaser (6 platforms), plus
   # checksums, changelog, tray bundles, and source SBOMs.
   release:
-    needs: [verify, tray-macos, tray-linux]
+    needs: [verify, client-contracts, tray-macos, tray-linux]
     permissions:
       contents: write
       id-token: write
@@ -63,7 +70,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22.22.0'
+          node-version: '22.23.2'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
@@ -83,11 +90,15 @@ jobs:
 
       # GoReleaser uploads CLI archives, checksums, and install.sh to a draft.
       # A failed/retried job reuses that draft and replaces duplicate assets.
+      - name: Extract release notes
+        shell: bash
+        run: bash scripts/extract-release-notes.sh "$GITHUB_REF_NAME" >"$RUNNER_TEMP/release-notes.md"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: v2.15.4
-          args: release --clean
+          args: release --clean --release-notes ${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -162,7 +173,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22.22.0'
+          node-version: '22.23.2'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
@@ -170,6 +181,18 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+
+      - name: Prepare Go embed assets
+        shell: bash
+        run: bash scripts/prepare-go-embed.sh web/dist
+
+      # The launcher process exits before a fresh CLI process requests stop,
+      # proving the Setsid-based daemon survives its originating terminal.
+      - name: Test detached macOS daemon lifecycle
+        run: >-
+          go test ./internal/cli
+          -run '^(TestDaemonUsesServePortAndWritesPrivateStartupLog|TestDaemonStartsInNewSession)$'
+          -count=1 -timeout=4m
 
       - name: Install rsvg-convert (SVG -> PNG for icon)
         run: brew install librsvg
@@ -219,7 +242,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '22.22.0'
+          node-version: '22.23.2'
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
@@ -365,11 +388,15 @@ jobs:
           done
           container_id=""
           state_volume="depsilo-release-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          restore_dir=""
           cleanup() {
             if [ -n "$container_id" ]; then
               docker rm -f "$container_id" >/dev/null 2>&1 || true
             fi
             docker volume rm "$state_volume" >/dev/null 2>&1 || true
+            if [ -n "$restore_dir" ]; then
+              find "$restore_dir" -depth -delete >/dev/null 2>&1 || true
+            fi
           }
           trap cleanup EXIT
           docker volume create "$state_volume" >/dev/null
@@ -397,9 +424,149 @@ jobs:
           logs="$(docker logs "$container_id" 2>&1)"
           grep -q 'Portal:' <<<"$logs"
           grep -Eq 'Bootstrap token: [A-Za-z0-9_-]{24,}' <<<"$logs"
+          test "$(docker inspect --format '{{.Config.User}}' "$container_id")" = "10001:10001"
+          test "$(docker exec "$container_id" id -u)" = "10001"
+          test "$(docker exec "$container_id" id -g)" = "10001"
+          docker exec "$container_id" sh -c \
+            'grep -Eq "^Uid:[[:space:]]+10001([[:space:]]+10001){3}$" /proc/1/status'
+          docker exec "$container_id" sh -c \
+            'grep -Eq "^Gid:[[:space:]]+10001([[:space:]]+10001){3}$" /proc/1/status'
           docker exec "$container_id" test -f /root/.depsilo/data/depsilo.db
           docker exec "$container_id" test -d /root/.depsilo/data/cache
+          test "$(docker exec "$container_id" stat -c '%u:%g' /root/.depsilo)" = "10001:10001"
+          test "$(docker exec "$container_id" stat -c '%u:%g' /root/.depsilo/data/depsilo.db)" = "10001:10001"
           docker exec "$container_id" sh -c 'test "$(command -v depsilo)" = /usr/local/bin/depsilo'
+
+          # Reproduce the numeric ownership of a v0.9 root-running named
+          # volume, execute the documented one-time migration, then prove the
+          # default non-root image can reopen the same SQLite state.
+          docker exec "$container_id" sh -c \
+            'printf "%s\n" retained > /root/.depsilo/.v090-volume-marker'
+          docker rm -f "$container_id" >/dev/null
+          container_id=""
+          docker run --rm --user 0:0 --entrypoint /bin/chown \
+            --volume "$state_volume:/root/.depsilo" \
+            "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}" \
+            -R 0:0 /root/.depsilo
+          docker run --rm --user 0:0 --entrypoint /bin/chown \
+            --volume "$state_volume:/root/.depsilo" \
+            "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}" \
+            -R 10001:10001 /root/.depsilo
+          container_id="$(docker run --detach \
+            --publish 127.0.0.1::23333 \
+            --volume "$state_volume:/root/.depsilo" \
+            "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}")"
+          port="$(docker port "$container_id" 23333/tcp | sed 's/.*://')"
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "http://127.0.0.1:${port}/ready"; then
+              ready=true
+              break
+            fi
+            if ! docker inspect --format '{{.State.Running}}' "$container_id" | grep -qx true; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+          docker exec "$container_id" grep -qx retained /root/.depsilo/.v090-volume-marker
+          docker exec "$container_id" test -f /root/.depsilo/data/depsilo.db
+          test "$(docker exec "$container_id" stat -c '%u:%g' /root/.depsilo/data/depsilo.db)" = "10001:10001"
+
+          # Complete the real first-run flow so the generated configuration,
+          # administrator and SQLite state can be exercised by the documented
+          # online backup and isolated restore commands.
+          bootstrap_token="$(docker logs "$container_id" 2>&1 \
+            | grep -Eo 'Bootstrap token: [A-Za-z0-9_-]{24,}' \
+            | tail -1 | awk '{print $3}')"
+          [[ "$bootstrap_token" =~ ^[A-Za-z0-9_-]{24,}$ ]]
+          setup_payload="$(jq -nc '{
+            server: {port: 23333},
+            storage: {path: "/root/.depsilo/data/cache"},
+            admin: {username: "release-operator", password: "Release&Container-Password-47"},
+            ecosystems: {
+              npm: {
+                enabled: true,
+                upstreams: [{name: "npm", url: "https://registry.npmjs.org", priority: 1}]
+              }
+            }
+          }')"
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --header "X-Depsilo-Bootstrap-Token: $bootstrap_token" \
+            --data "$setup_payload" \
+            "http://127.0.0.1:${port}/api/v1/setup/complete" \
+            | jq -e '.status == "ok"'
+          configured=false
+          for attempt in $(seq 1 30); do
+            startup_count="$(docker logs "$container_id" 2>&1 | grep -c 'Portal:' || true)"
+            if [ "$startup_count" -ge 2 ] \
+              && curl --fail --silent "http://127.0.0.1:${port}/ready" >/dev/null \
+              && curl --fail --silent "http://127.0.0.1:${port}/api/v1/setup/status" \
+                | jq -e '.needs_setup == false' >/dev/null; then
+              configured=true
+              break
+            fi
+            if ! docker inspect --format '{{.State.Running}}' "$container_id" | grep -qx true; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$configured" = true
+
+          docker exec "$container_id" depsilo backup \
+            --out /tmp/depsilo-release-backup.tar.gz --json \
+            | jq -e '.ok == true'
+          restore_dir="$(mktemp -d "${RUNNER_TEMP}/depsilo-release-restore.XXXXXX")"
+          mkdir -p "$restore_dir/data"
+          docker cp "$container_id:/tmp/depsilo-release-backup.tar.gz" \
+            "$restore_dir/depsilo-release-backup.tar.gz"
+          test "$(tar -tzf "$restore_dir/depsilo-release-backup.tar.gz" \
+            | sort | paste -sd, -)" = "config.toml,depsilo.db,manifest.json"
+          docker rm -f "$container_id" >/dev/null
+          container_id=""
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp/depsilo-home \
+            --volume "$restore_dir:/state" \
+            "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}" \
+            restore /state/depsilo-release-backup.tar.gz \
+              --config-target /state/config.toml \
+              --database-target /state/data/depsilo.db
+          test "$(stat -c '%a' "$restore_dir/config.toml")" = "600"
+          test "$(stat -c '%a' "$restore_dir/data/depsilo.db")" = "600"
+
+          container_id="$(docker run --detach \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp/depsilo-home \
+            --env DEPSILO_CONFIG=/state/config.toml \
+            --env DEPSILO_DATABASE_DSN=/state/data/depsilo.db \
+            --env DEPSILO_STORAGE_PATH=/state/data/cache \
+            --publish 127.0.0.1::23333 \
+            --volume "$restore_dir:/state" \
+            "ghcr.io/depsilo/depsilo@${IMAGE_DIGEST}")"
+          port="$(docker port "$container_id" 23333/tcp | sed 's/.*://')"
+          restored_ready=false
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "http://127.0.0.1:${port}/ready" >/dev/null; then
+              restored_ready=true
+              break
+            fi
+            if ! docker inspect --format '{{.State.Running}}' "$container_id" | grep -qx true; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$restored_ready" = true
+          curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data '{"username":"release-operator","password":"Release&Container-Password-47"}' \
+            "http://127.0.0.1:${port}/api/v1/auth/login" \
+            | jq -e '.token | length >= 24'
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -498,11 +665,20 @@ jobs:
   # outputs are retained by GitHub, and every tag operation is idempotent.
   publish:
     needs: container_candidate
+    concurrency:
+      group: depsilo-release-promotion-${{ github.repository }}
+      queue: max
+      cancel-in-progress: false
     permissions:
       contents: write
       packages: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release planner
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
@@ -519,18 +695,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Detect stable release
-        id: release_kind
+      # This check runs inside the repository-wide promotion lock. Git refs,
+      # rather than published releases, are authoritative because a newer run
+      # may have moved container tags before publishing its draft release.
+      - name: Plan monotonic floating-tag promotion
+        id: promotion_plan
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          version_without_build="${version%%+*}"
-          if [[ "$version_without_build" == *-* ]]; then
-            echo 'stable=false' >> "$GITHUB_OUTPUT"
-          else
-            echo 'stable=true' >> "$GITHUB_OUTPUT"
-          fi
+          bash scripts/list-verified-release-tags.sh \
+            "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$GITHUB_SHA" \
+            | bash scripts/plan-release-promotion.sh "$GITHUB_REF_NAME" \
+            >>"$GITHUB_OUTPUT"
 
       - name: Extract formal release tags
         id: meta
@@ -543,9 +721,9 @@ jobs:
             latest=false
           tags: |
             type=semver,pattern={{version}},priority=910
-            type=semver,pattern={{major}}.{{minor}},priority=900,enable=${{ steps.release_kind.outputs.stable == 'true' }}
-            type=semver,pattern={{major}},priority=890,enable=${{ steps.release_kind.outputs.stable == 'true' && !startsWith(github.ref_name, 'v0.') }}
-            type=raw,value=latest,enable=${{ steps.release_kind.outputs.stable == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},priority=900,enable=${{ steps.promotion_plan.outputs.promote_floating == 'true' }}
+            type=semver,pattern={{major}},priority=890,enable=${{ steps.promotion_plan.outputs.promote_floating == 'true' && !startsWith(github.ref_name, 'v0.') }}
+            type=raw,value=latest,enable=${{ steps.promotion_plan.outputs.promote_floating == 'true' }}
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -582,6 +760,8 @@ jobs:
           IMAGE_DIGEST: ${{ needs.container_candidate.outputs.digest }}
           FORMAL_TAGS: ${{ steps.meta.outputs.tags }}
           FORMAL_VERSION: ${{ steps.meta.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_PROMOTE_FLOATING: ${{ steps.promotion_plan.outputs.promote_floating }}
         run: |
           set -euo pipefail
 
@@ -650,6 +830,21 @@ jobs:
           [ "$docker_exact" = true ]
           [ "$ghcr_exact" = true ]
 
+          # Re-read the authoritative refs immediately before the first tag
+          # mutation. A moved release ref or a changed floating-tag decision
+          # aborts rather than publishing metadata computed from stale input.
+          rechecked_plan="$(
+            bash scripts/list-verified-release-tags.sh \
+              "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$GITHUB_SHA" \
+              | bash scripts/plan-release-promotion.sh "$GITHUB_REF_NAME"
+          )"
+          rechecked_promote="$(sed -n 's/^promote_floating=//p' <<<"$rechecked_plan")"
+          if [[ ! "$rechecked_promote" =~ ^(true|false)$ ]] \
+            || [ "$rechecked_promote" != "$EXPECTED_PROMOTE_FLOATING" ]; then
+            echo "release promotion decision changed before tag mutation" >&2
+            exit 1
+          fi
+
           for tag in "${tags[@]}"; do
             repository="${tag%:*}"
             docker buildx imagetools create \
@@ -680,4 +875,25 @@ jobs:
       - name: Publish trusted GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --draft=false -R "${{ github.repository }}"
+          PROMOTE_FLOATING: ${{ steps.promotion_plan.outputs.promote_floating }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          publication_plan="$(
+            bash scripts/list-verified-release-tags.sh \
+              "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$GITHUB_SHA" \
+              | bash scripts/plan-release-promotion.sh "$GITHUB_REF_NAME"
+          )"
+          publication_promote="$(sed -n 's/^promote_floating=//p' <<<"$publication_plan")"
+          if [[ ! "$publication_promote" =~ ^(true|false)$ ]] \
+            || [ "$publication_promote" != "$PROMOTE_FLOATING" ]; then
+            echo "release promotion decision changed before GitHub publication" >&2
+            exit 1
+          fi
+          if [ "$PROMOTE_FLOATING" = true ]; then
+            gh release edit "${{ github.ref_name }}" --draft=false --latest \
+              -R "${{ github.repository }}"
+          else
+            gh release edit "${{ github.ref_name }}" --draft=false --latest=false \
+              -R "${{ github.repository }}"
+          fi

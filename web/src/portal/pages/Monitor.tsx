@@ -247,12 +247,12 @@ export default function MonitorPage() {
   const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
   const [query, setQuery] = useState('')
   const statsQuery = useQuery<StatsData>({
-    queryKey: ['stats-monitor'],
+    queryKey: ['stats-status'],
     queryFn: async ({ signal }) => {
       const res = await statsApi.getStats({ signal })
       return res.data
     },
-    refetchInterval: 30000,
+    staleTime: 30_000,
     retry: false,
   })
 

@@ -5,8 +5,8 @@ by the root `Makefile`; run `make help` if this guide and the Makefile diverge.
 
 ## Prerequisites
 
-- Go 1.26.5 or newer, as pinned by `go.mod`.
-- Node.js 22.22.0 or newer and npm 10 or newer.
+- Go 1.26.7 or newer, as pinned by `go.mod`.
+- Node.js 22.23.2 or newer and npm 10 or newer.
 - GNU Make.
 - Docker only for container and real-client tests.
 

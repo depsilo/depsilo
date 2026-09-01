@@ -243,6 +243,47 @@ func TestFreshnessHeadersPreservedForDirectButNotCachedResponses(t *testing.T) {
 	}
 }
 
+func TestXetConnectionHeadersAreScopedToReadTokenResponses(t *testing.T) {
+	source := http.Header{
+		"X-Xet-Cas-Url":          {"https://cas.example.test"},
+		"X-Xet-Access-Token":     {"short-lived-token"},
+		"X-Xet-Token-Expiration": {"1848535668"},
+		"X-Origin-Secret":        {"must-not-pass"},
+	}
+
+	token := filterResponseHeadersForTarget(
+		"/api/models/acme/model/xet-read-token/main",
+		source,
+	)
+	for name, want := range map[string]string{
+		"X-Xet-Cas-Url":          "https://cas.example.test",
+		"X-Xet-Access-Token":     "short-lived-token",
+		"X-Xet-Token-Expiration": "1848535668",
+	} {
+		if got := token.Get(name); got != want {
+			t.Fatalf("token response %s = %q, want %q", name, got, want)
+		}
+	}
+	if got := token.Get("X-Origin-Secret"); got != "" {
+		t.Fatalf("token response leaked unlisted origin header %q", got)
+	}
+
+	for _, target := range []string{
+		"/api/models/acme/model",
+		"/acme/model/resolve/main/model.bin",
+		"https://huggingface.co/api/models/acme/model/xet-read-token/main",
+	} {
+		t.Run(target, func(t *testing.T) {
+			filtered := filterResponseHeadersForTarget(target, source)
+			for _, name := range hfXetConnectionHeaders {
+				if got := filtered.Get(name); got != "" {
+					t.Fatalf("target %q leaked %s = %q", target, name, got)
+				}
+			}
+		})
+	}
+}
+
 func TestCDNRequestHeadersPreserveRangeValidatorsWithoutCredentials(t *testing.T) {
 	request, err := http.NewRequest(http.MethodGet, "http://example.test/file", nil)
 	if err != nil {

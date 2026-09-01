@@ -1,0 +1,22 @@
+services:
+  depsilo:
+    image: ${DEPSILO_IMAGE:?set the exact candidate image ID or digest}
+    user: "10001:10001"
+    ports:
+      - "${PORT:-23333}:23333"
+    environment:
+      HOME: /root
+      DEPSILO_CONFIG: /root/.depsilo/config.toml
+      DEPSILO_AUTH_JWT_SECRET: ${DEPSILO_AUTH_JWT_SECRET:?set the strong candidate JWT secret}
+    volumes:
+      - type: bind
+        source: ${DEPSILO_V090_DATA_DIR:?set the validated v0.9 data directory}
+        target: /app/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${DEPSILO_UPGRADE_STATE_DIR:?set the prepared upgrade state directory}
+        target: /root/.depsilo
+        bind:
+          create_host_path: false
+    restart: unless-stopped
