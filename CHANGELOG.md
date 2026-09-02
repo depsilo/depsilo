@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-02
+
 ### Upgrade notes
 - Schema v3 does not reinterpret concrete Package Rules created by the legacy
   shared comparator. A v0.9.1 `created_by = security-scanner` value is not
