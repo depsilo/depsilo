@@ -9,7 +9,7 @@ import {
 
 const longPackage = '@depsilo/supply-chain-package-with-an-intentionally-long-unbroken-name'
 
-test('quarantine mobile lists keep decision context, actions, and form labels visible', async ({ page }) => {
+test('quarantine mobile lists keep decision context and available actions visible', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 })
   await setUiPreferences(page, 'dark', 'en')
   await mockAdminApi(page, {
@@ -76,15 +76,9 @@ test('quarantine mobile lists keep decision context, actions, and form labels vi
   await expect(eventList.getByText('2026.07.29-security-review-candidate', { exact: true })).toBeVisible()
   await expect(eventList.getByText('Blocked', { exact: true })).toBeVisible()
   await expect(eventList.getByText(/newer than the configured minimum age/)).toBeVisible()
-  const approveButton = eventList.getByRole('button', { name: 'Approve' })
-  await expect(approveButton).toBeVisible()
-  expect((await approveButton.boundingBox())?.height).toBeGreaterThanOrEqual(40)
+  await expect(page.getByText(/Minimum release age is safety-disabled/)).toBeVisible()
+  await expect(eventList.getByRole('button', { name: 'Approve' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
-
-  await approveButton.click()
-  const approveDialog = page.getByRole('dialog', { name: 'Approve this version' })
-  await expect(approveDialog.getByLabel('Reason')).toBeVisible()
-  await approveDialog.getByRole('button', { name: 'Cancel' }).click()
 
   await page.getByRole('tab', { name: 'Approvals' }).click()
   const approvalList = page.locator('[data-quarantine-mobile-list="approvals"]')

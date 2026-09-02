@@ -15,19 +15,27 @@ type requestScopeContextKey struct{}
 // server instance. A field may intentionally be nil; once attached to a
 // request, that nil is authoritative and must not fall back to process globals.
 type RequestScope struct {
-	access   accessHookSnapshot
-	checker  QuarantineChecker
-	observer RequestObserver
+	access       accessHookSnapshot
+	checker      QuarantineChecker
+	packageRules PackageRuleChecker
+	observer     RequestObserver
 }
 
 // NewRequestScope captures one server owner's adapter dependencies.
-func NewRequestScope(recorder accesslog.Recorder, audit AuditLogger, checker QuarantineChecker, observers ...RequestObserver) *RequestScope {
+func NewRequestScope(
+	recorder accesslog.Recorder,
+	audit AuditLogger,
+	checker QuarantineChecker,
+	packageRules PackageRuleChecker,
+	observers ...RequestObserver,
+) *RequestScope {
 	scope := &RequestScope{
 		access: accessHookSnapshot{
 			recorder: recorder,
 			audit:    audit,
 		},
-		checker: checker,
+		checker:      checker,
+		packageRules: packageRules,
 	}
 	if len(observers) > 0 {
 		scope.observer = observers[0]

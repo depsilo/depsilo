@@ -336,7 +336,7 @@ func TestManagerCloseWaitsForActiveScanAndIsIdempotent(t *testing.T) {
 	manager.SetSecurityScanner(scanner)
 
 	body := []byte("wheel")
-	result, err := manager.Get(context.Background(), "pypi/files/demo-1.0.0.whl", "pypi", time.Hour,
+	result, err := manager.Get(context.Background(), "pypi/files/demo-1.0.0-py3-none-any.whl", "pypi", time.Hour,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			return io.NopCloser(bytes.NewReader(body)), "application/octet-stream", int64(len(body)), "mock", nil
 		})

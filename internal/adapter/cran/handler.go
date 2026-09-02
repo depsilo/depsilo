@@ -36,8 +36,8 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		return
 	}
 
-	// Quarantine gate. Only fires on .tar.gz package downloads;
-	// PACKAGES indices pass through.
+	// Quarantine gate. Only strict source/archive/binary artifact routes carry
+	// an authoritative package identity; indexes and installers pass through.
 	if pkg, version := packagekey.ParseCranPath(path); pkg != "" && version != "" {
 		if blocked := adapter.QuarantineGate(c, "cran", pkg, version); blocked {
 			return

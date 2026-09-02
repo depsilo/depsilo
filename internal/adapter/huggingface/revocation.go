@@ -25,8 +25,11 @@ type huggingFaceRepository struct {
 }
 
 func repositoryForParsed(parsed Parsed) (huggingFaceRepository, bool) {
-	repo, ok := escapedPath(parsed.Repo, parsed.repoSegments)
-	if !ok || parsed.Repo == "" {
+	canonicalRepo, escapedRepo, ok := canonicalRepositoryIdentity(
+		parsed.Repo,
+		parsed.repoSegments,
+	)
+	if !ok {
 		return huggingFaceRepository{}, false
 	}
 
@@ -34,13 +37,13 @@ func repositoryForParsed(parsed Parsed) (huggingFaceRepository, bool) {
 	case PathResolve, PathRaw,
 		PathAPIModelInfo, PathAPIModelRevision, PathAPIModelTree:
 		return huggingFaceRepository{
-			packageName: parsed.Repo,
-			escapedRepo: repo,
+			packageName: canonicalRepo,
+			escapedRepo: escapedRepo,
 		}, true
 	case PathAPIDatasetInfo, PathAPIDatasetRevision, PathAPIDatasetTree:
 		return huggingFaceRepository{
-			packageName: "datasets/" + parsed.Repo,
-			escapedRepo: "datasets/" + repo,
+			packageName: "datasets/" + canonicalRepo,
+			escapedRepo: "datasets/" + escapedRepo,
 		}, true
 	default:
 		return huggingFaceRepository{}, false
@@ -618,7 +621,7 @@ func (h *Handler) finishRepositoryRevocation(
 	if h.db != nil {
 		cleanupCtx, cancel := repositoryRevocationContext(ctx)
 		pinErr := h.db.WithContext(cleanupCtx).
-			Where("key LIKE ? ESCAPE '!'", escapeSQLLike(
+			Where("lower(key) LIKE lower(?) ESCAPE '!'", escapeSQLLike(
 				"huggingface/"+repository.escapedRepo+"/ref/",
 			)+"%").
 			Delete(&db.HuggingFaceRefPin{}).Error

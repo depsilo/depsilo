@@ -2,7 +2,7 @@
 
 ## Overview
 
-When no config.toml exists, Depsilo starts with built-in defaults (no upstream sources). Users are redirected to a `/setup` wizard in the Web UI to configure port, storage path, ecosystems, and upstream mirrors. The wizard generates `~/.depsilo/config.toml` and restarts the server.
+When no config.toml exists, Depsilo starts with built-in defaults (no upstream sources). Users are redirected to a `/setup` wizard in the Web UI to configure port, storage path, ecosystems, and upstream mirrors. The wizard durably commits the administrator/onboarding state before publishing `~/.depsilo/config.toml`, then restarts the server. If an interrupted or older installation has a config file but no loginable administrator, startup reopens the token-protected wizard for recovery.
 
 ## Default Paths
 
@@ -102,9 +102,19 @@ Request body: `SetupRequest` (see above).
 
 Steps:
 1. Validate: port range (1-65535), storage path not empty, at least one ecosystem enabled
-2. Call `config.WriteConfig(cfg.ConfigPath, request)`
-3. Return `200 { "status": "ok", "message": "restarting" }`
-4. After 1-second delay, call `os.Exit(0)` — the process manager (systemd, Docker restart policy, or user) restarts the server, which now loads the new config
+2. Begin a SQLite transaction, create or verify the initial administrator, and initialize onboarding state.
+3. Commit that transaction with setup-only `synchronous=FULL` durability.
+4. Call `config.WriteConfig(cfg.ConfigPath, request)`, which writes a `0600` temporary file, fsyncs it, atomically renames it, and fsyncs the parent directory.
+5. Return `200 { "status": "ok", "message": "restarting" }`
+6. After a 1-second delay, re-exec the server on Unix-like systems (Windows
+   returns `restart_strategy=supervisor_required`); if re-exec is unavailable,
+   the external supervisor restarts the process, which then loads the new config
+
+If a failure occurs after the database commit but before config publication, the
+config file remains absent and the next start keeps setup open; if publication
+has completed, the next start uses the committed administrator for login. The
+startup reconciliation guard also reopens setup when a configured database has
+no loginable administrator.
 
 If setup is called when `needs_setup=false`, return `409 { "code": "ALREADY_CONFIGURED" }`.
 

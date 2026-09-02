@@ -35,13 +35,14 @@ func setupRulesEngine(t *testing.T, rulesList []db.PackageRule) *rules.Engine {
 		t.Fatal(err)
 	}
 
-	for i := range rulesList {
-		database.Create(&rulesList[i])
-	}
-
 	licMgr := license.NewManager(config.LicenseConfig{}, nil)
 	checker := entitlement.NewChecker(licMgr, nil)
 	store := rules.NewStore(database)
+	for i := range rulesList {
+		if err := store.Create(&rulesList[i]); err != nil {
+			t.Fatalf("create rule %d: %v", i, err)
+		}
+	}
 	engine := rules.NewEngine(store, checker)
 	return engine
 }
@@ -84,7 +85,7 @@ func TestRules_DenyVersionRange(t *testing.T) {
 
 func TestRules_WildcardEcosystem(t *testing.T) {
 	engine := setupRulesEngine(t, []db.PackageRule{
-		{Ecosystem: "*", PackageName: "malicious-pkg", Version: "*", Action: "deny"},
+		{Ecosystem: "*", PackageName: "*", Version: "*", Action: "deny"},
 	})
 	allowed1, _, err := engine.Check(context.Background(), "pypi", "malicious-pkg", "1.0.0")
 	if err != nil {
@@ -187,16 +188,18 @@ func TestRules_CommunityEnforced(t *testing.T) {
 	if err := db.AutoMigrate(database); err != nil {
 		t.Fatal(err)
 	}
-	database.Create(&db.PackageRule{
+	store := rules.NewStore(database)
+	if err := store.Create(&db.PackageRule{
 		Ecosystem:   "pypi",
 		PackageName: "log4j",
 		Version:     "*",
 		Action:      "deny",
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	licMgr := license.NewManager(config.LicenseConfig{}, nil) // no key, no dev mode
 	checker := entitlement.NewChecker(licMgr, nil)
-	store := rules.NewStore(database)
 	engine := rules.NewEngine(store, checker)
 
 	allowed, matched, err := engine.Check(context.Background(), "pypi", "log4j", "2.14.0")

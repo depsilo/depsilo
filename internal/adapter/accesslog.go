@@ -92,6 +92,12 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 		}
 	}
 	pkgName := packagekey.ExtractName(adapterType, cacheKey)
+	version := packagekey.ExtractVersion(adapterType, cacheKey)
+	if authenticated, ok := AuthenticatedArtifactCoordinateFromContext(ctx); ok &&
+		authenticated.Ecosystem == adapterType {
+		pkgName = authenticated.PackageName
+		version = authenticated.Version
+	}
 	now := time.Now().UTC()
 	hooks := accessHooks.Load()
 	var observer RequestObserver
@@ -162,7 +168,7 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	logAuditOutcome(hooks, db.AuditLog{
 		Ecosystem:   adapterType,
 		PackageName: pkgName,
-		Version:     packagekey.ExtractVersion(adapterType, cacheKey),
+		Version:     version,
 		Action:      action,
 		CacheResult: cacheResult,
 		ClientIP:    clientIP,

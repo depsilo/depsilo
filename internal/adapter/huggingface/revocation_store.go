@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,6 +296,8 @@ func validateRepositoryRevocationIdentity(repository, escapedRepo string) error 
 		)
 	case escapedRepo == "":
 		return fmt.Errorf("%w: escaped repository is empty", errRepositoryRevocationMarkerInvalid)
+	case repository != strings.ToLower(repository) || escapedRepo != strings.ToLower(escapedRepo):
+		return fmt.Errorf("%w: repository identity must be lowercase canonical form", errRepositoryRevocationMarkerInvalid)
 	case len(escapedRepo) > 512:
 		return fmt.Errorf(
 			"%w: escaped repository is longer than 512 bytes",
@@ -314,6 +317,8 @@ func validateRepositoryAndToken(repository, token string) error {
 			"%w: repository is longer than 256 bytes",
 			errRepositoryRevocationMarkerInvalid,
 		)
+	case repository != strings.ToLower(repository):
+		return fmt.Errorf("%w: repository identity must be lowercase canonical form", errRepositoryRevocationMarkerInvalid)
 	case !validRepositoryRevocationToken(token):
 		return fmt.Errorf("%w: token is not 32 lowercase hexadecimal characters",
 			errRepositoryRevocationMarkerInvalid,

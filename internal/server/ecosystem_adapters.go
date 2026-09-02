@@ -42,7 +42,7 @@ type adapterBinding struct {
 	factory   adapterFactory
 }
 
-func standardEcosystemDefinitions(cfg *config.Config) []ecosystemDef {
+func standardEcosystemDefinitions(cfg *config.Config, npmTarballSigningKey []byte) []ecosystemDef {
 	bindings := map[string]adapterBinding{
 		"pypi": {func(cfg *config.Config) []config.UpstreamConfig { return cfg.PyPI.Upstreams }, func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
 			return pypi.New(cm, s, cc, database)
@@ -51,7 +51,7 @@ func standardEcosystemDefinitions(cfg *config.Config) []ecosystemDef {
 			return apt.New(cm, s, cc, database)
 		}},
 		"npm": {func(cfg *config.Config) []config.UpstreamConfig { return cfg.NPM.Upstreams }, func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
-			return npm.New(cm, s, cc, database)
+			return npm.New(cm, s, cc, database, append([]byte(nil), npmTarballSigningKey...))
 		}},
 		"go": {func(cfg *config.Config) []config.UpstreamConfig { return cfg.Go.Upstreams }, func(cm *cache.Manager, s upstream.Selector, cc config.CacheConfig, database *gorm.DB) adapter.Adapter {
 			return goproxy.New(cm, s, cc, database)

@@ -2,7 +2,6 @@ package security
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -100,33 +99,4 @@ func extractReferences(refs []osvRef) string {
 
 func reverseEcosystem(osvEco string) string {
 	return ecosystem.NameForOSV(osvEco)
-}
-
-// ExtractFixedVersion extracts the "fixed" version from affected ranges JSON.
-func ExtractFixedVersion(affectedRangesJSON string) string {
-	type rangeEntry struct {
-		Type   string     `json:"type"`
-		Events []osvEvent `json:"events"`
-	}
-	var ranges []rangeEntry
-	if err := json.Unmarshal([]byte(affectedRangesJSON), &ranges); err != nil {
-		return ""
-	}
-	for _, r := range ranges {
-		for _, e := range r.Events {
-			if e.Fixed != "" {
-				return e.Fixed
-			}
-		}
-	}
-	return ""
-}
-
-// FormatVersionConstraint creates a version constraint string for a PackageRule.
-func FormatVersionConstraint(v *db.Vulnerability) string {
-	fixed := ExtractFixedVersion(v.AffectedRanges)
-	if fixed != "" {
-		return fmt.Sprintf("<%s", fixed)
-	}
-	return "*"
 }

@@ -12,16 +12,19 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
 import BadgeV2 from '@/components/Badge'
+import ButtonV2 from '@/components/Button'
 import DrawerV2 from '@/components/Drawer'
 import Icon, { type IconName } from '@/components/Icon'
 import IconButton from '@/components/IconButton'
+import InlineNotice from '@/components/InlineNotice'
 import LangToggle from '@/components/LangToggle'
 import Logo from '@/components/Logo'
 import ThemeToggle from '@/components/ThemeToggle'
 import { usePrincipal } from '@/hooks/usePrincipal'
-import { authApi, statsApi } from '@/lib/api'
+import { adminApi, authApi, statsApi } from '@/lib/api'
+import type { PolicyStatus } from '@/lib/adminApi.types'
 import { removeLocalStorage } from '@/lib/storage'
-import { formatVersion } from '@/lib/utils'
+import { formatTime, formatVersion } from '@/lib/utils'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
 
 interface NavItem {
@@ -239,6 +242,86 @@ function SidebarContent({
   )
 }
 
+function formatPolicySnapshotAge(seconds: number, language: string): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return ''
+
+  const age = Math.round(seconds)
+  const locale = language.startsWith('zh') ? 'zh-CN' : 'en-US'
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'always' })
+  if (age < 60) return relative.format(-age, 'second')
+  const minutes = Math.round(age / 60)
+  if (minutes < 60) return relative.format(-minutes, 'minute')
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return relative.format(-hours, 'hour')
+  return relative.format(-Math.round(hours / 24), 'day')
+}
+
+interface PolicyStatusBannerProps {
+  status?: PolicyStatus
+  unavailable: boolean
+  refreshing: boolean
+  onRefresh: () => unknown
+}
+
+function PolicyStatusBanner({ status, unavailable, refreshing, onRefresh }: PolicyStatusBannerProps) {
+  const { t, i18n } = useTranslation()
+  // `degraded` also describes the no-last-known-good case. Only call the
+  // snapshot message when the engine explicitly says that an old snapshot is
+  // being used; otherwise operators must not be told that a snapshot exists
+  // when the first policy load has never succeeded.
+  const statusDegraded = status?.using_stale_snapshot === true
+  const statusUnavailable = unavailable || (
+    status !== undefined
+    && status.status !== 'healthy'
+    && status.status !== 'ready'
+    && !statusDegraded
+  )
+  if (!statusUnavailable && !statusDegraded) return null
+
+  const snapshotLoadedAt = status?.snapshot_loaded_at ?? status?.last_successful_refresh
+  const refreshTime = snapshotLoadedAt
+    ? (formatPolicySnapshotAge(status?.snapshot_age_seconds ?? Number.NaN, i18n.language)
+      || formatTime(snapshotLoadedAt, 'relative', i18n.language))
+    : null
+
+  return (
+    <div
+      data-admin-policy-status-banner
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className="mb-4"
+    >
+      <InlineNotice tone="warning">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-[600]">
+              {statusUnavailable ? t('policy.statusUnavailable') : t('policy.staleSnapshot')}
+            </p>
+            {!statusUnavailable && (
+              <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-soft)' }}>
+                {refreshTime
+                  ? t('policy.lastSuccessfulRefresh', { time: refreshTime })
+                  : t('policy.neverRefreshed')}
+              </p>
+            )}
+          </div>
+          <ButtonV2
+            type="button"
+            variant="secondary"
+            size="sm"
+            aria-busy={refreshing || undefined}
+            disabled={refreshing}
+            onClick={() => { void onRefresh() }}
+          >
+            {refreshing ? t('policy.refreshing') : t('policy.refresh')}
+          </ButtonV2>
+        </div>
+      </InlineNotice>
+    </div>
+  )
+}
+
 export default function MainLayoutV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -253,6 +336,15 @@ export default function MainLayoutV2() {
     queryFn: async ({ signal }) => (await statsApi.getStats({ signal })).data,
     refetchInterval: 30000,
     staleTime: 30000,
+  })
+
+  const policyStatusQuery = useQuery<PolicyStatus>({
+    queryKey: ['admin', 'policy', 'status'],
+    queryFn: async ({ signal }) => (await adminApi.getPolicyStatus({ signal })).data,
+    refetchInterval: 30000,
+    staleTime: 30000,
+    refetchOnWindowFocus: true,
+    retry: false,
   })
 
   const activeRoute = resolveAdminRoute(location.pathname)
@@ -369,6 +461,12 @@ export default function MainLayoutV2() {
 
         <main className="min-h-screen pt-16 pb-6" style={{ background: 'var(--admin-canvas)' }}>
           <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
+            <PolicyStatusBanner
+              status={policyStatusQuery.data}
+              unavailable={policyStatusQuery.isError}
+              refreshing={policyStatusQuery.isFetching}
+              onRefresh={() => policyStatusQuery.refetch()}
+            />
             <Outlet />
           </div>
         </main>

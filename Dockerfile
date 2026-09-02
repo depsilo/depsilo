@@ -40,6 +40,8 @@ FROM alpine:3.23.5@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=backend /app/depsilo /app/depsilo
+COPY --from=backend /app/LICENSE /app/NOTICE /usr/share/licenses/depsilo/
+COPY --from=backend /app/LICENSES/Apache-2.0.txt /usr/share/licenses/depsilo/LICENSES/
 RUN addgroup -S -g 10001 depsilo \
     && adduser -S -D -H -h /root -u 10001 -G depsilo depsilo \
     && mkdir -p /root/.depsilo /root/.local/share/depsilo /root/.config/depsilo \

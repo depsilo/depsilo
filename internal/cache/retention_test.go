@@ -283,6 +283,31 @@ func TestRetentionRemovePreservesRowWhenStorageDeleteFails(t *testing.T) {
 	}
 }
 
+func TestRetentionReclaimRetiredPreservesRowAndObjectWhenStorageDeleteFails(t *testing.T) {
+	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 90, TargetPercent: 80})
+	entry := seedRetentionEntry(t, fixture, "huggingface/openai/whisper-tiny/resolve/main/config.json", 10, time.Now().Add(-time.Hour), time.Now())
+	if err := fixture.database.Model(&db.CacheEntry{}).Where("id = ?", entry.ID).UpdateColumns(map[string]any{
+		"adapter_type": "retired-v3",
+		"package_name": "",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	wantErr := errors.New("storage unavailable")
+	fixture.storage.failDelete(entry.StoragePath, wantErr)
+
+	report, err := fixture.retention.ReclaimRetired(context.Background(), "retired-v3")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("retired cleanup error = %v, want %v", err, wantErr)
+	}
+	if report.Failed != 1 || report.Removed != 0 {
+		t.Fatalf("retired cleanup report = %+v", report)
+	}
+	assertRetentionEntryExists(t, fixture, entry.ID, true)
+	if exists, err := fixture.storage.Exists(context.Background(), entry.StoragePath); err != nil || !exists {
+		t.Fatalf("retired object after failed cleanup = (%v, %v), want (true, nil)", exists, err)
+	}
+}
+
 func TestRetentionRemovePreservesRowWhenStorageExistenceCheckFails(t *testing.T) {
 	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 90, TargetPercent: 80})
 	entry := seedRetentionEntry(t, fixture, "pypi/files/exists-failure.whl", 10, time.Now().Add(time.Hour), time.Now())

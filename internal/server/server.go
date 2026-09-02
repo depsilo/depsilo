@@ -137,11 +137,16 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	if err := db.AutoMigrate(database); err != nil {
 		return nil, fmt.Errorf("migrate database: %w", err)
 	}
-	definitions := standardEcosystemDefinitions(cfg)
-	bootstrap, err := upstream.ReconcileBootstrap(database, seedSources(definitions))
+	seedDefinitions := standardEcosystemDefinitions(cfg, nil)
+	bootstrap, err := upstream.ReconcileBootstrap(database, seedSources(seedDefinitions))
 	if err != nil {
 		return nil, fmt.Errorf("reconcile upstream control plane: %w", err)
 	}
+	npmTarballSigningKey, err := deriveActiveNPMTarballSigningKey(cfg.Auth.JWTSecret, bootstrap.ActiveEcosystems)
+	if err != nil {
+		return nil, fmt.Errorf("configure npm tarball provenance: %w", err)
+	}
+	definitions := standardEcosystemDefinitions(cfg, npmTarballSigningKey)
 	registry, err = upstream.NewRegistry(database, bootstrap.ActiveEcosystems)
 	if err != nil {
 		return nil, fmt.Errorf("build upstream registry: %w", err)
@@ -153,9 +158,16 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, err
 	}
 
+	// A config file is considered published only alongside a durable
+	// administrator. Reconcile old/interrupted states before the headless
+	// bootstrap path so a missing administrator reopens recoverable setup
+	// instead of creating an inaccessible random account.
+	if err := api.ReconcileSetupState(database, cfg); err != nil {
+		return nil, fmt.Errorf("reconcile initial administrator: %w", err)
+	}
 	// Interactive first-run setup creates the administrator from wizard input.
-	// Configured/headless deployments use environment credentials or a random
-	// one-time password emitted to the server log.
+	// Configured/headless deployments with explicit environment credentials
+	// retain their bootstrap behavior.
 	if err := api.EnsureInitialAdmin(database, cfg.IsDefault); err != nil {
 		return nil, fmt.Errorf("ensure initial administrator: %w", err)
 	}
@@ -240,6 +252,16 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	if err != nil {
 		return nil, fmt.Errorf("configure cache retention: %w", err)
 	}
+	retiredReclaim, err := cacheRetention.ReclaimRetired(serverCtx, db.RetiredHuggingFaceAdapterType)
+	if err != nil {
+		return nil, fmt.Errorf("reclaim retired Hugging Face cache entries before startup: %w", err)
+	}
+	if retiredReclaim.Removed > 0 {
+		zap.L().Info("reclaimed retired Hugging Face cache entries before startup",
+			zap.Int("removed", retiredReclaim.Removed),
+			zap.Int64("reclaimed_bytes", retiredReclaim.ReclaimedBytes),
+		)
+	}
 
 	compilerCache, err := openCompileCacheRuntime(serverCtx, cfg.Storage, cfg.CompileCache, database)
 	if err != nil {
@@ -268,7 +290,20 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	checker := entitlement.NewChecker(licenseManager, trialManager)
 
 	rulesStore := rules.NewStore(database)
-	rulesEngine := rules.NewEngine(rulesStore, checker)
+	policyOnLoadError, err := rules.ParseOnLoadErrorPolicy(cfg.Policy.OnLoadError)
+	if err != nil {
+		return nil, fmt.Errorf("policy configuration: %w", err)
+	}
+	rulesEngine, err := rules.NewEngineWithOptions(
+		rulesStore,
+		checker,
+		rules.WithOnLoadErrorPolicy(policyOnLoadError),
+		rules.WithPolicyTelemetry(api.M),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("initialize package policy engine: %w", err)
+	}
+	api.M.BindPolicyStatusProvider(rulesEngine)
 
 	auditLogger := audit.NewLogger(database)
 	if err := submitBackground("audit logger", func(ctx context.Context) {
@@ -291,8 +326,10 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	if err != nil {
 		return nil, fmt.Errorf("quarantine policy: %w", err)
 	}
-	if quarantinePolicy.IsAgeGateEnabled() {
+	if quarantinePolicy.HasActiveThresholds() {
 		zap.L().Info("minimum release age quarantine enabled")
+	} else if quarantinePolicy.IsAgeGateEnabled() {
+		zap.L().Warn("minimum release age quarantine requested but inactive: no source-bound ecosystem thresholds are available")
 	} else {
 		zap.L().Info("minimum release age quarantine disabled")
 	}
@@ -306,6 +343,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		accessRecorder,
 		auditLogger,
 		quarantine.Wrap(quarantineChecker),
+		rules.Wrap(rulesEngine),
 		api.M,
 	)
 
@@ -450,7 +488,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	osvFetcher = security.NewFetcher(secCfg.OSVURL, secCfg.Proxy)
-	securityCatalog, err := security.NewAdvisoryCatalog(database, secCfg.CheckTTL, rulesEngine.InvalidateCache)
+	securityCatalog, err := security.NewAdvisoryCatalog(database, secCfg.CheckTTL)
 	if err != nil {
 		return nil, fmt.Errorf("configure security intelligence catalog: %w", err)
 	}
@@ -495,9 +533,20 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	// Setup Gin
+	extraPackageRuleRoutes := make([]rules.PyPIRouteDescriptor, 0, len(cfg.ExtraIndexes))
+	for index := range cfg.ExtraIndexes {
+		descriptor, err := rules.NewPyPIRouteDescriptor(
+			cfg.ExtraIndexes[index].Path,
+			cfg.ExtraIndexes[index].Kind == config.ExtraIndexKindPyTorch,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("configure extra index %s package-policy route: %w", cfg.ExtraIndexes[index].Name, err)
+		}
+		extraPackageRuleRoutes = append(extraPackageRuleRoutes, descriptor)
+	}
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
-	r.Use(rules.Middleware(rulesEngine))
+	r.Use(rules.Middleware(rulesEngine, extraPackageRuleRoutes...))
 	r.Use(middleware.ProjectTokenMiddleware(database))
 
 	// Build ordered ecosystem name list (defines UI iteration order)
@@ -512,32 +561,34 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// Register all API routes
 	indexRefresher := api.NewCacheIndexRefresher(r, cfg.ExtraIndexes, cfg.Docker)
 	api.RegisterRoutes(r, api.Deps{
-		LifecycleContext: serverCtx,
-		DB:               database,
-		Storage:          storage,
-		Config:           cfg,
-		ConfigStore:      settingsStore,
-		Pools:            pools,
-		UpstreamRegistry: registry,
-		Ecosystems:       ecosystemNames,
-		CacheMgr:         cacheMgr,
-		CacheRetention:   cacheRetention,
-		CompileCache:     compilerCache.handlerDependencies(),
-		IndexRefresher:   indexRefresher,
-		EventBus:         eventBus,
-		LicenseManager:   licenseManager,
-		TrialManager:     trialManager,
-		Entitlement:      checker,
-		RulesStore:       rulesStore,
-		RulesEngine:      rulesEngine,
-		SecurityScanner:  securityScanner,
-		SecurityCatalog:  securityCatalog,
-		WebhookNotifier:  webhookNotifier,
-		QuarantineStore:  quarantineStore,
-		BlocklistStore:   blocklistStore,
-		BlocklistSyncer:  blocklistSyncer,
-		BlocklistMode:    string(blocklistMode),
-		Tasks:            background,
+		LifecycleContext:           serverCtx,
+		DB:                         database,
+		Storage:                    storage,
+		Config:                     cfg,
+		ConfigStore:                settingsStore,
+		Pools:                      pools,
+		UpstreamRegistry:           registry,
+		Ecosystems:                 ecosystemNames,
+		CacheMgr:                   cacheMgr,
+		CacheRetention:             cacheRetention,
+		CompileCache:               compilerCache.handlerDependencies(),
+		IndexRefresher:             indexRefresher,
+		EventBus:                   eventBus,
+		LicenseManager:             licenseManager,
+		TrialManager:               trialManager,
+		Entitlement:                checker,
+		RulesStore:                 rulesStore,
+		RulesEngine:                rulesEngine,
+		PolicyStatusProvider:       rulesEngine,
+		SecurityScanner:            securityScanner,
+		SecurityCatalog:            securityCatalog,
+		WebhookNotifier:            webhookNotifier,
+		QuarantineStore:            quarantineStore,
+		QuarantineApprovalsEnabled: quarantinePolicy.HasActiveThresholds(),
+		BlocklistStore:             blocklistStore,
+		BlocklistSyncer:            blocklistSyncer,
+		BlocklistMode:              string(blocklistMode),
+		Tasks:                      background,
 	})
 
 	// Project-scoped proxy routes (/p/:slug/...) share Registry-owned Pools

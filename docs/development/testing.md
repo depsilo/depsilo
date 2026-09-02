@@ -24,8 +24,9 @@ the changed interface.
 | Compiler clients | `make test-compiler-cache` | Client-dependent | Installed ccache and sccache against a running service |
 | Qualified compiler clients | `make test-compiler-cache-qualified` | No upstream network after client install | Bootstrap a service and credential, then prove ccache and sccache miss/write/remote-hit behavior |
 | S3 storage contract | `make test-s3` | Local Docker | Signed known/unknown-length streaming, metadata, listing, deletion, and failed multipart cleanup against pinned MinIO |
-| v0.9.0 state reopen | `make test-v090-upgrade` | Go modules if uncached | Build the tagged source, seed durable state, and exercise it offline with the current binary |
+| v0.9.0 state reopen | `make test-v090-upgrade` | Go modules if uncached | Build the tagged source, seed durable state, prove legacy unsigned npm cache fails closed offline, then reconnect the mock Upstream and prove fresh signed provenance |
 | v0.9.0 shipped Compose upgrade | `make test-v090-compose-upgrade` | Privileged Docker, host PID namespace, util-linux `findmnt`, and registry access | Reject a real nested bind mount without changing its external victim, then run the immutable published v0.9.0 image with its exact shipped layout, rotate a weak JWT secret explicitly, and reopen its state with a UID/GID 10001 candidate |
+| v0.9.1 direct-predecessor upgrade | `make test-v091-upgrade` | Go modules if uncached, Docker, and registry access | Build source from the fixed peeled tag commit, then run the immutable published image by digest with its checksummed Compose named-volume layout; preserve credentials and entitlement while migrating a safe Package Rule to schema v3 |
 | Development scripts | `make verify-scripts` | No | Make workflows, paired Vite/backend lifecycle, and development proxy coverage |
 
 Docker Registry remains a separate privileged dind check:
@@ -33,8 +34,8 @@ Docker Registry remains a separate privileged dind check:
 
 The tag-triggered release workflow invokes the real-client workflow in release
 qualification mode. GitHub release assets wait for all 14 package clients,
-Docker OCI, compiler-cache, S3, tagged-source state-reopen, and immutable
-v0.9.0 shipped-Compose upgrade jobs; the ordinary
+Docker OCI, compiler-cache, S3, the long-range v0.9.0 source/Compose contracts,
+and the direct-predecessor v0.9.1 source/image-state contract; the ordinary
 weekly run keeps the smaller all-package-client matrix.
 
 ## Change-to-check matrix
@@ -44,11 +45,12 @@ weekly run keeps the smaller all-package-client matrix.
 | Backend implementation inside one module | focused `go test` | `make test`; `make check` for normal changes |
 | Cache, concurrency, or lifecycle | focused test with `-race` where useful | `make verify` |
 | Auth or migration | focused owning-package test | `make verify` |
+| First-run setup durability | `go test ./internal/api ./internal/config ./internal/db -run 'TestSetup|TestOSAtomic|TestBeginDurable' -count=1` | `make verify` |
 | HTTP/package protocol | adjacent Go tests + tagged integration case | `make verify` and relevant `make test-docker-<ecosystem>` when network is available |
 | Pure frontend model/manifest | focused Vitest file | `make check` |
 | Portal/Admin interaction | focused Playwright file | `make check`; full `make verify` for shared shell/primitives |
 | Embedded frontend or release delivery | `make test-ui-production` | `make test-ui-production` plus release checks |
-| Storage backend or schema compatibility | focused storage/migration test | `make test-s3`, `make test-v090-upgrade`, and `make test-v090-compose-upgrade` |
+| Storage backend or schema compatibility | focused storage/migration test | `make test-s3`, `make test-v090-upgrade`, `make test-v090-compose-upgrade`, and `make test-v091-upgrade` |
 | i18n | `make lint-i18n` | `make check` |
 | Makefile, installer, dev or release scripts | relevant `scripts/test-*.sh` | `make verify-scripts` or `make verify` |
 | Dependency versions or release inputs | focused build | `make security` plus release checks |

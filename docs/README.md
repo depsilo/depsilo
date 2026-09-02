@@ -26,6 +26,8 @@ contains the stable repository rules and links into these guides.
   and advanced overrides.
 - [Admin control plane](admin-control-plane.md): configuration/database
   authority and Admin HTTP contracts.
+- [Package rules](package-rules.md): ecosystem-specific package identity,
+  version capabilities, migration behavior, and enforcement limitations.
 - [Compiler cache](compile-cache.md): ccache and sccache deployment contract.
 - [Self-test checklist](self-test-checklist.md): manual deployed-service checks.
 - [Release verification](release-verification.md): signed artifacts and

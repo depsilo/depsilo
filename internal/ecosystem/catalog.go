@@ -26,19 +26,19 @@ type Definition struct {
 }
 
 var definitions = [...]Definition{
-	{Name: "pypi", Route: "/pypi", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "PyPI", MaliciousDataset: true},
+	{Name: "pypi", Route: "/pypi", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "PyPI"},
 	{Name: "apt", Route: "/apt", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "Debian"},
 	{Name: "npm", Route: "/npm", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "npm", MaliciousDataset: true},
 	{Name: "go", Route: "/go", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "Go", MaliciousDataset: true},
 	{Name: "cargo", Route: "/crates", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "crates.io", MaliciousDataset: true},
 	{Name: "maven", Route: "/maven", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "Maven", MaliciousDataset: true},
-	{Name: "rubygems", Route: "/rubygems", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "RubyGems", MaliciousDataset: true},
+	{Name: "rubygems", Route: "/rubygems", StandardUpstreams: true, AvailableInSetup: true, OSVName: "RubyGems"},
 	{Name: "composer", Route: "/composer", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "Packagist", MaliciousDataset: true},
 	{Name: "nuget", Route: "/nuget", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "NuGet", MaliciousDataset: true},
 	{Name: "conda", Route: "/conda", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true},
 	{Name: "cran", Route: "/cran", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true, OSVName: "CRAN"},
 	{Name: "alpine", Route: "/alpine", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true},
-	{Name: "helm", Route: "/helm", StandardUpstreams: true, AvailableInSetup: true, RuleEnforcement: true},
+	{Name: "helm", Route: "/helm", StandardUpstreams: true, AvailableInSetup: true},
 	{Name: "huggingface", Route: "/huggingface", StandardUpstreams: true},
 	{Name: "docker", Route: "/v2"},
 }
@@ -90,7 +90,7 @@ func MaliciousDatasetDefinitions() []Definition {
 	out := make([]Definition, 0, len(maliciousDatasetOrder))
 	for _, name := range maliciousDatasetOrder {
 		definition, ok := Lookup(name)
-		if ok {
+		if ok && definition.MaliciousDataset {
 			out = append(out, definition)
 		}
 	}

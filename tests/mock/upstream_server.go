@@ -3,6 +3,7 @@ package mock
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -116,6 +117,42 @@ func (m *MockUpstream) RegisterNpm() {
 	m.mux.HandleFunc("/testpkg/-/testpkg-1.0.0.tgz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Write([]byte("FAKE_NPM_TARBALL"))
+	})
+	// Deliberately map several declared versions to one arbitrary archive name.
+	// Depsilo must carry the versions map key into its authenticated tarball
+	// route; the filename itself provides no version evidence.
+	m.mux.HandleFunc("/malicious-pkg", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"name":"malicious-pkg","versions":{`+
+			`"1.0.0":{"dist":{"tarball":"%[1]s/malicious-pkg/-/pkg-custom.tgz"}},`+
+			`"2.0.0":{"dist":{"tarball":"%[1]s/malicious-pkg/-/pkg-custom.tgz"}},`+
+			`"9.9.9":{"dist":{"tarball":"%[1]s/malicious-pkg/-/pkg-custom.tgz"}}}}`, m.URL())
+	})
+	m.mux.HandleFunc("/malicious-pkg/-/pkg-custom.tgz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		_, _ = w.Write([]byte("FAKE_MALICIOUS_NPM_TARBALL"))
+	})
+	m.mux.HandleFunc("/onboarding-fixture", func(w http.ResponseWriter, r *http.Request) {
+		versions := make(map[string]any, 64)
+		for patch := 1; patch <= 64; patch++ {
+			version := fmt.Sprintf("1.0.%d", patch)
+			versions[version] = map[string]any{
+				"name":    "onboarding-fixture",
+				"version": version,
+				"dist": map[string]string{
+					"tarball": fmt.Sprintf("%s/onboarding-fixture/-/onboarding-fixture-%s.tgz", m.URL(), version),
+				},
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":     "onboarding-fixture",
+			"versions": versions,
+		})
+	})
+	m.mux.HandleFunc("/onboarding-error", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"name":"onboarding-error","versions":{"1.0.0":{"name":"onboarding-error","version":"1.0.0","dist":{"tarball":"%s/onboarding-error/-/onboarding-error-1.0.0.tgz"}}}}`, m.URL())
 	})
 	// Dedicated onboarding fixtures must stay isolated from the ordinary npm
 	// cases because the integration suite shares one server and cache. The

@@ -11,6 +11,7 @@ import type {
   CompileCacheStatusResponse,
   NowResponse,
   OnboardingStatusResponse,
+  PolicyStatus,
   ProjectListResponse,
   RecentDownloadsResponse,
   SecurityDashboard,
@@ -75,6 +76,14 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
     sparkline: [],
   } satisfies NowResponse,
   'GET /api/v1/admin/dashboard': { summary: {}, top_packages: [], upstreams: [] },
+  'GET /api/v1/admin/policy/status': {
+    status: 'healthy',
+    using_stale_snapshot: false,
+    snapshot_loaded_at: '2026-09-02T01:12:00Z',
+    snapshot_age_seconds: 0,
+    refresh_failures: 0,
+    on_load_error: 'use_stale_then_allow',
+  } satisfies PolicyStatus,
   'GET /api/v1/admin/onboarding/status': {
     status: 'completed',
     started_at: '2026-08-06T00:00:00Z',

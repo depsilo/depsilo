@@ -24,6 +24,15 @@ func (s *PrioritySelector) Select(ctx context.Context) (*Upstream, error) {
 	return s.selectHealthy(ctx, nil)
 }
 
+// ResolveProvenanceSource returns the exact source named by authenticated
+// metadata instead of applying priority failover again.
+func (s *PrioritySelector) ResolveProvenanceSource(sourceID string) (*Upstream, error) {
+	if s == nil {
+		return nil, fmt.Errorf("artifact provenance source is unavailable")
+	}
+	return resolveProvenanceSource(s.pool, sourceID)
+}
+
 // SelectExcluding chooses the best healthy alternative to a source that just
 // failed the current exchange. The exclusion is request-local: it does not
 // mutate global health or penalize a source for unrelated traffic.

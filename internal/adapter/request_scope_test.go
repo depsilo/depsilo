@@ -19,6 +19,7 @@ type requestScopeCalls struct {
 	recorder map[string]int
 	audit    map[string]int
 	checker  map[string]int
+	rules    map[string]int
 }
 
 func newRequestScopeCalls() *requestScopeCalls {
@@ -26,6 +27,7 @@ func newRequestScopeCalls() *requestScopeCalls {
 		recorder: make(map[string]int),
 		audit:    make(map[string]int),
 		checker:  make(map[string]int),
+		rules:    make(map[string]int),
 	}
 }
 
@@ -59,6 +61,20 @@ type requestScopeChecker struct {
 	calls *requestScopeCalls
 }
 
+type requestScopeRuleChecker struct {
+	owner int
+	calls *requestScopeCalls
+}
+
+func (checker *requestScopeRuleChecker) EvaluatePackageRule(
+	_ context.Context, _, packageName, _ string,
+) PackageRuleDecision {
+	checker.calls.mu.Lock()
+	checker.calls.rules[packageName] = checker.owner
+	checker.calls.mu.Unlock()
+	return PackageRuleDecision{Outcome: PackageRuleAllow}
+}
+
 func (checker *requestScopeChecker) Check(_ context.Context, _, pkg, _, _ string) QuarantineDecision {
 	checker.calls.mu.Lock()
 	checker.calls.checker[pkg] = checker.owner
@@ -81,11 +97,13 @@ func TestRequestScopesCanServeConcurrentlyWithoutMixingOwners(t *testing.T) {
 		&requestScopeRecorder{owner: 1, calls: calls},
 		&requestScopeAudit{owner: 1, calls: calls},
 		&requestScopeChecker{owner: 1, calls: calls},
+		&requestScopeRuleChecker{owner: 1, calls: calls},
 	).Wrap(handler)
 	second := NewRequestScope(
 		&requestScopeRecorder{owner: 2, calls: calls},
 		&requestScopeAudit{owner: 2, calls: calls},
 		&requestScopeChecker{owner: 2, calls: calls},
+		&requestScopeRuleChecker{owner: 2, calls: calls},
 	).Wrap(handler)
 
 	start := make(chan struct{})
@@ -139,11 +157,13 @@ func TestRequestScopeRemainsFixedDuringLegacyAndOtherScopeReplacement(t *testing
 		&requestScopeRecorder{owner: 1, calls: calls},
 		&requestScopeAudit{owner: 1, calls: calls},
 		&requestScopeChecker{owner: 1, calls: calls},
+		&requestScopeRuleChecker{owner: 1, calls: calls},
 	).Wrap(requestScopeExerciseHandler(entered, release))
 	secondHandler := NewRequestScope(
 		&requestScopeRecorder{owner: 2, calls: calls},
 		&requestScopeAudit{owner: 2, calls: calls},
 		&requestScopeChecker{owner: 2, calls: calls},
+		&requestScopeRuleChecker{owner: 2, calls: calls},
 	).Wrap(requestScopeExerciseHandler(nil, nil))
 
 	firstDone := make(chan *httptest.ResponseRecorder, 1)
@@ -185,7 +205,25 @@ func TestRequestScopeRemainsFixedDuringLegacyAndOtherScopeReplacement(t *testing
 
 	assertRequestScopeOwner(t, calls, "long-request", 1)
 	assertRequestScopeOwner(t, calls, "other-scope", 2)
-	assertRequestScopeOwner(t, calls, "legacy-replacement", 3)
+	assertLegacyRequestScopeOwner(t, calls, "legacy-replacement", 3)
+}
+
+func assertLegacyRequestScopeOwner(t *testing.T, calls *requestScopeCalls, key string, want int) {
+	t.Helper()
+	calls.mu.Lock()
+	defer calls.mu.Unlock()
+	if got := calls.recorder[key]; got != want {
+		t.Errorf("%s recorder owner = %d, want %d", key, got, want)
+	}
+	if got := calls.audit[key]; got != want {
+		t.Errorf("%s audit owner = %d, want %d", key, got, want)
+	}
+	if got := calls.checker[key]; got != want {
+		t.Errorf("%s checker owner = %d, want %d", key, got, want)
+	}
+	if got, exists := calls.rules[key]; exists {
+		t.Errorf("%s unscoped request reached package-rule owner %d", key, got)
+	}
 }
 
 func requestScopeExerciseHandler(entered chan<- struct{}, release <-chan struct{}) http.Handler {
@@ -201,6 +239,9 @@ func requestScopeExerciseHandler(entered chan<- struct{}, release <-chan struct{
 
 		ginContext, _ := gin.CreateTestContext(writer)
 		ginContext.Request = request
+		if PackageRuleGate(ginContext, "npm", client, "1.0.0") {
+			return
+		}
 		if !QuarantineGate(ginContext, "npm", client, "1.0.0") {
 			writer.WriteHeader(http.StatusNoContent)
 		}
@@ -219,6 +260,9 @@ func assertRequestScopeOwner(t *testing.T, calls *requestScopeCalls, key string,
 	}
 	if got := calls.checker[key]; got != want {
 		t.Errorf("%s checker owner = %d, want %d", key, got, want)
+	}
+	if got := calls.rules[key]; got != want {
+		t.Errorf("%s package-rule owner = %d, want %d", key, got, want)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"depsilo/internal/adapter"
 	"depsilo/internal/db"
 	"depsilo/internal/ecosystem"
 )
@@ -64,6 +65,38 @@ func TestRecordProjectDownloadCompletesBeforeReturn(t *testing.T) {
 	}
 	if got.DownloadCount != 2 {
 		t.Fatalf("download count = %d, want 2", got.DownloadCount)
+	}
+}
+
+func TestRecordProjectDownloadPrefersAuthenticatedAdapterCoordinate(t *testing.T) {
+	database, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "project-authenticated.db")), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.ProjectPackage{}); err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(
+		http.MethodGet,
+		"/npm/fixture/-/__depsilo_tarball_v1/opaque/pkg-custom.tgz",
+		nil,
+	)
+	adapter.BindAuthenticatedArtifactCoordinate(context, "npm", "fixture", "1.0.0")
+	context.Status(http.StatusOK)
+	recordProjectDownload(database, 43, context)
+
+	var got db.ProjectPackage
+	if err := database.First(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.ProjectID != 43 || got.Ecosystem != "npm" ||
+		got.PackageName != "fixture" || got.Version != "1.0.0" {
+		t.Fatalf("project package = %#v", got)
 	}
 }
 

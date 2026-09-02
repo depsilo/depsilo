@@ -2,12 +2,14 @@ package quarantine
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 	"strings"
+
+	"depsilo/internal/packagepolicy"
 )
 
-// AllowList matches package coordinates against the user-provided
-// bypass rules. Three syntaxes per the locked-in decisions:
+// AllowList matches package coordinates against the user-provided bypass
+// rules. It supports three syntaxes:
 //
 //	"ecosystem:glob"           — glob match on package name
 //	                              e.g. "npm:@scope/internal-*"
@@ -18,9 +20,9 @@ import (
 //	                              e.g. "npm:react>=18.0.0"
 //
 // The "ecosystem:" prefix is required so the same rule file can carry
-// entries for every adapter without collisions. Match() is called on
-// the hot fetch path; pre-parsing into typed entries lets it run
-// without string analysis on every request.
+// entries for every adapter without collisions. Match is called on the hot
+// fetch path; ecosystem validation, package-name normalization, and version
+// selector compilation all happen at startup.
 //
 // A nil AllowList matches nothing — equivalent to "no bypass rules
 // configured." Empty input strings are tolerated as a convenience for
@@ -29,55 +31,39 @@ type AllowList struct {
 	entries []allowEntry
 }
 
-type matchType int
-
-const (
-	matchGlob matchType = iota
-	matchExact
-	matchRange
-)
-
-type rangeOp int
-
-const (
-	opEQ rangeOp = iota // ==
-	opGE                // >=
-	opGT                // >
-	opLE                // <=
-	opLT                // <
-)
-
 type allowEntry struct {
-	ecosystem string
-	kind      matchType
-	// For matchGlob: pattern is the glob pattern (filepath.Match
-	// semantics). For matchExact: pattern is the package name,
-	// version is the exact pinned version. For matchRange:
-	// pattern is the package name, version is the comparator's
-	// right-hand side, op is the comparator.
-	pattern string
-	version string
-	op      rangeOp
+	ecosystem      string
+	dialect        packagepolicy.PackagePolicyDialect
+	packageName    string
+	packageGlob    bool
+	versionMatcher packagepolicy.VersionMatcher
 }
 
-// ParseAllowList parses a list of "ecosystem:rule" strings into an
-// AllowList. Returns an error on the first malformed entry so the
-// operator sees the typo at startup rather than discovering at
-// request time that a rule never fires.
+type quarantineVersionCapability uint8
+
+const (
+	quarantineVersionsPackageOnly quarantineVersionCapability = iota
+	quarantineVersionsExactOnly
+	quarantineVersionsRanges
+)
+
+// ParseAllowList parses a list of "ecosystem:rule" strings into an AllowList.
+// Returns an error on the first malformed entry so the operator sees the typo
+// at startup rather than discovering at request time that a rule never fires.
 func ParseAllowList(rules []string) (*AllowList, error) {
-	a := &AllowList{}
-	for i, raw := range rules {
+	allowList := &AllowList{}
+	for index, raw := range rules {
 		raw = strings.TrimSpace(raw)
 		if raw == "" {
 			continue
 		}
 		entry, err := parseAllowEntry(raw)
 		if err != nil {
-			return nil, fmt.Errorf("allow rule #%d %q: %w", i+1, raw, err)
+			return nil, fmt.Errorf("allow rule #%d %q: %w", index+1, raw, err)
 		}
-		a.entries = append(a.entries, entry)
+		allowList.entries = append(allowList.entries, entry)
 	}
-	return a, nil
+	return allowList, nil
 }
 
 func parseAllowEntry(raw string) (allowEntry, error) {
@@ -90,176 +76,128 @@ func parseAllowEntry(raw string) (allowEntry, error) {
 	if ecosystem == "" || rule == "" {
 		return allowEntry{}, fmt.Errorf("empty ecosystem or rule")
 	}
+	dialect, err := packagepolicy.DialectFor(ecosystem)
+	if err != nil {
+		return allowEntry{}, err
+	}
 
-	// Range / exact comparators take precedence over glob detection.
-	// Order matters: check the two-character ops (>=, <=, ==) before
-	// the single-character ones (>, <) so "react>=18" doesn't get
-	// parsed as opGT with pattern "react=" and version "18".
-	for _, op := range []struct {
-		token string
-		kind  rangeOp
-	}{
-		{">=", opGE},
-		{"<=", opLE},
-		{"==", opEQ},
-		{">", opGT},
-		{"<", opLT},
-	} {
-		if idx := strings.Index(rule, op.token); idx > 0 {
-			name := strings.TrimSpace(rule[:idx])
-			version := strings.TrimSpace(rule[idx+len(op.token):])
+	// Version selectors take precedence over glob detection. Two-character
+	// operators must be checked first so ">=" is never parsed as ">".
+	for _, operator := range []string{">=", "<=", "==", ">", "<"} {
+		if index := strings.Index(rule, operator); index >= 0 {
+			name := strings.TrimSpace(rule[:index])
+			version := strings.TrimSpace(rule[index+len(operator):])
 			if name == "" || version == "" {
-				return allowEntry{}, fmt.Errorf("comparator %q with empty operand", op.token)
+				return allowEntry{}, fmt.Errorf("comparator %q with empty operand", operator)
 			}
-			kind := matchRange
-			if op.kind == opEQ {
-				kind = matchExact
+			if operator == "==" && version == "*" {
+				return allowEntry{}, fmt.Errorf("exact version selector requires a concrete version")
+			}
+			capability := quarantineAllowVersionCapability(ecosystem, dialect)
+			if capability == quarantineVersionsPackageOnly {
+				return allowEntry{}, packagepolicy.ErrVersionSelectorsUnsupported
+			}
+			if operator != "==" && capability != quarantineVersionsRanges {
+				return allowEntry{}, packagepolicy.ErrVersionSelectorsUnsupported
+			}
+			normalizedName, err := dialect.NormalizePackageName(name)
+			if err != nil {
+				return allowEntry{}, fmt.Errorf("normalize package name: %w", err)
+			}
+
+			selector := operator + version
+			if operator == "==" {
+				selector = version
+			}
+			matcher, err := packagepolicy.CompileVersionMatcher(ecosystem, selector)
+			if err != nil {
+				return allowEntry{}, fmt.Errorf("compile version selector %q: %w", operator+version, err)
 			}
 			return allowEntry{
-				ecosystem: ecosystem,
-				kind:      kind,
-				pattern:   name,
-				version:   version,
-				op:        op.kind,
+				ecosystem:      ecosystem,
+				dialect:        dialect,
+				packageName:    normalizedName,
+				versionMatcher: matcher,
 			}, nil
 		}
 	}
 
-	// No comparator → glob match on the whole rule.
+	// A package-wide rule uses deterministic slash-separated glob syntax; both
+	// the configured pattern and request package use the dialect's package
+	// identity normalization.
+	normalizedPattern, err := packagepolicy.NormalizePackageGlob(dialect, rule)
+	if err != nil {
+		return allowEntry{}, fmt.Errorf("normalize package glob: %w", err)
+	}
 	return allowEntry{
-		ecosystem: ecosystem,
-		kind:      matchGlob,
-		pattern:   rule,
+		ecosystem:   ecosystem,
+		dialect:     dialect,
+		packageName: normalizedPattern,
+		packageGlob: true,
 	}, nil
 }
 
-// Match reports whether (ecosystem, packageName, version) is allowed
-// by any rule. version may be empty when the caller hasn't resolved
-// to a specific version yet (e.g. checking an index endpoint) —
-// range and exact rules can't fire without a version, glob rules
-// only need the name.
+// quarantineAllowVersionCapability is intentionally independent from Package
+// Rules request-path capability. In particular, npm's adapter authenticates a
+// packument-derived version before calling QuarantineGate, while the earlier
+// Package Rules middleware cannot verify that private token and remains
+// package-only. Conversely, APT, Composer, RubyGems, and Helm must not acquire
+// version bypasses merely because a dialect comparator exists.
+func quarantineAllowVersionCapability(
+	ecosystem string,
+	dialect packagepolicy.PackagePolicyDialect,
+) quarantineVersionCapability {
+	switch ecosystem {
+	case "apt", "composer", "rubygems", "helm":
+		return quarantineVersionsPackageOnly
+	case "npm":
+		return quarantineVersionsRanges
+	default:
+		if dialect.SupportsRanges() {
+			return quarantineVersionsRanges
+		}
+		return quarantineVersionsExactOnly
+	}
+}
+
+// Match reports whether (ecosystem, packageName, version) is allowed by any
+// rule. version may be empty when the caller has not resolved to a specific
+// version yet; version rules cannot fire without it, while package globs only
+// need the name. Invalid request identities fail closed for the bypass.
 func (a *AllowList) Match(ecosystem, packageName, version string) bool {
 	if a == nil || len(a.entries) == 0 {
 		return false
 	}
-	ecosystem = strings.ToLower(ecosystem)
-	for i := range a.entries {
-		e := &a.entries[i]
-		if e.ecosystem != ecosystem {
+	ecosystem = strings.ToLower(strings.TrimSpace(ecosystem))
+	var normalizedPackageName string
+	packageNameNormalized := false
+
+	for index := range a.entries {
+		entry := &a.entries[index]
+		if entry.ecosystem != ecosystem {
 			continue
 		}
-		switch e.kind {
-		case matchGlob:
-			if matched, _ := filepath.Match(e.pattern, packageName); matched {
+		if !packageNameNormalized {
+			var err error
+			normalizedPackageName, err = entry.dialect.NormalizePackageName(packageName)
+			if err != nil {
+				return false
+			}
+			packageNameNormalized = true
+		}
+		if entry.packageGlob {
+			if matched, _ := path.Match(entry.packageName, normalizedPackageName); matched {
 				return true
 			}
-		case matchExact:
-			if e.pattern == packageName && version != "" && e.version == version {
-				return true
-			}
-		case matchRange:
-			if e.pattern != packageName || version == "" {
-				continue
-			}
-			cmp := compareVersions(version, e.version)
-			switch e.op {
-			case opGE:
-				if cmp >= 0 {
-					return true
-				}
-			case opGT:
-				if cmp > 0 {
-					return true
-				}
-			case opLE:
-				if cmp <= 0 {
-					return true
-				}
-			case opLT:
-				if cmp < 0 {
-					return true
-				}
-			}
+			continue
+		}
+		if entry.packageName != normalizedPackageName || version == "" {
+			continue
+		}
+		matched, err := entry.versionMatcher.Match(version)
+		if err == nil && matched {
+			return true
 		}
 	}
 	return false
-}
-
-// compareVersions returns -1 / 0 / +1 like strings.Compare, using
-// best-effort semver-shaped comparison. Numeric chunks compare
-// numerically; non-numeric chunks fall back to lexical. Pre-release
-// suffixes ("-rc.1", "-beta") sort before the bare version per
-// semver convention — sufficient for allowlist range comparisons,
-// not a full PEP-440 / npm-semver implementation. Operators who
-// need stricter semantics can pin exact versions.
-func compareVersions(a, b string) int {
-	// Split on the first '-' so the build/pre-release tail compares
-	// after the core triple.
-	aCore, aTail := splitPre(a)
-	bCore, bTail := splitPre(b)
-	if c := compareCore(aCore, bCore); c != 0 {
-		return c
-	}
-	// Per semver, a version with a pre-release suffix is LOWER than
-	// the same version without one. Empty tail wins.
-	switch {
-	case aTail == "" && bTail == "":
-		return 0
-	case aTail == "":
-		return 1
-	case bTail == "":
-		return -1
-	}
-	return strings.Compare(aTail, bTail)
-}
-
-func splitPre(v string) (core, tail string) {
-	v = strings.TrimPrefix(v, "v")
-	if i := strings.IndexByte(v, '-'); i >= 0 {
-		return v[:i], v[i+1:]
-	}
-	return v, ""
-}
-
-func compareCore(a, b string) int {
-	aParts := strings.Split(a, ".")
-	bParts := strings.Split(b, ".")
-	n := len(aParts)
-	if len(bParts) > n {
-		n = len(bParts)
-	}
-	for i := 0; i < n; i++ {
-		// Missing segments compare as numeric zero so "1.0" == "1.0.0"
-		// — semver convention and the natural reading for allow-list
-		// pins where operators routinely write the shorter form.
-		ap := "0"
-		bp := "0"
-		if i < len(aParts) && aParts[i] != "" {
-			ap = aParts[i]
-		}
-		if i < len(bParts) && bParts[i] != "" {
-			bp = bParts[i]
-		}
-		// Try numeric first.
-		var an, bn int
-		_, aErr := fmt.Sscanf(ap, "%d", &an)
-		_, bErr := fmt.Sscanf(bp, "%d", &bn)
-		if aErr == nil && bErr == nil {
-			switch {
-			case an < bn:
-				return -1
-			case an > bn:
-				return 1
-			}
-			continue
-		}
-		// Mixed or non-numeric → lexical compare on the segment.
-		if ap < bp {
-			return -1
-		}
-		if ap > bp {
-			return 1
-		}
-	}
-	return 0
 }

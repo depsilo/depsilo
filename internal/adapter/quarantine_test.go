@@ -188,7 +188,7 @@ func TestQuarantineGateScopedNilCheckerDoesNotFallBackToGlobal(t *testing.T) {
 
 	var globalCalls atomic.Int64
 	InstallQuarantineChecker(&recordingQuarantineChecker{owner: 9, calls: &globalCalls})
-	emptyScope := NewRequestScope(nil, nil, nil)
+	emptyScope := NewRequestScope(nil, nil, nil, nil)
 	blockedResult := make(chan bool, 1)
 	handler := emptyScope.Wrap(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		ginContext, _ := gin.CreateTestContext(writer)

@@ -96,12 +96,34 @@ if [ "$macos_embed_line" -ge "$macos_daemon_line" ]; then
     echo "macOS release qualification must prepare Go embed assets before compiling CLI tests" >&2
     exit 1
 fi
-for command in 'make test-e2e' 'make test-docker-docker' 'make test-compiler-cache-qualified' 'make test-s3' 'make test-v090-upgrade' 'make test-v090-compose-upgrade'; do
+for command in 'make test-e2e' 'make test-docker-docker' 'make test-compiler-cache-qualified' 'make test-s3' 'make test-v090-upgrade' 'make test-v090-compose-upgrade' 'make test-v091-upgrade'; do
     if ! grep -q "$command" "$REAL_CLIENT_WORKFLOW"; then
         echo "release qualification is missing: $command" >&2
         exit 1
     fi
 done
+
+v091_upgrade_script="$ROOT/scripts/test-v091-upgrade.sh"
+v091_image_script="$ROOT/scripts/test-v091-image-upgrade.sh"
+for script in "$v091_upgrade_script" "$v091_image_script"; do
+    if [ ! -x "$script" ]; then
+        echo "missing executable direct-predecessor upgrade contract: $script" >&2
+        exit 1
+    fi
+done
+if ! grep -Fq 'DEPSILO_UPGRADE_BASELINE_TAG=v0.9.1' "$v091_upgrade_script" ||
+    ! grep -Fq 'DEPSILO_UPGRADE_BASELINE_COMMIT=773b9ad673615d5df6a8281f7cb658e3df84527d' "$v091_upgrade_script" ||
+    ! grep -Fq 'bash "$root/scripts/test-v090-upgrade.sh"' "$v091_upgrade_script" ||
+    ! grep -Fq 'bash "$root/scripts/test-v091-image-upgrade.sh"' "$v091_upgrade_script" ||
+    ! grep -Fqx 'baseline_tag=v0.9.1' "$v091_image_script" ||
+    ! grep -Fqx 'baseline_commit=773b9ad673615d5df6a8281f7cb658e3df84527d' "$v091_image_script" ||
+    ! grep -Fqx 'baseline_compose_sha256=5abaad918604e045a32eacb81a4db14019e6a3c3d33d2f82be61e3bbe1a2a3ae' "$v091_image_script" ||
+    ! grep -Fqx 'baseline_image_index=ghcr.io/depsilo/depsilo@sha256:bd3a2aeb8f7f461ed91cd583edc16e8f8958f103ebeb4946c626fd2a0d60b8f6' "$v091_image_script" ||
+    ! grep -Fqx 'baseline_image_amd64=ghcr.io/depsilo/depsilo@sha256:c242b5dba39aa891cb49ba815d3232f06a59344682a97c0a6f2841bdeb0dd571' "$v091_image_script" ||
+    ! grep -Fqx 'baseline_image_arm64=ghcr.io/depsilo/depsilo@sha256:2bef80088d03255a02b512763196006132e7827688b6400c9cd98286e2ee889a' "$v091_image_script"; then
+    echo 'v0.9.1 qualification inputs must remain pinned to the reviewed tag commit, Compose bytes, and published image digest' >&2
+    exit 1
+fi
 
 real_clients_job=$(sed -n '/^  real-clients:/,/^  docker-registry:/p' "$REAL_CLIENT_WORKFLOW")
 upload_log_step=$(sed -n '/- name: Upload server log/,/- name: Clean up/p' <<<"$real_clients_job")

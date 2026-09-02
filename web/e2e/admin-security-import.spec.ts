@@ -24,7 +24,7 @@ test('security import reports exact results and rejects duplicate interaction wh
     'POST /api/v1/admin/security/import': async () => {
       importCalls += 1
       await releaseImport.promise
-      return { imported: 3, received: 5, packages: 2, duplicates: 1, skipped: 1, rules_created: 2 }
+      return { imported: 3, received: 5, packages: 2, duplicates: 1, skipped: 1, rules_created: 0 }
     },
   })
 
@@ -54,7 +54,8 @@ test('security import reports exact results and rejects duplicate interaction wh
 
   releaseImport.resolve()
   await expect(page.getByText(/已导入 3 条漏洞|3 vulnerabilities imported/)).toBeVisible()
-  await expect(page.getByText(/接收 5.*涉及包 2.*重复 1.*跳过 1.*新建规则 2|Received 5.*Packages 2.*Duplicates 1.*Skipped 1.*Rules created 2/)).toBeVisible()
+  await expect(page.getByText(/^接收 5 · 涉及包 2 · 重复 1 · 跳过 1$|^Received 5 · Packages 2 · Duplicates 1 · Skipped 1$/)).toBeVisible()
+  await expect(page.getByText(/新建规则|Rules created/)).toHaveCount(0)
   await expect.poll(() => policyCalls).toBeGreaterThanOrEqual(2)
 })
 

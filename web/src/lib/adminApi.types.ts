@@ -56,6 +56,26 @@ export interface NowResponse {
   sparkline: Array<{ t: number; requests: number; hits: number }>
 }
 
+/**
+ * Operational health of the package-rule snapshot used by the request path.
+ * A degraded response is still actionable: the engine is serving a known
+ * snapshot, but its last refresh failed. An unavailable response means no
+ * usable snapshot has been observed yet (or the status probe itself failed).
+ */
+export type PolicyStatusKind = 'healthy' | 'degraded' | 'unavailable' | 'ready' | 'unknown'
+
+export interface PolicyStatus {
+  status: PolicyStatusKind
+  using_stale_snapshot: boolean
+  /** Preferred name in the Admin contract. */
+  snapshot_loaded_at?: string | null
+  /** Compatibility alias emitted by older status handlers. */
+  last_successful_refresh?: string | null
+  snapshot_age_seconds: number
+  refresh_failures: number
+  on_load_error: string
+}
+
 export type SecuritySeverity = 'critical' | 'high' | 'medium' | 'low' | 'unknown'
 
 export interface SecurityDashboard {
@@ -114,7 +134,7 @@ export type SecurityPackagePage = SecurityPage<SecurityVulnerabilityCheck>
 export interface SecurityBaseQuery { page?: number; per_page?: number; ecosystem?: string }
 export interface SecurityQuery extends SecurityBaseQuery { severity?: SecuritySeverity; package?: string }
 export interface UpdateSecurityPolicyRequest { auto_block_enabled: boolean; min_cvss_score: number }
-export interface ApproveSuggestionRequest { version?: string; reason?: string }
+export interface ApproveSuggestionRequest { version: string; reason?: string }
 export interface ApproveSuggestionResponse { rule_id: number }
 export interface DismissSuggestionResponse { status: 'dismissed' }
 export interface SecurityScanResponse { status: 'scan_started' }

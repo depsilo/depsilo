@@ -135,6 +135,8 @@ func TestCacheIndexPublicPath(t *testing.T) {
 		{name: "pypi", entry: metadata("pypi", "pypi/simple/pillow/index.html"), want: "/pypi/simple/pillow/"},
 		{name: "npm", entry: metadata("npm", "npm/react/metadata.json"), want: "/npm/react"},
 		{name: "npm scoped", entry: metadata("npm", "npm/@types/node/metadata.json"), want: "/npm/@types/node"},
+		{name: "npm exact identity", entry: metadata("npm", "npm-exact-v1/Express/metadata.json"), want: "/npm/Express"},
+		{name: "npm exact identity scoped", entry: metadata("npm", "npm-exact-v1/@LegacyScope/Name/metadata.json"), want: "/npm/@LegacyScope/Name"},
 		{name: "go list", entry: metadata("go", "go/example.com/acme/mod/@v/list"), want: "/go/example.com/acme/mod/@v/list"},
 		{name: "go latest", entry: metadata("go", "go/example.com/acme/mod/@latest"), want: "/go/example.com/acme/mod/@latest"},
 		{name: "cargo config", entry: metadata("cargo", "cargo/config.json"), want: "/crates/config.json"},

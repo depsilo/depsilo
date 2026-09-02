@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/db"
 	"depsilo/internal/upstreamupdates"
@@ -201,7 +202,11 @@ func CacheIndexPublicPath(entry db.CacheEntry) (string, error) {
 		publicPath = "/pypi/simple/" + pkg + "/"
 
 	case "npm":
-		const prefix, suffix = "npm/", "/metadata.json"
+		const suffix = "/metadata.json"
+		prefix := "npm/"
+		if strings.HasPrefix(entry.Key, packagekey.NPMExactIdentityCachePrefix) {
+			prefix = packagekey.NPMExactIdentityCachePrefix
+		}
 		if !strings.HasPrefix(entry.Key, prefix) || !strings.HasSuffix(entry.Key, suffix) {
 			return "", unsupportedIndexKey(entry)
 		}

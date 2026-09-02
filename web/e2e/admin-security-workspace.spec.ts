@@ -1,6 +1,6 @@
 import type { Request } from '@playwright/test'
 
-import { securityEcosystems } from '../src/admin/operatorEcosystems'
+import { securityEcosystems, supportsVulnerabilityAutoBlock } from '../src/admin/operatorEcosystems'
 import type { SecurityVulnerability } from '../src/lib/adminApi.types'
 import { expect, mockAdminApi, test } from './fixtures/admin-api'
 
@@ -132,7 +132,7 @@ test('Security replaces an invalid tab with the canonical overview URL', async (
   await expect(page).toHaveURL(/\/admin$/)
 })
 
-test('Security suggestion decisions require confirmation and preserve a failed action for retry', async ({ page }) => {
+test('Security suggestions direct blocking to manual rules and preserve a failed dismissal for retry', async ({ page }) => {
   let requestCount = 0
   await mockAdminApi(page, {
     'GET /api/v1/admin/security/suggestions': {
@@ -140,27 +140,31 @@ test('Security suggestion decisions require confirmation and preserve a failed a
       total: 1,
       page: 1,
     },
-    'POST /api/v1/admin/security/suggestions/1/approve': () => {
+    'POST /api/v1/admin/security/suggestions/1/dismiss': () => {
       requestCount += 1
       if (requestCount === 1) {
         return {
           status: 503,
-          body: { code: 'RULE_CREATE_UNAVAILABLE', message: 'Rule service is temporarily unavailable' },
+          body: { code: 'DISMISS_UNAVAILABLE', message: 'Suggestion service is temporarily unavailable' },
         }
       }
-      return { rule_id: 71 }
+      return { status: 'dismissed' }
     },
   })
   await page.goto('/admin/security?tab=suggestions')
 
-  await page.getByRole('button', { name: /阻止|Block/ }).click()
-  const dialog = page.getByRole('dialog', { name: /要拦截这条包建议吗|Block this package suggestion/ })
-  const confirm = dialog.getByRole('button', { name: /创建拦截规则|Create blocking rule/ })
+  await expect(page.getByText(/完整 OSV 受影响集合目前无法无损投影|complete affected sets cannot be projected losslessly/)).toBeVisible()
+  await expect(page.getByRole('link', { name: /打开包规则|Open Package Rules/ })).toHaveAttribute('href', '/admin/rules')
+  await expect(page.getByRole('button', { name: /^(阻止|Block)$/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: /^(忽略|Dismiss)$/ }).click()
+  const dialog = page.getByRole('dialog', { name: /要忽略这条安全建议吗|Dismiss this security suggestion/ })
+  const confirm = dialog.getByRole('button', { name: /忽略建议|Dismiss suggestion/ })
   await expect(dialog).toContainText('unsafe-package')
   expect(requestCount).toBe(0)
 
   await confirm.click()
-  await expect(dialog.getByRole('alert')).toContainText('Rule service is temporarily unavailable')
+  await expect(dialog.getByRole('alert')).toContainText('Suggestion service is temporarily unavailable')
   await expect(confirm).toBeEnabled()
 
   await confirm.click()
@@ -174,6 +178,15 @@ test('Security policies support a shared draft, changed-only review, and one bat
   let maxConcurrentRequests = 0
   let releaseRequests!: () => void
   const requestsReleased = new Promise<void>((resolve) => { releaseRequests = resolve })
+  const legacyPolicies = securityEcosystems.map((ecosystem, index) => ({
+    id: index + 1,
+    ecosystem: ecosystem.id,
+    auto_block_enabled: true,
+    min_cvss_score: 8.5,
+    created_by: 'admin',
+    created_at: '2026-07-10T00:00:00Z',
+    updated_at: '2026-07-10T00:00:00Z',
+  }))
   const policyOverrides = Object.fromEntries(securityEcosystems.map(ecosystem => [
     `PUT /api/v1/admin/security/policies/${ecosystem.id}`,
     async (request: Request) => {
@@ -203,14 +216,15 @@ test('Security policies support a shared draft, changed-only review, and one bat
     },
   ]))
   await mockAdminApi(page, {
-    'GET /api/v1/admin/security/policies': [],
+    'GET /api/v1/admin/security/policies': legacyPolicies,
     ...policyOverrides,
   })
   await page.goto('/admin/security?tab=policies')
 
   const bulk = page.locator('[data-security-policy-bulk]')
-  await bulk.getByRole('switch', { name: /共享自动拦截基线|Shared auto-block baseline/ }).click()
-  await bulk.getByLabel(/CVSS 阈值|CVSS threshold/).fill('8.5')
+  await expect(bulk.getByRole('switch', { name: /共享自动拦截基线|Shared auto-block baseline/ })).toBeDisabled()
+  await expect(bulk.getByLabel(/CVSS 阈值|CVSS threshold/)).toBeDisabled()
+  await expect(bulk).toContainText(/所有生态的自动拦截都已安全停用|safety-disabled for every ecosystem/)
   await bulk.getByRole('button', { name: /应用草稿到全部|Apply draft to all/ }).click()
 
   await expect(page.getByText(/10 项未保存变更|10 unsaved changes/)).toBeVisible()
@@ -228,8 +242,44 @@ test('Security policies support a shared draft, changed-only review, and one bat
 
   await expect.poll(() => policyRequests).toHaveLength(10)
   expect(maxConcurrentRequests).toBeLessThanOrEqual(4)
-  expect(policyRequests.every(request => request.autoBlock && request.threshold === 8.5)).toBe(true)
+  expect(policyRequests.every(request =>
+    request.autoBlock === supportsVulnerabilityAutoBlock(request.ecosystem) && request.threshold === 8.5,
+  )).toBe(true)
   await expect(page.getByText(/没有策略变更|No policy changes/)).toBeVisible()
+})
+
+test('Security permits disabling but not re-enabling a legacy exact-only auto-block policy', async ({ page }) => {
+  let savedAutoBlock: boolean | undefined
+  const legacyGoPolicy = {
+    id: 1,
+    ecosystem: 'go',
+    auto_block_enabled: true,
+    min_cvss_score: 8.5,
+    created_by: 'admin',
+    created_at: '2026-07-10T00:00:00Z',
+    updated_at: '2026-07-10T00:00:00Z',
+  }
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/security/policies': [legacyGoPolicy],
+    'PUT /api/v1/admin/security/policies/go': (request: Request) => {
+      const body = request.postDataJSON() as { auto_block_enabled: boolean; min_cvss_score: number }
+      savedAutoBlock = body.auto_block_enabled
+      return { ...legacyGoPolicy, auto_block_enabled: body.auto_block_enabled }
+    },
+  })
+  await page.goto('/admin/security?tab=policies')
+
+  const goPolicy = page.locator('[data-policy-ecosystem="go"]')
+  const autoBlock = goPolicy.getByRole('switch')
+  await expect(autoBlock).toBeChecked()
+  await expect(autoBlock).toBeEnabled()
+  await autoBlock.click()
+  await expect(autoBlock).not.toBeChecked()
+  await expect(autoBlock).toBeDisabled()
+
+  await goPolicy.getByRole('button', { name: /GO.*保存|GO.*Save/ }).click()
+  await expect.poll(() => savedAutoBlock).toBe(false)
+  await expect(goPolicy.getByRole('button', { name: /GO.*保存|GO.*Save/ })).toBeDisabled()
 })
 
 test('Security disables conflicting bulk policy actions while a row save is pending', async ({ page }) => {
@@ -237,8 +287,17 @@ test('Security disables conflicting bulk policy actions while a row save is pend
   let releaseSave!: () => void
   const saveStarted = new Promise<void>((resolve) => { markSaveStarted = resolve })
   const saveReleased = new Promise<void>((resolve) => { releaseSave = resolve })
+  const legacyPypiPolicy = {
+    id: 1,
+    ecosystem: 'pypi',
+    auto_block_enabled: true,
+    min_cvss_score: 8.5,
+    created_by: 'admin',
+    created_at: '2026-07-10T00:00:00Z',
+    updated_at: '2026-07-10T00:00:00Z',
+  }
   await mockAdminApi(page, {
-    'GET /api/v1/admin/security/policies': [],
+    'GET /api/v1/admin/security/policies': [legacyPypiPolicy],
     'PUT /api/v1/admin/security/policies/pypi': async (request: Request) => {
       const body = request.postDataJSON() as { auto_block_enabled: boolean; min_cvss_score: number }
       markSaveStarted()
@@ -304,7 +363,7 @@ test('Security suggestion rows do not create root overflow at 320px', async ({ p
   await page.getByRole('tab', { name: /建议规则|Suggested Rules/ }).click()
 
   await expect(page.getByText(longPackageName)).toBeVisible()
-  await expect(page.getByRole('button', { name: /阻止|Block/ })).toBeVisible()
+  await expect(page.getByRole('link', { name: /打开包规则|Open Package Rules/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /忽略|Dismiss/ })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })

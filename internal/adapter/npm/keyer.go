@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"mime"
 	"strings"
+
+	"depsilo/internal/adapter/packagekey"
 )
 
 const installV1MediaType = "application/vnd.npm.install-v1+json"
@@ -17,18 +19,17 @@ type acceptMediaRange struct {
 }
 
 func MetadataCacheKey(packageName string) string {
-	return "npm/" + strings.ToLower(packageName) + "/metadata.json"
+	return packagekey.NPMExactIdentityCachePrefix + packageName + "/metadata.json"
 }
 
 func ScopedMetadataCacheKey(scope, packageName string) string {
-	return "npm/@" + strings.ToLower(scope) + "/" + strings.ToLower(packageName) + "/metadata.json"
+	return packagekey.NPMExactIdentityCachePrefix + "@" + scope + "/" + packageName + "/metadata.json"
 }
 
 func metadataCacheKeyForAccept(baseKey, accept string) string {
-	// npm 7+ requests the abbreviated install-v1 representation. v0.9 stored
-	// that real-client response at baseKey, so keep this one representation on
-	// the legacy key during an in-place upgrade. Full/default and every other
-	// negotiated form move to hashed keys and can no longer overwrite it.
+	// npm 7+ requests the abbreviated install-v1 representation. Keep that
+	// common representation at the exact-identity base key. Full/default and
+	// every other negotiated form use independent hashed keys.
 	if acceptsInstallV1(accept) {
 		return baseKey
 	}
@@ -164,9 +165,9 @@ func representationQuality(ranges []acceptMediaRange, typeName, subtype string) 
 }
 
 func TarballCacheKey(packageName, filename string) string {
-	return "npm/" + strings.ToLower(packageName) + "/-/" + filename
+	return packagekey.NPMExactIdentityCachePrefix + packageName + "/-/" + filename
 }
 
 func ScopedTarballCacheKey(scope, packageName, filename string) string {
-	return "npm/@" + strings.ToLower(scope) + "/" + strings.ToLower(packageName) + "/-/" + filename
+	return packagekey.NPMExactIdentityCachePrefix + "@" + scope + "/" + packageName + "/-/" + filename
 }

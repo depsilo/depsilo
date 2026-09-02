@@ -95,7 +95,7 @@ func (f *ChannelFamily) channelFromRequest(c *gin.Context) (string, bool) {
 }
 
 func (f *ChannelFamily) handlerForChannel(raw string) (*Handler, bool) {
-	if !validIndexChannel(raw) {
+	if !ValidIndexChannel(raw) {
 		return nil, false
 	}
 	channel := strings.ToLower(raw)
@@ -107,7 +107,10 @@ func (f *ChannelFamily) handlerForChannel(raw string) (*Handler, bool) {
 	return &handler, true
 }
 
-func validIndexChannel(value string) bool {
+// ValidIndexChannel reports whether value is a channel segment accepted by a
+// channel-family route. Policy middleware uses this same predicate so it never
+// infers a package identity for a path the adapter cannot serve.
+func ValidIndexChannel(value string) bool {
 	if value == "" || len(value) > maxIndexChannelBytes || value != strings.ToLower(value) {
 		return false
 	}
@@ -153,7 +156,7 @@ func ChannelIndexFromCacheKey(adapterID, key string) (string, string, bool) {
 		return "", "", false
 	}
 	channel, _, ok := strings.Cut(rest, "/")
-	if !ok || !validIndexChannel(channel) {
+	if !ok || !ValidIndexChannel(channel) {
 		return "", "", false
 	}
 	packageName, ok := IndexPackageFromCacheKey(channelCacheNamespace(adapterID, channel), key)

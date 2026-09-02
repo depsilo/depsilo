@@ -114,6 +114,37 @@ func TestHandlerPersistsMarkerBeforeRepositoryCleanup(t *testing.T) {
 	<-done
 }
 
+func TestHandlerRevocationPurgesLegacyCaseAliasCacheAndRefPins(t *testing.T) {
+	database, manager, _ := newDurableHandlerFixture(t)
+	key := "huggingface/OpenAI/Whisper-Tiny/resolve/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/config.json"
+	if err := database.Create(&db.CacheEntry{
+		Key: key, AdapterType: "huggingface", PackageName: "OpenAI/Whisper-Tiny", StoragePath: key,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&db.HuggingFaceRefPin{
+		Key: "huggingface/OpenAI/Whisper-Tiny/ref/main", Commit: strings.Repeat("a", 40),
+		ExpiresAt: time.Now().Add(time.Hour),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	handler := New(manager, nil, config.CacheConfig{}, database)
+	handler.revokeRepository(
+		context.Background(),
+		ParseRequestPath("/openai/whisper-tiny/resolve/main/config.json"),
+	)
+
+	for model, label := range map[any]string{&db.CacheEntry{}: "cache row", &db.HuggingFaceRefPin{}: "ref pin"} {
+		var count int64
+		if err := database.Model(model).Count(&count).Error; err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("revocation retained %d legacy alias %s", count, label)
+		}
+	}
+}
+
 func TestHandlerRestartBypassesResidualCommitCacheAfterDoubleDeleteFailure(t *testing.T) {
 	database, manager, storage := newDurableHandlerFixture(t)
 	key := "huggingface/acme/model/resolve/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/a.bin"

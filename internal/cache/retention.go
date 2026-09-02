@@ -387,6 +387,67 @@ func (retention *Retention) Reclaim(ctx context.Context, mode ReclaimMode) (Recl
 	return report, errors.Join(reclaimErrors...)
 }
 
+// ReclaimRetired synchronously removes expired cache rows belonging to one
+// retired adapter namespace. Startup uses this before adapters can refill a
+// canonical key whose object path was retained only to give storage ownership
+// a chance to delete it. It deliberately skips staging and LRU policy: this
+// is a narrow migration recovery path, while removeCandidate still owns the
+// object-before-metadata deletion and failure handling.
+func (retention *Retention) ReclaimRetired(ctx context.Context, adapterType string) (ReclaimReport, error) {
+	if retention == nil || retention.manager == nil {
+		return ReclaimReport{}, errors.New("cache retired retention is unavailable")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if adapterType == "" {
+		return ReclaimReport{}, errors.New("cache retired retention: adapter type is required")
+	}
+
+	now := time.Now().UTC()
+	var report ReclaimReport
+	var reclaimErrors []error
+	var candidates []db.CacheEntry
+	query := retention.manager.db.WithContext(ctx).Where("adapter_type = ?", adapterType)
+	// SQLite persists timestamps as text and can compare timezone suffixes
+	// lexicographically. PostgreSQL and other typed timestamp dialects compare
+	// the bound UTC value directly, so keeping the normalization here avoids
+	// making server startup depend on SQLite's datetime function elsewhere.
+	if retention.manager.db.Dialector.Name() == "sqlite" {
+		query = query.Where("datetime(expires_at) < datetime(?)", now)
+	} else {
+		query = query.Where("expires_at < ?", now)
+	}
+	err := query.Order("id ASC").
+		FindInBatches(&candidates, 500, func(_ *gorm.DB, _ int) error {
+			for _, candidate := range candidates {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				report.Examined++
+				removal, attempted, removeErr := retention.removeCandidate(ctx, candidate, func(current db.CacheEntry) bool {
+					return current.AdapterType == adapterType && current.ExpiresAt.Before(now)
+				})
+				if attempted {
+					report.ReclaimedBytes += removal.ReclaimedBytes
+				}
+				if removeErr != nil {
+					report.Failed++
+					reclaimErrors = append(reclaimErrors, fmt.Errorf("remove retired cache entry %d: %w", candidate.ID, removeErr))
+					continue
+				}
+				if removal.MetadataRemoved {
+					report.Removed++
+				}
+			}
+			return nil
+		}).Error
+	if err != nil {
+		reclaimErrors = append(reclaimErrors, fmt.Errorf("list retired cache entries: %w", err))
+	}
+	return report, errors.Join(reclaimErrors...)
+}
+
 func (retention *Retention) reclaimStaging(ctx context.Context) (int, int64, []error) {
 	stagingStore, ok := retention.manager.storage.(StagingObjectStore)
 	if !ok {

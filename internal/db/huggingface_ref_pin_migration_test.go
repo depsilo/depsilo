@@ -1,8 +1,11 @@
 package db
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestAutoMigrateAddsHuggingFaceRefPinsWithoutChangingCacheRows(t *testing.T) {
+func TestAutoMigrateAddsHuggingFaceRefPinsAndRetiresLegacyCaseAliases(t *testing.T) {
 	database, err := Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -26,12 +29,14 @@ func TestAutoMigrateAddsHuggingFaceRefPinsWithoutChangingCacheRows(t *testing.T)
 	if !database.Migrator().HasTable(&HuggingFaceRefPin{}) {
 		t.Fatal("Hugging Face ref pin table was not created")
 	}
-	var preserved CacheEntry
-	if err := database.Where("key = ?", legacy.Key).First(&preserved).Error; err != nil {
+	var retired CacheEntry
+	if err := database.First(&retired, legacy.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if preserved.StoragePath != legacy.StoragePath || preserved.Size != legacy.Size {
-		t.Fatalf("legacy cache row changed during ref-pin migration: %+v", preserved)
+	if retired.Key == legacy.Key || !strings.HasPrefix(retired.Key, schemaV3RetiredHuggingFaceKeyPrefix) ||
+		retired.AdapterType != schemaV3RetiredHuggingFaceAdapterType || retired.PackageName != "" ||
+		retired.StoragePath != legacy.StoragePath || retired.Size != legacy.Size {
+		t.Fatalf("legacy cache row was not safely retired: %+v", retired)
 	}
 	if err := AutoMigrate(database); err != nil {
 		t.Fatalf("repeat migration: %v", err)

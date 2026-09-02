@@ -20,12 +20,13 @@ import (
 // is an open-source wedge feature per docs/DIRECTION.md (NOT Pro-
 // gated) so the routes mount under adminGroup, not proGroup.
 type QuarantineHandler struct {
-	db    *gorm.DB
-	store *quarantine.Store
+	db               *gorm.DB
+	store            *quarantine.Store
+	approvalsEnabled bool
 }
 
-func NewQuarantineHandler(database *gorm.DB, store *quarantine.Store) *QuarantineHandler {
-	return &QuarantineHandler{db: database, store: store}
+func NewQuarantineHandler(database *gorm.DB, store *quarantine.Store, approvalsEnabled bool) *QuarantineHandler {
+	return &QuarantineHandler{db: database, store: store, approvalsEnabled: approvalsEnabled}
 }
 
 // ── GET /admin/quarantine/events ──────────────────────────────────
@@ -120,25 +121,37 @@ type approveReq struct {
 }
 
 func (h *QuarantineHandler) Approve(c *gin.Context) {
+	if !h.approvalsEnabled {
+		c.JSON(http.StatusConflict, gin.H{
+			"code":    "MINIMUM_RELEASE_AGE_UNAVAILABLE",
+			"message": "minimum-release-age approvals are unavailable until artifact-source and timestamp provenance are bound",
+		})
+		return
+	}
 	var req approveReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "INVALID_BODY", "message": err.Error()})
 		return
 	}
+	coordinate, err := quarantine.NormalizeCoordinate(req.Ecosystem, req.Package, req.Version)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "INVALID_COORDINATE", "message": err.Error()})
+		return
+	}
 	actorID := userIDFromContext(c)
-	if err := h.store.Approve(c.Request.Context(), req.Ecosystem, req.Package, req.Version, req.Reason, actorID); err != nil {
+	if err := h.store.Approve(c.Request.Context(), coordinate.Ecosystem, coordinate.Package, coordinate.Version, req.Reason, actorID); err != nil {
 		zap.L().Error("quarantine approve",
-			zap.String("ecosystem", req.Ecosystem),
-			zap.String("package", req.Package),
-			zap.String("version", req.Version),
+			zap.String("ecosystem", coordinate.Ecosystem),
+			zap.String("package", coordinate.Package),
+			zap.String("version", coordinate.Version),
 			zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"ecosystem":   req.Ecosystem,
-		"package":     req.Package,
-		"version":     req.Version,
+		"ecosystem":   coordinate.Ecosystem,
+		"package":     coordinate.Package,
+		"version":     coordinate.Version,
 		"reason":      req.Reason,
 		"approved_by": actorID,
 		"created_at":  time.Now().UTC(),
@@ -186,14 +199,21 @@ func (h *QuarantineHandler) Revoke(c *gin.Context) {
 	}
 
 	actorID := userIDFromContext(c)
-	if err := h.store.Revoke(c.Request.Context(), row.Ecosystem, row.Package, row.Version, req.Reason, actorID); err != nil {
+	coordinate, err := quarantine.NormalizeCoordinate(row.Ecosystem, row.Package, row.Version)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"code": "INVALID_STORED_COORDINATE", "message": "stored approval cannot be interpreted safely; remove it during database migration",
+		})
+		return
+	}
+	if err := h.store.Revoke(c.Request.Context(), coordinate.Ecosystem, coordinate.Package, coordinate.Version, req.Reason, actorID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL", "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"ecosystem":  row.Ecosystem,
-		"package":    row.Package,
-		"version":    row.Version,
+		"ecosystem":  coordinate.Ecosystem,
+		"package":    coordinate.Package,
+		"version":    coordinate.Version,
 		"revoked_by": actorID,
 		"reason":     req.Reason,
 	})

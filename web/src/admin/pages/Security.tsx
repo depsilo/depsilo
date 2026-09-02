@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, type ComponentProps } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatDate, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/Button'
@@ -23,7 +23,8 @@ import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
-import { securityEcosystems } from '@/admin/operatorEcosystems'
+import { securityEcosystems, supportsPackageRuleRanges, supportsVulnerabilityAutoBlock } from '@/admin/operatorEcosystems'
+import { getAdminRouteHref } from '@/admin/routes'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import type {
@@ -320,10 +321,7 @@ function SuggestionsTab() {
   const queryClient = useQueryClient()
   const { canWrite } = usePrincipal()
   const [page, setPage] = useState(1)
-  const [actionTarget, setActionTarget] = useState<{
-    item: SecurityVulnerability
-    action: 'block' | 'dismiss'
-  } | null>(null)
+  const [dismissTarget, setDismissTarget] = useState<SecurityVulnerability | null>(null)
 
   const query = useQuery({
     queryKey: ['admin', 'security', 'suggestions', { page }],
@@ -335,34 +333,22 @@ function SuggestionsTab() {
   const items = data?.data.items ?? []
   const total = data?.data.total ?? items.length
 
-  const approveMutation = useMutation({
-    mutationFn: (vulnId: number) => adminApi.approveSuggestion(vulnId),
-    onSuccess: () => {
-      setActionTarget(null)
-      queryClient.invalidateQueries({ queryKey: ['admin', 'security'] })
-    },
-  })
-
   const dismissMutation = useMutation({
     mutationFn: (vulnId: number) => adminApi.dismissSuggestion(vulnId),
     onSuccess: () => {
-      setActionTarget(null)
+      setDismissTarget(null)
       queryClient.invalidateQueries({ queryKey: ['admin', 'security'] })
     },
   })
 
-  const activeMutation = actionTarget?.action === 'block' ? approveMutation : dismissMutation
-
-  function openAction(item: SecurityVulnerability, action: 'block' | 'dismiss') {
-    approveMutation.reset()
+  function openDismiss(item: SecurityVulnerability) {
     dismissMutation.reset()
-    setActionTarget({ item, action })
+    setDismissTarget(item)
   }
 
-  function closeAction() {
-    if (approveMutation.isPending || dismissMutation.isPending) return
-    setActionTarget(null)
-    approveMutation.reset()
+  function closeDismiss() {
+    if (dismissMutation.isPending) return
+    setDismissTarget(null)
     dismissMutation.reset()
   }
 
@@ -386,12 +372,22 @@ function SuggestionsTab() {
   return (
     <div className="space-y-3">
       {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
+      {items.length > 0 && <InlineNotice tone="warning">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span>{t('security.manualRuleRequired')}</span>
+          <Link
+            to={getAdminRouteHref('rules')}
+            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-[5px] px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
+          >
+            {t('security.openPackageRules')}
+          </Link>
+        </div>
+      </InlineNotice>}
       {items.length === 0 ? <EmptyState icon="verified" title={t('security.noSuggestions')} minHeight={240} /> : <>
       <div>
         {items.map((item: SecurityVulnerability, idx: number) => {
           const severityVariant = SEVERITY_BADGE_MAP[item.severity] || 'default'
-          const isActing = (approveMutation.isPending && approveMutation.variables === item.id) ||
-            (dismissMutation.isPending && dismissMutation.variables === item.id)
+          const isActing = dismissMutation.isPending && dismissMutation.variables === item.id
 
           return (
             <div
@@ -420,19 +416,10 @@ function SuggestionsTab() {
               </div>
               {canWrite && <div className="flex shrink-0 flex-wrap gap-2 self-end sm:self-start">
                 <ButtonV2
-                  variant="danger"
-                  size="sm"
-                  disabled={isActing}
-                  onClick={() => openAction(item, 'block')}
-                >
-                  <Icon name="block" size="sm" />
-                  {t('security.block')}
-                </ButtonV2>
-                <ButtonV2
                   variant="ghost"
                   size="sm"
                   disabled={isActing}
-                  onClick={() => openAction(item, 'dismiss')}
+                  onClick={() => openDismiss(item)}
                 >
                   <Icon name="close" size="sm" />
                   {t('security.dismiss')}
@@ -445,31 +432,28 @@ function SuggestionsTab() {
 
       <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
       <ConfirmActionDialog
-        open={actionTarget !== null}
-        title={actionTarget?.action === 'block' ? t('security.blockTitle') : t('security.dismissTitle')}
-        description={actionTarget?.action === 'block'
-          ? t('security.blockImpact', { name: actionTarget?.item.package_name ?? '' })
-          : t('security.dismissImpact', { name: actionTarget?.item.package_name ?? '' })}
-        details={actionTarget ? [
-          { label: t('security.package'), value: actionTarget.item.package_name, mono: true },
-          { label: t('security.ecosystem'), value: actionTarget.item.ecosystem.toUpperCase() },
-          { label: t('security.osvId'), value: actionTarget.item.osv_id, mono: true },
+        open={dismissTarget !== null}
+        title={t('security.dismissTitle')}
+        description={t('security.dismissImpact', { name: dismissTarget?.package_name ?? '' })}
+        details={dismissTarget ? [
+          { label: t('security.package'), value: dismissTarget.package_name, mono: true },
+          { label: t('security.ecosystem'), value: dismissTarget.ecosystem.toUpperCase() },
+          { label: t('security.osvId'), value: dismissTarget.osv_id, mono: true },
           {
             label: t('security.cvssScore'),
-            value: Number(actionTarget.item.cvss_score).toFixed(1),
+            value: Number(dismissTarget.cvss_score).toFixed(1),
             mono: true,
           },
         ] : []}
         cancelLabel={t('cancel')}
-        confirmLabel={actionTarget?.action === 'block' ? t('security.confirmBlock') : t('security.confirmDismiss')}
-        pendingLabel={actionTarget?.action === 'block' ? t('security.blocking') : t('security.dismissing')}
-        pending={activeMutation.isPending}
-        errorMessage={activeMutation.isError ? getApiError(activeMutation.error).message : null}
-        onClose={closeAction}
+        confirmLabel={t('security.confirmDismiss')}
+        pendingLabel={t('security.dismissing')}
+        pending={dismissMutation.isPending}
+        errorMessage={dismissMutation.isError ? getApiError(dismissMutation.error).message : null}
+        onClose={closeDismiss}
         onConfirm={() => {
-          if (!actionTarget || !canWrite) return
-          if (actionTarget.action === 'block') approveMutation.mutate(actionTarget.item.id)
-          else dismissMutation.mutate(actionTarget.item.id)
+          if (!dismissTarget || !canWrite) return
+          dismissMutation.mutate(dismissTarget.id)
         }}
       />
       </>}
@@ -604,7 +588,15 @@ function PoliciesTab() {
   function applyBulkPolicy() {
     if (!canWrite || batchSaveInFlightRef.current || policyWritesInFlightRef.current.size > 0) return
     setLocalPolicies(Object.fromEntries(
-      securityEcosystems.map(ecosystem => [ecosystem.id, { ...bulkPolicy }]),
+      securityEcosystems.map(ecosystem => {
+        const autoBlockSupported = supportsVulnerabilityAutoBlock(ecosystem.id)
+        return [ecosystem.id, {
+          auto_block_enabled: autoBlockSupported && bulkPolicy.auto_block_enabled,
+          min_cvss_score: autoBlockSupported
+            ? bulkPolicy.min_cvss_score
+            : getPolicy(ecosystem.id).min_cvss_score,
+        }]
+      }),
     ))
     setShowChangedOnly(true)
   }
@@ -670,6 +662,7 @@ function PoliciesTab() {
   const dirtyEcosystems = ecosystems.filter(isPolicyDirty)
   const visibleEcosystems = showChangedOnly ? dirtyEcosystems : ecosystems
   const hasPolicyWrites = policyWriteCount > 0
+  const hasAutoBlockSupport = ecosystems.some(supportsVulnerabilityAutoBlock)
 
   if (query.isPending) {
     return (
@@ -706,7 +699,7 @@ function PoliciesTab() {
               <SwitchV2
                 label={t('security.bulkAutoBlock')}
                 checked={bulkPolicy.auto_block_enabled}
-                disabled={isBatchSaving || hasPolicyWrites}
+                disabled={!hasAutoBlockSupport || isBatchSaving || hasPolicyWrites}
                 onCheckedChange={(checked) => setBulkPolicy(current => ({
                   ...current,
                   auto_block_enabled: checked,
@@ -723,7 +716,7 @@ function PoliciesTab() {
               max={10}
               step={0.1}
               value={bulkPolicy.min_cvss_score}
-              disabled={!bulkPolicy.auto_block_enabled || isBatchSaving || hasPolicyWrites}
+              disabled={!hasAutoBlockSupport || !bulkPolicy.auto_block_enabled || isBatchSaving || hasPolicyWrites}
               onChange={(event) => setBulkPolicy(current => ({
                 ...current,
                 min_cvss_score: Number.parseFloat(event.target.value) || 0,
@@ -791,6 +784,16 @@ function PoliciesTab() {
             const saveState = policySaveStates[eco]
             const isSaving = saveState?.isPending ?? false
             const isDirty = isPolicyDirty(eco)
+            const autoBlockSupported = supportsVulnerabilityAutoBlock(eco)
+            const autoBlockUnavailableHint = supportsPackageRuleRanges(eco)
+              ? 'security.autoBlockUnavailableOSVProjection'
+              : eco === 'apt'
+                ? 'security.autoBlockUnavailableApt'
+                : eco === 'composer'
+                  ? 'security.autoBlockUnavailableComposer'
+                  : eco === 'rubygems'
+                    ? 'security.autoBlockUnavailableNoPackageRules'
+                    : 'security.autoBlockUnavailableExactOnly'
             return (
               <div
                 key={eco}
@@ -815,7 +818,7 @@ function PoliciesTab() {
                       label={t('security.autoBlock')}
                       aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
                       checked={policy.auto_block_enabled}
-                      disabled={!canWrite || isSaving || isBatchSaving}
+                      disabled={!canWrite || isSaving || isBatchSaving || (!autoBlockSupported && !policy.auto_block_enabled)}
                       onCheckedChange={(checked) => setPolicy(eco, { auto_block_enabled: checked })}
                     />
                   </div>
@@ -830,7 +833,7 @@ function PoliciesTab() {
                       max={10}
                       step={0.1}
                       value={policy.min_cvss_score}
-                      disabled={!canWrite || isSaving || isBatchSaving || !policy.auto_block_enabled}
+                      disabled={!canWrite || isSaving || isBatchSaving || !autoBlockSupported || !policy.auto_block_enabled}
                       onChange={(e) => setPolicy(eco, { min_cvss_score: parseFloat(e.target.value) || 0 })}
                       mono
                       className="px-2 py-1 text-center"
@@ -850,6 +853,11 @@ function PoliciesTab() {
                     </ButtonV2>
                   </div>}
                 </div>
+                {!autoBlockSupported && (
+                  <p className="mt-1 text-[12px] leading-5 text-[var(--text-soft)]">
+                    {t(autoBlockUnavailableHint)}
+                  </p>
+                )}
                 {saveState?.error ? <div className="mt-2"><InlineNotice tone="danger">{getApiError(saveState.error).message}</InlineNotice></div> : null}
               </div>
             )
@@ -934,7 +942,6 @@ function PoliciesTab() {
                 packages: importMutation.data.data.packages,
                 duplicates: importMutation.data.data.duplicates,
                 skipped: importMutation.data.data.skipped,
-                rulesCreated: importMutation.data.data.rules_created,
               })}
             </p>
           </InlineNotice></div>

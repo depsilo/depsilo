@@ -20,6 +20,13 @@ func TestSignedIndexCacheKeyVersionsSignedHTML(t *testing.T) {
 	}
 }
 
+func TestIndexCacheKeyUsesPEP503ProjectIdentity(t *testing.T) {
+	t.Parallel()
+	if got, want := IndexCacheKey("pypi", "Django_rest.framework"), "pypi/simple/django-rest-framework/index.html"; got != want {
+		t.Fatalf("IndexCacheKey = %q, want %q", got, want)
+	}
+}
+
 func TestIndexPackageFromCacheKeyRejectsMalformedSignedNamespace(t *testing.T) {
 	t.Parallel()
 	validDigest := strings.Repeat("a", 64)

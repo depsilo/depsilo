@@ -23,13 +23,14 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { RuleListResponse, RuleRecord, RuleRequest, RuleTestResponse } from '@/lib/adminApi.types'
 import AdminPage from '@/admin/components/AdminPage'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
+import { packageRuleEcosystems, supportsPackageRuleRanges, supportsPackageRuleVersions } from '@/admin/operatorEcosystems'
 
-const ECOSYSTEM_OPTIONS = [{ value: '*', label: 'All (*)' }, { value: 'pypi', label: 'PyPI' }, { value: 'apt', label: 'APT' }, { value: 'npm', label: 'npm' }, { value: 'go', label: 'Go' }, { value: 'cargo', label: 'Cargo' }, { value: 'maven', label: 'Maven' }, { value: 'rubygems', label: 'RubyGems' }, { value: 'composer', label: 'Composer' }, { value: 'nuget', label: 'NuGet' }, { value: 'conda', label: 'Conda' }, { value: 'cran', label: 'CRAN' }, { value: 'alpine', label: 'Alpine' }, { value: 'helm', label: 'Helm' }]
+const ECOSYSTEM_OPTIONS = packageRuleEcosystems.map(ecosystem => ({ value: ecosystem.id, label: ecosystem.label }))
 
 type RuleForm = RuleRequest
 type RuleListPayload = RuleListResponse
 type RuleTestState = RuleTestResponse | { error: string }
-const emptyForm: RuleForm = { ecosystem: '*', package_name: '', version: '*', action: 'deny', reason: '' }
+const emptyForm: RuleForm = { ecosystem: 'pypi', package_name: '', version: '*', action: 'deny', reason: '' }
 
 function upsertRule(current: AxiosResponse<RuleListPayload> | undefined, response: AxiosResponse<RuleRecord>): AxiosResponse<RuleListPayload> {
   const rule = response.data
@@ -83,6 +84,11 @@ export default function RulesV2() {
   const isSaving = createMutation.isPending || updateMutation.isPending
   const saveError = editId ? updateMutation.error : createMutation.error
   const apiError = getApiError(query.error)
+  const globalRule = form.ecosystem === '*'
+  const versionsSupported = supportsPackageRuleVersions(form.ecosystem)
+  const rangesSupported = supportsPackageRuleRanges(form.ecosystem)
+  const packagePlaceholder = form.ecosystem === 'maven' ? t('rules.mavenPackagePlaceholder') : t('rules.packagePlaceholder')
+  const testPackagePlaceholder = testForm.ecosystem === 'maven' ? t('rules.mavenPackagePlaceholder') : t('rules.packagePlaceholder')
 
   // Rules engine moved to open-source on 2026-06-28 — the page no longer
   // 402s, so there is no Pro paywall branch to render.
@@ -127,9 +133,14 @@ export default function RulesV2() {
 
       <ModalV2 open={dialogOpen} onClose={closeDialog} title={editId ? t('rules.editRule') : t('rules.addRule')} closeDisabled={isSaving}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <SelectV2 label={t('rules.ecosystem')} value={form.ecosystem} onChange={(e) => setForm({ ...form, ecosystem: e.target.value })}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
-          <InputV2 label={t('rules.packageName')} mono value={form.package_name} onChange={(e) => setForm({ ...form, package_name: e.target.value })} placeholder={t('rules.packagePlaceholder')} required />
-          <InputV2 label={t('rules.version')} mono value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder={t('rules.versionPlaceholder')} />
+          <SelectV2 label={t('rules.ecosystem')} value={form.ecosystem} onChange={(e) => { const ecosystem = e.target.value; setForm({ ...form, ecosystem, ...(ecosystem === '*' ? { package_name: '*', version: '*' } : !supportsPackageRuleVersions(ecosystem) ? { version: '*' } : {}) }) }}><option value="*">{t('rules.allEcosystems')} (*)</option>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
+          <InputV2 label={t('rules.packageName')} mono value={form.package_name} onChange={(e) => setForm({ ...form, package_name: e.target.value })} placeholder={packagePlaceholder} required disabled={globalRule} />
+          <InputV2 label={t('rules.version')} mono value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} placeholder={rangesSupported ? t('rules.versionPlaceholder') : t('rules.exactVersionPlaceholder')} disabled={globalRule || !versionsSupported} />
+          {globalRule && <InlineNotice tone="warning">{t('rules.globalRuleHint')}</InlineNotice>}
+          {!globalRule && versionsSupported && !rangesSupported && <InlineNotice tone="warning">{t('rules.exactOnlyHint')}</InlineNotice>}
+          {form.ecosystem === 'apt' && <InlineNotice tone="warning">{t('rules.aptVersionHint')}</InlineNotice>}
+          {form.ecosystem === 'npm' && <InlineNotice tone="warning">{t('rules.npmVersionHint')}</InlineNotice>}
+          {form.ecosystem === 'composer' && <InlineNotice tone="warning">{t('rules.composerVersionHint')}</InlineNotice>}
           <fieldset>
             <legend className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">{t('rules.action')}</legend>
             <div className="flex gap-2">
@@ -181,9 +192,9 @@ export default function RulesV2() {
 
       <ModalV2 open={testOpen} onClose={() => setTestOpen(false)} title={t('rules.testTitle')} closeDisabled={testLoading}>
         <div className="space-y-4">
-          <SelectV2 label={t('rules.ecosystem')} value={testForm.ecosystem} onChange={(e) => setTestForm({ ...testForm, ecosystem: e.target.value })}>{ECOSYSTEM_OPTIONS.filter(o => o.value !== '*').map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
-          <InputV2 label={t('rules.packageName')} mono value={testForm.package} onChange={(e) => setTestForm({ ...testForm, package: e.target.value })} placeholder={t('rules.packagePlaceholder')} />
-          <InputV2 label={t('rules.version')} mono value={testForm.version} onChange={(e) => setTestForm({ ...testForm, version: e.target.value })} placeholder={t('rules.versionPlaceholder')} />
+          <SelectV2 label={t('rules.ecosystem')} value={testForm.ecosystem} onChange={(e) => setTestForm({ ...testForm, ecosystem: e.target.value })}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
+          <InputV2 label={t('rules.packageName')} mono value={testForm.package} onChange={(e) => setTestForm({ ...testForm, package: e.target.value })} placeholder={testPackagePlaceholder} />
+          <InputV2 label={t('rules.version')} mono value={testForm.version} onChange={(e) => setTestForm({ ...testForm, version: e.target.value })} placeholder={t('rules.testVersionPlaceholder')} />
           <ButtonV2 onClick={handleTest} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
           {testResult && !('error' in testResult) && (
             <div className="rounded-[4px] p-4" style={{ background: testResult.allowed ? 'var(--ok-fill)' : 'var(--danger-fill)', border: `1px solid ${testResult.allowed ? 'var(--ok-border)' : 'var(--danger)'}` }}>

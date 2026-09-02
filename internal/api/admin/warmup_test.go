@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	npmadapter "depsilo/internal/adapter/npm"
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -147,7 +148,7 @@ func TestWarmupNPMUsesAdapterKeyAndRewritesTarballs(t *testing.T) {
 
 	handler.doWarmup(context.Background(), "npm", []string{"@scope/widget@1.2.3"}, pool)
 
-	reader, _, err := storage.Get(context.Background(), "npm/@scope/widget/metadata.json")
+	reader, _, err := storage.Get(context.Background(), npmadapter.ScopedMetadataCacheKey("scope", "widget"))
 	if err != nil {
 		t.Fatalf("read npm warmup entry: %v", err)
 	}
@@ -156,8 +157,8 @@ func TestWarmupNPMUsesAdapterKeyAndRewritesTarballs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(got), `"tarball":"/npm/@scope/widget/-/widget-1.2.3.tgz"`) {
-		t.Fatalf("npm tarball URL was not rewritten through the proxy: %s", got)
+	if !strings.Contains(string(got), `"tarball":"depsilo:npm-artifact-reference:v1:`) {
+		t.Fatalf("npm tarball reference was not provenance-prepared before caching: %s", got)
 	}
 }
 
@@ -181,7 +182,7 @@ func TestNormalizeWarmupPackages(t *testing.T) {
 		wantErr   bool
 	}{
 		{name: "pypi specifiers and duplicates", ecosystem: "pypi", raw: []string{" Requests>=2 ", "requests==1", "# comment", "-r other.txt"}, want: []string{"Requests"}},
-		{name: "npm versions and scopes", ecosystem: "npm", raw: []string{"react@19", "@scope/widget@1.2.3", "REACT"}, want: []string{"react", "@scope/widget"}},
+		{name: "npm versions and case-distinct legacy names", ecosystem: "npm", raw: []string{"react@19", "@scope/widget@1.2.3", "REACT", "legacy!pkg"}, want: []string{"react", "@scope/widget", "REACT", "legacy!pkg"}},
 		{name: "unsupported ecosystem", ecosystem: "maven", raw: []string{"artifact"}, wantErr: true},
 		{name: "invalid scoped npm", ecosystem: "npm", raw: []string{"@scope"}, wantErr: true},
 		{name: "path injection", ecosystem: "pypi", raw: []string{"requests?source=other"}, wantErr: true},

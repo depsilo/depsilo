@@ -87,6 +87,35 @@ func TestLoadMissingConfigPlacesAllLocalStateUnderHome(t *testing.T) {
 	}
 }
 
+func TestMarkSetupPendingUsesBootstrapTokenPolicy(t *testing.T) {
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "recovery-bootstrap-token-0123456789")
+	cfg := &Config{IsDefault: false, BootstrapToken: "stale"}
+	if err := MarkSetupPending(cfg); err != nil {
+		t.Fatalf("MarkSetupPending: %v", err)
+	}
+	if !cfg.IsDefault || cfg.BootstrapToken != "recovery-bootstrap-token-0123456789" || cfg.BootstrapTokenGenerated {
+		t.Fatalf("setup state = %#v", cfg)
+	}
+}
+
+func TestLoadMissingExplicitSetupPathUsesFirstRunDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state", "config")
+	t.Setenv("DEPSILO_CONFIG", path)
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "explicit-path-bootstrap-token-012345")
+	t.Setenv("DEPSILO_DATABASE_DSN", "")
+	t.Setenv("DEPSILO_STORAGE_PATH", "")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_PATH", "")
+	setTestJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load missing explicit setup path: %v", err)
+	}
+	if !cfg.IsDefault || cfg.ConfigPath != path {
+		t.Fatalf("first-run config state = %#v", cfg)
+	}
+}
+
 func TestLoadEnvironmentOverridesWizardStoragePaths(t *testing.T) {
 	setTestJWTSecret(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
@@ -223,6 +252,14 @@ func TestConfigExampleLoadsWithCurrentSchema(t *testing.T) {
 	}
 	if cfg.SupplyChain.MinReleaseAgeEnabled == nil || *cfg.SupplyChain.MinReleaseAgeEnabled {
 		t.Fatal("config.example.toml must explicitly default minimum release age to disabled")
+	}
+	for ecosystem, threshold := range cfg.SupplyChain.MinReleaseAge {
+		if threshold != "0" {
+			t.Errorf("config.example.toml minimum release age %q = %q, want safe zero", ecosystem, threshold)
+		}
+	}
+	if len(cfg.SupplyChain.MinReleaseAge) != 16 {
+		t.Fatalf("config.example.toml has %d minimum-release-age entries, want default plus 15 ecosystems", len(cfg.SupplyChain.MinReleaseAge))
 	}
 
 	currentDefaultUpstreams := []struct {

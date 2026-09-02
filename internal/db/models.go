@@ -203,15 +203,18 @@ type UpstreamLatencyLog struct {
 }
 
 type PackageRule struct {
-	ID          uint      `gorm:"primarykey" json:"id"`
-	Ecosystem   string    `gorm:"size:16;index" json:"ecosystem"`
-	PackageName string    `gorm:"size:256" json:"package_name"`
-	Version     string    `gorm:"size:128" json:"version"`
-	Action      string    `gorm:"size:8" json:"action"`
-	Reason      string    `gorm:"size:512" json:"reason"`
-	CreatedBy   string    `gorm:"size:64" json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                    uint      `gorm:"primarykey" json:"id"`
+	Ecosystem             string    `gorm:"size:16;index" json:"ecosystem"`
+	PackageName           string    `gorm:"size:256" json:"package_name"`
+	Version               string    `gorm:"size:128" json:"version"`
+	Action                string    `gorm:"size:8" json:"action"`
+	Reason                string    `gorm:"size:512" json:"reason"`
+	CreatedBy             string    `gorm:"size:64" json:"created_by"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+	NormalizedPackageName string    `gorm:"size:256;not null;default:''" json:"-"`
+	NormalizedVersion     string    `gorm:"size:128;not null;default:''" json:"-"`
+	DialectRevision       uint      `gorm:"not null;default:0" json:"-"`
 }
 
 type AuditLog struct {

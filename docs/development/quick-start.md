@@ -82,6 +82,11 @@ Use `make stop` if the terminal is terminated without allowing cleanup to run.
 - Interactive first run prints a one-time bootstrap token to the server log.
 - The setup flow creates the initial administrator; there is no default
   `admin/admin` credential.
+- Setup commits the administrator and onboarding state before atomically
+  publishing `config.toml`. If a process stops at any boundary, restart either
+  keeps the wizard recoverable or leaves the submitted administrator able to
+  log in; a configured instance with no loginable administrator automatically
+  reopens setup.
 - Default local data lives under the configured database and storage paths.
 - `config.toml`, `.dev-jwt-secret`, `.dev.log`, `.server.pid`, `data/`, `bin/`,
   and `web/dist/` are generated or local state.

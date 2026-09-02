@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -59,12 +60,35 @@ func backfillPackageNames(database *gorm.DB) {
 	}
 	zap.L().Info("backfilling package names", zap.Int("count", len(entries)))
 	for _, entry := range entries {
+		if !canBackfillPackageName(entry) {
+			continue
+		}
 		name := packagekey.ExtractName(entry.AdapterType, entry.Key)
 		if name != "" {
 			database.Model(&entry).Update("package_name", name)
 		}
 	}
 	zap.L().Info("package name backfill complete")
+}
+
+// canBackfillPackageName is deliberately narrower than ExtractName. A few
+// transports expose a package-looking token that is not the identity used by
+// their vulnerability ecosystem (APT source-vs-binary names, NuGet casing,
+// and RubyGems platform filenames). Schema v3 clears those legacy values;
+// startup must not repopulate them before the next trusted migration or scan.
+func canBackfillPackageName(entry db.CacheEntry) bool {
+	ecosystem := strings.ToLower(strings.TrimSpace(entry.AdapterType))
+	switch ecosystem {
+	case "apt", "nuget", "rubygems":
+		return false
+	case "npm":
+		// Legacy npm cache keys used a case-folded namespace and cannot be
+		// recovered into the exact identity contract. New rows carry the
+		// explicit namespace revision.
+		return strings.HasPrefix(entry.Key, packagekey.NPMExactIdentityCachePrefix)
+	default:
+		return true
+	}
 }
 
 // syncWebhookConfigs ensures configured webhooks from config.toml exist in the database.

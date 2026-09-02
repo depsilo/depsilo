@@ -240,3 +240,17 @@ func TestCacheKey(t *testing.T) {
 		t.Errorf("CacheKey = %q, want %q", got, want)
 	}
 }
+
+func TestCacheKeyCanonicalizesRepositoryCaseAliases(t *testing.T) {
+	modelAlias := huggingface.ParseRequestPath("/OpenAI/Whisper-Tiny/resolve/main/config.json")
+	modelCanonical := huggingface.ParseRequestPath("/openai/whisper-tiny/resolve/main/config.json")
+	if aliasKey, canonicalKey := huggingface.CacheKey(modelAlias), huggingface.CacheKey(modelCanonical); aliasKey != canonicalKey {
+		t.Fatalf("model alias keys differ: %q != %q", aliasKey, canonicalKey)
+	}
+
+	datasetAlias := huggingface.ParseRequestPath("/datasets/Acme/My_Data/resolve/main/data.parquet")
+	datasetCanonical := huggingface.ParseRequestPath("/datasets/acme/my_data/resolve/main/data.parquet")
+	if aliasKey, canonicalKey := huggingface.CacheKey(datasetAlias), huggingface.CacheKey(datasetCanonical); aliasKey != canonicalKey {
+		t.Fatalf("dataset alias keys differ: %q != %q", aliasKey, canonicalKey)
+	}
+}

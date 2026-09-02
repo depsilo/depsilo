@@ -46,6 +46,7 @@ import type {
   OnboardingStatusResponse,
   OnboardingTerminalStatus,
   Principal,
+  PolicyStatus,
   Project,
   ProjectDetail,
   ProjectListResponse,
@@ -151,6 +152,8 @@ export const authApi = {
 
 export const adminApi = {
   getDashboard: (options: ApiGetOptions = {}) => api.get<DashboardResponse>('/admin/dashboard', options),
+  // Operational status (read-only; safe to poll from the Admin shell).
+  getPolicyStatus: (options: ApiGetOptions = {}) => api.get<PolicyStatus>('/admin/policy/status', options),
   getOnboardingStatus: (params: OnboardingStatusQuery = {}, options: ApiGetOptions = {}) =>
     api.get<OnboardingStatusResponse>('/admin/onboarding/status', { ...options, params }),
   updateOnboardingStatus: (status: OnboardingTerminalStatus) =>
@@ -227,7 +230,7 @@ export const adminApi = {
   listVulnerabilities: (params: SecurityQuery, options: ApiGetOptions = {}) => api.get<SecurityVulnerabilityPage>('/admin/security/vulnerabilities', { ...options, params }),
   listVulnerablePackages: (params: SecurityBaseQuery, options: ApiGetOptions = {}) => api.get<SecurityPackagePage>('/admin/security/packages', { ...options, params }),
   listSuggestions: (params: SecurityBaseQuery, options: ApiGetOptions = {}) => api.get<SecuritySuggestionPage>('/admin/security/suggestions', { ...options, params }),
-  approveSuggestion: (vulnerabilityID: number, data: ApproveSuggestionRequest = {}) => api.post<ApproveSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/approve`, data),
+  approveSuggestion: (vulnerabilityID: number, data: ApproveSuggestionRequest) => api.post<ApproveSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/approve`, data),
   dismissSuggestion: (vulnerabilityID: number) => api.post<DismissSuggestionResponse>(`/admin/security/suggestions/${vulnerabilityID}/dismiss`),
   triggerSecurityScan: () => api.post<SecurityScanResponse>('/admin/security/scan'),
   importVulnerabilities: (formData: FormData) => api.post<SecurityImportResponse>('/admin/security/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),

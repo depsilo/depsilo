@@ -1,10 +1,9 @@
 // Package resolvers fetches the upstream publish time for a single
-// (ecosystem, package, version) from each registry's authoritative
-// public API. Each Resolver hits the canonical registry — registry
-// .npmjs.org, pypi.org, crates.io, etc. — rather than whatever
-// upstream the operator configured, because the quarantine decision
-// must use the AUTHORITATIVE publish time, not a mirror's possibly-
-// stale answer.
+// (ecosystem, package, version) from a canonical public registry API.
+// That timestamp is authoritative only for bytes selected from the same
+// registry. These resolvers must not govern an arbitrary configured private or
+// mirrored Upstream until the composition root binds both to one source
+// identity; production thresholds therefore remain zero today.
 //
 // Calls happen at most once per (ecosystem, package, version) per
 // install lifetime — the result is persisted in PackageTimestamp via
@@ -12,9 +11,8 @@
 // cache fill, total network cost is bounded by "every dependency
 // the team uses, once."
 //
-// Per the locked-in defaults in docs/DIRECTION.md, Go and apt skip
-// quarantine entirely (threshold = 0), so there are no go/apt
-// resolvers. Every other adapter has one.
+// Go and APT have no resolver. Other implementations remain dormant until the
+// source-provenance seam above is complete.
 package resolvers
 
 import (
@@ -65,11 +63,11 @@ var (
 // names match internal/adapter directory names ("pypi", "npm",
 // "cargo", ...).
 //
-// Resolvers absent from the map cause Lookup to return ErrUnsupported,
-// which is by design — we ship resolvers for ecosystems in the recommended
-// minimum-release-age profile. Operators who set a
-// threshold for an unsupported ecosystem will hit ErrUnsupported and
-// see the audit trail explain what's missing.
+// Resolvers absent from the map cause Lookup to return ErrUnsupported. The
+// implementations remain available for tests and future source-bound
+// composition, but production minimum-release-age thresholds stay at zero:
+// these resolvers query fixed public registries and therefore cannot yet
+// govern artifacts selected from arbitrary configured Upstreams.
 type Registry map[string]Resolver
 
 // NewRegistry wires up one Resolver per ecosystem with a shared

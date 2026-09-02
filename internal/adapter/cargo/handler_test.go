@@ -76,14 +76,14 @@ func TestPackageUpstreamFailuresAreRecordedAsAuditErrors(t *testing.T) {
 		t.Fatalf("audit entries = %#v", audit.entries)
 	}
 	for index, entry := range audit.entries {
-		if entry.Ecosystem != "cargo" || entry.PackageName != "serde" || entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
+		if entry.Ecosystem != "cargo" || entry.CacheResult != "error" || entry.StatusCode != http.StatusBadGateway {
 			t.Errorf("audit entry %d = %#v", index, entry)
 		}
 	}
-	if audit.entries[0].Action != "metadata" || audit.entries[0].Version != "" {
+	if audit.entries[0].Action != "metadata" || audit.entries[0].PackageName != "" || audit.entries[0].Version != "" {
 		t.Errorf("index audit entry = %#v", audit.entries[0])
 	}
-	if audit.entries[1].Action != "download" || audit.entries[1].Version != "1.0.219" {
+	if audit.entries[1].Action != "download" || audit.entries[1].PackageName != "serde" || audit.entries[1].Version != "1.0.219" {
 		t.Errorf("download audit entry = %#v", audit.entries[1])
 	}
 }

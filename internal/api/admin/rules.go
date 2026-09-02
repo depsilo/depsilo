@@ -11,6 +11,7 @@ import (
 
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
+	"depsilo/internal/packagepolicy"
 	"depsilo/internal/rules"
 )
 
@@ -59,6 +60,10 @@ func (h *RulesHandler) Create(c *gin.Context) {
 		CreatedBy:   createdBy,
 	}
 	if err := h.store.Create(&rule); err != nil {
+		if errors.Is(err, packagepolicy.ErrInvalidRule) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
@@ -85,7 +90,9 @@ func (h *RulesHandler) Update(c *gin.Context) {
 	}
 	rule, err := h.store.Update(uint(id), updates)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, packagepolicy.ErrInvalidRule) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "rule not found"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "failed to update rule"})

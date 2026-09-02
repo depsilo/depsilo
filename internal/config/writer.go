@@ -11,6 +11,13 @@ import (
 
 // SetupRequest is the request body from the setup wizard.
 type SetupRequest struct {
+	// Database is populated by the setup handler from the effective startup
+	// configuration. It is deliberately not accepted from the browser: the
+	// wizard must never be able to retarget the transaction it is committing.
+	Database struct {
+		Driver string `json:"-"`
+		DSN    string `json:"-"`
+	} `json:"-" mapstructure:"-"`
 	Server struct {
 		Port int `json:"port"`
 	} `json:"server"`
@@ -40,6 +47,19 @@ type UpstreamSetup struct {
 
 // WriteConfig generates a TOML config file from the setup wizard data.
 func WriteConfig(path string, req SetupRequest) error {
+	return writeConfig(path, req, osAtomicFileWriter{})
+}
+
+// WriteConfigWithStageHook is the internal fault-injection seam for setup
+// recovery tests. It keeps the normal API on WriteConfig while allowing the
+// cross-package setup test to stop after the temporary write/fsync, immediately
+// before rename, immediately after rename, or after the parent-directory fsync.
+// This helper is not a compatibility contract for external callers.
+func WriteConfigWithStageHook(path string, req SetupRequest, hook WriteStageHook) error {
+	return writeConfig(path, req, osAtomicFileWriter{onStage: hook})
+}
+
+func writeConfig(path string, req SetupRequest, writer atomicFileWriter) error {
 	// Ensure parent directory exists
 	dir := filepath.Dir(path)
 	if err := ensureConfigDirectory(dir); err != nil {
@@ -59,6 +79,13 @@ func WriteConfig(path string, req SetupRequest) error {
 	storagePath = filepath.Clean(storagePath)
 	stateDataDir := filepath.Join(absoluteConfigDir, "data")
 	dbPath := filepath.Join(stateDataDir, "depsilo.db")
+	if req.Database.DSN != "" {
+		// Preserve the effective DSN selected by config.Load (including any
+		// operator-provided URI/query options). This keeps the database that was
+		// committed above identical to the one a clean restart will open. Do not
+		// normalize it here: whitespace can be part of a SQLite filename or URI.
+		dbPath = req.Database.DSN
+	}
 	compileCachePath := filepath.Join(stateDataDir, "compile-cache")
 
 	jwtSecret, err := NewSecureToken()
@@ -80,8 +107,12 @@ func WriteConfig(path string, req SetupRequest) error {
 	b.WriteString("\n")
 
 	// Database section
+	databaseDriver := strings.TrimSpace(req.Database.Driver)
+	if databaseDriver == "" {
+		databaseDriver = "sqlite"
+	}
 	b.WriteString("[database]\n")
-	b.WriteString("driver = \"sqlite\"\n")
+	b.WriteString(fmt.Sprintf("driver = %q\n", databaseDriver))
 	b.WriteString(fmt.Sprintf("dsn = %q\n", dbPath))
 	b.WriteString("\n")
 
@@ -97,6 +128,13 @@ func WriteConfig(path string, req SetupRequest) error {
 	b.WriteString("ttl_index = \"5m\"\n")
 	b.WriteString("ttl_blob = \"72h\"\n")
 	b.WriteString("lru_threshold = 90\n")
+	b.WriteString("\n")
+
+	// Package-policy refreshes default to the availability-friendly
+	// last-known-good behavior, but keep the choice explicit in every newly
+	// generated configuration so operators can review and change it.
+	b.WriteString("[policy]\n")
+	b.WriteString("on_load_error = \"use_stale_then_allow\"\n")
 	b.WriteString("\n")
 
 	// Compiler artifacts use a separate namespace but share the same durable
@@ -152,7 +190,7 @@ func WriteConfig(path string, req SetupRequest) error {
 	b.WriteString("scan_interval = \"24h\"\n")
 	b.WriteString("check_ttl = \"24h\"\n")
 
-	outcome, err := (osAtomicFileWriter{}).Write(path, []byte(b.String()), 0600)
+	outcome, err := writer.Write(path, []byte(b.String()), 0600)
 	if err != nil {
 		return fmt.Errorf("write config file: %w", err)
 	}

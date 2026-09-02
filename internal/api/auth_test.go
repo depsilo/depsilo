@@ -85,6 +85,25 @@ func TestCreateInitialAdminUsesProvidedCredentialsOnlyOnce(t *testing.T) {
 	}
 }
 
+func TestCreateInitialAdminCanRecoverWhenOnlyAdministratorIsDisabled(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	disabled := db.User{
+		Username: "retired", PasswordHash: "unused", Role: "admin", Enabled: false,
+	}
+	if err := database.Create(&disabled).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&disabled).Update("enabled", false).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateInitialAdmin(database, "operator", "Tr0ub4dor&Correct"); err != nil {
+		t.Fatalf("CreateInitialAdmin: %v", err)
+	}
+	if err := VerifyExistingAdminCredentials(database, "operator", "Tr0ub4dor&Correct"); err != nil {
+		t.Fatalf("new loginable administrator credentials: %v", err)
+	}
+}
+
 func TestVerifyExistingAdminCredentials(t *testing.T) {
 	database := newAPIAuthTestDB(t)
 	if err := CreateInitialAdmin(database, "operator", "Tr0ub4dor&Correct"); err != nil {
@@ -128,6 +147,51 @@ func TestEnsureInitialAdminSkipsInteractiveSetup(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("user count = %d, want 0 while setup is pending", count)
+	}
+}
+
+func TestReconcileSetupStateReopensConfiguredDatabaseWithoutLoginableAdmin(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "recovery-bootstrap-token-0123456789")
+	cfg := &config.Config{ConfigPath: filepath.Join(t.TempDir(), "config.toml")}
+
+	if err := ReconcileSetupState(database, cfg); err != nil {
+		t.Fatalf("ReconcileSetupState: %v", err)
+	}
+	if !cfg.IsDefault || cfg.BootstrapToken != "recovery-bootstrap-token-0123456789" || cfg.BootstrapTokenGenerated {
+		t.Fatalf("reconciled setup state = %#v", cfg)
+	}
+	if err := EnsureInitialAdmin(database, cfg.IsDefault); err != nil {
+		t.Fatalf("EnsureInitialAdmin after reconciliation: %v", err)
+	}
+	var count int64
+	if err := database.Model(&db.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("administrator count = %d, want 0 while setup is pending", count)
+	}
+}
+
+func TestReconcileSetupStateKeepsExplicitHeadlessBootstrap(t *testing.T) {
+	database := newAPIAuthTestDB(t)
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "ops")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", "Headless&Secure123")
+	cfg := &config.Config{}
+
+	if err := ReconcileSetupState(database, cfg); err != nil {
+		t.Fatalf("ReconcileSetupState: %v", err)
+	}
+	if cfg.IsDefault {
+		t.Fatal("explicit headless credentials unexpectedly reopened setup")
+	}
+	if err := EnsureInitialAdmin(database, false); err != nil {
+		t.Fatalf("EnsureInitialAdmin: %v", err)
+	}
+	if err := VerifyExistingAdminCredentials(database, "ops", "Headless&Secure123"); err != nil {
+		t.Fatalf("headless administrator credentials: %v", err)
 	}
 }
 

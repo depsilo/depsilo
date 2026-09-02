@@ -28,6 +28,7 @@ import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
+import { maliciousBlocklistEcosystems } from '@/admin/operatorEcosystems'
 
 // Backend mirrors db.QuarantineEvent + db.ApprovedVersion. We keep
 // the shape narrow to avoid leaking schema details into TS — extra
@@ -126,11 +127,6 @@ export default function Quarantine() {
   const [actionFilter, setActionFilter] = useState('all')
   const [pkgSearch, setPkgSearch] = useState('')
 
-  // Approve / Revoke dialogs share a tiny per-action state object.
-  const [approveOpen, setApproveOpen] = useState(false)
-  const [approveTarget, setApproveTarget] = useState<{ ecosystem: string; package: string; version: string } | null>(null)
-  const [approveReason, setApproveReason] = useState('')
-
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [revokeTarget, setRevokeTarget] = useState<ApprovedVersion | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
@@ -164,22 +160,6 @@ export default function Quarantine() {
   })
 
   // ── Mutations ─────────────────────────────────────────────────
-  const approveM = useMutation({
-    mutationFn: () =>
-      adminApi.approveQuarantine({
-        ecosystem: approveTarget!.ecosystem,
-        package: approveTarget!.package,
-        version: approveTarget!.version,
-        reason: approveReason.trim(),
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
-      setApproveOpen(false)
-      setApproveTarget(null)
-      setApproveReason('')
-    },
-  })
-
   const revokeM = useMutation({
     mutationFn: () =>
       adminApi.revokeQuarantineApproval(revokeTarget!.id, { reason: revokeReason.trim() }),
@@ -195,6 +175,7 @@ export default function Quarantine() {
   return (
     <AdminPage description={t('quarantine.subtitle')}>
     <div className="space-y-6">
+      <InlineNotice tone="warning">{t('quarantine.minimum_age_unavailable')}</InlineNotice>
       <TabsV2
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
@@ -211,13 +192,6 @@ export default function Quarantine() {
               setActionFilter={setActionFilter}
               pkgSearch={pkgSearch}
               setPkgSearch={setPkgSearch}
-              canWrite={canWrite}
-              onApprove={(ev) => {
-                approveM.reset()
-                setApproveTarget({ ecosystem: ev.ecosystem, package: ev.package, version: ev.version })
-                setApproveReason('')
-                setApproveOpen(true)
-              }}
             />,
           },
           {
@@ -233,43 +207,6 @@ export default function Quarantine() {
           { key: 'blocklist', label: t('quarantine.tab.blocklist'), content: <BlocklistTab /> },
         ]}
       />
-
-      {/* Approve dialog */}
-      <ModalV2
-        open={approveOpen}
-        onClose={() => setApproveOpen(false)}
-        title={t('quarantine.approve.title')}
-        closeDisabled={approveM.isPending}
-      >
-        {approveTarget && (
-          <div className="space-y-4">
-            <p className="text-[13px]" style={{ color: 'var(--text-soft)' }}>
-              {t('quarantine.approve.body', { eco: approveTarget.ecosystem, pkg: approveTarget.package, ver: approveTarget.version })}
-            </p>
-            <InputV2
-              label={t('quarantine.col.reason')}
-              placeholder={t('quarantine.reason_placeholder')}
-              value={approveReason}
-              onChange={(e) => setApproveReason(e.target.value)}
-              disabled={approveM.isPending}
-              autoFocus
-            />
-            {approveM.isError && <InlineNotice tone="danger">{getApiError(approveM.error).message}</InlineNotice>}
-            <div className="flex justify-end gap-2">
-              <ButtonV2 variant="secondary" onClick={() => setApproveOpen(false)} disabled={approveM.isPending}>
-                {t('cancel')}
-              </ButtonV2>
-              <ButtonV2
-                onClick={() => approveM.mutate()}
-                aria-busy={approveM.isPending || undefined}
-                disabled={approveReason.trim().length < 3 || approveM.isPending || !canWrite}
-              >
-                {approveM.isPending ? t('quarantine.approve.submitting') : t('quarantine.approve.submit')}
-              </ButtonV2>
-            </div>
-          </div>
-        )}
-      </ModalV2>
 
       {/* Revoke dialog */}
       <ModalV2
@@ -320,8 +257,6 @@ function EventsTab(props: {
   ecoFilter: string; setEcoFilter: (v: string) => void
   actionFilter: string; setActionFilter: (v: string) => void
   pkgSearch: string; setPkgSearch: (v: string) => void
-  canWrite: boolean
-  onApprove: (ev: QuarantineEvent) => void
 }) {
   const { t } = useTranslation()
   const data = props.eventsQ.data as { items: QuarantineEvent[]; total: number } | undefined
@@ -393,15 +328,6 @@ function EventsTab(props: {
                   { label: t('quarantine.col.time'), value: formatTime(ev.created_at), mono: true },
                 ]}
               />
-              {props.canWrite && ev.action === 'blocked' && (
-                <ButtonV2
-                  className="min-h-[40px] w-full"
-                  variant="secondary"
-                  onClick={() => props.onApprove(ev)}
-                >
-                  <Icon name="check" size="sm" /> {t('quarantine.approve.cta')}
-                </ButtonV2>
-              )}
             </li>
           ))}
         </ul>
@@ -417,7 +343,6 @@ function EventsTab(props: {
                 <Th>{t('quarantine.col.version')}</Th>
                 <Th>{t('quarantine.col.action')}</Th>
                 <Th>{t('quarantine.col.reason')}</Th>
-                <Th>{' '}</Th>
               </tr>
             </thead>
             <tbody>
@@ -439,13 +364,6 @@ function EventsTab(props: {
                   <Td>{actionBadge(ev.action, t)}</Td>
                   <Td>
                     <span className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{ev.reason}</span>
-                  </Td>
-                  <Td>
-                    {props.canWrite && ev.action === 'blocked' && (
-                      <ButtonV2 size="sm" variant="secondary" onClick={() => props.onApprove(ev)}>
-                        <Icon name="check" size="sm" /> {t('quarantine.approve.cta')}
-                      </ButtonV2>
-                    )}
                   </Td>
                 </tr>
               ))}
@@ -637,6 +555,8 @@ function BlocklistTab() {
   const st = statusQ.data
   const overrides = overridesQ.data?.items ?? []
   const now = overridesQ.data?.now ? new Date(overridesQ.data.now).getTime() : mountedAt
+  const reportedEcosystems = new Set(st?.ecosystems ?? [])
+  const overrideEcosystems = maliciousBlocklistEcosystems.filter(ecosystem => reportedEcosystems.has(ecosystem.id))
 
   return (
     <div className="space-y-5">
@@ -855,7 +775,7 @@ function BlocklistTab() {
               label={t('quarantine.col.ecosystem')}
               value={form.ecosystem}
               onChange={(v) => setForm({ ...form, ecosystem: v })}
-              options={ECOSYSTEMS.map((eco) => ({ value: eco, label: eco }))}
+              options={overrideEcosystems.map((ecosystem) => ({ value: ecosystem.id, label: ecosystem.label }))}
               disabled={createM.isPending}
             />
             <InputV2
@@ -889,7 +809,7 @@ function BlocklistTab() {
               aria-busy={createM.isPending || undefined}
               disabled={!form.package.trim() || form.reason.trim().length < 3 || createM.isPending || !canWrite}
             >
-              {createM.isPending ? t('quarantine.approve.submitting') : t('quarantine.blocklist.create_submit')}
+              {createM.isPending ? t('quarantine.blocklist.creating') : t('quarantine.blocklist.create_submit')}
             </ButtonV2>
           </div>
         </div>

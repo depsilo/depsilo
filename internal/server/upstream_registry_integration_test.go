@@ -80,12 +80,95 @@ probe_interval = "10ms"
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if srv, err := StartServer(ctx, zap.NewAtomicLevel()); err == nil || srv != nil {
+	if srv, err := StartServer(ctx, zap.NewAtomicLevel()); err == nil || srv != nil || !strings.Contains(err.Error(), "listen on") {
 		t.Fatalf("StartServer = (%v, %v), want nil bind error", srv, err)
 	}
 	time.Sleep(100 * time.Millisecond)
 	if got := probeHits.Load(); got != 0 {
 		t.Fatalf("registry worker probed %d times after bind failure", got)
+	}
+}
+
+func TestStartServerAllowsLoopbackDevelopmentSecretForSignedArtifactRoutes(t *testing.T) {
+	tests := []struct {
+		name      string
+		npmConfig string
+	}{
+		{name: "default PyTorch preset with npm inactive"},
+		{
+			name: "npm active",
+			npmConfig: `
+[[npm.upstreams]]
+name = "npm"
+url = "https://registry.npmjs.org"
+priority = 1
+probe_mode = "passive"
+probe_interval = "30m"
+`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			configPath := filepath.Join(dir, "config.toml")
+			document := fmt.Sprintf(`
+[server]
+host = "127.0.0.1"
+port = 0
+log_level = "error"
+
+[database]
+driver = "sqlite"
+dsn = %q
+
+[storage]
+type = "local"
+path = %q
+
+[access_log]
+rollup_enabled = false
+backfill_on_start = false
+retention_days = 0
+rollup_retention_days = 0
+
+[upstream_updates]
+enabled = false
+
+[security]
+enabled = false
+
+[supply_chain.blocklist]
+enabled = false
+
+[supply_chain.tamper_detection]
+enabled = false
+
+[auth]
+enabled = true
+jwt_secret = "change-me-in-production"
+token_ttl = "1h"
+%s`, filepath.Join(dir, "server.db"), filepath.Join(dir, "cache"), test.npmConfig)
+			if err := os.WriteFile(configPath, []byte(document), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("DEPSILO_CONFIG", configPath)
+			t.Setenv("DEPSILO_ADMIN_PASSWORD", "integration-Test-password-123")
+
+			ctx, cancel := context.WithCancel(context.Background())
+			server, err := StartServer(ctx, zap.NewAtomicLevel())
+			if err != nil {
+				cancel()
+				t.Fatalf("StartServer with loopback development secret: %v", err)
+			}
+			t.Cleanup(func() {
+				cancel()
+				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer shutdownCancel()
+				if err := Shutdown(shutdownCtx, server); err != nil {
+					t.Errorf("shutdown server: %v", err)
+				}
+			})
+		})
 	}
 }
 
@@ -477,7 +560,7 @@ func requestUniquePyPIPath(t *testing.T, handler http.Handler, path string) {
 
 func TestStandardEcosystemDefinitionsHaveExactOrderRoutesAndFactories(t *testing.T) {
 	cfg := &config.Config{}
-	definitions := standardEcosystemDefinitions(cfg)
+	definitions := standardEcosystemDefinitions(cfg, nil)
 	got := make([][2]string, 0, len(definitions))
 	for _, definition := range definitions {
 		if definition.factory == nil {
@@ -503,7 +586,7 @@ func TestSeedSourcesExcludeDefaultedAlpineAndActiveDefinitionsExcludeInactive(t 
 		PyPI:                       config.AdapterConfig{Upstreams: []config.UpstreamConfig{{Name: "pypi", URL: "https://pypi.example", Priority: 1}}},
 		Alpine:                     config.AdapterConfig{Upstreams: []config.UpstreamConfig{{Name: "built-in", URL: "https://dl-cdn.alpinelinux.org/alpine", Priority: 1}}},
 	}
-	definitions := standardEcosystemDefinitions(cfg)
+	definitions := standardEcosystemDefinitions(cfg, nil)
 	result, err := upstream.ReconcileBootstrap(serverTestDB(t), seedSources(definitions))
 	if err != nil {
 		t.Fatal(err)
@@ -530,7 +613,7 @@ func TestRegisterActiveAdaptersAddsOnlyStandardAndProjectPyPIRoutes(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	definitions, err := activeDefinitions(standardEcosystemDefinitions(&config.Config{}), []string{"pypi"})
+	definitions, err := activeDefinitions(standardEcosystemDefinitions(&config.Config{}, nil), []string{"pypi"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -581,7 +664,7 @@ func TestRegisteredStandardAdapterRecoversUnhealthyPassiveUpstream(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	definitions, err := activeDefinitions(standardEcosystemDefinitions(&config.Config{}), []string{"pypi"})
+	definitions, err := activeDefinitions(standardEcosystemDefinitions(&config.Config{}, nil), []string{"pypi"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,6 +29,111 @@ func TestMutableRefPinKeyIsSharedAcrossFilesQueriesAndResolveRaw(t *testing.T) {
 	}
 }
 
+func TestMutableRefPinKeyCollapsesRepositoryCaseAliasesButPreservesRefCase(t *testing.T) {
+	upperRepository := ParseRequestPath("/OpenAI/Whisper-Tiny/resolve/Main/config.json")
+	lowerRepository := ParseRequestPath("/openai/whisper-tiny/raw/Main/model.bin")
+	upperKey, ok := mutableRefPinKey(upperRepository)
+	if !ok {
+		t.Fatal("mixed-case repository ref was not pinnable")
+	}
+	lowerKey, ok := mutableRefPinKey(lowerRepository)
+	if !ok {
+		t.Fatal("lowercase repository ref was not pinnable")
+	}
+	const want = "huggingface/openai/whisper-tiny/ref/Main"
+	if upperKey != want || lowerKey != want {
+		t.Fatalf("case-alias pin keys = (%q, %q), want shared %q", upperKey, lowerKey, want)
+	}
+
+	lowerRef := ParseRequestPath("/openai/whisper-tiny/resolve/main/config.json")
+	lowerRefKey, ok := mutableRefPinKey(lowerRef)
+	if !ok {
+		t.Fatal("lowercase ref was not pinnable")
+	}
+	if lowerRefKey == want {
+		t.Fatalf("case-sensitive refs collapsed to one pin key %q", lowerRefKey)
+	}
+}
+
+func TestSchemaV3RefPinCleanupCannotBeResplitByRepositoryCaseAliases(t *testing.T) {
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "schema-v3-ref-pins.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	legacyPins := []db.HuggingFaceRefPin{
+		{
+			Key:       "huggingface/OpenAI/Whisper-Tiny/ref/Main",
+			Commit:    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			ExpiresAt: now.Add(time.Hour),
+		},
+		{
+			Key:       "huggingface/openai/whisper-tiny/ref/Main",
+			Commit:    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			ExpiresAt: now.Add(time.Hour),
+		},
+	}
+	if err := database.Create(&legacyPins).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec("DELETE FROM schema_migrations WHERE version >= 3").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatalf("apply schema v3 cleanup: %v", err)
+	}
+	var pinsAfterCleanup int64
+	if err := database.Model(&db.HuggingFaceRefPin{}).Count(&pinsAfterCleanup).Error; err != nil {
+		t.Fatal(err)
+	}
+	if pinsAfterCleanup != 0 {
+		t.Fatalf("schema v3 retained %d legacy ref pins", pinsAfterCleanup)
+	}
+
+	upperKey, ok := mutableRefPinKey(ParseRequestPath(
+		"/OpenAI/Whisper-Tiny/resolve/Main/config.json",
+	))
+	if !ok {
+		t.Fatal("mixed-case repository ref was not pinnable")
+	}
+	lowerKey, ok := mutableRefPinKey(ParseRequestPath(
+		"/openai/whisper-tiny/raw/Main/model.bin",
+	))
+	if !ok {
+		t.Fatal("lowercase repository ref was not pinnable")
+	}
+	handler := &Handler{db: database}
+	first, err := handler.claimRefPin(context.Background(), db.HuggingFaceRefPin{
+		Key:       upperKey,
+		Commit:    legacyPins[0].Commit,
+		ExpiresAt: now.Add(time.Hour),
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := handler.claimRefPin(context.Background(), db.HuggingFaceRefPin{
+		Key:       lowerKey,
+		Commit:    legacyPins[1].Commit,
+		ExpiresAt: now.Add(time.Hour),
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Key != second.Key || first.Commit != second.Commit {
+		t.Fatalf("case aliases split after schema v3: first=%+v second=%+v", first, second)
+	}
+	var pinsAfterRequests int64
+	if err := database.Model(&db.HuggingFaceRefPin{}).Count(&pinsAfterRequests).Error; err != nil {
+		t.Fatal(err)
+	}
+	if pinsAfterRequests != 1 {
+		t.Fatalf("case aliases recreated %d ref pins after schema v3, want 1", pinsAfterRequests)
+	}
+}
+
 func TestSelectAfterFailureNeverReadmitsCriticallyFailedOnlySource(t *testing.T) {
 	pool, err := upstream.NewPool([]config.UpstreamConfig{{
 		Name:      "only",

@@ -8,7 +8,7 @@ import (
 
 // IndexCacheKey returns the cache key for a package's simple index page.
 func IndexCacheKey(prefix, packageName string) string {
-	return prefix + "/simple/" + strings.ToLower(packageName) + "/index.html"
+	return prefix + "/simple/" + canonicalProjectName(packageName) + "/index.html"
 }
 
 // signedIndexCacheKey versions cached index HTML by both token format and
@@ -16,8 +16,33 @@ func IndexCacheKey(prefix, packageName string) string {
 // old token format nor references signed by a rotated key may be reused.
 func signedIndexCacheKey(prefix, packageName string, signingKey []byte) string {
 	digest := sha256.Sum256(signingKey)
-	return prefix + "/simple/" + strings.ToLower(packageName) +
+	return prefix + "/simple/" + canonicalProjectName(packageName) +
 		"/_signed/" + externalArtifactTokenVersion + "/" + hex.EncodeToString(digest[:]) + "/index.html"
+}
+
+// canonicalProjectName applies the PEP 503 identity rule used by PyPI: ASCII
+// case-folding plus collapse of every run of '.', '_' and '-' to one '-'.
+// Request validation owns rejection of malformed names; cache identity must at
+// least ensure every valid alias reaches the same object.
+func canonicalProjectName(packageName string) string {
+	var normalized strings.Builder
+	normalized.Grow(len(packageName))
+	separator := false
+	for _, character := range strings.ToLower(packageName) {
+		if character == '.' || character == '_' || character == '-' {
+			separator = true
+			continue
+		}
+		if separator {
+			normalized.WriteByte('-')
+			separator = false
+		}
+		normalized.WriteRune(character)
+	}
+	if separator {
+		normalized.WriteByte('-')
+	}
+	return normalized.String()
 }
 
 // IndexPackageFromCacheKey extracts the project name from either the legacy

@@ -9,6 +9,7 @@ import (
 
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
+	"depsilo/internal/packagepolicy"
 )
 
 // PackageInvalidationResult reports whether every discovered representation
@@ -23,6 +24,7 @@ type PackageInvalidationResult struct {
 type packageInvalidationEntry struct {
 	Key         string
 	StoragePath string
+	PackageName string
 	generation  uint64
 }
 
@@ -38,13 +40,25 @@ func (m *Manager) InvalidatePackage(
 	if m == nil {
 		return result, ErrManagerClosed
 	}
-	adapterType = strings.TrimSpace(adapterType)
+	adapterType = strings.ToLower(strings.TrimSpace(adapterType))
 	packageName = strings.TrimSpace(packageName)
 	if adapterType == "" {
 		return result, errors.New("cache package invalidation adapter type is empty")
 	}
 	if packageName == "" {
 		return result, errors.New("cache package invalidation package name is empty")
+	}
+	packageMatches := func(candidate string) bool { return candidate == packageName }
+	if dialect, err := packagepolicy.DialectFor(adapterType); err == nil {
+		normalizedPackageName, normalizeErr := dialect.NormalizePackageName(packageName)
+		if normalizeErr != nil {
+			return result, fmt.Errorf("normalize cache package invalidation identity: %w", normalizeErr)
+		}
+		packageName = normalizedPackageName
+		packageMatches = func(candidate string) bool {
+			normalizedCandidate, candidateErr := dialect.NormalizePackageName(candidate)
+			return candidateErr == nil && normalizedCandidate == packageName
+		}
 	}
 	if m.db == nil || m.storage == nil || m.invalidations == nil {
 		return result, errors.New("cache package invalidation is not initialized")
@@ -68,7 +82,7 @@ func (m *Manager) InvalidatePackage(
 	m.refreshMu.Lock()
 	entriesByKey := make(map[string]packageInvalidationEntry)
 	for key := range m.inflight {
-		if packagekey.ExtractName(adapterType, key) == packageName {
+		if packageMatches(packagekey.ExtractName(adapterType, key)) {
 			entriesByKey[key] = packageInvalidationEntry{
 				Key:         key,
 				StoragePath: key,
@@ -76,7 +90,7 @@ func (m *Manager) InvalidatePackage(
 		}
 	}
 	for key := range m.refreshing {
-		if packagekey.ExtractName(adapterType, key) == packageName {
+		if packageMatches(packagekey.ExtractName(adapterType, key)) {
 			entriesByKey[key] = packageInvalidationEntry{
 				Key:         key,
 				StoragePath: key,
@@ -87,15 +101,15 @@ func (m *Manager) InvalidatePackage(
 	var persisted []packageInvalidationEntry
 	if err := m.db.WithContext(cleanupCtx).
 		Model(&db.CacheEntry{}).
-		Select("key", "storage_path").
-		Where("adapter_type = ? AND package_name = ?", adapterType, packageName).
+		Select("key", "storage_path", "package_name").
+		Where("adapter_type = ?", adapterType).
 		Find(&persisted).Error; err != nil {
 		m.refreshMu.Unlock()
 		m.inflightMu.Unlock()
 		return result, fmt.Errorf("list package cache entries: %w", err)
 	}
 	for _, entry := range persisted {
-		if entry.Key == "" {
+		if entry.Key == "" || !packageMatches(entry.PackageName) {
 			continue
 		}
 		if entry.StoragePath == "" {

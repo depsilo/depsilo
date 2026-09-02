@@ -48,10 +48,16 @@ const (
 // Built by NewPolicy from a config.SupplyChainConfig — never
 // constructed by hand outside tests.
 type Policy struct {
-	// ageGateEnabled is the resolved global switch. Thresholds retain the
-	// recommended profile even while disabled so an explicit true can enable
-	// the profile without duplicating every ecosystem in configuration.
+	// ageGateEnabled is the resolved operator request. It does not imply that
+	// any ecosystem is active: source-unbound thresholds are forced to zero.
 	ageGateEnabled bool
+
+	// sourceProvenanceBound is nil in every production policy today. It is the
+	// explicit seam a future composition root must provide only after proving
+	// the selected artifact and timestamp share one source identity. Keeping the
+	// predicate on Policy also lets checker unit tests exercise decision logic
+	// without weakening NewPolicy's startup rejection.
+	sourceProvenanceBound func(ecosystem string) bool
 
 	// Per-ecosystem threshold lookup. Keys are lowercase ecosystem
 	// names matching internal/adapter directory names ("pypi", "npm",
@@ -112,39 +118,40 @@ type Config struct {
 	FailClosed *bool `mapstructure:"fail_closed"`
 }
 
-// DefaultThresholds returns the recommended per-ecosystem profile used when
-// the minimum-release-age gate is enabled. The gate itself defaults off for
-// new and empty configurations.
+// DefaultThresholds returns the safe production profile. The gate itself
+// defaults off for new and empty configurations.
 //
-// Rationale per ecosystem:
-//   - pip / cargo / maven / rubygems / nuget / composer: 3d window
-//     covers the typical 24-48h "community catches it and yanks"
-//     timeline for Shai-Hulud-class malware with a margin of safety.
-//   - npm: 7d because npm sees an order-of-magnitude more publishes
-//     than the others; community noticing and yanking lags more.
-//   - go: 0 — Go modules are immutable on proxy.golang.org and the
-//     checksum DB cross-validates content. Re-tagging is impossible
-//     without changing the hash, which the toolchain rejects.
-//   - conda / cran / helm / alpine / docker / huggingface: 3d
-//     as a conservative middle ground; can be tuned per-deployment.
+// Every ecosystem is currently zero. The configured artifact upstream may be
+// private or shadow a public registry, while the timestamp resolvers query
+// fixed public registries and the timestamp cache has no source identity. A
+// public release timestamp therefore cannot safely govern bytes selected from
+// an arbitrary source. Positive defaults return only after source provenance
+// is bound from metadata through artifact fetch and timestamp persistence.
 func DefaultThresholds() map[string]time.Duration {
 	return map[string]time.Duration{
-		"pypi":        3 * 24 * time.Hour,
-		"npm":         7 * 24 * time.Hour,
+		"pypi":        0,
+		"npm":         0,
 		"go":          0,
-		"cargo":       3 * 24 * time.Hour,
-		"maven":       3 * 24 * time.Hour,
-		"rubygems":    3 * 24 * time.Hour,
-		"composer":    3 * 24 * time.Hour,
-		"nuget":       3 * 24 * time.Hour,
-		"conda":       3 * 24 * time.Hour,
-		"cran":        3 * 24 * time.Hour,
-		"helm":        3 * 24 * time.Hour,
-		"alpine":      3 * 24 * time.Hour,
-		"docker":      3 * 24 * time.Hour,
-		"huggingface": 3 * 24 * time.Hour,
-		"apt":         0, // apt repos are highly curated upstream; quarantine adds noise here.
+		"cargo":       0,
+		"maven":       0,
+		"rubygems":    0,
+		"composer":    0,
+		"nuget":       0,
+		"conda":       0,
+		"cran":        0,
+		"helm":        0,
+		"alpine":      0,
+		"docker":      0,
+		"huggingface": 0,
+		"apt":         0,
 	}
+}
+
+// SupportsMinimumReleaseAge reports whether an ecosystem has a trusted request
+// identity, the exact selected artifact source, and a publish-time resolver
+// authoritative for that same source. It is intentionally a closed allow-list.
+func SupportsMinimumReleaseAge(ecosystem string) bool {
+	return false
 }
 
 // NewPolicy normalizes a Config into a Policy ready for the checker.
@@ -164,11 +171,23 @@ func NewPolicy(cfg Config) (*Policy, error) {
 		if err != nil {
 			return nil, fmt.Errorf("quarantine: invalid duration for %q: %w", key, err)
 		}
-		if key == "default" {
+		normalizedKey := strings.ToLower(strings.TrimSpace(key))
+		if normalizedKey == "default" {
+			if ageGateEnabled && dur > 0 {
+				return nil, fmt.Errorf(
+					"quarantine: positive minimum release age defaults are not supported safely until artifact source provenance is bound; set default to 0 or disable the age gate",
+				)
+			}
 			defaultThreshold = dur
 			continue
 		}
-		thresholds[strings.ToLower(key)] = dur
+		if ageGateEnabled && dur > 0 && !SupportsMinimumReleaseAge(normalizedKey) {
+			return nil, fmt.Errorf(
+				"quarantine: minimum release age for ecosystem %q is not supported safely; set its threshold to 0 or disable the age gate",
+				normalizedKey,
+			)
+		}
+		thresholds[normalizedKey] = dur
 	}
 
 	mode := ModeBlock
@@ -210,7 +229,15 @@ func (p *Policy) Threshold(ecosystem string) time.Duration {
 	if p == nil || !p.ageGateEnabled {
 		return 0
 	}
-	if d, ok := p.Thresholds[strings.ToLower(ecosystem)]; ok {
+	normalizedEcosystem := strings.ToLower(strings.TrimSpace(ecosystem))
+	provenanceBound := SupportsMinimumReleaseAge(normalizedEcosystem)
+	if !provenanceBound && p.sourceProvenanceBound != nil {
+		provenanceBound = p.sourceProvenanceBound(normalizedEcosystem)
+	}
+	if !provenanceBound {
+		return 0
+	}
+	if d, ok := p.Thresholds[normalizedEcosystem]; ok {
 		return d
 	}
 	return p.Default
@@ -227,6 +254,22 @@ func (p *Policy) Enabled(ecosystem string) bool {
 // zero-threshold exemptions are applied.
 func (p *Policy) IsAgeGateEnabled() bool {
 	return p != nil && p.ageGateEnabled
+}
+
+// HasActiveThresholds reports whether the resolved policy can make an age
+// decision for at least one concrete ecosystem. This differs from
+// IsAgeGateEnabled: an operator may retain the switch while all thresholds are
+// deliberately zero until artifact and timestamp source provenance is bound.
+func (p *Policy) HasActiveThresholds() bool {
+	if p == nil || !p.ageGateEnabled {
+		return false
+	}
+	for ecosystemName := range p.Thresholds {
+		if p.Threshold(ecosystemName) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseDuration extends time.ParseDuration with "d" (days) and "w"

@@ -348,6 +348,13 @@ func TestRepositoryRevocationStoreErrorsFailClosed(t *testing.T) {
 	); !errors.Is(err, errRepositoryRevocationMarkerInvalid) {
 		t.Fatalf("invalid marker error = %v", err)
 	}
+	if _, err := store.Begin(
+		context.Background(),
+		"Acme/Model",
+		"Acme/Model",
+	); !errors.Is(err, errRepositoryRevocationMarkerInvalid) {
+		t.Fatalf("mixed-case marker error = %v, want canonical-identity rejection", err)
+	}
 
 	sqlDB, err := database.DB()
 	if err != nil {

@@ -43,8 +43,12 @@ Package managers / CI / coding agents
 - **Cache** — stream artifacts into local or S3-backed storage, coalesce
   concurrent misses, and serve eligible cached artifacts when an Upstream is
   unavailable.
-- **Enforce** — block operator-defined package rules, known-malicious
-  versions, or releases that violate an enabled cooling period.
+- **Enforce** — where a proxy request carries an authoritative package identity,
+  apply operator-defined rules according to the
+  [Package Rule capability matrix](docs/package-rules.md), and block
+  known-malicious versions for the ecosystems listed below.
+  Minimum-release-age enforcement is temporarily safety-disabled until
+  artifact-source and timestamp provenance are bound.
 - **Verify** — record first-seen hashes and surface tamper alerts when immutable
   artifacts change during a natural refresh.
 - **Audit** — keep requests, policy decisions, and Upstream health visible in
@@ -190,10 +194,10 @@ change the others.
 
 | Control | Default | Behavior |
 | --- | --- | --- |
-| Known-malicious blocklist | On | Syncs explicit and all-version OSV MAL records for eight covered ecosystems and blocks a match before serving it. |
-| Minimum release age | Off | When enabled, holds newly published versions for an operator-configured period. |
+| Known-malicious blocklist | On | Syncs explicit and all-version OSV MAL records for npm, Cargo, Composer, NuGet, Go, and Maven, then blocks a match before serving it. |
+| Minimum release age | Unavailable | Positive enabled thresholds are rejected until artifact-source and timestamp provenance are bound. |
 | Tamper detection | On | Compares immutable artifacts against their first-seen SHA-256 during natural refreshes and emits an alert on mismatch. It is alert-only. |
-| Package allow / deny rules | Operator-defined | Applies explicit package policy on the request path and records the decision. |
+| Package allow / deny rules | Operator-defined | Applies and records only selectors supported by the [request-path capability matrix](docs/package-rules.md); unsupported surfaces do not guess package or version identity. |
 
 A new installation begins enforcing the malicious-package dataset after its
 first successful sync. Later sync failures keep using the last good dataset
@@ -208,7 +212,9 @@ distribution URL. Operators who require hard enforcement for Composer must
 also restrict direct client access to that origin.
 
 See [`config.example.toml`](config.example.toml) for the full policy schema and
-current ecosystem defaults.
+current ecosystem defaults. See the
+[Package Rule capability matrix](docs/package-rules.md) for exact per-ecosystem
+name, version, and range support.
 
 ## State, configuration, and health
 

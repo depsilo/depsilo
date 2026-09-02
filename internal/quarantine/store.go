@@ -4,13 +4,51 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"depsilo/internal/db"
+	"depsilo/internal/packagepolicy"
 )
+
+var ErrInvalidCoordinate = errors.New("invalid quarantine package coordinate")
+
+// Coordinate is the ecosystem-dialect identity used by permanent version
+// approvals. It is intentionally separate from the raw values accepted by the
+// admin API: aliases that an ecosystem considers identical must not create
+// distinct approval or revocation decisions.
+type Coordinate struct {
+	Ecosystem string
+	Package   string
+	Version   string
+}
+
+// NormalizeCoordinate validates a concrete package coordinate and returns the
+// stable spelling persisted by the quarantine store. CompareVersions remains
+// the authority for equality because some dialects (notably SemVer) retain
+// build metadata in their stable spelling while ignoring it for precedence.
+func NormalizeCoordinate(ecosystem, pkg, version string) (Coordinate, error) {
+	normalized := Coordinate{Ecosystem: strings.ToLower(strings.TrimSpace(ecosystem))}
+	dialect, err := packagepolicy.DialectFor(normalized.Ecosystem)
+	if err != nil {
+		return Coordinate{}, fmt.Errorf("%w: ecosystem: %v", ErrInvalidCoordinate, err)
+	}
+	normalized.Package, err = dialect.NormalizePackageName(pkg)
+	if err != nil {
+		return Coordinate{}, fmt.Errorf("%w: package: %v", ErrInvalidCoordinate, err)
+	}
+	normalized.Version, err = packagepolicy.NormalizeVersion(normalized.Ecosystem, version)
+	if err != nil {
+		return Coordinate{}, fmt.Errorf("%w: version: %v", ErrInvalidCoordinate, err)
+	}
+	if len(normalized.Ecosystem) > 32 || len(normalized.Package) > 256 || len(normalized.Version) > 128 {
+		return Coordinate{}, fmt.Errorf("%w: normalized coordinate exceeds database limits", ErrInvalidCoordinate)
+	}
+	return normalized, nil
+}
 
 // Event action constants — exported strings so admin API JSON
 // responses can filter on them without an indirection layer.
@@ -106,14 +144,15 @@ func (s *Store) IsApproved(ctx context.Context, ecosystem, pkg, version string) 
 	if s == nil || s.db == nil {
 		return false, nil
 	}
-	var count int64
-	err := s.db.WithContext(ctx).Model(&db.ApprovedVersion{}).
-		Where("ecosystem = ? AND package = ? AND version = ?", ecosystem, pkg, version).
-		Count(&count).Error
+	coordinate, err := NormalizeCoordinate(ecosystem, pkg, version)
+	if err != nil {
+		return false, err
+	}
+	ids, err := equivalentApprovalIDs(s.db.WithContext(ctx), coordinate)
 	if err != nil {
 		return false, fmt.Errorf("is approved: %w", err)
 	}
-	return count > 0, nil
+	return len(ids) > 0, nil
 }
 
 // Approve persists an admin's manual release of a quarantined version
@@ -124,11 +163,24 @@ func (s *Store) Approve(ctx context.Context, ecosystem, pkg, version, reason str
 	if s == nil || s.db == nil {
 		return nil
 	}
+	coordinate, err := NormalizeCoordinate(ecosystem, pkg, version)
+	if err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		ids, err := equivalentApprovalIDs(tx, coordinate)
+		if err != nil {
+			return fmt.Errorf("find equivalent approvals: %w", err)
+		}
+		if len(ids) > 0 {
+			if err := tx.Where("id IN ?", ids).Delete(&db.ApprovedVersion{}).Error; err != nil {
+				return fmt.Errorf("replace equivalent approvals: %w", err)
+			}
+		}
 		row := db.ApprovedVersion{
-			Ecosystem:  ecosystem,
-			Package:    pkg,
-			Version:    version,
+			Ecosystem:  coordinate.Ecosystem,
+			Package:    coordinate.Package,
+			Version:    coordinate.Version,
 			Reason:     reason,
 			ApprovedBy: actorID,
 			CreatedAt:  time.Now().UTC(),
@@ -140,9 +192,9 @@ func (s *Store) Approve(ctx context.Context, ecosystem, pkg, version, reason str
 			return fmt.Errorf("approve insert: %w", err)
 		}
 		ev := db.QuarantineEvent{
-			Ecosystem: ecosystem,
-			Package:   pkg,
-			Version:   version,
+			Ecosystem: coordinate.Ecosystem,
+			Package:   coordinate.Package,
+			Version:   coordinate.Version,
 			Action:    ActionApproved,
 			Reason:    reason,
 			ActorID:   actorID,
@@ -162,19 +214,25 @@ func (s *Store) Revoke(ctx context.Context, ecosystem, pkg, version, reason stri
 	if s == nil || s.db == nil {
 		return nil
 	}
+	coordinate, err := NormalizeCoordinate(ecosystem, pkg, version)
+	if err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.Where("ecosystem = ? AND package = ? AND version = ?", ecosystem, pkg, version).
-			Delete(&db.ApprovedVersion{})
-		if res.Error != nil {
-			return fmt.Errorf("revoke delete: %w", res.Error)
+		ids, err := equivalentApprovalIDs(tx, coordinate)
+		if err != nil {
+			return fmt.Errorf("find equivalent approvals: %w", err)
 		}
-		if res.RowsAffected == 0 {
+		if len(ids) == 0 {
 			return nil
 		}
+		if err := tx.Where("id IN ?", ids).Delete(&db.ApprovedVersion{}).Error; err != nil {
+			return fmt.Errorf("revoke delete: %w", err)
+		}
 		ev := db.QuarantineEvent{
-			Ecosystem: ecosystem,
-			Package:   pkg,
-			Version:   version,
+			Ecosystem: coordinate.Ecosystem,
+			Package:   coordinate.Package,
+			Version:   coordinate.Version,
 			Action:    ActionRevoked,
 			Reason:    reason,
 			ActorID:   actorID,
@@ -182,6 +240,36 @@ func (s *Store) Revoke(ctx context.Context, ecosystem, pkg, version, reason stri
 		}
 		return tx.Create(&ev).Error
 	})
+}
+
+// equivalentApprovalIDs locates both current canonical rows and valid rows
+// written by older releases. Invalid legacy rows are never treated as an
+// approval; schema migration reports them separately instead of guessing.
+func equivalentApprovalIDs(database *gorm.DB, target Coordinate) ([]uint, error) {
+	var candidates []db.ApprovedVersion
+	if err := database.Where("lower(ecosystem) = ?", target.Ecosystem).
+		Order("id ASC").Find(&candidates).Error; err != nil {
+		return nil, err
+	}
+	dialect, err := packagepolicy.DialectFor(target.Ecosystem)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uint, 0, 1)
+	for _, candidate := range candidates {
+		normalized, err := NormalizeCoordinate(candidate.Ecosystem, candidate.Package, candidate.Version)
+		if err != nil || normalized.Package != target.Package {
+			continue
+		}
+		comparison, err := dialect.CompareVersions(normalized.Version, target.Version)
+		if err != nil {
+			continue
+		}
+		if comparison == 0 {
+			ids = append(ids, candidate.ID)
+		}
+	}
+	return ids, nil
 }
 
 // RecordEvent persists a request-time decision (block, serve_eligible,

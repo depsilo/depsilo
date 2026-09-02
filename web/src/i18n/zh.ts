@@ -317,6 +317,17 @@ const zh = {
       emptyHint: '服务已启动。配置你的第一个客户端开始接收请求。',
     },
 
+    // 包规则快照状态——当请求链路使用过期或不可用的策略快照时，
+    // 在管理后台 shell 中显式提示。
+    policy: {
+      staleSnapshot: '包规则正在使用过期快照。',
+      lastSuccessfulRefresh: '上次成功刷新：{{time}}',
+      neverRefreshed: '尚未成功刷新过包规则快照。',
+      statusUnavailable: '策略状态暂时不可用。请先确认状态，再判断策略是否正常。',
+      refresh: '刷新策略状态',
+      refreshing: '正在刷新策略状态...',
+    },
+
     // Bandwidth Report
     bandwidth: {
       title: '带宽报告',
@@ -650,7 +661,8 @@ const zh = {
     // Supply-chain Quarantine
     quarantine: {
       title: '供应链隔离',
-      subtitle: '最小发布年龄默认关闭；启用并配置阈值后可隔离刚发布的版本。恶意包封锁独立运行，所有决策都会记录在这里。',
+      subtitle: '查看恶意包、内容篡改及历史隔离决策。最小发布年龄强制执行暂时不可用。',
+      minimum_age_unavailable: '最小发布年龄已安全停用，等待制品来源与发布时间证明完成绑定。启用状态下的正阈值会导致启动拒绝，当前也不能新建永久放行。',
       tab: {
         events: '事件',
         approvals: '已放行',
@@ -692,7 +704,7 @@ const zh = {
         sync_now: '立即同步',
         syncing: '同步中…',
         overrides_title: '误报豁免',
-        overrides_hint: '豁免创建后 24 小时自动过期，且不可续期——只能重新创建（每次都是一条审计记录）。豁免只解除恶意封锁；若已启用最小发布年龄，隔离仍会继续执行。',
+        overrides_hint: '豁免创建后 24 小时自动过期，且不可续期——只能重新创建（每次都是一条审计记录）。豁免只解除恶意封锁。',
         no_overrides_title: '没有生效中的豁免',
         no_overrides_hint: '命中恶意封锁的请求会以 451 MALICIOUS_BLOCKED 拒绝。确认误报后可在此临时豁免。',
         col_expires: '剩余有效期',
@@ -704,6 +716,7 @@ const zh = {
         version_placeholder: '版本（留空 = 全部版本）',
         create_error: '创建失败',
         create_submit: '创建豁免（24h）',
+        creating: '创建中…',
         overrides_table: '恶意封锁豁免表格',
       },
       col: {
@@ -718,25 +731,17 @@ const zh = {
       events: {
         table: '供应链隔离事件表格',
         empty_title: '暂无供应链事件',
-        empty_hint: '最小发布年龄启用后的决策、恶意包命中和篡改告警会显示在这里。',
+        empty_hint: '恶意包命中、篡改告警及历史最小发布年龄决策会显示在这里。',
       },
       approvals: {
         table: '供应链隔离放行表格',
         empty_title: '暂无人工放行',
-        empty_hint: '在事件流里给被拦截的版本「放行」之后会出现在这里。',
-      },
-      approve: {
-        cta: '放行',
-        title: '放行此版本',
-        body: '即将放行 {{eco}} 生态的 {{pkg}} {{ver}} ——以后所有客户端都会直接拿到此版本，跳过隔离检查。请填写原因（必填，留作审计）。',
-        submit: '确认放行',
-        submitting: '提交中…',
-        error: '放行失败，请稍后重试。',
+        empty_hint: '当前没有历史最小发布年龄放行记录；安全停用期间不能新建放行。',
       },
       revoke: {
         cta: '撤销',
         title: '撤销此放行',
-        body: '撤销后，{{eco}} 生态的 {{pkg}} {{ver}} 将重新受隔离策略约束。请填写撤销原因（必填）。',
+        body: '撤销 {{eco}} 生态中 {{pkg}} {{ver}} 的已存放行。最小发布年龄当前未执行；本次删除会记录审计，并防止未来恢复隔离时继承该绕过。',
         submit: '撤销',
         submitting: '撤销中…',
         error: '撤销失败，请稍后重试。',
@@ -791,11 +796,19 @@ const zh = {
       editRule: '编辑规则',
       testRule: '测试规则',
       ecosystem: '生态',
-      allEcosystems: '全部生态',
+      allEcosystems: '全部包规则生态',
       packageName: '包名',
       packagePlaceholder: '如 log4j 或 org.apache.*',
+      mavenPackagePlaceholder: '如 org.apache.logging.log4j:log4j-core',
       version: '版本',
       versionPlaceholder: '如 < 2.17.0 或 * 表示全部',
+      exactVersionPlaceholder: '精确版本，或 * 表示全部版本',
+      exactOnlyHint: '此生态仅支持包级规则和精确版本规则；版本范围会被拒绝。',
+      globalRuleHint: '此规则覆盖所有支持包规则的生态，但不覆盖 Docker、Hugging Face、RubyGems 或 Helm；包名和版本都必须使用 *。',
+      aptVersionHint: 'APT 包规则目前只能覆盖整个包，因为 .deb 路径不含 Debian epoch。索引版本映射可用前，版本选择器会被拒绝。',
+      npmVersionHint: 'npm 精确版本及单个 <、<=、> 或 >= 比较器仅在元数据返回的已签名 dist.tarball URL 上执行。不支持 Node 风格的复合范围；手工构造的旧 tarball URL 会被拒绝。',
+      composerVersionHint: 'Composer 包规则目前只能覆盖整个包，因为 dist URL 可能使用规范化版本或 reference 回退，而不是声明的展示版本。版本选择器会被拒绝。',
+      testVersionPlaceholder: '实际包版本，如 2.17.0',
       action: '操作',
       allow: '允许',
       deny: '禁止',
@@ -869,15 +882,12 @@ const zh = {
       importFile: '导入漏洞数据',
       importDesc: '上传 OSV JSON 文件',
       importSuccess: '已导入 {{count}} 条漏洞',
-      importSummary: '接收 {{received}} · 涉及包 {{packages}} · 重复 {{duplicates}} · 跳过 {{skipped}} · 新建规则 {{rulesCreated}}',
+      importSummary: '接收 {{received}} · 涉及包 {{packages}} · 重复 {{duplicates}} · 跳过 {{skipped}}',
       importFormat: 'OSV JSON 格式',
 
       // Suggestions tab
-      block: '阻止',
-      blockTitle: '要拦截这条包建议吗？',
-      blockImpact: '这会为 {{name}} 创建拦截规则；在管理员修改规则前，匹配的依赖请求可能会被拒绝。',
-      confirmBlock: '创建拦截规则',
-      blocking: '正在创建规则…',
+      manualRuleRequired: '完整 OSV 受影响集合目前无法无损投影，因此不能自动从建议创建规则。请先复核公告，再使用明确的选择器手动创建包规则。',
+      openPackageRules: '打开包规则',
       dismissTitle: '要忽略这条安全建议吗？',
       dismissImpact: '这会从当前待处理队列移除 {{name}}，但不会创建规则；后续扫描仍可能再次提出建议。',
       confirmDismiss: '忽略建议',
@@ -895,7 +905,12 @@ const zh = {
       policyHint: '先应用共享基线，再只保留有明确原因的生态差异。',
       cvssThreshold: 'CVSS 阈值',
       bulkAutoBlock: '共享自动拦截基线',
-      bulkPolicyHint: '把这组草稿应用到所有支持的生态；确认保存前不会写入服务端。',
+      bulkPolicyHint: '完整 OSV 受影响集合目前无法无损投影，因此所有生态的自动拦截都已安全停用。此草稿只能关闭旧版策略；确认保存前不会写入服务端。',
+      autoBlockUnavailableOSVProjection: '不可用：完整 OSV 受影响集合目前无法无损投影为包规则。旧版已启用的策略只能关闭。',
+      autoBlockUnavailableExactOnly: '不可用：自动拦截依赖版本范围，而此生态不支持版本范围。旧版已启用的策略只能关闭。',
+      autoBlockUnavailableApt: '不可用：.deb 路径不含 Debian epoch，目前无法安全执行自动版本拦截。旧版已启用的策略只能关闭。',
+      autoBlockUnavailableComposer: '不可用：Composer dist URL 可能暴露规范化版本或 reference 回退，而不是声明的展示版本。旧版已启用的策略只能关闭。',
+      autoBlockUnavailableNoPackageRules: '不可用：制品路径无法建立无歧义的包身份，因此此生态不提供 Package Rule。旧版已启用的策略只能关闭。',
       applyToAll: '应用草稿到全部',
       unsavedCount: '{{count}} 项未保存变更',
       showChangedOnly: '只看变更',

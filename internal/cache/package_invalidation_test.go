@@ -178,3 +178,29 @@ func TestInvalidatePackageRetainsTombstonesWhenBothDeletesFail(t *testing.T) {
 		t.Fatalf("retry package invalidation = (%+v, %v), want 2 safe entries", retry, retryErr)
 	}
 }
+
+func TestInvalidatePackageMatchesLegacyHuggingFaceCaseAliases(t *testing.T) {
+	storage := newMutationTestStorage()
+	manager, _, closeManager := newPackageInvalidationManager(t, storage)
+	t.Cleanup(closeManager)
+
+	key := "huggingface/OpenAI/Whisper-Tiny/resolve/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/config.json"
+	storage.seed(key, []byte("old"))
+	if err := manager.db.Create(&db.CacheEntry{
+		Key: key, AdapterType: "huggingface", CacheKind: db.CacheKindArtifact,
+		PackageName: "OpenAI/Whisper-Tiny", StoragePath: key, Size: 3,
+		ExpiresAt: time.Now().Add(time.Hour),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.InvalidatePackage(
+		context.Background(), "huggingface", "openai/whisper-tiny",
+	)
+	if err != nil || !result.SafeToRestore || result.Entries != 1 {
+		t.Fatalf("case-alias invalidation = (%+v, %v), want one safe entry", result, err)
+	}
+	if _, err := manager.Head(context.Background(), key, "huggingface"); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("legacy alias remained readable: %v", err)
+	}
+}

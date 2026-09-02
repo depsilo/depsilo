@@ -16,9 +16,17 @@ func IsPackageFile(adapterType, key string) bool {
 	case "cargo":
 		return strings.HasSuffix(key, ".crate")
 	case "apt":
-		return strings.HasSuffix(key, ".deb")
+		_, ok := trimDebianPackageExtension(key)
+		return ok
 	case "maven":
-		return strings.HasSuffix(key, ".jar") || strings.HasSuffix(key, ".aar") || strings.HasSuffix(key, ".pom")
+		lower := strings.ToLower(key)
+		for _, sidecar := range []string{".asc", ".md5", ".sha1", ".sha256", ".sha512"} {
+			if strings.HasSuffix(lower, sidecar) {
+				return false
+			}
+		}
+		coordinate, version := ParseMavenPath(strings.TrimPrefix(key, "maven/"))
+		return coordinate != "" && version != ""
 	case "rubygems":
 		return strings.HasSuffix(key, ".gem")
 	case "composer":

@@ -39,6 +39,15 @@ func (s *PassiveRecoverySelector) Select(ctx context.Context) (*Upstream, error)
 	return s.selectCandidate(ctx, nil)
 }
 
+// ResolveProvenanceSource returns the exact source named by authenticated
+// metadata instead of applying health-based failover again.
+func (s *PassiveRecoverySelector) ResolveProvenanceSource(sourceID string) (*Upstream, error) {
+	if s == nil {
+		return nil, fmt.Errorf("artifact provenance source is unavailable")
+	}
+	return resolveProvenanceSource(s.pool, sourceID)
+}
+
 // SelectExcluding keeps request-local retries away from the source that just
 // failed. Healthy alternatives remain preferred; an unhealthy passive
 // alternative may enter half-open recovery only when no healthy one exists.

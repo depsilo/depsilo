@@ -3,17 +3,20 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func validSetupRequest(t *testing.T, root string) []byte {
@@ -99,6 +102,139 @@ func newSetupTestHandler(t *testing.T) (*SetupHandler, *config.Config, string, *
 	return handler, cfg, root, &restarts
 }
 
+// newPersistentSetupTestHandler builds the same directory layout that a real
+// first-run process uses. The fault-boundary test closes this database and
+// reloads config.toml through config.Load, so it cannot accidentally pass by
+// carrying IsDefault or an in-memory GORM view across a simulated restart.
+func newPersistentSetupTestHandler(t *testing.T) (*SetupHandler, *config.Config, string, *int) {
+	t.Helper()
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatalf("create test home: %v", err)
+	}
+	t.Chdir(root)
+	t.Setenv("HOME", home)
+	// Keep the loader and the setup request on the same deterministic token,
+	// while clearing every stateful override a developer shell may provide.
+	for _, key := range []string{
+		"DEPSILO_CONFIG",
+		"DEPSILO_DATABASE_DSN",
+		"DEPSILO_DATABASE_DRIVER",
+		"DEPSILO_STORAGE_PATH",
+		"DEPSILO_COMPILE_CACHE_STORAGE_PATH",
+		"DEPSILO_AUTH_JWT_SECRET",
+		"DEPSILO_SERVER_HOST",
+		"DEPSILO_SERVER_PORT",
+		"DEPSILO_ADMIN_USERNAME",
+		"DEPSILO_ADMIN_PASSWORD",
+	} {
+		t.Setenv(key, "")
+	}
+	const bootstrapToken = "bootstrap-token-0123456789abcdef"
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", bootstrapToken)
+	configPath := filepath.Join(home, ".depsilo", "config.toml")
+	databasePath := filepath.Join(home, ".depsilo", "data", "depsilo.db")
+	database, err := db.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatalf("open persistent setup db: %v", err)
+	}
+	t.Cleanup(func() {
+		if sqlDatabase, dbErr := database.DB(); dbErr == nil {
+			_ = sqlDatabase.Close()
+		}
+	})
+	if err := database.AutoMigrate(&db.User{}, &db.APIToken{}, &db.ControlPlaneState{}); err != nil {
+		t.Fatalf("migrate persistent setup db: %v", err)
+	}
+	cfg := &config.Config{
+		IsDefault:      true,
+		ConfigPath:     configPath,
+		BootstrapToken: bootstrapToken,
+		Server:         config.ServerConfig{Host: "127.0.0.1", Port: 23333},
+		Database:       config.DatabaseConfig{Driver: "sqlite", DSN: databasePath},
+		Auth:           config.AuthConfig{Enabled: true, JWTSecret: authTestJWTSecret, TokenTTL: time.Hour},
+	}
+	restarts := 0
+	handler := NewSetupHandler(cfg, database)
+	handler.scheduleRestart = func() { restarts++ }
+	return handler, cfg, root, &restarts
+}
+
+func fileExists(t *testing.T, path string) bool {
+	t.Helper()
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	t.Fatalf("stat %s: %v", path, err)
+	return false
+}
+
+// restartSetupState closes the old SQL pool, reloads the on-disk config, and
+// opens a fresh pool against the DSN selected by that config. It intentionally
+// returns only durable state visible to a new process.
+func restartSetupState(t *testing.T, database *gorm.DB) (*config.Config, *gorm.DB) {
+	t.Helper()
+	sqlDatabase, err := database.DB()
+	if err != nil {
+		t.Fatalf("access setup db before restart: %v", err)
+	}
+	if err := sqlDatabase.Close(); err != nil {
+		t.Fatalf("close setup db before restart: %v", err)
+	}
+	restartedCfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("reload config after restart: %v", err)
+	}
+	restartedDB, err := db.Open(restartedCfg.Database.Driver, restartedCfg.Database.DSN)
+	if err != nil {
+		t.Fatalf("reopen setup db after restart: %v", err)
+	}
+	t.Cleanup(func() {
+		if sqlDB, dbErr := restartedDB.DB(); dbErr == nil {
+			_ = sqlDB.Close()
+		}
+	})
+	if err := restartedDB.AutoMigrate(&db.User{}, &db.APIToken{}, &db.ControlPlaneState{}); err != nil {
+		t.Fatalf("migrate reopened setup db: %v", err)
+	}
+	return restartedCfg, restartedDB
+}
+
+type setupStatusResponse struct {
+	NeedsSetup    bool `json:"needs_setup"`
+	TokenRequired bool `json:"token_required"`
+}
+
+func setupStatus(t *testing.T, handler *SetupHandler) setupStatusResponse {
+	t.Helper()
+	router := gin.New()
+	router.GET("/setup/status", handler.Status)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/setup/status", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("setup status code = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var status setupStatusResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode setup status: %v", err)
+	}
+	return status
+}
+
+func loginRequestForSetup(t *testing.T, database *gorm.DB, cfg *config.Config) *httptest.ResponseRecorder {
+	t.Helper()
+	router := gin.New()
+	handler := NewAuthHandler(database, cfg.Auth)
+	router.POST("/auth/login", handler.Login)
+	return loginTestRequest(router, "127.0.0.1", "operator", "Tr0ub4dor&Correct")
+}
+
 func TestSetupCompleteRequiresBootstrapTokenFromRemotePeer(t *testing.T) {
 	handler, _, root, restarts := newSetupTestHandler(t)
 	recorder := setupRequest(handler, "203.0.113.10:4321", "", validSetupRequest(t, root))
@@ -156,6 +292,214 @@ func TestSetupCompleteCreatesAdminAndProtectedConfig(t *testing.T) {
 	status, err := loadOnboardingStatus(t.Context(), handler.db)
 	if err != nil || status != onboardingStatusNotStarted {
 		t.Fatalf("fresh setup onboarding status = %q, err=%v, want not_started", status, err)
+	}
+}
+
+func TestSetupFaultBoundariesAlwaysRestartIntoRecoveryOrLogin(t *testing.T) {
+	type configExpectation uint8
+	const (
+		configMustBeAbsent configExpectation = iota
+		configMustBePresent
+		configMayBeEither
+	)
+	tests := []struct {
+		name              string
+		stage             setupStage
+		configExpectation configExpectation
+		wantAdmin         bool
+	}{
+		{name: "after administrator creation", stage: setupStageAfterAdminCreated},
+		{name: "after onboarding save", stage: setupStageAfterOnboardingSaved},
+		{name: "before database commit", stage: setupStageBeforeDBCommit},
+		{name: "after database commit", stage: setupStageAfterDBCommit, wantAdmin: true},
+		{name: "after temporary config write", stage: setupStageAfterConfigTempWrite, wantAdmin: true},
+		{name: "after temporary config fsync", stage: setupStageAfterConfigTempSync, wantAdmin: true},
+		{name: "before config rename", stage: setupStageBeforeConfigRename, wantAdmin: true},
+		{name: "after config rename", stage: setupStageAfterConfigRename, configExpectation: configMayBeEither, wantAdmin: true},
+		{name: "after config directory fsync", stage: setupStageAfterConfigDirSync, configExpectation: configMustBePresent, wantAdmin: true},
+		{name: "after durable config write", stage: setupStageAfterConfigWrite, configExpectation: configMustBePresent, wantAdmin: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler, cfg, root, restarts := newPersistentSetupTestHandler(t)
+			crashErr := errors.New("injected process stop at " + string(test.stage))
+			handler.stageHook = func(stage setupStage) error {
+				if stage == test.stage {
+					return crashErr
+				}
+				return nil
+			}
+
+			recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+			if recorder.Code != http.StatusInternalServerError {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if *restarts != 0 {
+				t.Fatalf("restart count = %d, want 0 after injected stop", *restarts)
+			}
+			configExists := fileExists(t, cfg.ConfigPath)
+			// A real power loss immediately after rename can leave either the old
+			// directory entry or the new one until the parent fsync is durable.
+			// The subsequent branch checks both outcomes, so this boundary must not
+			// turn that filesystem-level ambiguity into a false failure.
+			switch test.configExpectation {
+			case configMustBeAbsent:
+				if configExists {
+					t.Fatalf("config exists = true, want false")
+				}
+			case configMustBePresent:
+				if !configExists {
+					t.Fatalf("config exists = false, want true")
+				}
+			case configMayBeEither:
+				// Both outcomes are handled by the restart branch below.
+			default:
+				t.Fatalf("unknown config expectation %d", test.configExpectation)
+			}
+
+			restartedCfg, restartedDB := restartSetupState(t, handler.db)
+			var administrators int64
+			if err := restartedDB.Model(&db.User{}).
+				Where("username = ? AND role = ? AND enabled = ?", "operator", "admin", true).
+				Count(&administrators).Error; err != nil {
+				t.Fatal(err)
+			}
+			if got := administrators == 1; got != test.wantAdmin {
+				t.Fatalf("operator administrator persisted = %t, want %t", got, test.wantAdmin)
+			}
+			var onboardingRows int64
+			if err := restartedDB.Model(&db.ControlPlaneState{}).
+				Where("key = ?", onboardingStatusStateKey).
+				Count(&onboardingRows).Error; err != nil {
+				t.Fatalf("count onboarding rows: %v", err)
+			}
+			if got := onboardingRows == 1; got != test.wantAdmin {
+				t.Fatalf("onboarding state persisted = %t, want %t", got, test.wantAdmin)
+			}
+
+			status := setupStatus(t, NewSetupHandler(restartedCfg, restartedDB))
+			if status.NeedsSetup {
+				// Recovery path A: retrying the same request must create a rolled-back
+				// administrator or verify the already committed one, then publish config.
+				recovery := NewSetupHandler(restartedCfg, restartedDB)
+				recovery.scheduleRestart = func() {}
+				retry := setupRequest(
+					recovery,
+					"203.0.113.10:4321",
+					restartedCfg.BootstrapToken,
+					validSetupRequest(t, root),
+				)
+				if retry.Code != http.StatusOK {
+					t.Fatalf("setup recovery status = %d, body = %s", retry.Code, retry.Body.String())
+				}
+				if err := VerifyExistingAdminCredentials(restartedDB, "operator", "Tr0ub4dor&Correct"); err != nil {
+					t.Fatalf("recovered administrator credentials: %v", err)
+				}
+				return
+			}
+
+			// Recovery path B: when config is visible, the originally submitted
+			// administrator credentials must already work through the login API.
+			if login := loginRequestForSetup(t, restartedDB, restartedCfg); login.Code != http.StatusOK {
+				t.Fatalf("login after restart status = %d, body = %s", login.Code, login.Body.String())
+			}
+		})
+	}
+}
+
+func TestSetupStageForConfigWriteRejectsUnknownStage(t *testing.T) {
+	if _, err := setupStageForConfigWrite(config.WriteStage(255)); err == nil {
+		t.Fatal("unknown config publication stage was silently accepted")
+	}
+}
+
+func TestSetupCommitFailureLeavesSetupRecoverable(t *testing.T) {
+	handler, cfg, root, restarts := newPersistentSetupTestHandler(t)
+	handler.commit = func(*gorm.DB) error {
+		return errors.New("injected commit failure")
+	}
+
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if fileExists(t, cfg.ConfigPath) {
+		t.Fatal("config published after failed database commit")
+	}
+	if *restarts != 0 {
+		t.Fatalf("restart count = %d, want 0", *restarts)
+	}
+
+	restartedCfg, restartedDB := restartSetupState(t, handler.db)
+	var administrators int64
+	if err := restartedDB.Model(&db.User{}).Where("role = ? AND enabled = ?", "admin", true).Count(&administrators).Error; err != nil {
+		t.Fatal(err)
+	}
+	if administrators != 0 {
+		t.Fatalf("administrator count after failed commit = %d, want 0", administrators)
+	}
+	if status := setupStatus(t, NewSetupHandler(restartedCfg, restartedDB)); !status.NeedsSetup {
+		t.Fatalf("setup status after commit failure = %#v, want pending", status)
+	}
+	recovery := NewSetupHandler(restartedCfg, restartedDB)
+	recovery.scheduleRestart = func() {}
+	retry := setupRequest(recovery, "203.0.113.10:4321", restartedCfg.BootstrapToken, validSetupRequest(t, root))
+	if retry.Code != http.StatusOK {
+		t.Fatalf("recovery status = %d, body = %s", retry.Code, retry.Body.String())
+	}
+}
+
+func TestSetupPersistsEffectiveDatabaseForCustomConfigPath(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(root, "state", "depsilo-config")
+	t.Setenv("DEPSILO_CONFIG", configPath)
+	t.Setenv("DEPSILO_DATABASE_DSN", "")
+	t.Setenv("DEPSILO_STORAGE_PATH", "")
+	t.Setenv("DEPSILO_COMPILE_CACHE_STORAGE_PATH", "")
+	t.Setenv("DEPSILO_SERVER_HOST", "")
+	t.Setenv("DEPSILO_SERVER_PORT", "")
+	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "custom-path-bootstrap-token-012345")
+	t.Setenv("DEPSILO_ADMIN_USERNAME", "")
+	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load missing custom config: %v", err)
+	}
+	database, err := db.Open(cfg.Database.Driver, cfg.Database.DSN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDatabase, err := database.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDatabase.Close() })
+	if err := database.AutoMigrate(&db.User{}, &db.APIToken{}, &db.ControlPlaneState{}); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewSetupHandler(cfg, database)
+	handler.scheduleRestart = func() {}
+	request := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if request.Code != http.StatusOK {
+		t.Fatalf("setup status = %d, body = %s", request.Code, request.Body.String())
+	}
+
+	restartedCfg, restartedDB := restartSetupState(t, database)
+	if restartedCfg.IsDefault {
+		t.Fatal("custom config remained in first-run state after setup")
+	}
+	if got, want := restartedCfg.Database.DSN, cfg.Database.DSN; got != want {
+		t.Fatalf("restarted database DSN = %q, want committed DSN %q", got, want)
+	}
+	if err := VerifyExistingAdminCredentials(restartedDB, "operator", "Tr0ub4dor&Correct"); err != nil {
+		t.Fatalf("administrator in effective database: %v", err)
 	}
 }
 

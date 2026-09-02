@@ -14,7 +14,7 @@ import (
 // change under the same version raises a tamper_detected event AND the
 // client keeps getting the first-seen bytes (storage not overwritten).
 func TestTamper_UpstreamSwapDetectedAndFirstSeenKept(t *testing.T) {
-	url := depsiloURL + "/npm/tamperpkg/-/tamperpkg-1.0.0.tgz"
+	url := npmVersionTarballURL(t, "tamperpkg", "1.0.0")
 
 	// First fetch: caches ORIGINAL-BYTES and records the baseline.
 	first := httpGet(t, url)

@@ -30,6 +30,8 @@ type workerPlan struct {
 	start []*Upstream
 }
 
+const registryBusyRetryLimit = 3
+
 func validateMutation(input MutationInput) (MutationInput, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.URL = strings.TrimSpace(input.URL)
@@ -54,7 +56,29 @@ func validateMutation(input MutationInput) (MutationInput, error) {
 	return input, nil
 }
 
-func (r *Registry) runTransaction(ctx context.Context, apply func(*gorm.DB) error) (err error) {
+func (r *Registry) runTransaction(ctx context.Context, apply func(*gorm.DB) error) error {
+	for attempt := 0; ; attempt++ {
+		err := r.runTransactionOnce(ctx, apply)
+		if err == nil || !isSQLiteBusy(err) || attempt >= registryBusyRetryLimit {
+			return err
+		}
+
+		// WAL readers can fail immediately with SQLITE_BUSY_SNAPSHOT when a
+		// background health write commits between this transaction's reads and
+		// writes. SQLite's busy timeout does not wait for that invalid snapshot;
+		// retry the complete transaction against a fresh snapshot instead.
+		delay := time.Millisecond << attempt
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (r *Registry) runTransactionOnce(ctx context.Context, apply func(*gorm.DB) error) (err error) {
 	tx := r.db.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return tx.Error
@@ -73,6 +97,11 @@ func (r *Registry) runTransaction(ctx context.Context, apply func(*gorm.DB) erro
 	}
 	committed = true
 	return nil
+}
+
+func isSQLiteBusy(err error) bool {
+	var sqliteError interface{ Code() int }
+	return errors.As(err, &sqliteError) && sqliteError.Code()&0xff == 5
 }
 
 func (r *Registry) prepareAndCommit(ctx context.Context, ecosystem string, apply func(*gorm.DB) (uint, error)) (preparedMutation, error) {

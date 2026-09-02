@@ -78,9 +78,11 @@ be defined.
   local or S3-backed artifact storage, health monitoring, access and audit
   logs, Prometheus metrics, package rules, supply-chain intelligence, and
   webhook alerts.
-- The minimum-release-age gate is optional and off by default. Delivered,
-  unreleased, and planned security capabilities must be described according to
-  the actual release state rather than presented as uniformly available.
+- The minimum-release-age gate is safety-disabled until artifact-source and
+  timestamp provenance are bound. Positive enabled thresholds are rejected at
+  startup. Delivered, unreleased, and planned security capabilities must be
+  described according to the actual release state rather than presented as
+  uniformly available.
 - The compiler cache is an isolated ccache HTTP and narrow sccache WebDAV
   compatibility service. It is not an sccache-dist scheduler or a public S3
   API.

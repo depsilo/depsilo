@@ -368,8 +368,8 @@ if ! seeded_metadata=$(curl --fail-with-body --silent --show-error --header "Acc
   exit 1
 fi
 jq -e '.versions["1.0.0"].name == "upgrade-fixture"' <<<"$seeded_metadata" >/dev/null
-old_artifact=$(curl --fail --silent --show-error \
-  "$origin/npm/upgrade-fixture/-/upgrade-fixture-1.0.0.tgz")
+old_tarball_url=$(jq -er '.versions["1.0.0"].dist.tarball' <<<"$seeded_metadata")
+old_artifact=$(curl --fail --silent --show-error "$old_tarball_url")
 [[ "$old_artifact" == 'depsilo-v0.9.0-compose-cache-artifact' ]] || {
   echo 'v0.9 Compose did not seed the expected artifact cache' >&2
   exit 1
@@ -455,14 +455,76 @@ current_admin_token=$(curl --fail --silent --show-error \
   "$origin/api/v1/auth/login" | jq -er '.token')
 curl --fail --silent --show-error --header "Authorization: Bearer $api_token" \
   "$origin/api/v1/auth/me" | jq -e '.username == "compose-upgrade-admin" and .auth_method == "api_token" and .token_permissions == "readonly"' >/dev/null
-curl --fail --silent --show-error --header "Accept: $npm_accept" \
-  "$origin/npm/upgrade-fixture" | jq -e '.versions["1.0.0"].name == "upgrade-fixture"' >/dev/null
-current_artifact=$(curl --fail --silent --show-error \
-  "$origin/npm/upgrade-fixture/-/upgrade-fixture-1.0.0.tgz")
-[[ "$current_artifact" == 'depsilo-v0.9.0-compose-cache-artifact' ]] || {
-  echo 'candidate did not serve the v0.9 artifact while its Upstream was offline' >&2
+
+# Unsigned v0.9 npm cache entries have no selected-source or exact-target
+# provenance. The candidate must fail closed while that source is offline.
+legacy_artifact_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$old_tarball_url")
+[[ "$legacy_artifact_status" == 404 ]] || {
+  echo "candidate accepted an unsigned v0.9 npm artifact URL: HTTP $legacy_artifact_status" >&2
   exit 1
 }
+offline_metadata_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --header "Accept: $npm_accept" "$origin/npm/upgrade-fixture")
+[[ "$offline_metadata_status" == 502 ]] || {
+  echo "candidate reused unsigned v0.9 npm metadata while its Upstream was offline: HTTP $offline_metadata_status" >&2
+  exit 1
+}
+
+# Re-enable the same configured source only after the fail-closed assertions;
+# the candidate must refetch metadata and issue a new source-bound signed URL.
+docker start "$mock_container" >/dev/null
+docker network connect --alias depsilo-v090-upstream "$candidate_network" "$mock_container"
+mock_ready=false
+for _ in $(seq 1 100); do
+  if docker exec "$candidate_container" wget --quiet --output-document /dev/null \
+    'http://depsilo-v090-upstream:8080/upgrade-fixture/' \
+    >/dev/null 2>&1; then
+    mock_ready=true
+    break
+  fi
+  docker inspect --format '{{.State.Running}}' "$mock_container" 2>/dev/null | grep -qx true || break
+  sleep 0.05
+done
+[[ "$mock_ready" == true ]] || { echo 'restarted pinned mock Upstream was not reachable from the candidate network' >&2; exit 1; }
+
+current_metadata=$(curl --fail --silent --show-error --header "Accept: $npm_accept" \
+  "$origin/npm/upgrade-fixture")
+jq -e '.versions["1.0.0"].name == "upgrade-fixture"' <<<"$current_metadata" >/dev/null
+current_tarball_url=$(jq -er '.versions["1.0.0"].dist.tarball' <<<"$current_metadata")
+[[ "$current_tarball_url" == *'/__depsilo_tarball_v1/'* ]] || {
+  echo 'candidate did not emit a signed npm artifact URL after provenance refetch' >&2
+  exit 1
+}
+current_artifact=$(curl --fail --silent --show-error "$current_tarball_url")
+[[ "$current_artifact" == 'depsilo-v0.9.0-compose-cache-artifact' ]] || {
+  echo 'candidate did not fetch the artifact through fresh source-bound provenance' >&2
+  exit 1
+}
+
+python3 - "$database" <<'PY'
+import sqlite3
+import sys
+
+database = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+checks = {
+    "legacy npm metadata": database.execute(
+        "SELECT COUNT(*) FROM cache_entries WHERE key = 'npm/upgrade-fixture/metadata.json'"
+    ).fetchone()[0],
+    "legacy npm artifact": database.execute(
+        "SELECT COUNT(*) FROM cache_entries WHERE key = 'npm/upgrade-fixture/-/upgrade-fixture-1.0.0.tgz'"
+    ).fetchone()[0],
+    "source-bound npm metadata": database.execute(
+        "SELECT COUNT(*) FROM cache_entries WHERE key = 'npm-exact-v1/upgrade-fixture/metadata.json'"
+    ).fetchone()[0],
+    "source-bound npm artifact": database.execute(
+        "SELECT COUNT(*) FROM cache_entries WHERE key GLOB "
+        "'npm-exact-v1/upgrade-fixture/-/__depsilo_tarball_v1/objects/*/upgrade-fixture-1.0.0.tgz'"
+    ).fetchone()[0],
+}
+failed = [name for name, count in checks.items() if count != 1]
+if failed:
+    raise SystemExit("Compose npm provenance cache contract is incomplete: " + ", ".join(failed))
+PY
 
 current_paid_status=$(curl --fail --silent --show-error \
   --header "Authorization: Bearer $current_admin_token" \

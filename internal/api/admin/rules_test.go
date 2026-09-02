@@ -45,6 +45,14 @@ func TestRulesCreateUsesTypedValidatedInput(t *testing.T) {
 		{name: "invalid action", body: `{"ecosystem":"pypi","package_name":"pkg","version":"*","action":"drop"}`},
 		{name: "middle wildcard", body: `{"ecosystem":"pypi","package_name":"pkg*tail","version":"*","action":"deny"}`},
 		{name: "unsupported comparison", body: `{"ecosystem":"pypi","package_name":"pkg","version":"~= 1.0","action":"deny"}`},
+		{name: "npm compound range", body: `{"ecosystem":"npm","package_name":"pkg","version":">= 1.0.0 < 2.0.0","action":"deny"}`},
+		{name: "range on exact-only ecosystem", body: `{"ecosystem":"go","package_name":"example.com/pkg","version":">= 1.0.0","action":"deny"}`},
+		{name: "APT exact version without request provenance", body: `{"ecosystem":"apt","package_name":"libc6","version":"1:2.36-9","action":"deny"}`},
+		{name: "Composer exact version without authoritative dist provenance", body: `{"ecosystem":"composer","package_name":"vendor/pkg","version":"1.0.0","action":"deny"}`},
+		{name: "RubyGems package rules unavailable", body: `{"ecosystem":"rubygems","package_name":"nokogiri","version":"*","action":"deny"}`},
+		{name: "Helm package rules unavailable", body: `{"ecosystem":"helm","package_name":"my-chart","version":"*","action":"deny"}`},
+		{name: "abbreviated Cargo semver", body: `{"ecosystem":"cargo","package_name":"pkg","version":"1.0","action":"deny"}`},
+		{name: "ambiguous wildcard ecosystem", body: `{"ecosystem":"*","package_name":"pkg","version":"*","action":"deny"}`},
 		{name: "database id field", body: `{"ecosystem":"pypi","package_name":"pkg","version":"*","action":"deny","id":999}`},
 		{name: "created by field", body: `{"ecosystem":"pypi","package_name":"pkg","version":"*","action":"deny","created_by":"attacker"}`},
 	}
@@ -63,6 +71,34 @@ func TestRulesCreateUsesTypedValidatedInput(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("rule count = %d, want only the valid rule", count)
+	}
+}
+
+func TestRulesCreateAcceptsAuthenticatedNPMVersionSelectors(t *testing.T) {
+	router, _ := newRulesAdminTestRouter(t)
+	for _, version := range []string{"1.0.0", ">= 1.0.0"} {
+		body := fmt.Sprintf(
+			`{"ecosystem":"npm","package_name":"@Scope/pkg","version":%q,"action":"deny"}`,
+			version,
+		)
+		response := rulesAdminRequest(router, http.MethodPost, "/rules", body)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("npm selector %q status=%d body=%s", version, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestRulesCreateAcceptsPackageWideSelectorsWithoutVersionProvenance(t *testing.T) {
+	router, _ := newRulesAdminTestRouter(t)
+	for _, body := range []string{
+		`{"ecosystem":"apt","package_name":"libc6","version":"*","action":"deny"}`,
+		`{"ecosystem":"npm","package_name":"left-pad","version":"*","action":"deny"}`,
+		`{"ecosystem":"composer","package_name":"vendor/package","version":"*","action":"deny"}`,
+	} {
+		response := rulesAdminRequest(router, http.MethodPost, "/rules", body)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("package-wide create status = %d, body = %s", response.Code, response.Body.String())
+		}
 	}
 }
 
@@ -107,11 +143,24 @@ func TestRulesUpdateWhitelistsFieldsAndDistinguishesNotFound(t *testing.T) {
 
 func TestRulesTestRejectsNonEnforceableEcosystem(t *testing.T) {
 	router, _ := newRulesAdminTestRouter(t)
-	for _, ecosystem := range []string{"unknown", "docker", "huggingface", "*"} {
+	for _, ecosystem := range []string{"unknown", "rubygems", "helm", "docker", "huggingface", "*"} {
 		response := rulesAdminRequest(router, http.MethodPost, "/rules/test", `{"ecosystem":"`+ecosystem+`","package":"pkg","version":"1.0.0"}`)
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("ecosystem %q status = %d, body = %s", ecosystem, response.Code, response.Body.String())
 		}
+	}
+}
+
+func TestRulesTestRejectsInvalidDialectPackageName(t *testing.T) {
+	router, _ := newRulesAdminTestRouter(t)
+	response := rulesAdminRequest(
+		router,
+		http.MethodPost,
+		"/rules/test",
+		`{"ecosystem":"cargo","package":"bad/name","version":"1.0.0"}`,
+	)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("invalid Cargo package status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 

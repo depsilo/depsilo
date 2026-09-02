@@ -376,6 +376,77 @@ func TestRegistryNameOnlyUpdateReplacesWorkerWithPublishedObject(t *testing.T) {
 	}
 }
 
+func TestRegistryMutationRetriesAfterConcurrentHealthWriteInvalidatesSnapshot(t *testing.T) {
+	database, registry := registryFixture(t, "pypi", 1)
+	var record db.UpstreamRecord
+	if err := database.First(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	type pauseMutationUpdateKey struct{}
+	mutationRead := make(chan struct{})
+	healthWriteCommitted := make(chan struct{})
+	var pauseOnce sync.Once
+	const callbackName = "test:pause_registry_mutation_after_reads"
+	if err := database.Callback().Update().Before("gorm:update").Register(callbackName, func(tx *gorm.DB) {
+		paused, _ := tx.Statement.Context.Value(pauseMutationUpdateKey{}).(bool)
+		if !paused || tx.Statement.Schema == nil || tx.Statement.Schema.Name != "UpstreamRecord" {
+			return
+		}
+		pauseOnce.Do(func() {
+			close(mutationRead)
+			<-healthWriteCommitted
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.Callback().Update().Remove(callbackName) })
+
+	result := make(chan error, 1)
+	ctx := context.WithValue(context.Background(), pauseMutationUpdateKey{}, true)
+	go func() {
+		_, err := registry.Update(ctx, record.ID, MutationInput{
+			AdapterType:   "pypi",
+			Name:          "renamed",
+			URL:           record.URL,
+			Priority:      record.Priority,
+			ProbeMode:     record.ProbeMode,
+			ProbeInterval: record.ProbeInterval,
+		})
+		result <- err
+	}()
+
+	select {
+	case <-mutationRead:
+	case <-time.After(time.Second):
+		t.Fatal("registry mutation did not reach its write boundary")
+	}
+	healthWriteErr := database.Model(&db.UpstreamRecord{}).
+		Where("id = ?", record.ID).
+		Update("healthy", false).Error
+	close(healthWriteCommitted)
+	if healthWriteErr != nil {
+		t.Fatalf("commit concurrent health-style write: %v", healthWriteErr)
+	}
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("registry mutation did not retry invalidated SQLite snapshot: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("registry mutation did not finish after the concurrent write")
+	}
+
+	var stored db.UpstreamRecord
+	if err := database.First(&stored, record.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Name != "renamed" || stored.Healthy {
+		t.Fatalf("stored upstream after retry = %#v", stored)
+	}
+}
+
 func TestRegistryPriorityOnlyUpdateReplacesActiveWorker(t *testing.T) {
 	database, registry := registryFixture(t, "pypi", 1)
 	var record db.UpstreamRecord

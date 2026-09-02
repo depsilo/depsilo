@@ -101,6 +101,7 @@ lru_threshold = 90
 
 [auth]
 enabled = false
+jwt_secret = "integration-artifact-signing-secret-0123456789abcdef"
 
 [supply_chain]
 min_release_age_enabled = false

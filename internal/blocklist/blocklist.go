@@ -17,6 +17,7 @@ import (
 	"time"
 
 	ecosystemcatalog "depsilo/internal/ecosystem"
+	"depsilo/internal/packagepolicy"
 )
 
 // OverrideTTL is how long an operator override stays valid. Locked-in
@@ -80,51 +81,40 @@ func SyncedEcosystems() []string {
 	return names
 }
 
-// NormalizeName maps a package name to the canonical form both the
-// importer and the request-time lookup use, so equality is exact.
-//   - npm: registry names are lowercase; scoped names keep the slash.
-//   - pypi: PEP 503 — lowercase, runs of [-_.] collapse to "-".
-//   - everything else: case-preserving identity (Maven coordinates and
-//     Go module paths are case-significant; OSV stores them verbatim).
+// NormalizeName maps a valid package name through the same ecosystem dialect
+// used by Package Rules. Invalid names return ""; production paths call the
+// strict helper below so malformed advisory/request identities are observable.
 func NormalizeName(ecosystem, name string) string {
-	switch ecosystem {
-	case "npm", "nuget":
-		// npm registry names are lowercase; NuGet IDs are
-		// case-insensitive and the flat-container protocol mandates
-		// lowercase in request URLs — store lowercase so request-time
-		// equality works (v0.8.0 review finding: ~95% of NuGet MAL
-		// entries carry mixed-case names).
-		return strings.ToLower(name)
-	case "pypi":
-		lower := strings.ToLower(name)
-		var b strings.Builder
-		b.Grow(len(lower))
-		prevSep := false
-		for _, r := range lower {
-			if r == '-' || r == '_' || r == '.' {
-				if !prevSep {
-					b.WriteByte('-')
-				}
-				prevSep = true
-				continue
-			}
-			prevSep = false
-			b.WriteRune(r)
-		}
-		return b.String()
-	default:
-		return name
-	}
+	normalized, _ := normalizeNameStrict(ecosystem, name)
+	return normalized
 }
 
-// NormalizeVersion maps a request-side version string to the dataset's
-// convention. Go advisories carry semver WITHOUT the "v" prefix while
-// GOPROXY paths carry it — strip so exact matching works.
-func NormalizeVersion(ecosystem, version string) string {
-	if ecosystem == "go" {
-		return strings.TrimPrefix(version, "v")
+func normalizeNameStrict(ecosystem, name string) (string, error) {
+	dialect, err := packagepolicy.DialectFor(CanonicalEcosystem(ecosystem))
+	if err != nil {
+		return "", err
 	}
-	return version
+	return dialect.NormalizePackageName(name)
+}
+
+// NormalizeVersion maps a valid request-side version to the dataset's
+// dialect spelling. Invalid versions return ""; production paths use the
+// strict helper so they never guess. Go advisories omit the GOPROXY "v"
+// prefix, so it is removed before validation.
+func NormalizeVersion(ecosystem, version string) string {
+	normalized, _ := normalizeVersionStrict(ecosystem, version)
+	return normalized
+}
+
+func normalizeVersionStrict(ecosystem, version string) (string, error) {
+	if version == "" {
+		return "", nil
+	}
+	ecosystem = CanonicalEcosystem(ecosystem)
+	if ecosystem == "go" {
+		version = strings.TrimPrefix(version, "v")
+	}
+	return packagepolicy.NormalizeVersion(ecosystem, version)
 }
 
 // CanonicalEcosystem maps adapter-reported ecosystem names onto the
@@ -133,15 +123,16 @@ func NormalizeVersion(ecosystem, version string) string {
 // protocol — malware in the dataset's PyPI section applies to them
 // too (v0.8.0 review finding: extra indexes bypassed the gate).
 func CanonicalEcosystem(ecosystem string) string {
-	if strings.HasPrefix(ecosystem, "extra:") {
+	canonical := strings.ToLower(ecosystem)
+	if strings.HasPrefix(canonical, "extra:") {
 		return "pypi"
 	}
-	return ecosystem
+	return canonical
 }
 
 // IsSyncedEcosystem reports whether the dataset covers the ecosystem —
 // used by the admin API to reject overrides that could never match.
 func IsSyncedEcosystem(ecosystem string) bool {
-	definition, ok := ecosystemcatalog.Lookup(ecosystem)
+	definition, ok := ecosystemcatalog.Lookup(CanonicalEcosystem(ecosystem))
 	return ok && definition.MaliciousDataset
 }

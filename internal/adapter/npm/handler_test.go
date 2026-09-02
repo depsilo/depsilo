@@ -60,7 +60,7 @@ func TestMetadataUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	release := adapter.InstallAccessHooks(nil, audit)
 	t.Cleanup(release)
 
-	handler := New(manager, unavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour}, database)
+	handler := New(manager, unavailableSelector{}, config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
 	router := gin.New()
 	handler.Register(router.Group("/npm"))
 	response := httptest.NewRecorder()
@@ -80,6 +80,70 @@ func TestMetadataUpstreamFailureIsRecordedAsAuditError(t *testing.T) {
 	}
 }
 
+func TestMetadataCacheDoesNotCrossLegacyPackageNameCase(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var requests atomic.Int64
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"name":"`+strings.TrimPrefix(request.URL.Path, "/")+`","versions":{}}`)
+	}))
+	t.Cleanup(upstreamServer.Close)
+
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "npm-case.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Close(ctx); err != nil {
+			t.Errorf("close cache manager: %v", err)
+		}
+	})
+	pool, err := upstream.NewPool([]config.UpstreamConfig{{
+		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
+	router := gin.New()
+	handler.Register(router.Group("/npm"))
+
+	requestPackage := func(name string) string {
+		t.Helper()
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/npm/"+name, nil)
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body=%s", name, response.Code, response.Body.String())
+		}
+		return response.Body.String()
+	}
+
+	if body := requestPackage("Express"); !strings.Contains(body, `"name":"Express"`) {
+		t.Fatalf("Express response = %s", body)
+	}
+	if body := requestPackage("express"); !strings.Contains(body, `"name":"express"`) {
+		t.Fatalf("express response reused case-distinct cache: %s", body)
+	}
+	if body := requestPackage("Express"); !strings.Contains(body, `"name":"Express"`) {
+		t.Fatalf("cached Express response = %s", body)
+	}
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("upstream requests = %d, want one per case-distinct identity", got)
+	}
+}
+
 func TestMetadataAcceptRepresentationsHaveIndependentCaches(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const (
@@ -95,13 +159,14 @@ func TestMetadataAcceptRepresentationsHaveIndependentCaches(t *testing.T) {
 	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		requests.Add(1)
 		accept := request.Header.Get("Accept")
+		packageName := strings.TrimPrefix(request.URL.Path, "/")
 		if accept == canonicalInstallAccept || accept == caseOWSInstallAccept {
 			w.Header().Set("Content-Type", "application/vnd.npm.install-v1+json")
-			_, _ = io.WriteString(w, `{"name":"accept-fixture","variant":"install"}`)
+			_, _ = io.WriteString(w, `{"name":"`+packageName+`","variant":"install","versions":{}}`)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"name":"accept-fixture","variant":"full"}`)
+		_, _ = io.WriteString(w, `{"name":"`+packageName+`","variant":"full","versions":{}}`)
 	}))
 	t.Cleanup(upstreamServer.Close)
 
@@ -130,7 +195,7 @@ func TestMetadataAcceptRepresentationsHaveIndependentCaches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour}, database)
+	handler := New(manager, upstream.NewPrioritySelector(pool), config.CacheConfig{TTLIndex: time.Hour}, database, testNPMTarballSigningKey)
 	router := gin.New()
 	handler.Register(router.Group("/npm"))
 

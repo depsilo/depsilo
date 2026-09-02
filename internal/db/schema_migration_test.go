@@ -62,7 +62,7 @@ func TestAutoMigrateRecordsAndReusesCurrentSchemaVersion(t *testing.T) {
 	if records[0].Version != 1 || records[0].Name != "baseline" {
 		t.Fatalf("baseline migration record = %#v", records[0])
 	}
-	if last := records[len(records)-1]; last.Version != CurrentSchemaVersion || last.Name != "user credential version" {
+	if last := records[len(records)-1]; last.Version != CurrentSchemaVersion || last.Name != "package policy and identity dialects" {
 		t.Fatalf("current migration record = %#v", last)
 	}
 }

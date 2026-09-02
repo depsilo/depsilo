@@ -58,14 +58,12 @@ func TestRewriteTarballURLs(t *testing.T) {
 	}
 }
 
-func TestApplyBaseURLTargetsOnlyTarballValues(t *testing.T) {
+func TestRewriteTarballURLsTargetsOnlyTarballValues(t *testing.T) {
 	in := []byte(`{"name":"lodash","description":"see /npm/ for details","versions":{"4.17.21":{"dist":{"tarball":"https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz"},"description":"still /npm/ here"}}}`)
-	relative, err := RewriteTarballURLs(in, "")
+	got, err := RewriteTarballURLs(in, "http://localhost:23333")
 	if err != nil {
 		t.Fatalf("RewriteTarballURLs() error = %v", err)
 	}
-
-	got := ApplyBaseURL(relative, "http://localhost:23333")
 
 	var doc struct {
 		Name        string `json:"name"`

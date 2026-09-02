@@ -61,6 +61,11 @@ func Load() (*Config, error) {
 	depsiloDir, hasDepsiloDir := defaultDepsiloDir()
 
 	if configPath != "" {
+		// DEPSILO_CONFIG may intentionally point at a not-yet-created setup
+		// file, including a path without a conventional extension. Pin the
+		// project's documented TOML format before ReadInConfig so Viper reports
+		// a normal "not found" state instead of "unsupported config type".
+		v.SetConfigType("toml")
 		v.SetConfigFile(configPath)
 		resolvedPath = configPath
 	} else {
@@ -76,7 +81,7 @@ func Load() (*Config, error) {
 	}
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		if !isConfigFileNotFound(err) {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 		isDefault = true
@@ -150,7 +155,7 @@ func Load() (*Config, error) {
 			return nil, errors.New("auth.jwt_secret must be at least 32 bytes with no surrounding whitespace before listening on a non-loopback address; set DEPSILO_AUTH_JWT_SECRET to a cryptographically random value")
 		}
 	} else if cfg.Auth.JWTSecret == "change-me-in-production" {
-		zap.L().Warn("auth.jwt_secret is using the development placeholder; the server is restricted to loopback")
+		zap.L().Warn("auth.jwt_secret is using the development placeholder; the server is restricted to loopback and signed artifact URLs use process-local keys")
 	}
 
 	if err := ValidateSettingsSnapshot(SettingsSnapshotFromConfig(cfg)); err != nil {
@@ -158,6 +163,15 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func isConfigFileNotFound(err error) bool {
+	var notFound viper.ConfigFileNotFoundError
+	if errors.As(err, &notFound) {
+		return true
+	}
+	var pathErr *os.PathError
+	return errors.As(err, &pathErr) && os.IsNotExist(err)
 }
 
 func defaultDepsiloDir() (string, bool) {
@@ -201,6 +215,25 @@ func resolveBootstrapToken() (token string, generated bool, err error) {
 		return "", false, fmt.Errorf("generate bootstrap token: %w", err)
 	}
 	return token, true, nil
+}
+
+// MarkSetupPending reopens the interactive setup gate for a configuration
+// whose durable administrator is missing. This is used during startup
+// reconciliation after an interrupted first-run write (or an older install
+// that lost its database). The token remains ephemeral and follows the same
+// environment/generated-token policy as a brand-new install.
+func MarkSetupPending(cfg *Config) error {
+	if cfg == nil {
+		return errors.New("config is nil")
+	}
+	token, generated, err := resolveBootstrapToken()
+	if err != nil {
+		return err
+	}
+	cfg.IsDefault = true
+	cfg.BootstrapToken = token
+	cfg.BootstrapTokenGenerated = generated
+	return nil
 }
 
 func explicitUpstreamEcosystems(v *viper.Viper) map[string]bool {
@@ -283,6 +316,14 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 	cfg.CompileCache.PublicURL = strings.TrimRight(strings.TrimSpace(cfg.CompileCache.PublicURL), "/")
 	if err := validateCompileCacheConfig(cfg.CompileCache); err != nil {
 		return nil, err
+	}
+	if err := validatePolicyConfig(cfg.Policy); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(cfg.Policy.OnLoadError) == "" {
+		cfg.Policy.OnLoadError = defaultPolicyOnLoadError
+	} else {
+		cfg.Policy.OnLoadError = strings.ToLower(strings.TrimSpace(cfg.Policy.OnLoadError))
 	}
 
 	return cfg, nil
@@ -367,6 +408,21 @@ func validateCompileCacheConfig(cfg CompileCacheConfig) error {
 		return fmt.Errorf("compile_cache.storage.type must be local or s3, got %q", cfg.Storage.Type)
 	}
 	return nil
+}
+
+const defaultPolicyOnLoadError = "use_stale_then_allow"
+
+func validatePolicyConfig(cfg PolicyConfig) error {
+	value := strings.ToLower(strings.TrimSpace(cfg.OnLoadError))
+	if value == "" {
+		return nil
+	}
+	switch value {
+	case "use_stale_then_allow", "use_stale_then_deny", "allow", "deny":
+		return nil
+	default:
+		return fmt.Errorf("policy.on_load_error must be one of \"use_stale_then_allow\", \"use_stale_then_deny\", \"allow\", or \"deny\"; got %q", cfg.OnLoadError)
+	}
 }
 
 func decodeConfigDocument(data []byte) (*Config, error) {
@@ -463,6 +519,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.enabled", true)
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")
+	v.SetDefault("policy.on_load_error", defaultPolicyOnLoadError)
 	// Access log rollup. retention_days bounds the raw access_logs table
 	// at 7 days of detail (the admin "recent logs" page); rollup retention
 	// keeps a year of aggregated dashboards. Operators who upgrade and

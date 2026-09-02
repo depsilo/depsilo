@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,7 +71,7 @@ func TestSecurityApproveSuggestionInvalidatesRulesAfterCreate(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	path := "/security/suggestions/" + strconv.FormatUint(uint64(vulnerability.ID), 10) + "/approve"
-	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"version":"<2.0"}`)))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("approve status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
@@ -104,12 +105,44 @@ func TestSecurityApproveSuggestionDoesNotInvalidateWhenCreateFails(t *testing.T)
 
 	recorder := httptest.NewRecorder()
 	path := "/security/suggestions/" + strconv.FormatUint(uint64(vulnerability.ID), 10) + "/approve"
-	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, nil))
+	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"version":"<2.0"}`)))
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("approve status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	if invalidations != 0 {
 		t.Fatalf("rule cache invalidations = %d, want 0", invalidations)
+	}
+}
+
+func TestSecurityApproveSuggestionRequiresExplicitReviewedSelector(t *testing.T) {
+	for _, body := range []string{"", `{}`, `{"version":"   "}`} {
+		t.Run(body, func(t *testing.T) {
+			invalidations := 0
+			r, database := newSecurityContractRouterWithInvalidator(t, func() { invalidations++ })
+			vulnerability := db.Vulnerability{
+				OSVID: "OSV-REVIEW-REQUIRED", Ecosystem: "pypi", PackageName: "review-required",
+			}
+			if err := database.Create(&vulnerability).Error; err != nil {
+				t.Fatal(err)
+			}
+
+			path := "/security/suggestions/" + strconv.FormatUint(uint64(vulnerability.ID), 10) + "/approve"
+			recorder := httptest.NewRecorder()
+			r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)))
+			if recorder.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("approve status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if invalidations != 0 {
+				t.Fatalf("rule cache invalidations = %d, want 0", invalidations)
+			}
+			var count int64
+			if err := database.Model(&db.PackageRule{}).Count(&count).Error; err != nil {
+				t.Fatal(err)
+			}
+			if count != 0 {
+				t.Fatalf("package rules = %d, want 0", count)
+			}
+		})
 	}
 }
 
@@ -189,7 +222,7 @@ func TestSecurityPolicyCanonicalFieldsAndCVSSRange(t *testing.T) {
 	}
 
 	for _, score := range []string{"0", "10"} {
-		payload := []byte(`{"auto_block_enabled":true,"min_cvss_score":` + score + `}`)
+		payload := []byte(`{"auto_block_enabled":false,"min_cvss_score":` + score + `}`)
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/security/policies/pypi", bytes.NewReader(payload)))
 		if rec.Code != http.StatusOK {
@@ -198,13 +231,13 @@ func TestSecurityPolicyCanonicalFieldsAndCVSSRange(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	quotedNumber := []byte(`{"auto_block_enabled":true,"min_cvss_score":"7.5"}`)
+	quotedNumber := []byte(`{"auto_block_enabled":false,"min_cvss_score":"7.5"}`)
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/security/policies/pypi", bytes.NewReader(quotedNumber)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("quoted score status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 
-	payload := []byte(`{"auto_block_enabled":true,"min_cvss_score":7.5}`)
+	payload := []byte(`{"auto_block_enabled":false,"min_cvss_score":7.5}`)
 	rec = httptest.NewRecorder()
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/security/policies/pypi", bytes.NewReader(payload)))
 	if rec.Code != http.StatusOK {
@@ -214,7 +247,7 @@ func TestSecurityPolicyCanonicalFieldsAndCVSSRange(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode policy: %v", err)
 	}
-	if body["auto_block_enabled"] != true || body["min_cvss_score"] != 7.5 {
+	if body["auto_block_enabled"] != false || body["min_cvss_score"] != 7.5 {
 		t.Fatalf("policy body = %#v", body)
 	}
 	if _, exists := body["auto_block"]; exists {
@@ -229,6 +262,64 @@ func TestSecurityPolicyCanonicalFieldsAndCVSSRange(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("policy count = %d, want 1", count)
+	}
+}
+
+func TestSecurityPolicyRejectsAutomaticBlockingForEveryEcosystem(t *testing.T) {
+	r, database := newSecurityContractRouter(t)
+	for _, ecosystem := range []string{"pypi", "cargo", "apt", "npm", "go", "maven", "rubygems", "composer", "nuget", "cran"} {
+		payload := bytes.NewBufferString(`{"auto_block_enabled":true,"min_cvss_score":7.5}`)
+		recorder := httptest.NewRecorder()
+		path := "/security/policies/" + ecosystem
+		r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, path, payload))
+
+		if recorder.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("%s auto-block status = %d, want %d; body = %s", ecosystem, recorder.Code, http.StatusUnprocessableEntity, recorder.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body["code"] != "INVALID_POLICY" {
+			t.Fatalf("%s response = %#v, want INVALID_POLICY", ecosystem, body)
+		}
+		if body["message"] != "automatic vulnerability blocking is safety-disabled because OSV affected sets cannot be projected losslessly to Package Rule selectors" {
+			t.Fatalf("%s response = %#v, want lossless OSV projection explanation", ecosystem, body)
+		}
+	}
+	var count int64
+	if err := database.Model(&db.SecurityPolicy{}).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("rejected policy wrote %d rows", count)
+	}
+}
+
+func TestSecurityPolicyAllowsDisablingLegacyAutomaticBlocking(t *testing.T) {
+	r, database := newSecurityContractRouter(t)
+	legacy := db.SecurityPolicy{
+		Ecosystem:        "pypi",
+		AutoBlockEnabled: true,
+		MinCVSSScore:     9,
+		CreatedBy:        "admin",
+	}
+	if err := database.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	payload := bytes.NewBufferString(`{"auto_block_enabled":false,"min_cvss_score":9}`)
+	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/security/policies/pypi", payload))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("disable legacy policy status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var stored db.SecurityPolicy
+	if err := database.Where("ecosystem = ?", "pypi").Take(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.AutoBlockEnabled {
+		t.Fatal("legacy automatic vulnerability policy remained enabled")
 	}
 }
 
@@ -403,7 +494,6 @@ func TestSecurityDashboardChecksAggregateQueries(t *testing.T) {
 		{name: "vulnerability total", table: "vulnerabilities", occurrence: 1},
 		{name: "affected packages", table: "vulnerability_checks", occurrence: 1},
 		{name: "severity breakdown", table: "vulnerabilities", occurrence: 2},
-		{name: "auto blocked total", table: "package_rules", occurrence: 1},
 	}
 
 	for _, tt := range tests {
@@ -414,6 +504,26 @@ func TestSecurityDashboardChecksAggregateQueries(t *testing.T) {
 			r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/security/dashboard", nil))
 			assertDBError(t, rec)
 		})
+	}
+}
+
+func TestSecurityDashboardDoesNotTreatUsernameAsMachineProvenance(t *testing.T) {
+	r, database := newSecurityContractRouter(t)
+	if err := database.Create(&db.PackageRule{
+		Ecosystem: "pypi", PackageName: "human-owned", Version: "*", Action: "deny",
+		Reason: "manual rule", CreatedBy: "security-scanner",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	recorder := httptest.NewRecorder()
+	r.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/security/dashboard", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	body := decodeJSONMap(t, recorder)
+	if body["auto_blocked_count"] != float64(0) {
+		t.Fatalf("auto_blocked_count = %#v, want 0 while automatic blocking is disabled", body["auto_blocked_count"])
 	}
 }
 
@@ -438,14 +548,14 @@ func TestSecurityVulnerabilityLookupDistinguishesNotFoundFromDatabaseFailure(t *
 
 func TestSecurityPolicyUpdatePropagatesDatabaseErrors(t *testing.T) {
 	r, database := newSecurityContractRouter(t)
-	policy := db.SecurityPolicy{Ecosystem: "pypi", AutoBlockEnabled: false, MinCVSSScore: 8, CreatedBy: "admin"}
+	policy := db.SecurityPolicy{Ecosystem: "pypi", AutoBlockEnabled: true, MinCVSSScore: 8, CreatedBy: "admin"}
 	if err := database.Create(&policy).Error; err != nil {
 		t.Fatalf("seed policy: %v", err)
 	}
 	injectGORMFailure(t, database, "update", "security_policies", 1)
 
 	rec := httptest.NewRecorder()
-	payload := bytes.NewBufferString(`{"auto_block_enabled":true,"min_cvss_score":7.5}`)
+	payload := bytes.NewBufferString(`{"auto_block_enabled":false,"min_cvss_score":7.5}`)
 	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/security/policies/pypi", payload))
 	assertDBError(t, rec)
 }

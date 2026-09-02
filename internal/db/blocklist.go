@@ -9,8 +9,9 @@ import "time"
 // MaliciousPackage is one (advisory, ecosystem, package) row imported
 // from the OSV malicious-packages dataset (MAL-* entries, which may
 // carry GHSA aliases). Package
-// names are stored in their ecosystem-normalized form (npm lowercase,
-// PyPI PEP 503) so request-time lookups are a single indexed equality.
+// names are stored in their ecosystem-normalized form (npm preserves legacy
+// case identity; PyPI uses PEP 503) so request-time lookups are a single
+// indexed equality.
 type MaliciousPackage struct {
 	ID        uint   `gorm:"primarykey" json:"id"`
 	SourceID  string `gorm:"size:64;uniqueIndex:idx_mal_src_eco_pkg,priority:1" json:"source_id"` // e.g. MAL-2026-1234

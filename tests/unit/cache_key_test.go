@@ -51,28 +51,28 @@ func TestCacheKey_PyPI_FileNoLeadingSlash(t *testing.T) {
 
 func TestCacheKey_Npm_Metadata(t *testing.T) {
 	key := npm.MetadataCacheKey("lodash")
-	if key != "npm/lodash/metadata.json" {
+	if key != "npm-exact-v1/lodash/metadata.json" {
 		t.Errorf("got %s", key)
 	}
 }
 
 func TestCacheKey_Npm_ScopedMetadata(t *testing.T) {
 	key := npm.ScopedMetadataCacheKey("babel", "core")
-	if key != "npm/@babel/core/metadata.json" {
+	if key != "npm-exact-v1/@babel/core/metadata.json" {
 		t.Errorf("got %s", key)
 	}
 }
 
 func TestCacheKey_Npm_Tarball(t *testing.T) {
 	key := npm.TarballCacheKey("lodash", "lodash-4.17.21.tgz")
-	if key != "npm/lodash/-/lodash-4.17.21.tgz" {
+	if key != "npm-exact-v1/lodash/-/lodash-4.17.21.tgz" {
 		t.Errorf("got %s", key)
 	}
 }
 
 func TestCacheKey_Npm_ScopedTarball(t *testing.T) {
 	key := npm.ScopedTarballCacheKey("babel", "core", "core-7.24.0.tgz")
-	if key != "npm/@babel/core/-/core-7.24.0.tgz" {
+	if key != "npm-exact-v1/@babel/core/-/core-7.24.0.tgz" {
 		t.Errorf("got %s", key)
 	}
 }

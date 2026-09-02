@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
-	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/upstream"
@@ -38,17 +37,9 @@ func (h *Handler) handleRequest(c *gin.Context) {
 
 	cacheKey := CacheKey(path)
 
-	// Quarantine gate. Only artifact downloads have a parseable
-	// (gem, version); metadata paths (versions, info/*, specs.4.8.gz)
-	// don't, and the helper short-circuits when we pass empties.
-	if strings.HasPrefix(path, "gems/") && strings.HasSuffix(path, ".gem") {
-		filename := strings.TrimPrefix(path, "gems/")
-		if gem, version := packagekey.ParseRubygemsFilename(filename); gem != "" && version != "" {
-			if blocked := adapter.QuarantineGate(c, "rubygems", gem, version); blocked {
-				return
-			}
-		}
-	}
+	// Platform gem filenames do not expose a reversible name/version/platform
+	// boundary. Quarantine stays disabled until compact-index provenance or the
+	// embedded gemspec can establish the identity without guessing.
 
 	// Determine TTL by path type
 	ttl := h.cfg.TTLIndex // default short for metadata

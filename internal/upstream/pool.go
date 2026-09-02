@@ -287,6 +287,29 @@ func (u *Upstream) Fetch(ctx context.Context, path string) (*FetchResult, error)
 // third-party host, and charging its latency or failures to this
 // upstream would poison the mirror's health accounting.
 func (u *Upstream) FetchURL(ctx context.Context, reqURL string) (*FetchResult, error) {
+	return u.fetchURL(ctx, reqURL, false)
+}
+
+// FetchProvenanceURL fetches an artifact URL that was authenticated by
+// metadata from this exact source. Configured origin credentials are restored
+// only when the declared artifact target has the same HTTP origin. Redirects
+// and targets on another origin remain credential-free.
+func (u *Upstream) FetchProvenanceURL(
+	ctx context.Context,
+	sourceID string,
+	reqURL string,
+) (*FetchResult, error) {
+	if u == nil || sourceID == "" || u.ProvenanceSourceID() != sourceID {
+		return nil, errors.New("artifact provenance source is unavailable")
+	}
+	return u.fetchURL(ctx, reqURL, true)
+}
+
+func (u *Upstream) fetchURL(
+	ctx context.Context,
+	reqURL string,
+	restoreOriginCredentials bool,
+) (*FetchResult, error) {
 	if !validHTTPURL(reqURL) {
 		return nil, fmt.Errorf("create request for %s: invalid HTTP URL", safeURLOrigin(reqURL))
 	}
@@ -294,6 +317,10 @@ func (u *Upstream) FetchURL(ctx context.Context, reqURL string) (*FetchResult, e
 	origin, _ := url.Parse(u.URL)
 	if err := validateExternalTarget(origin, target, u.directNetworkGuard); err != nil {
 		return nil, fmt.Errorf("fetch %s: external target rejected", safeURLOrigin(reqURL))
+	}
+	if restoreOriginCredentials && sameHTTPOrigin(origin, target) && origin.User != nil {
+		target.User = origin.User
+		reqURL = target.String()
 	}
 	return u.do(ctx, reqURL, false)
 }

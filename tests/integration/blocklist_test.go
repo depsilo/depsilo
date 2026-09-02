@@ -22,7 +22,7 @@ import (
 
 func fetchBlocked(t *testing.T) (*http.Response, string) {
 	t.Helper()
-	url := depsiloURL + "/npm/malicious-pkg/-/malicious-pkg-1.0.0.tgz"
+	url := npmVersionTarballURL(t, "malicious-pkg", "1.0.0")
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		resp, err := http.Get(url)
@@ -70,7 +70,7 @@ func TestBlocklist_DisabledAgeGateDoesNotBypassMalware(t *testing.T) {
 	// The test config disables the minimum-release-age gate — if the malware
 	// gate depended on that switch, this request would be served. Any different
 	// version must also block (the advisory covers all versions).
-	url := depsiloURL + "/npm/malicious-pkg/-/malicious-pkg-9.9.9.tgz"
+	url := npmVersionTarballURL(t, "malicious-pkg", "9.9.9")
 	resp, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestBlocklist_DisabledAgeGateDoesNotBypassMalware(t *testing.T) {
 
 func TestBlocklist_CleanPackageStillServes(t *testing.T) {
 	// The regular npm test package must be unaffected by the blocklist.
-	resp, err := http.Get(depsiloURL + "/npm/testpkg/-/testpkg-1.0.0.tgz")
+	resp, err := http.Get(npmVersionTarballURL(t, "testpkg", "1.0.0"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,20 +144,17 @@ func TestBlocklist_OverrideLifecycle(t *testing.T) {
 
 	// …the overridden version now serves (thresholds are zero, so the
 	// age quarantine won't block it either)…
-	servedResp, err := http.Get(depsiloURL + "/npm/malicious-pkg/-/malicious-pkg-1.0.0.tgz")
+	servedResp, err := http.Get(npmVersionTarballURL(t, "malicious-pkg", "1.0.0"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	servedResp.Body.Close()
-	// The mock has no tarball for malicious-pkg, so passing the gate
-	// surfaces as an upstream 404/502 — anything but 451 proves the
-	// gate opened.
-	if servedResp.StatusCode == http.StatusUnavailableForLegalReasons {
-		t.Fatalf("override not honored: still 451")
+	if servedResp.StatusCode != http.StatusOK {
+		t.Fatalf("override not honored: status = %d, want 200", servedResp.StatusCode)
 	}
 
 	// …other versions stay blocked…
-	other, err := http.Get(depsiloURL + "/npm/malicious-pkg/-/malicious-pkg-2.0.0.tgz")
+	other, err := http.Get(npmVersionTarballURL(t, "malicious-pkg", "2.0.0"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +178,7 @@ func TestBlocklist_OverrideLifecycle(t *testing.T) {
 	if delResp.StatusCode != http.StatusOK {
 		t.Fatalf("revoke = %d", delResp.StatusCode)
 	}
-	reblocked, err := http.Get(depsiloURL + "/npm/malicious-pkg/-/malicious-pkg-1.0.0.tgz")
+	reblocked, err := http.Get(npmVersionTarballURL(t, "malicious-pkg", "1.0.0"))
 	if err != nil {
 		t.Fatal(err)
 	}

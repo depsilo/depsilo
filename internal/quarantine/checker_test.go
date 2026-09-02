@@ -33,10 +33,21 @@ func (f resolverFunc) Lookup(_ context.Context, pkg, version string) (time.Time,
 // deterministic.
 func newChecker(t *testing.T, cfg Config, reg resolvers.Registry, now time.Time) *Checker {
 	t.Helper()
+	ageGateEnabled := len(cfg.MinReleaseAge) > 0
+	if cfg.MinReleaseAgeEnabled != nil {
+		ageGateEnabled = *cfg.MinReleaseAgeEnabled
+	}
+	// Production NewPolicy rejects every positive threshold until timestamp
+	// source provenance is wired. Checker tests inject that completed seam so
+	// the decision engine itself retains coverage without opening a config path.
+	disabled := false
+	cfg.MinReleaseAgeEnabled = &disabled
 	p, err := NewPolicy(cfg)
 	if err != nil {
 		t.Fatalf("NewPolicy: %v", err)
 	}
+	p.ageGateEnabled = ageGateEnabled
+	p.sourceProvenanceBound = func(string) bool { return true }
 	store := NewStore(newLookupDB(t))
 	c, err := NewChecker(p, NewLookup(store, reg), store)
 	if err != nil {
@@ -250,20 +261,14 @@ func TestChecker_NotFound_FailOpen_Allows(t *testing.T) {
 	}
 }
 
-func TestChecker_UnsupportedEcosystem_FailClosed_Blocks(t *testing.T) {
-	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+func TestChecker_UnsupportedEcosystemPositiveThresholdIsRejectedAtStartup(t *testing.T) {
 	failClosed := true
-	c := newChecker(t, Config{
+	_, err := NewPolicy(Config{
 		MinReleaseAge: map[string]string{"exotic": "1d"}, // configured but no resolver
 		FailClosed:    &failClosed,
-	}, resolvers.Registry{}, now)
-
-	d := c.Check(context.Background(), "exotic", "x", "1.0", "")
-	if d.Allowed {
-		t.Fatalf("ErrUnsupported + FailClosed should block; got %+v", d)
-	}
-	if !strings.Contains(d.Reason, "resolver") {
-		t.Errorf("Reason should explain missing resolver; got %q", d.Reason)
+	})
+	if err == nil || !strings.Contains(err.Error(), "not supported safely") {
+		t.Fatalf("NewPolicy unsupported positive threshold error = %v", err)
 	}
 }
 

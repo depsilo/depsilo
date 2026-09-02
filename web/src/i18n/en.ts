@@ -317,6 +317,17 @@ const en = {
       emptyHint: 'Service is up. Configure your first client to start receiving requests.',
     },
 
+    // Package-rule snapshot status — visible in the Admin shell when the
+    // request path is operating from a stale or unavailable policy snapshot.
+    policy: {
+      staleSnapshot: 'Policy rules are using a stale snapshot.',
+      lastSuccessfulRefresh: 'Last successful refresh: {{time}}',
+      neverRefreshed: 'No successful policy snapshot refresh has completed yet.',
+      statusUnavailable: 'Policy status is temporarily unavailable. Verify before treating policy as clear.',
+      refresh: 'Refresh policy status',
+      refreshing: 'Refreshing policy status...',
+    },
+
     // Bandwidth Report
     bandwidth: {
       title: 'Bandwidth Report',
@@ -650,7 +661,8 @@ const en = {
     // Supply-chain Quarantine
     quarantine: {
       title: 'Supply-chain Quarantine',
-      subtitle: 'Minimum release age is off by default. Once enabled and configured, it quarantines fresh releases; the malware blocklist runs independently and every decision is logged here.',
+      subtitle: 'Review malware, tamper, and historical quarantine decisions. Minimum-release-age enforcement is temporarily unavailable.',
+      minimum_age_unavailable: 'Minimum release age is safety-disabled until artifact-source and timestamp provenance are bound. Positive enabled thresholds are rejected at startup; new permanent approvals cannot be created.',
       tab: {
         events: 'Events',
         approvals: 'Approvals',
@@ -692,7 +704,7 @@ const en = {
         sync_now: 'Sync now',
         syncing: 'Syncing…',
         overrides_title: 'False-positive overrides',
-        overrides_hint: 'Overrides expire 24 hours after creation and cannot be extended — only re-created, each one an audited decision. An override lifts the malware block only; minimum-release-age quarantine still applies when enabled.',
+        overrides_hint: 'Overrides expire 24 hours after creation and cannot be extended — only re-created, each one an audited decision. An override lifts the malware block only.',
         no_overrides_title: 'No active overrides',
         no_overrides_hint: 'Requests matching the blocklist are refused with 451 MALICIOUS_BLOCKED. Confirmed false positives can be temporarily exempted here.',
         col_expires: 'Expires in',
@@ -704,6 +716,7 @@ const en = {
         version_placeholder: 'Version (empty = all versions)',
         create_error: 'Failed to create override',
         create_submit: 'Create override (24h)',
+        creating: 'Creating…',
         overrides_table: 'Malware override table',
       },
       col: {
@@ -718,25 +731,17 @@ const en = {
       events: {
         table: 'Quarantine events table',
         empty_title: 'No quarantine events yet',
-        empty_hint: 'Age-gate decisions, malware matches, and tamper alerts will appear here.',
+        empty_hint: 'Malware matches, tamper alerts, and historical age-gate decisions will appear here.',
       },
       approvals: {
         table: 'Quarantine approvals table',
         empty_title: 'No manual approvals',
-        empty_hint: 'Approving a blocked version from the events tab will land it here.',
-      },
-      approve: {
-        cta: 'Approve',
-        title: 'Approve this version',
-        body: 'About to approve {{pkg}} {{ver}} on {{eco}} — all clients will receive it directly, skipping the quarantine check. Reason is required and audited.',
-        submit: 'Approve',
-        submitting: 'Submitting…',
-        error: 'Approval failed. Please retry.',
+        empty_hint: 'No historical minimum-release-age approvals are stored. New approvals are unavailable while the gate is safety-disabled.',
       },
       revoke: {
         cta: 'Revoke',
         title: 'Revoke this approval',
-        body: 'Revoking will put {{pkg}} {{ver}} on {{eco}} back under the quarantine policy. Reason is required and audited.',
+        body: 'Revoke the stored approval for {{pkg}} {{ver}} on {{eco}}. Minimum-release-age enforcement is currently unavailable; the removal is audited and prevents a future gate from inheriting this bypass.',
         submit: 'Revoke',
         submitting: 'Revoking…',
         error: 'Revoke failed. Please retry.',
@@ -791,11 +796,19 @@ const en = {
       editRule: 'Edit Rule',
       testRule: 'Test Rule',
       ecosystem: 'Ecosystem',
-      allEcosystems: 'All Ecosystems',
+      allEcosystems: 'All Package Rule Ecosystems',
       packageName: 'Package Name',
       packagePlaceholder: 'e.g. log4j or org.apache.*',
+      mavenPackagePlaceholder: 'e.g. org.apache.logging.log4j:log4j-core',
       version: 'Version',
       versionPlaceholder: 'e.g. < 2.17.0 or * for all',
+      exactVersionPlaceholder: 'Exact version or * for all',
+      exactOnlyHint: 'This ecosystem supports package-wide and exact-version rules only; version ranges are rejected.',
+      globalRuleHint: 'This rule covers every ecosystem supported by Package Rules; it does not cover Docker, Hugging Face, RubyGems, or Helm. Package and version must both be *.',
+      aptVersionHint: 'APT package rules are package-wide only because .deb paths omit the Debian epoch. Version selectors are rejected until index-derived version mapping is available.',
+      npmVersionHint: 'npm exact versions and one <, <=, >, or >= comparator are enforced only on the authenticated signed dist.tarball URL returned by metadata. Node-style compound ranges are not supported; hand-built legacy tarball URLs are rejected.',
+      composerVersionHint: 'Composer package rules are package-wide only because dist URLs may contain a normalized version or a reference fallback instead of the declared pretty version. Version selectors are rejected.',
+      testVersionPlaceholder: 'Actual package version, e.g. 2.17.0',
       action: 'Action',
       allow: 'Allow',
       deny: 'Deny',
@@ -869,15 +882,12 @@ const en = {
       importFile: 'Import Vulnerabilities',
       importDesc: 'Upload OSV JSON file',
       importSuccess: '{{count}} vulnerabilities imported',
-      importSummary: 'Received {{received}} · Packages {{packages}} · Duplicates {{duplicates}} · Skipped {{skipped}} · Rules created {{rulesCreated}}',
+      importSummary: 'Received {{received}} · Packages {{packages}} · Duplicates {{duplicates}} · Skipped {{skipped}}',
       importFormat: 'OSV JSON format',
 
       // Suggestions tab
-      block: 'Block',
-      blockTitle: 'Block this package suggestion?',
-      blockImpact: 'This creates a blocking rule for {{name}}. Matching dependency requests may be refused until an operator changes the rule.',
-      confirmBlock: 'Create blocking rule',
-      blocking: 'Creating rule…',
+      manualRuleRequired: 'Automatic OSV rule creation is unavailable because complete affected sets cannot be projected losslessly. Review the advisory, then create a manual Package Rule with an explicit selector.',
+      openPackageRules: 'Open Package Rules',
       dismissTitle: 'Dismiss this security suggestion?',
       dismissImpact: 'This removes {{name}} from the current review queue without creating a rule. A later scan may suggest it again.',
       confirmDismiss: 'Dismiss suggestion',
@@ -895,7 +905,12 @@ const en = {
       policyHint: 'Start from a shared baseline, then keep only deliberate ecosystem exceptions.',
       cvssThreshold: 'CVSS threshold',
       bulkAutoBlock: 'Shared auto-block baseline',
-      bulkPolicyHint: 'Apply these draft values to every supported ecosystem. Nothing is saved until you confirm the changes.',
+      bulkPolicyHint: 'Automatic blocking is safety-disabled for every ecosystem because complete OSV affected sets cannot be projected losslessly. This draft can only switch off legacy policies. Nothing is saved until you confirm.',
+      autoBlockUnavailableOSVProjection: 'Unavailable: complete OSV affected sets cannot currently be projected losslessly into Package Rules. A legacy enabled policy can only be switched off.',
+      autoBlockUnavailableExactOnly: 'Unavailable: automatic blocking requires version ranges, which this ecosystem does not support. A legacy enabled policy can only be switched off.',
+      autoBlockUnavailableApt: 'Unavailable: .deb paths omit the Debian epoch, so automatic version blocking cannot be enforced safely yet. A legacy enabled policy can only be switched off.',
+      autoBlockUnavailableComposer: 'Unavailable: Composer dist URLs may expose a normalized version or reference fallback rather than the declared pretty version. A legacy enabled policy can only be switched off.',
+      autoBlockUnavailableNoPackageRules: 'Unavailable: this ecosystem does not provide Package Rules because artifact paths cannot establish an unambiguous package identity. A legacy enabled policy can only be switched off.',
       applyToAll: 'Apply draft to all',
       unsavedCount: '{{count}} unsaved changes',
       showChangedOnly: 'Changed only',

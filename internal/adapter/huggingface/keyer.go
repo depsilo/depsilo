@@ -294,7 +294,7 @@ func parseAPI(segs []string) Parsed {
 // CacheKey derives the cache.Manager key from a parsed request. The shape
 // mirrors the request path with the "huggingface/" prefix.
 func CacheKey(p Parsed) string {
-	repo, ok := escapedPath(p.Repo, p.repoSegments)
+	_, repo, ok := canonicalRepositoryIdentity(p.Repo, p.repoSegments)
 	if !ok {
 		return ""
 	}
@@ -333,6 +333,29 @@ func CacheKey(p Parsed) string {
 	default:
 		return ""
 	}
+}
+
+// canonicalRepositoryIdentity collapses Hub's case aliases before any cache,
+// ref-pin, or revocation identity is derived. Ref names and file subpaths stay
+// case-sensitive; only the repository segments are canonicalized.
+func canonicalRepositoryIdentity(
+	repository string,
+	parsedSegments []string,
+) (canonical string, escaped string, ok bool) {
+	segments := parsedSegments
+	if len(segments) == 0 {
+		if repository == "" {
+			return "", "", false
+		}
+		segments = strings.Split(repository, "/")
+	}
+	canonicalSegments := make([]string, len(segments))
+	for index, segment := range segments {
+		canonicalSegments[index] = strings.ToLower(segment)
+	}
+	canonical = strings.Join(canonicalSegments, "/")
+	escaped, ok = escapedPath(canonical, canonicalSegments)
+	return canonical, escaped, ok
 }
 
 func isXetReadToken(parsed Parsed) bool {
@@ -383,7 +406,7 @@ func mutableRefPinKey(parsed Parsed) (string, bool) {
 	if parsed.Kind != PathResolve && parsed.Kind != PathRaw || IsCommitSHA(parsed.Ref) {
 		return "", false
 	}
-	repo, ok := escapedPath(parsed.Repo, parsed.repoSegments)
+	_, repo, ok := canonicalRepositoryIdentity(parsed.Repo, parsed.repoSegments)
 	if !ok {
 		return "", false
 	}

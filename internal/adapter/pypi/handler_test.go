@@ -641,7 +641,7 @@ func TestExtraIndexArtifactKeepsExtraPolicyIdentity(t *testing.T) {
 	}
 	router := gin.New()
 	handler.Register(router.Group(handler.pathPrefix))
-	scoped := adapter.NewRequestScope(nil, nil, checker).Wrap(router)
+	scoped := adapter.NewRequestScope(nil, nil, checker, nil).Wrap(router)
 	recorder := httptest.NewRecorder()
 	scoped.ServeHTTP(recorder, httptest.NewRequest(
 		http.MethodGet,

@@ -93,7 +93,7 @@ func performSecurityImport(
 
 func newSecurityImportTestCatalog(t *testing.T, database *gorm.DB) *security.AdvisoryCatalog {
 	t.Helper()
-	catalog, err := security.NewAdvisoryCatalog(database, time.Hour, nil)
+	catalog, err := security.NewAdvisoryCatalog(database, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,6 +144,24 @@ func TestSecurityImportMapsCatalogValidationErrors(t *testing.T) {
 		recorder, response := performSecurityImport(t, router, payload)
 		if recorder.Code != http.StatusRequestEntityTooLarge || response.Code != "IMPORT_TOO_LARGE" {
 			t.Fatalf("status = %d, response = %+v", recorder.Code, response)
+		}
+	})
+
+	t.Run("invalid affected package identity", func(t *testing.T) {
+		payload := []byte(`[{"id":"OSV-INVALID-PACKAGE","affected":[{"package":{"ecosystem":"PyPI","name":"bad/name"}}]}]`)
+		recorder, response := performSecurityImport(t, router, payload)
+		if recorder.Code != http.StatusBadRequest || response.Code != "INVALID_IMPORT" || response.Message != "invalid advisory import" {
+			t.Fatalf("status = %d, response = %+v", recorder.Code, response)
+		}
+		var vulnerabilities, checks int64
+		if err := database.Model(&db.Vulnerability{}).Count(&vulnerabilities).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := database.Model(&db.VulnerabilityCheck{}).Count(&checks).Error; err != nil {
+			t.Fatal(err)
+		}
+		if vulnerabilities != 0 || checks != 0 {
+			t.Fatalf("invalid import wrote vulnerabilities=%d checks=%d", vulnerabilities, checks)
 		}
 	})
 }

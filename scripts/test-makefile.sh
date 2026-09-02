@@ -211,6 +211,9 @@ fi
 v090_compose_dry_run=$(make -n -C "$ROOT" test-v090-compose-upgrade)
 assert_contains "$v090_compose_dry_run" 'bash scripts/test-v090-compose-upgrade.sh'
 
+v091_upgrade_dry_run=$(make -n -C "$ROOT" test-v091-upgrade)
+assert_contains "$v091_upgrade_dry_run" 'bash scripts/test-v091-upgrade.sh'
+
 docker_run=$(make -n -C "$ROOT" docker-run CONFIG=config.toml DEV_JWT_SECRET=.dev-jwt-secret)
 assert_contains "$docker_run" 'DEPSILO_AUTH_JWT_SECRET="$secret" docker run'
 assert_contains "$docker_run" '--user "$(id -u):$(id -g)"'

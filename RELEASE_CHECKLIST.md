@@ -4,6 +4,9 @@
 
 ### Code Quality
 - [ ] `make verify` passes (lint, race, integration, build, browser, scripts)
+- [ ] First-run setup durability matrix passes: database commit precedes config
+      publication, and every injected boundary reopens Setup or preserves admin
+      login after a clean restart
 - [ ] `make security` passes (online dependency vulnerability scan)
 - [ ] `make test-ui-production` passes against the embedded production frontend
 - [ ] The production container runs as UID/GID `10001:10001` and `/ready`
@@ -15,12 +18,20 @@
 - [ ] `make test-compiler-cache-qualified` passes with pinned ccache and sccache
 - [ ] `make test-s3` passes against the pinned MinIO image
 - [ ] `make test-v090-upgrade` reopens v0.9.0 state and preserves config,
-      SQLite identities, password/JWT/API credentials, real npm cache metadata,
-      and an offline cached artifact
+      SQLite identities, password/JWT/API credentials, and legacy npm cache
+      records; it rejects unsigned cached npm data while offline, then refetches
+      online metadata and proves fresh source-bound signed artifact provenance
 - [ ] `make test-v090-compose-upgrade` upgrades the immutable published v0.9.0
       image's exact shipped bind layout, explicitly rotates a weak legacy JWT
-      secret, preserves passwords, API tokens, database, license and cache, and
-      proves Admin Settings can atomically rewrite the prepared candidate config
+      secret, preserves passwords, API tokens, database, license and legacy
+      npm cache records, rejects unsigned legacy npm artifacts, establishes fresh
+      source-bound signed provenance after reconnect, and proves Admin Settings
+      can atomically rewrite the prepared candidate config
+- [ ] `make test-v091-upgrade` upgrades the fixed direct-predecessor source and
+      immutable published v0.9.1 image. It reopens the shipped named-volume
+      state with the candidate, preserves config, password/JWT/API credentials,
+      trial and paid entitlement, and migrates a safe ecosystem-wide Package
+      Rule to schema v3 with dialect revision 1
 
 ### Binary
 - [ ] `make build` produces `bin/depsilo` successfully

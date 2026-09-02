@@ -29,6 +29,12 @@ ttl_index    = "1h"         # 索引元数据刷新间隔（过期后同步刷�
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
+# Package-policy snapshot refresh behavior. A stale, last-known-good snapshot
+# is preferred when the policy store is temporarily unavailable; change to
+# use_stale_then_deny, allow, or deny for a different explicit fallback.
+[policy]
+on_load_error = "use_stale_then_allow"
+
 # 可选：为下游 ccache / sccache 提供本机或团队共享的编译产物缓存。
 # 该存储必须与上面的包缓存隔离；启用后通过 Admin API 创建 namespace 凭据。
 # 当前只支持单 Depsilo 实例，多个实例不能共享下面的目录/bucket 和容量账本。
@@ -91,7 +97,10 @@ rollup_retention_days = 365    # rollup tables sweep horizon (0 = never sweep)
 enabled    = true
 # A non-loopback listener requires at least 32 bytes with no surrounding
 # whitespace. Use the same strength behind a reverse proxy, even with a
-# loopback listener. Rotating this value invalidates existing browser JWTs.
+# loopback listener. The placeholder remains available only for loopback
+# development; npm and extra PyPI indexes then use process-local random signing
+# keys, so signed artifact URLs rotate on every restart. Rotating a configured
+# secret invalidates existing browser JWTs and signed artifact URLs.
 # Prefer an environment secret: DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
 jwt_secret = "change-me-in-production"
 token_ttl  = "168h"         # 7天
@@ -326,76 +335,45 @@ scan_interval = "24h"
 check_ttl = "24h"
 # proxy = "http://127.0.0.1:7890"
 
-# ─── Supply-chain quarantine — minimum release age ──────────────────────
+# ─── Minimum release age — temporarily unavailable ──────────────────────
 #
-# Refuses to serve any package version whose upstream publish time is
-# younger than the configured threshold. Mitigates Shai-Hulud-style
-# self-propagating worms by giving the community a window to catch
-# and yank a poisoned version before it can enter a build.
+# This build does not enforce minimum release age. Artifact bytes may come
+# from a configured private or mirrored Upstream while the current timestamp
+# resolvers query a different public registry. A public timestamp cannot
+# safely govern those bytes until the selected artifact source is bound to
+# timestamp provenance.
 #
-# The age gate defaults OFF so normal installs never reject a package merely
-# because it is new. Set min_release_age_enabled = true to activate the
-# recommended profile below, then override only the ecosystems you need.
-# Existing configs that already contain a threshold table but predate the
-# switch remain enabled until they explicitly set the switch to false.
-#
-# Threshold values accept "3d" / "7d" / "2w" / "24h" / "30m" / "0".
-# Set an ecosystem to "0" to exempt it while the global switch is on.
-#
-# Mode controls what happens when the age gate would refuse a version:
-#   block  — return 451 and refuse the request (default)
-#   warn   — record a warning event and serve the request anyway
-# The legacy serve_last_eligible value is recognized but rejected at
-# startup because it is not implemented in this build.
-#
-# Allow rules bypass the check for trusted pins. Three syntaxes:
-#   npm:@scope/internal-*         — glob match on package name
-#   pypi:requests==2.32.3         — exact pin on (name, version)
-#   npm:react>=18.0.0             — range comparator on a name
-#
-# Operators can also approve individual (package, version) pairs at
-# runtime via the admin UI — those approvals persist permanently.
-#
-# fail_closed controls not-found / unsupported timestamp results:
-#   true  (default when the age gate is enabled) — treat as quarantined
-#   false           — allow through (legacy / opt-in)
-# A genuine upstream outage always allows with a warning; one registry
-# incident must not halt every build.
+# Keep the gate disabled and every threshold at zero. If the effective gate is
+# enabled, startup rejects every positive default or ecosystem threshold.
+# Explicitly disabled legacy configurations may retain positive values for
+# rollback compatibility, but those values have no runtime effect.
 
 [supply_chain]
 min_release_age_enabled = false
 mode = "block"
 fail_closed = true
 
-# allow = [
-#   "npm:@your-org/internal-*",
-#   "pypi:requests==2.32.3",
-#   "npm:react>=18.0.0",
-# ]
-
 [supply_chain.min_release_age]
-# Recommended opt-in profile. The fallback is for unknown/future ecosystem
-# keys only; supported ecosystems use these values when the switch is true.
 default  = "0"
-pypi     = "3d"
-npm      = "7d"
-go       = "0"     # no publish-time resolver; keep zero (checksum DB protects Go modules)
-cargo    = "3d"
-maven    = "3d"
-rubygems = "3d"
-composer = "3d"
-nuget    = "3d"
-conda    = "3d"
-cran     = "3d"
-helm     = "3d"
-alpine   = "3d"
-docker   = "3d"
-huggingface = "3d"
-apt      = "0"     # APT has no quarantine gate yet; keep this at zero
+pypi     = "0"
+npm      = "0"
+go       = "0"
+cargo    = "0"
+maven    = "0"
+rubygems = "0"
+composer = "0"
+nuget    = "0"
+conda    = "0"
+cran     = "0"
+helm     = "0"
+alpine   = "0"
+docker   = "0"
+huggingface = "0"
+apt      = "0"
 
 # ── Known-malicious blocklist ─────────────────────────────────────────
-# Syncs OSV MAL-* records for npm, pypi, cargo, rubygems, composer, nuget,
-# go, and maven. Explicit version lists and all-version advisories are
+# Syncs OSV MAL-* records for npm, cargo, composer, nuget, go, and maven.
+# Explicit version lists and all-version advisories are
 # imported; bounded ranges without a version list are skipped.
 # Records may carry GHSA aliases.
 # The quarantine allow-list CANNOT bypass a malware match — the only

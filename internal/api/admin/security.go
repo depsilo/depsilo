@@ -3,8 +3,10 @@ package admin
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +14,8 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
+	"depsilo/internal/packagepolicy"
+	packagerules "depsilo/internal/rules"
 	"depsilo/internal/security"
 )
 
@@ -92,12 +96,6 @@ func (h *SecurityHandler) Dashboard(c *gin.Context) {
 		severityMap[s.Severity] = s.Count
 	}
 
-	var autoBlocked int64
-	if err := h.db.Model(&db.PackageRule{}).Where("created_by = 'security-scanner'").Count(&autoBlocked).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
-		return
-	}
-
 	lastScan := h.scanner.LastScanTime()
 	var lastScanStr *string
 	if !lastScan.IsZero() {
@@ -109,9 +107,12 @@ func (h *SecurityHandler) Dashboard(c *gin.Context) {
 		TotalVulnerabilities: totalVulns,
 		AffectedPackages:     affectedPkgs,
 		BySeverity:           severityMap,
-		AutoBlockedCount:     autoBlocked,
-		LastScanAt:           lastScanStr,
-		ScanInProgress:       h.scanner.IsScanning(),
+		// Automatic blocking is safety-disabled until OSV affected sets have
+		// a lossless native policy representation. A username is not machine
+		// provenance and must never be counted as an automatic rule owner.
+		AutoBlockedCount: 0,
+		LastScanAt:       lastScanStr,
+		ScanInProgress:   h.scanner.IsScanning(),
 	})
 }
 
@@ -239,11 +240,18 @@ func (h *SecurityHandler) ApproveSuggestion(c *gin.Context) {
 		Version string `json:"version"`
 		Reason  string `json:"reason"`
 	}
-	c.ShouldBindJSON(&body)
+	if err := c.ShouldBindJSON(&body); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "request body must be valid JSON"})
+		return
+	}
 
 	version := body.Version
-	if version == "" {
-		version = security.FormatVersionConstraint(&vuln)
+	if strings.TrimSpace(version) == "" {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"code":    "VERSION_REQUIRED",
+			"message": "an explicit reviewed Package Rule version selector is required",
+		})
+		return
 	}
 	reason := body.Reason
 	if reason == "" {
@@ -257,7 +265,11 @@ func (h *SecurityHandler) ApproveSuggestion(c *gin.Context) {
 		Ecosystem: vuln.Ecosystem, PackageName: vuln.PackageName,
 		Version: version, Action: "deny", Reason: reason, CreatedBy: "admin",
 	}
-	if err := h.db.Create(&rule).Error; err != nil {
+	if err := packagerules.NewStore(h.db).Create(&rule); err != nil {
+		if errors.Is(err, packagepolicy.ErrInvalidRule) {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "message": err.Error()})
 		return
 	}
@@ -352,7 +364,7 @@ func (h *SecurityHandler) ListPolicies(c *gin.Context) {
 }
 
 func (h *SecurityHandler) UpdatePolicy(c *gin.Context) {
-	ecosystem := c.Param("ecosystem")
+	ecosystem := strings.ToLower(strings.TrimSpace(c.Param("ecosystem")))
 
 	var req updateSecurityPolicyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -364,12 +376,28 @@ func (h *SecurityHandler) UpdatePolicy(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "INVALID_POLICY", "message": "min_cvss_score must be between 0 and 10"})
 		return
 	}
+	autoBlockSupported, err := security.SupportsAutomaticVersionBlocking(ecosystem)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"code": "INVALID_POLICY", "message": err.Error()})
+		return
+	}
+	if req.AutoBlockEnabled && !autoBlockSupported {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"code":    "INVALID_POLICY",
+			"message": "automatic vulnerability blocking is safety-disabled because OSV affected sets cannot be projected losslessly to Package Rule selectors",
+		})
+		return
+	}
 
 	policy := db.SecurityPolicy{
 		Ecosystem: ecosystem, AutoBlockEnabled: req.AutoBlockEnabled,
 		MinCVSSScore: minCVSSScore, CreatedBy: "admin",
 	}
-	result := h.db.Where("ecosystem = ?", ecosystem).Assign(policy).FirstOrCreate(&policy)
+	result := h.db.Where("ecosystem = ?", ecosystem).Assign(map[string]any{
+		"auto_block_enabled": req.AutoBlockEnabled,
+		"min_cvss_score":     minCVSSScore,
+		"created_by":         "admin",
+	}).FirstOrCreate(&policy)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": result.Error.Error()})
 		return

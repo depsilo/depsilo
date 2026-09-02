@@ -7,7 +7,15 @@ package packagekey
 import (
 	"net/url"
 	"strings"
+
+	"depsilo/internal/gomoduleidentity"
 )
+
+// NPMExactIdentityCachePrefix is a one-way cache namespace revision. Before
+// v0.9.1 npm keys case-folded package identities, so reusing the old "npm/"
+// namespace could serve an uppercase package's bytes for a lowercase package
+// after an in-place upgrade.
+const NPMExactIdentityCachePrefix = "npm-exact-v1/"
 
 // ExtractName returns a human-readable package name from a cache key,
 // or "" when the key does not denote a recognisable package.
@@ -24,13 +32,15 @@ func ExtractName(adapterType, key string) string {
 			path := strings.TrimPrefix(key, "pypi/files/")
 			parts := strings.Split(path, "/")
 			fname := parts[len(parts)-1]
-			if idx := strings.Index(fname, "-"); idx > 0 {
-				return fname[:idx]
-			}
-			return fname
+			// Artifact links may use arbitrary filenames. Only the strict
+			// PEP 427/625 parser is authoritative enough for cache identity;
+			// returning empty prevents background scans from recording a
+			// guessed package as clean.
+			packageName, _ := ParsePypiFilename(fname)
+			return packageName
 		}
 	case "apt":
-		if strings.HasSuffix(key, ".deb") {
+		if _, ok := trimDebianPackageExtension(key); ok {
 			parts := strings.Split(key, "/")
 			fname := parts[len(parts)-1]
 			if idx := strings.Index(fname, "_"); idx > 0 {
@@ -38,12 +48,22 @@ func ExtractName(adapterType, key string) string {
 			}
 			return fname
 		}
-		parts := strings.SplitN(strings.TrimPrefix(key, "apt/"), "/", 2)
-		if len(parts) > 0 {
-			return parts[0]
-		}
+		// Repository metadata and source-package files do not identify one
+		// installable binary package. In particular, the repository selector at
+		// the front of the cache key is not a package name.
+		return ""
 	case "npm":
-		trimmed := strings.TrimPrefix(key, "npm/")
+		trimmed := key
+		switch {
+		case strings.HasPrefix(key, NPMExactIdentityCachePrefix):
+			trimmed = strings.TrimPrefix(key, NPMExactIdentityCachePrefix)
+		case strings.HasPrefix(key, "npm/"):
+			// Legacy cache rows remain readable to admin/retention tooling, but
+			// adapters never generate this ambiguous namespace again.
+			trimmed = strings.TrimPrefix(key, "npm/")
+		default:
+			return ""
+		}
 		if strings.HasPrefix(trimmed, "@") {
 			parts := strings.SplitN(trimmed, "/", 3)
 			if len(parts) >= 2 {
@@ -56,32 +76,44 @@ func ExtractName(adapterType, key string) string {
 			}
 		}
 	case "go":
+		if !strings.HasPrefix(key, "go/") {
+			return ""
+		}
 		trimmed := strings.TrimPrefix(key, "go/")
+		var escaped string
 		if idx := strings.Index(trimmed, "/@v/"); idx > 0 {
-			return trimmed[:idx]
+			escaped = trimmed[:idx]
+		} else if idx := strings.Index(trimmed, "/@latest"); idx > 0 {
+			escaped = trimmed[:idx]
 		}
-		if idx := strings.Index(trimmed, "/@latest"); idx > 0 {
-			return trimmed[:idx]
+		if escaped == "" {
+			return ""
 		}
+		modulePath, err := gomoduleidentity.DecodeProxyPath(escaped)
+		if err != nil {
+			return ""
+		}
+		return modulePath
 	case "cargo":
-		trimmed := strings.TrimPrefix(key, "cargo/")
-		if strings.HasPrefix(trimmed, "crates/") {
-			parts := strings.SplitN(strings.TrimPrefix(trimmed, "crates/"), "/", 2)
-			if len(parts) >= 1 {
+		const artifactPrefix = "cargo/crates/"
+		if strings.HasPrefix(key, artifactPrefix) {
+			parts := strings.Split(strings.TrimPrefix(key, artifactPrefix), "/")
+			if len(parts) == 2 && parts[0] != "" &&
+				strings.HasSuffix(parts[1], ".crate") &&
+				strings.TrimSuffix(parts[1], ".crate") != "" {
 				return parts[0]
 			}
 		}
-		if strings.HasPrefix(trimmed, "index/") {
-			parts := strings.Split(trimmed, "/")
-			if len(parts) >= 1 {
-				return parts[len(parts)-1]
-			}
-		}
+		// Sparse-index filenames are lowercased by the protocol even though the
+		// package identity inside the index record is case-sensitive. The cache
+		// key alone therefore cannot authenticate a crate name for OSV scanning.
+		return ""
 	case "maven":
-		parts := strings.Split(strings.TrimPrefix(key, "maven/"), "/")
-		if len(parts) >= 3 {
-			return parts[len(parts)-3]
+		if !strings.HasPrefix(key, "maven/") {
+			return ""
 		}
+		coordinate, _ := ParseMavenPath(strings.TrimPrefix(key, "maven/"))
+		return coordinate
 	case "rubygems":
 		trimmed := strings.TrimPrefix(key, "rubygems/")
 		if strings.HasPrefix(trimmed, "gems/") {
@@ -95,18 +127,11 @@ func ExtractName(adapterType, key string) string {
 			return strings.TrimPrefix(trimmed, "info/")
 		}
 	case "composer":
-		trimmed := strings.TrimPrefix(key, "composer/")
-		if strings.HasPrefix(trimmed, "p2/") {
-			name := strings.TrimPrefix(trimmed, "p2/")
-			name = strings.TrimSuffix(name, ".json")
-			name = strings.TrimSuffix(name, "~dev")
-			return name
+		if !strings.HasPrefix(key, "composer/") {
+			return ""
 		}
-		if strings.HasPrefix(trimmed, "dist/") {
-			parts := strings.SplitN(strings.TrimPrefix(trimmed, "dist/"), "/", 3)
-			if len(parts) >= 2 {
-				return parts[0] + "/" + parts[1]
-			}
+		if name, ok := ParseComposerPath(strings.TrimPrefix(key, "composer/")); ok {
+			return name
 		}
 	case "conda":
 		trimmed := strings.TrimPrefix(key, "conda/")
@@ -124,13 +149,11 @@ func ExtractName(adapterType, key string) string {
 		}
 		return fname
 	case "cran":
-		trimmed := strings.TrimPrefix(key, "cran/")
-		parts := strings.Split(trimmed, "/")
-		fname := parts[len(parts)-1]
-		if idx := strings.Index(fname, "_"); idx > 0 {
-			return fname[:idx]
+		if !strings.HasPrefix(key, "cran/") {
+			return ""
 		}
-		return strings.TrimSuffix(fname, ".tar.gz")
+		packageName, _ := ParseCranPath(strings.TrimPrefix(key, "cran/"))
+		return packageName
 	case "alpine":
 		// e.g. alpine/v3.19/main/x86_64/py3-foo-1.2.3-r0.apk -> py3-foo
 		if !strings.HasSuffix(key, ".apk") {
@@ -240,11 +263,15 @@ func ExtractVersion(adapterType, key string) string {
 		}
 	case "go":
 		if idx := strings.Index(key, "/@v/"); idx > 0 {
-			ver := key[idx+4:]
+			escapedVersion := key[idx+4:]
 			for _, ext := range []string{".zip", ".mod", ".info"} {
-				ver = strings.TrimSuffix(ver, ext)
+				escapedVersion = strings.TrimSuffix(escapedVersion, ext)
 			}
-			return ver
+			version, err := gomoduleidentity.DecodeProxyVersion(escapedVersion)
+			if err != nil {
+				return ""
+			}
+			return version
 		}
 	case "cargo":
 		if !strings.HasSuffix(key, ".crate") {
@@ -254,12 +281,14 @@ func ExtractVersion(adapterType, key string) string {
 		fname := parts[len(parts)-1]
 		return strings.TrimSuffix(fname, ".crate")
 	case "apt":
-		if !strings.HasSuffix(key, ".deb") {
+		trimmed, ok := trimDebianPackageExtension(key)
+		if !ok {
 			return ""
 		}
-		parts := strings.Split(key, "/")
-		fname := parts[len(parts)-1]
-		fname = strings.TrimSuffix(fname, ".deb")
+		fname := strings.TrimSuffix(trimmed, "/")
+		if slash := strings.LastIndexByte(fname, '/'); slash >= 0 {
+			fname = fname[slash+1:]
+		}
 		underParts := strings.SplitN(fname, "_", 3)
 		if len(underParts) >= 2 {
 			return underParts[1]
@@ -352,6 +381,15 @@ func ExtractVersion(adapterType, key string) string {
 		}
 	}
 	return ""
+}
+
+func trimDebianPackageExtension(value string) (string, bool) {
+	for _, extension := range []string{".udeb", ".deb"} {
+		if strings.HasSuffix(value, extension) {
+			return strings.TrimSuffix(value, extension), true
+		}
+	}
+	return value, false
 }
 
 func parseHuggingFaceFileKey(key string) (repo, ref string, ok bool) {

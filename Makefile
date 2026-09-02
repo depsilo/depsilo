@@ -39,6 +39,7 @@ GO_RACE_PKGS := \
 	./internal/middleware/... \
 	./internal/notify/... \
 	./internal/quarantine/... \
+	./internal/rules/... \
 	./internal/security/... \
 	./internal/server/... \
 	./internal/trial/... \
@@ -167,7 +168,7 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade
+.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade test-v091-upgrade
 
 test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
 	go test -short $(GO_TEST_PKGS)
@@ -201,6 +202,9 @@ test-v090-upgrade: build-dev-server  # 发布：验证 v0.9.0 配置、SQLite、
 
 test-v090-compose-upgrade:          # 发布：验证官方 v0.9.0 Compose bind 布局安全升级
 	@bash scripts/test-v090-compose-upgrade.sh
+
+test-v091-upgrade: build-dev-server # 发布：验证固定 v0.9.1 source 与已发布镜像状态升级
+	@bash scripts/test-v091-upgrade.sh
 
 # ─── Docker E2E ──────────────────────────────
 # Every fixture accepts one DEPSILO_URL build arg and derives its own route.

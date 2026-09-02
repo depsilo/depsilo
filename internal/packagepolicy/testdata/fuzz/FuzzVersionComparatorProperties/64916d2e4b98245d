@@ -1,0 +1,5 @@
+go test fuzz v1
+string("mAven")
+string("0A0")
+string("0")
+string("A")

@@ -54,14 +54,21 @@ type Deps struct {
 	Entitlement      *entitlement.Checker // NEW
 	RulesStore       *rules.Store
 	RulesEngine      *rules.Engine
-	SecurityScanner  *security.Scanner
-	SecurityCatalog  *security.AdvisoryCatalog
-	WebhookNotifier  *notify.Notifier
+	// PolicyStatusProvider is a read-only snapshot seam shared by readiness,
+	// Admin status, and Prometheus telemetry. It must not refresh the store.
+	PolicyStatusProvider PolicyStatusProvider
+	SecurityScanner      *security.Scanner
+	SecurityCatalog      *security.AdvisoryCatalog
+	WebhookNotifier      *notify.Notifier
 	// QuarantineStore is the supply-chain quarantine helper exposed via
 	// admin endpoints for events / approvals. Separate from the
 	// adapter-side gate bound to each request by the server's adapter
 	// RequestScope; this is the admin-control-plane access path.
 	QuarantineStore *quarantine.Store
+	// QuarantineApprovalsEnabled is true only when at least one source-bound
+	// minimum-release-age threshold is active. Historical approvals stay
+	// readable/revocable while creation is disabled.
+	QuarantineApprovalsEnabled bool
 	// BlocklistStore / BlocklistSyncer power the known-malicious
 	// blocklist admin endpoints (status / manual sync / overrides).
 	// Both nil when [supply_chain.blocklist] enabled = false.
@@ -85,7 +92,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Public routes
 	r.GET("/health", healthHandler)
 	r.GET("/live", healthHandler)
-	r.GET("/ready", readinessHandler(deps.DB, deps.Storage))
+	r.GET("/ready", readinessHandler(deps.DB, deps.Storage, deps.PolicyStatusProvider))
 	r.GET("/metrics", MetricsHandler())
 
 	// Stock ccache remote-storage data plane. The route remains registered
@@ -187,6 +194,12 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.GET("/dashboard", dashHandler.GetDashboard)
 	adminRead.GET("/dashboard/recent-downloads", dashHandler.GetRecentDownloads)
 	adminRead.GET("/dashboard/trends", dashHandler.GetTrends)
+
+	// Policy freshness is an authenticated operational status surface. The
+	// package-policy middleware remains on the request path; this endpoint only
+	// reads its last-known status and never forces a database refresh.
+	policyHandler := admin.NewPolicyHandler(deps.PolicyStatusProvider)
+	adminRead.GET("/policy/status", policyHandler.Status)
 
 	// Bandwidth report
 	bandwidthHandler := admin.NewBandwidthHandler(deps.DB, deps.Config.AccessLog.RollupEnabled)
@@ -318,7 +331,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// operator approvals. Wedge feature, open-source per
 	// docs/DIRECTION.md, so endpoints mount under adminGroup (NOT
 	// proGroup). See ADR-0003.
-	quarantineHandler := admin.NewQuarantineHandler(deps.DB, deps.QuarantineStore)
+	quarantineHandler := admin.NewQuarantineHandler(deps.DB, deps.QuarantineStore, deps.QuarantineApprovalsEnabled)
 	adminRead.GET("/quarantine/events", quarantineHandler.ListEvents)
 	adminRead.GET("/quarantine/approvals", quarantineHandler.ListApprovals)
 	adminWrite.POST("/quarantine/approve", quarantineHandler.Approve)

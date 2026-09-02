@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
+	"depsilo/internal/packagepolicy"
 )
 
 // Store owns the three blocklist tables. Safe for concurrent use —
@@ -39,8 +40,10 @@ type Match struct {
 // blocking without at least a warning log.
 func (s *Store) Check(ctx context.Context, ecosystem, pkg, version string) (*Match, bool, error) {
 	ecosystem = CanonicalEcosystem(ecosystem)
-	name := NormalizeName(ecosystem, pkg)
-	version = NormalizeVersion(ecosystem, version)
+	name, err := normalizeNameStrict(ecosystem, pkg)
+	if err != nil {
+		return nil, false, fmt.Errorf("normalize blocklist package identity: %w", err)
+	}
 
 	var rows []db.MaliciousPackage
 	if err := s.db.WithContext(ctx).
@@ -52,7 +55,10 @@ func (s *Store) Check(ctx context.Context, ecosystem, pkg, version string) (*Mat
 		return nil, false, nil
 	}
 
-	match := matchVersion(rows, version)
+	match, err := matchVersion(rows, ecosystem, version)
+	if err != nil {
+		return nil, false, err
+	}
 	if match == nil {
 		return nil, false, nil
 	}
@@ -70,36 +76,92 @@ func (s *Store) Check(ctx context.Context, ecosystem, pkg, version string) (*Mat
 // matchVersion finds the first advisory row covering the exact
 // version. An empty Versions list means the advisory covers every
 // version of the package.
-func matchVersion(rows []db.MaliciousPackage, version string) *Match {
+func matchVersion(rows []db.MaliciousPackage, ecosystem, version string) (*Match, error) {
+	// All-version advisories do not need a parseable request version. Preserve
+	// the existing fail-safe treatment of corrupt JSON as all-version data.
 	for i := range rows {
 		r := &rows[i]
 		if r.Versions == "" || r.Versions == "[]" {
-			return &Match{SourceID: r.SourceID, Summary: r.Summary}
+			return &Match{SourceID: r.SourceID, Summary: r.Summary}, nil
 		}
 		var versions []string
 		if err := json.Unmarshal([]byte(r.Versions), &versions); err != nil {
-			// Corrupt row — treat as all-versions rather than silently
-			// letting a known-malicious package through.
-			return &Match{SourceID: r.SourceID, Summary: r.Summary}
+			return &Match{SourceID: r.SourceID, Summary: r.Summary}, nil
 		}
-		for _, v := range versions {
-			if v == version {
-				return &Match{SourceID: r.SourceID, Summary: r.Summary}
+	}
+
+	dialect, err := packagepolicy.DialectFor(ecosystem)
+	if err != nil {
+		return nil, fmt.Errorf("blocklist version dialect: %w", err)
+	}
+	requestVersion, err := normalizeVersionStrict(ecosystem, version)
+	if err != nil {
+		return nil, fmt.Errorf("normalize requested %s version %q: %w", ecosystem, version, err)
+	}
+	var firstIntegrityError error
+	for i := range rows {
+		r := &rows[i]
+		var versions []string
+		if err := json.Unmarshal([]byte(r.Versions), &versions); err != nil {
+			continue // handled as all-version in the first pass
+		}
+		for _, advisoryVersion := range versions {
+			canonical, err := normalizeVersionStrict(ecosystem, advisoryVersion)
+			if err != nil {
+				if firstIntegrityError == nil {
+					firstIntegrityError = fmt.Errorf("blocklist row %d has invalid %s version %q: %w", r.ID, ecosystem, advisoryVersion, err)
+				}
+				continue
+			}
+			equal, err := dialect.CompareVersions(canonical, requestVersion)
+			if err != nil {
+				if firstIntegrityError == nil {
+					firstIntegrityError = fmt.Errorf("compare blocklist row %d version: %w", r.ID, err)
+				}
+				continue
+			}
+			if equal == 0 {
+				return &Match{SourceID: r.SourceID, Summary: r.Summary}, nil
 			}
 		}
 	}
-	return nil
+	return nil, firstIntegrityError
 }
 
 // hasOverride reports an unexpired override for the exact version or
 // a package-wide (Version == "") one.
 func (s *Store) hasOverride(ctx context.Context, ecosystem, name, version string) (bool, error) {
-	var n int64
-	err := s.db.WithContext(ctx).Model(&db.MalwareOverride{}).
-		Where("ecosystem = ? AND package = ? AND (version = ? OR version = '') AND expires_at > ?",
-			ecosystem, name, version, s.now()).
-		Count(&n).Error
-	return n > 0, err
+	var overrides []db.MalwareOverride
+	if err := s.db.WithContext(ctx).
+		Where("ecosystem = ? AND package = ? AND expires_at > ?", ecosystem, name, s.now()).
+		Find(&overrides).Error; err != nil {
+		return false, err
+	}
+	requestVersion, err := normalizeVersionStrict(ecosystem, version)
+	if err != nil {
+		return false, err
+	}
+	dialect, err := packagepolicy.DialectFor(ecosystem)
+	if err != nil {
+		return false, err
+	}
+	for index := range overrides {
+		if overrides[index].Version == "" {
+			return true, nil
+		}
+		overrideVersion, err := normalizeVersionStrict(ecosystem, overrides[index].Version)
+		if err != nil {
+			return false, fmt.Errorf("invalid override %d version: %w", overrides[index].ID, err)
+		}
+		comparison, err := dialect.CompareVersions(overrideVersion, requestVersion)
+		if err != nil {
+			return false, err
+		}
+		if comparison == 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // CreateOverride records an audited exemption expiring OverrideTTL
@@ -110,22 +172,30 @@ func (s *Store) CreateOverride(ctx context.Context, ecosystem, pkg, version, rea
 		return nil, errors.New("blocklist: override reason is mandatory")
 	}
 	ecosystem = CanonicalEcosystem(ecosystem)
+	name, err := normalizeNameStrict(ecosystem, pkg)
+	if err != nil {
+		return nil, fmt.Errorf("normalize override package identity: %w", err)
+	}
+	normalizedVersion, err := normalizeVersionStrict(ecosystem, version)
+	if err != nil {
+		return nil, fmt.Errorf("normalize override version identity: %w", err)
+	}
 	ov := &db.MalwareOverride{
 		Ecosystem: ecosystem,
-		Package:   NormalizeName(ecosystem, pkg),
-		Version:   NormalizeVersion(ecosystem, version),
+		Package:   name,
+		Version:   normalizedVersion,
 		Reason:    reason,
 		ActorID:   actorID,
 		ExpiresAt: s.now().Add(OverrideTTL),
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(ov).Error; err != nil {
 			return err
 		}
 		return tx.Create(&db.QuarantineEvent{
 			Ecosystem: ecosystem,
 			Package:   ov.Package,
-			Version:   version,
+			Version:   ov.Version,
 			Action:    ActionOverrideCreated,
 			Reason:    reason,
 			ActorID:   actorID,
@@ -197,9 +267,13 @@ func (s *Store) ReplaceEcosystem(ctx context.Context, ecosystem string, rows []d
 // the admin API uses it to warn when an override can never match.
 func (s *Store) HasEntries(ctx context.Context, ecosystem, pkg string) (bool, error) {
 	ecosystem = CanonicalEcosystem(ecosystem)
+	name, err := normalizeNameStrict(ecosystem, pkg)
+	if err != nil {
+		return false, err
+	}
 	var n int64
-	err := s.db.WithContext(ctx).Model(&db.MaliciousPackage{}).
-		Where("ecosystem = ? AND package = ?", ecosystem, NormalizeName(ecosystem, pkg)).
+	err = s.db.WithContext(ctx).Model(&db.MaliciousPackage{}).
+		Where("ecosystem = ? AND package = ?", ecosystem, name).
 		Count(&n).Error
 	return n > 0, err
 }

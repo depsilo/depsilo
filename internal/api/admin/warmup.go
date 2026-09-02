@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -19,6 +18,7 @@ import (
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/packagepolicy"
 	"depsilo/internal/upstream"
 )
 
@@ -139,7 +139,17 @@ func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packa
 			if err := errors.Join(readErr, closeErr); err != nil {
 				return nil, "", 0, ups.Name, err
 			}
-			rewritten, err := rewriteWarmupIndex(ecosystem, body)
+			var rewritten []byte
+			if ecosystem == "npm" {
+				rewritten, err = npmadapter.PreparePackument(
+					body,
+					pkg,
+					result.URL,
+					ups.ProvenanceSourceID(),
+				)
+			} else {
+				rewritten, err = rewriteWarmupIndex(ecosystem, body)
+			}
 			if err != nil {
 				return nil, "", 0, ups.Name, err
 			}
@@ -185,6 +195,10 @@ func normalizeWarmupPackages(ecosystem string, raw []string) ([]string, error) {
 	if len(raw) > maxWarmupPackages {
 		return nil, fmt.Errorf("package list exceeds the %d item limit", maxWarmupPackages)
 	}
+	dialect, err := packagepolicy.DialectFor(ecosystem)
+	if err != nil {
+		return nil, err
+	}
 
 	packages := make([]string, 0, len(raw))
 	seen := make(map[string]struct{}, len(raw))
@@ -199,10 +213,13 @@ func normalizeWarmupPackages(ecosystem string, raw []string) ([]string, error) {
 			name = stripNPMSpecifier(name)
 		}
 		name = strings.TrimSpace(name)
-		if err := validateWarmupPackageName(ecosystem, name); err != nil {
-			return nil, err
+		if len(name) > maxWarmupPackageBytes {
+			return nil, fmt.Errorf("package names must be at most %d bytes", maxWarmupPackageBytes)
 		}
-		canonical := strings.ToLower(name)
+		canonical, err := dialect.NormalizePackageName(name)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s package name %q: %w", ecosystem, name, err)
+		}
 		if _, duplicate := seen[canonical]; duplicate {
 			continue
 		}
@@ -240,41 +257,6 @@ func stripNPMSpecifier(name string) string {
 	return name
 }
 
-func validateWarmupPackageName(ecosystem, name string) error {
-	if name == "" || len(name) > maxWarmupPackageBytes || strings.ContainsFunc(name, unicode.IsSpace) || strings.ContainsFunc(name, unicode.IsControl) {
-		return fmt.Errorf("package names must be non-empty and at most %d bytes without whitespace", maxWarmupPackageBytes)
-	}
-	if strings.ContainsAny(name, "\\?#") {
-		return errors.New("package name contains unsupported path characters")
-	}
-	for _, character := range name {
-		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' {
-			continue
-		}
-		if strings.ContainsRune("-._~", character) || ecosystem == "npm" && (character == '@' || character == '/') {
-			continue
-		}
-		return errors.New("package name contains unsupported characters")
-	}
-	if ecosystem == "pypi" {
-		if strings.Contains(name, "/") {
-			return errors.New("PyPI package names must not contain a slash")
-		}
-		return nil
-	}
-	if strings.HasPrefix(name, "@") {
-		parts := strings.Split(name, "/")
-		if len(parts) != 2 || len(parts[0]) < 2 || parts[1] == "" {
-			return errors.New("scoped npm packages must use @scope/name")
-		}
-		return nil
-	}
-	if strings.Contains(name, "/") {
-		return errors.New("npm package names must not contain a slash unless scoped")
-	}
-	return nil
-}
-
 func warmupTarget(ecosystem, pkg string) (cacheKey, upstreamPath string, err error) {
 	switch ecosystem {
 	case "pypi":
@@ -297,8 +279,6 @@ func rewriteWarmupIndex(ecosystem string, body []byte) ([]byte, error) {
 	switch ecosystem {
 	case "pypi":
 		return []byte(pypiadapter.RewriteURLs(string(body), "", "/pypi")), nil
-	case "npm":
-		return npmadapter.RewriteTarballURLs(body, "")
 	default:
 		return nil, errors.New("unsupported warmup ecosystem")
 	}

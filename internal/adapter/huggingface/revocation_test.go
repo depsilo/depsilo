@@ -15,6 +15,21 @@ import (
 	"depsilo/internal/db"
 )
 
+func TestRepositoryRevocationIdentityCanonicalizesCaseAliases(t *testing.T) {
+	alias, aliasOK := repositoryForParsed(ParseRequestPath(
+		"/OpenAI/Whisper-Tiny/resolve/main/config.json",
+	))
+	canonical, canonicalOK := repositoryForParsed(ParseRequestPath(
+		"/openai/whisper-tiny/resolve/main/config.json",
+	))
+	if !aliasOK || !canonicalOK {
+		t.Fatal("recognized repository path did not produce a revocation identity")
+	}
+	if alias != canonical {
+		t.Fatalf("case aliases have different revocation identities: %+v != %+v", alias, canonical)
+	}
+}
+
 func TestRepositoryRevocationStatusClassification(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -103,7 +118,7 @@ func TestHandlerRepositoryRevocationInvalidatesSiblingCommitEntries(t *testing.T
 			recorder,
 			httptest.NewRequest(
 				http.MethodGet,
-				"/huggingface/acme/model/resolve/main/"+name,
+				"/huggingface/Acme/Model/resolve/main/"+name,
 				nil,
 			),
 		)
@@ -121,7 +136,7 @@ func TestHandlerRepositoryRevocationInvalidatesSiblingCommitEntries(t *testing.T
 		metadata,
 		httptest.NewRequest(
 			http.MethodGet,
-			"/huggingface/api/models/acme/model?blobs=true",
+			"/huggingface/api/models/ACME/Model?blobs=true",
 			nil,
 		),
 	)
@@ -170,7 +185,7 @@ func TestHandlerRepositoryRevocationInvalidatesSiblingCommitEntries(t *testing.T
 		sibling,
 		httptest.NewRequest(
 			http.MethodGet,
-			"/huggingface/acme/model/resolve/"+commit+"/b.bin",
+			"/huggingface/ACME/MODEL/resolve/"+commit+"/b.bin",
 			nil,
 		),
 	)

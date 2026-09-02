@@ -20,6 +20,7 @@ type Config struct {
 	CompileCache               CompileCacheConfig `mapstructure:"compile_cache"`
 	AccessLog                  AccessLogConfig    `mapstructure:"access_log"`
 	Auth                       AuthConfig         `mapstructure:"auth"`
+	Policy                     PolicyConfig       `mapstructure:"policy"`
 	PyPI                       AdapterConfig      `mapstructure:"pypi"`
 	APT                        AdapterConfig      `mapstructure:"apt"`
 	NPM                        AdapterConfig      `mapstructure:"npm"`
@@ -52,6 +53,13 @@ type Config struct {
 	// duration parsing + allow-list semantics next to the code that
 	// consumes them; this config carries the raw operator-facing shape.
 	SupplyChain SupplyChainConfig `mapstructure:"supply_chain"`
+}
+
+// PolicyConfig controls the behavior used when the package-rule snapshot
+// cannot be refreshed from SQLite. It is deliberately a small raw config
+// shape; the rules package owns runtime semantics and validation at startup.
+type PolicyConfig struct {
+	OnLoadError string `mapstructure:"on_load_error"`
 }
 
 // SupplyChainConfig is the TOML/YAML shape the operator writes. It

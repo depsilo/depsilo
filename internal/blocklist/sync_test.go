@@ -9,9 +9,47 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"depsilo/internal/asyncruntime"
 )
+
+func TestParseAdvisoryNormalizesExplicitVersionsWithDialect(t *testing.T) {
+	t.Parallel()
+
+	document := `{
+		"id":"MAL-NUGET-DIALECT",
+		"summary":"test",
+		"affected":[{
+			"package":{"ecosystem":"NuGet","name":"Example.Client"},
+			"versions":["01.0.0.0-Alpha+build.7"]
+		}]
+	}`
+	rows, err := parseAdvisory(strings.NewReader(document), "nuget", "NuGet", time.Unix(1, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Package != "example.client" || rows[0].Versions != `["1.0.0-alpha"]` {
+		t.Fatalf("normalized advisory rows = %#v", rows)
+	}
+}
+
+func TestParseAdvisoryRejectsInvalidExplicitVersion(t *testing.T) {
+	t.Parallel()
+
+	document := `{
+		"id":"MAL-NUGET-BAD",
+		"summary":"test",
+		"affected":[{
+			"package":{"ecosystem":"NuGet","name":"Example.Client"},
+			"versions":["1..0"]
+		}]
+	}`
+	rows, err := parseAdvisory(strings.NewReader(document), "nuget", "NuGet", time.Unix(1, 0).UTC())
+	if err == nil || len(rows) != 0 || !strings.Contains(err.Error(), "invalid nuget version") {
+		t.Fatalf("invalid advisory = rows %#v err %v", rows, err)
+	}
+}
 
 type submitterFunc func(asyncruntime.Task) error
 
@@ -113,13 +151,16 @@ func TestSyncOnce(t *testing.T) {
 		}
 	})
 
-	t.Run("all-versions advisory normalized + matches", func(t *testing.T) {
-		m, _, err := store.Check(ctx, "npm", "evil-pkg", "42.0.0")
+	t.Run("all-versions advisory preserves name + matches exactly", func(t *testing.T) {
+		m, _, err := store.Check(ctx, "npm", "Evil-Pkg", "42.0.0")
 		if err != nil || m == nil {
 			t.Fatalf("m=%v err=%v", m, err)
 		}
 		if m.SourceID != "MAL-2026-1111" {
 			t.Errorf("SourceID = %s", m.SourceID)
+		}
+		if m, _, err := store.Check(ctx, "npm", "evil-pkg", "42.0.0"); err != nil || m != nil {
+			t.Fatalf("case-distinct request matched Evil-Pkg: m=%v err=%v", m, err)
 		}
 	})
 
@@ -177,7 +218,7 @@ func TestSyncFailureKeepsLastGoodData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if m, _, _ := store.Check(ctx, "npm", "evil-pkg", "1.0.0"); m == nil {
+	if m, _, _ := store.Check(ctx, "npm", "Evil-Pkg", "1.0.0"); m == nil {
 		t.Error("last good dataset lost after failed sync")
 	}
 	st, _ := store.SyncState(ctx)
@@ -270,7 +311,7 @@ func TestSync_ReviewRegressions(t *testing.T) {
 	if m, _, _ := store.Check(ctx, "npm", "briefly-compromised", "1.1.8"); m != nil {
 		t.Error("last_affected-bounded advisory blocks clean versions")
 	}
-	if m, _, _ := store.Check(ctx, "npm", "evil-pkg", "1.0.0"); m == nil {
+	if m, _, _ := store.Check(ctx, "npm", "Evil-Pkg", "1.0.0"); m == nil {
 		t.Error("genuine all-versions advisory should still block")
 	}
 }
@@ -301,7 +342,7 @@ func TestSync_ZeroWipeGuard(t *testing.T) {
 	if _, err := syncer.SyncOnce(ctx); err == nil {
 		t.Fatal("zero-entry archive over a populated store must fail the sync")
 	}
-	if m, _, _ := store.Check(ctx, "npm", "evil-pkg", "1.0.0"); m == nil {
+	if m, _, _ := store.Check(ctx, "npm", "Evil-Pkg", "1.0.0"); m == nil {
 		t.Error("populated ecosystem was wiped by an empty archive")
 	}
 }

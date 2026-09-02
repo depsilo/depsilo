@@ -17,7 +17,7 @@ const readinessTimeout = 2 * time.Second
 // readinessHandler verifies only dependencies required to serve cached proxy
 // traffic. Upstream health is intentionally excluded: Depsilo can still serve
 // cache hits while every remote source is degraded.
-func readinessHandler(database *gorm.DB, storage cache.Storage) gin.HandlerFunc {
+func readinessHandler(database *gorm.DB, storage cache.Storage, policyProviders ...PolicyStatusProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), readinessTimeout)
 		defer cancel()
@@ -42,12 +42,36 @@ func readinessHandler(database *gorm.DB, storage cache.Storage) gin.HandlerFunc 
 			status = http.StatusServiceUnavailable
 			state = "not_ready"
 		}
-		c.Header("Cache-Control", "no-store")
-		c.JSON(status, gin.H{
+		response := gin.H{
 			"status":  state,
 			"version": version.Version,
 			"checks":  checks,
-		})
+		}
+		// Policy freshness is informative rather than a readiness dependency:
+		// a stale snapshot remains a valid serving state, and must not turn a
+		// healthy database/storage pair into an HTTP 503. Keep the provider
+		// optional so lightweight API tests and setup-mode callers retain the
+		// original handler contract.
+		if len(policyProviders) > 0 && policyProviders[0] != nil {
+			statusValue := readPolicyStatus(policyProviders[0])
+			policy := policyStatusView(statusValue, false)
+			if loadedTime := policySnapshotLoadedAt(statusValue); !loadedTime.IsZero() {
+				// These two fields are safe, useful freshness context for operators
+				// polling /ready; fallback mode and internal errors stay on the
+				// authenticated Admin status route.
+				loadedAt := loadedTime.UTC().Format(time.RFC3339Nano)
+				// Keep both names during the 0.9.x contract transition. The
+				// canonical operator-facing name is snapshot_loaded_at; the
+				// last_successful_refresh alias is retained for clients that
+				// consumed the initial status endpoint draft.
+				policy["snapshot_loaded_at"] = loadedAt
+				policy["last_successful_refresh"] = loadedAt
+				policy["snapshot_age_seconds"] = policySnapshotAge(statusValue, time.Now())
+			}
+			response["policy"] = policy
+		}
+		c.Header("Cache-Control", "no-store")
+		c.JSON(status, response)
 	}
 }
 

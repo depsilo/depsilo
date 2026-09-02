@@ -1,8 +1,9 @@
 import type { Request } from '@playwright/test'
 
-import { expect, mockAdminApi, test } from './fixtures/admin-api'
+import { expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
 
 test('upstream update history renders episode counts and loads the next cursor page', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'zh')
   const requestedCursors: Array<string | null> = []
   let releaseSecondPage: () => void = () => {}
   const secondPageGate = new Promise<void>(resolve => {
@@ -63,6 +64,8 @@ test('upstream update history renders episode counts and loads the next cursor p
 
   await page.goto('/admin/upstream-updates')
 
+  const toolbar = page.locator('[data-upstream-updates-toolbar]')
+  await expect(toolbar.getByLabel('生态').locator('option[value="all"]')).toHaveText('全部生态')
   const table = page.locator('[data-upstream-update-table]')
   await expect(table.getByRole('cell', { name: 'requests', exact: true })).toBeVisible()
   await expect(table.getByText('×3', { exact: true })).toHaveAttribute('aria-label', '检查次数：3')

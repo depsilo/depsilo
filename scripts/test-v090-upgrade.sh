@@ -4,13 +4,18 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 current_binary=${DEPSILO_UPGRADE_BINARY:-$root/bin/depsilo}
 baseline_tag=${DEPSILO_UPGRADE_BASELINE_TAG:-v0.9.0}
+baseline_commit=${DEPSILO_UPGRADE_BASELINE_COMMIT:-71e9f029877e66ae9fdb353e134358bfa55c280c}
 
 for command in git go tar curl jq python3; do
   command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 1; }
 done
 [[ -x "$current_binary" ]] || { echo "upgrade qualification binary is missing: $current_binary" >&2; exit 1; }
-git -C "$root" rev-parse --verify --quiet "refs/tags/$baseline_tag^{commit}" >/dev/null || {
+resolved_baseline_commit=$(git -C "$root" rev-parse --verify --quiet "refs/tags/$baseline_tag^{commit}") || {
   echo "upgrade baseline tag is unavailable: $baseline_tag" >&2
+  exit 1
+}
+[[ "$resolved_baseline_commit" == "$baseline_commit" ]] || {
+  echo "upgrade baseline tag does not resolve to the qualified commit: $baseline_tag" >&2
   exit 1
 }
 
@@ -94,7 +99,7 @@ stop_server() {
 }
 
 mkdir -p "$old_source/web/dist"
-git -C "$root" archive --format=tar "$baseline_tag" | tar -xf - -C "$old_source"
+git -C "$root" archive --format=tar "$baseline_commit" | tar -xf - -C "$old_source"
 printf '%s\n' '<!doctype html><title>Depsilo upgrade fixture</title>' >"$old_source/web/dist/index.html"
 (cd "$old_source" && go build -trimpath -buildvcs=false -o "$old_binary" ./cmd/depsilo)
 
@@ -258,9 +263,10 @@ paid_status=$(curl --fail --silent --show-error \
 jq -e '.is_pro == true and .source == "paid" and .trial_used == true and .license_key_masked == "depsilo-***"' \
   <<<"$paid_status" >/dev/null
 
-curl --fail --silent --show-error --header "Accept: $npm_accept" "$origin/npm/upgrade-fixture" |
-  jq -e '.versions["1.0.0"].name == "upgrade-fixture"' >/dev/null
-old_artifact=$(curl --fail --silent --show-error "$origin/npm/upgrade-fixture/-/upgrade-fixture-1.0.0.tgz")
+old_metadata=$(curl --fail --silent --show-error --header "Accept: $npm_accept" "$origin/npm/upgrade-fixture")
+jq -e '.versions["1.0.0"].name == "upgrade-fixture"' <<<"$old_metadata" >/dev/null
+old_tarball_url=$(jq -er '.versions["1.0.0"].dist.tarball' <<<"$old_metadata")
+old_artifact=$(curl --fail --silent --show-error "$old_tarball_url")
 [[ "$old_artifact" == 'depsilo-v0.9.0-cache-artifact' ]] || { echo 'v0.9.0 artifact cache seed failed' >&2; exit 1; }
 
 stop_server "$old_log"
@@ -334,10 +340,46 @@ curl --fail --silent --show-error \
   --header "Authorization: Bearer $api_token" \
   "$origin/api/v1/auth/me" |
   jq -e '.username == "upgrade-admin" and .auth_method == "api_token" and .token_permissions == "readonly"' >/dev/null
-curl --fail --silent --show-error --header "Accept: $npm_accept" "$origin/npm/upgrade-fixture" |
-  jq -e '.versions["1.0.0"].name == "upgrade-fixture"' >/dev/null
-current_artifact=$(curl --fail --silent --show-error "$origin/npm/upgrade-fixture/-/upgrade-fixture-1.0.0.tgz")
-[[ "$current_artifact" == 'depsilo-v0.9.0-cache-artifact' ]] || { echo 'current binary did not serve the v0.9.0 artifact offline' >&2; exit 1; }
+
+# v0.9 npm cache entries carried neither a selected-source identity nor the
+# exact dist target. The candidate must not reinterpret those unsigned rows.
+legacy_artifact_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$old_tarball_url")
+[[ "$legacy_artifact_status" == 404 ]] || {
+  echo "current binary accepted an unsigned v0.9 npm artifact URL: HTTP $legacy_artifact_status" >&2
+  exit 1
+}
+offline_metadata_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+  --header "Accept: $npm_accept" "$origin/npm/upgrade-fixture")
+[[ "$offline_metadata_status" == 502 ]] || {
+  echo "current binary reused unsigned v0.9 npm metadata while its Upstream was offline: HTTP $offline_metadata_status" >&2
+  exit 1
+}
+
+# Bring the same configured source back only after proving the legacy cache is
+# fail-closed. Fresh metadata establishes source-bound provenance and issues a
+# signed URL into the new artifact namespace.
+DEPSILO_UPGRADE_MOCK_PORT="$mock_port" python3 "$mock_script" &
+mock_pid=$!
+mock_ready=false
+for _ in $(seq 1 100); do
+  if curl --head --fail --silent "$mock_origin/" >/dev/null; then
+    mock_ready=true
+    break
+  fi
+  kill -0 "$mock_pid" >/dev/null 2>&1 || { echo 'restarted mock registry exited early' >&2; exit 1; }
+  sleep 0.05
+done
+[[ "$mock_ready" == true ]] || { echo 'restarted mock registry did not become ready' >&2; exit 1; }
+
+current_metadata=$(curl --fail --silent --show-error --header "Accept: $npm_accept" "$origin/npm/upgrade-fixture")
+jq -e '.versions["1.0.0"].name == "upgrade-fixture"' <<<"$current_metadata" >/dev/null
+current_tarball_url=$(jq -er '.versions["1.0.0"].dist.tarball' <<<"$current_metadata")
+[[ "$current_tarball_url" == *'/__depsilo_tarball_v1/'* ]] || {
+  echo 'current binary did not emit a signed npm artifact URL after provenance refetch' >&2
+  exit 1
+}
+current_artifact=$(curl --fail --silent --show-error "$current_tarball_url")
+[[ "$current_artifact" == 'depsilo-v0.9.0-cache-artifact' ]] || { echo 'current binary did not fetch the artifact through fresh source-bound provenance' >&2; exit 1; }
 
 current_paid_status=$(curl --fail --silent --show-error \
   --header "Authorization: Bearer $current_admin_token" \
@@ -367,14 +409,21 @@ expected = {
     "npm artifact": database.execute(
         "SELECT COUNT(*) FROM cache_entries WHERE key = 'npm/upgrade-fixture/-/upgrade-fixture-1.0.0.tgz'"
     ).fetchone()[0],
+    "source-bound npm metadata": database.execute(
+        "SELECT COUNT(*) FROM cache_entries WHERE key = 'npm-exact-v1/upgrade-fixture/metadata.json'"
+    ).fetchone()[0],
+    "source-bound npm artifact": database.execute(
+        "SELECT COUNT(*) FROM cache_entries WHERE key GLOB "
+        "'npm-exact-v1/upgrade-fixture/-/__depsilo_tarball_v1/objects/*/upgrade-fixture-1.0.0.tgz'"
+    ).fetchone()[0],
     "configured upstream": database.execute(
         "SELECT COUNT(*) FROM upstream_records WHERE adapter_type = 'npm' AND name = 'upgrade-fixture'"
     ).fetchone()[0],
-    "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 2,
+    "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 3,
 }
 failed = [name for name, value in expected.items() if value not in (1, True)]
 if failed:
-    raise SystemExit("upgrade did not preserve: " + ", ".join(failed))
+    raise SystemExit("upgrade contract is incomplete: " + ", ".join(failed))
 
 actual = {
     "trial": database.execute(
@@ -426,4 +475,4 @@ if database.execute("SELECT COUNT(*) FROM license_storages").fetchone()[0] != 1:
 PY
 
 stop_server "$current_log"
-echo 'v0.9.0 -> current upgrade contract passed (config, SQLite identity, password/JWT/API tokens, trial/paid entitlement, real npm metadata, offline artifact)'
+echo "$baseline_tag -> current source upgrade contract passed (config, SQLite identity, password/JWT/API tokens, trial/paid entitlement, fail-closed legacy npm cache, fresh signed npm provenance)"

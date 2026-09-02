@@ -22,6 +22,7 @@ import type {
   ProjectPackageQuery,
   ProjectPackagesResponse,
   ProjectSBOMQuery,
+  PolicyStatus,
   RegenerateProjectTokenResponse,
   RecentDownloadsResponse,
   SecurityDashboard,
@@ -48,6 +49,7 @@ export type FirstArg<T extends (...args: never[]) => unknown> = Parameters<T>[0]
 export type SecondArg<T extends (...args: never[]) => unknown> = Parameters<T>[1]
 
 export type PrincipalContract = Assert<Equal<ResponseData<typeof authApi.me>, Principal>>
+export type PolicyStatusContract = Assert<Equal<ResponseData<typeof adminApi.getPolicyStatus>, PolicyStatus>>
 export type LogsContract = Assert<Equal<ResponseData<typeof adminApi.listLogs>, AccessLogListResponse>>
 export type RecentDownloadsContract = Assert<Equal<ResponseData<typeof adminApi.getRecentDownloads>, RecentDownloadsResponse>>
 export type AuditContract = Assert<Equal<ResponseData<typeof adminApi.listAuditLogs>, AuditLogListResponse>>
@@ -66,7 +68,7 @@ export type UpdatePolicyContract = Assert<Equal<ResponseData<typeof adminApi.upd
 export type SecurityQueryContract = Assert<Equal<FirstArg<typeof adminApi.listVulnerabilities>, SecurityQuery>>
 export type VulnerablePackagesQueryContract = Assert<Equal<FirstArg<typeof adminApi.listVulnerablePackages>, SecurityBaseQuery>>
 export type SuggestionsQueryContract = Assert<Equal<FirstArg<typeof adminApi.listSuggestions>, SecurityBaseQuery>>
-export type ApproveSuggestionInputContract = Assert<Equal<SecondArg<typeof adminApi.approveSuggestion>, ApproveSuggestionRequest | undefined>>
+export type ApproveSuggestionInputContract = Assert<Equal<SecondArg<typeof adminApi.approveSuggestion>, ApproveSuggestionRequest>>
 export type SecurityImportInputContract = Assert<Equal<FirstArg<typeof adminApi.importVulnerabilities>, FormData>>
 export type UpdatePolicyInputContract = Assert<Equal<SecondArg<typeof adminApi.updateSecurityPolicy>, UpdateSecurityPolicyRequest>>
 

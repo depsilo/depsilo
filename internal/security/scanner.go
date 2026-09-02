@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
 )
 
@@ -167,6 +169,11 @@ func (s *Scanner) scanAll(ctx context.Context) error {
 	if err := s.db.WithContext(ctx).Model(&db.CacheEntry{}).
 		Select("DISTINCT adapter_type, package_name").
 		Where("package_name != ''").
+		Where(
+			"lower(adapter_type) <> ? OR key LIKE ?",
+			"npm",
+			packagekey.NPMExactIdentityCachePrefix+"%",
+		).
 		Find(&packages).Error; err != nil {
 		return fmt.Errorf("query cached packages: %w", err)
 	}
@@ -174,21 +181,38 @@ func (s *Scanner) scanAll(ctx context.Context) error {
 	// Filter: skip unsupported ecosystems and packages with fresh checks
 	now := time.Now()
 	var toScan []PackageRef
+	seen := make(map[string]struct{}, len(packages))
 	for _, pkg := range packages {
-		if OSVEcosystem(pkg.AdapterType) == "" {
+		ecosystemName := strings.ToLower(strings.TrimSpace(pkg.AdapterType))
+		if !SupportsAutomaticVulnerabilityScanning(ecosystemName) {
 			continue
 		}
+		packageName, err := normalizeScannedPackageName(ecosystemName, pkg.PackageName)
+		if err != nil {
+			zap.L().Warn(
+				"skipping cached package with invalid scanner identity",
+				zap.String("ecosystem", ecosystemName),
+				zap.String("package", pkg.PackageName),
+				zap.Error(err),
+			)
+			continue
+		}
+		identityKey := ecosystemName + "\x00" + packageName
+		if _, duplicate := seen[identityKey]; duplicate {
+			continue
+		}
+		seen[identityKey] = struct{}{}
 		var check db.VulnerabilityCheck
-		err := s.db.WithContext(ctx).
-			Where("ecosystem = ? AND package_name = ?", pkg.AdapterType, pkg.PackageName).
+		err = s.db.WithContext(ctx).
+			Where("ecosystem = ? AND package_name = ?", ecosystemName, packageName).
 			First(&check).Error
 		if err == nil && check.NextFetchAt.After(now) {
 			continue
 		}
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("query vulnerability check for %s/%s: %w", pkg.AdapterType, pkg.PackageName, err)
+			return fmt.Errorf("query vulnerability check for %s/%s: %w", ecosystemName, packageName, err)
 		}
-		toScan = append(toScan, PackageRef{Ecosystem: pkg.AdapterType, Name: pkg.PackageName})
+		toScan = append(toScan, PackageRef{Ecosystem: ecosystemName, Name: packageName})
 	}
 
 	if len(toScan) == 0 {
@@ -288,15 +312,21 @@ func (s *Scanner) storeLastScan(scanTime time.Time) {
 
 // ScanPackage scans a single package for vulnerabilities.
 func (s *Scanner) ScanPackage(ctx context.Context, ecosystem, packageName string) error {
-	if OSVEcosystem(ecosystem) == "" || packageName == "" {
+	ecosystem = strings.ToLower(strings.TrimSpace(ecosystem))
+	if !SupportsAutomaticVulnerabilityScanning(ecosystem) || packageName == "" {
 		return nil
 	}
+	normalizedPackageName, err := normalizeScannedPackageName(ecosystem, packageName)
+	if err != nil {
+		return fmt.Errorf("normalize package identity for scan: %w", err)
+	}
+	packageName = normalizedPackageName
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	var check db.VulnerabilityCheck
-	err := s.db.WithContext(ctx).
+	err = s.db.WithContext(ctx).
 		Where("ecosystem = ? AND package_name = ?", ecosystem, packageName).
 		First(&check).Error
 	if err == nil && check.NextFetchAt.After(time.Now()) {

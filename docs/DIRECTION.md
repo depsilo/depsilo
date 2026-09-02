@@ -161,6 +161,13 @@ Rebuilding those is now a low-ROI use of time. Updated T2:
 
 ### Task 1 — Minimum release age (quarantine)
 
+> **Current safety status:** request-time enforcement is temporarily disabled.
+> Configured artifacts may come from a private or mirrored Upstream while the
+> existing resolvers query public registries. The current build rejects every
+> positive enabled threshold until artifact-source identity is bound to the
+> timestamp source; historical approvals remain readable and revocable, but
+> new approvals are rejected. The task text below records the original design.
+
 **Goal:** refuse to serve any package version whose upstream publish time is younger than
 a configurable threshold, so a freshly-poisoned version cannot enter a build before the
 community catches it.
@@ -209,6 +216,11 @@ Pre-release / yanked versions use the same decision path.
 - [x] Timestamps are cached; no per-request upstream calls.
 
 ### Task 2 — Known-malicious blocklist
+
+> **Current enforcement scope:** npm, Cargo, Composer, NuGet, Go, and Maven.
+> PyPI and RubyGems are excluded from the guaranteed dataset surface until all
+> served artifact formats establish complete request identity. The original
+> eight-ecosystem goal below is retained as historical intent.
 
 **Goal:** hard-block versions known to be **malicious** (distinct from merely vulnerable).
 

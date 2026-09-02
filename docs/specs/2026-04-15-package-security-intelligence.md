@@ -126,7 +126,7 @@ Wraps the OSV.dev v1 API.
 | maven | Maven |
 | nuget | NuGet |
 | composer | Packagist |
-| rubygems | RubyGems |
+| rubygems | RubyGems (upstream mapping only; automatic scans safety-disabled until cache identities carry trusted index/gemspec provenance) |
 | conda | (not supported by OSV — skip) |
 | cran | CRAN |
 | helm | (not supported by OSV — skip) |
@@ -134,6 +134,14 @@ Wraps the OSV.dev v1 API.
 | docker | (not supported by OSV — skip) |
 
 Unsupported ecosystems are silently skipped during scanning.
+Depsilo also skips NuGet and RubyGems automatic scans even though OSV defines
+those ecosystems: the current cache keys do not preserve a trustworthy NuGet
+catalog ID or an unambiguous RubyGems name/version/platform identity. Persisting
+an empty response for either guessed identity would create false-clean state.
+For PyPI, simple-index cache keys and strict PEP 427 wheel or PEP 625 sdist
+filenames are accepted. Other `/files/` artifacts retain an empty package
+identity and are skipped by both immediate and periodic scans instead of
+guessing a name from the filename.
 
 **Rate limiting:** Max 1 request/second to OSV.dev (use `time.Ticker`). Batch queries reduce total calls.
 
@@ -179,6 +187,11 @@ Unsupported ecosystems are silently skipped during scanning.
 - For SEMVER type: use semver comparison
 - For ECOSYSTEM type: use ecosystem-specific version comparison (reuse `compareVersions()` from rules/engine.go where applicable)
 - Conservative: if version comparison fails (unparseable version), do NOT block (fail-open)
+
+> **Erratum / current status (2026-09-02):** the shared comparator described
+> above was unsafe across ecosystems and is not the current implementation.
+> Automatic OSV-to-Rule projection is safety-disabled; reviewed manual rules
+> use validated ecosystem dialects. See [Package Rule semantics](../package-rules.md).
 
 **Caching:** In-memory cache keyed by `ecosystem:packageName:version`, TTL 5 minutes, invalidated when scanner updates Vulnerability data.
 

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -59,6 +60,77 @@ func TestWriteConfigAnchorsGeneratedStateToConfigDirectory(t *testing.T) {
 	}
 	if v.GetBool("compile_cache.enabled") {
 		t.Fatal("generated config enables the compiler cache")
+	}
+}
+
+func TestWriteConfigPreservesEffectiveDatabaseDSNForSetupRestart(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, ".depsilo", "config.toml")
+	effectiveDSN := filepath.Join(root, "external", "committed.db")
+	req := SetupRequest{}
+	req.Database.Driver = "sqlite"
+	req.Database.DSN = effectiveDSN
+	req.Server.Port = 23333
+	req.Storage.Path = filepath.Join(root, "cache")
+
+	if err := WriteConfig(configPath, req); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+	document, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := viper.New()
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(bytes.NewReader(document)); err != nil {
+		t.Fatal(err)
+	}
+	if got := v.GetString("database.driver"); got != "sqlite" {
+		t.Fatalf("database.driver = %q, want sqlite", got)
+	}
+	if got := v.GetString("database.dsn"); got != effectiveDSN {
+		t.Fatalf("database.dsn = %q, want effective DSN %q", got, effectiveDSN)
+	}
+}
+
+func TestWriteConfigPreservesWhitespaceInEffectiveDatabaseDSN(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "config.toml")
+	effectiveDSN := filepath.Join(root, "database with spaces.db") + " "
+	req := SetupRequest{}
+	req.Database.DSN = effectiveDSN
+
+	if err := WriteConfig(configPath, req); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+	document, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := viper.New()
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(bytes.NewReader(document)); err != nil {
+		t.Fatal(err)
+	}
+	if got := v.GetString("database.dsn"); got != effectiveDSN {
+		t.Fatalf("database.dsn = %q, want byte-for-byte effective DSN %q", got, effectiveDSN)
+	}
+}
+
+func TestSetupRequestJSONCannotOverrideEffectiveDatabaseTarget(t *testing.T) {
+	var req SetupRequest
+	if err := json.Unmarshal([]byte(`{"database":{"driver":"postgres","dsn":"/tmp/attacker.db"}}`), &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.Database.Driver != "" || req.Database.DSN != "" {
+		t.Fatalf("browser supplied database target was accepted: %#v", req.Database)
+	}
+	encoded, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("database")) || bytes.Contains(encoded, []byte("dsn")) {
+		t.Fatalf("internal database target leaked into setup JSON: %s", encoded)
 	}
 }
 

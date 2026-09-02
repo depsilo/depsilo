@@ -43,7 +43,7 @@ func TestOnboardingStatusTracksRealMissThenHit(t *testing.T) {
 	baseline := getOnboardingBaseline(t)
 	version := fmt.Sprintf("1.0.%d", onboardingArtifactSequence.Add(1))
 	artifactPath := fmt.Sprintf("/onboarding-fixture/-/onboarding-fixture-%s.tgz", version)
-	proxyURL := depsiloURL + "/npm" + artifactPath
+	proxyURL := npmVersionTarballURL(t, "onboarding-fixture", version)
 
 	before := mockRequestCountForPath(artifactPath)
 	first := httpGet(t, proxyURL)
@@ -98,13 +98,13 @@ func TestOnboardingStatusTracksRealUpstreamFailure(t *testing.T) {
 	artifactPath := "/onboarding-error/-/onboarding-error-1.0.0.tgz"
 	before := mockRequestCountForPath(artifactPath)
 
-	response := httpGet(t, depsiloURL+"/npm"+artifactPath)
+	response := httpGet(t, npmVersionTarballURL(t, "onboarding-error", "1.0.0"))
 	assertStatus(t, response, http.StatusBadGateway)
 	_, _ = io.Copy(io.Discard, response.Body)
 	response.Body.Close()
 
 	failure, _ := waitForOnboardingOutcome(t, baseline, "error", func(event onboardingEvent) bool {
-		return event.Ecosystem == "npm" && event.PackageName == "onboarding-error"
+		return event.Ecosystem == "npm" && event.PackageName == "onboarding-error" && event.Version == "1.0.0"
 	})
 	if failure.StatusCode != http.StatusBadGateway {
 		t.Fatalf("upstream failure event = %+v", failure)

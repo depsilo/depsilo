@@ -14,6 +14,9 @@ func TestExtractPackageName_PyPI(t *testing.T) {
 		{"pypi/simple/requests/index.html", "requests"},
 		{"pypi/files/packages/ab/cd/requests-2.31.0.tar.gz", "requests"},
 		{"pypi/files/packages/ab/cd/Flask-2.0.0-py3-none-any.whl", "Flask"},
+		{"pypi/files/packages/aa/foo-bar-1.0.zip", ""},
+		{"pypi/files/packages/aa/foo-bar-1.0.tar.gz", ""},
+		{"pypi/files/packages/aa/Flask-2.0.0-py3-none-any.whl.metadata", ""},
 	}
 	for _, tt := range tests {
 		got := packagekey.ExtractName("pypi", tt.key)
@@ -32,6 +35,8 @@ func TestExtractPackageName_Npm(t *testing.T) {
 		{"npm/lodash/-/lodash-4.17.21.tgz", "lodash"},
 		{"npm/@babel/core/metadata.json", "@babel/core"},
 		{"npm/@babel/core/-/core-7.24.0.tgz", "@babel/core"},
+		{"npm-exact-v1/Express/metadata.json", "Express"},
+		{"npm-exact-v1/@LegacyScope/Name/-/Name-1.0.0.tgz", "@LegacyScope/Name"},
 	}
 	for _, tt := range tests {
 		got := packagekey.ExtractName("npm", tt.key)
@@ -64,7 +69,7 @@ func TestExtractPackageName_Cargo(t *testing.T) {
 		expected string
 	}{
 		{"cargo/crates/serde/1.0.0.crate", "serde"},
-		{"cargo/index/se/rd/serde", "serde"},
+		{"cargo/index/se/rd/serde", ""},
 	}
 	for _, tt := range tests {
 		got := packagekey.ExtractName("cargo", tt.key)
@@ -80,7 +85,8 @@ func TestExtractPackageName_APT(t *testing.T) {
 		expected string
 	}{
 		{"apt/ubuntu/pool/main/c/curl/curl_7.68.0-1ubuntu2_amd64.deb", "curl"},
-		{"apt/ubuntu/dists/jammy/InRelease", "ubuntu"},
+		{"apt/debian/pool/main/a/anna/anna_1.0_amd64.udeb", "anna"},
+		{"apt/ubuntu/dists/jammy/InRelease", ""},
 	}
 	for _, tt := range tests {
 		got := packagekey.ExtractName("apt", tt.key)
@@ -93,8 +99,11 @@ func TestExtractPackageName_APT(t *testing.T) {
 func TestExtractPackageName_Maven(t *testing.T) {
 	key := "maven/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar"
 	got := packagekey.ExtractName("maven", key)
-	if got != "commons-lang3" {
-		t.Errorf("ExtractPackageName(maven, ...) = %q, want commons-lang3", got)
+	if got != "org.apache.commons:commons-lang3" {
+		t.Errorf("ExtractPackageName(maven, ...) = %q, want complete coordinate", got)
+	}
+	if got := packagekey.ExtractName("maven", "maven/org/apache/commons/commons-lang3/maven-metadata.xml"); got != "" {
+		t.Errorf("ExtractPackageName(maven metadata) = %q, want empty", got)
 	}
 }
 

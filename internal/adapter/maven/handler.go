@@ -36,8 +36,8 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		return
 	}
 
-	// Quarantine gate. Only fires on .jar / .pom artifact paths;
-	// maven-metadata.xml and snapshot manifests pass through.
+	// Quarantine gate. Maven packaging extensions are open-ended, so the
+	// repository layout identifies artifacts; metadata paths pass through.
 	if coord, version := packagekey.ParseMavenPath(path); coord != "" && version != "" {
 		if blocked := adapter.QuarantineGate(c, "maven", coord, version); blocked {
 			return

@@ -452,16 +452,20 @@ const mutationCases: MutationCase[] = [
     retained: page => page.getByRole('dialog', { name: /生成 Token/ }),
   },
   {
-    name: 'Quarantine approval', path: '/admin/quarantine', endpoint: 'POST /api/v1/admin/quarantine/approve', status: 422,
+    name: 'Quarantine approval revoke', path: '/admin/quarantine', endpoint: 'DELETE /api/v1/admin/quarantine/approvals/1', status: 422,
     fixtures: {
-      'GET /api/v1/admin/quarantine/events': { items: [{ id: 1, ecosystem: 'pypi', package: 'fixture-package', version: '1.0.0', action: 'blocked', reason: 'minimum age', created_at: '2026-07-10T00:00:00Z' }], total: 1 },
+      'GET /api/v1/admin/quarantine/approvals': {
+        items: [{ id: 1, ecosystem: 'pypi', package: 'fixture-package', version: '1.0.0', reason: 'historical approval', approved_by: 1, created_at: '2026-07-10T00:00:00Z' }],
+        total: 1,
+      },
     },
     submit: async page => {
-      await page.getByRole('button', { name: /^放行$/ }).click()
-      await page.getByPlaceholder(/填写理由/).fill('fixture approval reason')
-      await page.getByRole('dialog').getByRole('button', { name: /确认放行/ }).click()
+      await page.getByRole('tab', { name: /已放行|Approvals/ }).click()
+      await page.getByRole('button', { name: /^撤销$|^Revoke$/ }).click()
+      await page.getByPlaceholder(/填写理由|Enter a reason/).fill('fixture revoke reason')
+      await page.getByRole('dialog').getByRole('button', { name: /^撤销$|^Revoke$/ }).click()
     },
-    retained: page => page.getByRole('dialog', { name: /放行此版本/ }),
+    retained: page => page.getByRole('dialog', { name: /撤销此放行|Revoke this approval/ }),
   },
 ]
 
@@ -572,70 +576,79 @@ test('Blocklist sync exposes a stable held pending state', async ({ page }) => {
   await expect(page.getByRole('button', { name: /立即同步|Sync now/ })).not.toHaveAttribute('aria-busy', 'true')
 })
 
-test('Security policy saves retain per-ecosystem busy, error, and normalized response state', async ({ page }) => {
+test('Security legacy-policy disable saves retain per-ecosystem busy, error, and normalized response state', async ({ page }) => {
   const pypiSuccess = deferred<void>()
-  const npmFailure = deferred<void>()
-  const npmSuccess = deferred<void>()
-  let npmCalls = 0
-  const policy = (ecosystem: string, score: number) => ({
-    id: ecosystem === 'pypi' ? 1 : 2, ecosystem, auto_block_enabled: true, min_cvss_score: score,
+  const cargoFailure = deferred<void>()
+  const cargoSuccess = deferred<void>()
+  let cargoCalls = 0
+  const policy = (ecosystem: string, score: number, enabled = true) => ({
+    id: ecosystem === 'pypi' ? 1 : 2, ecosystem, auto_block_enabled: enabled, min_cvss_score: score,
     created_by: 'admin', created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-10T00:00:00Z',
   })
   await mockAdminApi(page, {
-    'GET /api/v1/admin/security/policies': [policy('pypi', 8.5), policy('npm', 7.5)],
-    'PUT /api/v1/admin/security/policies/pypi': async () => {
+    'GET /api/v1/admin/security/policies': [policy('pypi', 8.5), policy('cargo', 7.5)],
+    'PUT /api/v1/admin/security/policies/pypi': async (request: Request) => {
+      expect(request.postDataJSON()).toMatchObject({ auto_block_enabled: false, min_cvss_score: 8.5 })
       await pypiSuccess.promise
-      return policy('pypi', 9.7)
+      return policy('pypi', 9.7, false)
     },
-    'PUT /api/v1/admin/security/policies/npm': async () => {
-      npmCalls += 1
-      if (npmCalls === 1) {
-        await npmFailure.promise
-        return { status: 422, body: { code: 'INVALID_POLICY', message: 'fixture npm rejected' } }
+    'PUT /api/v1/admin/security/policies/cargo': async (request: Request) => {
+      expect(request.postDataJSON()).toMatchObject({ auto_block_enabled: false, min_cvss_score: 7.5 })
+      cargoCalls += 1
+      if (cargoCalls === 1) {
+        await cargoFailure.promise
+        return { status: 422, body: { code: 'INVALID_POLICY', message: 'fixture cargo rejected' } }
       }
-      await npmSuccess.promise
-      return policy('npm', 6.4)
+      await cargoSuccess.promise
+      return policy('cargo', 6.4, false)
     },
   })
   await page.goto('/admin/security')
   await page.getByRole('tab', { name: /策略|Policies/ }).click()
   const pypiRow = page.locator('[data-policy-ecosystem="pypi"]')
-  const npmRow = page.locator('[data-policy-ecosystem="npm"]')
+  const cargoRow = page.locator('[data-policy-ecosystem="cargo"]')
   const pypiSave = pypiRow.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ })
-  const npmSave = npmRow.getByRole('button', { name: /NPM.*保存|NPM.*Save/ })
-  await pypiRow.getByRole('spinbutton').fill('8.1')
-  await npmRow.getByRole('spinbutton').fill('7.1')
+  const cargoSave = cargoRow.getByRole('button', { name: /CARGO.*保存|CARGO.*Save/ })
+  await pypiRow.getByRole('switch').click()
+  await cargoRow.getByRole('switch').click()
+  await expect(pypiRow.getByRole('switch')).not.toBeChecked()
+  await expect(cargoRow.getByRole('switch')).not.toBeChecked()
+  await expect(pypiRow.getByRole('spinbutton')).toBeDisabled()
+  await expect(cargoRow.getByRole('spinbutton')).toBeDisabled()
   await pypiSave.click()
   await expect(pypiRow.getByRole('spinbutton')).toBeDisabled()
   await expect(pypiRow.getByRole('switch')).toBeDisabled()
-  await expect(npmRow.getByRole('spinbutton')).toBeEnabled()
-  await expect(npmRow.getByRole('switch')).toBeEnabled()
-  await npmSave.click()
+  await expect(cargoSave).toBeEnabled()
+  await cargoSave.click()
   await expect(pypiSave).toHaveAttribute('aria-busy', 'true')
-  await expect(npmSave).toHaveAttribute('aria-busy', 'true')
+  await expect(cargoSave).toHaveAttribute('aria-busy', 'true')
   await expect(pypiSave).toBeDisabled()
-  await expect(npmSave).toBeDisabled()
-  await expect(npmRow.getByRole('spinbutton')).toBeDisabled()
-  await expect(npmRow.getByRole('switch')).toBeDisabled()
+  await expect(cargoSave).toBeDisabled()
+  await expect(cargoRow.getByRole('spinbutton')).toBeDisabled()
+  await expect(cargoRow.getByRole('switch')).toBeDisabled()
 
-  npmFailure.resolve()
-  await expect(npmRow.getByRole('alert')).toContainText('fixture npm rejected')
-  await expect(npmSave).not.toHaveAttribute('aria-busy', 'true')
+  cargoFailure.resolve()
+  await expect(cargoRow.getByRole('alert')).toContainText('fixture cargo rejected')
+  await expect(cargoSave).not.toHaveAttribute('aria-busy', 'true')
   await expect(pypiSave).toHaveAttribute('aria-busy', 'true')
 
-  await npmSave.click()
-  await expect(npmSave).toHaveAttribute('aria-busy', 'true')
+  await cargoSave.click()
+  await expect(cargoSave).toHaveAttribute('aria-busy', 'true')
   pypiSuccess.resolve()
   await expect(pypiRow.getByRole('spinbutton')).toHaveValue('9.7')
-  await expect(pypiRow.getByRole('spinbutton')).toBeEnabled()
-  await expect(pypiRow.getByRole('switch')).toBeEnabled()
+  await expect(pypiRow.getByRole('spinbutton')).toBeDisabled()
+  await expect(pypiRow.getByRole('switch')).toBeDisabled()
+  await expect(pypiRow.getByRole('switch')).not.toBeChecked()
   await expect(pypiSave).not.toHaveAttribute('aria-busy', 'true')
-  await expect(npmSave).toHaveAttribute('aria-busy', 'true')
+  await expect(pypiSave).toBeDisabled()
+  await expect(cargoSave).toHaveAttribute('aria-busy', 'true')
 
-  npmSuccess.resolve()
-  await expect(npmRow.getByRole('spinbutton')).toHaveValue('6.4')
-  await expect(npmRow.getByRole('spinbutton')).toBeEnabled()
-  await expect(npmRow.getByRole('switch')).toBeEnabled()
-  await expect(npmRow.getByRole('alert')).toHaveCount(0)
-  await expect(npmSave).not.toHaveAttribute('aria-busy', 'true')
+  cargoSuccess.resolve()
+  await expect(cargoRow.getByRole('spinbutton')).toHaveValue('6.4')
+  await expect(cargoRow.getByRole('spinbutton')).toBeDisabled()
+  await expect(cargoRow.getByRole('switch')).toBeDisabled()
+  await expect(cargoRow.getByRole('switch')).not.toBeChecked()
+  await expect(cargoRow.getByRole('alert')).toHaveCount(0)
+  await expect(cargoSave).not.toHaveAttribute('aria-busy', 'true')
+  await expect(cargoSave).toBeDisabled()
 })

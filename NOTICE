@@ -1,0 +1,16 @@
+Depsilo
+Copyright 2026 Depsilo Contributors
+
+This product includes a modified Go port of Apache Maven's
+ComparableVersion implementation.
+
+Apache Maven
+Copyright 2001-2019 The Apache Software Foundation
+
+This product includes software developed at
+The Apache Software Foundation (http://www.apache.org/).
+
+The Apache-licensed portions are identified in
+internal/packagepolicy/maven.go and
+internal/packagepolicy/maven_conformance_test.go. Their license is available
+at LICENSES/Apache-2.0.txt.

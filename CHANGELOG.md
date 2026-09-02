@@ -5,6 +5,90 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Upgrade notes
+- Schema v3 does not reinterpret concrete Package Rules created by the legacy
+  shared comparator. A v0.9.1 `created_by = security-scanner` value is not
+  trusted as machine provenance because it can also be a human username.
+  Before upgrading, review and remove every concrete rule, including generated
+  auto-block rows, plus ecosystem-wide rules for unsupported proxy surfaces;
+  recreate reviewed rules after upgrade. The migration then disables all
+  stored automatic-block policies. See `docs/package-rules.md`.
+- Schema v3 re-derives PyPI, Go, Cargo, CRAN, and Maven cache identities from
+  authoritative keys and clears ambiguous metadata guesses. APT and NuGet
+  cache identities are cleared because their transport keys cannot prove the
+  package identity required by OSV; pre-v3 npm cache rows cannot participate in
+  a new scan. Because legacy storage cannot distinguish fetched advisories from
+  operator imports, all stored advisories, checks, dismissals, and project
+  package rows for npm, PyPI, APT, Go, Cargo, Maven, NuGet, CRAN, RubyGems,
+  and Composer are invalidated before trusted identities are scanned or
+  imported again.
+  Cached package objects remain available.
+- Legacy Hugging Face cache rows are retired during migration and synchronously
+  removed with their stored objects before request handling; ref pins are
+  invalidated so a case alias cannot retain stale private bytes.
+- Legacy malicious-package data is migrated only for the six end-to-end
+  covered ecosystems. Unrecoverable npm and unsupported-ecosystem rows and
+  overrides are removed, recoverable identities are dialect-normalized, and a
+  full blocklist resync is required.
+
+### Changed
+- Package Rules now validate and persist ecosystem-specific package and
+  version identities at creation time. PyPI uses PEP 440; Cargo and npm use
+  strict SemVer comparisons, with npm exact/single-comparator rules enforced
+  only after its signed packument provenance is authenticated. Go, Maven,
+  NuGet, Conda, CRAN, and Alpine are exact-only; APT and Composer remain
+  package-only where request paths do not prove a complete version. Unsupported
+  ranges are rejected instead of guessed.
+- Minimum-release-age enforcement is safety-disabled. Startup rejects positive
+  enabled thresholds until the selected artifact source and authoritative
+  timestamp provenance are bound end to end. New permanent approvals are
+  disabled, while historical approvals remain readable and revocable.
+- Guaranteed malicious-dataset request-path coverage is npm, Cargo, Composer,
+  NuGet, Go, and Maven. PyPI and RubyGems are deliberately excluded until every
+  served artifact format has complete identity provenance.
+- NuGet background OSV scanning is disabled until registry canonical package
+  IDs are retained instead of inferred from lowercase flat-container paths.
+- APT background OSV scanning is disabled until authenticated repository
+  metadata binds each binary package and served filename to Debian's source
+  package identity.
+- RubyGems background OSV scanning is disabled until trusted index or gemspec
+  provenance is persisted; platform artifact filenames are not parsed into a
+  guessed identity that could record a false-clean result.
+- PyPI background OSV scanning trusts simple-index project names and strictly
+  parsed PEP 427/625 artifacts only. Ambiguous legacy archives are retained in
+  cache but are not assigned a guessed package identity or recorded as clean.
+- Composer background OSV scanning now trusts only exact per-package `p2`
+  metadata and reversible dist cache keys. `packages.json`, incomplete or
+  malformed metadata paths, indexes, and arbitrary passthrough paths remain
+  cacheable but cannot acquire a guessed package name or clean OSV receipt;
+  legacy guessed Composer identities require migration repair before scanning.
+- Cargo and CRAN background OSV scanning now trusts strict artifact keys only.
+  Cargo sparse-index files, CRAN package indexes and installers, and ambiguous
+  paths remain cacheable but cannot create a guessed scan or false-clean result.
+- Automatic OSV-to-Package-Rule blocking is safety-disabled for every
+  ecosystem until complete affected sets, including ordered ranges,
+  prereleases, and explicit versions, can be represented without loss. Manual
+  reviewed selectors remain available wherever the Package Rule capability
+  table permits them, including single comparators for PyPI, Cargo, and npm.
+
+### Fixed
+- Frontend build tooling now pins Browserslist 4.28.8, which contains the
+  upstream fixes for its unbounded query caches and unsafe custom-stats
+  normalization.
+- Pre-release, epoch, post-release, qualifier, revision, and build-metadata
+  ordering no longer falls through a dot-splitting cross-ecosystem version
+  comparator. Invalid Package Rule coordinates now fail before persistence,
+  and semantic/integrity failures return `PACKAGE_POLICY_UNEVALUABLE` instead
+  of silently allowing a request.
+- Permanent quarantine approvals now use each ecosystem's package and version
+  equality, collapse semantic aliases, and reject invalid coordinates.
+- First-run setup now commits the administrator and onboarding state before
+  publishing `config.toml`. SQLite setup commits use a pinned `FULL`-
+  synchronous connection, config replacement is `0600` + temp-file fsync +
+  atomic rename + parent-directory fsync, and startup reopens the wizard when
+  a configured database has no loginable administrator. Fault-injection tests
+  cover each database and filesystem publication boundary.
+
 ## [0.9.1] - 2026-09-01
 
 ### Upgrade notes

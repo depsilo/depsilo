@@ -1,39 +1,110 @@
 package rules
 
 import (
+	"fmt"
 	"path"
 	"strings"
-	"unicode"
 
 	"depsilo/internal/adapter/packagekey"
+	"depsilo/internal/adapter/pypi"
 	ecosystemcatalog "depsilo/internal/ecosystem"
+	"depsilo/internal/gomoduleidentity"
+	"depsilo/internal/packagepolicy"
 )
 
 // requestTarget is the package identity that can be established from a proxy
 // request before the adapter runs. Version is intentionally empty for package
-// metadata whose path does not identify a particular release.
+// metadata whose path does not identify a particular release. An
+// AmbiguousArtifact target identifies only an ecosystem artifact route; its
+// package and version are deliberately empty.
 type requestTarget struct {
-	Ecosystem   string
-	PackageName string
-	Version     string
+	Ecosystem         string
+	PackageName       string
+	Version           string
+	AmbiguousArtifact bool
+}
+
+// PyPIRouteDescriptor is one validated, configuration-owned PyPI-compatible
+// proxy route. Its fields are private so callers cannot bypass construction
+// validation or silently change route semantics after middleware creation.
+type PyPIRouteDescriptor struct {
+	path          string
+	channelFamily bool
+}
+
+// NewPyPIRouteDescriptor creates a literal route descriptor from a normalized
+// extra-index path. A channel-family route accepts exactly the same channel
+// segments as the PyTorch adapter before its /simple and /files subtrees.
+func NewPyPIRouteDescriptor(configuredPath string, channelFamily bool) (PyPIRouteDescriptor, error) {
+	if !validConfiguredRoutePath(configuredPath) {
+		return PyPIRouteDescriptor{}, fmt.Errorf("invalid configured PyPI route %q", configuredPath)
+	}
+	return PyPIRouteDescriptor{path: "/" + configuredPath, channelFamily: channelFamily}, nil
 }
 
 // extractRequestTarget recognizes both global proxy routes and their
-// project-scoped /p/:slug counterparts. Route ownership comes from the
-// ecosystem catalog so adding or renaming a proxy route cannot silently leave
-// the policy middleware's path switch stale.
-func extractRequestTarget(requestPath string) (requestTarget, bool) {
+// project-scoped /p/:slug counterparts. Standard route ownership comes from
+// the ecosystem catalog; config-owned PyPI routes must be injected explicitly
+// so the middleware never infers an extra-index namespace from request data.
+func extractRequestTarget(requestPath string, extraPyPIRoutes ...PyPIRouteDescriptor) (requestTarget, bool) {
 	requestPath = stripProjectPrefix(requestPath)
 
-	for _, definition := range ecosystemcatalog.All() {
+	for _, definition := range ecosystemcatalog.RuleDefinitions() {
 		relative, ok := trimRoute(requestPath, definition.Route)
 		if !ok {
 			continue
 		}
 		return extractEcosystemTarget(definition.Name, relative)
 	}
+	for _, route := range extraPyPIRoutes {
+		if target, ok := route.extract(requestPath); ok {
+			return target, true
+		}
+	}
 
 	return requestTarget{}, false
+}
+
+func (route PyPIRouteDescriptor) extract(requestPath string) (requestTarget, bool) {
+	// The exported descriptor's zero value is intentionally inert. Callers in
+	// other packages can name that value even though only the constructor can
+	// populate its private fields.
+	if route.path == "" {
+		return requestTarget{}, false
+	}
+	relative, ok := trimRoute(requestPath, route.path)
+	if !ok {
+		return requestTarget{}, false
+	}
+	if !route.channelFamily {
+		return extractPyPITarget(relative)
+	}
+	channel, relative, ok := strings.Cut(strings.TrimPrefix(relative, "/"), "/")
+	if !ok || !pypi.ValidIndexChannel(channel) {
+		return requestTarget{}, false
+	}
+	return extractPyPITarget(relative)
+}
+
+func validConfiguredRoutePath(value string) bool {
+	if value == "" || value != strings.Trim(value, "/") {
+		return false
+	}
+	for _, segment := range strings.Split(value, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+		for _, character := range segment {
+			if character >= 'a' && character <= 'z' ||
+				character >= 'A' && character <= 'Z' ||
+				character >= '0' && character <= '9' ||
+				character == '.' || character == '_' || character == '-' {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }
 
 func stripProjectPrefix(requestPath string) string {
@@ -69,15 +140,17 @@ func extractEcosystemTarget(ecosystem, relative string) (requestTarget, bool) {
 	case "apt":
 		return extractAPTTarget(relative)
 	case "npm":
-		return extractNPMTarget(relative)
+		// npm metadata must remain discoverable so an End User can obtain the
+		// authenticated artifact URL. The npm Adapter evaluates every artifact
+		// rule only after verifying that URL's exact package/version provenance;
+		// legacy URLs are rejected there without any policy inference here.
+		return requestTarget{}, false
 	case "go":
 		return extractGoTarget(relative)
 	case "cargo":
 		return extractCargoTarget(relative)
 	case "maven":
 		return extractMavenTarget(relative)
-	case "rubygems":
-		return extractRubyGemsTarget(relative)
 	case "composer":
 		return extractComposerTarget(relative)
 	case "nuget":
@@ -90,13 +163,12 @@ func extractEcosystemTarget(ecosystem, relative string) (requestTarget, bool) {
 	case "alpine":
 		name, version := packagekey.ParseAlpinePath(relative)
 		return artifactTarget(ecosystem, name, version)
-	case "helm":
-		name, version := packagekey.ParseHelmPath(relative)
-		return artifactTarget(ecosystem, name, version)
 	default:
-		// Docker and Hugging Face use configuration-dependent identities and
-		// are not exposed by the package-rules UI. Guessing their package key
-		// here would make a rule apply to a different object than the adapter.
+		// Ecosystems without RuleEnforcement are never passed here. In
+		// particular, Docker and Hugging Face use configuration-dependent
+		// identities, while RubyGems and Helm artifact names are ambiguous.
+		// Guessing any of those keys could apply a global rule to the wrong
+		// object.
 		return requestTarget{}, false
 	}
 }
@@ -110,53 +182,55 @@ func extractPyPITarget(relative string) (requestTarget, bool) {
 		return requestTarget{}, false
 	}
 	if strings.HasPrefix(relative, "files/") {
-		name, version := packagekey.ParsePypiFilename(path.Base(relative))
-		return artifactTarget("pypi", name, version)
+		filename := path.Base(relative)
+		if isPyPISidecar(filename) {
+			// PEP 658 metadata is attached to an artifact but is not itself an
+			// installable artifact, so it remains outside Package Rules.
+			return requestTarget{}, false
+		}
+		name, version := packagekey.ParsePypiFilename(filename)
+		if validPyPIArtifactIdentity(name, version) {
+			return artifactTarget("pypi", name, version)
+		}
+		// Every non-sidecar file in the PyPI artifact subtree is potentially an
+		// artifact. The filename does not establish one authoritative
+		// package/version pair, so keep that state explicit rather than letting
+		// an unfamiliar archive format bypass Package Rules.
+		return requestTarget{Ecosystem: "pypi", AmbiguousArtifact: true}, true
 	}
 	return requestTarget{}, false
 }
 
+func validPyPIArtifactIdentity(name, version string) bool {
+	if name == "" || version == "" {
+		return false
+	}
+	dialect, err := packagepolicy.DialectFor("pypi")
+	if err != nil {
+		return false
+	}
+	if _, err := dialect.NormalizePackageName(name); err != nil {
+		return false
+	}
+	return dialect.ValidateVersion(version) == nil
+}
+
+func isPyPISidecar(filename string) bool {
+	return strings.HasSuffix(strings.ToLower(filename), ".metadata")
+}
+
 func extractAPTTarget(relative string) (requestTarget, bool) {
-	if !strings.HasSuffix(relative, ".deb") {
+	if !hasAnySuffix(relative, ".deb", ".udeb") {
 		// APT indices contain many packages, so no single package identity can
 		// be inferred safely from their URL.
 		return requestTarget{}, false
 	}
 	key := "apt/" + relative
-	return artifactTarget(
-		"apt",
-		packagekey.ExtractName("apt", key),
-		packagekey.ExtractVersion("apt", key),
-	)
-}
-
-func extractNPMTarget(relative string) (requestTarget, bool) {
-	parts := splitPath(relative)
-	if len(parts) == 0 {
-		return requestTarget{}, false
-	}
-
-	var name string
-	var artifactAt int
-	if strings.HasPrefix(parts[0], "@") {
-		if len(parts) < 2 {
-			return requestTarget{}, false
-		}
-		name = parts[0] + "/" + parts[1]
-		artifactAt = 2
-	} else {
-		name = parts[0]
-		artifactAt = 1
-	}
-
-	if len(parts) == artifactAt {
-		return metadataTarget("npm", name)
-	}
-	if len(parts) == artifactAt+2 && parts[artifactAt] == "-" {
-		version := packagekey.ParseNpmFilename(name, parts[artifactAt+1])
-		return artifactTarget("npm", name, version)
-	}
-	return requestTarget{}, false
+	// Debian deliberately omits the epoch from .deb filenames. Treat the
+	// transport version as unknown until an index-derived Filename -> Version
+	// mapping can provide the complete Debian version; comparing it as epoch 0
+	// would make range rules unsound.
+	return metadataTarget("apt", packagekey.ExtractName("apt", key))
 }
 
 func extractGoTarget(relative string) (requestTarget, bool) {
@@ -167,7 +241,10 @@ func extractGoTarget(relative string) (requestTarget, bool) {
 
 	for _, suffix := range []string{"/@v/list", "/@latest"} {
 		if strings.HasSuffix(relative, suffix) {
-			name := unescapeGoPath(strings.TrimSuffix(relative, suffix))
+			name, err := gomoduleidentity.DecodeProxyPath(strings.TrimSuffix(relative, suffix))
+			if err != nil {
+				return requestTarget{}, false
+			}
 			return metadataTarget("go", name)
 		}
 	}
@@ -179,8 +256,14 @@ func extractGoTarget(relative string) (requestTarget, bool) {
 	versionFile := relative[idx+len("/@v/"):]
 	for _, suffix := range []string{".info", ".mod"} {
 		if strings.HasSuffix(versionFile, suffix) {
-			name := unescapeGoPath(relative[:idx])
-			version := strings.TrimSuffix(versionFile, suffix)
+			name, err := gomoduleidentity.DecodeProxyPath(relative[:idx])
+			if err != nil {
+				return requestTarget{}, false
+			}
+			version, err := gomoduleidentity.DecodeProxyVersion(strings.TrimSuffix(versionFile, suffix))
+			if err != nil {
+				return requestTarget{}, false
+			}
 			return versionedTarget("go", name, version)
 		}
 	}
@@ -195,97 +278,27 @@ func extractCargoTarget(relative string) (requestTarget, bool) {
 	if relative == "" || relative == "config.json" || strings.HasPrefix(relative, "api/") {
 		return requestTarget{}, false
 	}
-	parts := splitPath(relative)
-	if len(parts) == 0 {
-		return requestTarget{}, false
-	}
-	// Sparse-index metadata paths end in the crate name, while the directory
-	// prefix is a sharding detail and is not part of the package identity.
-	return metadataTarget("cargo", parts[len(parts)-1])
-}
-
-func extractMavenTarget(relative string) (requestTarget, bool) {
-	parts := splitPath(relative)
-	if len(parts) < 3 {
-		return requestTarget{}, false
-	}
-
-	filename := parts[len(parts)-1]
-	if hasAnySuffix(filename, ".jar", ".pom", ".aar") {
-		if len(parts) < 4 {
-			return requestTarget{}, false
-		}
-		artifact := parts[len(parts)-3]
-		version := parts[len(parts)-2]
-		group := strings.Join(parts[:len(parts)-3], ".")
-		if group == "" || artifact == "" || version == "" || !strings.HasPrefix(filename, artifact+"-") {
-			return requestTarget{}, false
-		}
-		return artifactTarget("maven", group+":"+artifact, version)
-	}
-
-	if filename != "maven-metadata.xml" {
-		return requestTarget{}, false
-	}
-	dirs := parts[:len(parts)-1]
-	if len(dirs) < 2 {
-		return requestTarget{}, false
-	}
-
-	artifactAt := len(dirs) - 1
-	version := ""
-	if len(dirs) >= 3 && looksLikeMavenVersion(dirs[len(dirs)-1]) {
-		version = dirs[len(dirs)-1]
-		artifactAt--
-	}
-	if artifactAt <= 0 {
-		return requestTarget{}, false
-	}
-	group := strings.Join(dirs[:artifactAt], ".")
-	name := group + ":" + dirs[artifactAt]
-	if version == "" {
-		return metadataTarget("maven", name)
-	}
-	return versionedTarget("maven", name, version)
-}
-
-func extractRubyGemsTarget(relative string) (requestTarget, bool) {
-	if strings.HasPrefix(relative, "gems/") {
-		name, version := packagekey.ParseRubygemsFilename(path.Base(relative))
-		return artifactTarget("rubygems", name, version)
-	}
-	if strings.HasPrefix(relative, "info/") {
-		name := strings.Trim(strings.TrimPrefix(relative, "info/"), "/")
-		if name != "" && !strings.Contains(name, "/") {
-			return metadataTarget("rubygems", name)
-		}
-	}
-	if strings.HasPrefix(relative, "quick/") && strings.HasSuffix(relative, ".gemspec.rz") {
-		base := strings.TrimSuffix(path.Base(relative), ".gemspec.rz")
-		name, version := splitDashVersion(base)
-		return versionedTarget("rubygems", name, version)
-	}
+	// Sparse-index filenames are lowercase even though the authoritative name
+	// in each JSON record is case-sensitive. The pre-adapter middleware cannot
+	// recover that original identity from the URL, so it must not guess. Cargo
+	// artifact downloads above retain the original crate name and remain fully
+	// enforceable.
 	return requestTarget{}, false
 }
 
+func extractMavenTarget(relative string) (requestTarget, bool) {
+	coordinate, version := packagekey.ParseMavenPath(relative)
+	return artifactTarget("maven", coordinate, version)
+}
+
 func extractComposerTarget(relative string) (requestTarget, bool) {
-	if strings.HasPrefix(relative, "p2/") && strings.HasSuffix(relative, ".json") {
-		name := strings.TrimSuffix(strings.TrimPrefix(relative, "p2/"), ".json")
-		name = strings.TrimSuffix(name, "~dev")
-		if parts := splitPath(name); len(parts) == 2 {
-			return metadataTarget("composer", parts[0]+"/"+parts[1])
-		}
+	name, version, ok := packagekey.ParseComposerRequestPath(relative)
+	if !ok {
 		return requestTarget{}, false
 	}
-	if !strings.HasPrefix(relative, "dist/") {
-		return requestTarget{}, false
+	if version == "" {
+		return metadataTarget("composer", name)
 	}
-	parts := splitPath(strings.TrimPrefix(relative, "dist/"))
-	if len(parts) < 4 || !strings.Contains(parts[len(parts)-1], ".") {
-		return requestTarget{}, false
-	}
-	name := parts[0] + "/" + parts[1]
-	version := strings.Join(parts[2:len(parts)-1], "/")
 	return artifactTarget("composer", name, version)
 }
 
@@ -329,10 +342,11 @@ func versionedTarget(ecosystem, name, version string) (requestTarget, bool) {
 }
 
 func artifactTarget(ecosystem, name, version string) (requestTarget, bool) {
-	// Never downgrade a malformed or unfamiliar artifact path to a
-	// package-wide check. Without its version, a constrained rule cannot be
-	// evaluated accurately and the middleware must fail open.
-	return newTarget(ecosystem, name, version, true)
+	// Package identity and version identity are independent. If a known package
+	// has an unfamiliar artifact filename, keep the package identity so a
+	// package-wide rule still applies; an empty version never enters a dialect
+	// comparator and therefore cannot match an exact/range rule.
+	return newTarget(ecosystem, name, version, false)
 }
 
 func newTarget(ecosystem, name, version string, requireVersion bool) (requestTarget, bool) {
@@ -360,48 +374,4 @@ func hasAnySuffix(value string, suffixes ...string) bool {
 		}
 	}
 	return false
-}
-
-func splitDashVersion(base string) (string, string) {
-	for i := len(base) - 1; i > 0; i-- {
-		if base[i] == '-' && i+1 < len(base) && base[i+1] >= '0' && base[i+1] <= '9' {
-			return base[:i], base[i+1:]
-		}
-	}
-	return "", ""
-}
-
-func looksLikeMavenVersion(value string) bool {
-	if value == "" {
-		return false
-	}
-	if value[0] >= '0' && value[0] <= '9' {
-		return true
-	}
-	return len(value) > 1 && (value[0] == 'v' || value[0] == 'V') && value[1] >= '0' && value[1] <= '9'
-}
-
-// unescapeGoPath mirrors GOPROXY's !lower encoding for uppercase letters.
-// The artifact helper already performs this conversion; metadata paths need
-// it here so both request shapes address the same rule key.
-func unescapeGoPath(value string) string {
-	if !strings.Contains(value, "!") {
-		return value
-	}
-	var out strings.Builder
-	out.Grow(len(value))
-	escaped := false
-	for _, char := range value {
-		if escaped {
-			out.WriteRune(unicode.ToUpper(char))
-			escaped = false
-			continue
-		}
-		if char == '!' {
-			escaped = true
-			continue
-		}
-		out.WriteRune(char)
-	}
-	return out.String()
 }

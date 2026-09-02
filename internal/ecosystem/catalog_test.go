@@ -29,11 +29,15 @@ func TestCatalogCapabilitiesAndStableOrder(t *testing.T) {
 	if got := definitionNames(SetupDefinitions()); !reflect.DeepEqual(got, setup) {
 		t.Fatalf("setup ecosystems = %v, want %v", got, setup)
 	}
-	if got := definitionNames(RuleDefinitions()); !reflect.DeepEqual(got, setup) {
-		t.Fatalf("rule ecosystems = %v, want %v", got, setup)
+	rules := []string{
+		"pypi", "apt", "npm", "go", "cargo", "maven", "composer",
+		"nuget", "conda", "cran", "alpine",
+	}
+	if got := definitionNames(RuleDefinitions()); !reflect.DeepEqual(got, rules) {
+		t.Fatalf("rule ecosystems = %v, want %v", got, rules)
 	}
 
-	malicious := []string{"npm", "pypi", "cargo", "rubygems", "composer", "nuget", "go", "maven"}
+	malicious := []string{"npm", "cargo", "composer", "nuget", "go", "maven"}
 	if got := definitionNames(MaliciousDatasetDefinitions()); !reflect.DeepEqual(got, malicious) {
 		t.Fatalf("malicious dataset ecosystems = %v, want %v", got, malicious)
 	}

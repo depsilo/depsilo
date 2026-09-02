@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"depsilo/internal/adapter"
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
 	ecosystemcatalog "depsilo/internal/ecosystem"
@@ -131,6 +132,11 @@ func recordProjectDownload(database *gorm.DB, projectID uint, c *gin.Context) {
 
 	name := packagekey.ExtractName(ecosystem, cacheKey)
 	version := packagekey.ExtractVersion(ecosystem, cacheKey)
+	if authenticated, ok := adapter.GetAuthenticatedArtifactCoordinate(c); ok &&
+		authenticated.Ecosystem == ecosystem {
+		name = authenticated.PackageName
+		version = authenticated.Version
+	}
 	if ecosystem == "huggingface" {
 		if commit := c.Writer.Header().Get("X-Repo-Commit"); isCanonicalCommit(commit) {
 			version = commit

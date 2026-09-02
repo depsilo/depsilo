@@ -76,7 +76,7 @@ func TestAutoMigrateUpgradesExistingPreLedgerSchemaV1PreservingData(t *testing.T
 			 content_type, etag, last_modified, response_headers, expires_at, last_accessed,
 			 created_at, updated_at)
 		VALUES
-			(7, 'pypi/files/demo-1.0.whl', 'pypi', 'artifact', 'demo', 'objects/demo', 42, 3,
+			(7, 'pypi/files/demo-1.0-py3-none-any.whl', 'pypi', 'artifact', 'demo', 'objects/demo', 42, 3,
 			 'application/octet-stream', 'etag-1', '', '{}', ?, ?, ?, ?)
 	`, time.Unix(10, 0).UTC(), time.Unix(11, 0).UTC(), time.Unix(12, 0).UTC(), time.Unix(13, 0).UTC()).Error; err != nil {
 		t.Fatalf("seed schema v1 row: %v", err)
@@ -109,7 +109,7 @@ func TestAutoMigrateUpgradesExistingPreLedgerSchemaV1PreservingData(t *testing.T
 	if err := database.Table("cache_entries").Where("id = ?", 7).Take(&row).Error; err != nil {
 		t.Fatalf("read preserved schema v1 row: %v", err)
 	}
-	if row.Key != "pypi/files/demo-1.0.whl" || row.PackageName != "demo" || row.HitCount != 3 {
+	if row.Key != "pypi/files/demo-1.0-py3-none-any.whl" || row.PackageName != "demo" || row.HitCount != 3 {
 		t.Fatalf("schema v1 row changed: %+v", row)
 	}
 	var user User

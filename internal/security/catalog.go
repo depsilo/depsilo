@@ -12,14 +12,15 @@ import (
 	"time"
 
 	"depsilo/internal/db"
+	"depsilo/internal/packagepolicy"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 const (
 	maxAdvisoryImportBytes      = 32 << 20
+	maxAdvisoryPackageNameBytes = 256
 	storedAdvisoryReadBatchSize = 500
-	autoBlockCreatedBy          = "security-scanner"
 )
 
 var (
@@ -46,12 +47,12 @@ type IngestReceipt struct {
 
 // AdvisoryCatalog is the transactional write boundary for vulnerability
 // scans and operator imports. Its write gate is shared by both entry points so
-// rule deduplication remains reliable on SQLite's single-writer database.
+// advisory/check reconciliation remains deterministic on SQLite's
+// single-writer database.
 type AdvisoryCatalog struct {
-	db              *gorm.DB
-	checkTTL        time.Duration
-	invalidateRules func()
-	writes          chan struct{}
+	db       *gorm.DB
+	checkTTL time.Duration
+	writes   chan struct{}
 }
 
 type advisoryIdentity struct {
@@ -77,7 +78,7 @@ func (a normalizedAdvisory) key() advisoryKey {
 }
 
 // NewAdvisoryCatalog creates the shared vulnerability ingestion boundary.
-func NewAdvisoryCatalog(database *gorm.DB, checkTTL time.Duration, invalidateRules func()) (*AdvisoryCatalog, error) {
+func NewAdvisoryCatalog(database *gorm.DB, checkTTL time.Duration) (*AdvisoryCatalog, error) {
 	if database == nil {
 		return nil, errors.New("create advisory catalog: database is nil")
 	}
@@ -88,15 +89,14 @@ func NewAdvisoryCatalog(database *gorm.DB, checkTTL time.Duration, invalidateRul
 	writes := make(chan struct{}, 1)
 	writes <- struct{}{}
 	return &AdvisoryCatalog{
-		db:              database,
-		checkTTL:        checkTTL,
-		invalidateRules: invalidateRules,
-		writes:          writes,
+		db:       database,
+		checkTTL: checkTTL,
+		writes:   writes,
 	}, nil
 }
 
-// RecordScan atomically stores one package's current OSV result, refreshes its
-// check record, and creates any policy-driven deny rules.
+// RecordScan atomically stores one package's current OSV result and refreshes
+// its check record. Advisory ingestion never mutates operator Package Rules.
 func (c *AdvisoryCatalog) RecordScan(
 	ctx context.Context,
 	pkg PackageRef,
@@ -118,10 +118,8 @@ func (c *AdvisoryCatalog) RecordScan(
 		Duplicates: duplicates,
 	}
 
-	var rulesCreated int
-	var rulesChanged bool
 	err = c.writeTransaction(ctx, func(tx *gorm.DB) error {
-		effective, err := reconcileAdvisories(tx, normalized)
+		_, err := reconcileAdvisories(tx, normalized)
 		if err != nil {
 			return fmt.Errorf("store package scan advisories: %w", err)
 		}
@@ -131,22 +129,12 @@ func (c *AdvisoryCatalog) RecordScan(
 			return fmt.Errorf("store package scan check: %w", err)
 		}
 
-		created, changed, err := reconcileAutoBlockRules(tx, identity, effective, true)
-		if err != nil {
-			return fmt.Errorf("apply package scan policy: %w", err)
-		}
-		rulesCreated = created
-		rulesChanged = changed
 		return nil
 	})
 	if err != nil {
 		return IngestReceipt{}, err
 	}
 
-	receipt.RulesCreated = rulesCreated
-	if rulesChanged && c.invalidateRules != nil {
-		c.invalidateRules()
-	}
 	return receipt, nil
 }
 
@@ -178,8 +166,6 @@ func (c *AdvisoryCatalog) Import(ctx context.Context, src io.Reader) (IngestRece
 		Skipped:    skipped,
 	}
 
-	var rulesCreated int
-	var rulesChanged bool
 	err = c.writeTransaction(ctx, func(tx *gorm.DB) error {
 		effective, err := reconcileAdvisories(tx, normalized)
 		if err != nil {
@@ -200,13 +186,6 @@ func (c *AdvisoryCatalog) Import(ctx context.Context, src io.Reader) (IngestRece
 			if err := upsertVulnerabilityCheck(tx, group.identity, int(total), now, c.checkTTL); err != nil {
 				return fmt.Errorf("store imported package check: %w", err)
 			}
-
-			created, changed, err := reconcileAutoBlockRules(tx, group.identity, group.advisories, false)
-			if err != nil {
-				return fmt.Errorf("apply imported package policy: %w", err)
-			}
-			rulesCreated += created
-			rulesChanged = rulesChanged || changed
 		}
 		return nil
 	})
@@ -214,10 +193,6 @@ func (c *AdvisoryCatalog) Import(ctx context.Context, src io.Reader) (IngestRece
 		return IngestReceipt{}, err
 	}
 
-	receipt.RulesCreated = rulesCreated
-	if rulesChanged && c.invalidateRules != nil {
-		c.invalidateRules()
-	}
 	return receipt, nil
 }
 
@@ -242,9 +217,16 @@ func normalizePackageScan(
 	pkg PackageRef,
 	input []OSVVulnerability,
 ) (advisoryIdentity, []normalizedAdvisory, int, error) {
+	ecosystemName := strings.ToLower(strings.TrimSpace(pkg.Ecosystem))
+	normalizedName, err := normalizeScannedPackageName(ecosystemName, pkg.Name)
+	if err != nil {
+		return advisoryIdentity{}, nil, 0, fmt.Errorf(
+			"%w: normalize %s package identity: %v", ErrInvalidPackageScan, ecosystemName, err,
+		)
+	}
 	identity := advisoryIdentity{
-		ecosystem: strings.TrimSpace(pkg.Ecosystem),
-		name:      strings.TrimSpace(pkg.Name),
+		ecosystem: ecosystemName,
+		name:      normalizedName,
 	}
 	if identity.ecosystem == "" || identity.name == "" || OSVEcosystem(identity.ecosystem) == "" {
 		return advisoryIdentity{}, nil, 0, fmt.Errorf(
@@ -316,7 +298,14 @@ func projectScannedAdvisory(
 		if depsiloEcosystem == "" {
 			continue
 		}
-		if depsiloEcosystem == expected.ecosystem && name == expected.name {
+		normalizedName, err := normalizeScannedPackageName(depsiloEcosystem, name)
+		if err != nil {
+			return OSVVulnerability{}, fmt.Errorf(
+				"%w: advisory %q has invalid %s package identity: %v",
+				ErrInvalidPackageScan, advisory.ID, depsiloEcosystem, err,
+			)
+		}
+		if depsiloEcosystem == expected.ecosystem && normalizedName == expected.name {
 			matching = append(matching, affected)
 		}
 	}
@@ -332,6 +321,25 @@ func projectScannedAdvisory(
 	projected := advisory
 	projected.Affected = matching
 	return projected, nil
+}
+
+func normalizeScannedPackageName(ecosystemName, packageName string) (string, error) {
+	packageName = strings.TrimSpace(packageName)
+	if len(packageName) > maxAdvisoryPackageNameBytes {
+		return "", fmt.Errorf("package name exceeds %d bytes", maxAdvisoryPackageNameBytes)
+	}
+	dialect, err := packagepolicy.DialectFor(ecosystemName)
+	if err != nil {
+		return "", err
+	}
+	normalized, err := dialect.NormalizePackageName(packageName)
+	if err != nil {
+		return "", err
+	}
+	if len(normalized) > maxAdvisoryPackageNameBytes {
+		return "", fmt.Errorf("normalized package name exceeds %d bytes", maxAdvisoryPackageNameBytes)
+	}
+	return normalized, nil
 }
 
 func decodeAdvisoryImport(src io.Reader) ([]OSVVulnerability, error) {
@@ -450,7 +458,14 @@ func projectImportedAdvisory(advisory OSVVulnerability) ([]normalizedAdvisory, i
 			unsupported[candidate] = struct{}{}
 			continue
 		}
-		identity := advisoryIdentity{ecosystem: depsiloEcosystem, name: candidate.name}
+		normalizedName, err := normalizeScannedPackageName(depsiloEcosystem, candidate.name)
+		if err != nil {
+			return nil, 0, fmt.Errorf(
+				"%w: advisory %q affected entry %d has invalid %s package identity: %v",
+				ErrInvalidAdvisoryImport, advisory.ID, i, depsiloEcosystem, err,
+			)
+		}
+		identity := advisoryIdentity{ecosystem: depsiloEcosystem, name: normalizedName}
 		byIdentity[identity] = append(byIdentity[identity], affected)
 	}
 
@@ -602,151 +617,6 @@ func upsertVulnerabilityCheck(
 			"updated_at",
 		}),
 	}).Create(&check).Error
-}
-
-func reconcileAutoBlockRules(
-	tx *gorm.DB,
-	identity advisoryIdentity,
-	advisories []normalizedAdvisory,
-	authoritative bool,
-) (int, bool, error) {
-	var policy db.SecurityPolicy
-	result := tx.Where("ecosystem = ?", identity.ecosystem).
-		Limit(1).
-		Find(&policy)
-	if result.Error != nil {
-		return 0, false, result.Error
-	}
-	policyEnabled := result.RowsAffected > 0 && policy.AutoBlockEnabled
-	policyExplicitlyDisabled := result.RowsAffected > 0 && !policy.AutoBlockEnabled
-	if len(advisories) == 0 && !policyExplicitlyDisabled && !authoritative {
-		return 0, false, nil
-	}
-
-	var existingRules []db.PackageRule
-	if err := tx.Where(
-		"ecosystem = ? AND package_name = ? AND created_by = ?",
-		identity.ecosystem,
-		identity.name,
-		autoBlockCreatedBy,
-	).Order("id ASC").Find(&existingRules).Error; err != nil {
-		return 0, false, err
-	}
-	if policyExplicitlyDisabled {
-		recognizable := make([]db.PackageRule, 0, len(existingRules))
-		for _, rule := range existingRules {
-			if autoBlockRuleOSVID(rule.Reason) != "" {
-				recognizable = append(recognizable, rule)
-			}
-		}
-		if err := deleteAutoBlockRules(tx, recognizable); err != nil {
-			return 0, false, err
-		}
-		return 0, len(recognizable) > 0, nil
-	}
-
-	created := 0
-	changed := false
-	if authoritative {
-		effectiveIDs := make(map[string]struct{}, len(advisories))
-		for _, advisory := range advisories {
-			effectiveIDs[advisory.model.OSVID] = struct{}{}
-		}
-		absent := make([]db.PackageRule, 0)
-		for _, rule := range existingRules {
-			osvID := autoBlockRuleOSVID(rule.Reason)
-			if osvID == "" {
-				continue
-			}
-			if _, exists := effectiveIDs[osvID]; !exists {
-				absent = append(absent, rule)
-			}
-		}
-		if err := deleteAutoBlockRules(tx, absent); err != nil {
-			return 0, false, err
-		}
-		changed = len(absent) > 0
-	}
-	for i := range advisories {
-		vulnerability := &advisories[i].model
-		matching := make([]db.PackageRule, 0, 1)
-		for _, rule := range existingRules {
-			if autoBlockRuleOSVID(rule.Reason) == vulnerability.OSVID {
-				matching = append(matching, rule)
-			}
-		}
-
-		shouldBlock := policyEnabled && vulnerability.CVSSScore >= policy.MinCVSSScore
-		if !shouldBlock {
-			if err := deleteAutoBlockRules(tx, matching); err != nil {
-				return 0, false, err
-			}
-			changed = changed || len(matching) > 0
-			continue
-		}
-
-		desired := db.PackageRule{
-			Ecosystem:   identity.ecosystem,
-			PackageName: identity.name,
-			Version:     FormatVersionConstraint(vulnerability),
-			Action:      "deny",
-			Reason: fmt.Sprintf(
-				"Auto-blocked: %s (CVSS %.1f)", vulnerability.OSVID, vulnerability.CVSSScore,
-			),
-			CreatedBy: autoBlockCreatedBy,
-		}
-		if len(matching) == 0 {
-			if err := tx.Create(&desired).Error; err != nil {
-				return 0, false, err
-			}
-			existingRules = append(existingRules, desired)
-			created++
-			changed = true
-			continue
-		}
-
-		canonical := matching[0]
-		if canonical.Version != desired.Version || canonical.Action != desired.Action ||
-			canonical.Reason != desired.Reason {
-			if err := tx.Model(&canonical).Updates(map[string]any{
-				"version": desired.Version,
-				"action":  desired.Action,
-				"reason":  desired.Reason,
-			}).Error; err != nil {
-				return 0, false, err
-			}
-			changed = true
-		}
-		if err := deleteAutoBlockRules(tx, matching[1:]); err != nil {
-			return 0, false, err
-		}
-		changed = changed || len(matching) > 1
-	}
-	return created, changed, nil
-}
-
-func autoBlockRuleOSVID(reason string) string {
-	const prefix = "Auto-blocked: "
-	if !strings.HasPrefix(reason, prefix) || !strings.HasSuffix(reason, ")") {
-		return ""
-	}
-	remainder := strings.TrimPrefix(reason, prefix)
-	marker := strings.Index(remainder, " (CVSS ")
-	if marker <= 0 {
-		return ""
-	}
-	return remainder[:marker]
-}
-
-func deleteAutoBlockRules(tx *gorm.DB, rules []db.PackageRule) error {
-	if len(rules) == 0 {
-		return nil
-	}
-	ids := make([]uint, len(rules))
-	for i, rule := range rules {
-		ids[i] = rule.ID
-	}
-	return tx.Delete(&db.PackageRule{}, ids).Error
 }
 
 func nonNilContext(ctx context.Context) context.Context {

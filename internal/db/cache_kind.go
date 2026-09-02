@@ -15,6 +15,7 @@ type cacheBackfillRow struct {
 	ID          uint `gorm:"primaryKey"`
 	AdapterType string
 	Key         string
+	PackageName string
 }
 
 // backfillSchemaV1CacheKinds classifies rows created before cache_kind was

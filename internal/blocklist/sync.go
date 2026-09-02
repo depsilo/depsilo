@@ -329,14 +329,22 @@ func parseAdvisory(r io.Reader, eco, osvName string, importedAt time.Time) ([]db
 		if i := strings.IndexByte(affEco, ':'); i >= 0 {
 			affEco = affEco[:i]
 		}
-		if affEco != osvName {
+		if !strings.EqualFold(affEco, osvName) {
 			continue
 		}
 
 		var versions string // empty = every version is malicious
 		switch {
 		case len(aff.Versions) > 0 && !coversAllVersions(aff.Ranges):
-			b, err := json.Marshal(aff.Versions)
+			normalizedVersions := make([]string, 0, len(aff.Versions))
+			for _, version := range aff.Versions {
+				normalized, err := normalizeVersionStrict(eco, version)
+				if err != nil {
+					return nil, fmt.Errorf("advisory %s package %q has invalid %s version %q: %w", adv.ID, aff.Package.Name, eco, version, err)
+				}
+				normalizedVersions = append(normalizedVersions, normalized)
+			}
+			b, err := json.Marshal(normalizedVersions)
 			if err != nil {
 				return nil, err
 			}
@@ -358,10 +366,14 @@ func parseAdvisory(r io.Reader, eco, osvName string, importedAt time.Time) ([]db
 			continue
 		}
 
+		packageName, err := normalizeNameStrict(eco, aff.Package.Name)
+		if err != nil {
+			return nil, fmt.Errorf("advisory %s has invalid %s package identity %q: %w", adv.ID, eco, aff.Package.Name, err)
+		}
 		rows = append(rows, db.MaliciousPackage{
 			SourceID:   adv.ID,
 			Ecosystem:  eco,
-			Package:    NormalizeName(eco, aff.Package.Name),
+			Package:    packageName,
 			Versions:   versions,
 			Aliases:    aliases,
 			Summary:    summary,

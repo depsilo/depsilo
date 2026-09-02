@@ -47,65 +47,6 @@ func TestClassifyCVSS_Levels(t *testing.T) {
 	}
 }
 
-func TestExtractFixedVersion(t *testing.T) {
-	rangesJSON := `[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"2.28.0"}]}]`
-	fixed := ExtractFixedVersion(rangesJSON)
-	if fixed != "2.28.0" {
-		t.Errorf("fixed = %q, want 2.28.0", fixed)
-	}
-}
-
-func TestExtractFixedVersion_NoFixed(t *testing.T) {
-	rangesJSON := `[{"type":"SEMVER","events":[{"introduced":"0"}]}]`
-	fixed := ExtractFixedVersion(rangesJSON)
-	if fixed != "" {
-		t.Errorf("fixed = %q, want empty", fixed)
-	}
-}
-
-func TestExtractFixedVersion_InvalidJSON(t *testing.T) {
-	fixed := ExtractFixedVersion("not json")
-	if fixed != "" {
-		t.Errorf("fixed = %q, want empty", fixed)
-	}
-}
-
-func TestFormatVersionConstraint_WithFixed(t *testing.T) {
-	vuln := ParseVulnerability(OSVVulnerability{
-		ID: "CVE-test",
-		Affected: []osvAffected{
-			{
-				Package: &osvPackage{Name: "requests", Ecosystem: "PyPI"},
-				Ranges: []osvRange{
-					{Type: "SEMVER", Events: []osvEvent{{Introduced: "0"}, {Fixed: "2.28.0"}}},
-				},
-			},
-		},
-	}, "pypi")
-	constraint := FormatVersionConstraint(vuln)
-	if constraint != "<2.28.0" {
-		t.Errorf("constraint = %q, want <2.28.0", constraint)
-	}
-}
-
-func TestFormatVersionConstraint_NoFixed(t *testing.T) {
-	vuln := ParseVulnerability(OSVVulnerability{
-		ID: "CVE-test-2",
-		Affected: []osvAffected{
-			{
-				Package: &osvPackage{Name: "pkg", Ecosystem: "PyPI"},
-				Ranges: []osvRange{
-					{Type: "SEMVER", Events: []osvEvent{{Introduced: "1.0.0"}}},
-				},
-			},
-		},
-	}, "pypi")
-	constraint := FormatVersionConstraint(vuln)
-	if constraint != "*" {
-		t.Errorf("constraint = %q, want *", constraint)
-	}
-}
-
 func TestEcosystemMapping(t *testing.T) {
 	tests := []struct {
 		depsilo string

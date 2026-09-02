@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -93,6 +94,67 @@ func TestFetchURLRejectsUnsafeTargetBeforeTransport(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("transport calls = %d, want 0", calls)
+	}
+}
+
+func TestFetchURLDoesNotRestoreConfiguredOriginCredentials(t *testing.T) {
+	var gotAuthorization string
+	var gotUserInfo *url.Userinfo
+	u := &Upstream{
+		Name: "private",
+		URL:  "https://registry-user:registry-password@registry.example/repository/npm",
+		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			gotAuthorization = request.Header.Get("Authorization")
+			gotUserInfo = request.URL.User
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("artifact")),
+				Request:    request,
+			}, nil
+		})},
+	}
+
+	result, err := u.FetchURL(
+		context.Background(),
+		"https://registry.example/repository/npm/fixture/-/fixture.tgz",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Body.Close()
+	if gotAuthorization != "" || gotUserInfo != nil {
+		t.Fatalf("external artifact request inherited origin credentials: Authorization=%q User=%v", gotAuthorization, gotUserInfo)
+	}
+}
+
+func TestFetchProvenanceURLRequiresExactSourceIdentity(t *testing.T) {
+	var calls int
+	u := &Upstream{
+		AdapterType: "npm",
+		Name:        "private",
+		URL:         "https://registry-user:registry-password@registry.example/repository/npm",
+		client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("artifact")),
+				Request:    request,
+			}, nil
+		})},
+	}
+
+	_, err := u.FetchProvenanceURL(
+		context.Background(),
+		"another-source",
+		"https://registry.example/repository/npm/fixture/-/fixture.tgz",
+	)
+	if err == nil || !strings.Contains(err.Error(), "provenance source is unavailable") {
+		t.Fatalf("mismatched provenance source error = %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("mismatched provenance source made %d transport calls, want 0", calls)
 	}
 }
 

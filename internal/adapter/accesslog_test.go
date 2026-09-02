@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"depsilo/internal/accesslog"
 	"depsilo/internal/db"
 )
@@ -161,6 +163,32 @@ func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
 		if audit.entries[index].CreatedAt.IsZero() {
 			t.Errorf("%s %q has zero event timestamp", test.ecosystem, test.cacheKey)
 		}
+	}
+}
+
+func TestLogAccessPrefersAuthenticatedArtifactCoordinate(t *testing.T) {
+	accessHooks.Store(nil)
+	t.Cleanup(func() { accessHooks.Store(nil) })
+
+	recorder := &timestampAccessRecorder{}
+	audit := &captureAuditEntries{}
+	InstallAccessHooks(recorder, audit)
+
+	ginContext, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ginContext.Request = httptest.NewRequest(http.MethodGet, "/npm/fixture/-/opaque/pkg-custom.tgz", nil)
+	BindAuthenticatedArtifactCoordinate(ginContext, "npm", "fixture", "1.0.0")
+	LogAccess(
+		ginContext.Request.Context(), nil, "npm", http.MethodGet,
+		"npm-exact-v1/fixture/-/__depsilo_tarball_v1/objects/digest/pkg-custom.tgz",
+		false, "primary", time.Millisecond, http.StatusOK, "192.0.2.10", 10,
+	)
+
+	if recorder.event.PackageName != "fixture" {
+		t.Fatalf("recorded package = %q, want authenticated fixture", recorder.event.PackageName)
+	}
+	if len(audit.entries) != 1 || audit.entries[0].PackageName != "fixture" ||
+		audit.entries[0].Version != "1.0.0" {
+		t.Fatalf("audit entries = %#v", audit.entries)
 	}
 }
 
@@ -332,7 +360,7 @@ func TestLogAccessScopedNilHooksUseRawDatabaseWithoutGlobalFallback(t *testing.T
 		}
 	})
 
-	emptyScope := NewRequestScope(nil, nil, nil)
+	emptyScope := NewRequestScope(nil, nil, nil, nil)
 	handler := emptyScope.Wrap(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
 		LogAccess(request.Context(), database, "npm", "GET", "npm/scoped-package", false, "upstream", time.Millisecond, 200, "scoped-raw", 12)
 	}))

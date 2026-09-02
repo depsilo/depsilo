@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=22.23.2"
   },
+  "overrides": {
+    "browserslist": "4.28.8"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

@@ -22,8 +22,8 @@ func testStore(t *testing.T) *Store {
 
 func TestNormalizeName(t *testing.T) {
 	cases := []struct{ eco, in, want string }{
-		{"npm", "EvIl-Pkg", "evil-pkg"},
-		{"npm", "@Scope/Name", "@scope/name"},
+		{"npm", "EvIl-Pkg", "EvIl-Pkg"},
+		{"NPM", "@Scope/Name", "@Scope/Name"},
 		{"pypi", "Requests", "requests"},
 		{"pypi", "typo__squat.pkg", "typo-squat-pkg"},
 		{"maven", "com.Evil:Artifact", "com.Evil:Artifact"}, // case-significant
@@ -33,6 +33,44 @@ func TestNormalizeName(t *testing.T) {
 		if got := NormalizeName(c.eco, c.in); got != c.want {
 			t.Errorf("NormalizeName(%s, %s) = %s, want %s", c.eco, c.in, got, c.want)
 		}
+	}
+}
+
+func TestStore_NPMPackageIdentityIsCaseSensitive(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	rows := []db.MaliciousPackage{
+		{SourceID: "MAL-EXPRESS-UPPER", Ecosystem: "npm", Package: "Express", Versions: ""},
+		{SourceID: "MAL-EXPRESS-LOWER", Ecosystem: "npm", Package: "express", Versions: ""},
+		{SourceID: "MAL-JSONSTREAM", Ecosystem: "npm", Package: "JSONStream", Versions: ""},
+	}
+	if err := s.ReplaceEcosystem(ctx, "npm", rows); err != nil {
+		t.Fatal(err)
+	}
+
+	upper, upperOverridden, err := s.Check(ctx, "NPM", "Express", "1.0.0")
+	if err != nil || upper == nil || upper.SourceID != "MAL-EXPRESS-UPPER" || upperOverridden {
+		t.Fatalf("uppercase identity: match=%+v overridden=%t err=%v", upper, upperOverridden, err)
+	}
+	lower, lowerOverridden, err := s.Check(ctx, "npm", "express", "1.0.0")
+	if err != nil || lower == nil || lower.SourceID != "MAL-EXPRESS-LOWER" || lowerOverridden {
+		t.Fatalf("lowercase identity: match=%+v overridden=%t err=%v", lower, lowerOverridden, err)
+	}
+	if match, _, err := s.Check(ctx, "npm", "jsonstream", "1.0.0"); err != nil || match != nil {
+		t.Fatalf("lowercase request matched JSONStream advisory: match=%+v err=%v", match, err)
+	}
+	if match, _, err := s.Check(ctx, "npm", "JSONStream", "1.0.0"); err != nil || match == nil {
+		t.Fatalf("exact JSONStream request did not match: match=%+v err=%v", match, err)
+	}
+
+	if _, err := s.CreateOverride(ctx, "npm", "Express", "", "case-specific false positive", 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, overridden, err := s.Check(ctx, "npm", "Express", "1.0.0"); err != nil || !overridden {
+		t.Fatalf("Express override not honored: overridden=%t err=%v", overridden, err)
+	}
+	if _, overridden, err := s.Check(ctx, "npm", "express", "1.0.0"); err != nil || overridden {
+		t.Fatalf("Express override leaked to express: overridden=%t err=%v", overridden, err)
 	}
 }
 
@@ -58,9 +96,9 @@ func TestStore_Check(t *testing.T) {
 		}
 	})
 
-	t.Run("name is normalized at query time", func(t *testing.T) {
-		if m, _, _ := s.Check(ctx, "npm", "EVIL-PKG", "1.0.0"); m == nil {
-			t.Error("uppercase query should still match")
+	t.Run("name requires exact case at query time", func(t *testing.T) {
+		if m, _, _ := s.Check(ctx, "npm", "EVIL-PKG", "1.0.0"); m != nil {
+			t.Error("uppercase query matched lowercase npm package")
 		}
 	})
 
@@ -174,7 +212,7 @@ func TestStore_CanonicalizationRegressions(t *testing.T) {
 	ctx := context.Background()
 
 	if err := s.ReplaceEcosystem(ctx, "nuget", []db.MaliciousPackage{
-		{SourceID: "MAL-2026-0005", Ecosystem: "nuget", Package: NormalizeName("nuget", "Evil.Client"), Versions: ""},
+		{SourceID: "MAL-2026-0005", Ecosystem: "nuget", Package: "evil.client", Versions: `["1.0","2.0.0-Alpha"]`},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +229,10 @@ func TestStore_CanonicalizationRegressions(t *testing.T) {
 
 	t.Run("nuget is case-insensitive", func(t *testing.T) {
 		if m, _, _ := s.Check(ctx, "nuget", "evil.client", "1.0.0"); m == nil {
-			t.Error("lowercase flat-container request should match mixed-case advisory")
+			t.Error("NuGet 1.0 request should match equivalent flat-container 1.0.0")
+		}
+		if m, _, _ := s.Check(ctx, "nuget", "EVIL.CLIENT", "2.0.0-alpha"); m == nil {
+			t.Error("NuGet package and prerelease identity should be case-insensitive")
 		}
 	})
 	t.Run("go versions match with the v prefix stripped", func(t *testing.T) {
@@ -207,4 +248,69 @@ func TestStore_CanonicalizationRegressions(t *testing.T) {
 			t.Error("extra-index ecosystem should hit the pypi rows")
 		}
 	})
+}
+
+func TestStore_ExplicitVersionsUseDialectEquality(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	fixtures := []struct {
+		ecosystem string
+		pkg       string
+		stored    string
+		request   string
+	}{
+		{ecosystem: "npm", pkg: "signed-release", stored: "1.0.0+advisory", request: "1.0.0+mirror"},
+		{ecosystem: "cargo", pkg: "signed_release", stored: "1.0.0+advisory", request: "1.0.0+mirror"},
+		{ecosystem: "pypi", pkg: "friendly-kit", stored: "1.0RC1", request: "1.0rc1"},
+		{ecosystem: "maven", pkg: "org.example:artifact", stored: "1.0-final", request: "1.0"},
+	}
+	for index, fixture := range fixtures {
+		row := db.MaliciousPackage{
+			SourceID:  "MAL-DIALECT",
+			Ecosystem: fixture.ecosystem,
+			Package:   fixture.pkg,
+			Versions:  `["` + fixture.stored + `"]`,
+		}
+		if err := s.ReplaceEcosystem(ctx, fixture.ecosystem, []db.MaliciousPackage{row}); err != nil {
+			t.Fatal(err)
+		}
+		t.Run(fixture.ecosystem, func(t *testing.T) {
+			match, _, err := s.Check(ctx, fixture.ecosystem, fixture.pkg, fixture.request)
+			if err != nil || match == nil {
+				t.Fatalf("dialect-equal version did not match: match=%+v err=%v fixture=%+v index=%d", match, err, fixture, index)
+			}
+		})
+	}
+}
+
+func TestStore_OverrideUsesDialectVersionIdentity(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.ReplaceEcosystem(ctx, "nuget", []db.MaliciousPackage{{
+		SourceID: "MAL-NUGET", Ecosystem: "nuget", Package: "example.client", Versions: `["1.0"]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateOverride(ctx, "nuget", "Example.Client", "1.0", "verified false positive", 7); err != nil {
+		t.Fatal(err)
+	}
+	match, overridden, err := s.Check(ctx, "nuget", "example.client", "1.0.0")
+	if err != nil || match == nil || !overridden {
+		t.Fatalf("NuGet-equivalent override not honored: match=%+v overridden=%t err=%v", match, overridden, err)
+	}
+}
+
+func TestStore_InvalidExplicitVersionIsObservable(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.ReplaceEcosystem(ctx, "nuget", []db.MaliciousPackage{{
+		SourceID: "MAL-CORRUPT", Ecosystem: "nuget", Package: "bad.client", Versions: `["1..0"]`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	match, _, err := s.Check(ctx, "nuget", "bad.client", "1.0.0")
+	if match != nil || err == nil {
+		t.Fatalf("corrupt explicit version = match %+v err %v, want nil match and observable error", match, err)
+	}
 }

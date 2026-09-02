@@ -257,14 +257,17 @@ func ValidateInitialAdminCredentials(username, password string) error {
 	return credential.CredentialPolicy.ValidatePassword(username, password)
 }
 
-// CreateInitialAdmin creates the first administrator with operator-provided
-// credentials. It never overwrites or resets an existing administrator.
+// CreateInitialAdmin creates the first loginable administrator with
+// operator-provided credentials. It never overwrites or resets an enabled
+// administrator; disabled historical accounts do not block recovery.
 func CreateInitialAdmin(database *gorm.DB, username, password string) error {
 	if err := ValidateInitialAdminCredentials(username, password); err != nil {
 		return err
 	}
 	var count int64
-	if err := database.Model(&db.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil {
+	if err := database.Model(&db.User{}).
+		Where("role = ? AND enabled = ?", "admin", true).
+		Count(&count).Error; err != nil {
 		return fmt.Errorf("count administrators: %w", err)
 	}
 	if count > 0 {
@@ -301,16 +304,53 @@ func VerifyExistingAdminCredentials(database *gorm.DB, username, password string
 	return nil
 }
 
+// ReconcileSetupState detects a configured document whose loginable
+// administrator is missing. A config file is a publication marker only after
+// setup commits the administrator, but this guard also repairs states created
+// by older releases or by a storage-level failure. Explicit headless
+// credentials retain their original bootstrap behavior.
+func ReconcileSetupState(database *gorm.DB, cfg *config.Config) error {
+	if database == nil {
+		return errors.New("database is nil")
+	}
+	if cfg == nil {
+		return errors.New("config is nil")
+	}
+	if cfg.IsDefault {
+		return nil
+	}
+	if os.Getenv("DEPSILO_ADMIN_USERNAME") != "" || os.Getenv("DEPSILO_ADMIN_PASSWORD") != "" {
+		return nil
+	}
+	var count int64
+	if err := database.Model(&db.User{}).
+		Where("role = ? AND enabled = ?", "admin", true).
+		Count(&count).Error; err != nil {
+		return fmt.Errorf("count loginable administrators: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	if err := config.MarkSetupPending(cfg); err != nil {
+		return fmt.Errorf("reopen interactive setup: %w", err)
+	}
+	zap.L().Warn("configuration has no loginable administrator; reopening interactive setup")
+	return nil
+}
+
 // EnsureInitialAdmin bootstraps configured/headless deployments while keeping
 // the interactive setup database empty until the wizard supplies credentials.
 // Headless installs can provide DEPSILO_ADMIN_USERNAME and
-// DEPSILO_ADMIN_PASSWORD; otherwise a random password is printed once.
+// DEPSILO_ADMIN_PASSWORD; otherwise ReconcileSetupState reopens interactive
+// setup when a configured database has no loginable administrator.
 func EnsureInitialAdmin(database *gorm.DB, setupPending bool) error {
 	if setupPending {
 		return nil
 	}
 	var count int64
-	if err := database.Model(&db.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil {
+	if err := database.Model(&db.User{}).
+		Where("role = ? AND enabled = ?", "admin", true).
+		Count(&count).Error; err != nil {
 		return fmt.Errorf("count administrators: %w", err)
 	}
 	if count > 0 {
