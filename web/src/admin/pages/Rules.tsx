@@ -20,7 +20,15 @@ import QueryErrorState from '@/components/QueryErrorState'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
-import type { RuleListResponse, RuleRecord, RuleRequest, RuleTestResponse } from '@/lib/adminApi.types'
+import type {
+  RuleListResponse,
+  RuleRecord,
+  RuleRequest,
+  RuleTestCandidate,
+  RuleTestMatchLevels,
+  RuleTestResponse,
+  RuleTestSpecificity,
+} from '@/lib/adminApi.types'
 import AdminPage from '@/admin/components/AdminPage'
 import ConfirmActionDialog from '@/admin/components/ConfirmActionDialog'
 import { packageRuleEcosystems, supportsPackageRuleRanges, supportsPackageRuleVersions } from '@/admin/operatorEcosystems'
@@ -31,6 +39,198 @@ type RuleForm = RuleRequest
 type RuleListPayload = RuleListResponse
 type RuleTestState = RuleTestResponse | { error: string }
 const emptyForm: RuleForm = { ecosystem: 'pypi', package_name: '', version: '*', action: 'deny', reason: '' }
+
+const MATCH_LEVEL_TRANSLATION_KEYS: Record<keyof RuleTestMatchLevels, Record<string, string>> = {
+  ecosystem: { exact: 'rules.levelEcosystemExact', wildcard: 'rules.levelWildcard' },
+  package: { exact: 'rules.levelPackageExact', prefix: 'rules.levelPackagePrefix', wildcard: 'rules.levelWildcard' },
+  version: { exact: 'rules.levelVersionExact', range: 'rules.levelVersionRange', wildcard: 'rules.levelWildcard' },
+}
+
+const PRECEDENCE_TRANSLATION_KEYS: Record<string, string> = {
+  default_allow: 'rules.precedenceDefaultAllow',
+  only_matching_rule: 'rules.precedenceOnlyMatching',
+  priority: 'rules.precedencePriority',
+  ecosystem_specificity: 'rules.precedenceEcosystem',
+  package_specificity: 'rules.precedencePackage',
+  version_specificity: 'rules.precedenceVersion',
+  deny_tie_break: 'rules.precedenceDeny',
+  id_tie_break: 'rules.precedenceID',
+  policy_fallback_deny: 'rules.precedenceFallbackDeny',
+  stable_order: 'rules.precedenceStableOrder',
+}
+
+function ruleSelector(rule: RuleRecord | null | undefined) {
+  if (!rule) return ''
+  return `${rule.ecosystem}/${rule.package_name}@${rule.version}`
+}
+
+function matchLevelLabel(
+  translate: (key: string) => string,
+  dimension: keyof RuleTestMatchLevels,
+  value: string | undefined,
+) {
+  if (!value) return '—'
+  return translate(MATCH_LEVEL_TRANSLATION_KEYS[dimension][value] ?? value)
+}
+
+function specificityParts(specificity: RuleTestSpecificity | number | undefined) {
+  if (typeof specificity === 'number') return [`${specificity}`]
+  if (!specificity) return []
+  return [
+    `P${specificity.priority}`,
+    `E${specificity.ecosystem}`,
+    `K${specificity.package}`,
+    `V${specificity.version}`,
+    `A${specificity.action}`,
+    `#${specificity.id}`,
+  ]
+}
+
+function candidateAction(candidate: RuleTestCandidate) {
+  return candidate.rule.action === 'allow' ? 'allow' : 'deny'
+}
+
+function RuleTestResultView({ result }: { result: RuleTestResponse }) {
+  const { t } = useTranslation()
+  const hasCandidateData = Array.isArray(result.candidates)
+  const candidates = hasCandidateData ? result.candidates ?? [] : []
+  const winner = result.winning_rule ?? result.matched_rule ?? result.winner?.rule
+  const winnerID = winner?.id
+  // `reason` is the stable business/audit explanation. Some early server
+  // builds used `winner_reason` for a ranking explanation, so keep it as a
+  // fallback rather than allowing that diagnostic text to mask the rule's
+  // operator-facing reason.
+  const winnerReason = result.reason || winner?.reason || result.winner_reason
+  const displayReason = result.reason === 'no matching rule; default allow' || result.reason === 'policy load fallback denied request'
+    ? ''
+    : result.reason
+  const precedenceReason = result.precedence_reason
+    ? t(PRECEDENCE_TRANSLATION_KEYS[result.precedence_reason] ?? result.precedence_reason)
+    : ''
+  const usingStaleSnapshot = result.policy_status?.using_stale_snapshot === true
+  const degradedPolicy = result.policy_status?.degraded === true
+    || result.policy_status?.status === 'degraded'
+    || result.policy_status?.status === 'unavailable'
+
+  return (
+    <div className="space-y-3" data-rule-test-result role="status" aria-live="polite">
+      <div
+        className="rounded-[4px] p-4"
+        data-rule-test-decision={result.allowed ? 'allow' : 'deny'}
+        style={{
+          background: result.allowed ? 'var(--ok-fill)' : 'var(--danger-fill)',
+          border: `1px solid ${result.allowed ? 'var(--ok-border)' : 'var(--danger)'}`,
+        }}
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <Icon
+            name={result.allowed ? 'check_circle' : 'cancel'}
+            size="sm"
+            style={{ color: result.allowed ? 'var(--ok-text)' : 'var(--danger)' }}
+          />
+          <span className="text-[14px] font-[400]" style={{ color: result.allowed ? 'var(--ok-text)' : 'var(--danger)' }}>
+            {result.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}
+          </span>
+        </div>
+
+        {winner ? (
+          <div className="space-y-1 text-[12px]" data-rule-test-winner style={{ color: 'var(--text-soft)' }}>
+            <p className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.winningRule')}</p>
+            <p className="break-all font-mono" data-rule-test-winner-selector>
+              {ruleSelector(winner)} → {winner.action === 'allow' ? t('rules.allow') : t('rules.deny')}
+            </p>
+            {winnerReason && <p data-rule-test-reason><span className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.decisionReason')}:</span> {winnerReason}</p>}
+            {precedenceReason && <p data-rule-test-precedence><span className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
+          </div>
+        ) : (
+          <div className="space-y-1 text-[12px]" style={{ color: 'var(--text-soft)' }}>
+            <p data-rule-test-no-match>{result.allowed ? t('rules.noMatch') : t('rules.noMatchDenied')}</p>
+            {displayReason && <p data-rule-test-reason>{displayReason}</p>}
+            {precedenceReason && <p data-rule-test-precedence><span className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
+          </div>
+        )}
+      </div>
+
+      {(usingStaleSnapshot || degradedPolicy) && (
+        <InlineNotice tone="warning" title={t('rules.policySnapshotNotice')}>
+          {usingStaleSnapshot && result.policy_status?.snapshot_age_seconds
+            ? t('rules.policySnapshotAge', { seconds: Math.round(result.policy_status.snapshot_age_seconds) })
+            : usingStaleSnapshot
+              ? t('rules.policySnapshotUsingStale')
+              : t('rules.policySnapshotDegraded')}
+        </InlineNotice>
+      )}
+
+      {!hasCandidateData ? null : candidates.length > 0 ? (
+        <section aria-label={t('rules.candidateRules')} data-rule-test-candidates>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-[13px] font-[500]" style={{ color: 'var(--text)' }}>{t('rules.candidateRules')}</h3>
+            <BadgeV2 variant="neutral">{candidates.length}</BadgeV2>
+          </div>
+          <ol className="space-y-2">
+            {candidates.map((candidate, index) => {
+              const levels = candidate.match_levels
+              const selected = candidate.selected === true || (winnerID !== undefined && candidate.rule.id === winnerID)
+              const matched = candidate.matched !== false
+              const action = candidateAction(candidate)
+              const specificity = specificityParts(candidate.specificity).join(' · ')
+              return (
+                <li
+                  key={`${candidate.rule.id}-${index}`}
+                  className="min-w-0 border-b py-3 first:pt-0 last:border-b-0"
+                  data-rule-test-candidate
+                  data-selected={selected ? 'true' : 'false'}
+                  style={{
+                    borderColor: 'var(--border)',
+                    background: selected ? 'var(--brand-soft)' : undefined,
+                    borderLeft: selected ? '3px solid var(--brand)' : undefined,
+                    paddingLeft: selected ? '9px' : undefined,
+                  }}
+                >
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                    <span className="min-w-0 break-all font-mono text-[12px]" style={{ color: 'var(--text)' }}>
+                      {ruleSelector(candidate.rule)}
+                    </span>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1">
+                      <BadgeV2 variant={action === 'allow' ? 'success' : 'error'}>
+                        {action === 'allow' ? t('rules.allow') : t('rules.deny')}
+                      </BadgeV2>
+                      {selected && <BadgeV2 variant="success">{t('rules.selected')}</BadgeV2>}
+                      {!matched && <BadgeV2 variant="neutral">{t('rules.notMatched')}</BadgeV2>}
+                    </div>
+                  </div>
+                  <div className="mt-2 grid min-w-0 grid-cols-1 gap-1 text-[11px] sm:grid-cols-3" data-rule-test-levels>
+                    <span className="min-w-0 break-words" style={{ color: 'var(--text-soft)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('rules.levelEcosystem')}:</span>{' '}
+                      {matchLevelLabel(t, 'ecosystem', levels?.ecosystem)}
+                    </span>
+                    <span className="min-w-0 break-words" style={{ color: 'var(--text-soft)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('rules.levelPackage')}:</span>{' '}
+                      {matchLevelLabel(t, 'package', levels?.package)}
+                    </span>
+                    <span className="min-w-0 break-words" style={{ color: 'var(--text-soft)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('rules.levelVersion')}:</span>{' '}
+                      {matchLevelLabel(t, 'version', levels?.version)}
+                    </span>
+                  </div>
+                  {specificity && (
+                    <p className="mt-1 break-words text-[11px]" data-rule-test-specificity style={{ color: 'var(--text-muted)' }}>
+                      {t('rules.specificity')}: <span className="font-mono">{specificity}</span>
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+      ) : (
+        <p className="text-[12px]" data-rule-test-candidates-empty style={{ color: 'var(--text-soft)' }}>
+          {t('rules.noCandidates')}
+        </p>
+      )}
+    </div>
+  )
+}
 
 function upsertRule(current: AxiosResponse<RuleListPayload> | undefined, response: AxiosResponse<RuleRecord>): AxiosResponse<RuleListPayload> {
   const rule = response.data
@@ -81,6 +281,12 @@ export default function RulesV2() {
   function closeDeleteDialog() { if (deleteMutation.isPending) return; deleteMutation.reset(); setDeleteTarget(null) }
   function handleSubmit(e: React.FormEvent) { e.preventDefault(); if (!canWrite) return; if (editId) updateMutation.mutate({ id: editId, data: form }); else createMutation.mutate(form) }
   async function handleTest() { setTestLoading(true); setTestResult(null); try { const res = await adminApi.testRule(testForm); setTestResult(res.data) } catch (error: unknown) { setTestResult({ error: getApiError(error).message }) } finally { setTestLoading(false) } }
+  function updateTestField(field: 'ecosystem' | 'package' | 'version', value: string) {
+    setTestForm(current => ({ ...current, [field]: value }))
+    // A previous decision belongs to the previous coordinate; never leave it
+    // visible while the operator edits a new one.
+    setTestResult(null)
+  }
   const isSaving = createMutation.isPending || updateMutation.isPending
   const saveError = editId ? updateMutation.error : createMutation.error
   const apiError = getApiError(query.error)
@@ -106,12 +312,12 @@ export default function RulesV2() {
   return (
     <AdminPage
       description={t('rules.subtitle')}
-      actions={canWrite ? (
+      actions={(
         <>
           <ButtonV2 variant="ghost" size="sm" onClick={() => { setTestOpen(true); setTestResult(null) }}><Icon name="science" size="sm" />{t('rules.testRule')}</ButtonV2>
-          <ButtonV2 onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</ButtonV2>
+          {canWrite && <ButtonV2 onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</ButtonV2>}
         </>
-      ) : undefined}
+      )}
     >
     <div className="space-y-6">
       {query.isPending ? (
@@ -192,17 +398,12 @@ export default function RulesV2() {
 
       <ModalV2 open={testOpen} onClose={() => setTestOpen(false)} title={t('rules.testTitle')} closeDisabled={testLoading}>
         <div className="space-y-4">
-          <SelectV2 label={t('rules.ecosystem')} value={testForm.ecosystem} onChange={(e) => setTestForm({ ...testForm, ecosystem: e.target.value })}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
-          <InputV2 label={t('rules.packageName')} mono value={testForm.package} onChange={(e) => setTestForm({ ...testForm, package: e.target.value })} placeholder={testPackagePlaceholder} />
-          <InputV2 label={t('rules.version')} mono value={testForm.version} onChange={(e) => setTestForm({ ...testForm, version: e.target.value })} placeholder={t('rules.testVersionPlaceholder')} />
-          <ButtonV2 onClick={handleTest} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
-          {testResult && !('error' in testResult) && (
-            <div className="rounded-[4px] p-4" style={{ background: testResult.allowed ? 'var(--ok-fill)' : 'var(--danger-fill)', border: `1px solid ${testResult.allowed ? 'var(--ok-border)' : 'var(--danger)'}` }}>
-              <div className="flex items-center gap-2 mb-2"><Icon name={testResult.allowed ? 'check_circle' : 'cancel'} size="sm" style={{ color: testResult.allowed ? 'var(--ok-text)' : 'var(--danger)' }} /><span className="font-[400] text-[14px]" style={{ color: testResult.allowed ? 'var(--ok-text)' : 'var(--danger)' }}>{testResult.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}</span></div>
-              {testResult.matched_rule ? (<div className="text-[12px] space-y-1" style={{ color: 'var(--text-soft)' }}><p className="font-[400]" style={{ color: 'var(--text)' }}>{t('rules.matchedRule')}:</p><p className="font-mono">{testResult.matched_rule.ecosystem}/{testResult.matched_rule.package_name}@{testResult.matched_rule.version} → {testResult.matched_rule.action}</p>{testResult.matched_rule.reason && <p>{testResult.matched_rule.reason}</p>}</div>) : (<p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('rules.noMatch')}</p>)}
-            </div>
-          )}
-          {testResult && 'error' in testResult && <div className="rounded-[4px] p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
+          <SelectV2 label={t('rules.ecosystem')} value={testForm.ecosystem} disabled={testLoading} onChange={(e) => updateTestField('ecosystem', e.target.value)}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
+          <InputV2 label={t('rules.packageName')} mono value={testForm.package} disabled={testLoading} onChange={(e) => updateTestField('package', e.target.value)} placeholder={testPackagePlaceholder} />
+          <InputV2 label={t('rules.version')} mono value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
+          <ButtonV2 type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
+          {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
+          {testResult && 'error' in testResult && <div role="alert" className="rounded-[4px] p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
         </div>
       </ModalV2>
     </div>

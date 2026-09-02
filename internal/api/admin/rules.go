@@ -2,9 +2,11 @@ package admin
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -133,15 +135,91 @@ func (h *RulesHandler) Test(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": err.Error()})
 		return
 	}
-	allowed, rule, err := h.engine.Check(c.Request.Context(), req.Ecosystem, req.Package, req.Version)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "ERROR", "message": err.Error()})
+	if h == nil || h.engine == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code":    "PACKAGE_POLICY_UNAVAILABLE",
+			"message": "package policy engine is unavailable",
+		})
 		return
 	}
-	resp := gin.H{"allowed": allowed, "matched_rule": nil}
-	if rule != nil {
-		resp["matched_rule"] = rule
-		resp["reason"] = rule.Reason
+	evaluation, err := h.engine.Explain(c.Request.Context(), req.Ecosystem, req.Package, req.Version)
+	if err != nil {
+		status := http.StatusInternalServerError
+		code := "ERROR"
+		if errors.Is(err, rules.ErrPolicyIntegrity) || errors.Is(err, rules.ErrPolicyEvaluation) {
+			status = http.StatusServiceUnavailable
+			code = "PACKAGE_POLICY_UNEVALUABLE"
+		} else if errors.Is(err, rules.ErrRuleStoreUnavailable) {
+			status = http.StatusServiceUnavailable
+			code = "PACKAGE_POLICY_UNAVAILABLE"
+		}
+		c.JSON(status, gin.H{"code": code, "message": err.Error()})
+		return
+	}
+	// Keep the original compact response fields for existing Admin clients,
+	// then add the explainable decision surface. Candidates are already sorted
+	// by the Engine's explicit precedence tuple and carry their own match
+	// levels, so this handler never reimplements policy semantics.
+	resp := gin.H{
+		"allowed":           evaluation.Allowed,
+		"matched_rule":      evaluation.MatchedRule,
+		"winning_rule":      evaluation.WinningRule,
+		"winner":            evaluation.Winner,
+		"reason":            evaluation.Reason,
+		"winner_reason":     evaluation.WinnerReason,
+		"precedence_reason": evaluation.PrecedenceReason,
+		"candidates":        evaluation.Candidates,
+	}
+	if evaluation.PolicyStatus != nil {
+		resp["policy_status"] = policyStatusPayload(*evaluation.PolicyStatus)
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// policyStatusPayload keeps the Admin response stable and avoids exposing Go
+// time.Time's zero value or the rules package's internal field names. The
+// snapshot status is additive metadata: it does not alter the decision that
+// was already made by Engine.Explain.
+func policyStatusPayload(status rules.PolicyStatus) gin.H {
+	loaded := status.LastSuccessfulRefresh
+	if loaded.IsZero() {
+		loaded = status.SnapshotLoadedAt
+	}
+	state := status.Status
+	if state == "" {
+		if status.Degraded {
+			state = "degraded"
+		} else if loaded.IsZero() {
+			state = "unavailable"
+		} else {
+			state = "healthy"
+		}
+	}
+	age := status.SnapshotAgeSeconds
+	if !loaded.IsZero() {
+		age = time.Since(loaded).Seconds()
+		if age < 0 || math.IsNaN(age) || math.IsInf(age, 0) {
+			age = 0
+		}
+	} else {
+		age = 0
+	}
+	var loadedAt any
+	if !loaded.IsZero() {
+		loadedAt = loaded.UTC().Format(time.RFC3339Nano)
+	}
+	mode := status.OnLoadError
+	if mode == "" {
+		mode = rules.DefaultOnLoadErrorPolicy
+	}
+	return gin.H{
+		"status":                  state,
+		"degraded":                status.Degraded,
+		"using_stale_snapshot":    status.UsingStaleSnapshot,
+		"last_successful_refresh": loadedAt,
+		"snapshot_loaded_at":      loadedAt,
+		"snapshot_age_seconds":    age,
+		"refresh_failures":        status.RefreshFailures,
+		"on_load_error":           mode,
+	}
 }

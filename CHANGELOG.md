@@ -88,6 +88,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   atomic rename + parent-directory fsync, and startup reopens the wizard when
   a configured database has no loginable administrator. Fault-injection tests
   cover each database and filesystem publication boundary.
+- Policy winner selection now uses an explicit lexicographic specificity tuple
+  (reserved priority, selector levels, deny tie-break, and stable database ID)
+  rather than an additive score or Store row order. The read-only Admin policy
+  test shows matching candidates, winner, match levels, precedence reason, and
+  policy snapshot state.
 
 ## [0.9.1] - 2026-09-01
 

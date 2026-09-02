@@ -25,6 +25,8 @@ import type {
   PolicyStatus,
   RegenerateProjectTokenResponse,
   RecentDownloadsResponse,
+  RuleTestRequest,
+  RuleTestResponse,
   SecurityDashboard,
   SecurityBaseQuery,
   SecurityImportResponse,
@@ -50,6 +52,8 @@ export type SecondArg<T extends (...args: never[]) => unknown> = Parameters<T>[1
 
 export type PrincipalContract = Assert<Equal<ResponseData<typeof authApi.me>, Principal>>
 export type PolicyStatusContract = Assert<Equal<ResponseData<typeof adminApi.getPolicyStatus>, PolicyStatus>>
+export type RuleTestContract = Assert<Equal<ResponseData<typeof adminApi.testRule>, RuleTestResponse>>
+export type RuleTestInputContract = Assert<Equal<FirstArg<typeof adminApi.testRule>, RuleTestRequest>>
 export type LogsContract = Assert<Equal<ResponseData<typeof adminApi.listLogs>, AccessLogListResponse>>
 export type RecentDownloadsContract = Assert<Equal<ResponseData<typeof adminApi.getRecentDownloads>, RecentDownloadsResponse>>
 export type AuditContract = Assert<Equal<ResponseData<typeof adminApi.listAuditLogs>, AuditLogListResponse>>

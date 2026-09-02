@@ -66,6 +66,7 @@ export type PolicyStatusKind = 'healthy' | 'degraded' | 'unavailable' | 'ready' 
 
 export interface PolicyStatus {
   status: PolicyStatusKind
+  degraded?: boolean
   using_stale_snapshot: boolean
   /** Preferred name in the Admin contract. */
   snapshot_loaded_at?: string | null
@@ -349,7 +350,51 @@ export interface RuleRequest { ecosystem: string; package_name: string; version:
 export interface RuleRecord extends RuleRequest { id: number; created_by: string; created_at: string; updated_at: string }
 export type RuleListResponse = RuleRecord[] | { items: RuleRecord[]; total?: number }
 export interface RuleTestRequest { ecosystem: string; package: string; version: string }
-export interface RuleTestResponse { allowed: boolean; matched_rule: RuleRecord | null; reason?: string }
+export interface RuleTestSpecificity {
+  priority: number
+  ecosystem: number
+  package: number
+  version: number
+  action: number
+  id: number
+}
+
+export type RuleTestEcosystemMatchLevel = 'exact' | 'wildcard'
+export type RuleTestPackageMatchLevel = 'exact' | 'prefix' | 'wildcard'
+export type RuleTestVersionMatchLevel = 'exact' | 'range' | 'wildcard'
+
+export interface RuleTestMatchLevels {
+  ecosystem: RuleTestEcosystemMatchLevel
+  package: RuleTestPackageMatchLevel
+  version: RuleTestVersionMatchLevel
+}
+
+/** A persisted rule that matched the test coordinate, with its ranking. */
+export interface RuleTestCandidate {
+  rule: RuleRecord
+  specificity: RuleTestSpecificity
+  match_levels: RuleTestMatchLevels
+  matched: boolean
+  selected: boolean
+  explanation?: string
+}
+
+/** Result returned by the Admin "test policy" endpoint. */
+export interface RuleTestResponse {
+  allowed: boolean
+  matched_rule: RuleRecord | null
+  reason?: string
+  winning_rule?: RuleRecord | null
+  winner_reason?: string
+  /** Stable tuple dimension that selected the winner, when candidates exist. */
+  precedence_reason?: string
+  /** Full selected candidate, useful to clients that need its ranking details. */
+  winner?: RuleTestCandidate | null
+  /** Always an array; no-match decisions return an empty array. */
+  candidates: RuleTestCandidate[]
+  /** Optional status metadata when evaluation used a stale/fallback snapshot. */
+  policy_status?: PolicyStatus
+}
 
 export interface QuarantineQuery { limit?: number; ecosystem?: string; action?: string; package?: string }
 

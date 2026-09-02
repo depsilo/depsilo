@@ -289,10 +289,35 @@ the evaluator. Creates and updates validate the entire resulting rule before
 one atomic database write. Unsupported ranges and malformed versions return a
 client error instead of being guessed at request time.
 
-When multiple rules have equal specificity, the newest rule wins. SQLite
-orders `created_at` through `julianday(created_at)`, so timestamps with different
-UTC offsets are compared as absolute instants. The database ID is the stable
-insertion-order tie-breaker when those instants compare equal.
+### Deterministic winner selection
+
+When more than one rule matches, the Engine compares an explicit lexicographic
+tuple, from left to right. Higher values win at the first differing component:
+
+```text
+(priority, ecosystem, package, version, action, id)
+```
+
+The current schema has no operator-facing priority column, so `priority` is a
+reserved extension point and is `0` for every persisted rule. Selector ranks
+are exact ecosystem `2` > wildcard ecosystem `1`; exact package `2` > trailing
+prefix `1` > wildcard `0`; and exact version `2` > range `1` > wildcard `0`.
+At equal selector specificity, `deny` wins (`action=1`), and the higher
+database ID wins the final stable tie-break. The ID rule preserves the
+historical newest-row behavior without depending on query order.
+
+The Store's `created_at DESC, id DESC` ordering is useful for presentation and
+snapshot loading only; it is not policy semantics. Reordering rows cannot
+change the decision.
+
+The authenticated `POST /api/v1/admin/rules/test` endpoint evaluates one
+`ecosystem`/`package`/`version` coordinate and returns the decision, the
+winning rule, every matching candidate in winner-first order, each candidate's
+`match_levels` (`exact`, `prefix`, `range`, or `wildcard`), its numeric
+specificity tuple, and `precedence_reason`. `reason` remains the operator's
+business/audit reason; `precedence_reason` explains which tuple dimension made
+the winner prevail. A request with no matching rule returns `candidates: []`,
+`precedence_reason: "default_allow"`, and the existing default-allow decision.
 
 If persisted raw and normalized values disagree, or a matching request version
 cannot be interpreted by its ecosystem dialect, the package request fails

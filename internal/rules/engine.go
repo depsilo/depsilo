@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -72,16 +73,16 @@ type PolicyTelemetry interface {
 // snapshot. LastSuccessfulRefresh is deliberately retained across failed
 // refreshes so snapshot age remains truthful.
 type PolicyStatus struct {
-	Status                string
-	Degraded              bool
-	UsingStaleSnapshot    bool
-	LastSuccessfulRefresh time.Time
+	Status                string    `json:"status"`
+	Degraded              bool      `json:"degraded"`
+	UsingStaleSnapshot    bool      `json:"using_stale_snapshot"`
+	LastSuccessfulRefresh time.Time `json:"last_successful_refresh"`
 	// SnapshotLoadedAt is an alias kept for callers that use the metric's
 	// terminology; both fields always carry the same instant.
-	SnapshotLoadedAt   time.Time
-	SnapshotAgeSeconds float64
-	RefreshFailures    uint64
-	OnLoadError        OnLoadErrorPolicy
+	SnapshotLoadedAt   time.Time         `json:"snapshot_loaded_at"`
+	SnapshotAgeSeconds float64           `json:"snapshot_age_seconds"`
+	RefreshFailures    uint64            `json:"refresh_failures"`
+	OnLoadError        OnLoadErrorPolicy `json:"on_load_error"`
 }
 
 // PolicyStatusProvider is the read-only seam exposed by an Engine to
@@ -147,6 +148,130 @@ type compiledRule struct {
 	packageValue string
 	versionKind  selectorKind
 	version      packagepolicy.VersionMatcher
+}
+
+// RuleSpecificity is the total ordering used when more than one persisted
+// rule matches a request.  Every component is deliberately represented in
+// the ordering rather than folded into one additive score: an additive score
+// can make different selector shapes tie (for example, an exact ecosystem
+// plus a wildcard package versus a wildcard ecosystem plus an exact package).
+//
+// Higher values win. Priority is currently an internal extension point and is
+// zero for all rules because PackageRule has no priority column yet. Keeping
+// it in the tuple makes the future schema/API addition monotonic without
+// changing the comparison contract. Action is one for deny and zero for
+// allow, so a deny wins when all selector dimensions are otherwise equal. ID
+// is the final insertion-order tie-breaker; higher auto-increment IDs preserve
+// the historical newest-rule behavior for rows with equal selector
+// specificity.
+type RuleSpecificity struct {
+	Priority  int `json:"priority"`
+	Ecosystem int `json:"ecosystem"`
+	Package   int `json:"package"`
+	Version   int `json:"version"`
+	// Action is the action tie-breaker: deny=1, allow=0. The field is named
+	// Action (rather than Deny) so the explain JSON maps directly to the
+	// operator-facing rule action dimension.
+	Action int  `json:"action"`
+	ID     uint `json:"id"`
+}
+
+// RulePrecedence is a descriptive alias for callers that prefer the term
+// precedence over specificity. It intentionally remains an alias so values
+// can be passed to APIs using either name without conversion.
+type RulePrecedence = RuleSpecificity
+
+// Compare returns 1 when s wins over other, -1 when other wins, and 0 when
+// the tuples are identical. The comparison is lexicographic in the exact
+// order documented by RuleSpecificity.
+func (s RuleSpecificity) Compare(other RuleSpecificity) int {
+	if s.Priority != other.Priority {
+		if s.Priority > other.Priority {
+			return 1
+		}
+		return -1
+	}
+	if s.Ecosystem != other.Ecosystem {
+		if s.Ecosystem > other.Ecosystem {
+			return 1
+		}
+		return -1
+	}
+	if s.Package != other.Package {
+		if s.Package > other.Package {
+			return 1
+		}
+		return -1
+	}
+	if s.Version != other.Version {
+		if s.Version > other.Version {
+			return 1
+		}
+		return -1
+	}
+	if s.Action != other.Action {
+		if s.Action > other.Action {
+			return 1
+		}
+		return -1
+	}
+	if s.ID != other.ID {
+		if s.ID > other.ID {
+			return 1
+		}
+		return -1
+	}
+	return 0
+}
+
+// CompareRuleSpecificity is the function form of RuleSpecificity.Compare for
+// callers that prefer a comparator value when sorting or selecting rules.
+func CompareRuleSpecificity(a, b RuleSpecificity) int {
+	return a.Compare(b)
+}
+
+// RuleCandidate describes one rule that matched an Explain request. Rule is
+// copied by value so callers cannot mutate the engine's immutable snapshot.
+type RuleCandidate struct {
+	Rule        db.PackageRule  `json:"rule"`
+	Specificity RuleSpecificity `json:"specificity"`
+	MatchLevels RuleMatchLevels `json:"match_levels"`
+	Matched     bool            `json:"matched"`
+	Selected    bool            `json:"selected"`
+	// Explanation is a language-neutral diagnostic tuple for API consumers;
+	// Admin UI copy is localized from MatchLevels and Specificity instead.
+	Explanation string `json:"explanation,omitempty"`
+}
+
+// RuleMatchLevels gives the human-readable selector shape represented by a
+// candidate's numeric specificity tuple.
+type RuleMatchLevels struct {
+	Ecosystem string `json:"ecosystem"`
+	Package   string `json:"package"`
+	Version   string `json:"version"`
+}
+
+// Evaluation is the explainable result of a policy check. Candidates are
+// returned in winning order (best first), and Winner is nil when no rule
+// matched. Check intentionally keeps its historical compact return shape and
+// shares the same matching and tuple-comparison semantics.
+type Evaluation struct {
+	Allowed     bool            `json:"allowed"`
+	MatchedRule *db.PackageRule `json:"matched_rule,omitempty"`
+	Reason      string          `json:"reason,omitempty"`
+	WinningRule *db.PackageRule `json:"winning_rule,omitempty"`
+	// WinnerReason is the operator-authored reason attached to the winning
+	// rule. PrecedenceReason separately records which tuple dimension selected
+	// it over the other candidates; keeping both avoids conflating business
+	// rationale with ordering mechanics.
+	WinnerReason     string         `json:"winner_reason,omitempty"`
+	PrecedenceReason string         `json:"precedence_reason,omitempty"`
+	Winner           *RuleCandidate `json:"winner,omitempty"`
+	// Candidates is always encoded as an array, including when no rule
+	// matched. A stable shape keeps the Admin explain surface easy to consume
+	// and avoids null-vs-empty branching in automation.
+	Candidates   []RuleCandidate `json:"candidates"`
+	PolicyStatus *PolicyStatus   `json:"policy_status,omitempty"`
 }
 
 // Engine evaluates package rules with an in-memory cache of compiled,
@@ -241,23 +366,203 @@ func (e *Engine) Check(ctx context.Context, ecosystem, packageName, version stri
 		return false, nil, fmt.Errorf("%w: normalize %s package %q: %v", ErrPolicyEvaluation, ecosystem, packageName, err)
 	}
 
-	var bestRule *db.PackageRule
-	bestScore := -1
-	for index := range rules {
-		rule := &rules[index]
-		score, err := rule.match(ecosystem, normalizedPackage, version)
-		if err != nil {
-			return false, nil, fmt.Errorf("%w: evaluate rule %d: %v", ErrPolicyEvaluation, rule.model.ID, err)
-		}
-		if score > bestScore {
-			bestScore = score
-			bestRule = &rule.model
-		}
+	// The request path only needs the winner. Keep candidate collection and
+	// sorting behind Explain so every package request does not allocate a
+	// diagnostic slice or sort all matches merely to make one decision.
+	bestRule, err := selectBestCompiledRule(rules, ecosystem, normalizedPackage, version)
+	if err != nil {
+		return false, nil, err
 	}
 	if bestRule == nil {
 		return true, nil, nil
 	}
 	return bestRule.Action == "allow", bestRule, nil
+}
+
+// Explain evaluates a package coordinate and returns the same decision as
+// Check together with every matching candidate in deterministic winner-first
+// order. It is intentionally additive: existing callers should continue to
+// use Check's compact (allowed, rule, error) contract.
+func (e *Engine) Explain(
+	ctx context.Context,
+	ecosystem, packageName, version string,
+) (Evaluation, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return Evaluation{Allowed: true}, err
+		}
+	}
+	rules, outcome, err := e.loadRulesWithState()
+	if err != nil {
+		// Preserve Check's fail-open result on an error while still returning the
+		// error for callers that need to distinguish an unavailable snapshot.
+		return Evaluation{Allowed: true}, err
+	}
+	if outcome == loadOutcomeDeny {
+		status := e.PolicyStatus()
+		return Evaluation{
+			Allowed:          false,
+			Reason:           "policy load fallback denied request",
+			WinnerReason:     "policy load fallback denied request",
+			PrecedenceReason: "policy_fallback_deny",
+			Candidates:       make([]RuleCandidate, 0),
+			PolicyStatus:     &status,
+		}, nil
+	}
+
+	normalizedEcosystem := strings.ToLower(strings.TrimSpace(ecosystem))
+	definition, supported := ecosystemcatalog.Lookup(normalizedEcosystem)
+	if !supported || !definition.RuleEnforcement {
+		return Evaluation{}, fmt.Errorf("%w: package rules are unavailable for ecosystem %q", ErrPolicyEvaluation, normalizedEcosystem)
+	}
+	dialect, err := packagepolicy.DialectFor(normalizedEcosystem)
+	if err != nil {
+		return Evaluation{}, fmt.Errorf("%w: %v", ErrPolicyEvaluation, err)
+	}
+	normalizedPackage, err := dialect.NormalizePackageName(packageName)
+	if err != nil {
+		return Evaluation{}, fmt.Errorf("%w: normalize %s package %q: %v", ErrPolicyEvaluation, normalizedEcosystem, packageName, err)
+	}
+	evaluation, err := evaluateCompiledRules(rules, normalizedEcosystem, normalizedPackage, version)
+	if err != nil {
+		return Evaluation{}, err
+	}
+	status := e.PolicyStatus()
+	evaluation.PolicyStatus = &status
+	return evaluation, nil
+}
+
+// evaluateCompiledRules is the diagnostic winner-selection seam used by
+// Explain. Check uses selectBestCompiledRule for the same comparison without
+// allocating candidates. The input snapshot is immutable; this function copies
+// models into candidates so the returned explanation cannot mutate cached state.
+func evaluateCompiledRules(
+	rules []compiledRule,
+	ecosystem, normalizedPackage, version string,
+) (Evaluation, error) {
+	evaluation := Evaluation{
+		Allowed:    true,
+		Candidates: make([]RuleCandidate, 0),
+	}
+	for index := range rules {
+		rule := &rules[index]
+		specificity, matched, err := rule.matchSpecificity(ecosystem, normalizedPackage, version)
+		if err != nil {
+			return Evaluation{}, fmt.Errorf("%w: evaluate rule %d: %v", ErrPolicyEvaluation, rule.model.ID, err)
+		}
+		if !matched {
+			continue
+		}
+		evaluation.Candidates = append(evaluation.Candidates, RuleCandidate{
+			Rule:        rule.model,
+			Specificity: specificity,
+			MatchLevels: rule.matchLevels(),
+			Matched:     true,
+			Explanation: explainCandidate(specificity, rule.model.Action),
+		})
+	}
+	if len(evaluation.Candidates) == 0 {
+		evaluation.PrecedenceReason = "default_allow"
+		evaluation.Reason = "no matching rule; default allow"
+		return evaluation, nil
+	}
+	// Sorting is for a stable Explain presentation only. The comparator itself
+	// is independent of Store.List order, so Check would remain deterministic
+	// even if the backing query changes its ordering.
+	sort.SliceStable(evaluation.Candidates, func(i, j int) bool {
+		return evaluation.Candidates[i].Specificity.Compare(evaluation.Candidates[j].Specificity) > 0
+	})
+	evaluation.Candidates[0].Selected = true
+	winner := &evaluation.Candidates[0]
+	winningRule := winner.Rule
+	evaluation.Winner = winner
+	evaluation.MatchedRule = &winningRule
+	evaluation.WinningRule = &winningRule
+	evaluation.Allowed = winningRule.Action == "allow"
+	evaluation.Reason = winningRule.Reason
+	evaluation.WinnerReason = winningRule.Reason
+	if evaluation.WinnerReason == "" {
+		evaluation.WinnerReason = defaultDecisionReason(winningRule.Action)
+	}
+	evaluation.PrecedenceReason = precedenceReason(evaluation.Candidates)
+	return evaluation, nil
+}
+
+// selectBestCompiledRule is the allocation-free winner-selection path used by
+// Check. It intentionally shares matchSpecificity and RuleSpecificity.Compare
+// with Explain, so the compact hot path cannot drift from the operator-facing
+// explanation semantics.
+func selectBestCompiledRule(
+	rules []compiledRule,
+	ecosystem, normalizedPackage, version string,
+) (*db.PackageRule, error) {
+	var bestRule *db.PackageRule
+	var bestSpecificity RuleSpecificity
+	for index := range rules {
+		rule := &rules[index]
+		specificity, matched, err := rule.matchSpecificity(ecosystem, normalizedPackage, version)
+		if err != nil {
+			return nil, fmt.Errorf("%w: evaluate rule %d: %v", ErrPolicyEvaluation, rule.model.ID, err)
+		}
+		if !matched || (bestRule != nil && specificity.Compare(bestSpecificity) <= 0) {
+			continue
+		}
+		bestRule = &rule.model
+		bestSpecificity = specificity
+	}
+	return bestRule, nil
+}
+
+func defaultDecisionReason(action string) string {
+	if action == "deny" {
+		return "matched deny rule"
+	}
+	return "matched allow rule"
+}
+
+// precedenceReason returns a stable machine-readable explanation of why the
+// first candidate won. It deliberately compares the tuple dimensions in the
+// same order as RuleSpecificity.Compare, so an operator can audit a decision
+// without reconstructing the old additive score.
+func precedenceReason(candidates []RuleCandidate) string {
+	if len(candidates) == 0 {
+		return "default_allow"
+	}
+	if len(candidates) == 1 {
+		return "only_matching_rule"
+	}
+	winner := candidates[0].Specificity
+	for index := 1; index < len(candidates); index++ {
+		other := candidates[index].Specificity
+		switch {
+		case winner.Priority != other.Priority:
+			return "priority"
+		case winner.Ecosystem != other.Ecosystem:
+			return "ecosystem_specificity"
+		case winner.Package != other.Package:
+			return "package_specificity"
+		case winner.Version != other.Version:
+			return "version_specificity"
+		case winner.Action != other.Action:
+			return "deny_tie_break"
+		case winner.ID != other.ID:
+			return "id_tie_break"
+		}
+	}
+	// Distinct persisted rows should always differ by ID. Keep a defensive
+	// value for synthetic/test snapshots with duplicate zero IDs.
+	return "stable_order"
+}
+
+func explainCandidate(specificity RuleSpecificity, action string) string {
+	if action == "deny" {
+		return fmt.Sprintf("priority=%d ecosystem=%d package=%d version=%d deny=%d id=%d",
+			specificity.Priority, specificity.Ecosystem, specificity.Package,
+			specificity.Version, specificity.Action, specificity.ID)
+	}
+	return fmt.Sprintf("priority=%d ecosystem=%d package=%d version=%d allow=%d id=%d",
+		specificity.Priority, specificity.Ecosystem, specificity.Package,
+		specificity.Version, specificity.Action, specificity.ID)
 }
 
 // CheckIncompleteArtifact evaluates an artifact whose package/version cannot
@@ -287,7 +592,7 @@ func (e *Engine) CheckIncompleteArtifact(
 	}
 
 	var fallback *db.PackageRule
-	fallbackScore := -1
+	var fallbackSpecificity RuleSpecificity
 	for index := range rules {
 		rule := &rules[index]
 		if rule.model.Ecosystem != "*" && rule.model.Ecosystem != ecosystem {
@@ -296,13 +601,11 @@ func (e *Engine) CheckIncompleteArtifact(
 		if rule.packageKind != selectorWildcard || rule.versionKind != selectorWildcard {
 			continue
 		}
-		score := 1
-		if rule.model.Ecosystem == ecosystem {
-			score = 2
-		}
-		if score > fallbackScore {
-			fallbackScore = score
-			fallback = &rule.model
+		specificity := rule.specificity()
+		if fallback == nil || specificity.Compare(fallbackSpecificity) > 0 {
+			fallbackRule := rule.model
+			fallback = &fallbackRule
+			fallbackSpecificity = specificity
 		}
 	}
 
@@ -720,49 +1023,106 @@ func compilePersistedRule(model db.PackageRule) (compiledRule, error) {
 	return compiled, nil
 }
 
-func (r *compiledRule) match(ecosystem, normalizedPackage, actualVersion string) (int, error) {
-	score := 0
-	if r.model.Ecosystem == "*" {
-		score++
-	} else if r.model.Ecosystem == ecosystem {
-		score += 2
-	} else {
-		return -1, nil
+// matchSpecificity reports whether the rule matches and, when it does, the
+// structured ordering tuple used to select the winner.
+func (r *compiledRule) matchSpecificity(ecosystem, normalizedPackage, actualVersion string) (RuleSpecificity, bool, error) {
+	if r.model.Ecosystem != "*" && r.model.Ecosystem != ecosystem {
+		return RuleSpecificity{}, false, nil
 	}
 
 	switch r.packageKind {
 	case selectorWildcard:
 	case selectorPrefix:
 		if !strings.HasPrefix(normalizedPackage, r.packageValue) {
-			return -1, nil
+			return RuleSpecificity{}, false, nil
 		}
-		score++
 	case selectorExact:
 		if normalizedPackage != r.packageValue {
-			return -1, nil
+			return RuleSpecificity{}, false, nil
 		}
-		score += 2
 	}
 
-	if r.versionKind == selectorWildcard {
-		return score, nil
+	if r.versionKind != selectorWildcard {
+		if actualVersion == "" {
+			return RuleSpecificity{}, false, nil
+		}
+		if r.version == nil {
+			// A compiled non-wildcard selector must always carry its dialect
+			// matcher. Treat a synthetic or partially persisted snapshot as an
+			// evaluation failure rather than allowing a nil-interface panic to
+			// take down the proxy process.
+			return RuleSpecificity{}, false, errors.New("version matcher is missing")
+		}
+		matched, err := r.version.Match(actualVersion)
+		if err != nil {
+			return RuleSpecificity{}, false, err
+		}
+		if !matched {
+			return RuleSpecificity{}, false, nil
+		}
 	}
-	if actualVersion == "" {
-		return -1, nil
+	return r.specificity(), true, nil
+}
+
+func (r *compiledRule) specificity() RuleSpecificity {
+	ecosystem := 1 // wildcard
+	if r.model.Ecosystem != "*" {
+		ecosystem = 2 // exact
 	}
-	matched, err := r.version.Match(actualVersion)
-	if err != nil {
-		return -1, err
+
+	packageSpecificity := 0 // wildcard
+	switch r.packageKind {
+	case selectorPrefix:
+		packageSpecificity = 1
+	case selectorExact:
+		packageSpecificity = 2
 	}
-	if !matched {
-		return -1, nil
+
+	versionSpecificity := 0 // wildcard
+	switch r.versionKind {
+	case selectorRange:
+		versionSpecificity = 1
+	case selectorExact:
+		versionSpecificity = 2
 	}
-	if r.versionKind == selectorExact {
-		score += 2
-	} else {
-		score++
+
+	action := 0 // allow
+	if r.model.Action == "deny" {
+		action = 1
 	}
-	return score, nil
+	return RuleSpecificity{
+		// Priority is intentionally an explicit field even though the current
+		// persisted model has no priority column; all existing rules therefore
+		// receive the backwards-compatible zero value.
+		Priority:  0,
+		Ecosystem: ecosystem,
+		Package:   packageSpecificity,
+		Version:   versionSpecificity,
+		Action:    action,
+		ID:        r.model.ID,
+	}
+}
+
+func (r *compiledRule) matchLevels() RuleMatchLevels {
+	ecosystem := "exact"
+	if r.model.Ecosystem == "*" {
+		ecosystem = "wildcard"
+	}
+	packageLevel := "wildcard"
+	switch r.packageKind {
+	case selectorPrefix:
+		packageLevel = "prefix"
+	case selectorExact:
+		packageLevel = "exact"
+	}
+	versionLevel := "wildcard"
+	switch r.versionKind {
+	case selectorRange:
+		versionLevel = "range"
+	case selectorExact:
+		versionLevel = "exact"
+	}
+	return RuleMatchLevels{Ecosystem: ecosystem, Package: packageLevel, Version: versionLevel}
 }
 
 func hasComparisonOperator(value string) bool {
@@ -772,43 +1132,4 @@ func hasComparisonOperator(value string) bool {
 		}
 	}
 	return false
-}
-
-// matchScore remains a focused test helper for the rule-specificity contract.
-// Production evaluation only calls compilePersistedRule on prepared rows.
-func matchScore(model *db.PackageRule, ecosystem, packageName, version string) int {
-	if model == nil {
-		return -1
-	}
-	prepared, err := packagepolicy.PrepareRule(packagepolicy.RawRule{
-		Ecosystem: model.Ecosystem, PackageName: model.PackageName, Version: model.Version,
-	})
-	if err != nil {
-		return -1
-	}
-	copy := *model
-	copy.Ecosystem = prepared.Ecosystem
-	copy.PackageName = prepared.PackageName
-	copy.Version = prepared.Version
-	copy.NormalizedPackageName = prepared.NormalizedPackageName
-	copy.NormalizedVersion = prepared.NormalizedVersion
-	copy.DialectRevision = prepared.DialectRevision
-	copy.Action = "deny"
-	compiled, err := compilePersistedRule(copy)
-	if err != nil {
-		return -1
-	}
-	dialect, err := packagepolicy.DialectFor(strings.ToLower(strings.TrimSpace(ecosystem)))
-	if err != nil {
-		return -1
-	}
-	normalizedPackage, err := dialect.NormalizePackageName(packageName)
-	if err != nil {
-		return -1
-	}
-	score, err := compiled.match(strings.ToLower(strings.TrimSpace(ecosystem)), normalizedPackage, version)
-	if err != nil {
-		return -1
-	}
-	return score
 }

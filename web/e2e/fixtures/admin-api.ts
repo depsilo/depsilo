@@ -14,6 +14,7 @@ import type {
   PolicyStatus,
   ProjectListResponse,
   RecentDownloadsResponse,
+  RuleTestResponse,
   SecurityDashboard,
   SecurityPackagePage,
   SecuritySuggestionPage,
@@ -105,6 +106,7 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
   'GET /api/v1/admin/tokens': [],
   'GET /api/v1/admin/license/status': { is_pro: false, source: 'none', days_left: 0, trial_used: false, trial_available: true, last_checked: '2026-07-10T00:00:00Z' },
   'GET /api/v1/admin/rules': [],
+  'POST /api/v1/admin/rules/test': { allowed: true, matched_rule: null, candidates: [] } satisfies RuleTestResponse,
   'GET /api/v1/admin/security/policies': [],
   'GET /api/v1/admin/webhooks': [],
 }

@@ -60,6 +60,20 @@ exports at most 10,000 matching rows.
 Project package responses use `ecosystem`, `package_name`, `version`, `first_seen_at`,
 `last_seen_at`, and `download_count`. Project proxy URLs fall back to `/p/{slug}`.
 
+## Package policy test
+
+`POST /api/v1/admin/rules/test` is a read-only Admin operation and is available to
+readonly principals. It accepts `{ "ecosystem": "pypi", "package": "requests",
+"version": "1.0.0" }` and returns the allow/deny decision, `winning_rule`, the
+matching `candidates` in deterministic winner-first order, and each candidate's
+`match_levels` and `specificity`. The selected candidate is also available as
+`winner`. `reason` and `winner_reason` carry the winning rule's operator-authored
+business reason; `precedence_reason` identifies the tuple dimension that selected
+it. When the evaluator is degraded, `policy_status` reports whether a stale
+last-known-good snapshot was used and its age.
+When no rule matches, the response keeps `matched_rule: null`, returns an empty
+`candidates` array, and reports the existing default-allow decision.
+
 ## Settings
 
 `GET /api/v1/admin/settings` returns complete `configured` and `effective` snapshots plus

@@ -16,6 +16,7 @@ import (
 
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
+	"depsilo/internal/packagepolicy"
 	"depsilo/internal/rules"
 )
 
@@ -161,6 +162,110 @@ func TestRulesTestRejectsInvalidDialectPackageName(t *testing.T) {
 	)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("invalid Cargo package status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestRulesTestExplainsCandidatesAndStableWinner(t *testing.T) {
+	router, database := newRulesAdminTestRouter(t)
+	seed := []db.PackageRule{
+		{Ecosystem: "pypi", PackageName: "*", Version: "*", Action: "deny", Reason: "package baseline"},
+		{Ecosystem: "pypi", PackageName: "requests", Version: ">= 1.0.0", Action: "allow", Reason: "approved releases"},
+		{Ecosystem: "pypi", PackageName: "requests", Version: "1.0.0", Action: "deny", Reason: "incident pin"},
+	}
+	for index := range seed {
+		if err := database.Create(&seed[index]).Error; err != nil {
+			t.Fatalf("seed rule %d: %v", index, err)
+		}
+		// The admin fixture writes directly through GORM, so prepare the
+		// dialect columns exactly as Store.Create would before the Engine reads
+		// the row. This keeps the test focused on the explain response shape.
+		prepared, err := packagepolicy.PrepareRule(packagepolicy.RawRule{
+			Ecosystem: seed[index].Ecosystem, PackageName: seed[index].PackageName, Version: seed[index].Version,
+		})
+		if err != nil {
+			t.Fatalf("prepare rule %d: %v", index, err)
+		}
+		if err := database.Model(&db.PackageRule{}).Where("id = ?", seed[index].ID).Updates(map[string]any{
+			"ecosystem":               prepared.Ecosystem,
+			"package_name":            prepared.PackageName,
+			"version":                 prepared.Version,
+			"normalized_package_name": prepared.NormalizedPackageName,
+			"normalized_version":      prepared.NormalizedVersion,
+			"dialect_revision":        prepared.DialectRevision,
+			"action":                  seed[index].Action,
+			"reason":                  seed[index].Reason,
+		}).Error; err != nil {
+			t.Fatalf("prepare persisted rule %d: %v", index, err)
+		}
+	}
+
+	response := rulesAdminRequest(router, http.MethodPost, "/rules/test", `{"ecosystem":"pypi","package":"requests","version":"1.0.0"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("test status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Allowed      bool            `json:"allowed"`
+		MatchedRule  *db.PackageRule `json:"matched_rule"`
+		WinningRule  *db.PackageRule `json:"winning_rule"`
+		Reason       string          `json:"reason"`
+		WinnerReason string          `json:"winner_reason"`
+		Precedence   string          `json:"precedence_reason"`
+		Candidates   []struct {
+			Rule        db.PackageRule        `json:"rule"`
+			Specificity rules.RuleSpecificity `json:"specificity"`
+			MatchLevels rules.RuleMatchLevels `json:"match_levels"`
+			Matched     bool                  `json:"matched"`
+			Selected    bool                  `json:"selected"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode test response: %v", err)
+	}
+	if payload.Allowed || payload.MatchedRule == nil || payload.WinningRule == nil {
+		t.Fatalf("payload decision = allowed %v matched=%+v winning=%+v", payload.Allowed, payload.MatchedRule, payload.WinningRule)
+	}
+	if payload.MatchedRule.ID != seed[2].ID || payload.WinningRule.ID != seed[2].ID {
+		t.Fatalf("winner IDs = matched %d winning %d, want %d", payload.MatchedRule.ID, payload.WinningRule.ID, seed[2].ID)
+	}
+	if payload.Reason != "incident pin" || payload.WinnerReason != "incident pin" {
+		t.Fatalf("decision reasons = reason %q winner_reason %q", payload.Reason, payload.WinnerReason)
+	}
+	if payload.Precedence != "version_specificity" {
+		t.Fatalf("precedence reason = %q, want version_specificity", payload.Precedence)
+	}
+	if len(payload.Candidates) != 3 || !payload.Candidates[0].Selected || !payload.Candidates[0].Matched {
+		t.Fatalf("candidates = %+v, want winner-first selected list", payload.Candidates)
+	}
+	if payload.Candidates[0].Rule.ID != seed[2].ID || payload.Candidates[0].MatchLevels.Package != "exact" || payload.Candidates[0].MatchLevels.Version != "exact" {
+		t.Fatalf("winner candidate = %+v, want exact package/version", payload.Candidates[0])
+	}
+	for index := 1; index < len(payload.Candidates); index++ {
+		if payload.Candidates[index].Selected {
+			t.Fatalf("candidate %d is unexpectedly selected", index)
+		}
+		if payload.Candidates[index-1].Specificity.Compare(payload.Candidates[index].Specificity) < 0 {
+			t.Fatalf("candidate order is not descending at %d", index)
+		}
+	}
+}
+
+func TestRulesTestReturnsEmptyCandidateArrayOnNoMatch(t *testing.T) {
+	router, _ := newRulesAdminTestRouter(t)
+	response := rulesAdminRequest(router, http.MethodPost, "/rules/test", `{"ecosystem":"pypi","package":"unlisted","version":"1.0.0"}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("no-match status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Allowed    bool             `json:"allowed"`
+		Candidates []map[string]any `json:"candidates"`
+		Matched    *db.PackageRule  `json:"matched_rule"`
+		Precedence string           `json:"precedence_reason"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode no-match response: %v", err)
+	}
+	if !payload.Allowed || payload.Matched != nil || payload.Candidates == nil || len(payload.Candidates) != 0 || payload.Precedence != "default_allow" {
+		t.Fatalf("no-match payload = %+v, want allow/null/empty array", payload)
 	}
 }
 

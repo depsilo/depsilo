@@ -157,7 +157,7 @@ func TestEngineRejectsRequestSurfaceWithoutPackageRuleEnforcement(t *testing.T) 
 	}
 }
 
-func TestEngineUsesNewestRuleWhenSpecificityAndTimestampTie(t *testing.T) {
+func TestEngineUsesHigherIDWhenSpecificityTies(t *testing.T) {
 	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "rules.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -189,6 +189,6 @@ func TestEngineUsesNewestRuleWhenSpecificityAndTimestampTie(t *testing.T) {
 		t.Fatal(err)
 	}
 	if allowed || matched == nil || matched.ID != newerDeny.ID {
-		t.Fatalf("tie decision = allowed %v matched %+v, want newest deny rule %d", allowed, matched, newerDeny.ID)
+		t.Fatalf("tie decision = allowed %v matched %+v, want higher-ID deny rule %d", allowed, matched, newerDeny.ID)
 	}
 }
