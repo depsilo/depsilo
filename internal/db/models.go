@@ -70,18 +70,25 @@ type UpstreamUpdateEvent struct {
 }
 
 type AccessLog struct {
-	ID          uint      `gorm:"primarykey" json:"id"`
-	AdapterType string    `gorm:"size:16;index" json:"adapter_type"`
-	Method      string    `gorm:"size:8" json:"method"`
-	CacheKey    string    `gorm:"size:512" json:"cache_key"`
-	PackageName string    `gorm:"size:256;index" json:"package_name"`
-	Hit         bool      `gorm:"index" json:"hit"`
-	Upstream    string    `gorm:"size:128" json:"upstream"`
-	LatencyMs   int64     `json:"latency_ms"`
-	StatusCode  int       `json:"status_code"`
-	ClientIP    string    `gorm:"size:64" json:"client_ip"`
-	BytesSent   int64     `json:"bytes_sent"`
-	CreatedAt   time.Time `gorm:"index" json:"created_at"`
+	ID             uint      `gorm:"primarykey" json:"id"`
+	AdapterType    string    `gorm:"size:16;index" json:"adapter_type"`
+	Method         string    `gorm:"size:8" json:"method"`
+	CacheKey       string    `gorm:"size:512" json:"cache_key"`
+	PackageName    string    `gorm:"size:256;index" json:"package_name"`
+	Hit            bool      `gorm:"index" json:"hit"`
+	Upstream       string    `gorm:"size:128" json:"upstream"`
+	LatencyMs      int64     `json:"latency_ms"`
+	StatusCode     int       `json:"status_code"`
+	ClientIP       string    `gorm:"size:64" json:"client_ip"`
+	BytesSent      int64     `json:"bytes_sent"`
+	CreatedAt      time.Time `gorm:"index" json:"created_at"`
+	RequestID      string    `gorm:"size:128;index" json:"request_id"`
+	CacheResult    string    `gorm:"size:16" json:"cache_result"`
+	CacheReason    string    `gorm:"size:256" json:"cache_reason"`
+	PolicyDecision string    `gorm:"size:16" json:"policy_decision"`
+	PolicyReason   string    `gorm:"size:512" json:"policy_reason"`
+	DeliveryResult string    `gorm:"size:16" json:"delivery_result"`
+	DeliveryReason string    `gorm:"size:256" json:"delivery_reason"`
 }
 
 type AccessLogFiveMinutely struct {
@@ -231,6 +238,7 @@ type AuditLog struct {
 	BytesSent   int64     `json:"bytes_sent"`
 	StatusCode  int       `json:"status_code"`
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
+	RequestID   string    `gorm:"size:128;index" json:"request_id"`
 }
 
 type Vulnerability struct {

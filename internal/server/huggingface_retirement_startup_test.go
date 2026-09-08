@@ -69,7 +69,7 @@ token_ttl = "1h"
 	if err := db.AutoMigrate(seedDatabase); err != nil {
 		t.Fatal(err)
 	}
-	if err := seedDatabase.Exec("DELETE FROM schema_migrations WHERE version = ?", 3).Error; err != nil {
+	if err := seedDatabase.Exec("DELETE FROM schema_migrations WHERE version >= ?", 3).Error; err != nil {
 		t.Fatalf("rewind migration ledger to schema v2: %v", err)
 	}
 	storage, err := cache.NewLocalStorage(storagePath)

@@ -3,6 +3,7 @@ package admin
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -52,6 +53,29 @@ type accessLogListResponse struct {
 	Total    int64               `json:"total"`
 	Page     int                 `json:"page"`
 	PageSize int                 `json:"page_size"`
+}
+
+type accessLogAuditEvent struct {
+	ID          uint      `json:"id"`
+	Ecosystem   string    `json:"ecosystem"`
+	PackageName string    `json:"package_name"`
+	Version     string    `json:"version"`
+	Action      string    `json:"action"`
+	CacheResult string    `json:"cache_result"`
+	StatusCode  int       `json:"status_code"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type accessLogDetailResponse struct {
+	accessLogResponse
+	RequestID      string                `json:"request_id"`
+	CacheResult    string                `json:"cache_result"`
+	CacheReason    string                `json:"cache_reason"`
+	PolicyDecision string                `json:"policy_decision"`
+	PolicyReason   string                `json:"policy_reason"`
+	DeliveryResult string                `json:"delivery_result"`
+	DeliveryReason string                `json:"delivery_reason"`
+	AuditEvents    []accessLogAuditEvent `json:"audit_events"`
 }
 
 func parseAccessLogFilter(c *gin.Context) (accessLogFilter, error) {
@@ -200,4 +224,44 @@ func (h *AccessLogHandler) Export(c *gin.Context) {
 	filename := fmt.Sprintf("depsilo-access-logs-%s.csv", time.Now().UTC().Format("2006-01-02"))
 	c.Header("Content-Disposition", "attachment; filename=\""+filename+"\"")
 	c.Data(http.StatusOK, "text/csv; charset=utf-8", data)
+}
+
+func (h *AccessLogHandler) Detail(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"code": "ACCESS_LOG_NOT_FOUND", "message": "access log not found"})
+		return
+	}
+	var item db.AccessLog
+	if err := h.db.WithContext(c.Request.Context()).First(&item, uint(id)).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"code": "ACCESS_LOG_NOT_FOUND", "message": "access log not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "could not read access log"})
+		return
+	}
+	detail := accessLogDetailResponse{
+		accessLogResponse: toAccessLogResponses([]db.AccessLog{item})[0],
+		RequestID:         item.RequestID, CacheResult: item.CacheResult, CacheReason: item.CacheReason,
+		PolicyDecision: item.PolicyDecision, PolicyReason: item.PolicyReason,
+		DeliveryResult: item.DeliveryResult, DeliveryReason: item.DeliveryReason,
+		AuditEvents: make([]accessLogAuditEvent, 0),
+	}
+	if item.RequestID != "" {
+		var events []db.AuditLog
+		if err := h.db.WithContext(c.Request.Context()).Where("request_id = ?", item.RequestID).
+			Order("datetime(created_at) ASC").Limit(20).Find(&events).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": "could not read related audit events"})
+			return
+		}
+		for _, event := range events {
+			detail.AuditEvents = append(detail.AuditEvents, accessLogAuditEvent{
+				ID: event.ID, Ecosystem: event.Ecosystem, PackageName: event.PackageName,
+				Version: event.Version, Action: event.Action, CacheResult: event.CacheResult,
+				StatusCode: event.StatusCode, CreatedAt: event.CreatedAt,
+			})
+		}
+	}
+	c.JSON(http.StatusOK, detail)
 }

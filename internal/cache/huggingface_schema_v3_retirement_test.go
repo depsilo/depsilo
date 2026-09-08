@@ -33,7 +33,7 @@ func TestSchemaV3RetiresLegacyHuggingFaceObjectUntilStartupRetentionOwnsCleanup(
 	if err := db.AutoMigrate(database); err != nil {
 		t.Fatalf("initialize current schema: %v", err)
 	}
-	if err := database.Exec("DELETE FROM schema_migrations WHERE version = ?", 3).Error; err != nil {
+	if err := database.Exec("DELETE FROM schema_migrations WHERE version >= ?", 3).Error; err != nil {
 		t.Fatalf("rewind migration ledger to schema v2: %v", err)
 	}
 

@@ -163,6 +163,28 @@ export interface AccessLog {
   created_at: string
 }
 
+export interface AccessLogAuditEvent {
+  id: number
+  ecosystem: string
+  package_name: string
+  version: string
+  action: string
+  cache_result: string
+  status_code: number
+  created_at: string
+}
+
+export interface AccessLogDetail extends AccessLog {
+  request_id: string
+  cache_result: string
+  cache_reason: string
+  policy_decision: string
+  policy_reason: string
+  delivery_result: string
+  delivery_reason: string
+  audit_events: AccessLogAuditEvent[]
+}
+
 export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean }
 export interface AccessLogListResponse { items: AccessLog[]; total: number; page: number; page_size: number }
 

@@ -545,6 +545,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		extraPackageRuleRoutes = append(extraPackageRuleRoutes, descriptor)
 	}
 	r.Use(middleware.Recovery())
+	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(rules.Middleware(rulesEngine, extraPackageRuleRoutes...))
 	r.Use(middleware.ProjectTokenMiddleware(database))

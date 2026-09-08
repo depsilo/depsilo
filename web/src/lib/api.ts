@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { readLocalStorage, removeLocalStorage } from './storage'
 import type {
+  AccessLogDetail,
   AccessLogListResponse,
   AccessLogQuery,
   AdminSettingsResponse,
@@ -193,6 +194,7 @@ export const adminApi = {
 
   // Logs
   listLogs: (params: AccessLogQuery, options: ApiGetOptions = {}) => api.get<AccessLogListResponse>('/admin/logs', { ...options, params }),
+  getLogDetail: (id: number, options: ApiGetOptions = {}) => api.get<AccessLogDetail>(`/admin/logs/${id}`, options),
   exportLogs: (params: AccessLogQuery, options: ApiGetOptions = {}) => api.get<Blob>('/admin/logs/export', { ...options, params, responseType: 'blob' }),
 
   // Users

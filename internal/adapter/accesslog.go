@@ -12,6 +12,7 @@ import (
 	"depsilo/internal/accesslog"
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
+	"depsilo/internal/requestid"
 )
 
 // AuditLogger is the audit half of the access hook snapshot.
@@ -99,6 +100,9 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 		version = authenticated.Version
 	}
 	now := time.Now().UTC()
+	requestID := requestid.FromContext(ctx)
+	cacheResult, cacheReason := accessCacheOutcome(hit, statusCode)
+	deliveryResult, deliveryReason := deliveryOutcome(statusCode)
 	hooks := accessHooks.Load()
 	var observer RequestObserver
 	if scope, ok := requestScopeFromContext(ctx); ok {
@@ -120,34 +124,48 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 
 	if hooks != nil && hooks.recorder != nil {
 		hooks.recorder.Record(accesslog.Event{
-			AdapterType: adapterType,
-			Method:      method,
-			CacheKey:    cacheKey,
-			PackageName: pkgName,
-			Upstream:    upstreamName,
-			ClientIP:    clientIP,
-			Hit:         hit,
-			LatencyMs:   latency.Milliseconds(),
-			StatusCode:  statusCode,
-			BytesSent:   bytesSent,
-			At:          now,
+			RequestID:      requestID,
+			AdapterType:    adapterType,
+			Method:         method,
+			CacheKey:       cacheKey,
+			PackageName:    pkgName,
+			Upstream:       upstreamName,
+			ClientIP:       clientIP,
+			Hit:            hit,
+			LatencyMs:      latency.Milliseconds(),
+			StatusCode:     statusCode,
+			BytesSent:      bytesSent,
+			CacheResult:    cacheResult,
+			CacheReason:    cacheReason,
+			PolicyDecision: "unknown",
+			PolicyReason:   "not_recorded",
+			DeliveryResult: deliveryResult,
+			DeliveryReason: deliveryReason,
+			At:             now,
 		})
 	} else {
 		// Fallback: recorder not initialized yet (e.g. isolated adapter tests).
 		// Keep this synchronous: spawning an unowned database goroutine here can
 		// outlive the test/server resource that supplied database.
 		entry := db.AccessLog{
-			AdapterType: adapterType,
-			Method:      method,
-			CacheKey:    cacheKey,
-			PackageName: pkgName,
-			Hit:         hit,
-			Upstream:    upstreamName,
-			LatencyMs:   latency.Milliseconds(),
-			StatusCode:  statusCode,
-			ClientIP:    clientIP,
-			BytesSent:   bytesSent,
-			CreatedAt:   now,
+			RequestID:      requestID,
+			AdapterType:    adapterType,
+			Method:         method,
+			CacheKey:       cacheKey,
+			PackageName:    pkgName,
+			Hit:            hit,
+			Upstream:       upstreamName,
+			LatencyMs:      latency.Milliseconds(),
+			StatusCode:     statusCode,
+			ClientIP:       clientIP,
+			BytesSent:      bytesSent,
+			CacheResult:    cacheResult,
+			CacheReason:    cacheReason,
+			PolicyDecision: "unknown",
+			PolicyReason:   "not_recorded",
+			DeliveryResult: deliveryResult,
+			DeliveryReason: deliveryReason,
+			CreatedAt:      now,
 		}
 		if err := database.Create(&entry).Error; err != nil {
 			zap.L().Warn("failed to write access log", zap.Error(err))
@@ -158,14 +176,8 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	if db.ClassifyCacheKind(adapterType, cacheKey) == db.CacheKindMetadata {
 		action = "metadata"
 	}
-	cacheResult := "miss"
-	if hit {
-		cacheResult = "hit"
-	}
-	if statusCode >= 500 {
-		cacheResult = "error"
-	}
 	logAuditOutcome(hooks, db.AuditLog{
+		RequestID:   requestID,
 		Ecosystem:   adapterType,
 		PackageName: pkgName,
 		Version:     version,
@@ -202,6 +214,7 @@ func LogPolicyBlock(ctx context.Context, ecosystem, packageName, version string,
 		action = "download"
 	}
 	logAuditOutcome(hooks, db.AuditLog{
+		RequestID:   requestid.FromContext(ctx),
 		Ecosystem:   ecosystem,
 		PackageName: packageName,
 		Version:     version,
@@ -217,4 +230,21 @@ func logAuditOutcome(hooks *accessHookSnapshot, entry db.AuditLog) {
 	if hooks != nil && hooks.audit != nil {
 		hooks.audit.Log(entry)
 	}
+}
+
+func accessCacheOutcome(hit bool, statusCode int) (string, string) {
+	if statusCode >= 500 {
+		return "error", "cache_or_upstream_error"
+	}
+	if hit {
+		return "hit", "cache_lookup_hit"
+	}
+	return "miss", "cache_lookup_miss"
+}
+
+func deliveryOutcome(statusCode int) (string, string) {
+	if statusCode >= 400 {
+		return "error", "http_response_error"
+	}
+	return "unknown", "response_completion_not_recorded"
 }

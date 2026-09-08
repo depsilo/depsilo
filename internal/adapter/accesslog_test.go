@@ -14,6 +14,7 @@ import (
 
 	"depsilo/internal/accesslog"
 	"depsilo/internal/db"
+	"depsilo/internal/requestid"
 )
 
 type capturedHookCalls struct {
@@ -163,6 +164,24 @@ func TestLogAccessUsesCanonicalCacheKindForAuditAction(t *testing.T) {
 		if audit.entries[index].CreatedAt.IsZero() {
 			t.Errorf("%s %q has zero event timestamp", test.ecosystem, test.cacheKey)
 		}
+	}
+}
+
+func TestLogAccessRecordsCorrelatedDiagnosticFacts(t *testing.T) {
+	accessHooks.Store(nil)
+	t.Cleanup(func() { accessHooks.Store(nil) })
+	recorder := &timestampAccessRecorder{}
+	audit := &captureAuditEntries{}
+	InstallAccessHooks(recorder, audit)
+	ctx := requestid.With(context.Background(), "req-facts-1")
+	LogAccess(ctx, nil, "npm", "GET", "npm/react", false, "npmjs", time.Millisecond, http.StatusBadGateway, "127.0.0.1", 0)
+	if recorder.event.RequestID != "req-facts-1" || recorder.event.CacheResult != "error" ||
+		recorder.event.CacheReason != "cache_or_upstream_error" || recorder.event.PolicyDecision != "unknown" ||
+		recorder.event.DeliveryResult != "error" {
+		t.Fatalf("diagnostic event = %+v", recorder.event)
+	}
+	if len(audit.entries) != 1 || audit.entries[0].RequestID != "req-facts-1" {
+		t.Fatalf("audit entries = %+v", audit.entries)
 	}
 }
 

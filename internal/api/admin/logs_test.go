@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +138,62 @@ func TestAccessLogFilterHandlesMalformedValues(t *testing.T) {
 	}
 }
 
+func TestAccessLogDetailReturnsRecordedFactsAndRelatedAudit(t *testing.T) {
+	database := newAccessLogTestDB(t)
+	if err := database.AutoMigrate(&db.AuditLog{}); err != nil {
+		t.Fatalf("migrate audit: %v", err)
+	}
+	created := time.Date(2026, 7, 10, 8, 30, 0, 0, time.UTC)
+	item := db.AccessLog{
+		RequestID: "req-detail-1", AdapterType: "pypi", Method: "GET",
+		CacheKey: "pypi/requests.whl", PackageName: "requests", Hit: false,
+		Upstream: "primary", StatusCode: 200, CacheResult: "miss",
+		CacheReason: "cache_lookup_miss", PolicyDecision: "unknown",
+		PolicyReason: "not_recorded", DeliveryResult: "unknown",
+		DeliveryReason: "response_completion_not_recorded", CreatedAt: created,
+	}
+	if err := database.Create(&item).Error; err != nil {
+		t.Fatalf("seed access log: %v", err)
+	}
+	if err := database.Create(&db.AuditLog{
+		RequestID: "req-detail-1", Ecosystem: "pypi", PackageName: "requests",
+		Version: "2.32.3", Action: "download", CacheResult: "miss", StatusCode: 200,
+		CreatedAt: created,
+	}).Error; err != nil {
+		t.Fatalf("seed audit log: %v", err)
+	}
+	rec := performAccessLogRequest(newAccessLogTestRouter(database), "/logs/"+strconv.Itoa(int(item.ID)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("detail status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		RequestID      string `json:"request_id"`
+		CacheResult    string `json:"cache_result"`
+		PolicyDecision string `json:"policy_decision"`
+		DeliveryResult string `json:"delivery_result"`
+		AuditEvents    []struct {
+			RequestID string `json:"request_id"`
+		} `json:"audit_events"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if body.RequestID != "req-detail-1" || body.CacheResult != "miss" ||
+		body.PolicyDecision != "unknown" || body.DeliveryResult != "unknown" || len(body.AuditEvents) != 1 {
+		t.Fatalf("detail facts = %#v", body)
+	}
+}
+
+func TestAccessLogDetailHidesDatabaseErrorsAndMissingRows(t *testing.T) {
+	r := newAccessLogTestRouter(newAccessLogTestDB(t))
+	for _, path := range []string{"/logs/0", "/logs/not-a-number", "/logs/999"} {
+		rec := performAccessLogRequest(r, path)
+		if rec.Code != http.StatusNotFound || strings.Contains(strings.ToLower(rec.Body.String()), "database") {
+			t.Fatalf("GET %s status = %d, body = %s", path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestEncodeAccessLogsCSVNeutralizesAllTextCells(t *testing.T) {
 	item := accessLogResponse{
 		Method: "=method", AdapterType: "+ecosystem", PackageName: "-package",
@@ -249,6 +306,7 @@ func newAccessLogTestRouter(database *gorm.DB) *gin.Engine {
 	r := gin.New()
 	r.GET("/logs", h.List)
 	r.GET("/logs/export", h.Export)
+	r.GET("/logs/:id", h.Detail)
 	return r
 }
 

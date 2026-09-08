@@ -15,17 +15,24 @@ import "time"
 // observed; all rollup key derivation goes through e.At.UTC() so callers
 // don't have to remember to normalize.
 type Event struct {
-	AdapterType string
-	Method      string
-	CacheKey    string
-	PackageName string
-	Upstream    string
-	ClientIP    string
-	Hit         bool
-	LatencyMs   int64
-	StatusCode  int
-	BytesSent   int64
-	At          time.Time
+	RequestID      string
+	AdapterType    string
+	Method         string
+	CacheKey       string
+	PackageName    string
+	Upstream       string
+	ClientIP       string
+	Hit            bool
+	LatencyMs      int64
+	StatusCode     int
+	BytesSent      int64
+	CacheResult    string
+	CacheReason    string
+	PolicyDecision string
+	PolicyReason   string
+	DeliveryResult string
+	DeliveryReason string
+	At             time.Time
 }
 
 type fiveMinuteKey struct {

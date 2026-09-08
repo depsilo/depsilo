@@ -251,6 +251,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	logHandler := admin.NewAccessLogHandler(deps.DB)
 	adminRead.GET("/logs", logHandler.List)
 	adminRead.GET("/logs/export", logHandler.Export)
+	adminRead.GET("/logs/:id", logHandler.Detail)
 
 	// User management
 	userHandler := admin.NewUserHandler(deps.DB)
