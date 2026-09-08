@@ -12,15 +12,19 @@ import EmptyState from '@/components/EmptyState'
 import QueryErrorState from '@/components/QueryErrorState'
 import SelectV2 from '@/components/Select'
 import TableViewport from '@/components/TableViewport'
+import DrawerV2 from '@/components/Drawer'
+import InlineNotice from '@/components/InlineNotice'
+import IconButton from '@/components/IconButton'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getApiError } from '@/lib/apiError'
 import { downloadBlob } from '@/lib/download'
+import { copyText } from '@/lib/clipboard'
 import { useAppToast } from '@/components/Toast'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
-import type { AccessLog, AccessLogQuery } from '@/lib/adminApi.types'
+import type { AccessLog, AccessLogDetail, AccessLogQuery } from '@/lib/adminApi.types'
 
 function latencyColor(ms: number): string {
   if (ms < 100) return 'var(--ok)'
@@ -32,6 +36,12 @@ function parsePage(value: string | null): number {
   if (value === null || !/^[1-9]\d*$/.test(value)) return 1
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) ? parsed : 1
+}
+
+function parseDetailId(value: string | null): number | null {
+  if (value === null || !/^[1-9]\d*$/.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) ? parsed : null
 }
 
 function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
@@ -51,6 +61,9 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   const page = parsePage(current.get('page'))
   if (page > 1) next.set('page', String(page))
   else next.delete('page')
+  const detail = parseDetailId(current.get('detail'))
+  if (detail !== null) next.set('detail', String(detail))
+  else next.delete('detail')
   return next
 }
 
@@ -67,6 +80,7 @@ export default function AccessLogsV2() {
   const hitFilter = canonicalSearchParams.get('result') ?? 'all'
   const page = parsePage(canonicalSearchParams.get('page'))
   const [search, setSearch] = useState(appliedSearch)
+  const detailId = parseDetailId(canonicalSearchParams.get('detail'))
 
   useEffect(() => {
     const next = new URLSearchParams(serializedCanonicalSearchParams)
@@ -96,6 +110,13 @@ export default function AccessLogsV2() {
   const total = data?.data.total ?? 0
   const apiError = getApiError(error)
   const errorMessage = apiError.status === 403 ? t('common.permissionDenied') : apiError.message
+
+  const detailQuery = useQuery({
+    queryKey: ['admin', 'logs', 'detail', detailId],
+    queryFn: ({ signal }) => adminApi.getLogDetail(detailId as number, { signal }),
+    enabled: detailId !== null,
+    retry: false,
+  })
 
   const exportMutation = useMutation({
     mutationFn: () => adminApi.exportLogs(params),
@@ -140,6 +161,27 @@ export default function AccessLogsV2() {
     else next.set('page', String(nextPage))
     searchParamsRef.current = next
     setSearchParams(next)
+  }
+
+  function setDetailId(nextId: number | null) {
+    const next = new URLSearchParams(searchParamsRef.current)
+    if (nextId === null) next.delete('detail')
+    else next.set('detail', String(nextId))
+    searchParamsRef.current = next
+    setSearchParams(next)
+  }
+
+  async function copyDiagnosticSummary(detail: AccessLogDetail) {
+    const summary = [
+      `request_id: ${detail.request_id || t('logs.notRecorded')}`,
+      `time: ${detail.created_at}`,
+      `package: ${detail.package_name || '-'}`,
+      `cache: ${detail.cache_result || t('logs.notRecorded')} (${detail.cache_reason || t('logs.notRecorded')})`,
+      `policy: ${detail.policy_decision || t('logs.notRecorded')} (${detail.policy_reason || t('logs.notRecorded')})`,
+      `delivery: ${detail.delivery_result || t('logs.notRecorded')} (${detail.delivery_reason || t('logs.notRecorded')})`,
+      `upstream: ${detail.upstream || '-'}`,
+    ].join('\n')
+    if (await copyText(summary)) toast.show({ tone: 'success', message: t('logs.summaryCopied') })
   }
 
   const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || hitFilter !== 'all')
@@ -234,7 +276,7 @@ export default function AccessLogsV2() {
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp')].map(h => (
+                {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp'), t('actions')].map(h => (
                   <th key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
                     {h}
                   </th>
@@ -293,6 +335,10 @@ export default function AccessLogsV2() {
                   <td className="py-2 px-3">
                     <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip}</span>
                   </td>
+
+                  <td className="py-2 px-3 text-right">
+                    <IconButton icon="chevron_right" label={t('logs.viewDetails')} onClick={() => setDetailId(row.id)} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -304,6 +350,45 @@ export default function AccessLogsV2() {
 
       <AdminPagination page={page} pageSize={50} total={total} onPageChange={setPage} />
       </div>
+
+      <DrawerV2
+        open={detailId !== null}
+        onOpenChange={(open) => { if (!open) setDetailId(null) }}
+        title={t('logs.detailTitle')}
+      >
+        <div className="flex h-full flex-col gap-5 overflow-y-auto p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-4 pr-10">
+            <div>
+              <p className="font-mono text-[11px] uppercase" style={{ color: 'var(--text-subtle)' }}>{t('logs.detailTitle')}</p>
+              <h2 className="mt-1 break-words font-mono text-[16px]" style={{ color: 'var(--text)' }}>{detailQuery.data?.data.package_name || t('logs.loadingDetail')}</h2>
+            </div>
+            {detailQuery.data?.data && <IconButton icon="content_copy" label={t('logs.copySummary')} onClick={() => { void copyDiagnosticSummary(detailQuery.data!.data) }} />}
+          </div>
+          {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div> : detailQuery.isError ? <InlineNotice tone="danger">{getApiError(detailQuery.error).message}</InlineNotice> : detailQuery.data?.data && <DiagnosticDetail detail={detailQuery.data.data} t={t} />}
+        </div>
+      </DrawerV2>
     </AdminPage>
   )
+}
+
+function DiagnosticDetail({ detail, t }: { detail: AccessLogDetail; t: (key: string) => string }) {
+  const value = (input: string) => input === '' || input === 'unknown' || input === 'not_recorded' || input === 'response_completion_not_recorded' ? t('logs.notRecorded') : input
+  const facts = [
+    [t('logs.requestId'), value(detail.request_id)],
+    [t('logs.time'), formatTime(detail.created_at)],
+    [t('logs.cacheFact'), `${value(detail.cache_result)} · ${value(detail.cache_reason)}`],
+    [t('logs.policyFact'), `${value(detail.policy_decision)} · ${value(detail.policy_reason)}`],
+    [t('logs.deliveryFact'), `${value(detail.delivery_result)} · ${value(detail.delivery_reason)}`],
+    [t('logs.upstream'), value(detail.upstream)],
+    [t('logs.status'), String(detail.status_code || '-')],
+  ]
+  return <div className="space-y-5">
+    <dl className="grid gap-3 text-[12px]">
+      {facts.map(([label, content]) => <div key={label} className="grid grid-cols-[minmax(0,8rem)_1fr] gap-3 border-b pb-2" style={{ borderColor: 'var(--border-soft, var(--border))' }}><dt style={{ color: 'var(--text-soft)' }}>{label}</dt><dd className="min-w-0 break-words font-mono" style={{ color: 'var(--text)' }}>{content}</dd></div>)}
+    </dl>
+    <div>
+      <h3 className="mb-2 text-[12px] font-semibold" style={{ color: 'var(--text)' }}>{t('logs.auditEvents')}</h3>
+      {detail.audit_events.length === 0 ? <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>{t('logs.noAuditEvents')}</p> : <ul className="space-y-2">{detail.audit_events.map(event => <li key={event.id} className="rounded border p-2 text-[11px]" style={{ borderColor: 'var(--border-soft, var(--border))' }}><span className="font-mono">{event.action}</span> · {value(event.cache_result)} · {event.status_code || '-'} · {formatTime(event.created_at)}</li>)}</ul>}
+    </div>
+  </div>
 }

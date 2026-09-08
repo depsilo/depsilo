@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import type {
   AccessLogListResponse,
+  AccessLogDetail,
   AdminUpstreamListResponse,
   AuditLogListResponse,
 } from '../src/lib/adminApi.types'
@@ -24,7 +25,7 @@ const populated = {
 }
 
 const cases = [
-  { path: '/admin/logs', endpoint: 'GET /api/v1/admin/logs', table: true, actionCount: 0 },
+  { path: '/admin/logs', endpoint: 'GET /api/v1/admin/logs', table: true, actionCount: 1 },
   { path: '/admin/audit', endpoint: 'GET /api/v1/admin/audit-logs', table: true, actionCount: 0 },
   { path: '/admin/cache', endpoint: 'GET /api/v1/admin/cache', table: true, actionCount: 1 },
   { path: '/admin/quarantine', endpoint: 'GET /api/v1/admin/quarantine/events', table: true, actionCount: 0 },
@@ -149,6 +150,42 @@ test('wide-table query states stay in the mobile canvas and only data mounts a s
   await expect(table.getByText(/数据已过期|Stale data/, { exact: true })).toHaveCount(0)
   await expectWithinViewport(page, 'main [class*="rounded-"][class*="border"]:has-text("数据已过期")', width)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+})
+
+test('access log details keep the selected request explainable', async ({ page }) => {
+  const detail = {
+    id: 1,
+    adapter_type: 'pypi',
+    method: 'GET',
+    cache_key: 'pypi/requests.whl',
+    package_name: 'requests',
+    hit: true,
+    upstream: 'tuna',
+    latency_ms: 12,
+    status_code: 200,
+    client_ip: '127.0.0.1',
+    bytes_sent: 1024,
+    created_at: '2026-07-10T00:00:00Z',
+    request_id: 'req-detail-1',
+    cache_result: 'hit',
+    cache_reason: 'cached_response_used',
+    policy_decision: 'unknown',
+    policy_reason: 'not_recorded',
+    delivery_result: 'unknown',
+    delivery_reason: 'response_completion_not_recorded',
+    audit_events: [],
+  } satisfies AccessLogDetail
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/logs': populated['GET /api/v1/admin/logs'],
+    'GET /api/v1/admin/logs/1': detail,
+  })
+  await page.goto('/admin/logs')
+  await page.getByRole('button', { name: /查看请求详情|View request details/ }).click()
+  await expect(page.getByRole('heading', { name: /requests|请求详情/ })).toBeVisible()
+  await expect(page.getByText('req-detail-1', { exact: true })).toBeVisible()
+  await expect(page.getByText(/未记录|Not recorded/, { exact: true }).first()).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL(/\/admin\/logs$/)
 })
 
 test('empty states for wide Admin tables do not create local scroll regions at 320px', async ({ page }) => {
