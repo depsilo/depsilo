@@ -393,7 +393,9 @@ const en = {
       warmupPlaceholderNpm: 'react\n@scope/widget@1.2.3\nvite',
       warmupStart: 'Start Warmup',
       warmupLoading: 'Warming up...',
-      warmupStarted: 'Started warming up {{count}} packages',
+      warmupSubmitting: 'Warmup request is being submitted. Completion will be reported separately.',
+      warmupAccepted: 'Warmup accepted for {{count}} packages. Processing continues in the background.',
+      warmupFailed: 'Warmup could not be started: {{reason}}',
     },
 
     // Cached package indexes
@@ -642,6 +644,8 @@ const en = {
       searchPlaceholder: 'Search package...',
       hit: 'Hit',
       miss: 'Miss',
+      hitHint: 'Cache HIT: this request used a cached response.',
+      missHint: 'Cache MISS: this request did not use a cached response.',
       time: 'Time',
       method: 'Method',
       packageName: 'Package',

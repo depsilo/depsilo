@@ -269,9 +269,12 @@ export default function AccessLogsV2() {
 
                   {/* Result */}
                   <td className="py-2 px-3">
-                    <BadgeV2 variant={row.hit ? 'success' : 'error'}>
-                      {row.hit ? 'HIT' : 'MISS'}
-                    </BadgeV2>
+                    <span title={t(row.hit ? 'logs.hitHint' : 'logs.missHint')}>
+                      <BadgeV2 variant={row.hit ? 'success' : 'neutral'}>
+                        {row.hit ? 'HIT' : 'MISS'}
+                      </BadgeV2>
+                      <span className="sr-only">{t(row.hit ? 'logs.hitHint' : 'logs.missHint')}</span>
+                    </span>
                   </td>
 
                   {/* Latency */}

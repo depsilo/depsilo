@@ -393,7 +393,9 @@ const zh = {
       warmupPlaceholderNpm: 'react\n@scope/widget@1.2.3\nvite',
       warmupStart: '开始预热',
       warmupLoading: '预热中...',
-      warmupStarted: '已启动预热 {{count}} 个包',
+      warmupSubmitting: '正在提交预热请求。完成情况会单独报告。',
+      warmupAccepted: '已接受 {{count}} 个包的预热请求，后台仍在处理中。',
+      warmupFailed: '无法启动预热：{{reason}}',
     },
 
     // 软件包索引缓存
@@ -642,6 +644,8 @@ const zh = {
       searchPlaceholder: '搜索包名...',
       hit: '命中',
       miss: '未命中',
+      hitHint: '缓存命中：本次请求使用了缓存响应。',
+      missHint: '缓存未命中：本次请求没有使用缓存响应。',
       time: '时间',
       method: '方法',
       packageName: '包名',

@@ -58,6 +58,10 @@ Depsilo is MIT-licensed, has no telemetry, and is designed as a lightweight
 single-instance service backed by SQLite. It is not a multi-node artifact
 repository or an HA control plane.
 
+General-purpose artifact repository support is a future direction, not a
+shipped capability. Hosted publishing, repository management, retention, and
+their compatibility and migration rules remain to be defined separately.
+
 > This README documents the current `master` branch. For a tagged release, use
 > the README and configuration reference bundled with that release.
 

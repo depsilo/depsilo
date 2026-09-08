@@ -33,6 +33,12 @@ const WARMUP_ECOSYSTEMS = ['pypi', 'npm']
 
 interface CacheTreemapItem { name: string; size: number; type: string; hits: number }
 
+type WarmupState =
+  | { status: 'idle' }
+  | { status: 'submitting' }
+  | { status: 'accepted'; count: number }
+  | { status: 'failed'; message: string }
+
 function isCacheTreemapItem(value: unknown): value is CacheTreemapItem {
   if (!value || typeof value !== 'object') return false
   const item = value as Record<string, unknown>
@@ -55,8 +61,7 @@ export default function CacheManageV2() {
   const [warmupOpen, setWarmupOpen] = useState(false)
   const [warmupEco, setWarmupEco] = useState('pypi')
   const [warmupText, setWarmupText] = useState('')
-  const [warmupLoading, setWarmupLoading] = useState(false)
-  const [warmupResult, setWarmupResult] = useState<string | null>(null)
+  const [warmupState, setWarmupState] = useState<WarmupState>({ status: 'idle' })
 
   const params: CacheQuery = { page, page_size: 20 }
   if (search) params.search = search
@@ -104,7 +109,7 @@ export default function CacheManageV2() {
       description={t('cache.subtitle')}
       actions={canWrite ? (
         <>
-          <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupResult(null) }}>
+          <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupState({ status: 'idle' }) }}>
             <Icon name="download" size="sm" />
             {t('cache.warmup')}
           </ButtonV2>
@@ -350,7 +355,7 @@ export default function CacheManageV2() {
       </ModalV2>
 
       {/* Warmup Modal */}
-      <ModalV2 open={warmupOpen} onClose={() => setWarmupOpen(false)} title={t('cache.warmupTitle')} closeDisabled={warmupLoading}>
+      <ModalV2 open={warmupOpen} onClose={() => setWarmupOpen(false)} title={t('cache.warmupTitle')} closeDisabled={warmupState.status === 'submitting'}>
         <div className="space-y-4">
           <SelectV2 label={t('cache.warmupEcosystem')} value={warmupEco} onChange={(e) => setWarmupEco(e.target.value)}>
             {WARMUP_ECOSYSTEMS.map(eco => <option key={eco} value={eco}>{eco.toUpperCase()}</option>)}
@@ -363,28 +368,26 @@ export default function CacheManageV2() {
             value={warmupText}
             onChange={(e) => setWarmupText(e.target.value)}
           />
-          {warmupResult && (
-            <div className="rounded-[4px] px-3 py-2 text-[13px]" style={{ background: 'var(--ok-fill)', color: 'var(--ok-text)', border: '1px solid var(--ok-border)' }}>
-              {warmupResult}
-            </div>
-          )}
+          {warmupState.status === 'submitting' && <InlineNotice tone="warning">{t('cache.warmupSubmitting')}</InlineNotice>}
+          {warmupState.status === 'accepted' && <InlineNotice tone="info">{t('cache.warmupAccepted', { count: warmupState.count })}</InlineNotice>}
+          {warmupState.status === 'failed' && <InlineNotice tone="danger">{t('cache.warmupFailed', { reason: warmupState.message })}</InlineNotice>}
           <div className="flex justify-end gap-3">
-            <ButtonV2 variant="secondary" disabled={warmupLoading} onClick={() => setWarmupOpen(false)}>{t('cancel')}</ButtonV2>
+            <ButtonV2 variant="secondary" disabled={warmupState.status === 'submitting'} onClick={() => setWarmupOpen(false)}>{t('cancel')}</ButtonV2>
             <ButtonV2
-              disabled={warmupLoading || !warmupText.trim()}
+              disabled={warmupState.status === 'submitting' || warmupText.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).length === 0}
               onClick={async () => {
-                setWarmupLoading(true)
-                setWarmupResult(null)
+                setWarmupState({ status: 'submitting' })
                 try {
                   const packages = warmupText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
                   const res = await adminApi.warmupCache({ ecosystem: warmupEco, packages })
-                  setWarmupResult(t('cache.warmupStarted', { count: res.data?.packages || packages.length }))
-                } catch { setWarmupResult('Failed') }
-                finally { setWarmupLoading(false) }
+                  setWarmupState({ status: 'accepted', count: res.data?.packages || packages.length })
+                } catch (error) {
+                  setWarmupState({ status: 'failed', message: getApiError(error).message })
+                }
               }}
             >
               <Icon name="download" size="sm" />
-              {warmupLoading ? t('cache.warmupLoading') : t('cache.warmupStart')}
+              {warmupState.status === 'submitting' ? t('cache.warmupLoading') : t('cache.warmupStart')}
             </ButtonV2>
           </div>
         </div>

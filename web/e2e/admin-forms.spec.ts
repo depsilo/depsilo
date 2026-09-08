@@ -130,6 +130,9 @@ test('security policy controls have distinct ecosystem names and toggle with Spa
 
 test('dynamic rule and cache forms expose named controls and pass axe', async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
+  await mockAdminApi(page, {
+    'POST /api/v1/admin/cache/warmup': { packages: 1 },
+  })
   await page.goto('/admin/rules')
   await page.getByRole('button', { name: /添加规则|Add Rule/ }).click()
 
@@ -186,7 +189,14 @@ test('dynamic rule and cache forms expose named controls and pass axe', async ({
   await page.getByRole('button', { name: /预热|Warmup/ }).click()
 
   const warmupDialog = page.getByRole('dialog', { name: /缓存预热|Cache Warmup/ })
-  await expect(warmupDialog.getByRole('textbox', { name: /包名列表|Package list/ })).toBeVisible()
+  const warmupPackages = warmupDialog.getByRole('textbox', { name: /包名列表|Package list/ })
+  const warmupStart = warmupDialog.getByRole('button', { name: /开始预热|Start Warmup/ })
+  await expect(warmupPackages).toBeVisible()
+  await warmupPackages.fill('# only a comment')
+  await expect(warmupStart).toBeDisabled()
+  await warmupPackages.fill('requests')
+  await warmupStart.click()
+  await expect(warmupDialog).toContainText(/已接受 1 个包的预热请求|Warmup accepted for 1 packages/)
   await expectNoDialogAxeViolations(page)
 })
 
