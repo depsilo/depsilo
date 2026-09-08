@@ -102,7 +102,7 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	now := time.Now().UTC()
 	requestID := requestid.FromContext(ctx)
 	cacheResult, cacheReason := accessCacheOutcome(hit, statusCode)
-	deliveryResult, deliveryReason := deliveryOutcome(statusCode)
+	deliveryResult, deliveryReason := "unknown", "response_completion_not_recorded"
 	hooks := accessHooks.Load()
 	var observer RequestObserver
 	if scope, ok := requestScopeFromContext(ctx); ok {
@@ -176,13 +176,20 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	if db.ClassifyCacheKind(adapterType, cacheKey) == db.CacheKindMetadata {
 		action = "metadata"
 	}
+	auditCacheResult := "miss"
+	if hit {
+		auditCacheResult = "hit"
+	}
+	if statusCode >= 500 {
+		auditCacheResult = "error"
+	}
 	logAuditOutcome(hooks, db.AuditLog{
 		RequestID:   requestID,
 		Ecosystem:   adapterType,
 		PackageName: pkgName,
 		Version:     version,
 		Action:      action,
-		CacheResult: cacheResult,
+		CacheResult: auditCacheResult,
 		ClientIP:    clientIP,
 		LatencyMs:   latency.Milliseconds(),
 		BytesSent:   bytesSent,
@@ -233,18 +240,11 @@ func logAuditOutcome(hooks *accessHookSnapshot, entry db.AuditLog) {
 }
 
 func accessCacheOutcome(hit bool, statusCode int) (string, string) {
-	if statusCode >= 500 {
-		return "error", "cache_or_upstream_error"
-	}
 	if hit {
-		return "hit", "cache_lookup_hit"
+		return "hit", "cached_response_used"
 	}
-	return "miss", "cache_lookup_miss"
-}
-
-func deliveryOutcome(statusCode int) (string, string) {
 	if statusCode >= 400 {
-		return "error", "http_response_error"
+		return "unknown", "not_recorded"
 	}
-	return "unknown", "response_completion_not_recorded"
+	return "miss", "cached_response_not_used"
 }

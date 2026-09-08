@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestRequestIDPreservesSafeValueAndReplacesUnsafeValue(t *testing.T) {
+func TestRequestIDAlwaysUsesServerOwnedValue(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(RequestID())
@@ -25,7 +25,7 @@ func TestRequestIDPreservesSafeValueAndReplacesUnsafeValue(t *testing.T) {
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		got := rec.Header().Get(requestIDHeader)
-		if got == "" || (input == "safe-client-id" && got != input) || (input != "safe-client-id" && got == input) {
+		if got == "" || got == input {
 			t.Fatalf("input %q produced request id %q", input, got)
 		}
 	}

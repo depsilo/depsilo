@@ -175,9 +175,9 @@ func TestLogAccessRecordsCorrelatedDiagnosticFacts(t *testing.T) {
 	InstallAccessHooks(recorder, audit)
 	ctx := requestid.With(context.Background(), "req-facts-1")
 	LogAccess(ctx, nil, "npm", "GET", "npm/react", false, "npmjs", time.Millisecond, http.StatusBadGateway, "127.0.0.1", 0)
-	if recorder.event.RequestID != "req-facts-1" || recorder.event.CacheResult != "error" ||
-		recorder.event.CacheReason != "cache_or_upstream_error" || recorder.event.PolicyDecision != "unknown" ||
-		recorder.event.DeliveryResult != "error" {
+	if recorder.event.RequestID != "req-facts-1" || recorder.event.CacheResult != "unknown" ||
+		recorder.event.CacheReason != "not_recorded" || recorder.event.PolicyDecision != "unknown" ||
+		recorder.event.DeliveryResult != "unknown" {
 		t.Fatalf("diagnostic event = %+v", recorder.event)
 	}
 	if len(audit.entries) != 1 || audit.entries[0].RequestID != "req-facts-1" {
