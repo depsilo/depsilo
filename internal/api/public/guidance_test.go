@@ -1,6 +1,7 @@
 package public
 
 import (
+	"context"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -69,20 +70,39 @@ func TestMCPRequestFactsAreRecentAndCredentialRedacted(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := NewMCPHandler(database, []string{"pypi"}, false, nil)
-	result, err := handler.toolRequest("req-mcp-1")
+	result, err := handler.toolRequest(context.Background(), "req-mcp-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := toolResultText(t, result)
-	if strings.Contains(text, "user:secret") || !strings.Contains(text, "redacted:redacted") || !strings.Contains(text, "external_strings_untrusted") {
+	if strings.Contains(text, "user:secret") || strings.Contains(text, "example.invalid/path") || !strings.Contains(text, "example.invalid/***") || !strings.Contains(text, "external_strings_untrusted") {
 		t.Fatalf("request facts leaked or lacked trust marker: %s", text)
 	}
-	missing, err := handler.toolRequest("old-request")
+	missing, err := handler.toolRequest(context.Background(), "old-request")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(toolResultText(t, missing), "not found in the recent retention window") {
+	if !strings.Contains(toolResultText(t, missing), "no retained access log") {
 		t.Fatal("missing request did not report bounded retention")
+	}
+	for _, value := range []string{
+		"https://token@example.invalid/path?secret=1",
+		"https://user:secret@example.invalid/path",
+		"https://user%3Asecret@example.invalid/path",
+		strings.Repeat("x", 300) + "https://user:secret@example.invalid/path",
+	} {
+		masked := safeMCPFact(value, 256)
+		if strings.Contains(masked, "secret") || strings.Contains(masked, "example.invalid/path") {
+			t.Fatalf("unsafe MCP fact %q -> %q", value, masked)
+		}
+	}
+	if _, err := handler.toolRequest(context.Background(), "req mcp"); err == nil {
+		t.Fatal("unsafe request ID accepted")
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := handler.toolRequest(cancelled, "req-mcp-1"); err == nil {
+		t.Fatal("cancelled request facts query completed")
 	}
 }
 
