@@ -32,6 +32,8 @@ contains the stable repository rules and links into these guides.
 - [Self-test checklist](self-test-checklist.md): manual deployed-service checks.
 - [Release verification](release-verification.md): signed artifacts and
   immutable release inputs.
+- [Trial guide](trial-guide.md): isolated installation, fault rehearsal, and
+  feedback fields.
 - [Security policy](../SECURITY.md): supported releases and reporting process.
 
 ## Decisions and historical evidence

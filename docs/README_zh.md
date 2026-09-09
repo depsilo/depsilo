@@ -272,6 +272,7 @@ make setup build
 | 理解 Admin 和实时配置权威 | [Admin 控制面](admin-control-plane.md) |
 | 配置 ccache 或 sccache | [编译缓存](compile-cache.md) |
 | 验证签名发行版、镜像和 SBOM | [发行验证](release-verification.md) |
+| 安排隔离试用并收集反馈 | [试用指南](trial-guide.md) |
 | 查看各版本变化 | [更新日志](../CHANGELOG.md) · [GitHub Releases](https://github.com/depsilo/depsilo/releases) |
 | 理解当前产品范围和约束 | [`PRODUCT.md`](../PRODUCT.md) |
 | 开发或参与贡献 | [文档地图](README.md) · [贡献指南](../CONTRIBUTING.md) |

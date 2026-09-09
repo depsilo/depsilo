@@ -314,6 +314,7 @@ before a normal change; `make verify` is the complete offline gate.
 | Understand Admin and live configuration ownership | [Admin control plane](docs/admin-control-plane.md) |
 | Configure ccache or sccache | [Compiler cache (Chinese)](docs/compile-cache.md) |
 | Verify signed releases, images, and SBOMs | [Release verification](docs/release-verification.md) |
+| Run an isolated pilot and collect feedback | [Trial guide](docs/trial-guide.md) |
 | See what changed in each release | [Changelog](CHANGELOG.md) · [GitHub Releases](https://github.com/depsilo/depsilo/releases) |
 | Understand current product scope and constraints | [Product](PRODUCT.md) |
 | Develop or contribute | [Documentation map](docs/README.md) · [Contributing](CONTRIBUTING.md) |
