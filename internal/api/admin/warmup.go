@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,22 +36,23 @@ const (
 	maxWarmupJobs         = 32
 	warmupJobRetention    = 24 * time.Hour
 	maxWarmupDuration     = 10 * time.Minute
+	maxWarmupHistoryBytes = 2 << 20
+	warmupHistoryTimeout  = 5 * time.Second
 )
 
 type WarmupHandler struct {
-	cacheMgr  *cache.Manager
-	pools     map[string]*upstream.Pool
-	cfg       *config.Config
-	tasks     asyncruntime.Submitter
-	running   atomic.Bool
-	jobsMu    sync.Mutex
-	jobs      map[string]*warmupJob
-	db        *gorm.DB
-	persistMu sync.Mutex
+	cacheMgr   *cache.Manager
+	pools      map[string]*upstream.Pool
+	cfg        *config.Config
+	tasks      asyncruntime.Submitter
+	running    atomic.Bool
+	jobsMu     sync.Mutex
+	jobs       map[string]*warmupJob
+	db         *gorm.DB
+	historyErr error
 }
 
 type warmupJob struct {
-	mu        sync.RWMutex
 	ID        string
 	Principal uint
 	Ecosystem string
@@ -67,18 +69,13 @@ type warmupItem struct {
 	Detail  string `json:"detail,omitempty"`
 }
 
-// NewWarmupHandler binds warmup work to the server's async runtime.
-func NewWarmupHandler(tasks asyncruntime.Submitter, cacheMgr *cache.Manager, pools map[string]*upstream.Pool, cfg *config.Config, databases ...*gorm.DB) *WarmupHandler {
-	h := &WarmupHandler{
-		cacheMgr: cacheMgr,
-		pools:    pools,
-		cfg:      cfg,
-		tasks:    tasks,
-		jobs:     make(map[string]*warmupJob),
-	}
-	if len(databases) > 0 {
-		h.db = databases[0]
-		h.loadPersistedJobs()
+// NewWarmupHandler binds warmup work and its bounded history to one server.
+// A history failure disables this handler until restart; it must never replace
+// unreadable durable history with an empty map.
+func NewWarmupHandler(tasks asyncruntime.Submitter, cacheMgr *cache.Manager, pools map[string]*upstream.Pool, cfg *config.Config, database *gorm.DB) *WarmupHandler {
+	h := &WarmupHandler{cacheMgr: cacheMgr, pools: pools, cfg: cfg, tasks: tasks, db: database, jobs: make(map[string]*warmupJob)}
+	if err := h.loadPersistedJobs(); err != nil {
+		h.failHistoryLocked(err)
 	}
 	return h
 }
@@ -98,30 +95,47 @@ type durableWarmupJob struct {
 	Items     []warmupItem `json:"items"`
 }
 
-func (h *WarmupHandler) loadPersistedJobs() {
+// Called before the handler is published. Existing state is validated in full
+// before any recovery or retention change is persisted.
+func (h *WarmupHandler) loadPersistedJobs() error {
 	if h.db == nil {
-		return
-	}
+		return nil
+	} // isolated unit callers can run the fetch seam without an HTTP job store
+	ctx, cancel := context.WithTimeout(context.Background(), warmupHistoryTimeout)
+	defer cancel()
 	var state depsdb.ControlPlaneState
-	if err := h.db.Where("key = ?", warmupStateKey).First(&state).Error; err != nil {
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			zap.L().Warn("warmup history unavailable", zap.Error(err))
-		}
-		return
+	// SQLite is the deployment authority. Read at most the byte budget plus
+	// one sentinel byte, including when an old or corrupt value is oversized.
+	err := h.db.WithContext(ctx).Select("key, substr(CAST(value AS BLOB), 1, ?) AS value", maxWarmupHistoryBytes+1).
+		Where("key = ?", warmupStateKey).First(&state).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
 	}
 	var saved durableWarmupState
-	if err := json.Unmarshal([]byte(state.Value), &saved); err != nil || len(saved.Jobs) > maxWarmupJobs {
-		zap.L().Warn("warmup history ignored: invalid state")
-		return
+	if len(state.Value) > maxWarmupHistoryBytes {
+		return errors.New("warmup history exceeds limit")
 	}
+	if err := json.Unmarshal([]byte(state.Value), &saved); err != nil {
+		return err
+	}
+	if saved.Jobs == nil || len(saved.Jobs) > maxWarmupJobs {
+		return errors.New("invalid warmup history")
+	}
+	jobs := make(map[string]*warmupJob, len(saved.Jobs))
 	changed := false
+	now := time.Now().UTC()
 	for _, item := range saved.Jobs {
-		if item.ID == "" || item.Principal == 0 || len(item.Items) > maxWarmupPackages {
-			continue
+		if err := validateWarmupHistoryJob(item); err != nil {
+			return err
 		}
-		if item.Status == "queued" || item.Status == "running" || item.Status == "cancelling" {
-			item.Status = "interrupted"
-			item.UpdatedAt = time.Now().UTC()
+		if _, exists := jobs[item.ID]; exists {
+			return errors.New("duplicate warmup history ID")
+		}
+		if !warmupTerminal(item.Status) {
+			item.Status, item.UpdatedAt = "interrupted", now
 			for i := range item.Items {
 				if item.Items[i].Status == "queued" || item.Items[i].Status == "running" {
 					item.Items[i].Status = "interrupted"
@@ -129,38 +143,99 @@ func (h *WarmupHandler) loadPersistedJobs() {
 				}
 			}
 			changed = true
-		} else if !warmupTerminal(item.Status) {
-			continue
 		}
-		h.jobs[item.ID] = &warmupJob{ID: item.ID, Principal: item.Principal, Ecosystem: item.Ecosystem, Status: item.Status, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, Items: item.Items, cancel: func() {}}
+		jobs[item.ID] = &warmupJob{ID: item.ID, Principal: item.Principal, Ecosystem: item.Ecosystem, Status: item.Status, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, Items: item.Items, cancel: func() {}}
+	}
+	h.jobs = jobs
+	if h.pruneWarmupJobs(now) {
+		changed = true
 	}
 	if changed {
-		if err := h.persistJobs(); err != nil {
-			zap.L().Warn("warmup history save failed", zap.Error(err))
-		}
+		return h.saveHistoryLocked()
 	}
+	return nil
 }
 
-func (h *WarmupHandler) persistJobs() error {
+func validateWarmupHistoryJob(job durableWarmupJob) error {
+	id, err := hex.DecodeString(job.ID)
+	if err != nil || len(id) != 12 || job.Principal == 0 || job.CreatedAt.IsZero() || job.UpdatedAt.Before(job.CreatedAt) ||
+		(!warmupTerminal(job.Status) && job.Status != "queued" && job.Status != "running" && job.Status != "cancelling") {
+		return errors.New("invalid warmup history job")
+	}
+	packages := make([]string, len(job.Items))
+	for i, item := range job.Items {
+		packages[i] = item.Package
+		switch item.Status {
+		case "queued", "running", "succeeded", "failed", "cancelled", "interrupted":
+		default:
+			return errors.New("invalid warmup history item status")
+		}
+		switch item.Detail {
+		case "", "metadata cached", "request failed", "warmup stopped before this package completed", "service restarted before this package completed":
+		default:
+			return errors.New("invalid warmup history item detail")
+		}
+	}
+	normalized, err := normalizeWarmupPackages(job.Ecosystem, packages)
+	if err != nil || len(normalized) != len(packages) {
+		return errors.New("invalid warmup history packages")
+	}
+	for i, name := range normalized {
+		if name != packages[i] {
+			return errors.New("non-normalized warmup history package")
+		}
+	}
+	return nil
+}
+
+// jobsMu covers both state transitions and their SQLite commit. Readers never
+// observe a successful transition before the corresponding history write.
+func (h *WarmupHandler) saveHistoryLocked() error {
+	if h.historyErr != nil {
+		return h.historyErr
+	}
 	if h.db == nil {
 		return nil
 	}
-	h.persistMu.Lock()
-	defer h.persistMu.Unlock()
-	h.jobsMu.Lock()
 	saved := durableWarmupState{Jobs: make([]durableWarmupJob, 0, len(h.jobs))}
 	for _, job := range h.jobs {
-		job.mu.RLock()
-		saved.Jobs = append(saved.Jobs, durableWarmupJob{ID: job.ID, Principal: job.Principal, Ecosystem: job.Ecosystem, Status: job.Status, CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt, Items: append([]warmupItem(nil), job.Items...)})
-		job.mu.RUnlock()
+		saved.Jobs = append(saved.Jobs, durableWarmupJob{ID: job.ID, Principal: job.Principal, Ecosystem: job.Ecosystem, Status: job.Status, CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt, Items: job.Items})
 	}
-	h.jobsMu.Unlock()
 	b, err := json.Marshal(saved)
-	if err != nil {
-		return err
+	if err == nil && len(b) > maxWarmupHistoryBytes {
+		err = errors.New("warmup history exceeds limit")
 	}
-	state := depsdb.ControlPlaneState{Key: warmupStateKey, Value: string(b), UpdatedAt: time.Now().UTC()}
-	return h.db.Save(&state).Error
+	if err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), warmupHistoryTimeout)
+		defer cancel()
+		state := depsdb.ControlPlaneState{Key: warmupStateKey, Value: string(b), UpdatedAt: time.Now().UTC()}
+		err = h.db.WithContext(ctx).Save(&state).Error
+	}
+	if err != nil {
+		h.failHistoryLocked(err)
+	}
+	return err
+}
+
+// persistJobs is retained for focused package tests and non-HTTP callers.
+func (h *WarmupHandler) persistJobs() error {
+	h.jobsMu.Lock()
+	defer h.jobsMu.Unlock()
+	return h.saveHistoryLocked()
+}
+
+func (h *WarmupHandler) failHistoryLocked(err error) {
+	h.historyErr = err
+	// Raw database errors may contain the serialized package history.
+	zap.L().Warn("warmup history unavailable; warmup operations disabled until restart")
+}
+
+func (h *WarmupHandler) historyReadyLocked(c *gin.Context) bool {
+	if h.historyErr == nil {
+		return true
+	}
+	c.JSON(http.StatusServiceUnavailable, gin.H{"code": "WARMUP_HISTORY_UNAVAILABLE", "message": "warmup history is unavailable; repair storage and restart the service"})
+	return false
 }
 
 // Warmup accepts a list of packages and pre-fetches their index into cache.
@@ -182,7 +257,21 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 		return
 	}
 
-	pool, ok := h.pools[body.Ecosystem]
+	h.startWarmup(c, body.Ecosystem, packages)
+}
+
+func (h *WarmupHandler) startWarmup(c *gin.Context, ecosystem string, packages []string) {
+	principal, ok := middleware.PrincipalFromContext(c)
+	if !ok || principal.ID == 0 || !principal.CanWrite {
+		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "write permission is required"})
+		return
+	}
+	h.jobsMu.Lock()
+	defer h.jobsMu.Unlock()
+	if !h.historyReadyLocked(c) {
+		return
+	}
+	pool, ok := h.pools[ecosystem]
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "the selected ecosystem is not active"})
 		return
@@ -192,11 +281,15 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 		return
 	}
 	release := func() { h.running.Store(false) }
-
-	total := len(packages)
 	if h.tasks == nil {
 		release()
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "cache warmup is unavailable"})
+		return
+	}
+	h.pruneWarmupJobs(time.Now().UTC())
+	if len(h.jobs) >= maxWarmupJobs {
+		release()
+		c.JSON(http.StatusTooManyRequests, gin.H{"code": "WARMUP_QUEUE_FULL", "message": "too many warmup jobs"})
 		return
 	}
 	jobIDBytes := make([]byte, 12)
@@ -206,149 +299,119 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 		return
 	}
 	now := time.Now().UTC()
-	principal, _ := middleware.PrincipalFromContext(c)
-	job := &warmupJob{ID: fmt.Sprintf("%x", jobIDBytes), Principal: principal.ID, Ecosystem: body.Ecosystem, Status: "queued", CreatedAt: now, UpdatedAt: now, Items: make([]warmupItem, len(packages)), cancel: func() {}}
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	job := &warmupJob{ID: hex.EncodeToString(jobIDBytes), Principal: principal.ID, Ecosystem: ecosystem, Status: "queued", CreatedAt: now, UpdatedAt: now, Items: make([]warmupItem, len(packages)), cancel: cancelJob}
 	for i, pkg := range packages {
 		job.Items[i] = warmupItem{Package: pkg, Status: "queued"}
 	}
-	jobCtx, cancelJob := context.WithCancel(context.Background())
-	job.cancel = cancelJob
-	h.jobsMu.Lock()
-	h.pruneWarmupJobs(time.Now().UTC())
-	if len(h.jobs) >= maxWarmupJobs {
-		h.jobsMu.Unlock()
-		cancelJob()
-		release()
-		c.JSON(http.StatusTooManyRequests, gin.H{"code": "WARMUP_QUEUE_FULL", "message": "too many warmup jobs"})
-		return
-	}
 	h.jobs[job.ID] = job
-	h.jobsMu.Unlock()
-	if err := h.persistJobs(); err != nil {
+	if h.saveHistoryLocked() != nil {
 		cancelJob()
-		h.jobsMu.Lock()
 		delete(h.jobs, job.ID)
-		h.jobsMu.Unlock()
-		if persistErr := h.persistJobs(); persistErr != nil {
-			zap.L().Warn("warmup history cleanup failed", zap.Error(persistErr))
-		}
 		release()
-		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "WARMUP_UNAVAILABLE", "message": "could not persist warmup job"})
+		h.historyReadyLocked(c)
 		return
 	}
 	if err := h.tasks.Submit(func(ctx context.Context) {
 		defer release()
 		defer cancelJob()
 		taskCtx, cancel := context.WithCancel(ctx)
-		go func() { <-jobCtx.Done(); cancel() }()
-		h.runWarmupJob(taskCtx, job, body.Ecosystem, packages, pool)
-		cancel()
+		defer cancel()
+		stop := context.AfterFunc(jobCtx, cancel)
+		defer stop()
+		h.runWarmupJob(taskCtx, job, ecosystem, packages, pool)
 	}); err != nil {
 		cancelJob()
-		h.jobsMu.Lock()
 		delete(h.jobs, job.ID)
-		h.jobsMu.Unlock()
-		if persistErr := h.persistJobs(); persistErr != nil {
-			zap.L().Warn("warmup history cleanup failed", zap.Error(persistErr))
-		}
+		err = h.saveHistoryLocked()
 		release()
+		if err != nil {
+			h.historyReadyLocked(c)
+			return
+		}
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "cache warmup is unavailable"})
 		return
 	}
-
-	zap.L().Info("cache warmup started",
-		zap.String("ecosystem", body.Ecosystem),
-		zap.Int("packages", total),
-	)
-
-	c.JSON(http.StatusAccepted, gin.H{
-		"message":  "warmup started",
-		"packages": total,
-		"job_id":   job.ID,
-		"status":   "queued",
-	})
+	c.JSON(http.StatusAccepted, gin.H{"message": "warmup started", "packages": len(packages), "job_id": job.ID, "status": "queued"})
 }
 
-func (h *WarmupHandler) pruneWarmupJobs(now time.Time) {
-	for id, existing := range h.jobs {
-		existing.mu.RLock()
-		terminal, updated := warmupTerminal(existing.Status), existing.UpdatedAt
-		existing.mu.RUnlock()
-		if terminal && now.Sub(updated) >= warmupJobRetention {
+// Caller holds jobsMu, or is constructing an unpublished handler.
+func (h *WarmupHandler) pruneWarmupJobs(now time.Time) bool {
+	removed := false
+	for id, job := range h.jobs {
+		if warmupTerminal(job.Status) && now.Sub(job.UpdatedAt) >= warmupJobRetention {
 			delete(h.jobs, id)
+			removed = true
 		}
 	}
+	return removed
 }
 
-// Status returns a bounded, persisted-for-process-lifetime view of a warmup.
+// Status reads a committed, bounded view of a job owned by this principal.
 func (h *WarmupHandler) Status(c *gin.Context) {
-	jobID := strings.TrimSpace(c.Param("id"))
-	principal, principalOK := middleware.PrincipalFromContext(c)
 	h.jobsMu.Lock()
-	job, ok := h.jobs[jobID]
-	h.jobsMu.Unlock()
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"code": "WARMUP_NOT_FOUND", "message": "warmup job not found"})
+	defer h.jobsMu.Unlock()
+	if !h.historyReadyLocked(c) {
 		return
 	}
-	if !principalOK || job.Principal != principal.ID {
-		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "warmup job belongs to another operator"})
+	job := h.ownedJobLocked(c, false)
+	if job == nil {
 		return
 	}
-	job.mu.RLock()
-	items := append([]warmupItem(nil), job.Items...)
-	response := gin.H{"job_id": job.ID, "ecosystem": job.Ecosystem, "status": job.Status, "created_at": job.CreatedAt, "updated_at": job.UpdatedAt, "packages": len(items), "items": items}
-	job.mu.RUnlock()
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{"job_id": job.ID, "ecosystem": job.Ecosystem, "status": job.Status, "created_at": job.CreatedAt, "updated_at": job.UpdatedAt, "packages": len(job.Items), "items": job.Items})
 }
 
-// Cancel requests cooperative cancellation; completed jobs remain unchanged.
+func (h *WarmupHandler) ownedJobLocked(c *gin.Context, write bool) *warmupJob {
+	job := h.jobs[strings.TrimSpace(c.Param("id"))]
+	if job == nil || (warmupTerminal(job.Status) && time.Since(job.UpdatedAt) >= warmupJobRetention) {
+		c.JSON(http.StatusNotFound, gin.H{"code": "WARMUP_NOT_FOUND", "message": "warmup job not found"})
+		return nil
+	}
+	principal, ok := middleware.PrincipalFromContext(c)
+	if !ok || principal.ID != job.Principal || (write && !principal.CanWrite) {
+		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "permission for this warmup job is required"})
+		return nil
+	}
+	return job
+}
+
+// Cancel requests cooperative cancellation; published objects remain cached.
 func (h *WarmupHandler) Cancel(c *gin.Context) {
-	jobID := strings.TrimSpace(c.Param("id"))
-	principal, principalOK := middleware.PrincipalFromContext(c)
 	h.jobsMu.Lock()
-	job, ok := h.jobs[jobID]
-	h.jobsMu.Unlock()
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"code": "WARMUP_NOT_FOUND", "message": "warmup job not found"})
+	defer h.jobsMu.Unlock()
+	if !h.historyReadyLocked(c) {
 		return
 	}
-	if !principalOK || !principal.CanWrite || job.Principal != principal.ID {
-		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "write permission for this warmup job is required"})
+	job := h.ownedJobLocked(c, true)
+	if job == nil {
 		return
 	}
-	job.mu.Lock()
 	if job.Status == "queued" || job.Status == "running" {
-		job.Status = "cancelling"
-		job.UpdatedAt = time.Now().UTC()
+		job.Status, job.UpdatedAt = "cancelling", time.Now().UTC()
 		job.cancel()
+		if h.saveHistoryLocked() != nil {
+			h.historyReadyLocked(c)
+			return
+		}
 	}
-	status := job.Status
-	job.mu.Unlock()
-	c.JSON(http.StatusAccepted, gin.H{"job_id": job.ID, "status": status})
+	c.JSON(http.StatusAccepted, gin.H{"job_id": job.ID, "status": job.Status})
 }
 
-// Retry re-submits only failed inputs from a completed job through the normal
-// admission path; it cannot add new packages or bypass policy checks.
+// Retry uses the same admission path and only the original failed inputs.
 func (h *WarmupHandler) Retry(c *gin.Context) {
-	jobID := strings.TrimSpace(c.Param("id"))
-	principal, principalOK := middleware.PrincipalFromContext(c)
 	h.jobsMu.Lock()
-	job, ok := h.jobs[jobID]
-	h.jobsMu.Unlock()
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"code": "WARMUP_NOT_FOUND", "message": "warmup job not found"})
+	if !h.historyReadyLocked(c) {
+		h.jobsMu.Unlock()
 		return
 	}
-	if !principalOK || !principal.CanWrite || job.Principal != principal.ID {
-		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "write permission for this warmup job is required"})
+	job := h.ownedJobLocked(c, true)
+	if job == nil {
+		h.jobsMu.Unlock()
 		return
 	}
-	job.mu.RLock()
 	if !warmupTerminal(job.Status) {
-		status := job.Status
-		job.mu.RUnlock()
-		c.JSON(http.StatusConflict, gin.H{"code": "WARMUP_NOT_TERMINAL", "message": "warmup must finish before retrying", "status": status})
+		c.JSON(http.StatusConflict, gin.H{"code": "WARMUP_NOT_TERMINAL", "message": "warmup must finish before retrying"})
+		h.jobsMu.Unlock()
 		return
 	}
 	failed := make([]string, 0, len(job.Items))
@@ -358,19 +421,12 @@ func (h *WarmupHandler) Retry(c *gin.Context) {
 		}
 	}
 	ecosystem := job.Ecosystem
-	job.mu.RUnlock()
+	h.jobsMu.Unlock()
 	if len(failed) == 0 {
 		c.JSON(http.StatusConflict, gin.H{"code": "WARMUP_NO_FAILED_ITEMS", "message": "warmup has no failed items to retry"})
 		return
 	}
-	body, err := json.Marshal(map[string]any{"ecosystem": ecosystem, "packages": failed})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"code": "WARMUP_UNAVAILABLE", "message": "could not create retry request"})
-		return
-	}
-	c.Request.Body = io.NopCloser(strings.NewReader(string(body)))
-	c.Request.ContentLength = int64(len(body))
-	h.Warmup(c)
+	h.startWarmup(c, ecosystem, failed)
 }
 
 func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packages []string, pool *upstream.Pool) {
@@ -385,12 +441,22 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 	}
 	packages = normalized
 	if job != nil {
-		job.mu.Lock()
-		if job.Status != "cancelling" {
-			job.Status = "running"
+		h.jobsMu.Lock()
+		if h.historyErr != nil {
+			h.jobsMu.Unlock()
+			return
 		}
-		job.UpdatedAt = time.Now().UTC()
-		job.mu.Unlock()
+		if job.Status == "cancelling" {
+			h.finishWarmupJobLocked(job, "cancelled")
+			h.jobsMu.Unlock()
+			return
+		}
+		job.Status, job.UpdatedAt = "running", time.Now().UTC()
+		if h.saveHistoryLocked() != nil {
+			h.jobsMu.Unlock()
+			return
+		}
+		h.jobsMu.Unlock()
 	}
 	warmupContext, cancelWarmup := context.WithTimeout(parent, maxWarmupDuration)
 	defer cancelWarmup()
@@ -403,8 +469,8 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 		}
 		cacheKey, upstreamPath, err := warmupTarget(ecosystem, pkg)
 		if err != nil {
-			if job != nil {
-				h.updateWarmupItem(job, pkg, "failed", "request failed")
+			if job != nil && !h.updateWarmupItem(job, pkg, "failed", "request failed") {
+				return
 			}
 			zap.L().Warn("warmup target invalid", zap.String("ecosystem", ecosystem), zap.Error(err))
 			continue
@@ -458,8 +524,8 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 		cancel()
 
 		if err != nil {
-			if job != nil {
-				h.updateWarmupItem(job, pkg, "failed", "request failed")
+			if job != nil && !h.updateWarmupItem(job, pkg, "failed", "request failed") {
+				return
 			}
 			zap.L().Warn("warmup fetch failed",
 				zap.String("package", pkg),
@@ -467,8 +533,8 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 				zap.Error(err),
 			)
 		} else {
-			if job != nil {
-				h.updateWarmupItem(job, pkg, "succeeded", "metadata cached")
+			if job != nil && !h.updateWarmupItem(job, pkg, "succeeded", "metadata cached") {
+				return
 			}
 			zap.L().Debug("warmup cached",
 				zap.String("package", pkg),
@@ -477,18 +543,18 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 		}
 	}
 	if job != nil {
-		job.mu.RLock()
+		h.jobsMu.Lock()
 		status := job.Status
-		job.mu.RUnlock()
 		if warmupContext.Err() != nil || status == "cancelling" {
 			terminalStatus := "interrupted"
 			if status == "cancelling" {
 				terminalStatus = "cancelled"
 			}
-			h.finishWarmupJob(job, terminalStatus)
+			h.finishWarmupJobLocked(job, terminalStatus)
 		} else if status != "interrupted" {
-			h.finishWarmupJob(job, "succeeded")
+			h.finishWarmupJobLocked(job, "succeeded")
 		}
+		h.jobsMu.Unlock()
 	}
 
 	zap.L().Info("cache warmup completed",
@@ -497,8 +563,12 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 	)
 }
 
-func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail string) {
-	job.mu.Lock()
+func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail string) bool {
+	h.jobsMu.Lock()
+	defer h.jobsMu.Unlock()
+	if h.historyErr != nil {
+		return false
+	}
 	for i := range job.Items {
 		if job.Items[i].Package == pkg {
 			job.Items[i].Status, job.Items[i].Detail = status, detail
@@ -506,16 +576,19 @@ func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail str
 		}
 	}
 	job.UpdatedAt = time.Now().UTC()
-	job.mu.Unlock()
-	h.persistJobs()
+	return h.saveHistoryLocked() == nil
 }
 
 func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
-	job.mu.Lock()
+	h.jobsMu.Lock()
+	defer h.jobsMu.Unlock()
+	h.finishWarmupJobLocked(job, status)
+}
+
+func (h *WarmupHandler) finishWarmupJobLocked(job *warmupJob, status string) {
 	for i := range job.Items {
 		if (status == "cancelled" || status == "interrupted") && (job.Items[i].Status == "queued" || job.Items[i].Status == "running") {
-			job.Items[i].Status = status
-			job.Items[i].Detail = "warmup stopped before this package completed"
+			job.Items[i].Status, job.Items[i].Detail = status, "warmup stopped before this package completed"
 		}
 	}
 	if status == "succeeded" {
@@ -527,8 +600,7 @@ func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
 		}
 	}
 	job.Status, job.UpdatedAt = status, time.Now().UTC()
-	job.mu.Unlock()
-	h.persistJobs()
+	_ = h.saveHistoryLocked()
 }
 
 func warmupTerminal(status string) bool {

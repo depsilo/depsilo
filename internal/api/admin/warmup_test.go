@@ -19,6 +19,7 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/middleware"
 	"depsilo/internal/upstream"
 )
 
@@ -67,7 +68,7 @@ func TestWarmupMissPersistsNonEmptyBodyBeforeCompleting(t *testing.T) {
 	closeWarmupTestManager(t, manager)
 	handler := NewWarmupHandler(nil, manager, map[string]*upstream.Pool{"pypi": pool}, &config.Config{
 		Cache: config.CacheConfig{TTLIndex: time.Hour},
-	})
+	}, nil)
 
 	done := make(chan struct{})
 	go func() {
@@ -144,7 +145,7 @@ func TestWarmupNPMUsesAdapterKeyAndRewritesTarballs(t *testing.T) {
 	}
 	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
 	closeWarmupTestManager(t, manager)
-	handler := NewWarmupHandler(nil, manager, map[string]*upstream.Pool{"npm": pool}, &config.Config{Cache: config.CacheConfig{TTLIndex: time.Hour}})
+	handler := NewWarmupHandler(nil, manager, map[string]*upstream.Pool{"npm": pool}, &config.Config{Cache: config.CacheConfig{TTLIndex: time.Hour}}, nil)
 
 	handler.doWarmup(context.Background(), "npm", []string{"@scope/widget@1.2.3"}, pool)
 
@@ -227,12 +228,13 @@ func (runner *captureTaskRunner) Submit(task asyncruntime.Task) error {
 
 func TestWarmupRejectsUnsupportedEcosystemBeforeScheduling(t *testing.T) {
 	runner := &captureTaskRunner{}
-	handler := NewWarmupHandler(runner, nil, nil, &config.Config{})
+	handler := NewWarmupHandler(runner, nil, nil, &config.Config{}, nil)
 	recorder := httptest.NewRecorder()
 	ginContext, _ := gin.CreateTestContext(recorder)
 	ginContext.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/cache/warmup", strings.NewReader(`{"ecosystem":"maven","packages":["artifact"]}`))
 	ginContext.Request.Header.Set("Content-Type", "application/json")
 
+	ginContext.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: 1, Role: "admin", CanWrite: true})
 	handler.Warmup(ginContext)
 
 	if recorder.Code != http.StatusBadRequest {
@@ -249,12 +251,13 @@ func TestWarmupReportsUnavailableWhenRuntimeRejects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewWarmupHandler(runner, nil, map[string]*upstream.Pool{"pypi": pool}, &config.Config{})
+	handler := NewWarmupHandler(runner, nil, map[string]*upstream.Pool{"pypi": pool}, &config.Config{}, nil)
 	recorder := httptest.NewRecorder()
 	ginContext, _ := gin.CreateTestContext(recorder)
 	ginContext.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/cache/warmup", strings.NewReader(`{"ecosystem":"pypi","packages":["requests"]}`))
 	ginContext.Request.Header.Set("Content-Type", "application/json")
 
+	ginContext.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: 1, Role: "admin", CanWrite: true})
 	handler.Warmup(ginContext)
 
 	if recorder.Code != http.StatusServiceUnavailable {
@@ -269,6 +272,7 @@ func TestWarmupReportsUnavailableWhenRuntimeRejects(t *testing.T) {
 	ginContext, _ = gin.CreateTestContext(recorder)
 	ginContext.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/cache/warmup", strings.NewReader(`{"ecosystem":"pypi","packages":["requests"]}`))
 	ginContext.Request.Header.Set("Content-Type", "application/json")
+	ginContext.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: 1, Role: "admin", CanWrite: true})
 	handler.Warmup(ginContext)
 	if recorder.Code != http.StatusAccepted {
 		t.Fatalf("retry status = %d, body = %s", recorder.Code, recorder.Body.String())
@@ -281,12 +285,13 @@ func TestWarmupAllowsOnlyOneInFlightTaskAndReleasesOnCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := NewWarmupHandler(runner, nil, map[string]*upstream.Pool{"pypi": pool}, &config.Config{})
+	handler := NewWarmupHandler(runner, nil, map[string]*upstream.Pool{"pypi": pool}, &config.Config{}, nil)
 	request := func() *httptest.ResponseRecorder {
 		recorder := httptest.NewRecorder()
 		ginContext, _ := gin.CreateTestContext(recorder)
 		ginContext.Request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/cache/warmup", strings.NewReader(`{"ecosystem":"pypi","packages":["requests"]}`))
 		ginContext.Request.Header.Set("Content-Type", "application/json")
+		ginContext.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: 1, Role: "admin", CanWrite: true})
 		handler.Warmup(ginContext)
 		return recorder
 	}
@@ -318,9 +323,9 @@ func TestWarmupCancellationSettlesPendingItems(t *testing.T) {
 		UpdatedAt: now, Items: []warmupItem{{Package: "requests", Status: "queued"}},
 	}
 	handler.finishWarmupJob(job, "cancelled")
-	job.mu.RLock()
+	handler.jobsMu.Lock()
 	status, item := job.Status, job.Items[0]
-	job.mu.RUnlock()
+	handler.jobsMu.Unlock()
 	if status != "cancelled" || item.Status != "cancelled" || item.Detail == "" {
 		t.Fatalf("cancelled job = %#v item=%#v", status, item)
 	}
@@ -359,18 +364,69 @@ func TestWarmupHistoryMarksInterruptedJobsAfterRestart(t *testing.T) {
 		t.Cleanup(func() { _ = sqlDB.Close() })
 	}
 	handler := NewWarmupHandler(nil, nil, nil, &config.Config{}, database)
-	handler.jobs["job-1"] = &warmupJob{ID: "job-1", Principal: 7, Ecosystem: "pypi", Status: "running", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), Items: []warmupItem{{Package: "requests", Status: "queued"}}}
-	handler.persistJobs()
-
+	handler.jobs["0123456789abcdef01234567"] = &warmupJob{ID: "0123456789abcdef01234567", Principal: 7, Ecosystem: "pypi", Status: "running", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), Items: []warmupItem{{Package: "requests", Status: "queued"}}}
+	if err := handler.persistJobs(); err != nil {
+		t.Fatalf("persist warmup history: %v", err)
+	}
 	restarted := NewWarmupHandler(nil, nil, nil, &config.Config{}, database)
-	job, ok := restarted.jobs["job-1"]
+	if restarted.historyErr != nil {
+		t.Fatalf("load warmup history: %v", restarted.historyErr)
+	}
+	job, ok := restarted.jobs["0123456789abcdef01234567"]
 	if !ok {
 		t.Fatal("persisted warmup job was not loaded")
 	}
-	job.mu.RLock()
+	restarted.jobsMu.Lock()
 	status, item := job.Status, job.Items[0]
-	job.mu.RUnlock()
+	restarted.jobsMu.Unlock()
 	if status != "interrupted" || item.Status != "interrupted" {
 		t.Fatalf("restarted job = %q item=%q", status, item.Status)
+	}
+}
+
+func TestWarmupHistoryCorruptionFailsClosed(t *testing.T) {
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "warmup-history-corrupt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.ControlPlaneState{}); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	if err := database.Create(&db.ControlPlaneState{Key: warmupStateKey, Value: "not-json", UpdatedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewWarmupHandler(nil, nil, nil, &config.Config{}, database)
+	if handler.historyErr == nil {
+		t.Fatal("corrupt warmup history was accepted")
+	}
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Params = gin.Params{{Key: "id", Value: "0123456789abcdef01234567"}}
+	c.Set(middleware.ContextKeyPrincipal, middleware.Principal{ID: 1, CanWrite: true})
+	handler.Status(c)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	var response map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response["code"] != "WARMUP_HISTORY_UNAVAILABLE" {
+		t.Fatalf("response code = %v", response["code"])
+	}
+	var state db.ControlPlaneState
+	if err := database.First(&state, "key = ?", warmupStateKey).Error; err != nil {
+		t.Fatal(err)
+	}
+	if state.Value != "not-json" {
+		t.Fatalf("corrupt history was overwritten with %q", state.Value)
 	}
 }

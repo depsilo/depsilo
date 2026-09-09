@@ -412,7 +412,7 @@ const zh = {
       warmupRetryFailed: '重试失败项',
       warmupJobExpired: '此预热任务已不在保留范围内。',
       warmupJobLoadFailed: '无法加载预热进度，请稍后重试。',
-      warmupActionFailed: '预热操作失败，任务未改变。',
+      warmupActionFailed: '预热操作未完成，请刷新任务状态。',
       warmupCancelConfirm: '取消此预热任务？已完成的包仍会保留在缓存中。',
     },
 

@@ -412,7 +412,7 @@ const en = {
       warmupRetryFailed: 'Retry failed items',
       warmupJobExpired: 'This warmup job is no longer retained.',
       warmupJobLoadFailed: 'Unable to load warmup progress. Try again later.',
-      warmupActionFailed: 'The warmup action failed. The job was not changed.',
+      warmupActionFailed: 'The warmup action could not be completed. Refresh the job status.',
       warmupCancelConfirm: 'Cancel this warmup job? Completed packages will remain cached.',
     },
 
