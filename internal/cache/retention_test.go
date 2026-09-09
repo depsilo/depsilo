@@ -388,6 +388,30 @@ func TestRetentionManualReclaimRemovesExpiredThenStableLRUToTarget(t *testing.T)
 	assertRetentionEntryExists(t, fixture, newest.ID, true)
 }
 
+func TestRetentionPreviewMatchesManualOrderWithoutMutation(t *testing.T) {
+	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 90, TargetPercent: 80})
+	now := time.Now().UTC()
+	expired := seedRetentionEntry(t, fixture, "preview-expired", 10, now.Add(-time.Hour), now.Add(-4*time.Hour))
+	oldest := seedRetentionEntry(t, fixture, "preview-oldest", 40, now.Add(time.Hour), now.Add(-3*time.Hour))
+	seedRetentionEntry(t, fixture, "preview-newest", 50, now.Add(time.Hour), now.Add(-time.Hour))
+
+	preview, err := fixture.retention.Preview(context.Background(), 1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.CandidateCount != 2 || preview.LogicalBytes != 50 || len(preview.Items) != 2 {
+		t.Fatalf("preview = %+v", preview)
+	}
+	if preview.Items[0].ID != expired.ID || preview.Items[0].Reason != "expired" {
+		t.Fatalf("expired preview item = %+v", preview.Items[0])
+	}
+	if preview.Items[1].ID != oldest.ID || preview.Items[1].Reason != "lru" {
+		t.Fatalf("lru preview item = %+v", preview.Items[1])
+	}
+	assertRetentionEntryExists(t, fixture, expired.ID, true)
+	assertRetentionEntryExists(t, fixture, oldest.ID, true)
+}
+
 func TestRetentionCapacityModeDoesNothingBelowInitialThreshold(t *testing.T) {
 	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 80, TargetPercent: 50})
 	entry := seedRetentionEntry(t, fixture, "expired-below-threshold", 70, time.Now().Add(-time.Hour), time.Now())

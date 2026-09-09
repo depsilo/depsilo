@@ -75,6 +75,33 @@ type ReclaimReport struct {
 	UsageAfter      int64 `json:"usage_after"`
 }
 
+// ReclaimPreview is a read-only snapshot of the candidates selected by the
+// manual reclaim policy. LogicalBytes is the sum of metadata sizes; it is an
+// estimate of reclaimable bytes and may differ from physical storage usage.
+type ReclaimPreview struct {
+	GeneratedAt          time.Time      `json:"generated_at"`
+	UsageBytes           int64          `json:"usage_bytes"`
+	ThresholdBytes       int64          `json:"threshold_bytes"`
+	TargetBytes          int64          `json:"target_bytes"`
+	LogicalBytes         int64          `json:"logical_bytes"`
+	CandidateCount       int64          `json:"candidate_count"`
+	PhysicalUsageKnown   bool           `json:"physical_usage_known"`
+	PhysicalUsageMessage string         `json:"physical_usage_message,omitempty"`
+	Items                []PreviewEntry `json:"items"`
+}
+
+type PreviewEntry struct {
+	ID           uint      `json:"id"`
+	Key          string    `json:"key"`
+	AdapterType  string    `json:"adapter_type"`
+	PackageName  string    `json:"package_name"`
+	Size         int64     `json:"size"`
+	HitCount     int64     `json:"hit_count"`
+	LastAccessed time.Time `json:"last_accessed"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	Reason       string    `json:"reason"`
+}
+
 // Removal reports which irreversible stages completed. A caller can therefore
 // distinguish an untouched entry from an object that was removed before a
 // retryable metadata failure.
@@ -164,6 +191,133 @@ func (retention *Retention) Remove(ctx context.Context, id uint) (Removal, error
 		return removal, fmt.Errorf("%w: id %d", ErrCacheEntryNotFound, id)
 	}
 	return removal, nil
+}
+
+// Preview returns a bounded, read-only snapshot of the candidates that a
+// manual reclaim pass would consider. It never acquires mutation locks,
+// touches TTLs, or changes database/storage state.
+func (retention *Retention) Preview(ctx context.Context, page, pageSize int) (ReclaimPreview, error) {
+	if retention == nil || retention.manager == nil {
+		return ReclaimPreview{}, errors.New("cache retention preview is unavailable")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if page < 1 || pageSize < 1 {
+		return ReclaimPreview{}, errors.New("cache retention preview: page and page size must be positive")
+	}
+	now := time.Now().UTC()
+	preview := ReclaimPreview{
+		GeneratedAt: now, ThresholdBytes: retention.threshold,
+		TargetBytes: retention.target, Items: []PreviewEntry{},
+	}
+	usage, err := retention.manager.storage.TotalSize(ctx)
+	if err != nil {
+		return preview, fmt.Errorf("measure cache usage for preview: %w", err)
+	}
+	preview.UsageBytes = usage
+	preview.PhysicalUsageKnown = true
+
+	newQuery := func() *gorm.DB {
+		return retention.manager.db.WithContext(ctx).Model(&db.CacheEntry{})
+	}
+	expired := newQuery().Where("datetime(expires_at) < datetime(?)", now)
+	var expiredCount int64
+	if err := newQuery().Where("datetime(expires_at) < datetime(?)", now).Count(&expiredCount).Error; err != nil {
+		return preview, fmt.Errorf("count expired cache entries: %w", err)
+	}
+	var expiredBytes int64
+	if err := newQuery().Where("datetime(expires_at) < datetime(?)", now).
+		Select("COALESCE(SUM(size), 0)").Scan(&expiredBytes).Error; err != nil {
+		return preview, fmt.Errorf("sum expired cache entries: %w", err)
+	}
+	if expiredBytes < 0 {
+		expiredBytes = 0
+	}
+	postExpiryUsage := usage - expiredBytes
+	if postExpiryUsage < 0 {
+		postExpiryUsage = 0
+	}
+
+	lruEnabled := postExpiryUsage >= retention.threshold && postExpiryUsage > retention.target
+	var lruCount, lruBytes int64
+	if lruEnabled {
+		need := postExpiryUsage - retention.target
+		stop := errors.New("preview target reached")
+		var batch []db.CacheEntry
+		err := newQuery().Where("datetime(expires_at) >= datetime(?)", now).
+			Select("id, size").Order("last_accessed ASC, id ASC").
+			FindInBatches(&batch, 500, func(_ *gorm.DB, _ int) error {
+				for _, row := range batch {
+					lruCount++
+					lruBytes += maxInt64(row.Size, 0)
+					if lruBytes >= need {
+						return stop
+					}
+				}
+				return nil
+			}).Error
+		if err != nil && !errors.Is(err, stop) {
+			return preview, fmt.Errorf("list LRU cache preview: %w", err)
+		}
+	}
+	preview.CandidateCount = expiredCount
+	preview.LogicalBytes = expiredBytes
+	if lruEnabled {
+		preview.CandidateCount += lruCount
+		preview.LogicalBytes += lruBytes
+	}
+
+	offset := (page - 1) * pageSize
+	remaining := pageSize
+	appendRows := func(rows []db.CacheEntry, reason string) {
+		for _, row := range rows {
+			if remaining == 0 {
+				break
+			}
+			preview.Items = append(preview.Items, PreviewEntry{
+				ID: row.ID, Key: row.Key, AdapterType: row.AdapterType,
+				PackageName: row.PackageName, Size: maxInt64(row.Size, 0),
+				HitCount: row.HitCount, LastAccessed: row.LastAccessed,
+				ExpiresAt: row.ExpiresAt, Reason: reason,
+			})
+			remaining--
+		}
+	}
+	if offset < int(expiredCount) {
+		limit := pageSize
+		var rows []db.CacheEntry
+		if err := expired.Order("expires_at ASC, id ASC").Offset(offset).Limit(limit).Find(&rows).Error; err != nil {
+			return preview, fmt.Errorf("list expired cache preview: %w", err)
+		}
+		appendRows(rows, "expired")
+	}
+	if lruEnabled && remaining > 0 {
+		lruOffset := offset - int(expiredCount)
+		if lruOffset < 0 {
+			lruOffset = 0
+		}
+		if lruOffset < int(lruCount) {
+			var rows []db.CacheEntry
+			limit := remaining
+			if available := int(lruCount) - lruOffset; limit > available {
+				limit = available
+			}
+			if err := newQuery().Where("datetime(expires_at) >= datetime(?)", now).
+				Order("last_accessed ASC, id ASC").Offset(lruOffset).Limit(limit).Find(&rows).Error; err != nil {
+				return preview, fmt.Errorf("list LRU cache preview: %w", err)
+			}
+			appendRows(rows, "lru")
+		}
+	}
+	return preview, nil
+}
+
+func maxInt64(value, fallback int64) int64 {
+	if value < fallback {
+		return fallback
+	}
+	return value
 }
 
 type candidatePredicate func(db.CacheEntry) bool

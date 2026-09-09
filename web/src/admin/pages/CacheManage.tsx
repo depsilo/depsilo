@@ -97,6 +97,13 @@ export default function CacheManageV2() {
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }) },
   })
 
+  const cleanupPreviewQuery = useQuery({
+    queryKey: ['admin', 'cache', 'cleanup-preview'],
+    queryFn: ({ signal }) => adminApi.previewCacheCleanup({ page: 1, page_size: 8 }, { signal }),
+    enabled: cleanupOpen,
+    retry: false,
+  })
+
   const items = data?.data?.items || []
   const total = data?.data?.total || 0
   const apiError = getApiError(error)
@@ -342,6 +349,31 @@ export default function CacheManageV2() {
         setCleanupOpen(false)
       }} title={t('cache.cleanExpiredTitle')} closeDisabled={cleanupMutation.isPending}>
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
+        {cleanupPreviewQuery.isPending ? (
+          <div aria-busy="true" className="mb-6 text-[13px] text-[var(--text-soft)]">{t('cache.previewLoading')}</div>
+        ) : cleanupPreviewQuery.isError ? (
+          <div className="mb-6"><InlineNotice tone="warning">{t('cache.previewUnavailable')}</InlineNotice></div>
+        ) : cleanupPreviewQuery.data?.data ? (
+          <div className="mb-6 space-y-3" data-testid="cache-cleanup-preview">
+            <p className="text-[13px] text-[var(--text-soft)]">
+              {t('cache.previewSummary', {
+                count: cleanupPreviewQuery.data.data.candidate_count,
+                bytes: formatBytes(cleanupPreviewQuery.data.data.logical_bytes),
+              })}
+            </p>
+            {cleanupPreviewQuery.data.data.items.length > 0 ? (
+              <ul className="max-h-40 overflow-auto space-y-1 text-[12px] font-mono" aria-label={t('cache.previewItems')}>
+                {cleanupPreviewQuery.data.data.items.map((item) => (
+                  <li key={item.id} className="flex justify-between gap-3">
+                    <span className="truncate">{item.package_name || item.key}</span>
+                    <span className="shrink-0 text-[var(--text-soft)]">{formatBytes(item.size)} · {item.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewEmpty')}</p>}
+            <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewSnapshot')}</p>
+          </div>
+        ) : null}
         {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" disabled={cleanupMutation.isPending} onClick={() => {

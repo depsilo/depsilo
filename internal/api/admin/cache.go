@@ -454,6 +454,36 @@ func (h *CacheHandler) Cleanup(c *gin.Context) {
 	})
 }
 
+// PreviewCleanup reports the same manual retention candidates without
+// mutating cache metadata or objects.
+func (h *CacheHandler) PreviewCleanup(c *gin.Context) {
+	page := parseIntParam(c, "page", 1, 1, 100000)
+	pageSize := parseIntParam(c, "page_size", 20, 1, 100)
+	if h.retention == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "CACHE_PREVIEW_UNAVAILABLE", "message": "cache cleanup preview is not configured"})
+		return
+	}
+	preview, err := h.retention.Preview(c.Request.Context(), page, pageSize)
+	if err != nil {
+		zap.L().Warn("cache cleanup preview failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "CACHE_PREVIEW_FAILED", "message": "cache cleanup preview is unavailable"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"generated_at":           preview.GeneratedAt,
+		"usage_bytes":            preview.UsageBytes,
+		"threshold_bytes":        preview.ThresholdBytes,
+		"target_bytes":           preview.TargetBytes,
+		"logical_bytes":          preview.LogicalBytes,
+		"candidate_count":        preview.CandidateCount,
+		"physical_usage_known":   preview.PhysicalUsageKnown,
+		"physical_usage_message": preview.PhysicalUsageMessage,
+		"items":                  preview.Items,
+		"page":                   page,
+		"page_size":              pageSize,
+	})
+}
+
 func (h *CacheHandler) GetDistribution(c *gin.Context) {
 	type TypeBreakdown struct {
 		Type      string `json:"type"`

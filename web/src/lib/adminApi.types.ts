@@ -238,6 +238,30 @@ export interface CacheCleanupResponse {
   usage_before: number
   usage_after: number
 }
+export interface CacheCleanupPreviewItem {
+  id: number
+  key: string
+  adapter_type: string
+  package_name: string
+  size: number
+  hit_count: number
+  last_accessed: string
+  expires_at: string
+  reason: 'expired' | 'lru'
+}
+export interface CacheCleanupPreviewResponse {
+  generated_at: string
+  usage_bytes: number
+  threshold_bytes: number
+  target_bytes: number
+  logical_bytes: number
+  candidate_count: number
+  physical_usage_known: boolean
+  physical_usage_message?: string
+  items: CacheCleanupPreviewItem[]
+  page: number
+  page_size: number
+}
 export interface CacheTypeBreakdown { type: string; size: number; file_count: number }
 export interface CachePackageSize { name: string; type: string; size: number; hit_count: number }
 export interface CacheDistributionResponse {

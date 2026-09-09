@@ -20,6 +20,7 @@ import type {
   CacheDistributionResponse,
   CacheDeleteResponse,
   CacheCleanupResponse,
+  CacheCleanupPreviewResponse,
   CacheIndexListResponse,
   CacheIndexQuery,
   CacheIndexRefreshResponse,
@@ -169,6 +170,8 @@ export const adminApi = {
   listCache: (params: CacheQuery, options: ApiGetOptions = {}) => api.get<CacheListResponse>('/admin/cache', { ...options, params }),
   deleteCache: (id: number) => api.delete<CacheDeleteResponse>(`/admin/cache/${id}`),
   cleanupCache: () => api.post<CacheCleanupResponse>('/admin/cache/cleanup'),
+  previewCacheCleanup: (params: { page?: number; page_size?: number } = {}, options: ApiGetOptions = {}) =>
+    api.get<CacheCleanupPreviewResponse>('/admin/cache/cleanup/preview', { ...options, params }),
   getCacheDistribution: (options: ApiGetOptions = {}) => api.get<CacheDistributionResponse>('/admin/cache/distribution', options),
   listCacheIndexes: (params: CacheIndexQuery, options: ApiGetOptions = {}) => api.get<CacheIndexListResponse>('/admin/cache/indexes', { ...options, params }),
   refreshCacheIndex: (id: number) => api.post<CacheIndexRefreshResponse>(`/admin/cache/indexes/${id}/refresh`),

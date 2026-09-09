@@ -211,6 +211,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.GET("/cache", cacheHandler.List)
 	adminRead.GET("/cache/indexes", cacheHandler.ListIndexes)
 	adminRead.GET("/cache/distribution", cacheHandler.GetDistribution)
+	adminRead.GET("/cache/cleanup/preview", cacheHandler.PreviewCleanup)
 	adminWrite.DELETE("/cache/:id", cacheHandler.Delete)
 	adminWrite.POST("/cache/cleanup", cacheHandler.Cleanup)
 	adminWrite.POST("/cache/indexes/:id/refresh", cacheHandler.RefreshIndex)
