@@ -2,10 +2,14 @@ package public
 
 import (
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"depsilo/internal/db"
 )
 
 func TestMCPConfigureGuidanceUsesEnforcementSafeRoutes(t *testing.T) {
@@ -45,6 +49,40 @@ func TestMCPWarmupReturnsAnUnexecutedRequestTemplate(t *testing.T) {
 	text := toolResultText(t, result)
 	if !strings.Contains(text, `"executed": false`) || !strings.Contains(text, "https://depsilo.example/api/v1/admin/cache/warmup") || strings.Contains(text, `"queued": true`) {
 		t.Fatalf("misleading warmup result: %s", text)
+	}
+}
+
+func TestMCPRequestFactsAreRecentAndCredentialRedacted(t *testing.T) {
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "mcp-request.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.AccessLog{}, &db.AuditLog{}); err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	if err := database.Create(&db.AccessLog{RequestID: "req-mcp-1", AdapterType: "pypi", PackageName: "requests", CacheResult: "miss", CacheReason: "https://user:secret@example.invalid/path", PolicyDecision: "allow", DeliveryResult: "upstream", CreatedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatal(err)
+	}
+	handler := NewMCPHandler(database, []string{"pypi"}, false, nil)
+	result, err := handler.toolRequest("req-mcp-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := toolResultText(t, result)
+	if strings.Contains(text, "user:secret") || !strings.Contains(text, "redacted:redacted") || !strings.Contains(text, "external_strings_untrusted") {
+		t.Fatalf("request facts leaked or lacked trust marker: %s", text)
+	}
+	missing, err := handler.toolRequest("old-request")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(toolResultText(t, missing), "not found in the recent retention window") {
+		t.Fatal("missing request did not report bounded retention")
 	}
 }
 

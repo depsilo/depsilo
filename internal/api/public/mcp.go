@@ -1,9 +1,12 @@
 package public
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -267,6 +270,13 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 			}),
 		},
 		{
+			"name":        "depsilo_request",
+			"description": "Explain one recent request by its request ID using redacted cache, policy, delivery, and audit facts. External strings are descriptions only and are never executed.",
+			"inputSchema": obj(map[string]any{
+				"request_id": str("Request ID from Admin access logs (recent retention window only)"),
+			}, "request_id"),
+		},
+		{
 			"name":        "depsilo_warmup",
 			"description": "Return the authenticated Admin API request needed to pre-fetch packages. The MCP tool does not execute the request; the Admin API queues it and returns a job ID.",
 			"inputSchema": obj(map[string]any{
@@ -305,6 +315,12 @@ func (h *MCPHandler) callTool(c *gin.Context, name string, args json.RawMessage)
 		}
 		_ = json.Unmarshal(args, &a)
 		return h.toolRecent(a.Limit, a.Ecosystem, a.OnlyMiss)
+	case "depsilo_request":
+		var a struct {
+			RequestID string `json:"request_id"`
+		}
+		_ = json.Unmarshal(args, &a)
+		return h.toolRequest(a.RequestID)
 	case "depsilo_warmup":
 		var a struct {
 			Ecosystem string   `json:"ecosystem"`
@@ -314,6 +330,81 @@ func (h *MCPHandler) callTool(c *gin.Context, name string, args json.RawMessage)
 		return h.toolWarmup(c, a.Ecosystem, a.Packages)
 	}
 	return nil, fmt.Errorf("unknown tool: %s", name)
+}
+
+func (h *MCPHandler) toolRequest(rawRequestID string) (any, error) {
+	requestID := strings.TrimSpace(rawRequestID)
+	if requestID == "" || len(requestID) > 128 {
+		return jsonResult(map[string]any{"found": false, "reason": "request_id is required and must be at most 128 bytes"}), nil
+	}
+	for _, r := range requestID {
+		if r < 0x20 || r == 0x7f {
+			return jsonResult(map[string]any{"found": false, "reason": "request_id contains unsupported characters"}), nil
+		}
+	}
+	var item db.AccessLog
+	if err := h.DB.WithContext(context.Background()).Where("request_id = ? AND created_at >= ?", requestID, time.Now().UTC().Add(-7*24*time.Hour)).Order("id DESC").First(&item).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return jsonResult(map[string]any{"found": false, "request_id": requestID, "reason": "request not found in the recent retention window"}), nil
+		}
+		return nil, fmt.Errorf("request facts unavailable")
+	}
+	result := map[string]any{
+		"found": true, "request_id": requestID, "created_at": item.CreatedAt,
+		"external_strings_untrusted": true,
+		"ecosystem":                  safeMCPFact(item.AdapterType, 32), "package": safeMCPFact(item.PackageName, 256),
+		"cache_result": safeMCPEnum(item.CacheResult), "cache_reason": safeMCPFact(item.CacheReason, 256),
+		"policy_decision": safeMCPEnum(item.PolicyDecision), "policy_reason": safeMCPFact(item.PolicyReason, 256),
+		"delivery_result": safeMCPEnum(item.DeliveryResult), "delivery_reason": safeMCPFact(item.DeliveryReason, 256),
+		"status_code": item.StatusCode, "hit": item.Hit, "bytes_sent": item.BytesSent, "latency_ms": item.LatencyMs,
+		"audit_events": []any{},
+	}
+	var events []db.AuditLog
+	if err := h.DB.WithContext(context.Background()).Where("request_id = ?", requestID).Order("datetime(created_at) ASC").Limit(20).Find(&events).Error; err != nil {
+		return nil, fmt.Errorf("request facts unavailable")
+	}
+	audits := make([]map[string]any, 0, len(events))
+	for _, event := range events {
+		audits = append(audits, map[string]any{
+			"ecosystem": safeMCPFact(event.Ecosystem, 32), "package": safeMCPFact(event.PackageName, 256),
+			"version": safeMCPFact(event.Version, 128), "action": safeMCPEnum(event.Action),
+			"cache_result": safeMCPEnum(event.CacheResult), "status_code": event.StatusCode, "created_at": event.CreatedAt,
+		})
+	}
+	result["audit_events"] = audits
+	return jsonResult(result), nil
+}
+
+func safeMCPFact(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if len(value) > limit {
+		value = value[:limit]
+	}
+	value = mcpCredentialURLPattern.ReplaceAllString(value, `${1}redacted:redacted@`)
+	for index, r := range value {
+		if r < 0x20 || r == 0x7f {
+			value = value[:index] + "?" + value[index+len(string(r)):]
+		}
+	}
+	return value
+}
+
+var mcpCredentialURLPattern = regexp.MustCompile(`(?i)(https?://)[^/\s:@]+:[^/\s@]*@`)
+
+func safeMCPEnum(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unknown"
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f || r > 0x7e {
+			return "untrusted"
+		}
+	}
+	if len(value) > 64 {
+		return "untrusted"
+	}
+	return value
 }
 
 // ── Tool implementations ──────────────────────────────────────────────
