@@ -350,6 +350,9 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.POST("/blocklist/overrides", blocklistHandler.CreateOverride)
 	adminWrite.DELETE("/blocklist/overrides/:id", blocklistHandler.RevokeOverride)
 
+	capabilityHandler := admin.NewCapabilityHandler(deps.DB, deps.Config, deps.ConfigStore, deps.Ecosystems, deps.PolicyStatusProvider, deps.BlocklistStore, deps.BlocklistMode)
+	adminRead.GET("/capabilities/summary", capabilityHandler.Summary)
+
 	// Pro features (require entitlement). Multi-project workspaces are
 	// the only UI surface gated today — production teams running Depsilo
 	// across many projects/teams are the buyer the Pro contract is built
