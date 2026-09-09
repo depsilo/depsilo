@@ -206,6 +206,7 @@ CLI 参数 → DEPSILO_* 环境变量 → 配置文件 → 内置默认值
 ```bash
 depsilo doctor
 docker exec depsilo /app/depsilo doctor
+```
 
 需要提交排障材料时，可写入本地脱敏报告：
 
@@ -214,7 +215,6 @@ depsilo diagnose --out depsilo-diagnostic.json
 ```
 
 报告使用仅所有者可读的权限，并省略配置、凭据、请求样本、包名和客户端地址。
-```
 
 ## 可选集成
 

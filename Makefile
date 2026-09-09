@@ -407,6 +407,7 @@ verify-scripts:                 # 内部：安装、开发与发布脚本回归�
 	bash scripts/test-release-promotion.sh
 	bash scripts/test-prepare-v090-compose-upgrade.sh
 	bash scripts/test-release-workflow.sh
+	bash scripts/test-benchmark-install.sh
 
 verify-installer: verify-scripts # 兼容别名
 
