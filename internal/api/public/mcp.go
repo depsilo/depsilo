@@ -268,7 +268,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 		},
 		{
 			"name":        "depsilo_warmup",
-			"description": "Return the authenticated Admin API request needed to pre-fetch packages. The MCP tool does not execute or queue the warmup yet.",
+			"description": "Return the authenticated Admin API request needed to pre-fetch packages. The MCP tool does not execute the request; the Admin API queues it and returns a job ID.",
 			"inputSchema": obj(map[string]any{
 				"ecosystem": str("Target ecosystem (pypi, npm, cargo, etc.)"),
 				"packages":  arr("string", "Package names to fetch"),
@@ -623,7 +623,7 @@ func (h *MCPHandler) toolWarmup(c *gin.Context, ecosystem string, packages []str
 				"packages":  packages,
 			},
 		},
-		"hint": "MCP warmup execution is not wired yet; send this request to the Admin API",
+		"hint": "MCP does not execute write actions; send this request to the Admin API and use its job ID to inspect progress",
 	}), nil
 }
 

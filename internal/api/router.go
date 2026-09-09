@@ -219,6 +219,8 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Cache warmup
 	warmupHandler := admin.NewWarmupHandler(deps.Tasks, deps.CacheMgr, deps.Pools, deps.Config)
 	adminWrite.POST("/cache/warmup", warmupHandler.Warmup)
+	adminRead.GET("/cache/warmup/:id", warmupHandler.Status)
+	adminWrite.DELETE("/cache/warmup/:id", warmupHandler.Cancel)
 
 	// Compiler cache is a separate data domain from package cache. Its machine
 	// credentials can only access one compiler-cache namespace and grant no Admin API

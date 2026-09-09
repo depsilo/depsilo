@@ -2,11 +2,13 @@ package admin
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	"depsilo/internal/middleware"
 	"depsilo/internal/packagepolicy"
 	"depsilo/internal/upstream"
 )
@@ -34,6 +37,26 @@ type WarmupHandler struct {
 	cfg      *config.Config
 	tasks    asyncruntime.Submitter
 	running  atomic.Bool
+	jobsMu   sync.Mutex
+	jobs     map[string]*warmupJob
+}
+
+type warmupJob struct {
+	mu        sync.RWMutex
+	ID        string
+	Principal uint
+	Ecosystem string
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Items     []warmupItem
+	cancel    context.CancelFunc
+}
+
+type warmupItem struct {
+	Package string `json:"package"`
+	Status  string `json:"status"`
+	Detail  string `json:"detail,omitempty"`
 }
 
 // NewWarmupHandler binds warmup work to the server's async runtime.
@@ -43,6 +66,7 @@ func NewWarmupHandler(tasks asyncruntime.Submitter, cacheMgr *cache.Manager, poo
 		pools:    pools,
 		cfg:      cfg,
 		tasks:    tasks,
+		jobs:     make(map[string]*warmupJob),
 	}
 }
 
@@ -82,10 +106,42 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "cache warmup is unavailable"})
 		return
 	}
+	jobIDBytes := make([]byte, 12)
+	if _, err := rand.Read(jobIDBytes); err != nil {
+		release()
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "WARMUP_UNAVAILABLE", "message": "could not create warmup job"})
+		return
+	}
+	now := time.Now().UTC()
+	principal, _ := middleware.PrincipalFromContext(c)
+	job := &warmupJob{ID: fmt.Sprintf("%x", jobIDBytes), Principal: principal.ID, Ecosystem: body.Ecosystem, Status: "queued", CreatedAt: now, UpdatedAt: now, Items: make([]warmupItem, len(packages)), cancel: func() {}}
+	for i, pkg := range packages {
+		job.Items[i] = warmupItem{Package: pkg, Status: "queued"}
+	}
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	job.cancel = cancelJob
+	h.jobsMu.Lock()
+	if len(h.jobs) >= 32 {
+		h.jobsMu.Unlock()
+		cancelJob()
+		release()
+		c.JSON(http.StatusTooManyRequests, gin.H{"code": "WARMUP_QUEUE_FULL", "message": "too many warmup jobs"})
+		return
+	}
+	h.jobs[job.ID] = job
+	h.jobsMu.Unlock()
 	if err := h.tasks.Submit(func(ctx context.Context) {
 		defer release()
-		h.doWarmup(ctx, body.Ecosystem, packages, pool)
+		defer cancelJob()
+		taskCtx, cancel := context.WithCancel(ctx)
+		go func() { <-jobCtx.Done(); cancel() }()
+		h.runWarmupJob(taskCtx, job, body.Ecosystem, packages, pool)
+		cancel()
 	}); err != nil {
+		cancelJob()
+		h.jobsMu.Lock()
+		delete(h.jobs, job.ID)
+		h.jobsMu.Unlock()
 		release()
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "cache warmup is unavailable"})
 		return
@@ -99,16 +155,76 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":  "warmup started",
 		"packages": total,
+		"job_id":   job.ID,
+		"status":   "queued",
 	})
 }
 
+// Status returns a bounded, persisted-for-process-lifetime view of a warmup.
+func (h *WarmupHandler) Status(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("id"))
+	principal, principalOK := middleware.PrincipalFromContext(c)
+	h.jobsMu.Lock()
+	job, ok := h.jobs[jobID]
+	h.jobsMu.Unlock()
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"code": "WARMUP_NOT_FOUND", "message": "warmup job not found"})
+		return
+	}
+	if !principalOK || job.Principal != principal.ID {
+		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "warmup job belongs to another operator"})
+		return
+	}
+	job.mu.RLock()
+	items := append([]warmupItem(nil), job.Items...)
+	response := gin.H{"job_id": job.ID, "ecosystem": job.Ecosystem, "status": job.Status, "created_at": job.CreatedAt, "updated_at": job.UpdatedAt, "packages": len(items), "items": items}
+	job.mu.RUnlock()
+	c.JSON(http.StatusOK, response)
+}
+
+// Cancel requests cooperative cancellation; completed jobs remain unchanged.
+func (h *WarmupHandler) Cancel(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("id"))
+	principal, principalOK := middleware.PrincipalFromContext(c)
+	h.jobsMu.Lock()
+	job, ok := h.jobs[jobID]
+	h.jobsMu.Unlock()
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"code": "WARMUP_NOT_FOUND", "message": "warmup job not found"})
+		return
+	}
+	if !principalOK || !principal.CanWrite || job.Principal != principal.ID {
+		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "write permission for this warmup job is required"})
+		return
+	}
+	job.mu.Lock()
+	if job.Status == "queued" || job.Status == "running" {
+		job.Status = "cancelling"
+		job.UpdatedAt = time.Now().UTC()
+		job.cancel()
+	}
+	status := job.Status
+	job.mu.Unlock()
+	c.JSON(http.StatusAccepted, gin.H{"job_id": job.ID, "status": status})
+}
+
 func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packages []string, pool *upstream.Pool) {
+	h.runWarmupJob(parent, nil, ecosystem, packages, pool)
+}
+
+func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, ecosystem string, packages []string, pool *upstream.Pool) {
 	normalized, err := normalizeWarmupPackages(ecosystem, packages)
 	if err != nil {
 		zap.L().Warn("cache warmup rejected", zap.String("ecosystem", ecosystem), zap.Error(err))
 		return
 	}
 	packages = normalized
+	if job != nil {
+		job.mu.Lock()
+		job.Status = "running"
+		job.UpdatedAt = time.Now().UTC()
+		job.mu.Unlock()
+	}
 	warmupContext, cancelWarmup := context.WithTimeout(parent, maxWarmupDuration)
 	defer cancelWarmup()
 	selector := upstream.NewPassiveRecoverySelector(pool)
@@ -116,10 +232,16 @@ func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packa
 
 	for _, pkg := range packages {
 		if warmupContext.Err() != nil {
+			if job != nil {
+				h.finishWarmupJob(job, "interrupted")
+			}
 			break
 		}
 		cacheKey, upstreamPath, err := warmupTarget(ecosystem, pkg)
 		if err != nil {
+			if job != nil {
+				h.updateWarmupItem(job, pkg, "failed", "request failed")
+			}
 			zap.L().Warn("warmup target invalid", zap.String("ecosystem", ecosystem), zap.Error(err))
 			continue
 		}
@@ -166,16 +288,30 @@ func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packa
 		cancel()
 
 		if err != nil {
+			if job != nil {
+				h.updateWarmupItem(job, pkg, "failed", "request failed")
+			}
 			zap.L().Warn("warmup fetch failed",
 				zap.String("package", pkg),
 				zap.String("ecosystem", ecosystem),
 				zap.Error(err),
 			)
 		} else {
+			if job != nil {
+				h.updateWarmupItem(job, pkg, "succeeded", "metadata cached")
+			}
 			zap.L().Debug("warmup cached",
 				zap.String("package", pkg),
 				zap.String("ecosystem", ecosystem),
 			)
+		}
+	}
+	if job != nil {
+		job.mu.RLock()
+		status := job.Status
+		job.mu.RUnlock()
+		if status != "interrupted" && status != "cancelling" {
+			h.finishWarmupJob(job, "succeeded")
 		}
 	}
 
@@ -183,6 +319,32 @@ func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packa
 		zap.String("ecosystem", ecosystem),
 		zap.Int("packages", len(packages)),
 	)
+}
+
+func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail string) {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	for i := range job.Items {
+		if job.Items[i].Package == pkg {
+			job.Items[i].Status, job.Items[i].Detail = status, detail
+			break
+		}
+	}
+	job.UpdatedAt = time.Now().UTC()
+}
+
+func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
+	job.mu.Lock()
+	if status == "succeeded" {
+		for _, item := range job.Items {
+			if item.Status == "failed" {
+				status = "partial"
+				break
+			}
+		}
+	}
+	job.Status, job.UpdatedAt = status, time.Now().UTC()
+	job.mu.Unlock()
 }
 
 func normalizeWarmupPackages(ecosystem string, raw []string) ([]string, error) {

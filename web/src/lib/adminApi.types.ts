@@ -266,6 +266,16 @@ export interface CacheCleanupPreviewResponse {
   plan_id: string
   plan_expires_at: string
 }
+export interface WarmupJobItem { package: string; status: string; detail?: string }
+export interface WarmupJobResponse {
+  job_id: string
+  ecosystem: string
+  status: string
+  created_at: string
+  updated_at: string
+  packages: number
+  items: WarmupJobItem[]
+}
 export interface CacheTypeBreakdown { type: string; size: number; file_count: number }
 export interface CachePackageSize { name: string; type: string; size: number; hit_count: number }
 export interface CacheDistributionResponse {

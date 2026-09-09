@@ -21,6 +21,7 @@ import type {
   CacheDeleteResponse,
   CacheCleanupResponse,
   CacheCleanupPreviewResponse,
+  WarmupJobResponse,
   CacheIndexListResponse,
   CacheIndexQuery,
   CacheIndexRefreshResponse,
@@ -175,7 +176,9 @@ export const adminApi = {
   getCacheDistribution: (options: ApiGetOptions = {}) => api.get<CacheDistributionResponse>('/admin/cache/distribution', options),
   listCacheIndexes: (params: CacheIndexQuery, options: ApiGetOptions = {}) => api.get<CacheIndexListResponse>('/admin/cache/indexes', { ...options, params }),
   refreshCacheIndex: (id: number) => api.post<CacheIndexRefreshResponse>(`/admin/cache/indexes/${id}/refresh`),
-  warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post('/admin/cache/warmup', data),
+  warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post<WarmupJobResponse>('/admin/cache/warmup', data),
+  getWarmup: (id: string, options: ApiGetOptions = {}) => api.get<WarmupJobResponse>(`/admin/cache/warmup/${id}`, options),
+  cancelWarmup: (id: string) => api.delete(`/admin/cache/warmup/${id}`),
 
   // Compiler cache
   getCompileCacheStatus: (options: ApiGetOptions = {}) => api.get<CompileCacheStatusResponse>('/admin/compile-cache/status', options),
