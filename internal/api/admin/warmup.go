@@ -229,6 +229,9 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 		h.jobsMu.Lock()
 		delete(h.jobs, job.ID)
 		h.jobsMu.Unlock()
+		if persistErr := h.persistJobs(); persistErr != nil {
+			zap.L().Warn("warmup history cleanup failed", zap.Error(persistErr))
+		}
 		release()
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "WARMUP_UNAVAILABLE", "message": "could not persist warmup job"})
 		return
@@ -245,6 +248,9 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 		h.jobsMu.Lock()
 		delete(h.jobs, job.ID)
 		h.jobsMu.Unlock()
+		if persistErr := h.persistJobs(); persistErr != nil {
+			zap.L().Warn("warmup history cleanup failed", zap.Error(persistErr))
+		}
 		release()
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "cache warmup is unavailable"})
 		return
