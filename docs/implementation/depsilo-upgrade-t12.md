@@ -4,12 +4,24 @@
 分支：`master`  
 记录时间：2026-09-09 UTC  
 
-这份记录把“代码已完成”和“具备发布条件”分开。所有未在该候选
-commit 上执行的项目都保留为 `NOT_RUN`。
+## 后续候选复验
+
+预热历史 fail-closed 修复之后，当前候选为 `0f03968`（完整提交为
+`0f039680077fcf3ec55b28afee552839b9f42919`）。本次在该候选上重新执行了 `make verify`，全量
+Go/race、集成、前端构建、260 条 Playwright 和发布脚本检查均通过。下表中
+需要网络、Docker、S3 或真实客户端的项目仍沿用原记录的 `NOT_RUN`，不能用
+旧候选或离线门禁替代。
+
+当前候选的离线复验结论仍为 **NO_GO**：代码门禁通过，但发布检查表要求的
+外部环境证据尚未在 `0f03968` 上补齐。
+
+下方原始表格记录的是 `202c2d8` 候选上的逐项结果；除已明确写出当前复验的
+`make verify` 外，不把这些结果移绑定到 `0f03968`。这份记录把“代码已完成”
+和“具备发布条件”分开，所有未在对应候选上执行的项目都保留为 `NOT_RUN`。
 
 | 检查项 | 状态 | 证据 |
 | --- | --- | --- |
-| `make verify`（Go、race、集成、前端、完整 Playwright、脚本） | PASS | 本地运行；260 个 Playwright 测试通过 |
+| `make verify`（Go、race、集成、前端、完整 Playwright、脚本） | PASS | `202c2d8` 本地运行；`0f03968` 已再次运行，260 个 Playwright 测试通过 |
 | 生产嵌入 UI | PASS | `make test-ui-production`；Go 二进制嵌入前端冒烟通过 |
 | GoReleaser 配置 | PASS | `make release-check` |
 | v0.9.0 源码升级 | PASS | `scripts/test-v090-upgrade.sh`；schema v4、凭据和来源证明恢复通过 |
@@ -42,4 +54,3 @@ make test-s3
 make test-v090-compose-upgrade
 make release-check
 ```
-
