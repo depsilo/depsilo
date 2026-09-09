@@ -6,11 +6,14 @@
   `DELETE /api/v1/admin/cache/warmup/:id` 协作式取消。任务绑定创建者，
   readonly 只能读取自己的脱敏状态，不能取消或提交任务。
 - 状态使用 `queued`、`running`、`cancelling`、`succeeded`、`partial`、
-  `failed`、`interrupted`；成功项明确为 metadata cached，未把未知子依赖
+  `failed`、`cancelled`、`interrupted`；成功项明确为 metadata cached，未把未知子依赖
   或制品下载伪装成进度。已有预热实现继续负责来源选择、策略链路和缓存写入。
-- 任务仅保存在内存，服务重启后查询不到旧任务；运行时关闭通过已有
+- 任务仅保存在内存；终态任务保留 24 小时后回收，运行中任务不会因回收
+  被删除，达到 32 条活动/近期任务时仍会明确拒绝新任务。服务重启后查询
+  不到旧任务；运行时关闭通过已有
   `asyncruntime` 取消上下文，不静默重试或回滚已完成写入。
+- 取消会把未完成项标为 `cancelled`，超时或运行时终止标为 `interrupted`；
+  上游元数据响应限制为 8 MiB，避免预热把异常响应无界读入内存。
 
 现有预热 API 的 `message`/`packages` 字段保留兼容性，同时增加任务字段。
 新增状态和取消接口为 T16 进度 UI 提供真实数据源。
-

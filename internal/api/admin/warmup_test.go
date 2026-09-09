@@ -309,3 +309,40 @@ func TestWarmupAllowsOnlyOneInFlightTaskAndReleasesOnCompletion(t *testing.T) {
 		t.Fatalf("post-completion status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestWarmupCancellationSettlesPendingItems(t *testing.T) {
+	handler := &WarmupHandler{}
+	now := time.Now().UTC()
+	job := &warmupJob{
+		ID: "cancelled", Status: "cancelling", CreatedAt: now,
+		UpdatedAt: now, Items: []warmupItem{{Package: "requests", Status: "queued"}},
+	}
+	handler.finishWarmupJob(job, "cancelled")
+	job.mu.RLock()
+	status, item := job.Status, job.Items[0]
+	job.mu.RUnlock()
+	if status != "cancelled" || item.Status != "cancelled" || item.Detail == "" {
+		t.Fatalf("cancelled job = %#v item=%#v", status, item)
+	}
+}
+
+func TestWarmupJobRetentionPrunesOnlyOldTerminalJobs(t *testing.T) {
+	old := time.Now().UTC().Add(-warmupJobRetention - time.Minute)
+	fresh := time.Now().UTC()
+	oldJob := &warmupJob{Status: "succeeded", UpdatedAt: old}
+	runningJob := &warmupJob{Status: "running", UpdatedAt: old}
+	freshJob := &warmupJob{Status: "failed", UpdatedAt: fresh}
+	handler := &WarmupHandler{jobs: map[string]*warmupJob{"old": oldJob, "running": runningJob, "fresh": freshJob}}
+	handler.jobsMu.Lock()
+	handler.pruneWarmupJobs(time.Now().UTC())
+	handler.jobsMu.Unlock()
+	if _, ok := handler.jobs["old"]; ok {
+		t.Fatal("old terminal job was retained")
+	}
+	if _, ok := handler.jobs["running"]; !ok {
+		t.Fatal("running job was pruned")
+	}
+	if _, ok := handler.jobs["fresh"]; !ok {
+		t.Fatal("fresh terminal job was pruned")
+	}
+}

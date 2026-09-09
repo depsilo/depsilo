@@ -31,6 +31,12 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CacheQuery } from '@/lib/adminApi.types'
 
 const WARMUP_ECOSYSTEMS = ['pypi', 'npm']
+const WARMUP_STATUS_KEYS: Record<string, string> = {
+  queued: 'cache.warmupStatus.queued', running: 'cache.warmupStatus.running',
+  cancelling: 'cache.warmupStatus.cancelling', cancelled: 'cache.warmupStatus.cancelled',
+  succeeded: 'cache.warmupStatus.succeeded', partial: 'cache.warmupStatus.partial',
+  failed: 'cache.warmupStatus.failed', interrupted: 'cache.warmupStatus.interrupted',
+}
 
 interface CacheTreemapItem { name: string; size: number; type: string; hits: number }
 
@@ -116,7 +122,7 @@ export default function CacheManageV2() {
     enabled: warmupOpen && warmupJobId !== null,
     refetchInterval: query => {
       const status = query.state.data?.data.status
-      return status && ['succeeded', 'partial', 'failed', 'interrupted'].includes(status) ? false : 1500
+      return status && ['succeeded', 'partial', 'failed', 'cancelled', 'interrupted'].includes(status) ? false : 1500
     },
     retry: false,
   })
@@ -438,14 +444,14 @@ export default function CacheManageV2() {
           {warmupJobId && warmupJobQuery.data?.data && (
             <div className="space-y-3 rounded-[6px] border border-[var(--border)] p-3" data-testid="warmup-job-status">
               <div className="flex justify-between gap-3 text-[12px]">
-                <span>{t('cache.warmupJobStatus', { status: warmupJobQuery.data.data.status })}</span>
+                <span>{t('cache.warmupJobStatus', { status: t(WARMUP_STATUS_KEYS[warmupJobQuery.data.data.status] || 'cache.warmupStatus.unknown') })}</span>
                 <span className="font-mono text-[var(--text-soft)]">{warmupJobId}</span>
               </div>
               <ul className="max-h-40 overflow-auto space-y-1 text-[12px]" aria-label={t('cache.warmupResults')}>
                 {warmupJobQuery.data.data.items.map(item => (
                   <li key={item.package} className="flex justify-between gap-3">
                     <span className="truncate font-mono">{item.package}</span>
-                    <span className="shrink-0 text-[var(--text-soft)]">{item.detail || item.status}</span>
+                    <span className="shrink-0 text-[var(--text-soft)]">{item.detail === 'metadata cached' ? t('cache.warmupItemMetadata') : item.detail === 'request failed' ? t('cache.warmupItemFailed') : item.detail === 'warmup stopped before this package completed' ? t('cache.warmupItemStopped') : t(WARMUP_STATUS_KEYS[item.status] || 'cache.warmupStatus.unknown')}</span>
                   </li>
                 ))}
               </ul>
@@ -454,7 +460,7 @@ export default function CacheManageV2() {
                   {t('cache.warmupCancel')}
                 </ButtonV2>
               )}
-              {['partial', 'failed', 'interrupted'].includes(warmupJobQuery.data.data.status) && canWrite && warmupJobQuery.data.data.items.some(item => item.status === 'failed') && (
+              {['partial', 'failed', 'cancelled', 'interrupted'].includes(warmupJobQuery.data.data.status) && canWrite && warmupJobQuery.data.data.items.some(item => item.status === 'failed') && (
                 <ButtonV2 type="button" variant="secondary" size="sm" disabled={retryWarmupMutation.isPending} onClick={() => retryWarmupMutation.mutate()}>
                   {t('cache.warmupRetryFailed')}
                 </ButtonV2>

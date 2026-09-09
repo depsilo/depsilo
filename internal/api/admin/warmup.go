@@ -29,6 +29,9 @@ import (
 const (
 	maxWarmupPackages     = 100
 	maxWarmupPackageBytes = 256
+	maxWarmupMetadataSize = 8 << 20
+	maxWarmupJobs         = 32
+	warmupJobRetention    = 24 * time.Hour
 	maxWarmupDuration     = 10 * time.Minute
 )
 
@@ -122,7 +125,8 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 	jobCtx, cancelJob := context.WithCancel(context.Background())
 	job.cancel = cancelJob
 	h.jobsMu.Lock()
-	if len(h.jobs) >= 32 {
+	h.pruneWarmupJobs(time.Now().UTC())
+	if len(h.jobs) >= maxWarmupJobs {
 		h.jobsMu.Unlock()
 		cancelJob()
 		release()
@@ -159,6 +163,17 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 		"job_id":   job.ID,
 		"status":   "queued",
 	})
+}
+
+func (h *WarmupHandler) pruneWarmupJobs(now time.Time) {
+	for id, existing := range h.jobs {
+		existing.mu.RLock()
+		terminal, updated := warmupTerminal(existing.Status), existing.UpdatedAt
+		existing.mu.RUnlock()
+		if terminal && now.Sub(updated) >= warmupJobRetention {
+			delete(h.jobs, id)
+		}
+	}
 }
 
 // Status returns a bounded, persisted-for-process-lifetime view of a warmup.
@@ -226,6 +241,12 @@ func (h *WarmupHandler) Retry(c *gin.Context) {
 		return
 	}
 	job.mu.RLock()
+	if !warmupTerminal(job.Status) {
+		status := job.Status
+		job.mu.RUnlock()
+		c.JSON(http.StatusConflict, gin.H{"code": "WARMUP_NOT_TERMINAL", "message": "warmup must finish before retrying", "status": status})
+		return
+	}
 	failed := make([]string, 0, len(job.Items))
 	for _, item := range job.Items {
 		if item.Status == "failed" {
@@ -261,7 +282,9 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 	packages = normalized
 	if job != nil {
 		job.mu.Lock()
-		job.Status = "running"
+		if job.Status != "cancelling" {
+			job.Status = "running"
+		}
 		job.UpdatedAt = time.Now().UTC()
 		job.mu.Unlock()
 	}
@@ -272,9 +295,6 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 
 	for _, pkg := range packages {
 		if warmupContext.Err() != nil {
-			if job != nil {
-				h.finishWarmupJob(job, "interrupted")
-			}
 			break
 		}
 		cacheKey, upstreamPath, err := warmupTarget(ecosystem, pkg)
@@ -296,10 +316,16 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 			if err != nil {
 				return nil, "", 0, ups.Name, err
 			}
-			body, readErr := io.ReadAll(result.Body)
+			if result.Body == nil {
+				return nil, "", 0, ups.Name, errors.New("upstream returned an empty body")
+			}
+			body, readErr := io.ReadAll(io.LimitReader(result.Body, maxWarmupMetadataSize+1))
 			closeErr := result.Body.Close()
 			if err := errors.Join(readErr, closeErr); err != nil {
 				return nil, "", 0, ups.Name, err
+			}
+			if len(body) > maxWarmupMetadataSize {
+				return nil, "", 0, ups.Name, errors.New("upstream metadata exceeds warmup limit")
 			}
 			var rewritten []byte
 			if ecosystem == "npm" {
@@ -350,7 +376,13 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 		job.mu.RLock()
 		status := job.Status
 		job.mu.RUnlock()
-		if status != "interrupted" && status != "cancelling" {
+		if warmupContext.Err() != nil || status == "cancelling" {
+			terminalStatus := "interrupted"
+			if status == "cancelling" {
+				terminalStatus = "cancelled"
+			}
+			h.finishWarmupJob(job, terminalStatus)
+		} else if status != "interrupted" {
 			h.finishWarmupJob(job, "succeeded")
 		}
 	}
@@ -375,6 +407,12 @@ func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail str
 
 func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
 	job.mu.Lock()
+	for i := range job.Items {
+		if (status == "cancelled" || status == "interrupted") && (job.Items[i].Status == "queued" || job.Items[i].Status == "running") {
+			job.Items[i].Status = status
+			job.Items[i].Detail = "warmup stopped before this package completed"
+		}
+	}
 	if status == "succeeded" {
 		for _, item := range job.Items {
 			if item.Status == "failed" {
@@ -385,6 +423,15 @@ func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
 	}
 	job.Status, job.UpdatedAt = status, time.Now().UTC()
 	job.mu.Unlock()
+}
+
+func warmupTerminal(status string) bool {
+	switch status {
+	case "succeeded", "partial", "failed", "interrupted", "cancelled":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeWarmupPackages(ecosystem string, raw []string) ([]string, error) {
