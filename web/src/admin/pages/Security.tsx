@@ -33,6 +33,7 @@ import type {
   SecuritySeverity,
   SecurityVulnerability,
   UpdateSecurityPolicyRequest,
+  CapabilityFact,
 } from '@/lib/adminApi.types'
 
 const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'success'> = {
@@ -45,6 +46,72 @@ const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'succ
 const POLICY_SAVE_CONCURRENCY = 4
 
 type EcosystemName = ComponentProps<typeof EcosystemIcon>['type']
+
+function CapabilityOverview() {
+  const { t } = useTranslation()
+  const query = useQuery({
+    queryKey: ['admin', 'capabilities', 'summary'],
+    queryFn: ({ signal }) => adminApi.getCapabilitySummary({ signal }),
+    retry: false,
+  })
+  const facts = query.data?.data.capabilities ?? []
+  const grouped = new Map<string, CapabilityFact[]>()
+  for (const fact of facts) {
+    const list = grouped.get(fact.name) ?? []
+    list.push(fact)
+    grouped.set(fact.name, list)
+  }
+  const capabilityLabels: Record<string, string> = {
+    proxy_cache: t('security.capability_proxy_cache'),
+    manual_rules: t('security.capability_manual_rules'),
+    malicious_blocklist: t('security.capability_malicious_blocklist'),
+    vulnerability_scanning: t('security.capability_vulnerability_scanning'),
+    minimum_release_age: t('security.capability_minimum_release_age'),
+    tamper_alerts: t('security.capability_tamper_alerts'),
+    policy_snapshot: t('security.capability_policy_snapshot'),
+  }
+  const label = (value: string) => capabilityLabels[value] ?? value.replaceAll('_', ' ')
+  const value = (fact: CapabilityFact, field: 'support' | 'mode' | 'data_status') => {
+    const raw = fact[field]
+    if (raw === 'safety_disabled') return t('security.capabilitySafetyDisabled')
+    if (raw === 'never_synced') return t('security.capabilityNeverSynced')
+    if (raw === 'fresh') return t('security.capabilityFresh')
+    if (raw === 'stale') return t('security.capabilityStale')
+    if (raw === 'error') return t('security.capabilityError')
+    if (raw === 'unknown') return t('security.capabilityUnknown')
+    if (raw === 'alert_only') return t('security.capabilityAlertOnly')
+    return raw
+  }
+  return (
+    <section aria-label={t('security.capabilityTitle')} className="space-y-3">
+      <SectionHeader title={t('security.capabilityTitle')} />
+      {query.isPending && <p className="text-[12px] text-[var(--text-soft)]" aria-busy="true">{t('security.capabilityLoading')}</p>}
+      {query.isError && <InlineNotice tone="warning">{t('security.capabilityUnavailable')}</InlineNotice>}
+      {!query.isPending && !query.isError && facts.length === 0 && <InlineNotice tone="warning">{t('security.capabilityNoData')}</InlineNotice>}
+      {facts.length > 0 && (
+        <div className="space-y-3">
+          {[...grouped.entries()].map(([name, rows]) => (
+            <details key={name} className="rounded-[6px] border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
+              <summary className="cursor-pointer stripe-focus-ring text-[13px] font-[600]">{label(name)}</summary>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {rows.map((fact) => (
+                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-[4px] bg-[var(--bg-page)] p-2 text-[12px]">
+                    <div className="mb-1 font-[600]">{fact.ecosystem?.toUpperCase() ?? t('security.capabilityOverall')}</div>
+                    <div><span className="text-[var(--text-soft)]">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
+                    <div><span className="text-[var(--text-soft)]">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
+                    <div><span className="text-[var(--text-soft)]">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
+                    {fact.last_success_at && <div className="text-[var(--text-soft)]">{t('security.capabilityLastSuccess')}: {formatTime(fact.last_success_at)}</div>}
+                    {fact.recent_failure && <div className="break-words text-[var(--danger)]">{t('security.capabilityRecentFailure')}: {fact.recent_failure}</div>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
 
 // ─── Overview Tab ────────────────────────────────────────────────────
 
@@ -97,6 +164,7 @@ function OverviewTab() {
 
   return (
     <div className="space-y-12">
+      <CapabilityOverview />
       {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
       {/* ── Metrics row ───────────────────────────── */}
       <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">

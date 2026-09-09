@@ -88,6 +88,23 @@ export interface SecurityDashboard {
   scan_in_progress: boolean
 }
 
+export interface CapabilityFact {
+  name: string
+  ecosystem?: string
+  support: 'supported' | 'unsupported' | 'safety_disabled' | 'unknown' | string
+  mode: 'off' | 'warn' | 'block' | 'alert_only' | string
+  data_status: 'never_synced' | 'fresh' | 'stale' | 'error' | 'unknown' | string
+  last_success_at?: string | null
+  recent_failure?: string
+}
+
+export interface CapabilitySummary {
+  version: string
+  commit: string
+  build_date: string
+  capabilities?: CapabilityFact[]
+}
+
 export interface SecurityVulnerability {
   id: number
   osv_id: string

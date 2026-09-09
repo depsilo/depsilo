@@ -25,6 +25,7 @@ import type {
   CacheIndexRefreshResponse,
   CacheListResponse,
   CacheQuery,
+  CapabilitySummary,
   CheckUpstreamResponse,
   CompileCacheCleanupResponse,
   CompileCacheCredentialListResponse,
@@ -229,6 +230,7 @@ export const adminApi = {
 
   // Package Security (Pro)
   getSecurityDashboard: (options: ApiGetOptions = {}) => api.get<SecurityDashboard>('/admin/security/dashboard', options),
+  getCapabilitySummary: (options: ApiGetOptions = {}) => api.get<CapabilitySummary>('/admin/capabilities/summary', options),
   listVulnerabilities: (params: SecurityQuery, options: ApiGetOptions = {}) => api.get<SecurityVulnerabilityPage>('/admin/security/vulnerabilities', { ...options, params }),
   listVulnerablePackages: (params: SecurityBaseQuery, options: ApiGetOptions = {}) => api.get<SecurityPackagePage>('/admin/security/packages', { ...options, params }),
   listSuggestions: (params: SecurityBaseQuery, options: ApiGetOptions = {}) => api.get<SecuritySuggestionPage>('/admin/security/suggestions', { ...options, params }),

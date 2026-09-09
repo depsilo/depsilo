@@ -16,6 +16,7 @@ import type {
   RecentDownloadsResponse,
   RuleTestResponse,
   SecurityDashboard,
+  CapabilitySummary,
   SecurityPackagePage,
   SecuritySuggestionPage,
   SecurityVulnerabilityPage,
@@ -152,6 +153,9 @@ const canonicalAdminApiDefaults = {
     last_scan_at: null,
     scan_in_progress: false,
   } satisfies SecurityDashboard,
+  'GET /api/v1/admin/capabilities/summary': {
+    version: 'dev', commit: 'unknown', build_date: 'unknown', capabilities: [],
+  } satisfies CapabilitySummary,
   'GET /api/v1/admin/security/vulnerabilities': { items: [], total: 0, page: 1 } satisfies SecurityVulnerabilityPage,
   'GET /api/v1/admin/security/packages': { items: [], total: 0, page: 1 } satisfies SecurityPackagePage,
   'GET /api/v1/admin/security/suggestions': { items: [], total: 0, page: 1 } satisfies SecuritySuggestionPage,
