@@ -346,3 +346,31 @@ func TestWarmupJobRetentionPrunesOnlyOldTerminalJobs(t *testing.T) {
 		t.Fatal("fresh terminal job was pruned")
 	}
 }
+
+func TestWarmupHistoryMarksInterruptedJobsAfterRestart(t *testing.T) {
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "warmup-history.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.AutoMigrate(&db.ControlPlaneState{}); err != nil {
+		t.Fatal(err)
+	}
+	if sqlDB, err := database.DB(); err == nil {
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
+	handler := NewWarmupHandler(nil, nil, nil, &config.Config{}, database)
+	handler.jobs["job-1"] = &warmupJob{ID: "job-1", Principal: 7, Ecosystem: "pypi", Status: "running", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), Items: []warmupItem{{Package: "requests", Status: "queued"}}}
+	handler.persistJobs()
+
+	restarted := NewWarmupHandler(nil, nil, nil, &config.Config{}, database)
+	job, ok := restarted.jobs["job-1"]
+	if !ok {
+		t.Fatal("persisted warmup job was not loaded")
+	}
+	job.mu.RLock()
+	status, item := job.Status, job.Items[0]
+	job.mu.RUnlock()
+	if status != "interrupted" || item.Status != "interrupted" {
+		t.Fatalf("restarted job = %q item=%q", status, item.Status)
+	}
+}

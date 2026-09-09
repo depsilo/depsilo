@@ -15,12 +15,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	npmadapter "depsilo/internal/adapter/npm"
 	pypiadapter "depsilo/internal/adapter/pypi"
 	"depsilo/internal/asyncruntime"
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
+	depsdb "depsilo/internal/db"
 	"depsilo/internal/middleware"
 	"depsilo/internal/packagepolicy"
 	"depsilo/internal/upstream"
@@ -36,13 +38,15 @@ const (
 )
 
 type WarmupHandler struct {
-	cacheMgr *cache.Manager
-	pools    map[string]*upstream.Pool
-	cfg      *config.Config
-	tasks    asyncruntime.Submitter
-	running  atomic.Bool
-	jobsMu   sync.Mutex
-	jobs     map[string]*warmupJob
+	cacheMgr  *cache.Manager
+	pools     map[string]*upstream.Pool
+	cfg       *config.Config
+	tasks     asyncruntime.Submitter
+	running   atomic.Bool
+	jobsMu    sync.Mutex
+	jobs      map[string]*warmupJob
+	db        *gorm.DB
+	persistMu sync.Mutex
 }
 
 type warmupJob struct {
@@ -64,14 +68,99 @@ type warmupItem struct {
 }
 
 // NewWarmupHandler binds warmup work to the server's async runtime.
-func NewWarmupHandler(tasks asyncruntime.Submitter, cacheMgr *cache.Manager, pools map[string]*upstream.Pool, cfg *config.Config) *WarmupHandler {
-	return &WarmupHandler{
+func NewWarmupHandler(tasks asyncruntime.Submitter, cacheMgr *cache.Manager, pools map[string]*upstream.Pool, cfg *config.Config, databases ...*gorm.DB) *WarmupHandler {
+	h := &WarmupHandler{
 		cacheMgr: cacheMgr,
 		pools:    pools,
 		cfg:      cfg,
 		tasks:    tasks,
 		jobs:     make(map[string]*warmupJob),
 	}
+	if len(databases) > 0 {
+		h.db = databases[0]
+		h.loadPersistedJobs()
+	}
+	return h
+}
+
+const warmupStateKey = "admin.warmup.jobs"
+
+type durableWarmupState struct {
+	Jobs []durableWarmupJob `json:"jobs"`
+}
+type durableWarmupJob struct {
+	ID        string       `json:"id"`
+	Principal uint         `json:"principal"`
+	Ecosystem string       `json:"ecosystem"`
+	Status    string       `json:"status"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
+	Items     []warmupItem `json:"items"`
+}
+
+func (h *WarmupHandler) loadPersistedJobs() {
+	if h.db == nil {
+		return
+	}
+	var state depsdb.ControlPlaneState
+	if err := h.db.Where("key = ?", warmupStateKey).First(&state).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			zap.L().Warn("warmup history unavailable", zap.Error(err))
+		}
+		return
+	}
+	var saved durableWarmupState
+	if err := json.Unmarshal([]byte(state.Value), &saved); err != nil || len(saved.Jobs) > maxWarmupJobs {
+		zap.L().Warn("warmup history ignored: invalid state")
+		return
+	}
+	changed := false
+	for _, item := range saved.Jobs {
+		if item.ID == "" || item.Principal == 0 || len(item.Items) > maxWarmupPackages {
+			continue
+		}
+		if item.Status == "queued" || item.Status == "running" || item.Status == "cancelling" {
+			item.Status = "interrupted"
+			item.UpdatedAt = time.Now().UTC()
+			for i := range item.Items {
+				if item.Items[i].Status == "queued" || item.Items[i].Status == "running" {
+					item.Items[i].Status = "interrupted"
+					item.Items[i].Detail = "service restarted before this package completed"
+				}
+			}
+			changed = true
+		} else if !warmupTerminal(item.Status) {
+			continue
+		}
+		h.jobs[item.ID] = &warmupJob{ID: item.ID, Principal: item.Principal, Ecosystem: item.Ecosystem, Status: item.Status, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, Items: item.Items, cancel: func() {}}
+	}
+	if changed {
+		if err := h.persistJobs(); err != nil {
+			zap.L().Warn("warmup history save failed", zap.Error(err))
+		}
+	}
+}
+
+func (h *WarmupHandler) persistJobs() error {
+	if h.db == nil {
+		return nil
+	}
+	h.persistMu.Lock()
+	defer h.persistMu.Unlock()
+	h.jobsMu.Lock()
+	saved := durableWarmupState{Jobs: make([]durableWarmupJob, 0, len(h.jobs))}
+	for _, job := range h.jobs {
+		job.mu.RLock()
+		saved.Jobs = append(saved.Jobs, durableWarmupJob{ID: job.ID, Principal: job.Principal, Ecosystem: job.Ecosystem, Status: job.Status, CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt, Items: append([]warmupItem(nil), job.Items...)})
+		job.mu.RUnlock()
+	}
+	h.jobsMu.Unlock()
+	b, err := json.Marshal(saved)
+	if err != nil {
+		return err
+	}
+	state := depsdb.ControlPlaneState{Key: warmupStateKey, Value: string(b), UpdatedAt: time.Now().UTC()}
+	return h.db.Save(&state).Error
 }
 
 // Warmup accepts a list of packages and pre-fetches their index into cache.
@@ -135,6 +224,15 @@ func (h *WarmupHandler) Warmup(c *gin.Context) {
 	}
 	h.jobs[job.ID] = job
 	h.jobsMu.Unlock()
+	if err := h.persistJobs(); err != nil {
+		cancelJob()
+		h.jobsMu.Lock()
+		delete(h.jobs, job.ID)
+		h.jobsMu.Unlock()
+		release()
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "WARMUP_UNAVAILABLE", "message": "could not persist warmup job"})
+		return
+	}
 	if err := h.tasks.Submit(func(ctx context.Context) {
 		defer release()
 		defer cancelJob()
@@ -395,7 +493,6 @@ func (h *WarmupHandler) runWarmupJob(parent context.Context, job *warmupJob, eco
 
 func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail string) {
 	job.mu.Lock()
-	defer job.mu.Unlock()
 	for i := range job.Items {
 		if job.Items[i].Package == pkg {
 			job.Items[i].Status, job.Items[i].Detail = status, detail
@@ -403,6 +500,8 @@ func (h *WarmupHandler) updateWarmupItem(job *warmupJob, pkg, status, detail str
 		}
 	}
 	job.UpdatedAt = time.Now().UTC()
+	job.mu.Unlock()
+	h.persistJobs()
 }
 
 func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
@@ -423,6 +522,7 @@ func (h *WarmupHandler) finishWarmupJob(job *warmupJob, status string) {
 	}
 	job.Status, job.UpdatedAt = status, time.Now().UTC()
 	job.mu.Unlock()
+	h.persistJobs()
 }
 
 func warmupTerminal(status string) bool {

@@ -217,7 +217,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.POST("/cache/indexes/:id/refresh", cacheHandler.RefreshIndex)
 
 	// Cache warmup
-	warmupHandler := admin.NewWarmupHandler(deps.Tasks, deps.CacheMgr, deps.Pools, deps.Config)
+	warmupHandler := admin.NewWarmupHandler(deps.Tasks, deps.CacheMgr, deps.Pools, deps.Config, deps.DB)
 	adminWrite.POST("/cache/warmup", warmupHandler.Warmup)
 	adminRead.GET("/cache/warmup/:id", warmupHandler.Status)
 	adminWrite.DELETE("/cache/warmup/:id", warmupHandler.Cancel)
