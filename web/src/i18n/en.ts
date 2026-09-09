@@ -410,6 +410,10 @@ const en = {
       warmupItemStopped: 'stopped before completion',
       warmupCancel: 'Cancel warmup',
       warmupRetryFailed: 'Retry failed items',
+      warmupJobExpired: 'This warmup job is no longer retained.',
+      warmupJobLoadFailed: 'Unable to load warmup progress. Try again later.',
+      warmupActionFailed: 'The warmup action failed. The job was not changed.',
+      warmupCancelConfirm: 'Cancel this warmup job? Completed packages will remain cached.',
     },
 
     // Cached package indexes

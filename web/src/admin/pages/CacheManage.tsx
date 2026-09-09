@@ -121,6 +121,7 @@ export default function CacheManageV2() {
     queryFn: ({ signal }) => adminApi.getWarmup(warmupJobId as string, { signal }),
     enabled: warmupOpen && warmupJobId !== null,
     refetchInterval: query => {
+      if (query.state.error) return false
       const status = query.state.data?.data.status
       return status && ['succeeded', 'partial', 'failed', 'cancelled', 'interrupted'].includes(status) ? false : 1500
     },
@@ -441,6 +442,9 @@ export default function CacheManageV2() {
           {warmupState.status === 'submitting' && <InlineNotice tone="warning">{t('cache.warmupSubmitting')}</InlineNotice>}
           {warmupState.status === 'accepted' && <InlineNotice tone="info">{t('cache.warmupAccepted', { count: warmupState.count })}</InlineNotice>}
           {warmupState.status === 'failed' && <InlineNotice tone="danger">{t('cache.warmupFailed', { reason: warmupState.message })}</InlineNotice>}
+          {warmupJobId && warmupJobQuery.isError && <InlineNotice tone="danger">{getApiError(warmupJobQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(warmupJobQuery.error).status === 404 ? t('cache.warmupJobExpired') : t('cache.warmupJobLoadFailed')}</InlineNotice>}
+          {cancelWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
+          {retryWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
           {warmupJobId && warmupJobQuery.data?.data && (
             <div className="space-y-3 rounded-[6px] border border-[var(--border)] p-3" data-testid="warmup-job-status">
               <div className="flex justify-between gap-3 text-[12px]">
@@ -456,7 +460,7 @@ export default function CacheManageV2() {
                 ))}
               </ul>
               {['queued', 'running', 'cancelling'].includes(warmupJobQuery.data.data.status) && canWrite && (
-                <ButtonV2 type="button" variant="secondary" size="sm" disabled={cancelWarmupMutation.isPending} onClick={() => cancelWarmupMutation.mutate()}>
+                <ButtonV2 type="button" variant="secondary" size="sm" disabled={cancelWarmupMutation.isPending} onClick={() => { if (window.confirm(t('cache.warmupCancelConfirm'))) cancelWarmupMutation.mutate() }}>
                   {t('cache.warmupCancel')}
                 </ButtonV2>
               )}
