@@ -88,20 +88,23 @@ export default function CacheManageV2() {
     onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }) },
   })
 
-  const cleanupMutation = useMutation({
-    mutationFn: async () => (await adminApi.cleanupCache()).data,
-    onSuccess: (result) => {
-      setCleanupOpen(false)
-      toast.show({ tone: 'success', message: result.message })
-    },
-    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }) },
-  })
-
   const cleanupPreviewQuery = useQuery({
     queryKey: ['admin', 'cache', 'cleanup-preview'],
     queryFn: ({ signal }) => adminApi.previewCacheCleanup({ page: 1, page_size: 8 }, { signal }),
     enabled: cleanupOpen,
     retry: false,
+  })
+
+  const cleanupMutation = useMutation({
+    mutationFn: async () => {
+      const planId = cleanupPreviewQuery.data?.data.plan_id
+      return (await adminApi.cleanupCache(planId)).data
+    },
+    onSuccess: (result) => {
+      setCleanupOpen(false)
+      toast.show({ tone: 'success', message: result.message })
+    },
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }) },
   })
 
   const items = data?.data?.items || []
@@ -380,7 +383,7 @@ export default function CacheManageV2() {
             cleanupMutation.reset()
             setCleanupOpen(false)
           }}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !canWrite} onClick={() => cleanupMutation.mutate()}>
+          <ButtonV2 variant="danger" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
             {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
           </ButtonV2>
         </div>

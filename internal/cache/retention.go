@@ -102,6 +102,24 @@ type PreviewEntry struct {
 	Reason       string    `json:"reason"`
 }
 
+// RemoveIfMatches removes an entry only when the preview snapshot still
+// describes the current row. It returns attempted=false for a disappeared or
+// changed entry, allowing callers to report a safe skip.
+func (retention *Retention) RemoveIfMatches(ctx context.Context, candidate PreviewEntry) (Removal, bool, error) {
+	if retention == nil || retention.manager == nil {
+		return Removal{}, false, errors.New("cache retention is unavailable")
+	}
+	return retention.removeCandidate(ctx, db.CacheEntry{
+		ID: candidate.ID, Key: candidate.Key, Size: candidate.Size,
+		AdapterType: candidate.AdapterType, PackageName: candidate.PackageName,
+		ExpiresAt: candidate.ExpiresAt, LastAccessed: candidate.LastAccessed,
+	}, func(current db.CacheEntry) bool {
+		return current.Key == candidate.Key && current.Size == candidate.Size &&
+			current.AdapterType == candidate.AdapterType && current.PackageName == candidate.PackageName &&
+			current.ExpiresAt.Equal(candidate.ExpiresAt) && current.LastAccessed.Equal(candidate.LastAccessed)
+	})
+}
+
 // Removal reports which irreversible stages completed. A caller can therefore
 // distinguish an untouched entry from an object that was removed before a
 // retryable metadata failure.

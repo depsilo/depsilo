@@ -412,6 +412,22 @@ func TestRetentionPreviewMatchesManualOrderWithoutMutation(t *testing.T) {
 	assertRetentionEntryExists(t, fixture, oldest.ID, true)
 }
 
+func TestRetentionRemoveIfMatchesSkipsChangedEntry(t *testing.T) {
+	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 90, TargetPercent: 80})
+	now := time.Now().UTC()
+	entry := seedRetentionEntry(t, fixture, "changed", 10, now.Add(-time.Hour), now)
+	var candidate PreviewEntry
+	candidate.ID, candidate.Key, candidate.Size = entry.ID, entry.Key, entry.Size
+	candidate.AdapterType, candidate.ExpiresAt, candidate.LastAccessed = entry.AdapterType, entry.ExpiresAt, entry.LastAccessed
+	if err := fixture.database.Model(&db.CacheEntry{}).Where("id = ?", entry.ID).Update("size", 11).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, attempted, err := fixture.retention.RemoveIfMatches(context.Background(), candidate); err != nil || attempted {
+		t.Fatalf("changed candidate result = attempted=%v err=%v", attempted, err)
+	}
+	assertRetentionEntryExists(t, fixture, entry.ID, true)
+}
+
 func TestRetentionCapacityModeDoesNothingBelowInitialThreshold(t *testing.T) {
 	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 100, ThresholdPercent: 80, TargetPercent: 50})
 	entry := seedRetentionEntry(t, fixture, "expired-below-threshold", 70, time.Now().Add(-time.Hour), time.Now())

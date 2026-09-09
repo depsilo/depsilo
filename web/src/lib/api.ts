@@ -169,7 +169,7 @@ export const adminApi = {
   // Cache
   listCache: (params: CacheQuery, options: ApiGetOptions = {}) => api.get<CacheListResponse>('/admin/cache', { ...options, params }),
   deleteCache: (id: number) => api.delete<CacheDeleteResponse>(`/admin/cache/${id}`),
-  cleanupCache: () => api.post<CacheCleanupResponse>('/admin/cache/cleanup'),
+  cleanupCache: (planId?: string) => api.post<CacheCleanupResponse>('/admin/cache/cleanup', planId ? { plan_id: planId } : undefined),
   previewCacheCleanup: (params: { page?: number; page_size?: number } = {}, options: ApiGetOptions = {}) =>
     api.get<CacheCleanupPreviewResponse>('/admin/cache/cleanup/preview', { ...options, params }),
   getCacheDistribution: (options: ApiGetOptions = {}) => api.get<CacheDistributionResponse>('/admin/cache/distribution', options),

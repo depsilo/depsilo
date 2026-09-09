@@ -1,12 +1,14 @@
 package admin
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +18,7 @@ import (
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/cache"
 	"depsilo/internal/db"
+	"depsilo/internal/middleware"
 	"depsilo/internal/upstreamupdates"
 )
 
@@ -24,6 +27,14 @@ type CacheHandler struct {
 	retention      *cache.Retention
 	maxSizeGB      int
 	indexRefresher upstreamupdates.Refresher
+	plansMu        sync.Mutex
+	plans          map[string]cleanupPlan
+}
+
+type cleanupPlan struct {
+	principalID uint
+	expiresAt   time.Time
+	items       []cache.PreviewEntry
 }
 
 type cacheIndexItem struct {
@@ -126,7 +137,7 @@ func (h *CacheHandler) ListIndexes(c *gin.Context) {
 }
 
 func NewCacheHandler(database *gorm.DB, retention *cache.Retention, maxSizeGB int) *CacheHandler {
-	return &CacheHandler{db: database, retention: retention, maxSizeGB: maxSizeGB}
+	return &CacheHandler{db: database, retention: retention, maxSizeGB: maxSizeGB, plans: make(map[string]cleanupPlan)}
 }
 
 // SetIndexRefresher configures the callback used by RefreshIndex. It is
@@ -413,6 +424,16 @@ func (h *CacheHandler) Delete(c *gin.Context) {
 }
 
 func (h *CacheHandler) Cleanup(c *gin.Context) {
+	var request struct {
+		PlanID string `json:"plan_id"`
+	}
+	if c.Request.Body != nil && c.Request.ContentLength != 0 {
+		_ = c.ShouldBindJSON(&request)
+	}
+	if planID := strings.TrimSpace(request.PlanID); planID != "" {
+		h.cleanupPlan(c, planID)
+		return
+	}
 	report, err := h.retention.Reclaim(c.Request.Context(), cache.ReclaimModeManual)
 	if err != nil {
 		zap.L().Error("manual cache cleanup", zap.Error(err))
@@ -454,6 +475,47 @@ func (h *CacheHandler) Cleanup(c *gin.Context) {
 	})
 }
 
+func (h *CacheHandler) cleanupPlan(c *gin.Context, planID string) {
+	principal, ok := middleware.PrincipalFromContext(c)
+	if !ok || !principal.CanWrite {
+		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "write permission is required"})
+		return
+	}
+	h.plansMu.Lock()
+	plan, found := h.plans[planID]
+	if found && time.Now().After(plan.expiresAt) {
+		delete(h.plans, planID)
+		found = false
+	}
+	if found && plan.principalID != principal.ID {
+		found = false
+	}
+	if found {
+		delete(h.plans, planID)
+	}
+	h.plansMu.Unlock()
+	if !found {
+		c.JSON(http.StatusConflict, gin.H{"code": "CACHE_PLAN_EXPIRED", "message": "cleanup preview expired or belongs to another operator"})
+		return
+	}
+	deleted, skipped, failed := 0, 0, 0
+	var reclaimed int64
+	for _, candidate := range plan.items {
+		removal, attempted, err := h.retention.RemoveIfMatches(c.Request.Context(), candidate)
+		if !attempted {
+			skipped++
+			continue
+		}
+		if err != nil || !removal.MetadataRemoved {
+			failed++
+			continue
+		}
+		deleted++
+		reclaimed += removal.ReclaimedBytes
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "cleanup completed", "deleted": deleted, "skipped": skipped, "failed": failed, "reclaimed_bytes": reclaimed, "planned": len(plan.items)})
+}
+
 // PreviewCleanup reports the same manual retention candidates without
 // mutating cache metadata or objects.
 func (h *CacheHandler) PreviewCleanup(c *gin.Context) {
@@ -469,6 +531,31 @@ func (h *CacheHandler) PreviewCleanup(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "CACHE_PREVIEW_FAILED", "message": "cache cleanup preview is unavailable"})
 		return
 	}
+	principal, ok := middleware.PrincipalFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "UNAUTHORIZED", "message": "principal unavailable"})
+		return
+	}
+	planBytes := make([]byte, 18)
+	if _, err := rand.Read(planBytes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "CACHE_PREVIEW_FAILED", "message": "could not create cleanup plan"})
+		return
+	}
+	planID := fmt.Sprintf("%x", planBytes)
+	expiresAt := time.Now().Add(5 * time.Minute)
+	h.plansMu.Lock()
+	for key, existing := range h.plans {
+		if time.Now().After(existing.expiresAt) {
+			delete(h.plans, key)
+		}
+	}
+	if len(h.plans) >= 32 {
+		h.plansMu.Unlock()
+		c.JSON(http.StatusTooManyRequests, gin.H{"code": "CACHE_PREVIEW_LIMIT", "message": "too many cleanup previews"})
+		return
+	}
+	h.plans[planID] = cleanupPlan{principalID: principal.ID, expiresAt: expiresAt, items: append([]cache.PreviewEntry(nil), preview.Items...)}
+	h.plansMu.Unlock()
 	c.JSON(http.StatusOK, gin.H{
 		"generated_at":           preview.GeneratedAt,
 		"usage_bytes":            preview.UsageBytes,
@@ -481,6 +568,8 @@ func (h *CacheHandler) PreviewCleanup(c *gin.Context) {
 		"items":                  preview.Items,
 		"page":                   page,
 		"page_size":              pageSize,
+		"plan_id":                planID,
+		"plan_expires_at":        expiresAt,
 	})
 }
 

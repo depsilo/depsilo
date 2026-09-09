@@ -101,6 +101,7 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
   'GET /api/v1/admin/blocklist/status': { enabled: true, count: 0 },
   'GET /api/v1/admin/blocklist/overrides': { items: [] },
   'GET /api/v1/admin/cache/distribution': { total_size: 0, max_size: 1, by_type: [], top_packages: [] },
+  'GET /api/v1/admin/cache/cleanup/preview': { generated_at: '2026-08-06T00:00:00Z', usage_bytes: 0, threshold_bytes: 1, target_bytes: 0, logical_bytes: 0, candidate_count: 0, physical_usage_known: true, items: [], page: 1, page_size: 8, plan_id: 'fixture-plan', plan_expires_at: '2099-01-01T00:00:00Z' },
   'GET /api/v1/admin/cache': { items: [], total: 0 },
   'GET /api/v1/admin/cache/indexes': { items: [], summary: [], total: 0, page: 1, page_size: 25 },
   'GET /api/v1/admin/users': [{ id: 1, username: 'admin', role: 'admin', enabled: true }],

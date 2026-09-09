@@ -237,6 +237,8 @@ export interface CacheCleanupResponse {
   lru_removed: number
   usage_before: number
   usage_after: number
+  skipped?: number
+  planned?: number
 }
 export interface CacheCleanupPreviewItem {
   id: number
@@ -261,6 +263,8 @@ export interface CacheCleanupPreviewResponse {
   items: CacheCleanupPreviewItem[]
   page: number
   page_size: number
+  plan_id: string
+  plan_expires_at: string
 }
 export interface CacheTypeBreakdown { type: string; size: number; file_count: number }
 export interface CachePackageSize { name: string; type: string; size: number; hit_count: number }
