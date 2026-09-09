@@ -419,7 +419,7 @@ expected = {
     "configured upstream": database.execute(
         "SELECT COUNT(*) FROM upstream_records WHERE adapter_type = 'npm' AND name = 'upgrade-fixture'"
     ).fetchone()[0],
-    "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 3,
+        "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 4,
 }
 failed = [name for name, value in expected.items() if value not in (1, True)]
 if failed:

@@ -337,7 +337,7 @@ import sys
 
 database = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
 checks = {
-    "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 3,
+    "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 4,
     "administrator": database.execute(
         "SELECT COUNT(*) FROM users WHERE username = 'v091-image-upgrade-admin' AND role = 'admin' AND enabled = 1"
     ).fetchone()[0] == 1,
@@ -360,4 +360,4 @@ if failed:
     raise SystemExit("v0.9.1 image/state upgrade contract is incomplete: " + ", ".join(failed))
 PY
 
-echo 'v0.9.1 immutable image/state -> current upgrade contract passed (published digest, shipped named-volume layout, config, schema v3, password/JWT/API tokens, entitlement, safe package-rule migration)'
+echo 'v0.9.1 immutable image/state -> current upgrade contract passed (published digest, shipped named-volume layout, config, schema v4, password/JWT/API tokens, entitlement, safe package-rule migration)'
