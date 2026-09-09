@@ -35,6 +35,8 @@ func Run(cmd string, args []string) int {
 		return runVersion(args)
 	case "doctor":
 		return runDoctor(args)
+	case "diagnose":
+		return runDiagnose(args)
 	case "init-agent":
 		return runInitAgent(args)
 	case "prompt":
@@ -59,6 +61,7 @@ Commands:
     stop                        Stop the running daemon
     status [--json]             Show server health, cache stats, upstreams
     doctor [--json]             Run end-to-end health diagnosis with hints
+    diagnose [--out file]       Write a local, redacted diagnostic report
     init-agent [--format ...]   Write CLAUDE.md / AGENTS.md / .cursorrules so
                                 AI coding agents auto-detect Depsilo
     prompt [--url ...]          Print the project-integration prompt for an

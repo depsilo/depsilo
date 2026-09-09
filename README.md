@@ -239,6 +239,15 @@ Run the built-in diagnosis directly or through the container:
 ```bash
 depsilo doctor
 docker exec depsilo /app/depsilo doctor
+
+Write a local redacted report for sharing during support:
+
+```bash
+depsilo diagnose --out depsilo-diagnostic.json
+```
+
+The report is created with owner-only permissions and omits configuration,
+credentials, request samples, package identities, and client addresses.
 ```
 
 ## Optional integrations
