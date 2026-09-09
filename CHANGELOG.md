@@ -5,6 +5,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-09-09
+
+### Added
+- Runtime capability summaries, security capability status, access-log request
+  details, and local redacted diagnostics for operator troubleshooting.
+- Read-only cache cleanup previews with execution bound to the reviewed plan.
+- Bounded asynchronous cache warmup jobs with progress, retry, cancellation,
+  restart recovery, and persisted history.
+- Read-only MCP request explanations with bounded and redacted request facts.
+- A reproducible package-install benchmark harness and upgrade qualification
+  coverage.
+
+### Changed
+- Dashboard cache rates exclude requests whose cache outcome is unknown.
+- Warmup and cache-miss UI states now distinguish accepted, completed, and
+  failed work without presenting unknown outcomes as success.
+
+### Fixed
+- Diagnostic output now bounds and redacts request facts and sensitive URLs.
+- Warmup history fails closed when persisted state is corrupt or unavailable;
+  unreadable state is never replaced with an empty history.
+- Schema-v4 upgrade and release verification coverage now exercises the current
+  migration and recovery boundaries.
+
 ## [0.9.2] - 2026-09-02
 
 ### Upgrade notes
