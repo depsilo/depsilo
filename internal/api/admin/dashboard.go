@@ -197,7 +197,10 @@ func (h *DashboardHandler) aggWindow(from, to time.Time) aggSnapshot {
 			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
 			COALESCE(SUM(bytes_sent), 0) AS bytes,
 			COALESCE(SUM(latency_ms), 0) AS sum_latency`).
-		Where("created_at >= ? AND created_at < ?", from, to).
+		// Empty cache_result is retained for pre-diagnostics rows. New
+		// diagnostic rows use "unknown" for blocked/incomplete outcomes;
+		// those must not inflate the hit-rate denominator or served bytes.
+		Where("created_at >= ? AND created_at < ? AND (cache_result IN (?, ?) OR cache_result = '')", from, to, "hit", "miss").
 		Scan(&out)
 	return out
 }
@@ -376,7 +379,7 @@ func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWind
 			COALESCE(SUM(latency_ms), 0) AS sum_latency_ms,
 			COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`,
 			intervalSec, intervalSec).
-		Where("created_at >= ? AND created_at <= ?", window.start, window.now).
+		Where("created_at >= ? AND created_at <= ? AND (cache_result IN (?, ?) OR cache_result = '')", window.start, window.now, "hit", "miss").
 		Group("bucket").Order("bucket ASC").Scan(&rows)
 	if result.Error != nil {
 		return nil, result.Error

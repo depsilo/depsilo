@@ -436,6 +436,7 @@ func TestDashboardTrends_RawQueryIsBoundedAndZeroFillsGaps(t *testing.T) {
 	rows := []db.AccessLog{
 		{Hit: true, StatusCode: 200, CreatedAt: start.Add(-time.Second)},
 		{Hit: true, StatusCode: 200, CreatedAt: start},
+		{Hit: false, CacheResult: "unknown", StatusCode: 403, CreatedAt: start.Add(time.Second)},
 		{Hit: true, StatusCode: 200, CreatedAt: fixedTrendsNow.Add(-time.Second)},
 		{Hit: true, StatusCode: 200, CreatedAt: fixedTrendsNow.Add(time.Second)},
 	}
