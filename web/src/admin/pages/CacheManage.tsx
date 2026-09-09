@@ -25,6 +25,7 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
+import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { CacheQuery } from '@/lib/adminApi.types'
@@ -53,6 +54,7 @@ export default function CacheManageV2() {
   const queryClient = useQueryClient()
   const toast = useAppToast()
   const { canWrite } = usePrincipal()
+  const warmupJobStorageKey = 'depsilo:last-warmup-job'
   const [search, setSearch] = useState('')
   const [adapterType, setAdapterType] = useState('all')
   const [page, setPage] = useState(1)
@@ -61,7 +63,7 @@ export default function CacheManageV2() {
   const [warmupOpen, setWarmupOpen] = useState(false)
   const [warmupEco, setWarmupEco] = useState('pypi')
   const [warmupText, setWarmupText] = useState('')
-  const [warmupJobId, setWarmupJobId] = useState<string | null>(null)
+  const [warmupJobId, setWarmupJobId] = useState<string | null>(() => readLocalStorage(warmupJobStorageKey))
   const [warmupState, setWarmupState] = useState<WarmupState>({ status: 'idle' })
 
   const params: CacheQuery = { page, page_size: 20 }
@@ -122,6 +124,17 @@ export default function CacheManageV2() {
     mutationFn: () => adminApi.cancelWarmup(warmupJobId as string),
     onSuccess: () => { void warmupJobQuery.refetch() },
   })
+  const retryWarmupMutation = useMutation({
+    mutationFn: () => adminApi.retryWarmup(warmupJobId as string),
+    onSuccess: (response) => {
+      const nextID = response.data?.job_id
+      if (nextID) {
+        setWarmupJobId(nextID)
+        writeLocalStorage(warmupJobStorageKey, nextID)
+        setWarmupState({ status: 'accepted', count: response.data.packages || 0 })
+      }
+    },
+  })
 
   const items = data?.data?.items || []
   const total = data?.data?.total || 0
@@ -135,7 +148,7 @@ export default function CacheManageV2() {
       description={t('cache.subtitle')}
       actions={canWrite ? (
         <>
-          <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupState({ status: 'idle' }); setWarmupJobId(null) }}>
+          <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupState({ status: 'idle' }) }}>
             <Icon name="download" size="sm" />
             {t('cache.warmup')}
           </ButtonV2>
@@ -441,6 +454,11 @@ export default function CacheManageV2() {
                   {t('cache.warmupCancel')}
                 </ButtonV2>
               )}
+              {['partial', 'failed', 'interrupted'].includes(warmupJobQuery.data.data.status) && canWrite && warmupJobQuery.data.data.items.some(item => item.status === 'failed') && (
+                <ButtonV2 type="button" variant="secondary" size="sm" disabled={retryWarmupMutation.isPending} onClick={() => retryWarmupMutation.mutate()}>
+                  {t('cache.warmupRetryFailed')}
+                </ButtonV2>
+              )}
             </div>
           )}
           <div className="flex justify-end gap-3">
@@ -453,6 +471,7 @@ export default function CacheManageV2() {
                   const packages = warmupText.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
                   const res = await adminApi.warmupCache({ ecosystem: warmupEco, packages })
                   setWarmupJobId(res.data?.job_id || null)
+                  if (res.data?.job_id) writeLocalStorage(warmupJobStorageKey, res.data.job_id)
                   setWarmupState({ status: 'accepted', count: res.data?.packages || packages.length })
                 } catch (error) {
                   setWarmupState({ status: 'failed', message: getApiError(error).message })

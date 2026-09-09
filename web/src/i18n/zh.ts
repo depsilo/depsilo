@@ -405,6 +405,7 @@ const zh = {
       warmupJobStatus: '任务状态：{{status}}',
       warmupResults: '预热包结果',
       warmupCancel: '取消预热',
+      warmupRetryFailed: '重试失败项',
     },
 
     // 软件包索引缓存

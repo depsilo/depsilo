@@ -179,6 +179,7 @@ export const adminApi = {
   warmupCache: (data: { ecosystem: string; packages: string[] }) => api.post<WarmupJobResponse>('/admin/cache/warmup', data),
   getWarmup: (id: string, options: ApiGetOptions = {}) => api.get<WarmupJobResponse>(`/admin/cache/warmup/${id}`, options),
   cancelWarmup: (id: string) => api.delete(`/admin/cache/warmup/${id}`),
+  retryWarmup: (id: string) => api.post<WarmupJobResponse>(`/admin/cache/warmup/${id}/retry`),
 
   // Compiler cache
   getCompileCacheStatus: (options: ApiGetOptions = {}) => api.get<CompileCacheStatusResponse>('/admin/compile-cache/status', options),

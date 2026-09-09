@@ -405,6 +405,7 @@ const en = {
       warmupJobStatus: 'Job status: {{status}}',
       warmupResults: 'Warmup package results',
       warmupCancel: 'Cancel warmup',
+      warmupRetryFailed: 'Retry failed items',
     },
 
     // Cached package indexes

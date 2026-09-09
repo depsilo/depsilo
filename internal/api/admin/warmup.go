@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -206,6 +207,45 @@ func (h *WarmupHandler) Cancel(c *gin.Context) {
 	status := job.Status
 	job.mu.Unlock()
 	c.JSON(http.StatusAccepted, gin.H{"job_id": job.ID, "status": status})
+}
+
+// Retry re-submits only failed inputs from a completed job through the normal
+// admission path; it cannot add new packages or bypass policy checks.
+func (h *WarmupHandler) Retry(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Param("id"))
+	principal, principalOK := middleware.PrincipalFromContext(c)
+	h.jobsMu.Lock()
+	job, ok := h.jobs[jobID]
+	h.jobsMu.Unlock()
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"code": "WARMUP_NOT_FOUND", "message": "warmup job not found"})
+		return
+	}
+	if !principalOK || !principal.CanWrite || job.Principal != principal.ID {
+		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "write permission for this warmup job is required"})
+		return
+	}
+	job.mu.RLock()
+	failed := make([]string, 0, len(job.Items))
+	for _, item := range job.Items {
+		if item.Status == "failed" {
+			failed = append(failed, item.Package)
+		}
+	}
+	ecosystem := job.Ecosystem
+	job.mu.RUnlock()
+	if len(failed) == 0 {
+		c.JSON(http.StatusConflict, gin.H{"code": "WARMUP_NO_FAILED_ITEMS", "message": "warmup has no failed items to retry"})
+		return
+	}
+	body, err := json.Marshal(map[string]any{"ecosystem": ecosystem, "packages": failed})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "WARMUP_UNAVAILABLE", "message": "could not create retry request"})
+		return
+	}
+	c.Request.Body = io.NopCloser(strings.NewReader(string(body)))
+	c.Request.ContentLength = int64(len(body))
+	h.Warmup(c)
 }
 
 func (h *WarmupHandler) doWarmup(parent context.Context, ecosystem string, packages []string, pool *upstream.Pool) {
