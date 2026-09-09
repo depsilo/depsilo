@@ -402,6 +402,9 @@ const zh = {
       warmupSubmitting: '正在提交预热请求。完成情况会单独报告。',
       warmupAccepted: '已接受 {{count}} 个包的预热请求，后台仍在处理中。',
       warmupFailed: '无法启动预热：{{reason}}',
+      warmupJobStatus: '任务状态：{{status}}',
+      warmupResults: '预热包结果',
+      warmupCancel: '取消预热',
     },
 
     // 软件包索引缓存

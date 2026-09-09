@@ -402,6 +402,9 @@ const en = {
       warmupSubmitting: 'Warmup request is being submitted. Completion will be reported separately.',
       warmupAccepted: 'Warmup accepted for {{count}} packages. Processing continues in the background.',
       warmupFailed: 'Warmup could not be started: {{reason}}',
+      warmupJobStatus: 'Job status: {{status}}',
+      warmupResults: 'Warmup package results',
+      warmupCancel: 'Cancel warmup',
     },
 
     // Cached package indexes
