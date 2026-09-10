@@ -261,22 +261,30 @@ func (retention *Retention) Preview(ctx context.Context, page, pageSize int) (Re
 	var lruCount, lruBytes int64
 	if lruEnabled {
 		need := postExpiryUsage - retention.target
-		stop := errors.New("preview target reached")
-		var batch []db.CacheEntry
-		err := newQuery().Where("datetime(expires_at) >= datetime(?)", now).
-			Select("id, size").Order("last_accessed ASC, id ASC").
-			FindInBatches(&batch, 500, func(_ *gorm.DB, _ int) error {
-				for _, row := range batch {
-					lruCount++
-					lruBytes += maxInt64(row.Size, 0)
-					if lruBytes >= need {
-						return stop
-					}
+		var cursorTime time.Time
+		var cursorID uint
+		for {
+			batch := make([]db.CacheEntry, 0, 500)
+			query := newQuery().Where("datetime(expires_at) >= datetime(?)", now).
+				Select("id, size, last_accessed").Order("last_accessed ASC, id ASC").Limit(500)
+			if cursorID != 0 {
+				query = query.Where("(last_accessed > ? OR (last_accessed = ? AND id > ?))", cursorTime, cursorTime, cursorID)
+			}
+			if err := query.Find(&batch).Error; err != nil {
+				return preview, fmt.Errorf("list LRU cache preview: %w", err)
+			}
+			for _, row := range batch {
+				lruCount++
+				lruBytes += maxInt64(row.Size, 0)
+				if lruBytes >= need {
+					break
 				}
-				return nil
-			}).Error
-		if err != nil && !errors.Is(err, stop) {
-			return preview, fmt.Errorf("list LRU cache preview: %w", err)
+			}
+			if lruBytes >= need || len(batch) < 500 {
+				break
+			}
+			last := batch[len(batch)-1]
+			cursorTime, cursorID = last.LastAccessed, last.ID
 		}
 	}
 	preview.CandidateCount = expiredCount

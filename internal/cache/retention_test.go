@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -410,6 +411,48 @@ func TestRetentionPreviewMatchesManualOrderWithoutMutation(t *testing.T) {
 	}
 	assertRetentionEntryExists(t, fixture, expired.ID, true)
 	assertRetentionEntryExists(t, fixture, oldest.ID, true)
+}
+
+func TestRetentionPreviewLRUUsesCompositeCursorAcrossBatches(t *testing.T) {
+	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 1000, ThresholdPercent: 80, TargetPercent: 50})
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	for i := 1; i <= 1199; i++ {
+		seedRetentionEntry(t, fixture, fmt.Sprintf("lru-%04d", i), 1, now.Add(time.Hour), now.Add(time.Duration(i)*time.Second))
+	}
+	oldest := seedRetentionEntry(t, fixture, "lru-oldest", 1, now.Add(time.Hour), now.Add(-time.Second))
+
+	const pageSize = 100
+	const wantCandidates = 700
+	seen := make(map[uint]struct{}, wantCandidates)
+	for page := 1; page <= (wantCandidates+pageSize-1)/pageSize; page++ {
+		preview, err := fixture.retention.Preview(context.Background(), page, pageSize)
+		if err != nil {
+			t.Fatalf("preview page %d: %v", page, err)
+		}
+		if preview.CandidateCount != wantCandidates || preview.LogicalBytes != wantCandidates {
+			t.Fatalf("preview page %d summary = count %d bytes %d", page, preview.CandidateCount, preview.LogicalBytes)
+		}
+		for _, item := range preview.Items {
+			if item.Reason != "lru" {
+				t.Fatalf("preview page %d item reason = %q", page, item.Reason)
+			}
+			if _, duplicate := seen[item.ID]; duplicate {
+				t.Fatalf("preview repeated candidate %d on page %d", item.ID, page)
+			}
+			seen[item.ID] = struct{}{}
+		}
+	}
+	if len(seen) != wantCandidates {
+		t.Fatalf("preview candidates = %d, want %d", len(seen), wantCandidates)
+	}
+	if _, ok := seen[oldest.ID]; !ok {
+		t.Fatalf("composite cursor skipped oldest candidate %d", oldest.ID)
+	}
+	if preview, err := fixture.retention.Preview(context.Background(), 8, pageSize); err != nil {
+		t.Fatal(err)
+	} else if len(preview.Items) != 0 {
+		t.Fatalf("page after candidate range returned %d items", len(preview.Items))
+	}
 }
 
 func TestRetentionRemoveIfMatchesSkipsChangedEntry(t *testing.T) {
