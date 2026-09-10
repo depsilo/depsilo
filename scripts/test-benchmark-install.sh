@@ -10,7 +10,7 @@ report=json.loads(sys.argv[1])
 assert report['status'] == 'NOT_RUN'
 assert report['ecosystem'] == sys.argv[2]
 assert report['runs'] == 2
-assert report['scenarios'] == ['direct_cold','depsilo_cold','depsilo_hot','client_warm_direct','client_warm_depsilo']
+assert report['scenarios'] == ['direct_cold','depsilo_client_cold','depsilo_hot_client_cold','client_warm_direct','client_warm_depsilo']
 PY
 done
 echo 'benchmark harness dry-run checks passed'

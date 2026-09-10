@@ -55,7 +55,7 @@ function canonicalizeSearchParams(current: URLSearchParams): URLSearchParams {
   else next.delete('ecosystem')
 
   const result = current.get('result')
-  if (result === 'hit' || result === 'miss') next.set('result', result)
+  if (result === 'hit' || result === 'miss' || result === 'unknown') next.set('result', result)
   else next.delete('result')
 
   const page = parsePage(current.get('page'))
@@ -99,6 +99,7 @@ export default function AccessLogsV2() {
   if (adapterType !== 'all') params.adapter_type = adapterType
   if (hitFilter === 'hit') params.hit = true
   if (hitFilter === 'miss') params.hit = false
+  if (hitFilter === 'unknown') params.result = 'unknown'
 
   const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
     queryKey: ['admin', 'logs', params],
@@ -185,6 +186,7 @@ export default function AccessLogsV2() {
   }
 
   const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || hitFilter !== 'all')
+  const cacheResult = (row: AccessLog) => row.cache_result || (row.hit ? 'hit' : 'unknown')
 
   return (
     <AdminPage
@@ -247,6 +249,7 @@ export default function AccessLogsV2() {
             <option value="all">{t('all')}</option>
             <option value="hit">{t('logs.hit')}</option>
             <option value="miss">{t('logs.miss')}</option>
+            <option value="unknown">{t('logs.unknown')}</option>
           </SelectV2>
         </div>
 
@@ -311,11 +314,11 @@ export default function AccessLogsV2() {
 
                   {/* Result */}
                   <td className="py-2 px-3">
-                    <span title={t(row.hit ? 'logs.hitHint' : 'logs.missHint')}>
-                      <BadgeV2 variant={row.hit ? 'success' : 'neutral'}>
-                        {row.hit ? 'HIT' : 'MISS'}
+                    <span title={t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}>
+                      <BadgeV2 variant={cacheResult(row) === 'hit' ? 'success' : cacheResult(row) === 'miss' ? 'neutral' : 'warning'}>
+                        {cacheResult(row) === 'hit' ? 'HIT' : cacheResult(row) === 'miss' ? 'MISS' : 'UNKNOWN'}
                       </BadgeV2>
-                      <span className="sr-only">{t(row.hit ? 'logs.hitHint' : 'logs.missHint')}</span>
+                      <span className="sr-only">{t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}</span>
                     </span>
                   </td>
 

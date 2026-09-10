@@ -29,6 +29,7 @@ type accessLogFilter struct {
 	Search      string
 	AdapterType string
 	Hit         *bool
+	Result      string
 	Page        int
 	PageSize    int
 }
@@ -40,6 +41,7 @@ type accessLogResponse struct {
 	CacheKey    string    `json:"cache_key"`
 	PackageName string    `json:"package_name"`
 	Hit         bool      `json:"hit"`
+	CacheResult string    `json:"cache_result"`
 	Upstream    string    `json:"upstream"`
 	LatencyMs   int64     `json:"latency_ms"`
 	StatusCode  int       `json:"status_code"`
@@ -104,6 +106,14 @@ func parseAccessLogFilter(c *gin.Context) (accessLogFilter, error) {
 		}
 		filter.Hit = &hit
 	}
+	if raw := c.Query("result"); raw != "" {
+		switch raw {
+		case "hit", "miss", "unknown":
+			filter.Result = raw
+		default:
+			return accessLogFilter{}, fmt.Errorf("result must be hit, miss, or unknown")
+		}
+	}
 	return filter, nil
 }
 
@@ -118,6 +128,13 @@ func applyAccessLogFilter(database *gorm.DB, filter accessLogFilter) *gorm.DB {
 	if filter.Hit != nil {
 		query = query.Where("hit = ?", *filter.Hit)
 	}
+	if filter.Result != "" {
+		if filter.Result == "unknown" {
+			query = query.Where("COALESCE(NULLIF(cache_result, ''), 'unknown') = ?", filter.Result)
+		} else {
+			query = query.Where("cache_result = ?", filter.Result)
+		}
+	}
 	return query
 }
 
@@ -131,6 +148,7 @@ func toAccessLogResponses(items []db.AccessLog) []accessLogResponse {
 			CacheKey:    item.CacheKey,
 			PackageName: item.PackageName,
 			Hit:         item.Hit,
+			CacheResult: normalizedAccessCacheResult(item.CacheResult),
 			Upstream:    item.Upstream,
 			LatencyMs:   item.LatencyMs,
 			StatusCode:  item.StatusCode,
@@ -140,6 +158,15 @@ func toAccessLogResponses(items []db.AccessLog) []accessLogResponse {
 		}
 	}
 	return responses
+}
+
+func normalizedAccessCacheResult(result string) string {
+	switch result {
+	case "hit", "miss", "unknown":
+		return result
+	default:
+		return "unknown"
+	}
 }
 
 func (h *AccessLogHandler) List(c *gin.Context) {
@@ -243,7 +270,7 @@ func (h *AccessLogHandler) Detail(c *gin.Context) {
 	}
 	detail := accessLogDetailResponse{
 		accessLogResponse: toAccessLogResponses([]db.AccessLog{item})[0],
-		RequestID:         item.RequestID, CacheResult: item.CacheResult, CacheReason: item.CacheReason,
+		RequestID:         item.RequestID, CacheResult: normalizedAccessCacheResult(item.CacheResult), CacheReason: item.CacheReason,
 		PolicyDecision: item.PolicyDecision, PolicyReason: item.PolicyReason,
 		DeliveryResult: item.DeliveryResult, DeliveryReason: item.DeliveryReason,
 		AuditEvents: make([]accessLogAuditEvent, 0),

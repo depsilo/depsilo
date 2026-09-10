@@ -510,6 +510,23 @@ test('Cache cleanup stays busy until success then closes and toasts the service 
   await expect(page.locator('[data-toast-tone="success"]')).toContainText('fixture cleanup completed')
 })
 
+test('Cache cleanup keeps a partial result visible instead of claiming success', async ({ page }) => {
+  await mockAdminApi(page, {
+    'POST /api/v1/admin/cache/cleanup': {
+      message: 'fixture cleanup partially completed', outcome: 'partial',
+      deleted: 1, skipped: 1, failed: 1, planned_count: 3, planned_bytes: 3, total_candidate_count: 8,
+    },
+  })
+  await page.goto('/admin/cache')
+  await page.getByRole('button', { name: /清理过期|Clean Expired/ }).click()
+  const dialog = page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })
+  await dialog.getByRole('button', { name: /确认清理|Confirm/ }).click()
+  await expect(dialog).toContainText(/partially completed|部分完成/)
+  await expect(dialog).toContainText(/deleted 1|已删除 1/)
+  await expect(dialog.getByRole('button', { name: /确认清理|Confirm/ })).toBeDisabled()
+  await expect(page.locator('[data-toast-tone="success"]')).toHaveCount(0)
+})
+
 test('Cache delete clears an old failure before the confirmation dialog is reopened', async ({ page }) => {
   const entry = {
     id: 41, key: 'pypi/simple/fixture/index.html', adapter_type: 'pypi', package_name: 'fixture',

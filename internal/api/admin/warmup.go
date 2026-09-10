@@ -286,7 +286,13 @@ func (h *WarmupHandler) startWarmup(c *gin.Context, ecosystem string, packages [
 		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "SERVER_SHUTTING_DOWN", "message": "cache warmup is unavailable"})
 		return
 	}
-	h.pruneWarmupJobs(time.Now().UTC())
+	if h.pruneWarmupJobs(time.Now().UTC()) {
+		if err := h.saveHistoryLocked(); err != nil {
+			release()
+			h.historyReadyLocked(c)
+			return
+		}
+	}
 	if len(h.jobs) >= maxWarmupJobs {
 		release()
 		c.JSON(http.StatusTooManyRequests, gin.H{"code": "WARMUP_QUEUE_FULL", "message": "too many warmup jobs"})
@@ -341,6 +347,22 @@ func (h *WarmupHandler) pruneWarmupJobs(now time.Time) bool {
 	for id, job := range h.jobs {
 		if warmupTerminal(job.Status) && now.Sub(job.UpdatedAt) >= warmupJobRetention {
 			delete(h.jobs, id)
+			removed = true
+		}
+	}
+	if len(h.jobs) >= maxWarmupJobs {
+		var oldestID string
+		var oldest time.Time
+		for id, job := range h.jobs {
+			if !warmupTerminal(job.Status) {
+				continue
+			}
+			if oldestID == "" || job.UpdatedAt.Before(oldest) {
+				oldestID, oldest = id, job.UpdatedAt
+			}
+		}
+		if oldestID != "" {
+			delete(h.jobs, oldestID)
 			removed = true
 		}
 	}
@@ -592,11 +614,22 @@ func (h *WarmupHandler) finishWarmupJobLocked(job *warmupJob, status string) {
 		}
 	}
 	if status == "succeeded" {
+		succeeded, failed := 0, 0
 		for _, item := range job.Items {
-			if item.Status == "failed" {
-				status = "partial"
-				break
+			switch item.Status {
+			case "succeeded":
+				succeeded++
+			case "failed":
+				failed++
 			}
+		}
+		switch {
+		case succeeded == len(job.Items):
+			status = "succeeded"
+		case succeeded == 0 && failed == len(job.Items):
+			status = "failed"
+		default:
+			status = "partial"
 		}
 	}
 	job.Status, job.UpdatedAt = status, time.Now().UTC()

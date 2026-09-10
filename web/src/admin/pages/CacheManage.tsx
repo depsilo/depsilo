@@ -28,7 +28,7 @@ import { getApiError } from '@/lib/apiError'
 import { readLocalStorage, writeLocalStorage } from '@/lib/storage'
 import { ECOSYSTEM_COLORS as ECO_COLORS } from '@/lib/ecosystemColors'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
-import type { CacheQuery } from '@/lib/adminApi.types'
+import type { CacheCleanupResponse, CacheQuery } from '@/lib/adminApi.types'
 
 const WARMUP_ECOSYSTEMS = ['pypi', 'npm']
 const WARMUP_STATUS_KEYS: Record<string, string> = {
@@ -66,6 +66,8 @@ export default function CacheManageV2() {
   const [page, setPage] = useState(1)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [cleanupOpen, setCleanupOpen] = useState(false)
+  const [cleanupResult, setCleanupResult] = useState<CacheCleanupResponse | null>(null)
+  const [cleanupSession, setCleanupSession] = useState(0)
   const [warmupOpen, setWarmupOpen] = useState(false)
   const [warmupEco, setWarmupEco] = useState('pypi')
   const [warmupText, setWarmupText] = useState('')
@@ -98,10 +100,14 @@ export default function CacheManageV2() {
   })
 
   const cleanupPreviewQuery = useQuery({
-    queryKey: ['admin', 'cache', 'cleanup-preview'],
+    queryKey: ['admin', 'cache', 'cleanup-preview', cleanupSession],
     queryFn: ({ signal }) => adminApi.previewCacheCleanup({ page: 1, page_size: 8 }, { signal }),
     enabled: cleanupOpen,
     retry: false,
+    staleTime: Infinity,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
   const cleanupMutation = useMutation({
@@ -110,10 +116,21 @@ export default function CacheManageV2() {
       return (await adminApi.cleanupCache(planId)).data
     },
     onSuccess: (result) => {
-      setCleanupOpen(false)
-      toast.show({ tone: 'success', message: result.message })
+      setCleanupResult(result)
+      const outcome = result.outcome || (result.failed || result.skipped ? 'partial' : 'succeeded')
+      if (outcome === 'succeeded' && !result.interrupted) {
+        setCleanupOpen(false)
+        toast.show({ tone: 'success', message: result.message })
+      } else {
+        toast.show({ tone: outcome === 'failed' ? 'danger' : 'warning', message: result.message })
+      }
     },
-    onSettled: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'cache'] }) },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'cache'],
+        predicate: query => query.queryKey[2] !== 'cleanup-preview',
+      })
+    },
   })
 
   const warmupJobQuery = useQuery({
@@ -159,7 +176,7 @@ export default function CacheManageV2() {
             <Icon name="download" size="sm" />
             {t('cache.warmup')}
           </ButtonV2>
-          <ButtonV2 type="button" variant="danger" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupOpen(true) }}>
+          <ButtonV2 type="button" variant="danger" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupResult(null); setCleanupSession(value => value + 1); setCleanupOpen(true) }}>
             <Icon name="delete_sweep" size="sm" />
             {t('cache.cleanExpired')}
           </ButtonV2>
@@ -385,6 +402,7 @@ export default function CacheManageV2() {
       <ModalV2 open={cleanupOpen} onClose={() => {
         if (cleanupMutation.isPending) return
         cleanupMutation.reset()
+        setCleanupResult(null)
         setCleanupOpen(false)
       }} title={t('cache.cleanExpiredTitle')} closeDisabled={cleanupMutation.isPending}>
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
@@ -400,6 +418,12 @@ export default function CacheManageV2() {
                 bytes: formatBytes(cleanupPreviewQuery.data.data.logical_bytes),
               })}
             </p>
+            <p className="text-[13px] text-[var(--text-soft)]">
+              {t('cache.previewPlanned', {
+                count: cleanupPreviewQuery.data.data.planned_count,
+                bytes: formatBytes(cleanupPreviewQuery.data.data.planned_bytes),
+              })}
+            </p>
             {cleanupPreviewQuery.data.data.items.length > 0 ? (
               <ul className="max-h-40 overflow-auto space-y-1 text-[12px] font-mono" aria-label={t('cache.previewItems')}>
                 {cleanupPreviewQuery.data.data.items.map((item) => (
@@ -413,13 +437,27 @@ export default function CacheManageV2() {
             <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewSnapshot')}</p>
           </div>
         ) : null}
+        {cleanupResult && (
+          <div className="mb-4">
+            <InlineNotice tone={cleanupResult.outcome === 'failed' || cleanupResult.interrupted ? 'danger' : 'warning'}>
+              {t('cache.cleanupResult', {
+                message: cleanupResult.message,
+                deleted: cleanupResult.deleted,
+                failed: cleanupResult.failed,
+                skipped: cleanupResult.skipped || 0,
+                planned: cleanupResult.planned_count || cleanupResult.planned || 0,
+              })}
+            </InlineNotice>
+          </div>
+        )}
         {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" disabled={cleanupMutation.isPending} onClick={() => {
             cleanupMutation.reset()
+            setCleanupResult(null)
             setCleanupOpen(false)
           }}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
+          <ButtonV2 variant="danger" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !!cleanupResult || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
             {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
           </ButtonV2>
         </div>

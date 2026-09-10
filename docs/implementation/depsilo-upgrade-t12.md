@@ -15,6 +15,9 @@ Go/race、集成、前端构建、260 条 Playwright 和发布脚本检查均通
 当前候选的离线复验结论仍为 **NO_GO**：代码门禁通过，但发布检查表要求的
 外部环境证据尚未在 `0f03968` 上补齐。
 
+本次复查修复仍在工作区，尚未形成候选 commit；下面新增的 R01/R04 证据只
+记录本地工作区命令结果，不能移用到上述候选或任何 tag。
+
 下方原始表格记录的是 `202c2d8` 候选上的逐项结果；除已明确写出当前复验的
 `make verify` 外，不把这些结果移绑定到 `0f03968`。这份记录把“代码已完成”
 和“具备发布条件”分开，所有未在对应候选上执行的项目都保留为 `NOT_RUN`。
@@ -31,7 +34,8 @@ Go/race、集成、前端构建、260 条 Playwright 和发布脚本检查均通
 | Docker Registry dind | NOT_RUN | `make test-docker-docker` 需要特权 Docker |
 | ccache/sccache 资格测试 | NOT_RUN | `make test-compiler-cache-qualified` 需要客户端和 Docker |
 | S3/MinIO | NOT_RUN | `make test-s3` 需要 Docker |
-| 在线依赖安全扫描 | NOT_RUN | `make security` 需要网络 |
+| 前端依赖审计（工作区复查） | PASS | 在未提交工作区锁文件上执行 `npm audit --audit-level=moderate`；升级受影响的 `@humanfs/node`、`js-yaml` 和 Vitest 4.1.11 后报告 0 vulnerabilities；需绑定新候选后重跑 |
+| 在线 Go 依赖安全扫描 | NOT_RUN | `make security` 需要网络 |
 | 二进制备份恢复 | NOT_RUN | 本次未执行 `depsilo backup --out ...` 的人工流程 |
 | 安装器、发布工作流脚本 | PASS | `make verify` 中的脚本测试；`test-benchmark-install.sh` dry-run 通过 |
 | 安装性能数字 | NOT_RUN | 本地 `/health` 返回 `service-unavailable`，没有生成伪造数据 |

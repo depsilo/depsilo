@@ -54,7 +54,7 @@ func TestAccessLogListAndExportShareFilters(t *testing.T) {
 	}
 	assertExactKeys(t, items[0],
 		"id", "adapter_type", "method", "cache_key", "package_name", "hit",
-		"upstream", "latency_ms", "status_code", "client_ip", "bytes_sent", "created_at",
+		"cache_result", "upstream", "latency_ms", "status_code", "client_ip", "bytes_sent", "created_at",
 	)
 	var total int64
 	var page, pageSize int
@@ -109,6 +109,26 @@ func TestAccessLogListAndExportShareFilters(t *testing.T) {
 	legacyExportRec := performAccessLogRequest(r, "/logs/export?"+legacyFilter)
 	if legacyExportRec.Code != http.StatusOK || legacyExportRec.Body.String() != exportRec.Body.String() {
 		t.Fatalf("legacy export differs: canonical=%s legacy_status=%d legacy=%s", exportRec.Body.String(), legacyExportRec.Code, legacyExportRec.Body.String())
+	}
+}
+
+func TestAccessLogUnknownResultIsExplicitAndFilterable(t *testing.T) {
+	database := newAccessLogTestDB(t)
+	if err := database.Create(&db.AccessLog{AdapterType: "pypi", PackageName: "legacy", Hit: false, StatusCode: 500, CreatedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatalf("seed legacy row: %v", err)
+	}
+	if err := database.Create(&db.AccessLog{AdapterType: "pypi", PackageName: "miss", Hit: false, CacheResult: "miss", StatusCode: 200, CreatedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatalf("seed miss row: %v", err)
+	}
+	rec := performAccessLogRequest(newAccessLogTestRouter(database), "/logs?result=unknown")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"package_name":"legacy"`) || strings.Contains(rec.Body.String(), `"package_name":"miss"`) {
+		t.Fatalf("unknown filter status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Items []accessLogResponse `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Items) != 1 || body.Items[0].CacheResult != "unknown" {
+		t.Fatalf("unknown response = %#v err=%v", body.Items, err)
 	}
 }
 

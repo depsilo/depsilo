@@ -352,6 +352,38 @@ func TestWarmupJobRetentionPrunesOnlyOldTerminalJobs(t *testing.T) {
 	}
 }
 
+func TestWarmupTerminalStatusDistinguishesAllFailureFromPartial(t *testing.T) {
+	allFailed := &warmupJob{Items: []warmupItem{{Status: "failed"}, {Status: "failed"}}}
+	handler := &WarmupHandler{}
+	handler.finishWarmupJob(allFailed, "succeeded")
+	if allFailed.Status != "failed" {
+		t.Fatalf("all failed status = %q, want failed", allFailed.Status)
+	}
+	partial := &warmupJob{Items: []warmupItem{{Status: "succeeded"}, {Status: "failed"}}}
+	handler.finishWarmupJob(partial, "succeeded")
+	if partial.Status != "partial" {
+		t.Fatalf("partial status = %q, want partial", partial.Status)
+	}
+}
+
+func TestWarmupPrunesOldestTerminalWhenHistoryIsFull(t *testing.T) {
+	jobs := make(map[string]*warmupJob, maxWarmupJobs)
+	base := time.Now().UTC().Add(-time.Hour)
+	for i := 0; i < maxWarmupJobs; i++ {
+		jobs[string(rune('a'+i))] = &warmupJob{Status: "succeeded", UpdatedAt: base.Add(time.Duration(i) * time.Minute)}
+	}
+	handler := &WarmupHandler{jobs: jobs}
+	if !handler.pruneWarmupJobs(time.Now().UTC()) {
+		t.Fatal("full terminal history was not pruned")
+	}
+	if len(handler.jobs) != maxWarmupJobs-1 {
+		t.Fatalf("history size = %d, want %d", len(handler.jobs), maxWarmupJobs-1)
+	}
+	if _, ok := handler.jobs[string(rune('a'))]; ok {
+		t.Fatal("oldest terminal job was retained")
+	}
+}
+
 func TestWarmupHistoryMarksInterruptedJobsAfterRestart(t *testing.T) {
 	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "warmup-history.db"))
 	if err != nil {

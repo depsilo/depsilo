@@ -1,9 +1,13 @@
 package admin
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -32,9 +36,11 @@ type CacheHandler struct {
 }
 
 type cleanupPlan struct {
-	principalID uint
-	expiresAt   time.Time
-	items       []cache.PreviewEntry
+	principalID         uint
+	expiresAt           time.Time
+	items               []cache.PreviewEntry
+	totalCandidateCount int64
+	plannedBytes        int64
 }
 
 type cacheIndexItem struct {
@@ -424,13 +430,21 @@ func (h *CacheHandler) Delete(c *gin.Context) {
 }
 
 func (h *CacheHandler) Cleanup(c *gin.Context) {
-	var request struct {
-		PlanID string `json:"plan_id"`
+	principal, ok := middleware.PrincipalFromContext(c)
+	if !ok || principal.ID == 0 || !principal.CanWrite {
+		c.JSON(http.StatusForbidden, gin.H{"code": "FORBIDDEN", "message": "write permission is required"})
+		return
 	}
-	if c.Request.Body != nil && c.Request.ContentLength != 0 {
-		_ = c.ShouldBindJSON(&request)
+	planID, err := parseCleanupRequest(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "BAD_REQUEST", "message": "cleanup body must be empty or contain exactly one nonempty plan_id string"})
+		return
 	}
-	if planID := strings.TrimSpace(request.PlanID); planID != "" {
+	if h.retention == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": "CACHE_CLEANUP_UNAVAILABLE", "message": "cache cleanup is not configured"})
+		return
+	}
+	if planID != "" {
 		h.cleanupPlan(c, planID)
 		return
 	}
@@ -475,6 +489,45 @@ func (h *CacheHandler) Cleanup(c *gin.Context) {
 	})
 }
 
+// parseCleanupRequest preserves only the explicitly supported legacy contract:
+// a request with no body invokes the broad manual reclaim. Any body must be a
+// strict plan request; malformed input must never fall through to reclaim.
+func parseCleanupRequest(body io.Reader) (string, error) {
+	if body == nil {
+		return "", nil
+	}
+	const maxBodyBytes = 1024
+	data, err := io.ReadAll(io.LimitReader(body, maxBodyBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(data) == 0 {
+		return "", nil
+	}
+	invalid := errors.New("invalid cleanup plan request")
+	if len(data) > maxBodyBytes {
+		return "", invalid
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return "", invalid
+	}
+	if token, err := decoder.Token(); err != nil || token != "plan_id" {
+		return "", invalid
+	}
+	var planID string
+	if err := decoder.Decode(&planID); err != nil || strings.TrimSpace(planID) == "" {
+		return "", invalid
+	}
+	if token, err := decoder.Token(); err != nil || token != json.Delim('}') {
+		return "", invalid
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return "", invalid
+	}
+	return strings.TrimSpace(planID), nil
+}
+
 func (h *CacheHandler) cleanupPlan(c *gin.Context, planID string) {
 	principal, ok := middleware.PrincipalFromContext(c)
 	if !ok || !principal.CanWrite {
@@ -499,21 +552,64 @@ func (h *CacheHandler) cleanupPlan(c *gin.Context, planID string) {
 		return
 	}
 	deleted, skipped, failed := 0, 0, 0
+	notAttempted := 0
+	interrupted := false
 	var reclaimed int64
-	for _, candidate := range plan.items {
+	results := make([]gin.H, 0, len(plan.items))
+	for index, candidate := range plan.items {
 		removal, attempted, err := h.retention.RemoveIfMatches(c.Request.Context(), candidate)
-		if !attempted {
-			skipped++
+		if err != nil {
+			failed++
+			results = append(results, gin.H{"id": candidate.ID, "status": "failed", "object_removed": removal.ObjectRemoved, "metadata_removed": removal.MetadataRemoved})
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				interrupted = true
+				notAttempted = len(plan.items) - index - 1
+				break
+			}
 			continue
 		}
-		if err != nil || !removal.MetadataRemoved {
+		if !attempted {
+			skipped++
+			results = append(results, gin.H{"id": candidate.ID, "status": "skipped", "object_removed": false, "metadata_removed": false})
+			continue
+		}
+		if !removal.MetadataRemoved {
 			failed++
+			results = append(results, gin.H{"id": candidate.ID, "status": "failed", "object_removed": removal.ObjectRemoved, "metadata_removed": false})
 			continue
 		}
 		deleted++
 		reclaimed += removal.ReclaimedBytes
+		results = append(results, gin.H{"id": candidate.ID, "status": "deleted", "object_removed": removal.ObjectRemoved, "metadata_removed": true})
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "cleanup completed", "deleted": deleted, "skipped": skipped, "failed": failed, "reclaimed_bytes": reclaimed, "planned": len(plan.items)})
+	outcome := "succeeded"
+	if failed > 0 || skipped > 0 {
+		outcome = "partial"
+		if deleted == 0 && len(plan.items) > 0 {
+			outcome = "failed"
+		}
+	}
+	if interrupted {
+		outcome = "partial"
+		if deleted == 0 && len(plan.items) > 0 {
+			outcome = "failed"
+		}
+	}
+	message := "cleanup completed"
+	if interrupted {
+		message = "cleanup interrupted before the plan completed"
+	} else if outcome == "partial" {
+		message = "cleanup partially completed"
+	} else if outcome == "failed" {
+		message = "cleanup failed"
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": message, "outcome": outcome, "interrupted": interrupted,
+		"deleted": deleted, "skipped": skipped, "failed": failed,
+		"reclaimed_bytes": reclaimed, "planned": len(plan.items), "planned_count": len(plan.items),
+		"planned_bytes": plan.plannedBytes, "total_candidate_count": plan.totalCandidateCount,
+		"not_attempted": notAttempted, "items": results,
+	})
 }
 
 // PreviewCleanup reports the same manual retention candidates without
@@ -554,7 +650,15 @@ func (h *CacheHandler) PreviewCleanup(c *gin.Context) {
 		c.JSON(http.StatusTooManyRequests, gin.H{"code": "CACHE_PREVIEW_LIMIT", "message": "too many cleanup previews"})
 		return
 	}
-	h.plans[planID] = cleanupPlan{principalID: principal.ID, expiresAt: expiresAt, items: append([]cache.PreviewEntry(nil), preview.Items...)}
+	var plannedBytes int64
+	for _, item := range preview.Items {
+		plannedBytes += item.Size
+	}
+	h.plans[planID] = cleanupPlan{
+		principalID: principal.ID, expiresAt: expiresAt,
+		items:               append([]cache.PreviewEntry(nil), preview.Items...),
+		totalCandidateCount: preview.CandidateCount, plannedBytes: plannedBytes,
+	}
 	h.plansMu.Unlock()
 	c.JSON(http.StatusOK, gin.H{
 		"generated_at":           preview.GeneratedAt,
@@ -563,6 +667,8 @@ func (h *CacheHandler) PreviewCleanup(c *gin.Context) {
 		"target_bytes":           preview.TargetBytes,
 		"logical_bytes":          preview.LogicalBytes,
 		"candidate_count":        preview.CandidateCount,
+		"planned_count":          len(preview.Items),
+		"planned_bytes":          plannedBytes,
 		"physical_usage_known":   preview.PhysicalUsageKnown,
 		"physical_usage_message": preview.PhysicalUsageMessage,
 		"items":                  preview.Items,

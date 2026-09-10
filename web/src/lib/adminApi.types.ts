@@ -172,6 +172,7 @@ export interface AccessLog {
   cache_key: string
   package_name: string
   hit: boolean
+  cache_result?: 'hit' | 'miss' | 'unknown' | string
   upstream: string
   latency_ms: number
   status_code: number
@@ -202,7 +203,7 @@ export interface AccessLogDetail extends AccessLog {
   audit_events: AccessLogAuditEvent[]
 }
 
-export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean }
+export interface AccessLogQuery { page?: number; page_size?: number; search?: string; adapter_type?: string; hit?: boolean; result?: 'hit' | 'miss' | 'unknown' }
 export interface AccessLogListResponse { items: AccessLog[]; total: number; page: number; page_size: number }
 
 export interface RecentDownload {
@@ -229,6 +230,8 @@ export interface CacheDeleteResponse {
 }
 export interface CacheCleanupResponse {
   message: string
+  outcome?: 'succeeded' | 'partial' | 'failed'
+  interrupted?: boolean
   deleted: number
   failed: number
   reclaimed_bytes: number
@@ -239,6 +242,16 @@ export interface CacheCleanupResponse {
   usage_after: number
   skipped?: number
   planned?: number
+  planned_count?: number
+  planned_bytes?: number
+  total_candidate_count?: number
+  not_attempted?: number
+  items?: Array<{
+    id: number
+    status: 'deleted' | 'skipped' | 'failed'
+    object_removed: boolean
+    metadata_removed: boolean
+  }>
 }
 export interface CacheCleanupPreviewItem {
   id: number
@@ -258,6 +271,8 @@ export interface CacheCleanupPreviewResponse {
   target_bytes: number
   logical_bytes: number
   candidate_count: number
+  planned_count: number
+  planned_bytes: number
   physical_usage_known: boolean
   physical_usage_message?: string
   items: CacheCleanupPreviewItem[]

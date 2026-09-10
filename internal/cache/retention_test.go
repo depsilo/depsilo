@@ -417,7 +417,11 @@ func TestRetentionPreviewLRUUsesCompositeCursorAcrossBatches(t *testing.T) {
 	fixture := newRetentionFixture(t, RetentionPolicy{MaxBytes: 1000, ThresholdPercent: 80, TargetPercent: 50})
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	for i := 1; i <= 1199; i++ {
-		seedRetentionEntry(t, fixture, fmt.Sprintf("lru-%04d", i), 1, now.Add(time.Hour), now.Add(time.Duration(i)*time.Second))
+		lastAccessed := now.Add(time.Duration(i-499) * time.Second)
+		if i <= 499 {
+			lastAccessed = now.Add(-time.Duration(501-i) * time.Second)
+		}
+		seedRetentionEntry(t, fixture, fmt.Sprintf("lru-%04d", i), 1, now.Add(time.Hour), lastAccessed)
 	}
 	oldest := seedRetentionEntry(t, fixture, "lru-oldest", 1, now.Add(time.Hour), now.Add(-time.Second))
 
