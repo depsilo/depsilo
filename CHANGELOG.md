@@ -5,6 +5,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-09-10
+
+### Changed
+- Cache cleanup plans now validate request bodies strictly, report bounded
+  execution outcomes honestly, and keep the preview scope visible in the Admin UI.
+- Access logs preserve and filter unknown cache outcomes instead of inferring MISS
+  from legacy boolean fields.
+- Warmup history distinguishes all-failed jobs from partial success and evicts
+  the oldest terminal record when its bounded history is full.
+- The package-install benchmark uses explicit registry endpoints and exact sample
+  counts, while frontend dependencies pass the moderate-level audit gate.
+
+### Fixed
+- LRU cleanup previews now page with a composite `(last_accessed, id)` cursor,
+  preserving candidates when database primary-key order differs from access order.
+
 ## [0.9.3] - 2026-09-09
 
 ### Added
