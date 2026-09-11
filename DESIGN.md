@@ -23,7 +23,9 @@ The active visual system is **Instrument**:
 
 - Signal green communicates cache hits, healthy state, active navigation, and
   focus. It replaced the old purple palette.
-- Amber means slow/degraded. Red means miss/danger/failure.
+- Amber means degraded or partially completed. Red means a real failure,
+  explicit refusal, or destructive action. A cache miss is a normal neutral
+  result; an unknown result means the outcome was not recorded.
 - Dark mode is the product default; light mode uses the same semantic roles.
 - Light mode uses a pure-white page canvas without ambient grain. Dark mode
   retains one subtle global grain layer mounted by `App`.
@@ -84,8 +86,23 @@ Tokens live in `web/src/index.css`. Tailwind v4 exposes matching utilities via
 | `--inverse` / `--on-inverse` | `#14181A` / `#FFFFFF` | Compact inverse tooltips and data details |
 | `--brand` / `--hit` | `#0FA86F` | Active, hit, healthy, focus |
 | `--btn-primary-bg` / `--btn` | `#0A8654` | Primary command |
-| `--warn` / `--slow` | `#B5770E` | Slow/degraded |
-| `--danger` | `#CF4444` | Miss/error/destructive |
+| `--warn` / `--slow` | `#B5770E` | Slow/degraded/partial |
+| `--danger` | `#CF4444` | Failure/refusal/destructive |
+
+### State Semantics
+
+Keep these dimensions separate when they appear together in Admin:
+
+| Dimension | Normal result | Attention result |
+| --- | --- | --- |
+| Cache result | `hit` uses signal green; `miss` is neutral because the request was fetched; `unknown` is neutral and means the result was not recorded | Do not turn a miss or unknown into a failure |
+| Policy result | `allow` uses the normal success treatment | `deny` is danger because the request was explicitly refused; an unknown decision remains unrecorded |
+| Delivery result | `upstream` or `completed` uses the normal success treatment | `failed` is danger; `cancelled` or a partial outcome uses warning; unknown remains unrecorded |
+
+Use warning for degraded or partial execution, and danger for real failures,
+explicit refusals, and destructive commands. HTTP success only describes the
+request transport; it does not make a cleanup operation complete when items
+were skipped or failed.
 
 Compatibility names such as `--brand` remain because existing components use
 them. New code may prefer role names (`--hit`, `--btn`, `--surface`, `--line`),

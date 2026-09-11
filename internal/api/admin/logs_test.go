@@ -90,12 +90,15 @@ func TestAccessLogListAndExportShareFilters(t *testing.T) {
 		t.Fatalf("content disposition = %q", disposition)
 	}
 	records := readAccessLogCSV(t, exportRec.Body.String())
-	expectedHeader := []string{"Time", "Method", "Ecosystem", "Package", "Hit", "Status", "Latency(ms)", "Bytes", "Upstream", "Client IP", "Cache Key"}
+	expectedHeader := []string{"Time", "Method", "Ecosystem", "Package", "Hit", "Status", "Latency(ms)", "Bytes", "Upstream", "Client IP", "Cache Key", "Cache Result"}
 	if len(records) != 2 || !reflect.DeepEqual(records[0], expectedHeader) {
 		t.Fatalf("csv records = %#v", records)
 	}
 	if records[1][3] != "requests" || records[1][4] != "true" {
 		t.Fatalf("csv data row = %#v", records[1])
+	}
+	if records[1][11] != "hit" {
+		t.Fatalf("csv cache result = %q, want hit", records[1][11])
 	}
 	if strings.Contains(exportRec.Body.String(), "react") || strings.Contains(exportRec.Body.String(), "10.0.0.2") || strings.Contains(exportRec.Body.String(), "10.0.0.4") {
 		t.Fatalf("export ignored list filters: %s", exportRec.Body.String())
@@ -117,6 +120,9 @@ func TestAccessLogUnknownResultIsExplicitAndFilterable(t *testing.T) {
 	if err := database.Create(&db.AccessLog{AdapterType: "pypi", PackageName: "legacy", Hit: false, StatusCode: 500, CreatedAt: time.Now().UTC()}).Error; err != nil {
 		t.Fatalf("seed legacy row: %v", err)
 	}
+	if err := database.Create(&db.AccessLog{AdapterType: "pypi", PackageName: "legacy-hit", Hit: true, StatusCode: 200, CreatedAt: time.Now().UTC()}).Error; err != nil {
+		t.Fatalf("seed legacy hit row: %v", err)
+	}
 	if err := database.Create(&db.AccessLog{AdapterType: "pypi", PackageName: "miss", Hit: false, CacheResult: "miss", StatusCode: 200, CreatedAt: time.Now().UTC()}).Error; err != nil {
 		t.Fatalf("seed miss row: %v", err)
 	}
@@ -129,6 +135,22 @@ func TestAccessLogUnknownResultIsExplicitAndFilterable(t *testing.T) {
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Items) != 1 || body.Items[0].CacheResult != "unknown" {
 		t.Fatalf("unknown response = %#v err=%v", body.Items, err)
+	}
+	export := performAccessLogRequest(newAccessLogTestRouter(database), "/logs/export?result=unknown")
+	if export.Code != http.StatusOK {
+		t.Fatalf("unknown export status = %d, body = %s", export.Code, export.Body.String())
+	}
+	records := readAccessLogCSV(t, export.Body.String())
+	if len(records) != 2 || records[1][3] != "legacy" || records[1][11] != "unknown" {
+		t.Fatalf("unknown export records = %#v", records)
+	}
+	hitExport := performAccessLogRequest(newAccessLogTestRouter(database), "/logs/export?result=hit")
+	if hitExport.Code != http.StatusOK {
+		t.Fatalf("hit export status = %d, body = %s", hitExport.Code, hitExport.Body.String())
+	}
+	hitRecords := readAccessLogCSV(t, hitExport.Body.String())
+	if len(hitRecords) != 2 || hitRecords[1][3] != "legacy-hit" || hitRecords[1][11] != "hit" {
+		t.Fatalf("legacy hit export records = %#v", hitRecords)
 	}
 }
 
@@ -228,7 +250,7 @@ func TestEncodeAccessLogsCSVNeutralizesAllTextCells(t *testing.T) {
 	records := readAccessLogCSV(t, string(data))
 	expected := []string{
 		"2026-07-10T08:30:00Z", "'=method", "'+ecosystem", "'-package", "true",
-		"200", "12", "34", "'@upstream", "'\tclient", "'\rcache",
+		"200", "12", "34", "'@upstream", "'\tclient", "'\rcache", "hit",
 	}
 	if len(records) != 2 || !reflect.DeepEqual(records[1], expected) {
 		t.Fatalf("neutralized row = %#v", records)

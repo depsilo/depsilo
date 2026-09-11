@@ -315,7 +315,7 @@ export default function AccessLogsV2() {
                   {/* Result */}
                   <td className="py-2 px-3">
                     <span title={t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}>
-                      <BadgeV2 variant={cacheResult(row) === 'hit' ? 'success' : cacheResult(row) === 'miss' ? 'neutral' : 'warning'}>
+                      <BadgeV2 variant={cacheResult(row) === 'hit' ? 'success' : 'neutral'}>
                         {cacheResult(row) === 'hit' ? 'HIT' : cacheResult(row) === 'miss' ? 'MISS' : 'UNKNOWN'}
                       </BadgeV2>
                       <span className="sr-only">{t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}</span>

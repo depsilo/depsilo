@@ -45,6 +45,28 @@ Go/race、集成、前端构建、260 条 Playwright 和发布脚本检查均通
 维护者在具备相应环境后，应在同一 commit 上补跑这些项目，再重新作出
 GO/NO_GO 判定。此记录不创建 tag、不发布镜像，也不代表官网已更新。
 
+## v0.9.4 当前证据索引
+
+以下发布证据绑定已发布的 `v0.9.4`；官网证据绑定独立仓库提交。
+它们不改写上面的历史候选结论，也不代表本轮未发布的修复已经通过发布门禁。
+
+| 项目 | 状态 | 证据 |
+| --- | --- | --- |
+| 主仓库提交 | PASS | `4ddee1ed598439c725cb828879da1490db166de2`，分支 `master` |
+| GitHub Release | PASS | [v0.9.4 Release](https://github.com/depsilo/depsilo/releases/tag/v0.9.4)，非 draft、非 prerelease |
+| CI | PASS | [CI run 34442688395](https://github.com/depsilo/depsilo/actions/runs/34442688395)，HEAD 与 v0.9.4 一致 |
+| Release workflow | PASS | [Release run 34442692936](https://github.com/depsilo/depsilo/actions/runs/34442692936)，HEAD 与 v0.9.4 一致 |
+| 真实客户端、Docker OCI、编译缓存、S3 与历史升级 | PASS（发布工作流） | 上述 Release run 的 `client-contracts` 六项作业均成功；结果仅绑定 v0.9.4 |
+| 官网源码 | PASS（本地提交） | 独立仓库 `/data/codelab/depsilo_workspace/depsilo-landingpage`；提交 `68bbaa0b537bf54dd45e24eeb1fe49eb83488ee8`，版本入口和双语文档已更新为 v0.9.4 |
+| 官网构建 | PASS（未发布） | 官网仓库 `npm run check`（0 errors/warnings/hints）、`npm run build`（16 pages）和 `git diff --check` |
+| 线上官网部署 | NOT_RUN | 未执行 Cloudflare/DNS/CDN 写入；官网提交尚未推送或部署 |
+| 手工备份恢复与真实安装性能测量 | NOT_RUN | 本次没有执行这些流程，发布工作流成功不替代手工验收或性能数据 |
+
+官网当前候选保留最小发布时间的安全停用说明，不展示可启用的正阈值；
+未生成性能倍数、客户数据或全生态安全覆盖等宣传结论。本次未在本地重跑
+网络、Docker、S3 或真实客户端验证；上表引用已发布提交的线上证据。
+本轮修复若作为新候选发布，仍需按该候选提交执行对应发布门禁。
+
 ## 复验命令
 
 ```bash

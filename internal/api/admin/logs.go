@@ -129,11 +129,7 @@ func applyAccessLogFilter(database *gorm.DB, filter accessLogFilter) *gorm.DB {
 		query = query.Where("hit = ?", *filter.Hit)
 	}
 	if filter.Result != "" {
-		if filter.Result == "unknown" {
-			query = query.Where("COALESCE(NULLIF(cache_result, ''), 'unknown') = ?", filter.Result)
-		} else {
-			query = query.Where("cache_result = ?", filter.Result)
-		}
+		query = query.Where("CASE WHEN cache_result IN ('hit', 'miss', 'unknown') THEN cache_result WHEN hit = 1 THEN 'hit' ELSE 'unknown' END = ?", filter.Result)
 	}
 	return query
 }
@@ -148,7 +144,7 @@ func toAccessLogResponses(items []db.AccessLog) []accessLogResponse {
 			CacheKey:    item.CacheKey,
 			PackageName: item.PackageName,
 			Hit:         item.Hit,
-			CacheResult: normalizedAccessCacheResult(item.CacheResult),
+			CacheResult: normalizedAccessCacheResult(item.CacheResult, item.Hit),
 			Upstream:    item.Upstream,
 			LatencyMs:   item.LatencyMs,
 			StatusCode:  item.StatusCode,
@@ -160,11 +156,14 @@ func toAccessLogResponses(items []db.AccessLog) []accessLogResponse {
 	return responses
 }
 
-func normalizedAccessCacheResult(result string) string {
+func normalizedAccessCacheResult(result string, legacyHit bool) string {
 	switch result {
 	case "hit", "miss", "unknown":
 		return result
 	default:
+		if legacyHit {
+			return "hit"
+		}
 		return "unknown"
 	}
 }
@@ -199,10 +198,11 @@ func (h *AccessLogHandler) List(c *gin.Context) {
 func encodeAccessLogsCSV(items []accessLogResponse) ([]byte, error) {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
-	if err := w.Write([]string{"Time", "Method", "Ecosystem", "Package", "Hit", "Status", "Latency(ms)", "Bytes", "Upstream", "Client IP", "Cache Key"}); err != nil {
+	if err := w.Write([]string{"Time", "Method", "Ecosystem", "Package", "Hit", "Status", "Latency(ms)", "Bytes", "Upstream", "Client IP", "Cache Key", "Cache Result"}); err != nil {
 		return nil, err
 	}
 	for _, item := range items {
+		cacheResult := normalizedAccessCacheResult(item.CacheResult, item.Hit)
 		record := []string{
 			item.CreatedAt.Format(time.RFC3339),
 			item.Method,
@@ -215,6 +215,7 @@ func encodeAccessLogsCSV(items []accessLogResponse) ([]byte, error) {
 			item.Upstream,
 			item.ClientIP,
 			item.CacheKey,
+			cacheResult,
 		}
 		for i := range record {
 			record[i] = neutralizeCSVCell(record[i])
@@ -270,7 +271,7 @@ func (h *AccessLogHandler) Detail(c *gin.Context) {
 	}
 	detail := accessLogDetailResponse{
 		accessLogResponse: toAccessLogResponses([]db.AccessLog{item})[0],
-		RequestID:         item.RequestID, CacheResult: normalizedAccessCacheResult(item.CacheResult), CacheReason: item.CacheReason,
+		RequestID:         item.RequestID, CacheResult: normalizedAccessCacheResult(item.CacheResult, item.Hit), CacheReason: item.CacheReason,
 		PolicyDecision: item.PolicyDecision, PolicyReason: item.PolicyReason,
 		DeliveryResult: item.DeliveryResult, DeliveryReason: item.DeliveryReason,
 		AuditEvents: make([]accessLogAuditEvent, 0),

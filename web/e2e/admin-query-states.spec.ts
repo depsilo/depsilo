@@ -499,27 +499,36 @@ test('Cache cleanup stays busy until success then closes and toasts the service 
     },
   })
   await page.goto('/admin/cache')
-  await page.getByRole('button', { name: /清理过期|Clean Expired/ }).click()
+  await page.getByRole('button', { name: /清理缓存|Clean Cache/ }).click()
   const confirm = page.getByRole('dialog').getByRole('button', { name: /确认清理|Confirm/ })
   await confirm.click()
   const cleaning = page.getByRole('dialog').getByRole('button', { name: /清理中|Cleaning/ })
   await expect(cleaning).toHaveAttribute('aria-busy', 'true')
   await expect(cleaning).toBeDisabled()
   cleanup.resolve()
-  await expect(page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })).toHaveCount(0)
+  await expect(page.getByRole('dialog', { name: /清理缓存|Clean Cache/ })).toHaveCount(0)
   await expect(page.locator('[data-toast-tone="success"]')).toContainText('fixture cleanup completed')
 })
 
 test('Cache cleanup keeps a partial result visible instead of claiming success', async ({ page }) => {
   await mockAdminApi(page, {
+    'GET /api/v1/admin/cache/cleanup/preview': {
+      generated_at: '2026-08-06T00:00:00Z', usage_bytes: 8, threshold_bytes: 8, target_bytes: 4,
+      logical_bytes: 3, candidate_count: 2, planned_count: 1, planned_bytes: 1,
+      physical_usage_known: true,
+      items: [{ id: 17, key: 'pypi/expired', package_name: 'expired-package', size: 1, reason: 'expired' }],
+      page: 1, page_size: 8, plan_id: 'fixture-plan', plan_expires_at: '2099-01-01T00:00:00Z',
+    },
     'POST /api/v1/admin/cache/cleanup': {
       message: 'fixture cleanup partially completed', outcome: 'partial',
       deleted: 1, skipped: 1, failed: 1, planned_count: 3, planned_bytes: 3, total_candidate_count: 8,
     },
   })
   await page.goto('/admin/cache')
-  await page.getByRole('button', { name: /清理过期|Clean Expired/ }).click()
-  const dialog = page.getByRole('dialog', { name: /清理过期缓存|Clean Expired Cache/ })
+  await page.getByRole('button', { name: /清理缓存|Clean Cache/ }).click()
+  const dialog = page.getByRole('dialog', { name: /清理缓存|Clean Cache/ })
+  await expect(dialog).toContainText(/expired|到期/i)
+  await expect(dialog).toContainText(/remaining candidates|其余候选/i)
   await dialog.getByRole('button', { name: /确认清理|Confirm/ }).click()
   await expect(dialog).toContainText(/partially completed|部分完成/)
   await expect(dialog).toContainText(/deleted 1|已删除 1/)
