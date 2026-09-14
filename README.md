@@ -120,6 +120,12 @@ For a long-lived deployment, replace `latest` with a full `X.Y.Z` release tag.
 Release images are published to GHCR as the canonical registry; Docker Hub is
 maintained as a mirror.
 
+The official image runs as fixed non-root UID/GID `10001:10001`. The named
+volume above is the default because Docker initializes it with the image's
+state-directory ownership. If you need the state files on the host, use the
+[bind-mount Compose variant](compose.bind.yaml), prepare the directory
+ownership first, and keep the mount target at `/root/.depsilo`.
+
 ### Docker Compose
 
 ```bash
@@ -129,10 +135,30 @@ docker compose logs depsilo
 ```
 
 The official Compose file contains one service, one port, and one persistent
-volume. Override the host port with `PORT=18080 docker compose up -d`, then open
-<http://127.0.0.1:18080>. The startup log reports the container listener; use
-the published host port in your browser and the logs to find the bootstrap
-token.
+volume. Set `DEPSILO_IMAGE=depsilo/depsilo:local` for a locally built image,
+`PORT=18080` to change the host port, or
+`DEPSILO_BIND_ADDRESS=127.0.0.1` to keep the service local to the host:
+
+```bash
+DEPSILO_IMAGE=depsilo/depsilo:local \
+DEPSILO_BIND_ADDRESS=127.0.0.1 \
+PORT=18080 \
+docker compose up -d --force-recreate
+```
+
+To persist state in a host directory instead of a Docker volume:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.bind.yaml
+export DEPSILO_IMAGE=depsilo/depsilo:local
+export DEPSILO_STATE_DIR="$HOME/.local/share/depsilo/state"
+docker compose -f compose.bind.yaml up -d
+```
+
+Prepare `$HOME/.local/share/depsilo/state` as described in the
+[deployment guide](docs/deployment.md#bind-mounted-state). The startup log
+reports the container listener; use the published host port in your browser
+and the logs to find the bootstrap token.
 
 The image runs as fixed non-root UID/GID `10001:10001`. See the
 [deployment guide](docs/deployment.md) for the one-time ownership command when

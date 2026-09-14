@@ -26,6 +26,67 @@ recreation.
 The official image runs Depsilo as the fixed non-root UID/GID `10001:10001`.
 New named volumes inherit that ownership automatically.
 
+The repository's [`compose.yaml`](../compose.yaml) is the named-volume
+deployment. It accepts `DEPSILO_IMAGE` for a local or pinned image,
+`DEPSILO_BIND_ADDRESS` for the host interface, and `PORT` for the published
+host port. Recreate the container after changing the image:
+
+```bash
+DEPSILO_IMAGE=depsilo/depsilo:local \
+DEPSILO_BIND_ADDRESS=127.0.0.1 \
+PORT=23332 \
+docker compose up -d --force-recreate
+```
+
+### Bind-mounted state
+
+Use a bind mount when host-side tools must read or back up the state root
+directly. Name the host directory `state/` (rather than `data/`) because it
+contains `config.toml` as well as the nested `data/` directory. The bind source
+must be owned by the image's fixed service identity, `10001:10001`:
+
+```bash
+state_dir="${DEPSILO_STATE_DIR:-$HOME/.local/share/depsilo/state}"
+mkdir -p "$state_dir"
+docker run --rm --user 0:0 \
+  --entrypoint /bin/chown \
+  --mount "type=bind,src=$state_dir,dst=/root/.depsilo" \
+  ghcr.io/depsilo/depsilo:latest \
+  -R 10001:10001 /root/.depsilo
+```
+
+Start the bind deployment with the checked-in template:
+
+```bash
+export DEPSILO_STATE_DIR="$HOME/.local/share/depsilo/state"
+export DEPSILO_IMAGE=ghcr.io/depsilo/depsilo:X.Y.Z
+docker compose -f compose.bind.yaml up -d
+```
+
+The same bind layout can be started directly with Docker Engine:
+
+```bash
+docker run -d --name depsilo \
+  --restart unless-stopped \
+  --publish "${PORT:-23333}:23333" \
+  --mount "type=bind,src=$state_dir,dst=/root/.depsilo" \
+  "${DEPSILO_IMAGE:-ghcr.io/depsilo/depsilo:X.Y.Z}"
+```
+
+Use `--mount type=volume,src=depsilo-data,dst=/root/.depsilo` in the same
+command for the named-volume variant. Keep one container and one state source
+at a time; changing the source creates a separate state unless you migrate it
+explicitly.
+
+The template uses `create_host_path: false`, so a typo or missing directory
+fails before the container starts instead of silently creating a root-owned
+directory. Do not use `user: root` as a permissions workaround; it can create
+state that the fixed service identity cannot reopen after an upgrade.
+
+On SELinux hosts, apply the host's normal container labeling policy to the bind
+directory. On rootless Docker, prefer the named-volume template because the
+daemon's UID mapping can differ from the numeric UID shown inside the image.
+
 ### Upgrade the Compose layout shipped in v0.9.0
 
 The v0.9.0 `docker-compose.yml` did not use the current state volume. It

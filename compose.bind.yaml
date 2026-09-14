@@ -1,0 +1,15 @@
+# Bind-mounted state is an explicit opt-in. Prepare the directory ownership
+# for UID/GID 10001:10001 before starting the service; see docs/deployment.md.
+services:
+  depsilo:
+    image: ${DEPSILO_IMAGE:-ghcr.io/depsilo/depsilo:latest}
+    container_name: depsilo
+    ports:
+      - "${DEPSILO_BIND_ADDRESS:-0.0.0.0}:${PORT:-23333}:23333"
+    volumes:
+      - type: bind
+        source: ${DEPSILO_STATE_DIR:?set DEPSILO_STATE_DIR to an existing state directory}
+        target: /root/.depsilo
+        bind:
+          create_host_path: false
+    restart: unless-stopped

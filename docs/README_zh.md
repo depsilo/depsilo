@@ -101,6 +101,11 @@ docker logs depsilo
 长期运行时，请将 `latest` 替换为完整的 `X.Y.Z` 发行标签。GHCR 是官方主镜像仓库，
 Docker Hub 作为镜像源同步维护。
 
+官方镜像固定以非 root UID/GID `10001:10001` 运行。上面的 named volume 会继承镜像
+中状态目录的所有权，因此是默认方案。如果必须直接在宿主机查看状态文件，请使用
+[bind mount Compose 模板](../compose.bind.yaml)，先准备目录所有权，并保持容器目标路径
+为 `/root/.depsilo`。
+
 镜像从 v0.9.1 起固定以非 root UID/GID `10001:10001` 运行。复用 v0.9.0 创建的
 旧 Volume 时，必须按[部署指南](deployment.md)完成一次性所有权迁移；使用 v0.9.0
 官方 bind-mount Compose 布局时，必须使用指南中的独立兼容流程。
@@ -113,10 +118,28 @@ docker compose up -d
 docker compose logs depsilo
 ```
 
-官方 Compose 文件只有一个服务、一个端口和一个持久化 Volume。可通过
-`PORT=18080 docker compose up -d` 修改宿主机端口，然后打开
-<http://127.0.0.1:18080>。启动日志显示的是容器监听地址；浏览器应使用宿主机发布
-端口，日志用于查找 bootstrap token。
+官方 Compose 文件只有一个服务、一个端口和一个持久化 Volume。可以用
+`DEPSILO_IMAGE=depsilo/depsilo:local` 使用本地构建镜像，用 `PORT=18080` 修改宿主机
+端口，或用 `DEPSILO_BIND_ADDRESS=127.0.0.1` 限制为本机访问：
+
+```bash
+DEPSILO_IMAGE=depsilo/depsilo:local \
+DEPSILO_BIND_ADDRESS=127.0.0.1 \
+PORT=18080 \
+docker compose up -d --force-recreate
+```
+
+如果要把状态保存到宿主机目录而不是 Docker volume：
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.bind.yaml
+export DEPSILO_IMAGE=depsilo/depsilo:local
+export DEPSILO_STATE_DIR="$HOME/.local/share/depsilo/state"
+docker compose -f compose.bind.yaml up -d
+```
+
+先按[部署指南](deployment.md#bind-mounted-state)准备 `$HOME/.local/share/depsilo/state` 的所有权。
+启动日志显示容器监听地址；浏览器应使用宿主机发布端口，日志用于查找 bootstrap token。
 
 ### 完成首次启动
 
