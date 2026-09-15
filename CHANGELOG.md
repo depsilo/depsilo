@@ -5,6 +5,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-15
+
+### Added
+- Deployment now supports both named Docker volumes and host bind mounts for
+  durable instance state.
+
+### Changed
+- The Admin navigation now groups work into Overview, Upstreams, Cache, Logs,
+  Security, and Projects, with instance-wide administration in the sidebar
+  footer.
+- Bandwidth reporting is part of Overview; metadata refresh and audit records
+  are grouped with access logs.
+- Security and quarantine views use compact labeled selectors, while preserving
+  existing deep links and browser navigation.
+
+### Fixed
+- Development server entry documents no longer remain stale after a frontend
+  rebuild.
+
 ## [0.9.4] - 2026-09-10
 
 ### Changed
