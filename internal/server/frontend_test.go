@@ -246,6 +246,22 @@ func TestFrontendServesEmbeddedFilesOnlyForSafeMethods(t *testing.T) {
 	}
 }
 
+func TestFrontendDocumentsAreNotCached(t *testing.T) {
+	engine := newFrontendTestEngine()
+
+	for _, requestPath := range []string{"/", "/admin/settings"} {
+		t.Run(requestPath, func(t *testing.T) {
+			response := serveFrontendRequest(engine, http.MethodGet, requestPath, map[string]string{"Accept": "text/html"})
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+			}
+			if cacheControl := response.Header().Get("Cache-Control"); cacheControl != "no-store" {
+				t.Fatalf("Cache-Control = %q, want no-store", cacheControl)
+			}
+		})
+	}
+}
+
 func TestFrontendFallbackRequiresBrowserNavigationRequest(t *testing.T) {
 	engine := newFrontendTestEngine()
 

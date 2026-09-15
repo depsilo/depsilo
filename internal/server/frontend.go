@@ -47,6 +47,9 @@ func registerFrontendFS(engine *gin.Engine, distFS fs.FS, extraProxyPrefixes ...
 				writeFrontendError(c, http.StatusMethodNotAllowed)
 				return
 			}
+			if requestPath == "/" || requestPath == "/index.html" {
+				c.Header("Cache-Control", "no-store")
+			}
 			staticHandler.ServeHTTP(c.Writer, c.Request)
 			return
 		}
@@ -59,6 +62,7 @@ func registerFrontendFS(engine *gin.Engine, distFS fs.FS, extraProxyPrefixes ...
 		}
 
 		c.Writer.Header().Add("Vary", "Accept")
+		c.Header("Cache-Control", "no-store")
 		originalPath := c.Request.URL.Path
 		originalRawPath := c.Request.URL.RawPath
 		c.Request.URL.Path = "/"
