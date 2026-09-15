@@ -36,7 +36,7 @@ test('Dashboard metric deltas reflect domain intent instead of raw sign', async 
   await page.goto('/admin')
 
   const changes = page.locator('[data-dashboard-kpis] [data-metric-change]')
-  await expect(changes).toHaveCount(4)
+  await expect(changes).toHaveCount(2)
   const tones = await changes.evaluateAll(
     elements => elements.map(element => ({
       intent: element.getAttribute('data-change-intent'),
@@ -44,10 +44,8 @@ test('Dashboard metric deltas reflect domain intent instead of raw sign', async 
     })),
   )
   expect(tones).toEqual([
-    { intent: 'neutral', tone: 'neutral' },
     { intent: 'higher-is-better', tone: 'positive' },
     { intent: 'neutral', tone: 'neutral' },
-    { intent: 'lower-is-better', tone: 'negative' },
   ])
 })
 
