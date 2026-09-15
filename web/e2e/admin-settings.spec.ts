@@ -351,7 +351,7 @@ test('retains cached settings when a remount refetch fails', async ({ page }) =>
   })
   await page.goto('/admin/settings')
   await expect(page.getByLabel(/监听地址/)).toHaveValue('127.0.0.1')
-  const navigation = page.locator('[data-admin-page-navigation="projects"]')
+  const navigation = page.locator('[data-admin-page-navigation="instance"]')
   await navigation.getByRole('link', { name: /用户管理/ }).click()
   await expect(page.getByRole('heading', { name: '用户', exact: true })).toBeVisible()
   await navigation.getByRole('link', { name: /^系统设置$/ }).click()

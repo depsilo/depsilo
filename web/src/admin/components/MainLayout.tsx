@@ -274,7 +274,7 @@ export default function MainLayoutV2() {
     retry: false,
   })
 
-  const sections: NavSection[] = adminNavigationGroups.map(group => ({
+  const sections: NavSection[] = adminNavigationGroups.filter(group => !group.hiddenFromSidebar).map(group => ({
     id: group.id,
     label: t(group.titleKey),
     icon: group.icon,
@@ -375,6 +375,14 @@ export default function MainLayoutV2() {
             data-admin-preferences
             className="flex shrink-0 items-center gap-1"
           >
+            <Link
+              to="/admin/users"
+              aria-label={t('nav.instanceManagement')}
+              title={t('nav.instanceManagement')}
+              className="stripe-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-[6px] text-[var(--text-soft)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            >
+              <Icon name="settings" size="sm" />
+            </Link>
             <LangToggle variant="admin" />
             <ThemeToggle labeled variant="admin" />
           </div>

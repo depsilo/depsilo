@@ -7,6 +7,7 @@ const navGroupDefinitions = [
   { id: 'logs', titleKey: 'nav.workspaces.logs', icon: 'receipt_long', landingRouteId: 'accessLogs' },
   { id: 'security', titleKey: 'nav.workspaces.security', icon: 'security', landingRouteId: 'security' },
   { id: 'projects', titleKey: 'nav.workspaces.projects', icon: 'folder_managed', landingRouteId: 'projects' },
+  { id: 'instance', titleKey: 'nav.instanceManagement', icon: 'settings', landingRouteId: 'users', hiddenFromSidebar: true },
 ] as const
 
 export type AdminNavGroup = (typeof navGroupDefinitions)[number]['id']
@@ -19,6 +20,7 @@ interface AdminRouteDefinition {
   navGroup: AdminNavGroup
   pro?: true
   hiddenFromNavigation?: true
+  hiddenFromSidebar?: true
 }
 
 const routeDefinitions = [
@@ -37,9 +39,9 @@ const routeDefinitions = [
   { id: 'quarantine', path: 'quarantine', titleKey: 'nav.quarantine', icon: 'shield_lock', navGroup: 'security' },
   { id: 'rules', path: 'rules', titleKey: 'nav.rules', icon: 'shield', navGroup: 'security' },
   { id: 'projects', path: 'projects', titleKey: 'nav.projects', icon: 'folder_managed', navGroup: 'projects', pro: true },
-  { id: 'users', path: 'users', titleKey: 'nav.userManage', icon: 'group', navGroup: 'projects' },
-  { id: 'settings', path: 'settings', titleKey: 'nav.settings', icon: 'settings', navGroup: 'projects' },
-  { id: 'license', path: 'license', titleKey: 'license.title', icon: 'key', navGroup: 'projects' },
+  { id: 'users', path: 'users', titleKey: 'nav.userManage', icon: 'group', navGroup: 'instance' },
+  { id: 'settings', path: 'settings', titleKey: 'nav.settings', icon: 'settings', navGroup: 'instance' },
+  { id: 'license', path: 'license', titleKey: 'license.title', icon: 'key', navGroup: 'instance' },
 ] as const satisfies readonly AdminRouteDefinition[]
 
 export type AdminRouteId = (typeof routeDefinitions)[number]['id']
@@ -74,6 +76,7 @@ export interface AdminNavigationGroup {
   icon: IconName
   href: string
   routes: readonly AdminRoute[]
+  hiddenFromSidebar: boolean
 }
 
 /** Ordered Operator task domains projected from the canonical route manifest. */
@@ -90,6 +93,7 @@ export const adminNavigationGroups: readonly AdminNavigationGroup[] = Object.fre
       routes: Object.freeze(adminRouteManifest.filter(route => (
         route.navGroup === group.id && !route.hiddenFromNavigation
       ))),
+      hiddenFromSidebar: 'hiddenFromSidebar' in group && group.hiddenFromSidebar === true,
     })
   }),
 )

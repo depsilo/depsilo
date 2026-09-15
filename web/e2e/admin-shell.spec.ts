@@ -26,7 +26,7 @@ const workspaceNavigation = [
   { id: 'cache', label: 'Cache', href: '/admin/cache', routes: ['/admin/cache', '/admin/indexes', '/admin/compile-cache', '/admin/bandwidth'] },
   { id: 'logs', label: 'Logs', href: '/admin/logs', routes: ['/admin/logs'] },
   { id: 'security', label: 'Security', href: '/admin/security', routes: ['/admin/audit', '/admin/security', '/admin/quarantine', '/admin/rules'] },
-  { id: 'projects', label: 'Projects', href: '/admin/projects', routes: ['/admin/projects', '/admin/users', '/admin/settings', '/admin/license'] },
+  { id: 'projects', label: 'Projects', href: '/admin/projects', routes: ['/admin/projects'] },
 ] as const
 
 test('pending principal check shows an accessible branded loading state', async ({ page }) => {
@@ -132,9 +132,18 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
     }
   }
 
+  await page.getByRole('link', { name: 'Instance management', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/users$/)
+  const instanceNavigation = page.locator('[data-admin-page-navigation="instance"]')
+  await expect(instanceNavigation).toBeVisible()
+  await expect(instanceNavigation.locator('a')).toHaveCount(3)
+
   const visibleRouteHrefs = [
     workspaceNavigation[0].href,
     ...workspaceNavigation.slice(1).flatMap(workspace => workspace.routes),
+    '/admin/users',
+    '/admin/settings',
+    '/admin/license',
   ]
   expect([...visibleRouteHrefs].sort()).toEqual(
     legacyAdminHrefs.filter(href => href !== '/admin/attention').sort(),

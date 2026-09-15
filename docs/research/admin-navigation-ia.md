@@ -28,6 +28,10 @@ The old groups mixed three different user questions:
 | Cache | Cache | Cache, Index Cache, Compiler Cache, Bandwidth | How are dependencies stored and accelerated? |
 | Logs | Access Logs | Access Logs | What requests reached the proxy? |
 | Security | Security | Audit Logs, Security, Quarantine, Rules | Can requests and changes be trusted? |
-| Projects | Projects | Projects, Users, Settings, License | Who owns and configures the workspaces? |
+| Projects | Projects | Projects | Which project workspaces exist? |
+
+Instance-wide Users, Settings, and License are deliberately outside the six
+task domains. The shell exposes them through the top-right **Instance
+management** control and keeps their three-page local navigation together.
 
 The sidebar keeps only these five task-level links. Page tabs expose the detailed destinations, so a route appears once in the persistent shell and once in the relevant local context rather than being repeated as both a sidebar leaf and a tab.

@@ -255,6 +255,9 @@ The **Dependency Flowline** shell organizes work into six task domains:
 visible on desktop and in the mobile drawer, without child destinations or
 disclosure controls. Page-level tabs own the individual destinations, so their
 labels are not repeated in the sidebar.
+Instance-wide Users, Settings, and License live under the top-right **Instance
+management** control and share a separate local navigation row; they are not
+project pages.
 **Needs Attention** is integrated into Overview rather than presented as a primary navigation destination. Its legacy `/admin/attention`
 URL remains reachable so bookmarks and direct links do not break, as do all
 other established Admin URLs.

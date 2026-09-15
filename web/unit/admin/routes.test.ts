@@ -34,7 +34,8 @@ const expectedGroups = [
   { id: 'cache', routes: ['cache', 'cacheIndexes', 'compileCache', 'bandwidth'] },
   { id: 'logs', routes: ['accessLogs'] },
   { id: 'security', routes: ['auditLogs', 'security', 'quarantine', 'rules'] },
-  { id: 'projects', routes: ['projects', 'users', 'settings', 'license'] },
+  { id: 'projects', routes: ['projects'] },
+  { id: 'instance', routes: ['users', 'settings', 'license'] },
 ] as const
 
 describe('Admin route manifest', () => {

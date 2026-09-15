@@ -74,6 +74,7 @@ const zh = {
       security: '包安全',
       projects: '项目管理',
       logout: '退出登录',
+      instanceManagement: '实例管理',
       admin: '管理员',
       readonly: '只读',
       openNavigation: '打开导航',

@@ -74,6 +74,7 @@ const en = {
       security: 'Package Security',
       projects: 'Projects',
       logout: 'Sign out',
+      instanceManagement: 'Instance management',
       admin: 'Admin',
       readonly: 'Read-only',
       openNavigation: 'Open navigation',
