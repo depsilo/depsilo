@@ -139,6 +139,16 @@ function SidebarContent({
       </nav>
 
       <div data-admin-sidebar-footer className="shrink-0 px-3 py-3" style={{ borderTop: '0.5px solid var(--border)' }}>
+        <Link
+          to="/admin/users"
+          onClick={onNavigate}
+          aria-label={t('nav.instanceManagement')}
+          className="stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-[6px] px-2 py-2 text-[13px] font-[550] no-underline transition-colors hover:bg-[var(--admin-rail-hover)]"
+          style={{ color: 'var(--text-soft)' }}
+        >
+          <Icon name="settings" size="sm" />
+          <span>{t('nav.instanceManagement')}</span>
+        </Link>
         <div className="group flex cursor-default items-center gap-2.5 rounded-[6px] px-2 py-2 transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-[13px] font-[600]"
@@ -375,14 +385,6 @@ export default function MainLayoutV2() {
             data-admin-preferences
             className="flex shrink-0 items-center gap-1"
           >
-            <Link
-              to="/admin/users"
-              aria-label={t('nav.instanceManagement')}
-              title={t('nav.instanceManagement')}
-              className="stripe-focus-ring inline-flex h-10 w-10 items-center justify-center rounded-[6px] text-[var(--text-soft)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
-            >
-              <Icon name="settings" size="sm" />
-            </Link>
             <LangToggle variant="admin" />
             <ThemeToggle labeled variant="admin" />
           </div>

@@ -132,7 +132,7 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
     }
   }
 
-  await page.getByRole('link', { name: 'Instance management', exact: true }).click()
+  await page.locator('[data-admin-sidebar-footer]').getByRole('link', { name: 'Instance management', exact: true }).click()
   await expect(page).toHaveURL(/\/admin\/users$/)
   const instanceNavigation = page.locator('[data-admin-page-navigation="instance"]')
   await expect(instanceNavigation).toBeVisible()
