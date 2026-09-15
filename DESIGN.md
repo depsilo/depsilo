@@ -283,17 +283,29 @@ and page breadcrumb.
 `AdminPage` owns the content title, optional description, page actions, and
 readable/fluid width below that bar.
 
+Each multi-page workspace also exposes its canonical destinations as a compact
+page-local navigation row below the heading. It is a projection of the route
+manifest, so it must not create a second route registry or change deep links;
+the sidebar remains the persistent workspace switcher. Overview keeps its
+single landing page and exposes Bandwidth as a quiet shortcut into History.
+
+Policy runtime status is scoped to Overview and Security Governance. Other
+workspaces do not issue a policy-status request or reserve banner space; their
+domain pages own any relevant inline status.
+
 The Dashboard uses the Admin's default fluid canvas, capped at 1840px. Its page
 heading and all Dashboard regions use the full same width and left baseline;
 do not center a narrower content wrapper beneath a wider heading. On wide
 screens, the main instrument column is fluid and the supporting rail remains
-approximately 380px wide. The first row pairs a live request path—**Client
-ingress → Depsilo cache → Upstreams**—with a compact queue for unhealthy
-Upstreams and cache-capacity pressure. Four left-aligned KPIs form the next
-scanning layer. The final row contains one multi-metric trend view and at most
-three recent downloads; complete popular package, Upstream, and bandwidth detail
-belongs on the relevant History or Sources & Cache expert page instead of being
-duplicated on Overview.
+approximately 380px wide. Four left-aligned instruments lead the page—service
+status, cache hit rate, healthy Upstreams, and requests in the last 24 hours—
+followed by a compact queue for unhealthy Upstreams and cache-capacity pressure.
+The live request path—**Client ingress → Depsilo cache → Upstreams**—then leads
+the operational detail. The final row contains one multi-metric trend view and
+at most three recent downloads; complete popular package, Upstream, and
+bandwidth detail belongs on the relevant History or Sources & Cache expert page
+instead of being duplicated on Overview. Metrics with no observed data show an
+honest unavailable marker rather than a fabricated zero.
 
 Dashboard panel headers use one concise title/status row. Do not repeat generic
 explanatory copy as a visible subtitle when the structure already communicates
