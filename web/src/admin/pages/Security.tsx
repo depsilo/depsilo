@@ -26,6 +26,7 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { securityEcosystems, supportsPackageRuleRanges, supportsVulnerabilityAutoBlock } from '@/admin/operatorEcosystems'
 import { getAdminRouteHref } from '@/admin/routes'
 import { usePrincipal } from '@/hooks/usePrincipal'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { getApiError } from '@/lib/apiError'
 import type {
   SecurityPolicy,
@@ -1026,6 +1027,7 @@ function PoliciesTab() {
 
 export default function Security() {
   const { t } = useTranslation()
+  const desktopTabs = useMediaQuery('(min-width: 768px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const serializedSearchParams = searchParams.toString()
   const requestedTab = searchParams.get('tab')
@@ -1073,6 +1075,8 @@ export default function Security() {
           setSearchParams(nextParams)
         }}
         ariaLabel={t('security.title')}
+        orientation={desktopTabs ? 'vertical' : 'horizontal'}
+        appearance="directory"
       />
     </div>
     </AdminPage>

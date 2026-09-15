@@ -26,6 +26,7 @@ import QueryErrorState from '@/components/QueryErrorState'
 import TabsV2 from '@/components/Tabs'
 import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { maliciousBlocklistEcosystems } from '@/admin/operatorEcosystems'
@@ -118,6 +119,7 @@ function actionBadge(action: string, t: (k: string) => string) {
 
 export default function Quarantine() {
   const { t } = useTranslation()
+  const desktopTabs = useMediaQuery('(min-width: 768px)')
   const qc = useQueryClient()
   const { canWrite } = usePrincipal()
   const [tab, setTab] = useState<'events' | 'approvals' | 'blocklist'>('events')
@@ -180,6 +182,8 @@ export default function Quarantine() {
         value={tab}
         onValueChange={(value) => setTab(value as typeof tab)}
         ariaLabel={t('quarantine.title')}
+        orientation={desktopTabs ? 'vertical' : 'horizontal'}
+        appearance="directory"
         items={[
           {
             key: 'events',

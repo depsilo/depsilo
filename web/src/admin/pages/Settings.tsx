@@ -249,10 +249,15 @@ export default function SettingsV2() {
     </InlineNotice>
   ) : null
   const section = (title: string, children: ReactNode) => (
-    <section className="min-w-0 pt-5 md:pt-0">
+    <section className="min-w-0 max-w-[720px] [&_input]:h-10 [&_select]:h-10">
       <SectionHeader title={title} />
       {children}
     </section>
+  )
+  const fields = (children: ReactNode) => (
+    <div className="divide-y divide-[var(--border-soft)] [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
+      {children}
+    </div>
   )
   const updateDraft = <K extends keyof SettingsDraft>(key: K, value: SettingsDraft[K]) => {
     setDraft(current => current ? { ...current, [key]: value } : current)
@@ -309,64 +314,50 @@ export default function SettingsV2() {
       key: 'basic',
       label: t('settings.basic'),
       icon: <Icon name="tune" size="sm" />,
-      content: settingsForm('basic', section(t('settings.basic'), (
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} />
-            <InputV2 label={fieldLabel('server.port')} value={String(data.configured.server.port)} readOnly hint={fieldHint('server.port')} />
-          </div>
-          <SelectV2
-            label={fieldLabel('server.log_level')}
-            value={draft.logLevel}
-            onChange={event => updateDraft('logLevel', event.target.value as SettingsDraft['logLevel'])}
-            disabled={isDisabled('server.log_level')}
-            hint={fieldHint('server.log_level')}
-          >
-            <option value="debug">debug</option>
-            <option value="info">info</option>
-            <option value="warn">warn</option>
-            <option value="error">error</option>
-          </SelectV2>
-        </div>
-      ))),
+      content: settingsForm('basic', section(t('settings.basic'), fields(<>
+        <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} />
+        <InputV2 label={fieldLabel('server.port')} value={String(data.configured.server.port)} readOnly hint={fieldHint('server.port')} />
+        <SelectV2
+          label={fieldLabel('server.log_level')}
+          value={draft.logLevel}
+          onChange={event => updateDraft('logLevel', event.target.value as SettingsDraft['logLevel'])}
+          disabled={isDisabled('server.log_level')}
+          hint={fieldHint('server.log_level')}
+        >
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </SelectV2>
+      </>))),
     },
     {
       key: 'cache',
       label: t('settings.cachePolicy'),
       icon: <Icon name="cached" size="sm" />,
-      content: settingsForm('cache', section(t('settings.cachePolicy'), (
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InputV2 id="setting-cache-max-size" label={fieldLabel('cache.max_size_gb')} type="number" min={1} step={1} required value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} hint={fieldHint('cache.max_size_gb')} error={fieldError('maxSizeGB')} />
-            <InputV2 id="setting-cache-lru-threshold" label={fieldLabel('cache.lru_threshold')} type="number" min={1} max={100} step={1} required value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} hint={fieldHint('cache.lru_threshold')} error={fieldError('lruThreshold')} />
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InputV2 id="setting-cache-ttl-index" label={fieldLabel('cache.ttl_index')} mono required value={draft.ttlIndex} onChange={event => updateDraft('ttlIndex', event.target.value)} disabled={isDisabled('cache.ttl_index')} hint={fieldHint('cache.ttl_index', t('settings.durationHint'))} error={fieldError('ttlIndex')} />
-            <InputV2 id="setting-cache-ttl-blob" label={fieldLabel('cache.ttl_blob')} mono required value={draft.ttlBlob} onChange={event => updateDraft('ttlBlob', event.target.value)} disabled={isDisabled('cache.ttl_blob')} hint={fieldHint('cache.ttl_blob', t('settings.durationHint'))} error={fieldError('ttlBlob')} />
-          </div>
-        </div>
-      ))),
+      content: settingsForm('cache', section(t('settings.cachePolicy'), fields(<>
+        <InputV2 id="setting-cache-max-size" label={fieldLabel('cache.max_size_gb')} type="number" min={1} step={1} required value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} hint={fieldHint('cache.max_size_gb')} error={fieldError('maxSizeGB')} />
+        <InputV2 id="setting-cache-lru-threshold" label={fieldLabel('cache.lru_threshold')} type="number" min={1} max={100} step={1} required value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} hint={fieldHint('cache.lru_threshold')} error={fieldError('lruThreshold')} />
+        <InputV2 id="setting-cache-ttl-index" label={fieldLabel('cache.ttl_index')} mono required value={draft.ttlIndex} onChange={event => updateDraft('ttlIndex', event.target.value)} disabled={isDisabled('cache.ttl_index')} hint={fieldHint('cache.ttl_index', t('settings.durationHint'))} error={fieldError('ttlIndex')} />
+        <InputV2 id="setting-cache-ttl-blob" label={fieldLabel('cache.ttl_blob')} mono required value={draft.ttlBlob} onChange={event => updateDraft('ttlBlob', event.target.value)} disabled={isDisabled('cache.ttl_blob')} hint={fieldHint('cache.ttl_blob', t('settings.durationHint'))} error={fieldError('ttlBlob')} />
+      </>))),
     },
     {
       key: 'storage',
       label: t('settings.storageBackend'),
       icon: <Icon name="database" size="sm" />,
-      content: settingsForm('storage', section(t('settings.storageBackend'), (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} />
-          <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} />
-          <InputV2 label={fieldLabel('database.driver')} value={data.configured.database.driver} readOnly hint={fieldHint('database.driver')} />
-        </div>
-      ))),
+      content: settingsForm('storage', section(t('settings.storageBackend'), fields(<>
+        <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} />
+        <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} />
+        <InputV2 label={fieldLabel('database.driver')} value={data.configured.database.driver} readOnly hint={fieldHint('database.driver')} />
+      </>))),
     },
     {
       key: 'auth',
       label: t('settings.authSecurity'),
       icon: <Icon name="shield" size="sm" />,
-      content: settingsForm('auth', section(t('settings.authSecurity'), (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <InputV2 id="setting-auth-token-ttl" label={fieldLabel('auth.token_ttl')} mono required value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} hint={fieldHint('auth.token_ttl', t('settings.durationHint'))} error={fieldError('tokenTTL')} />
-        </div>
+      content: settingsForm('auth', section(t('settings.authSecurity'), fields(
+        <InputV2 id="setting-auth-token-ttl" label={fieldLabel('auth.token_ttl')} mono required value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} hint={fieldHint('auth.token_ttl', t('settings.durationHint'))} error={fieldError('tokenTTL')} />
       ))),
     },
     {
@@ -430,6 +421,7 @@ export default function SettingsV2() {
         onValueChange={value => setActiveTab(value as TabKey)}
         ariaLabel={t('settings.tabsLabel')}
         orientation={desktopTabs ? 'vertical' : 'horizontal'}
+        appearance="directory"
       />
     </div>
     </AdminPage>
