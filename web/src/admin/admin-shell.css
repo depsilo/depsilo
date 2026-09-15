@@ -1,3 +1,111 @@
+[data-admin-shell] {
+  /* BoardUI-inspired surface treatment, scoped to Admin so Portal and Setup
+     keep their established visual language. The role names continue to map
+     to the shared primitives through the existing CSS variables. */
+  --admin-canvas: #FFFFFF;
+  --admin-rail: #F6F7F5;
+  --admin-rail-hover: #EAF0E9;
+  --bg-page: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-soft: #F4F6F3;
+  --bg-hover: #EAF0E9;
+  --border: #DFE4DE;
+  --border-soft: #DFE4DE;
+  --border-strong: #7B867D;
+  --text: #202822;
+  --text-muted: #626C64;
+  --text-soft: #626C64;
+  --text-subtle: #626C64;
+  --brand: #245443;
+  --brand-strong: #1B4133;
+  --brand-soft: #EAF0E9;
+  --brand-text: #245443;
+  --btn: #245443;
+  --btn-press: #1B4133;
+  --btn-fg: #FFFFFF;
+  --focus-ring: #245443;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+}
+
+[data-admin-shell] .app-button {
+  border-radius: 6px;
+}
+
+[data-admin-shell] input,
+[data-admin-shell] select,
+[data-admin-shell] textarea {
+  border-radius: 6px !important;
+}
+
+[data-admin-shell] .app-dialog-popup {
+  border-radius: 12px;
+}
+
+[data-admin-shell] .admin-page-destination[aria-current="page"] {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+
+[data-admin-shell] .admin-page-destination:hover {
+  color: var(--brand);
+}
+
+[data-admin-shell].theme-dark,
+html.dark [data-admin-shell],
+[data-theme="dark"] [data-admin-shell] {
+  --admin-canvas: #141915;
+  --admin-rail: #181F1A;
+  --admin-rail-hover: #283A2E;
+  --bg-page: #141915;
+  --bg-card: #1A211C;
+  --bg-soft: #222B25;
+  --bg-hover: #283A2E;
+  --border: #354137;
+  --border-soft: #354137;
+  --border-strong: #738476;
+  --text: #E9EFE8;
+  --text-muted: #A5B0A6;
+  --text-soft: #A5B0A6;
+  --text-subtle: #A5B0A6;
+  --brand: #ABCDB7;
+  --brand-strong: #C0DCC9;
+  --brand-soft: #283A2E;
+  --brand-text: #ABCDB7;
+  --btn: #ABCDB7;
+  --btn-press: #C0DCC9;
+  --btn-fg: #17291E;
+  --focus-ring: #ABCDB7;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light):not([data-theme="light"]) [data-admin-shell] {
+    --admin-canvas: #141915;
+    --admin-rail: #181F1A;
+    --admin-rail-hover: #283A2E;
+    --bg-page: #141915;
+    --bg-card: #1A211C;
+    --bg-soft: #222B25;
+    --bg-hover: #283A2E;
+    --border: #354137;
+    --border-soft: #354137;
+    --border-strong: #738476;
+    --text: #E9EFE8;
+    --text-muted: #A5B0A6;
+    --text-soft: #A5B0A6;
+    --text-subtle: #A5B0A6;
+    --brand: #ABCDB7;
+    --brand-strong: #C0DCC9;
+    --brand-soft: #283A2E;
+    --brand-text: #ABCDB7;
+    --btn: #ABCDB7;
+    --btn-press: #C0DCC9;
+    --btn-fg: #17291E;
+    --focus-ring: #ABCDB7;
+  }
+}
+
 [data-admin-workspace-row] {
   border: 1px solid transparent;
 }

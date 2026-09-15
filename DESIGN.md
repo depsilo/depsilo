@@ -34,6 +34,13 @@ The active visual administration is **Instrument**:
   never inside the Logo. Purple Aurora backgrounds are not part of the current
   design.
 
+Admin surfaces additionally use the BoardUI-inspired porcelain / charcoal
+surface treatment: the light Admin canvas is `#FFFFFF` with a neutral
+`#F6F7F5` rail, and dark Admin uses `#141915` with `#181F1A` navigation.
+These values are scoped to `[data-admin-shell]`; Portal and Setup retain the
+shared Instrument tokens above. Admin controls use 6px corners, 40px targets,
+and green is reserved for commands, focus, health, and selection.
+
 Do not use the old purple/OKLCH examples, `/status` route, shadcn components,
 `CardV2`, or `MetricCardV2`. They belonged to an earlier design iteration.
 
