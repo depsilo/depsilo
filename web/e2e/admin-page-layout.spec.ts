@@ -24,6 +24,18 @@ test('readable and fluid pages preserve distinct desktop widths', async ({ page 
   expect(fluidWidth).toBeGreaterThan(readableWidth)
 })
 
+test('workspace destinations are available as a local page navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/admin/upstreams')
+
+  const localNavigation = page.locator('[data-admin-page-navigation="sourcesCache"]')
+  await expect(localNavigation).toBeVisible()
+  await expect(localNavigation.getByRole('link', { name: '上游源', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(localNavigation.getByRole('link', { name: '缓存管理', exact: true })).toHaveAttribute('href', '/admin/cache')
+  await expect(localNavigation.getByRole('link', { name: '索引缓存', exact: true })).toHaveAttribute('href', '/admin/indexes')
+  await expect(localNavigation.getByRole('link', { name: '编译缓存', exact: true })).toHaveAttribute('href', '/admin/compile-cache')
+})
+
 test('Dashboard aligns its snapshot with both fluid page content seams', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 2048, height: 1000 })

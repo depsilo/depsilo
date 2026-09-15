@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
 
 import { resolveAdminRoute } from '../routes'
+import AdminLocalNav from './AdminLocalNav'
 
 export type AdminPageWidth = 'fluid' | 'readable'
 
@@ -47,14 +48,14 @@ export default function AdminPage({
       {hasHeader && (
         <header
           data-admin-page-header
-          className={`${description ? 'mb-7' : 'mb-5'} flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between`}
+          className="mb-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
         >
           {(resolvedTitle || description) && (
             <div className="min-w-0 max-w-[72ch]">
               {resolvedTitle && (
                 <h1
                   data-admin-page-title
-                  className="text-[28px] font-[680] leading-[1.15]"
+                  className="text-[26px] font-[650] leading-[1.25]"
                   style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
                 >
                   {resolvedTitle}
@@ -63,7 +64,7 @@ export default function AdminPage({
               {description && (
                 <div
                   data-admin-page-description
-                  className={`${resolvedTitle ? 'mt-2' : ''} text-[13px] leading-[1.55]`}
+                  className={`${resolvedTitle ? 'mt-1.5' : ''} text-[12px] leading-[1.6]`}
                   style={{ color: 'var(--text-soft)' }}
                 >
                   {description}
@@ -78,6 +79,7 @@ export default function AdminPage({
           )}
         </header>
       )}
+      <AdminLocalNav />
       <div data-admin-page-content className="min-w-0">
         {children}
       </div>

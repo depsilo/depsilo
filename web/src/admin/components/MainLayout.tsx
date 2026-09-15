@@ -26,6 +26,7 @@ import type { PolicyStatus } from '@/lib/adminApi.types'
 import { removeLocalStorage } from '@/lib/storage'
 import { formatTime, formatVersion } from '@/lib/utils'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
+import '../admin-shell.css'
 
 interface NavItem {
   label: string
@@ -67,12 +68,7 @@ function LocalNavItem({
       to={item.to}
       end
       onClick={onNavigate}
-      className="flex min-h-9 items-center rounded-[6px] px-3 py-1.5 text-[13px] no-underline transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
-      style={({ isActive }) => ({
-        color: isActive ? 'var(--brand-text)' : 'var(--text-soft)',
-        background: isActive ? 'var(--brand-soft)' : undefined,
-        fontWeight: isActive ? 600 : 500,
-      })}
+      className="stripe-focus-ring admin-sidebar-destination"
     >
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.pro && <BadgeV2 variant="pro">Pro</BadgeV2>}
@@ -153,6 +149,7 @@ function SidebarContent({
               >
                 <div
                   data-admin-workspace-row
+                  data-admin-workspace-current={workspaceCurrent ? 'true' : undefined}
                   className="flex min-w-0 items-center rounded-[7px] transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
                   style={{
                     background: workspaceCurrent ? 'var(--brand-soft)' : undefined,
@@ -330,6 +327,8 @@ export default function MainLayoutV2() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const firstMobileNavigationRef = useRef<HTMLAnchorElement>(null)
   const { principal, canWrite } = usePrincipal()
+  const activeRoute = resolveAdminRoute(location.pathname)
+  const policySurface = activeRoute?.navGroup === 'overview' || activeRoute?.navGroup === 'governance'
 
   const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
     queryKey: ['stats-status'],
@@ -341,13 +340,13 @@ export default function MainLayoutV2() {
   const policyStatusQuery = useQuery<PolicyStatus>({
     queryKey: ['admin', 'policy', 'status'],
     queryFn: async ({ signal }) => (await adminApi.getPolicyStatus({ signal })).data,
+    enabled: policySurface,
     refetchInterval: 30000,
     staleTime: 30000,
     refetchOnWindowFocus: true,
     retry: false,
   })
 
-  const activeRoute = resolveAdminRoute(location.pathname)
   const sections: NavSection[] = adminNavigationGroups.map(group => ({
     id: group.id,
     label: t(group.titleKey),
@@ -461,12 +460,14 @@ export default function MainLayoutV2() {
 
         <main className="min-h-screen pt-16 pb-6" style={{ background: 'var(--admin-canvas)' }}>
           <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
-            <PolicyStatusBanner
-              status={policyStatusQuery.data}
-              unavailable={policyStatusQuery.isError}
-              refreshing={policyStatusQuery.isFetching}
-              onRefresh={() => policyStatusQuery.refetch()}
-            />
+            {policySurface && (
+              <PolicyStatusBanner
+                status={policyStatusQuery.data}
+                unavailable={policyStatusQuery.isError}
+                refreshing={policyStatusQuery.isFetching}
+                onRefresh={() => policyStatusQuery.refetch()}
+              />
+            )}
             <Outlet />
           </div>
         </main>

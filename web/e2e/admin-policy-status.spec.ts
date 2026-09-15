@@ -55,10 +55,45 @@ test('Admin does not present an unavailable policy probe as healthy', async ({ p
     },
   })
   await setUiPreferences(page, 'light', 'en')
-  await page.goto('/admin/settings')
+  await page.goto('/admin/security')
 
   const banner = page.locator('[data-admin-policy-status-banner]')
   await expect(banner).toBeVisible()
   await expect(banner).toContainText('Policy status is temporarily unavailable.')
   await expect(banner).not.toContainText('Policy rules are using a stale snapshot.')
+})
+
+test('policy status belongs to Overview and Governance, including client-side navigation', async ({ page }) => {
+  let calls = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/policy/status': () => {
+      calls += 1
+      return {
+        status: 'degraded',
+        using_stale_snapshot: true,
+        snapshot_loaded_at: '2026-09-02T01:00:00Z',
+        snapshot_age_seconds: 720,
+        refresh_failures: 2,
+        on_load_error: 'use_stale_then_allow',
+      }
+    },
+  })
+  await setUiPreferences(page, 'light', 'en')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin/settings')
+  await expect(page.locator('[data-admin-page-title]')).toBeVisible()
+  const banner = page.locator('[data-admin-policy-status-banner]')
+  await expect(banner).toHaveCount(0)
+  expect(calls).toBe(0)
+
+  const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
+  await navigation.locator('a[href="/admin"]').click()
+  await expect(banner).toContainText('Policy rules are using a stale snapshot.')
+
+  await navigation.locator('[data-admin-local-navigation="system"] a[href="/admin/users"]').click()
+  await expect(page).toHaveURL(/\/admin\/users$/)
+  await expect(banner).toHaveCount(0)
+
+  await navigation.locator('[data-admin-local-navigation="governance"] a[href="/admin/rules"]').click()
+  await expect(banner).toContainText('Policy rules are using a stale snapshot.')
 })
