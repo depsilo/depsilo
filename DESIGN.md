@@ -252,11 +252,10 @@ commands.
 The **Dependency Flowline** shell organizes work into five Operator domains:
 **Overview**, **History**, **Sources & Cache**, **Security Governance**, and
 **System**. The persistent sidebar is 232px wide. All five domains remain
-visible as one scrollable directory on desktop and in the mobile drawer; no
-disclosure controls are needed. The workspace label remains a separate
-navigation link, while the active workspace and current destination provide
-the hierarchy. **Needs Attention** is integrated into Overview rather than
-presented as a primary navigation destination. Its legacy `/admin/attention`
+visible as five links on desktop and in the mobile drawer, without child
+destinations or disclosure controls. Page-level tabs own the individual
+destinations, so their labels are not repeated in the sidebar.
+**Needs Attention** is integrated into Overview rather than presented as a primary navigation destination. Its legacy `/admin/attention`
 URL remains reachable so bookmarks and direct links do not break, as do all
 other established Admin URLs.
 
@@ -264,11 +263,9 @@ The light Admin canvas remains pure white, while its persistent workspace rail
 uses a dedicated mint porcelain surface (`#F3F8F5`) and hover
 (`#EAF3EE`). This near-white, brand-adjacent tint separates navigation from the
 canvas without reusing the darker global inset surface. Dark mode retains its
-existing rail and hover appearance. Parent workspaces communicate active
-context through their icon and label; only the current leaf destination
-receives a filled selection, so a nested route never produces two equally
-strong active rows. Child destinations use indentation alone: do not add
-connector rails, guide lines, or bullet dots to explain hierarchy. Language
+existing rail and hover appearance. The current workspace receives a filled
+selection on every route within it; the page-local tabs identify the current
+destination. Language
 and appearance remain adjacent in the utility bar, but each is a flat button
 separated by quiet spacing; do not wrap them in a tinted, bordered preference
 card.
@@ -282,7 +279,7 @@ and page breadcrumb.
 `AdminPage` owns the content title, optional description, page actions, and
 readable/fluid width below that bar.
 
-Each multi-page workspace also exposes its canonical destinations as a compact
+Each multi-page workspace exposes its canonical destinations as a compact
 page-local navigation row below the heading. It is a projection of the route
 manifest, so it must not create a second route registry or change deep links;
 the sidebar remains the persistent workspace switcher. Overview keeps its
@@ -370,10 +367,10 @@ applies when an icon button is pending or disabled.
 
 | Width | Admin behavior |
 | --- | --- |
-| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer defaults to the active workspace and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
+| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer shows five workspace links and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
 | `sm` 640 | Forms may use two columns; ordinary toolbars may share a row and long action groups wrap |
 | `md` 768 | Settings uses its 180px vertical tab rail; the Dashboard request flow becomes horizontal |
-| `lg` 1024 | The persistent 232px workspace sidebar appears with the full destination directory; KPI grids may use four columns |
+| `lg` 1024 | The persistent 232px workspace sidebar appears with five workspace links; KPI grids may use four columns |
 | `xl` 1280 | Dashboard flow/attention and trend/recent-activity rows use a fluid main column plus an approximately 380px supporting rail; they stack when that rail would crowd the primary task |
 | 1840+ | The Admin outlet is capped at 1840px and centered within the remaining main area |
 

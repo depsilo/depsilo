@@ -136,7 +136,7 @@ test('client navigation to Upstreams does not load the simple-icons barrel', asy
     if (request.resourceType() === 'script') loadedScripts.push(request.url())
   })
   const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
-  await navigation.getByRole('link', { name: '上游源', exact: true }).click()
+  await navigation.locator('a[href="/admin/upstreams"]').click()
   await expect(page.getByText('source-1', { exact: true })).toBeVisible()
 
   expect(loadedScripts.filter(url => (

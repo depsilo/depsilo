@@ -2,16 +2,15 @@
  * THESIS: Dependency Flowline organizes Admin around operational workspaces, not a flat inventory of pages.
  * OWN-WORLD: Instrument neutrals, precise keylines, signal green, compact task links, and one calm white or matte-dark canvas.
  * STORY: Operators confirm service health, investigate history, configure sources, govern risk, and maintain the system.
- * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; every destination stays visible in one simple directory.
+ * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; five workspace links lead to page-local tabs.
  * FORM: Structure candidate 4, flowline plus attention staging, seed 543e896c.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
  */
 import { type RefObject, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
-import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
 import DrawerV2 from '@/components/Drawer'
 import Icon, { type IconName } from '@/components/Icon'
@@ -27,12 +26,6 @@ import { formatTime, formatVersion } from '@/lib/utils'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
 import '../admin-shell.css'
 
-interface NavItem {
-  label: string
-  to: string
-  pro?: boolean
-}
-
 interface NavSection {
   id: string
   label: string
@@ -40,7 +33,6 @@ interface NavSection {
   href: string
   active: boolean
   current: boolean
-  items: NavItem[]
 }
 
 interface SidebarContentProps {
@@ -53,26 +45,6 @@ interface SidebarContentProps {
   reserveCloseSpace?: boolean
   onNavigate?: () => void
   onLogout: () => void
-}
-
-function LocalNavItem({
-  item,
-  onNavigate,
-}: {
-  item: NavItem
-  onNavigate?: () => void
-}) {
-  return (
-    <NavLink
-      to={item.to}
-      end
-      onClick={onNavigate}
-      className="stripe-focus-ring admin-sidebar-destination"
-    >
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-      {item.pro && <BadgeV2 variant="pro">Pro</BadgeV2>}
-    </NavLink>
-  )
 }
 
 function SidebarContent({
@@ -124,64 +96,45 @@ function SidebarContent({
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2"
       >
         <div className="space-y-2 px-2.5">
-          {sections.map((section) => {
-            const hasLocalNavigation = section.items.length > 1
-            const workspaceCurrent = section.current && section.items.length === 1
-            return (
+          {sections.map(section => (
+            <div
+              key={section.id}
+              data-admin-nav-group={section.id}
+              data-admin-nav-active={section.active ? 'true' : 'false'}
+            >
               <div
-                key={section.id}
-                data-admin-nav-group={section.id}
-                data-admin-nav-active={section.active ? 'true' : 'false'}
-                data-admin-nav-expanded={hasLocalNavigation ? 'true' : 'false'}
+                data-admin-workspace-row
+                data-admin-workspace-current={section.active ? 'true' : undefined}
+                className="flex min-w-0 items-center rounded-[7px] transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
+                style={{
+                  background: section.active ? 'var(--brand-soft)' : undefined,
+                }}
               >
-                <div
-                  data-admin-workspace-row
-                  data-admin-workspace-current={workspaceCurrent ? 'true' : undefined}
-                  className="flex min-w-0 items-center rounded-[7px] transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
+                <Link
+                  ref={section.id === preferredFocusSectionId ? firstNavigationRef : undefined}
+                  to={section.href}
+                  onClick={onNavigate}
+                  aria-current={section.active ? (section.current ? 'page' : 'location') : undefined}
+                  className="stripe-focus-ring flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-[13px] no-underline"
                   style={{
-                    background: workspaceCurrent ? 'var(--brand-soft)' : undefined,
+                    color: section.active ? 'var(--brand-text)' : 'var(--text-soft)',
+                    fontWeight: section.active ? 650 : 550,
                   }}
                 >
-                  <Link
-                    ref={section.id === preferredFocusSectionId ? firstNavigationRef : undefined}
-                    to={section.href}
-                    onClick={onNavigate}
-                    aria-current={section.current && section.items.length === 1 ? 'page' : undefined}
-                    className="stripe-focus-ring flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-[13px] no-underline"
+                  <span
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px]"
                     style={{
-                      color: section.active ? 'var(--brand-text)' : 'var(--text-soft)',
-                      fontWeight: section.active ? 650 : 550,
+                      background: section.active ? 'var(--bg-card)' : 'transparent',
+                      color: section.active ? 'var(--brand-text)' : 'var(--text-subtle)',
                     }}
                   >
-                    <span
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px]"
-                      style={{
-                        background: section.active
-                          ? (workspaceCurrent ? 'var(--bg-card)' : 'var(--brand-soft)')
-                          : 'transparent',
-                        color: section.active ? 'var(--brand-text)' : 'var(--text-subtle)',
-                      }}
-                    >
-                      <Icon name={section.icon} size="sm" />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{section.label}</span>
-                  </Link>
-
-                </div>
-
-                {hasLocalNavigation && (
-                  <div
-                    data-admin-local-navigation={section.id}
-                    className="mt-1 ml-9 space-y-0.5"
-                  >
-                    {section.items.map(item => (
-                      <LocalNavItem key={item.to} item={item} onNavigate={onNavigate} />
-                    ))}
-                  </div>
-                )}
+                    <Icon name={section.icon} size="sm" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                </Link>
               </div>
-            )
-          })}
+            </div>
+          ))}
         </div>
       </nav>
 
@@ -328,11 +281,6 @@ export default function MainLayoutV2() {
     href: group.href,
     active: activeRoute?.navGroup === group.id,
     current: activeRoute?.href === group.href,
-    items: group.routes.map(route => ({
-      label: t(route.titleKey),
-      to: route.href,
-      pro: route.pro,
-    })),
   }))
   const pageTitle = activeRoute ? t(activeRoute.titleKey) : t('notFound.title')
   const activeSection = sections.find(section => section.active)

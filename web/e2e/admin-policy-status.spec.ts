@@ -90,10 +90,11 @@ test('policy status belongs to Overview and Governance, including client-side na
   await navigation.locator('a[href="/admin"]').click()
   await expect(banner).toContainText('Policy rules are using a stale snapshot.')
 
-  await navigation.locator('[data-admin-local-navigation="system"] a[href="/admin/users"]').click()
+  await navigation.locator('a[href="/admin/users"]').click()
   await expect(page).toHaveURL(/\/admin\/users$/)
   await expect(banner).toHaveCount(0)
 
-  await navigation.locator('[data-admin-local-navigation="governance"] a[href="/admin/rules"]').click()
+  await navigation.locator('a[href="/admin/security"]').click()
+  await page.locator('[data-admin-page-navigation="governance"] a[href="/admin/rules"]').click()
   await expect(banner).toContainText('Policy rules are using a stale snapshot.')
 })

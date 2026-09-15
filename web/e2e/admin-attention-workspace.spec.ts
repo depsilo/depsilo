@@ -211,9 +211,9 @@ test('attention keeps cached results visible when background refreshes fail', as
 
   failRefresh = true
   const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
-  await navigation.getByRole('link', { name: /系统设置|Settings/ }).click()
-  await expect(page).toHaveURL(/\/admin\/settings$/)
-  await expect(page.locator('[data-admin-page-title]')).toHaveText(/系统设置|Settings/)
+  await navigation.locator('a[href="/admin/users"]').click()
+  await expect(page).toHaveURL(/\/admin\/users$/)
+  await expect(page.locator('[data-admin-page-title]')).toHaveText(/用户管理|Users/)
   await page.goBack()
   await expect(page).toHaveURL(/\/admin\/attention$/)
   await expect(page.locator('[data-admin-page-title]')).toHaveText(/待处理|Needs Attention/)
