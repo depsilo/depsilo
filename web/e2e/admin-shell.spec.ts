@@ -103,7 +103,7 @@ test('closed mobile drawer has no focusable offscreen links', async ({ page }) =
   await expect(page.getByRole('button', { name: /打开导航/ })).toBeFocused()
 })
 
-test('desktop navigation defaults every workspace open and keeps disclosure independent from navigation', async ({ page }) => {
+test('desktop navigation keeps every workspace directory visible without disclosure controls', async ({ page }) => {
   await mockAdminApi(page)
   await setUiPreferences(page, 'light', 'en')
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -130,19 +130,11 @@ test('desktop navigation defaults every workspace open and keeps disclosure inde
   for (const workspace of workspaceNavigation.slice(1)) {
     const group = navigation.locator(`[data-admin-nav-group="${workspace.id}"]`)
     await expect(group).toHaveAttribute('data-admin-nav-expanded', 'true')
-    await expect(group.getByRole('button', { name: `Collapse ${workspace.label}` })).toHaveAttribute('aria-expanded', 'true')
     expect(await group.locator('[data-admin-local-navigation] a').evaluateAll(links => (
       links.map(link => link.getAttribute('href'))
     ))).toEqual(workspace.routes)
   }
-
-  const historyGroup = navigation.locator('[data-admin-nav-group="history"]')
-  await historyGroup.getByRole('button', { name: 'Collapse History' }).click()
-  await expect(historyGroup).toHaveAttribute('data-admin-nav-expanded', 'false')
-  await expect(historyGroup.locator('[data-admin-local-navigation]')).toHaveCount(0)
-  await expect(navigation.locator('[data-admin-local-navigation]')).toHaveCount(3)
-  await historyGroup.getByRole('button', { name: 'Expand History' }).click()
-  await expect(navigation.locator('[data-admin-local-navigation]')).toHaveCount(4)
+  await expect(navigation.locator('[data-admin-workspace-toggle]')).toHaveCount(0)
 
   for (const workspace of workspaceNavigation.slice(1)) {
     await page.goto(workspace.href)
@@ -182,7 +174,7 @@ test('desktop sign-out control becomes visibly focused for keyboard users', asyn
   await expect(signOut).toHaveCSS('outline-style', /solid|auto/)
 })
 
-test('mobile drawer expands a workspace on demand before selecting a local destination', async ({ page }) => {
+test('mobile drawer shows the same flat workspace directory before selecting a local destination', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 320, height: 320 })
   await page.goto('/admin')
@@ -196,12 +188,11 @@ test('mobile drawer expands a workspace on demand before selecting a local desti
   await expect(navigation.getByRole('link', { name: '总览', exact: true })).toBeFocused()
 
   const historyWorkspace = navigation.locator('[data-admin-nav-group="history"]')
-  await expect(historyWorkspace).toHaveAttribute('data-admin-nav-expanded', 'false')
-  await historyWorkspace.getByRole('button', { name: '展开历史' }).click()
   await expect(drawer).toBeVisible()
   await expect(page).toHaveURL(/\/admin$/)
   await expect(historyWorkspace).toHaveAttribute('data-admin-nav-expanded', 'true')
-  await expect(navigation.locator('[data-admin-local-navigation]')).toHaveCount(1)
+  await expect(navigation.locator('[data-admin-local-navigation]')).toHaveCount(4)
+  await expect(navigation.locator('[data-admin-workspace-toggle]')).toHaveCount(0)
 
   const auditLogs = historyWorkspace.getByRole('link', { name: '审计日志', exact: true })
   await auditLogs.scrollIntoViewIfNeeded()

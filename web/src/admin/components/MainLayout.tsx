@@ -2,7 +2,7 @@
  * THESIS: Dependency Flowline organizes Admin around operational workspaces, not a flat inventory of pages.
  * OWN-WORLD: Instrument neutrals, precise keylines, signal green, compact task links, and one calm white or matte-dark canvas.
  * STORY: Operators confirm service health, investigate history, configure sources, govern risk, and maintain the system.
- * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; desktop destinations default open with independent disclosure controls.
+ * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; every destination stays visible in one simple directory.
  * FORM: Structure candidate 4, flowline plus attention staging, seed 543e896c.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
  */
@@ -15,7 +15,6 @@ import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
 import DrawerV2 from '@/components/Drawer'
 import Icon, { type IconName } from '@/components/Icon'
-import IconButton from '@/components/IconButton'
 import InlineNotice from '@/components/InlineNotice'
 import LangToggle from '@/components/LangToggle'
 import Logo from '@/components/Logo'
@@ -88,18 +87,7 @@ function SidebarContent({
   onLogout,
 }: SidebarContentProps) {
   const { t } = useTranslation()
-  const [expansionOverrides, setExpansionOverrides] = useState<Record<string, boolean>>({})
   const preferredFocusSectionId = sections.find(section => section.active)?.id ?? sections[0]?.id
-
-  const isSectionExpanded = (section: NavSection) => (
-    section.items.length > 1
-    && (expansionOverrides[section.id] ?? (surface === 'sidebar' || section.active))
-  )
-
-  const toggleSection = (section: NavSection) => {
-    const nextExpanded = !isSectionExpanded(section)
-    setExpansionOverrides(current => ({ ...current, [section.id]: nextExpanded }))
-  }
 
   return (
     <>
@@ -137,15 +125,14 @@ function SidebarContent({
       >
         <div className="space-y-2 px-2.5">
           {sections.map((section) => {
-            const expanded = isSectionExpanded(section)
+            const hasLocalNavigation = section.items.length > 1
             const workspaceCurrent = section.current && section.items.length === 1
-            const navigationId = `${surface}-${section.id}-navigation`
             return (
               <div
                 key={section.id}
                 data-admin-nav-group={section.id}
                 data-admin-nav-active={section.active ? 'true' : 'false'}
-                data-admin-nav-expanded={expanded ? 'true' : 'false'}
+                data-admin-nav-expanded={hasLocalNavigation ? 'true' : 'false'}
               >
                 <div
                   data-admin-workspace-row
@@ -180,23 +167,10 @@ function SidebarContent({
                     <span className="min-w-0 flex-1 truncate">{section.label}</span>
                   </Link>
 
-                  {section.items.length > 1 && (
-                    <IconButton
-                      data-admin-workspace-toggle={section.id}
-                      icon={expanded ? 'expand_less' : 'chevron_right'}
-                      label={t(expanded ? 'nav.collapseWorkspace' : 'nav.expandWorkspace', { workspace: section.label })}
-                      aria-expanded={expanded}
-                      aria-controls={navigationId}
-                      onClick={() => toggleSection(section)}
-                      className="hover:bg-[var(--admin-rail-hover)]"
-                      style={{ color: section.active ? 'var(--brand-text)' : 'var(--text-subtle)' }}
-                    />
-                  )}
                 </div>
 
-                {expanded && (
+                {hasLocalNavigation && (
                   <div
-                    id={navigationId}
                     data-admin-local-navigation={section.id}
                     className="mt-1 ml-9 space-y-0.5"
                   >

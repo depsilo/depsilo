@@ -252,11 +252,10 @@ commands.
 The **Dependency Flowline** shell organizes work into five Operator domains:
 **Overview**, **History**, **Sources & Cache**, **Security Governance**, and
 **System**. The persistent sidebar is 232px wide. All five domains remain
-visible. On desktop, every multi-page domain defaults open and can be folded
-independently with a dedicated disclosure control; the workspace label remains
-a separate navigation link. The narrow-screen drawer defaults to the active
-domain only and lets operators reveal the others on demand, keeping short
-viewports usable. **Needs Attention** is integrated into Overview rather than
+visible as one scrollable directory on desktop and in the mobile drawer; no
+disclosure controls are needed. The workspace label remains a separate
+navigation link, while the active workspace and current destination provide
+the hierarchy. **Needs Attention** is integrated into Overview rather than
 presented as a primary navigation destination. Its legacy `/admin/attention`
 URL remains reachable so bookmarks and direct links do not break, as do all
 other established Admin URLs.
@@ -374,7 +373,7 @@ applies when an icon button is pending or disabled.
 | 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer defaults to the active workspace and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
 | `sm` 640 | Forms may use two columns; ordinary toolbars may share a row and long action groups wrap |
 | `md` 768 | Settings uses its 180px vertical tab rail; the Dashboard request flow becomes horizontal |
-| `lg` 1024 | The persistent 232px workspace sidebar appears with all multi-page workspaces open by default and independently collapsible; KPI grids may use four columns |
+| `lg` 1024 | The persistent 232px workspace sidebar appears with the full destination directory; KPI grids may use four columns |
 | `xl` 1280 | Dashboard flow/attention and trend/recent-activity rows use a fluid main column plus an approximately 380px supporting rail; they stack when that rail would crowd the primary task |
 | 1840+ | The Admin outlet is capped at 1840px and centered within the remaining main area |
 
