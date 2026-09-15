@@ -46,10 +46,11 @@ const zh = {
       manage: '管理',
       workspaces: {
         overview: '总览',
-        monitor: '监控',
-        delivery: '交付',
+        upstreams: '上游源',
+        cache: '缓存',
+        logs: '日志',
         security: '安全',
-        administration: '管理',
+        projects: '项目',
       },
       groups: {
         operations: '运行',

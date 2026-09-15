@@ -249,9 +249,9 @@ navigation shell. Admin pages use compact headings, stable table/control sizes,
 clear empty/loading/error states, and explicit confirmation for destructive
 commands.
 
-The **Dependency Flowline** shell organizes work into five task domains:
-**Overview**, **Monitor**, **Delivery**, **Security**, and
-**Administration**. The persistent sidebar is 232px wide. These five links remain
+The **Dependency Flowline** shell organizes work into six task domains:
+**Overview**, **Upstream Sources**, **Cache**, **Logs**, **Security**, and
+**Projects**. The persistent sidebar is 232px wide. These six links remain
 visible on desktop and in the mobile drawer, without child destinations or
 disclosure controls. Page-level tabs own the individual destinations, so their
 labels are not repeated in the sidebar.
@@ -283,7 +283,7 @@ Each multi-page workspace exposes its canonical destinations as a compact
 page-local navigation row below the heading. It is a projection of the route
 manifest, so it must not create a second route registry or change deep links;
 the sidebar remains the persistent workspace switcher. Overview keeps its
-single landing page and exposes Bandwidth as a quiet shortcut into Monitor.
+single landing page and exposes Bandwidth as a quiet shortcut into Cache.
 
 Policy runtime status is scoped to Overview and Security. Other
 workspaces do not issue a policy-status request or reserve banner space; their
@@ -299,7 +299,7 @@ followed by a compact queue for unhealthy Upstreams and cache-capacity pressure.
 The live request path—**Client ingress → Depsilo cache → Upstreams**—then leads
 the operational detail. The final row contains one multi-metric trend view and
 at most three recent downloads; complete popular package, Upstream, and
-bandwidth detail belongs on the relevant Monitor or Delivery expert page
+bandwidth detail belongs on the relevant Cache expert page
 instead of being duplicated on Overview. Metrics with no observed data show an
 honest unavailable marker rather than a fabricated zero.
 
@@ -367,10 +367,10 @@ applies when an icon button is pending or disabled.
 
 | Width | Admin behavior |
 | --- | --- |
-| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer shows four workspace links and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
+| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer shows six workspace links and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
 | `sm` 640 | Forms may use two columns; ordinary toolbars may share a row and long action groups wrap |
 | `md` 768 | Settings uses its 180px vertical tab rail; the Dashboard request flow becomes horizontal |
-| `lg` 1024 | The persistent 232px workspace sidebar appears with four workspace links; KPI grids may use four columns |
+| `lg` 1024 | The persistent 232px workspace sidebar appears with six workspace links; KPI grids may use four columns |
 | `xl` 1280 | Dashboard flow/attention and trend/recent-activity rows use a fluid main column plus an approximately 380px supporting rail; they stack when that rail would crowd the primary task |
 | 1840+ | The Admin outlet is capped at 1840px and centered within the remaining main area |
 

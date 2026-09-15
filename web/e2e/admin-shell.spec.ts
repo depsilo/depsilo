@@ -22,30 +22,11 @@ const legacyAdminHrefs = [
 
 const workspaceNavigation = [
   { id: 'overview', label: 'Overview', href: '/admin', routes: [] },
-  {
-    id: 'monitor',
-    label: 'Monitor',
-    href: '/admin/logs',
-    routes: ['/admin/logs', '/admin/upstream-updates', '/admin/bandwidth'],
-  },
-  {
-    id: 'delivery',
-    label: 'Delivery',
-    href: '/admin/upstreams',
-    routes: ['/admin/upstreams', '/admin/cache', '/admin/indexes', '/admin/compile-cache'],
-  },
-  {
-    id: 'security',
-    label: 'Security',
-    href: '/admin/security',
-    routes: ['/admin/audit', '/admin/security', '/admin/quarantine', '/admin/rules'],
-  },
-  {
-    id: 'administration',
-    label: 'Administration',
-    href: '/admin/users',
-    routes: ['/admin/projects', '/admin/users', '/admin/settings', '/admin/license'],
-  },
+  { id: 'upstreams', label: 'Upstreams', href: '/admin/upstreams', routes: ['/admin/upstreams', '/admin/upstream-updates'] },
+  { id: 'cache', label: 'Cache', href: '/admin/cache', routes: ['/admin/cache', '/admin/indexes', '/admin/compile-cache', '/admin/bandwidth'] },
+  { id: 'logs', label: 'Logs', href: '/admin/logs', routes: ['/admin/logs'] },
+  { id: 'security', label: 'Security', href: '/admin/security', routes: ['/admin/audit', '/admin/security', '/admin/quarantine', '/admin/rules'] },
+  { id: 'projects', label: 'Projects', href: '/admin/projects', routes: ['/admin/projects', '/admin/users', '/admin/settings', '/admin/license'] },
 ] as const
 
 test('pending principal check shows an accessible branded loading state', async ({ page }) => {
@@ -111,7 +92,7 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
 
   const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
   const groups = navigation.locator('[data-admin-nav-group]')
-  await expect(groups).toHaveCount(5)
+  await expect(groups).toHaveCount(6)
   expect(await groups.evaluateAll(elements => elements.map(element => element.getAttribute('data-admin-nav-group')))).toEqual(
     workspaceNavigation.map(workspace => workspace.id),
   )
@@ -123,7 +104,7 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
     await expect(workspaceLink).toHaveAttribute('href', workspace.href)
   }
 
-  await expect(navigation.getByRole('link')).toHaveCount(5)
+  await expect(navigation.getByRole('link')).toHaveCount(6)
   await expect(navigation.getByRole('button')).toHaveCount(0)
   await expect(navigation.locator('a[aria-current="page"]')).toHaveAttribute('href', '/admin')
 
@@ -132,6 +113,11 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
     const group = navigation.locator(`[data-admin-nav-group="${workspace.id}"]`)
     const tabs = page.locator(`[data-admin-page-navigation="${workspace.id}"]`)
     await expect(tabs).toBeVisible()
+    if (workspace.routes.length === 1) {
+      await expect(page).toHaveURL(new RegExp(`${workspace.href}$`))
+      await expect(navigation.getByRole('link')).toHaveCount(6)
+      continue
+    }
     expect(await tabs.getByRole('link').evaluateAll(links => (
       links.map(link => link.getAttribute('href'))
     ))).toEqual(workspace.routes)
@@ -142,7 +128,7 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
       await expect(tabs.locator('a[aria-current="page"]')).toHaveAttribute('href', href)
       await expect(group.locator('[data-admin-workspace-current="true"]')).toBeVisible()
       await expect(group.getByRole('link')).toHaveAttribute('aria-current', href === workspace.href ? 'page' : 'location')
-      await expect(navigation.getByRole('link')).toHaveCount(5)
+      await expect(navigation.getByRole('link')).toHaveCount(6)
     }
   }
 
@@ -191,19 +177,19 @@ test('mobile drawer selects a workspace and page tabs select its destination', a
   await expect(drawer.locator('[data-admin-sidebar-footer]')).toBeInViewport()
   await expect(navigation.getByRole('link', { name: '总览', exact: true })).toBeFocused()
 
-  await expect(navigation.getByRole('link')).toHaveCount(5)
+  await expect(navigation.getByRole('link')).toHaveCount(6)
   await expect(navigation.getByRole('button')).toHaveCount(0)
-  await navigation.getByRole('link', { name: '监控', exact: true }).click()
+  await navigation.getByRole('link', { name: '安全', exact: true }).click()
   await expect(drawer).toBeHidden()
-  await expect(page).toHaveURL(/\/admin\/logs$/)
+  await expect(page).toHaveURL(/\/admin\/security$/)
 
   const auditLogs = page.locator('[data-admin-page-navigation="security"]').getByRole('link', { name: '审计日志', exact: true })
   await auditLogs.scrollIntoViewIfNeeded()
   await auditLogs.click()
   await expect(page).toHaveURL(/\/admin\/audit$/)
   await trigger.click()
-  await expect(navigation.getByRole('link', { name: '监控', exact: true })).toBeFocused()
-  await expect(navigation.getByRole('link', { name: '监控', exact: true })).toHaveAttribute('aria-current', 'location')
+  await expect(navigation.getByRole('link', { name: '安全', exact: true })).toBeFocused()
+  await expect(navigation.getByRole('link', { name: '安全', exact: true })).toHaveAttribute('aria-current', 'location')
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
@@ -224,7 +210,7 @@ test('desktop shell uses a 232px rail and separates breadcrumb from the page hea
   await expect(mainColumn).toHaveCSS('margin-left', '232px')
   await expect(topbar).toHaveCSS('left', '232px')
   await expect(topbar.getByRole('heading')).toHaveCount(0)
-  await expect(breadcrumb).toContainText('Monitor')
+  await expect(breadcrumb).toContainText('Upstreams')
   await expect(breadcrumb).toContainText('Upstream Updates')
   await expect(page.locator('main').getByRole('heading', { level: 1, name: 'Upstream Updates' })).toHaveCount(1)
 })

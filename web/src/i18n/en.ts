@@ -46,10 +46,11 @@ const en = {
       manage: 'Manage',
       workspaces: {
         overview: 'Overview',
-        monitor: 'Monitor',
-        delivery: 'Delivery',
+        upstreams: 'Upstreams',
+        cache: 'Cache',
+        logs: 'Logs',
         security: 'Security',
-        administration: 'Administration',
+        projects: 'Projects',
       },
       groups: {
         operations: 'Operations',

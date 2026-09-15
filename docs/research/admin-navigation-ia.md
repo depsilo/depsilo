@@ -24,9 +24,10 @@ The old groups mixed three different user questions:
 | Group | Landing page | Tabs | User question |
 | --- | --- | --- | --- |
 | Overview | Dashboard | none | What needs attention now? |
-| Monitor | Access Logs | Access Logs, Upstream Updates, Bandwidth | What is happening and what happened? |
-| Delivery | Upstreams | Upstreams, Cache, Index Cache, Compiler Cache | How are dependencies served? |
+| Upstream Sources | Upstreams | Upstreams, Upstream Updates | Where do dependencies come from? |
+| Cache | Cache | Cache, Index Cache, Compiler Cache, Bandwidth | How are dependencies stored and accelerated? |
+| Logs | Access Logs | Access Logs | What requests reached the proxy? |
 | Security | Security | Audit Logs, Security, Quarantine, Rules | Can requests and changes be trusted? |
-| Administration | Users | Projects, Users, Settings, License | Who can use this instance and how is it configured? |
+| Projects | Projects | Projects, Users, Settings, License | Who owns and configures the workspaces? |
 
 The sidebar keeps only these five task-level links. Page tabs expose the detailed destinations, so a route appears once in the persistent shell and once in the relevant local context rather than being repeated as both a sidebar leaf and a tab.
