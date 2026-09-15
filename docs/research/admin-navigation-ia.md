@@ -10,7 +10,7 @@
 
 ## Findings for Depsilo
 
-The old groups mixed three different user questions:
+The old groups mixed four different user questions:
 
 1. **Is the proxy healthy and what happened?** Dashboard, access logs, upstream updates, and bandwidth.
 2. **How does traffic get served?** Upstreams, cache, index cache, and compiler cache.
@@ -19,19 +19,32 @@ The old groups mixed three different user questions:
 
 “History”, “Sources & Cache”, “Security Governance”, and “System” describe implementation areas or time, but do not tell an operator which job the group supports. The new groups use the task language seen in GitLab and Gitea while retaining Harbor’s rule that related detail pages belong in local tabs.
 
-## Adopted grouping
+## Final grouping (user-approved)
 
-| Group | Landing page | Tabs | User question |
-| --- | --- | --- | --- |
-| Overview | Dashboard | none | What needs attention now? |
-| Upstream Sources | Upstreams | Upstreams, Upstream Updates | Where do dependencies come from? |
-| Cache | Cache | Cache, Index Cache, Compiler Cache, Bandwidth | How are dependencies stored and accelerated? |
-| Logs | Access Logs | Access Logs | What requests reached the proxy? |
-| Security | Security | Audit Logs, Security, Quarantine, Rules | Can requests and changes be trusted? |
-| Projects | Projects | Projects | Which project workspaces exist? |
+The final design uses the six resource areas requested by the user. Earlier
+Monitor/Delivery groupings were intermediate proposals, not an industry standard.
+The route manifest and DESIGN.md are the current implementation authorities.
 
-Instance-wide Users, Settings, and License are deliberately outside the six
-task domains. The shell exposes them through the top-right **Instance
-management** control and keeps their three-page local navigation together.
+| Group | Landing page | Local page navigation |
+| --- | --- | --- |
+| Overview | Dashboard | Dashboard, Bandwidth Report |
+| Upstream Sources | Upstreams | None (one page) |
+| Cache | Artifacts | Artifacts, Index Cache, Compiler Cache |
+| Logs | Access Logs | Access Logs, Metadata Refreshes, Audit Logs |
+| Security | Vulnerability Intelligence | Vulnerability Intelligence, Quarantine & Blocking, Package Rules |
+| Projects | Projects | None (project list opens project details) |
 
-The sidebar keeps only these five task-level links. Page tabs expose the detailed destinations, so a route appears once in the persistent shell and once in the relevant local context rather than being repeated as both a sidebar leaf and a tab.
+The metadata refresh page describes cached-metadata revalidation, not changes to
+upstream configuration. Audit Logs include management changes and package access,
+so they belong with request and refresh records. Bandwidth is a usage/savings
+report under Overview, rather than a cache-management action.
+
+Instance-wide Users, Settings, and License are outside the six main destinations.
+They share local navigation reached from **Instance management** at the bottom
+of the sidebar, above the user information. The mobile drawer uses the same footer.
+
+Inside the two Security pages, labeled native view selectors replace nested tab
+bars. Intelligence retains Overview, Vulnerabilities, Suggested Rules, and Policies;
+Quarantine retains Events, Approvals, and Malware blocklist. Existing functionality,
+query activation, and intelligence deep links are preserved. Single-page groups
+show no artificial tab bar, and no subpage labels are repeated in the sidebar.

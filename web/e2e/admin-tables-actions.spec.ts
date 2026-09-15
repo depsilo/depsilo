@@ -251,7 +251,7 @@ test('project and security tables expose named local scroll regions and explicit
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 
   await page.goto('/admin/security')
-  await page.getByRole('tab', { name: /漏洞|Vulnerabilities/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('vulnerabilities')
   const securityTable = page.getByRole('region', { name: /安全漏洞表格|Security vulnerabilities table/ })
   await expect(securityTable).toBeVisible()
   await expect(securityTable.locator('tbody tr')).toHaveCount(2)
@@ -383,7 +383,7 @@ test('quarantine uses direct mobile lists and preserves named desktop table regi
   })
   await page.goto('/admin/quarantine')
 
-  await page.getByRole('tab', { name: /已放行|Approvals/ }).click()
+  await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('approvals')
   const approvals = page.getByRole('region', { name: /供应链隔离放行表格|Quarantine approvals table/ })
   const approvalList = page.locator('[data-quarantine-mobile-list="approvals"]')
   await expect(approvalList).toBeVisible()
@@ -391,7 +391,7 @@ test('quarantine uses direct mobile lists and preserves named desktop table regi
   await expect(approvalList.getByRole('button', { name: /撤销|Revoke/ })).toBeVisible()
   await expect(approvals).toBeHidden()
 
-  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
+  await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('blocklist')
   const overrides = page.getByRole('region', { name: /恶意封锁豁免表格|Malware override table/ })
   const overrideList = page.locator('[data-quarantine-mobile-list="overrides"]')
   await expect(overrideList).toBeVisible()
@@ -409,7 +409,7 @@ test('quarantine uses direct mobile lists and preserves named desktop table regi
   await expect(overrides).toBeVisible()
   expect(await overrides.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
 
-  await page.getByRole('tab', { name: /已放行|Approvals/ }).click()
+  await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('approvals')
   await expect(approvalList).toBeHidden()
   await expect(approvals).toBeVisible()
   expect(await approvals.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)

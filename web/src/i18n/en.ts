@@ -61,17 +61,17 @@ const en = {
       dashboard: 'Dashboard',
       attention: 'Needs Attention',
       accessLogs: 'Access Logs',
-      cacheManage: 'Cache',
+      cacheManage: 'Artifacts',
       cacheIndexes: 'Index Cache',
       compileCache: 'Compiler Cache',
       upstreams: 'Upstreams',
-      upstreamUpdates: 'Upstream Updates',
+      upstreamUpdates: 'Metadata Refreshes',
       userManage: 'Users',
       settings: 'Settings',
       auditLogs: 'Audit Logs',
-      quarantine: 'Supply-chain Quarantine',
+      quarantine: 'Quarantine & Blocking',
       rules: 'Package Rules',
-      security: 'Package Security',
+      security: 'Vulnerability Intelligence',
       projects: 'Projects',
       logout: 'Sign out',
       instanceManagement: 'Instance management',
@@ -542,11 +542,11 @@ const en = {
 
     upstreamUpdates: {
       subtitle: 'See what changed, stayed current, or failed when Depsilo revalidated cached metadata.',
-      loadError: 'Unable to load upstream update records.',
+      loadError: 'Unable to load metadata refresh records.',
       staleNotice: 'Refresh failed. Showing records from the last successful load.',
       nextPageError: 'Unable to load more records. Try “Load more” again.',
-      tableLabel: 'Upstream update records',
-      filtersLabel: 'Filter upstream update records',
+      tableLabel: 'Metadata refresh records',
+      filtersLabel: 'Filter metadata refresh records',
       searchLabel: 'Search packages',
       searchPlaceholder: 'Search package name…',
       filterEcosystem: 'Ecosystem',
@@ -572,7 +572,7 @@ const en = {
       unknownUpstream: 'Unknown upstream',
       loadMore: 'Load more',
       loadingMore: 'Loading more...',
-      emptyTitle: 'No upstream update records yet',
+      emptyTitle: 'No metadata refresh records yet',
       emptyHint: 'Records appear after Depsilo revalidates cached metadata. Repeated identical outcomes are grouped into one episode.',
       noMatches: 'No records match these filters',
       noMatchesHint: 'Try another package, ecosystem, or result.',
@@ -711,7 +711,8 @@ const en = {
 
     // Supply-chain Quarantine
     quarantine: {
-      title: 'Supply-chain Quarantine',
+      view: 'Blocking view',
+      title: 'Quarantine & Blocking',
       subtitle: 'Review malware, tamper, and historical quarantine decisions. Minimum-release-age enforcement is temporarily unavailable.',
       minimum_age_unavailable: 'Minimum release age is safety-disabled until artifact-source and timestamp provenance are bound. Positive enabled thresholds are rejected at startup; new permanent approvals cannot be created.',
       tab: {
@@ -912,7 +913,8 @@ const en = {
 
     // Security
     security: {
-      title: 'Package Security',
+      view: 'Intelligence view',
+      title: 'Vulnerability Intelligence',
       subtitle: 'Review vulnerability intelligence, suggested blocks, and per-ecosystem security policies.',
       vulnerabilitiesTable: 'Security vulnerabilities table',
       overview: 'Overview',

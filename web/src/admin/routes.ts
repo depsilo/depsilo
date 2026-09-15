@@ -20,21 +20,20 @@ interface AdminRouteDefinition {
   navGroup: AdminNavGroup
   pro?: true
   hiddenFromNavigation?: true
-  hiddenFromSidebar?: true
 }
 
 const routeDefinitions = [
   { id: 'dashboard', path: '', titleKey: 'nav.workspaces.overview', icon: 'dashboard', navGroup: 'overview' },
+  { id: 'bandwidth', path: 'bandwidth', titleKey: 'bandwidth.title', icon: 'bar_chart', navGroup: 'overview' },
   { id: 'connect', path: 'connect', titleKey: 'onboarding.title', icon: 'link', navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'attention', path: 'attention', titleKey: 'nav.attention', icon: 'inbox', navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'upstreams', path: 'upstreams', titleKey: 'nav.upstreams', icon: 'cloud_sync', navGroup: 'upstreams' },
-  { id: 'upstreamUpdates', path: 'upstream-updates', titleKey: 'nav.upstreamUpdates', icon: 'update', navGroup: 'upstreams' },
   { id: 'cache', path: 'cache', titleKey: 'nav.cacheManage', icon: 'storage', navGroup: 'cache' },
   { id: 'cacheIndexes', path: 'indexes', titleKey: 'nav.cacheIndexes', icon: 'inventory_2', navGroup: 'cache' },
   { id: 'compileCache', path: 'compile-cache', titleKey: 'nav.compileCache', icon: 'memory', navGroup: 'cache' },
-  { id: 'bandwidth', path: 'bandwidth', titleKey: 'bandwidth.title', icon: 'bar_chart', navGroup: 'cache' },
   { id: 'accessLogs', path: 'logs', titleKey: 'nav.accessLogs', icon: 'receipt_long', navGroup: 'logs' },
-  { id: 'auditLogs', path: 'audit', titleKey: 'nav.auditLogs', icon: 'policy', navGroup: 'security' },
+  { id: 'upstreamUpdates', path: 'upstream-updates', titleKey: 'nav.upstreamUpdates', icon: 'update', navGroup: 'logs' },
+  { id: 'auditLogs', path: 'audit', titleKey: 'nav.auditLogs', icon: 'policy', navGroup: 'logs' },
   { id: 'security', path: 'security', titleKey: 'nav.security', icon: 'security', navGroup: 'security' },
   { id: 'quarantine', path: 'quarantine', titleKey: 'nav.quarantine', icon: 'shield_lock', navGroup: 'security' },
   { id: 'rules', path: 'rules', titleKey: 'nav.rules', icon: 'shield', navGroup: 'security' },

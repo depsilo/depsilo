@@ -80,7 +80,7 @@ test('quarantine mobile lists keep decision context and available actions visibl
   await expect(eventList.getByRole('button', { name: 'Approve' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
-  await page.getByRole('tab', { name: 'Approvals' }).click()
+  await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('approvals')
   const approvalList = page.locator('[data-quarantine-mobile-list="approvals"]')
   await expect(approvalList).toBeVisible()
   await expect(approvalList.getByText('trusted-after-review', { exact: true })).toBeVisible()
@@ -91,7 +91,7 @@ test('quarantine mobile lists keep decision context and available actions visibl
   await expect(revokeDialog.getByLabel('Reason')).toBeVisible()
   await revokeDialog.getByRole('button', { name: 'Cancel' }).click()
 
-  await page.getByRole('tab', { name: 'Malware blocklist' }).click()
+  await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('blocklist')
   const overrideList = page.locator('[data-quarantine-mobile-list="overrides"]')
   await expect(overrideList).toBeVisible()
   await expect(overrideList.getByText('confirmed-false-positive-with-a-long-package-name', { exact: true })).toBeVisible()

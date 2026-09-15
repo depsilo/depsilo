@@ -4,8 +4,8 @@ test('AdminPage renders the route title once and wraps its actions on mobile', a
   await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/admin/rules')
 
-  await expect(page.locator('[data-admin-page-title]')).toHaveText('包治理')
-  await expect(page.getByRole('heading', { level: 1, name: '包治理', exact: true })).toHaveCount(1)
+  await expect(page.locator('[data-admin-page-title]')).toHaveText('包规则')
+  await expect(page.getByRole('heading', { level: 1, name: '包规则', exact: true })).toHaveCount(1)
   await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
   const actions = page.locator('[data-admin-page-actions]')
   await expect(actions.getByRole('button', { name: /测试规则/ })).toBeVisible()
@@ -26,12 +26,11 @@ test('readable and fluid pages preserve distinct desktop widths', async ({ page 
 
 test('workspace destinations are available as a local page navigation', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
-  await page.goto('/admin/upstreams')
+  await page.goto('/admin/cache')
 
   const localNavigation = page.locator('[data-admin-page-navigation="cache"]')
   await expect(localNavigation).toBeVisible()
-  await expect(localNavigation.getByRole('link', { name: '上游源', exact: true })).toHaveAttribute('aria-current', 'page')
-  await expect(localNavigation.getByRole('link', { name: '缓存管理', exact: true })).toHaveAttribute('href', '/admin/cache')
+  await expect(localNavigation.getByRole('link', { name: '制品缓存', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(localNavigation.getByRole('link', { name: '索引缓存', exact: true })).toHaveAttribute('href', '/admin/indexes')
   await expect(localNavigation.getByRole('link', { name: '编译缓存', exact: true })).toHaveAttribute('href', '/admin/compile-cache')
 })
@@ -69,7 +68,7 @@ test('Dashboard aligns its snapshot with both fluid page content seams', async (
 
 test('duplicate page titles are removed while entity and section headings remain', async ({ page }) => {
   await page.goto('/admin/quarantine')
-  await expect(page.getByRole('heading', { name: '供应链隔离', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: '隔离与拦截', exact: true })).toHaveCount(1)
 
   await page.goto('/admin/license')
   await expect(page.getByRole('heading', { name: 'License 与 Pro', exact: true })).toHaveCount(1)

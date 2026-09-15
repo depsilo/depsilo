@@ -8,7 +8,7 @@ function deferred<T>() {
 
 async function openSecurityImport(page: import('@playwright/test').Page) {
   await page.goto('/admin/security')
-  await page.getByRole('tab', { name: /策略|Policies/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('policies')
   return page.locator('[data-security-import-dropzone]')
 }
 

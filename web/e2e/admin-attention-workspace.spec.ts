@@ -64,7 +64,7 @@ test('attention workspace brings operational risks into one direct queue', async
 
   await page.getByRole('link', { name: /处理安全建议|Review suggestions/ }).click()
   await expect(page).toHaveURL(/\/admin\/security\?tab=suggestions$/)
-  await expect(page.getByRole('tab', { name: /建议规则|Suggested Rules/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('suggestions')
 })
 
 test('attention keeps available queue items beside an unavailable initial signal', async ({ page }) => {
@@ -210,7 +210,7 @@ test('attention keeps cached results visible when background refreshes fail', as
   await page.waitForTimeout(25)
 
   failRefresh = true
-  const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
+  const navigation = page.locator('aside [data-admin-sidebar-footer]')
   await navigation.locator('a[href="/admin/users"]').click()
   await expect(page).toHaveURL(/\/admin\/users$/)
   await expect(page.locator('[data-admin-page-title]')).toHaveText(/用户管理|Users/)

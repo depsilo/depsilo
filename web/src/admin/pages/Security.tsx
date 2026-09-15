@@ -16,7 +16,6 @@ import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
 import InlineNotice from '@/components/InlineNotice'
 import DataTableV2 from '@/components/DataTable'
-import TabsV2 from '@/components/Tabs'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import QueryErrorState from '@/components/QueryErrorState'
 import AdminPage from '@/admin/components/AdminPage'
@@ -26,7 +25,6 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { securityEcosystems, supportsPackageRuleRanges, supportsVulnerabilityAutoBlock } from '@/admin/operatorEcosystems'
 import { getAdminRouteHref } from '@/admin/routes'
 import { usePrincipal } from '@/hooks/usePrincipal'
-import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { getApiError } from '@/lib/apiError'
 import type {
   SecurityPolicy,
@@ -1027,7 +1025,6 @@ function PoliciesTab() {
 
 export default function Security() {
   const { t } = useTranslation()
-  const desktopTabs = useMediaQuery('(min-width: 768px)')
   const [searchParams, setSearchParams] = useSearchParams()
   const serializedSearchParams = searchParams.toString()
   const requestedTab = searchParams.get('tab')
@@ -1053,31 +1050,34 @@ export default function Security() {
   // Security intelligence dashboard moved to open-source on 2026-06-28 —
   // the page no longer 402s, so there is no Pro paywall branch.
 
-  const tabs = [
-    { key: 'overview', label: t('security.overview'), icon: <Icon name="dashboard" size="sm" />, content: <OverviewTab /> },
-    { key: 'vulnerabilities', label: t('security.vulnerabilities'), icon: <Icon name="bug_report" size="sm" />, content: <VulnerabilitiesTab /> },
-    { key: 'suggestions', label: t('security.suggestions'), icon: <Icon name="lightbulb" size="sm" />, content: <SuggestionsTab /> },
-    { key: 'policies', label: t('security.policies'), icon: <Icon name="policy" size="sm" />, content: <PoliciesTab /> },
+  const views = [
+    { key: 'overview', label: t('security.overview'), content: <OverviewTab /> },
+    { key: 'vulnerabilities', label: t('security.vulnerabilities'), content: <VulnerabilitiesTab /> },
+    { key: 'suggestions', label: t('security.suggestions'), content: <SuggestionsTab /> },
+    { key: 'policies', label: t('security.policies'), content: <PoliciesTab /> },
   ]
 
   return (
     <AdminPage description={t('security.subtitle')}>
     <div className="space-y-6">
-      <TabsV2
-        items={tabs}
-        value={tab}
-        onValueChange={(nextTab) => {
-          if (nextTab === activeTabRef.current) return
-          activeTabRef.current = nextTab
-          const nextParams = new URLSearchParams(searchParams)
-          if (nextTab === 'overview') nextParams.delete('tab')
-          else nextParams.set('tab', nextTab)
-          setSearchParams(nextParams)
-        }}
-        ariaLabel={t('security.title')}
-        orientation={desktopTabs ? 'vertical' : 'horizontal'}
-        appearance="directory"
-      />
+      <div className="max-w-xs">
+        <SelectV2
+          label={t('security.view')}
+          value={tab}
+          onChange={(event) => {
+            const nextTab = event.target.value
+            if (nextTab === activeTabRef.current) return
+            activeTabRef.current = nextTab
+            const nextParams = new URLSearchParams(searchParams)
+            if (nextTab === 'overview') nextParams.delete('tab')
+            else nextParams.set('tab', nextTab)
+            setSearchParams(nextParams)
+          }}
+        >
+          {views.map(view => <option key={view.key} value={view.key}>{view.label}</option>)}
+        </SelectV2>
+      </div>
+      {views.find(view => view.key === tab)?.content}
     </div>
     </AdminPage>
   )

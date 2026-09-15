@@ -161,7 +161,7 @@ horizontally.
 
 `QuickStart.tsx` contains:
 
-1. A compact title and one-line orientation for choosing an ecoadministration and
+1. A compact title and one-line orientation for choosing an ecosystem and
    package manager, copying the persistent configuration, and verifying it.
 2. The primary setup surface, with `EcoadministrationCatalog` on the left and
    `ConfigurePane` on the right for the selected technology stack. This
@@ -171,7 +171,7 @@ horizontally.
    project-level AI integration path and the compiler-cache entry point.
 
 The catalog remembers at most three validated recent choices as compact
-shortcuts, searches ecoadministration and manager names, and shows the complete
+shortcuts, searches ecosystem and manager names, and shows the complete
 14-item catalog by default. Its white directory rail uses selection state, not
 a large tinted slab, to establish hierarchy. `ConfigurePane` shows every
 supported manager in one compact segmented rail and defaults to the first one
@@ -255,8 +255,8 @@ The **Dependency Flowline** shell organizes work into six task domains:
 visible on desktop and in the mobile drawer, without child destinations or
 disclosure controls. Page-level tabs own the individual destinations, so their
 labels are not repeated in the sidebar.
-Instance-wide Users, Settings, and License live under the top-right **Instance
-management** control and share a separate local navigation row; they are not
+Instance-wide Users, Settings, and License live under the bottom-left **Instance
+management** link above the user information and share a separate local navigation row; they are not
 project pages.
 **Needs Attention** is integrated into Overview rather than presented as a primary navigation destination. Its legacy `/admin/attention`
 URL remains reachable so bookmarks and direct links do not break, as do all
@@ -285,8 +285,26 @@ readable/fluid width below that bar.
 Each multi-page workspace exposes its canonical destinations as a compact
 page-local navigation row below the heading. It is a projection of the route
 manifest, so it must not create a second route registry or change deep links;
-the sidebar remains the persistent workspace switcher. Overview keeps its
-single landing page and exposes Bandwidth as a quiet shortcut into Cache.
+the sidebar remains the persistent workspace switcher. Overview contains the
+Dashboard and Bandwidth Report. Upstreams and Projects each have one page and
+render no local navigation row or empty divider.
+
+| Sidebar destination | Local page navigation (in order) |
+| --- | --- |
+| Overview | Dashboard, Bandwidth Report |
+| Upstreams | None; source configuration and health live on the same page |
+| Cache | Artifacts, Index Cache, Compiler Cache |
+| Logs | Access Logs, Metadata Refreshes, Audit Logs |
+| Security | Vulnerability Intelligence, Quarantine & Blocking, Package Rules |
+| Projects | None; project list opens the selected project's detail |
+| Instance management (footer) | Users, Settings, License |
+
+Security exposes only one row of page destinations. Inside Vulnerability
+Intelligence, a labeled native select switches Overview, Vulnerabilities,
+Suggested Rules, and Policies. Quarantine & Blocking similarly switches Events,
+Approvals, and Malware blocklist with a labeled select. Only the selected view
+is mounted. Existing `/admin/security?tab=...` URLs and browser Back continue to
+select the intelligence view. Settings retains its own configuration tabs.
 
 Policy runtime status is scoped to Overview and Security. Other
 workspaces do not issue a policy-status request or reserve banner space; their
@@ -302,7 +320,7 @@ followed by a compact queue for unhealthy Upstreams and cache-capacity pressure.
 The live request path—**Client ingress → Depsilo cache → Upstreams**—then leads
 the operational detail. The final row contains one multi-metric trend view and
 at most three recent downloads; complete popular package, Upstream, and
-bandwidth detail belongs on the relevant Cache expert page
+bandwidth detail belongs in the Overview workspace’s Bandwidth Report
 instead of being duplicated on Overview. Metrics with no observed data show an
 honest unavailable marker rather than a fabricated zero.
 
@@ -387,23 +405,23 @@ configured and effective values, environment override source, fields applied
 immediately, fields waiting for restart, and fields blocked by an environment
 override. A successful HTTP response alone is not presented as "applied".
 
-Ordinary ecoadministration Upstreams are database-authoritative after first-run seed.
+Ordinary ecosystem Upstreams are database-authoritative after first-run seed.
 Create, update, delete, and manual check responses reflect the live Registry
 snapshot; Docker remains configuration-authoritative and outside this CRUD
 surface. Mutation controls stay disabled and dimensionally stable while their
 request is pending, and row-local failures preserve the current data and form.
 
 The Upstreams page is an operational inventory before it is a chart: operators
-can search names, ecoadministrations, URLs, and proxies, then filter by the shared
-healthy/degraded/failed rule. Large ecoadministration groups expand into an adaptive
+can search names, ecosystems, URLs, and proxies, then filter by the shared
+healthy/degraded/failed rule. Large ecosystem groups expand into an adaptive
 multi-column list while small groups retain the compact tiled layout. “Check
 All” runs at most four requests concurrently, exposes progress and partial
 request failures, and reports the same three health states used by filters.
 Pending create, update, and delete dialogs cannot be dismissed until their
 request completes.
 
-Upstream Updates is stable episode history rather than a current-failures
-dashboard. Operators can filter package, ecoadministration, and result through
+Metadata Refreshes (`/admin/upstream-updates`) is stable episode history rather than a current-failures
+dashboard. Operators can filter package, ecosystem, and result through
 URL-backed server queries. Desktop uses a compact table; narrow screens use a
 divided event list that keeps outcome and detail visible without horizontal
 scrolling. The episode window displays both first and latest observation, while
@@ -413,7 +431,7 @@ latest” replaces history only after the newest-page request succeeds.
 
 Access Logs and Audit Logs keep applied filters and pagination in canonical URL
 parameters so links, reload, and browser navigation restore the same
-investigation. Security does the same for its active tab. Invalid values are
+investigation. Security does the same for its active intelligence view. Invalid values are
 replaced with the default canonical form rather than retained as misleading
 address-bar state. Export actions expose pending, success, and retryable failure
 feedback.

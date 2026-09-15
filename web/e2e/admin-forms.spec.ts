@@ -100,7 +100,7 @@ test('security policy controls have distinct ecosystem names and toggle with Spa
   })
   await page.goto('/admin/security')
   // TabsV2 receives tab semantics in Plan 04 Task 5; use its current button contract here.
-  await page.getByRole('tab', { name: /策略/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('policies')
 
   const pypiSwitch = page.getByRole('switch', { name: 'PYPI 自动拦截' })
   const npmPolicy = page.locator('[data-policy-ecosystem="npm"]')

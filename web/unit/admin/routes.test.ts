@@ -29,11 +29,11 @@ const expectedRoutes = {
 } as const
 
 const expectedGroups = [
-  { id: 'overview', routes: ['dashboard'] },
-  { id: 'upstreams', routes: ['upstreams', 'upstreamUpdates'] },
-  { id: 'cache', routes: ['cache', 'cacheIndexes', 'compileCache', 'bandwidth'] },
-  { id: 'logs', routes: ['accessLogs'] },
-  { id: 'security', routes: ['auditLogs', 'security', 'quarantine', 'rules'] },
+  { id: 'overview', routes: ['dashboard', 'bandwidth'] },
+  { id: 'upstreams', routes: ['upstreams'] },
+  { id: 'cache', routes: ['cache', 'cacheIndexes', 'compileCache'] },
+  { id: 'logs', routes: ['accessLogs', 'upstreamUpdates', 'auditLogs'] },
+  { id: 'security', routes: ['security', 'quarantine', 'rules'] },
   { id: 'projects', routes: ['projects'] },
   { id: 'instance', routes: ['users', 'settings', 'license'] },
 ] as const

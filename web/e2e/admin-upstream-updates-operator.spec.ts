@@ -198,7 +198,7 @@ test('makes 403 explicit and lets an initial 500 retry into the successful empty
   await page.reload()
 
   const failure = page.getByRole('alert')
-  await expect(failure).toContainText(/Unable to load upstream update records/i)
+  await expect(failure).toContainText(/Unable to load metadata refresh records/i)
   await expect.poll(() => retryCalls).toBe(1)
   await failure.getByRole('button', { name: 'Retry' }).click()
   await expect.poll(() => retryCalls).toBe(2)

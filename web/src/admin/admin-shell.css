@@ -24,8 +24,7 @@
   overscroll-behavior-x: contain;
 }
 
-.admin-page-destination,
-.admin-page-shortcut {
+.admin-page-destination {
   display: inline-flex;
   min-height: 40px;
   flex-shrink: 0;
@@ -50,17 +49,12 @@
   font-weight: 650;
 }
 
-.admin-page-destination:hover,
-.admin-page-shortcut:hover {
+.admin-page-destination:hover {
   color: var(--brand-text);
 }
 
 .admin-page-destination:focus-visible {
   outline-offset: -3px;
-}
-
-.admin-page-shortcut {
-  padding: 7px 0 9px;
 }
 
 @media (max-width: 639px) {

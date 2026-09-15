@@ -1,12 +1,3 @@
-// Quarantine — supply-chain monitor surface for the minimum-release-age
-// subsystem (T1 Task 1). Two tabs:
-//   - Events: recent quarantine decisions (block / bypass / approve /
-//     revoke). Filterable by ecosystem + action.
-//   - Approvals: operator's active permanent approvals; each row has a
-//     revoke action.
-//
-// Wedge feature per docs/DIRECTION.md — open-source, no Pro gating,
-// no upgrade callout.
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -23,10 +14,9 @@ import ModalV2 from '@/components/Modal'
 import InputV2 from '@/components/Input'
 import TableViewport from '@/components/TableViewport'
 import QueryErrorState from '@/components/QueryErrorState'
-import TabsV2 from '@/components/Tabs'
+import SelectV2 from '@/components/Select'
 import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
-import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { maliciousBlocklistEcosystems } from '@/admin/operatorEcosystems'
@@ -119,7 +109,6 @@ function actionBadge(action: string, t: (k: string) => string) {
 
 export default function Quarantine() {
   const { t } = useTranslation()
-  const desktopTabs = useMediaQuery('(min-width: 768px)')
   const qc = useQueryClient()
   const { canWrite } = usePrincipal()
   const [tab, setTab] = useState<'events' | 'approvals' | 'blocklist'>('events')
@@ -178,39 +167,36 @@ export default function Quarantine() {
     <AdminPage description={t('quarantine.subtitle')}>
     <div className="space-y-6">
       <InlineNotice tone="warning">{t('quarantine.minimum_age_unavailable')}</InlineNotice>
-      <TabsV2
-        value={tab}
-        onValueChange={(value) => setTab(value as typeof tab)}
-        ariaLabel={t('quarantine.title')}
-        orientation={desktopTabs ? 'vertical' : 'horizontal'}
-        appearance="directory"
-        items={[
-          {
-            key: 'events',
-            label: t('quarantine.tab.events'),
-            content: <EventsTab
-              eventsQ={eventsQ}
-              ecoFilter={ecoFilter}
-              setEcoFilter={setEcoFilter}
-              actionFilter={actionFilter}
-              setActionFilter={setActionFilter}
-              pkgSearch={pkgSearch}
-              setPkgSearch={setPkgSearch}
-            />,
-          },
-          {
-            key: 'approvals',
-            label: t('quarantine.tab.approvals'),
-            content: <ApprovalsTab approvalsQ={approvalsQ} canWrite={canWrite} onRevoke={(row) => {
-              revokeM.reset()
-              setRevokeTarget(row)
-              setRevokeReason('')
-              setRevokeOpen(true)
-            }} />,
-          },
-          { key: 'blocklist', label: t('quarantine.tab.blocklist'), content: <BlocklistTab /> },
-        ]}
-      />
+      <div className="max-w-xs">
+        <SelectV2
+          label={t('quarantine.view')}
+          value={tab}
+          onChange={(event) => {
+            const value = event.target.value
+            if (value === 'events' || value === 'approvals' || value === 'blocklist') setTab(value)
+          }}
+        >
+          <option value="events">{t('quarantine.tab.events')}</option>
+          <option value="approvals">{t('quarantine.tab.approvals')}</option>
+          <option value="blocklist">{t('quarantine.tab.blocklist')}</option>
+        </SelectV2>
+      </div>
+      {tab === 'events' && <EventsTab
+        eventsQ={eventsQ}
+        ecoFilter={ecoFilter}
+        setEcoFilter={setEcoFilter}
+        actionFilter={actionFilter}
+        setActionFilter={setActionFilter}
+        pkgSearch={pkgSearch}
+        setPkgSearch={setPkgSearch}
+      />}
+      {tab === 'approvals' && <ApprovalsTab approvalsQ={approvalsQ} canWrite={canWrite} onRevoke={(row) => {
+        revokeM.reset()
+        setRevokeTarget(row)
+        setRevokeReason('')
+        setRevokeOpen(true)
+      }} />}
+      {tab === 'blocklist' && <BlocklistTab />}
 
       {/* Revoke dialog */}
       <ModalV2

@@ -367,7 +367,7 @@ test('Blocklist overrides stay visible when status initially returns 500', async
     'GET /api/v1/admin/blocklist/overrides': { items: [populatedOverride], now: '2026-07-10T00:00:00Z' },
   })
   await page.goto('/admin/quarantine')
-  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
+  await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('blocklist')
   await expect(page.getByRole('table').getByText('false-positive')).toBeVisible()
   await expect(page.getByRole('alert')).toContainText('fixture status failure')
 })
@@ -460,7 +460,7 @@ const mutationCases: MutationCase[] = [
       },
     },
     submit: async page => {
-      await page.getByRole('tab', { name: /已放行|Approvals/ }).click()
+      await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('approvals')
       await page.getByRole('button', { name: /^撤销$|^Revoke$/ }).click()
       await page.getByPlaceholder(/填写理由|Enter a reason/).fill('fixture revoke reason')
       await page.getByRole('dialog').getByRole('button', { name: /^撤销$|^Revoke$/ }).click()
@@ -592,7 +592,7 @@ test('Blocklist sync exposes a stable held pending state', async ({ page }) => {
     },
   })
   await page.goto('/admin/quarantine')
-  await page.getByRole('tab', { name: /恶意封锁|Malware blocklist/ }).click()
+  await page.getByRole('combobox', { name: /拦截视图|Blocking view/ }).selectOption('blocklist')
   const syncButton = page.getByRole('button', { name: /立即同步|Sync now/ })
   await syncButton.click()
   const syncing = page.getByRole('button', { name: /同步中|Syncing/ })
@@ -630,7 +630,7 @@ test('Security legacy-policy disable saves retain per-ecosystem busy, error, and
     },
   })
   await page.goto('/admin/security')
-  await page.getByRole('tab', { name: /策略|Policies/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('policies')
   const pypiRow = page.locator('[data-policy-ecosystem="pypi"]')
   const cargoRow = page.locator('[data-policy-ecosystem="cargo"]')
   const pypiSave = pypiRow.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ })

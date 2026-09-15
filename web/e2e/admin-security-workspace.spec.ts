@@ -22,9 +22,10 @@ const suggestion = (id: number, packageName = `fixture-package-${id}`): Security
   updated_at: '2026-07-10T00:00:00Z',
 })
 
-test('Security uses stable Operator page chrome with one page heading across tabs', async ({ page }) => {
+test('Security uses stable Operator page chrome with one page heading across views', async ({ page }) => {
   await page.goto('/admin/security')
 
+  await expect(page.getByRole('tablist')).toHaveCount(0)
   const adminPage = page.locator('[data-admin-page]')
   await expect(adminPage).toHaveCount(1)
   await expect(adminPage).toHaveAttribute('data-admin-page-width', 'fluid')
@@ -32,14 +33,14 @@ test('Security uses stable Operator page chrome with one page heading across tab
     /查看漏洞情报与拦截建议|Review vulnerability intelligence/,
   )
   await expect(page.locator('h1:visible')).toHaveCount(1)
-  await expect(adminPage.locator('[data-admin-page-title]')).toHaveText(/包安全|Package Security/)
+  await expect(adminPage.locator('[data-admin-page-title]')).toHaveText(/漏洞情报|Vulnerability Intelligence/)
   await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
 
-  for (const tabName of [/漏洞列表|Vulnerabilities/, /建议规则|Suggested Rules/, /策略配置|Policies/]) {
-    await page.getByRole('tab', { name: tabName }).click()
+  for (const view of ['vulnerabilities', 'suggestions', 'policies']) {
+    await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption(view)
     await expect(adminPage).toHaveCount(1)
     await expect(page.locator('h1:visible')).toHaveCount(1)
-    await expect(adminPage.locator('[data-admin-page-title]')).toHaveText(/包安全|Package Security/)
+    await expect(adminPage.locator('[data-admin-page-title]')).toHaveText(/漏洞情报|Vulnerability Intelligence/)
   }
 })
 
@@ -57,7 +58,7 @@ test('Security vulnerability search keeps draft input local and submits a trimme
     },
   })
   await page.goto('/admin/security')
-  await page.getByRole('tab', { name: /漏洞列表|Vulnerabilities/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('vulnerabilities')
 
   await expect.poll(() => requests.length).toBe(1)
   const pagination = page.locator('[data-admin-pagination]')
@@ -93,7 +94,7 @@ test('Security suggestions use total-count pagination and disable Next on the la
     },
   })
   await page.goto('/admin/security')
-  await page.getByRole('tab', { name: /建议规则|Suggested Rules/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('suggestions')
 
   const pagination = page.locator('[data-admin-pagination]')
   await expect(pagination).toBeVisible()
@@ -108,17 +109,17 @@ test('Security suggestions use total-count pagination and disable Next on the la
   await expect(pagination.getByRole('button', { name: /下一页|Next/ })).toBeDisabled()
 })
 
-test('Security tabs are deep-linkable and preserve browser back navigation', async ({ page }) => {
+test('Security views are deep-linkable and preserve browser back navigation', async ({ page }) => {
   await page.goto('/admin/security?tab=suggestions')
-  await expect(page.getByRole('tab', { name: /建议规则|Suggested Rules/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('suggestions')
 
-  await page.getByRole('tab', { name: /策略配置|Policies/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('policies')
   await expect(page).toHaveURL(/\/admin\/security\?tab=policies$/)
-  await expect(page.getByRole('tab', { name: /策略配置|Policies/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('policies')
 
   await page.goBack()
   await expect(page).toHaveURL(/\/admin\/security\?tab=suggestions$/)
-  await expect(page.getByRole('tab', { name: /建议规则|Suggested Rules/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('suggestions')
 })
 
 test('Security replaces an invalid tab with the canonical overview URL', async ({ page }) => {
@@ -126,7 +127,7 @@ test('Security replaces an invalid tab with the canonical overview URL', async (
   await page.goto('/admin/security?tab=not-a-security-tab')
 
   await expect(page).toHaveURL(/\/admin\/security$/)
-  await expect(page.getByRole('tab', { name: /总览|Overview/ })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('combobox', { name: /情报视图|Intelligence view/ })).toHaveValue('overview')
 
   await page.goBack()
   await expect(page).toHaveURL(/\/admin$/)
@@ -360,7 +361,7 @@ test('Security suggestion rows do not create root overflow at 320px', async ({ p
     },
   })
   await page.goto('/admin/security')
-  await page.getByRole('tab', { name: /建议规则|Suggested Rules/ }).click()
+  await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption('suggestions')
 
   await expect(page.getByText(longPackageName)).toBeVisible()
   await expect(page.getByRole('link', { name: /打开包规则|Open Package Rules/ })).toBeVisible()

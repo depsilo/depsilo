@@ -61,17 +61,17 @@ const zh = {
       dashboard: '总览',
       attention: '待处理',
       accessLogs: '访问日志',
-      cacheManage: '缓存管理',
+      cacheManage: '制品缓存',
       cacheIndexes: '索引缓存',
       compileCache: '编译缓存',
       upstreams: '上游源',
-      upstreamUpdates: '上游更新记录',
+      upstreamUpdates: '元数据刷新记录',
       userManage: '用户管理',
       settings: '系统设置',
       auditLogs: '审计日志',
-      quarantine: '供应链隔离',
-      rules: '包治理',
-      security: '包安全',
+      quarantine: '隔离与拦截',
+      rules: '包规则',
+      security: '漏洞情报',
       projects: '项目管理',
       logout: '退出登录',
       instanceManagement: '实例管理',
@@ -542,11 +542,11 @@ const zh = {
 
     upstreamUpdates: {
       subtitle: '查看 Depsilo 复验缓存元数据时，哪些已刷新、保持有效或发生失败。',
-      loadError: '无法加载上游更新记录。',
+      loadError: '无法加载元数据刷新记录。',
       staleNotice: '刷新失败，当前显示的是上次成功加载的记录。',
       nextPageError: '加载后续记录失败，请重试“加载更多”。',
-      tableLabel: '上游更新记录表',
-      filtersLabel: '筛选上游更新记录',
+      tableLabel: '元数据刷新记录表',
+      filtersLabel: '筛选元数据刷新记录',
       searchLabel: '搜索包名',
       searchPlaceholder: '搜索包名…',
       filterEcosystem: '生态',
@@ -572,7 +572,7 @@ const zh = {
       unknownUpstream: '未知上游',
       loadMore: '加载更多',
       loadingMore: '正在加载...',
-      emptyTitle: '暂无上游更新记录',
+      emptyTitle: '暂无元数据刷新记录',
       emptyHint: 'Depsilo 复验缓存元数据后会在这里记录结果；连续相同结果会合并为一个事件段。',
       noMatches: '没有符合筛选条件的记录',
       noMatchesHint: '请尝试其他包名、生态或结果。',
@@ -711,7 +711,8 @@ const zh = {
 
     // Supply-chain Quarantine
     quarantine: {
-      title: '供应链隔离',
+      view: '拦截视图',
+      title: '隔离与拦截',
       subtitle: '查看恶意包、内容篡改及历史隔离决策。最小发布年龄强制执行暂时不可用。',
       minimum_age_unavailable: '最小发布年龄已安全停用，等待制品来源与发布时间证明完成绑定。启用状态下的正阈值会导致启动拒绝，当前也不能新建永久放行。',
       tab: {
@@ -912,7 +913,8 @@ const zh = {
 
     // Security
     security: {
-      title: '包安全',
+      view: '情报视图',
+      title: '漏洞情报',
       subtitle: '查看漏洞情报与拦截建议，并管理各软件生态的安全策略。',
       vulnerabilitiesTable: '安全漏洞表格',
       overview: '总览',
