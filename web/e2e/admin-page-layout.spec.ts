@@ -28,7 +28,7 @@ test('workspace destinations are available as a local page navigation', async ({
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/admin/upstreams')
 
-  const localNavigation = page.locator('[data-admin-page-navigation="sourcesCache"]')
+  const localNavigation = page.locator('[data-admin-page-navigation="delivery"]')
   await expect(localNavigation).toBeVisible()
   await expect(localNavigation.getByRole('link', { name: '上游源', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(localNavigation.getByRole('link', { name: '缓存管理', exact: true })).toHaveAttribute('href', '/admin/cache')

@@ -23,28 +23,28 @@ const legacyAdminHrefs = [
 const workspaceNavigation = [
   { id: 'overview', label: 'Overview', href: '/admin', routes: [] },
   {
-    id: 'history',
-    label: 'History',
+    id: 'monitor',
+    label: 'Monitor',
     href: '/admin/logs',
-    routes: ['/admin/logs', '/admin/upstream-updates', '/admin/audit', '/admin/bandwidth'],
+    routes: ['/admin/logs', '/admin/upstream-updates', '/admin/bandwidth'],
   },
   {
-    id: 'sourcesCache',
-    label: 'Sources & Cache',
+    id: 'delivery',
+    label: 'Delivery',
     href: '/admin/upstreams',
     routes: ['/admin/upstreams', '/admin/cache', '/admin/indexes', '/admin/compile-cache'],
   },
   {
-    id: 'governance',
-    label: 'Security Governance',
+    id: 'security',
+    label: 'Security',
     href: '/admin/security',
-    routes: ['/admin/security', '/admin/quarantine', '/admin/rules', '/admin/projects'],
+    routes: ['/admin/audit', '/admin/security', '/admin/quarantine', '/admin/rules'],
   },
   {
-    id: 'system',
-    label: 'System',
+    id: 'administration',
+    label: 'Administration',
     href: '/admin/users',
-    routes: ['/admin/users', '/admin/settings', '/admin/license'],
+    routes: ['/admin/projects', '/admin/users', '/admin/settings', '/admin/license'],
   },
 ] as const
 
@@ -193,17 +193,17 @@ test('mobile drawer selects a workspace and page tabs select its destination', a
 
   await expect(navigation.getByRole('link')).toHaveCount(5)
   await expect(navigation.getByRole('button')).toHaveCount(0)
-  await navigation.getByRole('link', { name: '历史', exact: true }).click()
+  await navigation.getByRole('link', { name: '监控', exact: true }).click()
   await expect(drawer).toBeHidden()
   await expect(page).toHaveURL(/\/admin\/logs$/)
 
-  const auditLogs = page.locator('[data-admin-page-navigation="history"]').getByRole('link', { name: '审计日志', exact: true })
+  const auditLogs = page.locator('[data-admin-page-navigation="security"]').getByRole('link', { name: '审计日志', exact: true })
   await auditLogs.scrollIntoViewIfNeeded()
   await auditLogs.click()
   await expect(page).toHaveURL(/\/admin\/audit$/)
   await trigger.click()
-  await expect(navigation.getByRole('link', { name: '历史', exact: true })).toBeFocused()
-  await expect(navigation.getByRole('link', { name: '历史', exact: true })).toHaveAttribute('aria-current', 'location')
+  await expect(navigation.getByRole('link', { name: '监控', exact: true })).toBeFocused()
+  await expect(navigation.getByRole('link', { name: '监控', exact: true })).toHaveAttribute('aria-current', 'location')
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
@@ -224,7 +224,7 @@ test('desktop shell uses a 232px rail and separates breadcrumb from the page hea
   await expect(mainColumn).toHaveCSS('margin-left', '232px')
   await expect(topbar).toHaveCSS('left', '232px')
   await expect(topbar.getByRole('heading')).toHaveCount(0)
-  await expect(breadcrumb).toContainText('History')
+  await expect(breadcrumb).toContainText('Monitor')
   await expect(breadcrumb).toContainText('Upstream Updates')
   await expect(page.locator('main').getByRole('heading', { level: 1, name: 'Upstream Updates' })).toHaveCount(1)
 })

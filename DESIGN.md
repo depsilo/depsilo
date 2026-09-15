@@ -19,7 +19,7 @@ repeated actions.
 
 ## Instrument Language
 
-The active visual system is **Instrument**:
+The active visual administration is **Instrument**:
 
 - Signal green communicates cache hits, healthy state, active navigation, and
   focus. It replaced the old purple palette.
@@ -143,7 +143,7 @@ Reusable primitives live in `web/src/components/`:
 - `Button`, `Input`, `Select`, `Segmented`, `Tabs`
 - `Badge`, `StatusDot`, `Metric`, `SectionHeader`
 - `Modal`, `DataTable`, `EmptyState`
-- `Icon`, `EcosystemIcon`, `UpstreamCard`
+- `Icon`, `EcoadministrationIcon`, `UpstreamCard`
 - `ThemeToggle`, `LangToggle`, `Logo`
 
 Use these before adding a new primitive. Admin-specific composition belongs in
@@ -161,9 +161,9 @@ horizontally.
 
 `QuickStart.tsx` contains:
 
-1. A compact title and one-line orientation for choosing an ecosystem and
+1. A compact title and one-line orientation for choosing an ecoadministration and
    package manager, copying the persistent configuration, and verifying it.
-2. The primary setup surface, with `EcosystemCatalog` on the left and
+2. The primary setup surface, with `EcoadministrationCatalog` on the left and
    `ConfigurePane` on the right for the selected technology stack. This
    Precision Workbench is capped at 1440px rather than inheriting the wider
    Admin canvas.
@@ -171,7 +171,7 @@ horizontally.
    project-level AI integration path and the compiler-cache entry point.
 
 The catalog remembers at most three validated recent choices as compact
-shortcuts, searches ecosystem and manager names, and shows the complete
+shortcuts, searches ecoadministration and manager names, and shows the complete
 14-item catalog by default. Its white directory rail uses selection state, not
 a large tinted slab, to establish hierarchy. `ConfigurePane` shows every
 supported manager in one compact segmented rail and defaults to the first one
@@ -205,13 +205,13 @@ administrator, write the durable configuration, and restart the service. The
 administrator fields and one completion command remain visible without an
 introductory welcome step or progress tracker.
 
-Port, storage, enabled Ecosystems, and Upstreams retain working defaults and
+Port, storage, enabled Ecoadministrations, and Upstreams retain working defaults and
 are submitted even when their disclosure is closed. They live in one native
 advanced-settings disclosure because the current Admin control plane cannot
-activate an omitted Ecosystem or edit port and storage after setup. Ecosystem
+activate an omitted Ecoadministration or edit port and storage after setup. Ecoadministration
 selection uses one keyboard-operable pressed button per option; it never nests
 a checkbox inside another interactive control. Upstream editors stack on
-narrow screens and expand only for the Ecosystem the Operator chooses to edit.
+narrow screens and expand only for the Ecoadministration the Operator chooses to edit.
 
 Language and appearance controls remain available before initialization.
 Validation names the failed requirement next to the field and never relies on
@@ -225,7 +225,7 @@ may sign in with the credentials still held by the Setup form; a port or origin
 change falls back to Login while preserving the destination. Bootstrap tokens
 never become Admin or package credentials.
 
-`/admin/connect` is the optional first-project loop: choose an Ecosystem and its
+`/admin/connect` is the optional first-project loop: choose an Ecoadministration and its
 package manager, copy configuration generated from the browser-visible origin,
 run a small dependency request when a safe client command exists, then observe
 the request and an optional real cache hit. Python, Node.js, Rust, Java, and Go
@@ -249,12 +249,12 @@ navigation shell. Admin pages use compact headings, stable table/control sizes,
 clear empty/loading/error states, and explicit confirmation for destructive
 commands.
 
-The **Dependency Flowline** shell organizes work into five Operator domains:
-**Overview**, **History**, **Sources & Cache**, **Security Governance**, and
-**System**. The persistent sidebar is 232px wide. All five domains remain
-visible as five links on desktop and in the mobile drawer, without child
-destinations or disclosure controls. Page-level tabs own the individual
-destinations, so their labels are not repeated in the sidebar.
+The **Dependency Flowline** shell organizes work into five task domains:
+**Overview**, **Monitor**, **Delivery**, **Security**, and
+**Administration**. The persistent sidebar is 232px wide. These five links remain
+visible on desktop and in the mobile drawer, without child destinations or
+disclosure controls. Page-level tabs own the individual destinations, so their
+labels are not repeated in the sidebar.
 **Needs Attention** is integrated into Overview rather than presented as a primary navigation destination. Its legacy `/admin/attention`
 URL remains reachable so bookmarks and direct links do not break, as do all
 other established Admin URLs.
@@ -283,9 +283,9 @@ Each multi-page workspace exposes its canonical destinations as a compact
 page-local navigation row below the heading. It is a projection of the route
 manifest, so it must not create a second route registry or change deep links;
 the sidebar remains the persistent workspace switcher. Overview keeps its
-single landing page and exposes Bandwidth as a quiet shortcut into History.
+single landing page and exposes Bandwidth as a quiet shortcut into Monitor.
 
-Policy runtime status is scoped to Overview and Security Governance. Other
+Policy runtime status is scoped to Overview and Security. Other
 workspaces do not issue a policy-status request or reserve banner space; their
 domain pages own any relevant inline status.
 
@@ -299,7 +299,7 @@ followed by a compact queue for unhealthy Upstreams and cache-capacity pressure.
 The live request path—**Client ingress → Depsilo cache → Upstreams**—then leads
 the operational detail. The final row contains one multi-metric trend view and
 at most three recent downloads; complete popular package, Upstream, and
-bandwidth detail belongs on the relevant History or Sources & Cache expert page
+bandwidth detail belongs on the relevant Monitor or Delivery expert page
 instead of being duplicated on Overview. Metrics with no observed data show an
 honest unavailable marker rather than a fabricated zero.
 
@@ -367,10 +367,10 @@ applies when an icon button is pending or disabled.
 
 | Width | Admin behavior |
 | --- | --- |
-| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer shows five workspace links and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
+| 320/390 | 16px page padding, single-column forms, horizontal Settings tabs, stacked section actions, two-column KPI grids; the Admin drawer shows four workspace links and scrolls only its navigation region; Dashboard uses a vertical request flow and keeps service state plus the first attention item in the first viewport |
 | `sm` 640 | Forms may use two columns; ordinary toolbars may share a row and long action groups wrap |
 | `md` 768 | Settings uses its 180px vertical tab rail; the Dashboard request flow becomes horizontal |
-| `lg` 1024 | The persistent 232px workspace sidebar appears with five workspace links; KPI grids may use four columns |
+| `lg` 1024 | The persistent 232px workspace sidebar appears with four workspace links; KPI grids may use four columns |
 | `xl` 1280 | Dashboard flow/attention and trend/recent-activity rows use a fluid main column plus an approximately 380px supporting rail; they stack when that rail would crowd the primary task |
 | 1840+ | The Admin outlet is capped at 1840px and centered within the remaining main area |
 
@@ -384,15 +384,15 @@ configured and effective values, environment override source, fields applied
 immediately, fields waiting for restart, and fields blocked by an environment
 override. A successful HTTP response alone is not presented as "applied".
 
-Ordinary ecosystem Upstreams are database-authoritative after first-run seed.
+Ordinary ecoadministration Upstreams are database-authoritative after first-run seed.
 Create, update, delete, and manual check responses reflect the live Registry
 snapshot; Docker remains configuration-authoritative and outside this CRUD
 surface. Mutation controls stay disabled and dimensionally stable while their
 request is pending, and row-local failures preserve the current data and form.
 
 The Upstreams page is an operational inventory before it is a chart: operators
-can search names, ecosystems, URLs, and proxies, then filter by the shared
-healthy/degraded/failed rule. Large ecosystem groups expand into an adaptive
+can search names, ecoadministrations, URLs, and proxies, then filter by the shared
+healthy/degraded/failed rule. Large ecoadministration groups expand into an adaptive
 multi-column list while small groups retain the compact tiled layout. “Check
 All” runs at most four requests concurrently, exposes progress and partial
 request failures, and reports the same three health states used by filters.
@@ -400,7 +400,7 @@ Pending create, update, and delete dialogs cannot be dismissed until their
 request completes.
 
 Upstream Updates is stable episode history rather than a current-failures
-dashboard. Operators can filter package, ecosystem, and result through
+dashboard. Operators can filter package, ecoadministration, and result through
 URL-backed server queries. Desktop uses a compact table; narrow screens use a
 divided event list that keeps outcome and detail visible without horizontal
 scrolling. The episode window displays both first and latest observation, while

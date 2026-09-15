@@ -46,10 +46,10 @@ const en = {
       manage: 'Manage',
       workspaces: {
         overview: 'Overview',
-        history: 'History',
-        sourcesCache: 'Sources & Cache',
-        governance: 'Security Governance',
-        system: 'System',
+        monitor: 'Monitor',
+        delivery: 'Delivery',
+        security: 'Security',
+        administration: 'Administration',
       },
       groups: {
         operations: 'Operations',

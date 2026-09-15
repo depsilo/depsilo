@@ -95,6 +95,6 @@ test('policy status belongs to Overview and Governance, including client-side na
   await expect(banner).toHaveCount(0)
 
   await navigation.locator('a[href="/admin/security"]').click()
-  await page.locator('[data-admin-page-navigation="governance"] a[href="/admin/rules"]').click()
+  await page.locator('[data-admin-page-navigation="security"] a[href="/admin/rules"]').click()
   await expect(banner).toContainText('Policy rules are using a stale snapshot.')
 })
