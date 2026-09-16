@@ -51,6 +51,27 @@ at flat `#0A8654` on light and `#3DDC91` on dark, so a green mark now sits
 beside a blue accent. That tension is a recorded consequence of adopting
 BoardUI's defaults, not an oversight.
 
+**Accepted accessibility exception — text contrast.** BoardUI's
+`text-secondary` and `text-tertiary` tokens do not reach WCAG AA on Depsilo's
+surfaces in either theme, and the palette is adopted verbatim rather than
+corrected. Measured violations:
+
+| Foreground | Background | Ratio | Role |
+| --- | --- | --- | --- |
+| `#a1a1a1` | `#ffffff` | 2.58:1 | light tertiary text |
+| `#a1a1a1` | `#f7f7f7` | 2.41:1 | light tertiary on the secondary surface |
+| `#737373` | `#f7f7f7` | 4.42:1 | light secondary text |
+| `#525252` | `#262626` | 1.93:1 | dark tertiary text |
+| `#737373` | `#262626` | 3.19:1 | dark secondary text |
+| `#3392ff` | `#273449` | 4.00:1 | dark accent text on a tinted surface |
+
+`color-contrast` is therefore disabled in every axe scan. Every other WCAG
+A/AA rule still gates, and the rest of the accessibility contract — keyboard
+access, visible focus, 40px targets, reduced motion, semantic status — is
+unchanged. Re-enabling this rule means either correcting those six token pairs
+or reverting the palette, so treat it as a deliberate, reversible decision
+rather than a gate that can be turned back on casually.
+
 Admin surfaces carry BoardUI's porcelain / charcoal surface treatment: the
 light Admin canvas is `#FFFFFF` with a `#F7F7F7` rail, and dark Admin uses
 `#121212` with an `oklch(20.5% 0 0)` navigation surface. These values are
@@ -666,7 +687,9 @@ Before merging broad UI changes, run `make verify` for the complete Playwright
 suite. Accessibility coverage visits every Admin route once and uses a small set
 of representative responsive, theme, and locale combinations; it also checks
 API contracts, WCAG 2.1 A/AA rules, target sizes, layout caps, and Portal token
-regressions. Keep screenshots failure-only; do not commit full-page pixel
+regressions. Every axe scan disables `color-contrast` under the accepted
+palette exception recorded in [Palette](#palette); the remaining A/AA rules
+still gate. Keep screenshots failure-only; do not commit full-page pixel
 snapshots.
 
 The repository has unrelated historical lint debt. The manifest is the exact

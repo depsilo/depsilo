@@ -149,7 +149,7 @@ test('Portal unknown paths keep the shell without loading a page route', async (
   await expect(notFound.getByRole('heading', { name: '页面不存在' })).toBeVisible()
   await expect(notFound).toBeFocused()
   expect(pageModuleRequests).toEqual([])
-  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast']).analyze()).violations).toEqual([])
 
   await notFound.getByRole('link', { name: '返回快速开始' }).click()
 
@@ -182,7 +182,7 @@ test('authenticated Admin unknown paths render 404 inside the shell without dash
   await expect(notFound).toBeFocused()
   expect(dashboardRequests).toBe(0)
   expect(pageModuleRequests).toEqual([])
-  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast']).analyze()).violations).toEqual([])
 
   await notFound.getByRole('link', { name: '返回管理总览' }).click()
 

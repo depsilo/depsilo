@@ -5,24 +5,24 @@
 
      This block re-tints SURFACES only — canvas, rail, borders, text and the
      control radius. It must not re-declare the semantic action tokens
-     (--brand*, --btn*, --focus-ring). Scoping a second green here re-points
-     every shared Button, the focus ring, and — because --hit aliases --brand
-     in light mode — the cache-hit signal, which is how the 2026-09-15 shell
-     refresh silently broke the primary-command contrast contract. */
+     (--brand*, --btn*, --focus-ring): scoping a second accent here re-points
+     every shared Button, the focus ring, and the cache-hit signal, which is
+     how the 2026-09-15 shell refresh silently broke the primary-command
+     contrast contract. */
   --admin-canvas: #FFFFFF;
-  --admin-rail: #F6F7F5;
-  --admin-rail-hover: #EAF0E9;
+  --admin-rail: #F7F7F7;
+  --admin-rail-hover: #EBEBEB;
   --bg-page: #FFFFFF;
   --bg-card: #FFFFFF;
-  --bg-soft: #F4F6F3;
-  --bg-hover: #EAF0E9;
-  --border: #DFE4DE;
-  --border-soft: #DFE4DE;
-  --border-strong: #7B867D;
-  --text: #202822;
-  --text-muted: #626C64;
-  --text-soft: #626C64;
-  --text-subtle: #626C64;
+  --bg-soft: #F7F7F7;
+  --bg-hover: #EBEBEB;
+  --border: #EBEBEB;
+  --border-soft: #EBEBEB;
+  --border-strong: oklch(87% 0 0);
+  --text: oklch(14.5% 0 0);
+  --text-muted: oklch(55.6% 0 0);
+  --text-soft: oklch(70.8% 0 0);
+  --text-subtle: oklch(70.8% 0 0);
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 10px;
@@ -57,38 +57,38 @@
 [data-admin-shell].theme-dark,
 html.dark [data-admin-shell],
 [data-theme="dark"] [data-admin-shell] {
-  --admin-canvas: #141915;
-  --admin-rail: #181F1A;
-  --admin-rail-hover: #283A2E;
-  --bg-page: #141915;
-  --bg-card: #1A211C;
-  --bg-soft: #222B25;
-  --bg-hover: #283A2E;
-  --border: #354137;
-  --border-soft: #354137;
-  --border-strong: #738476;
-  --text: #E9EFE8;
-  --text-muted: #A5B0A6;
-  --text-soft: #A5B0A6;
-  --text-subtle: #A5B0A6;
+  --admin-canvas: #121212;
+  --admin-rail: oklch(20.5% 0 0);
+  --admin-rail-hover: oklch(26.9% 0 0);
+  --bg-page: #121212;
+  --bg-card: oklch(26.9% 0 0);
+  --bg-soft: oklch(20.5% 0 0);
+  --bg-hover: oklch(26.9% 0 0);
+  --border: oklch(37.1% 0 0);
+  --border-soft: oklch(26.9% 0 0);
+  --border-strong: oklch(55.6% 0 0);
+  --text: oklch(98.5% 0 0);
+  --text-muted: oklch(55.6% 0 0);
+  --text-soft: oklch(43.9% 0 0);
+  --text-subtle: oklch(43.9% 0 0);
 }
 
 @media (prefers-color-scheme: dark) {
   html:not(.light):not([data-theme="light"]) [data-admin-shell] {
-    --admin-canvas: #141915;
-    --admin-rail: #181F1A;
-    --admin-rail-hover: #283A2E;
-    --bg-page: #141915;
-    --bg-card: #1A211C;
-    --bg-soft: #222B25;
-    --bg-hover: #283A2E;
-    --border: #354137;
-    --border-soft: #354137;
-    --border-strong: #738476;
-    --text: #E9EFE8;
-    --text-muted: #A5B0A6;
-    --text-soft: #A5B0A6;
-    --text-subtle: #A5B0A6;
+    --admin-canvas: #121212;
+    --admin-rail: oklch(20.5% 0 0);
+    --admin-rail-hover: oklch(26.9% 0 0);
+    --bg-page: #121212;
+    --bg-card: oklch(26.9% 0 0);
+    --bg-soft: oklch(20.5% 0 0);
+    --bg-hover: oklch(26.9% 0 0);
+    --border: oklch(37.1% 0 0);
+    --border-soft: oklch(26.9% 0 0);
+    --border-strong: oklch(55.6% 0 0);
+    --text: oklch(98.5% 0 0);
+    --text-muted: oklch(55.6% 0 0);
+    --text-soft: oklch(43.9% 0 0);
+    --text-subtle: oklch(43.9% 0 0);
   }
 }
 

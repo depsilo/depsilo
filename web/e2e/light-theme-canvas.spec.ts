@@ -42,7 +42,7 @@ test('dark Portal keeps one subtle grain layer', async ({ page }) => {
 
   await expect(page.locator('body')).toHaveCSS(
     'background-color',
-    'rgb(11, 13, 15)',
+    'rgb(18, 18, 18)',
   )
   const wash = page.locator('.page-wash')
   await expect(wash).toHaveCount(1)

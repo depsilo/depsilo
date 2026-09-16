@@ -1,4 +1,21 @@
 import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
+import type { Page } from '@playwright/test'
+
+// Resolve a themed CSS custom property the way the browser does, so a colour
+// assertion tracks the palette instead of restating a literal that goes stale.
+async function resolvedToken(page: Page, token: string, property: 'color' | 'background-color') {
+  return page.evaluate(
+    ([name, prop]) => {
+      const probe = document.createElement('div')
+      probe.style.setProperty(prop, `var(${name})`)
+      document.body.appendChild(probe)
+      const value = getComputedStyle(probe).getPropertyValue(prop)
+      probe.remove()
+      return value
+    },
+    [token, property] as const,
+  )
+}
 
 test('dialog traps focus and restores its trigger', async ({ page }) => {
   await page.goto('/admin/users')
@@ -17,8 +34,11 @@ test('dialog traps focus and restores its trigger', async ({ page }) => {
   await closeButton.focus()
   const tooltip = page.getByRole('tooltip')
   await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'rgb(233, 236, 238)')
-  await expect(tooltip).toHaveCSS('color', 'rgb(11, 13, 15)')
+  // Compare against the resolved tokens instead of literals so a palette
+  // change cannot silently rot this into asserting a colour that no longer
+  // exists anywhere in the product.
+  await expect(tooltip).toHaveCSS('background-color', await resolvedToken(page, '--inverse', 'background-color'))
+  await expect(tooltip).toHaveCSS('color', await resolvedToken(page, '--on-inverse', 'color'))
 
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
@@ -51,8 +71,8 @@ test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
   await expect(button).toBeFocused()
   const tooltip = page.getByRole('tooltip')
   await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'rgb(20, 24, 26)')
-  await expect(tooltip).toHaveCSS('color', 'rgb(255, 255, 255)')
+  await expect(tooltip).toHaveCSS('background-color', await resolvedToken(page, '--inverse', 'background-color'))
+  await expect(tooltip).toHaveCSS('color', await resolvedToken(page, '--on-inverse', 'color'))
 })
 
 test('user credential dialog explains the enforced password policy', async ({ page }) => {

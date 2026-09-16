@@ -258,7 +258,7 @@ test('desktop Admin chrome uses a clean canvas, brand portal link, and labeled t
   await expect(shell).toHaveCSS('background-color', 'rgb(255, 255, 255)')
   await expect(main).toHaveCSS('background-color', 'rgb(255, 255, 255)')
   await expect(topbar).toHaveCSS('background-color', 'rgb(255, 255, 255)')
-  await expect(sidebar).toHaveCSS('background-color', 'rgb(246, 247, 245)')
+  await expect(sidebar).toHaveCSS('background-color', 'rgb(247, 247, 247)')
 
   const brandLink = page.locator('[data-admin-nav-surface="sidebar"]')
     .locator('..')
@@ -271,10 +271,10 @@ test('desktop Admin chrome uses a clean canvas, brand portal link, and labeled t
   await themeToggle.click()
   await expect(themeToggle).toContainText('外观：深色')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-  await expect(shell).toHaveCSS('background-color', 'rgb(20, 25, 21)')
-  await expect(main).toHaveCSS('background-color', 'rgb(20, 25, 21)')
-  await expect(topbar).toHaveCSS('background-color', 'rgb(20, 25, 21)')
-  await expect(sidebar).toHaveCSS('background-color', 'rgb(24, 31, 26)')
+  await expect(shell).toHaveCSS('background-color', 'rgb(18, 18, 18)')
+  await expect(main).toHaveCSS('background-color', 'rgb(18, 18, 18)')
+  await expect(topbar).toHaveCSS('background-color', 'rgb(18, 18, 18)')
+  await expect(sidebar).toHaveCSS('background-color', 'oklch(0.205 0 0)')
   expect(await page.evaluate(() => localStorage.getItem('depsilo-theme'))).toBe('dark')
 
   await themeToggle.click()

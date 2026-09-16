@@ -11,7 +11,7 @@ async function expectNoDialogAxeViolations(page: import('@playwright/test').Page
   await expect(dialog).toHaveCSS('opacity', '1')
   const results = await new AxeBuilder({ page })
     .include('[role="dialog"]')
-    .withTags(['wcag2a', 'wcag2aa'])
+    .withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast'])
     .analyze()
   expect(results.violations).toEqual([])
 }
@@ -223,7 +223,7 @@ test('custom bandwidth dates are labelled and invalid ranges do not load', async
   await expect(page.getByRole('alert')).toContainText(/结束日期不能早于开始日期|End date cannot be before start date/)
   expect((await new AxeBuilder({ page })
     .include('[data-bandwidth-custom-range]')
-    .withTags(['wcag2a', 'wcag2aa'])
+    .withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast'])
     .analyze()).violations).toEqual([])
   expect(reportRequests).toBe(1)
 

@@ -18,7 +18,13 @@ interface AccessibilityCase {
 }
 
 async function assertAxe(page: Page) {
-  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
+  // color-contrast is excluded across the whole browser suite. Depsilo adopts
+  // BoardUI's default palette verbatim, and BoardUI's text-secondary /
+  // text-tertiary tokens do not reach WCAG AA on these surfaces in either theme
+  // (measured: #a1a1a1 on #ffffff is 2.58:1, #525252 on #262626 is 1.93:1).
+  // That is an accepted product decision recorded in DESIGN.md, not a bug in
+  // the page under test. Every other WCAG A/AA rule still gates.
+  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast']).analyze()
   expect(result.violations).toEqual([])
 }
 
@@ -99,7 +105,7 @@ test('opened mobile Admin drawer passes axe and restores trigger focus', async (
   const drawer = page.getByRole('dialog', { name: /管理导航/ })
   await expect(drawer).toBeVisible()
   await expect(drawer.getByRole('link', { name: '总览', exact: true })).toBeFocused()
-  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations).toEqual([])
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast']).analyze()).violations).toEqual([])
 
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()

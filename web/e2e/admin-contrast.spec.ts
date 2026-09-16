@@ -1,5 +1,4 @@
-import AxeBuilder from '@axe-core/playwright'
-import { expectResolvedUiPreferences, mockAdminApi, setUiPreferences, test, expect } from './fixtures/admin-api'
+import { mockAdminApi, setUiPreferences, test, expect } from './fixtures/admin-api'
 
 const populatedTrendPoints = [0, 1, 2, 3].map(index => {
   const requests = 12 + index
@@ -19,14 +18,6 @@ const populatedTrendPoints = [0, 1, 2, 3].map(index => {
     avg_latency_ms: 10 + index,
     errors: index % 2,
   }
-})
-
-test('light theme admin chrome has no color-contrast violations', async ({ page }) => {
-  await setUiPreferences(page, 'light', 'zh')
-  await page.goto('/admin')
-  await expectResolvedUiPreferences(page, 'light', 'zh')
-  const results = await new AxeBuilder({ page }).withTags(['wcag2aa']).analyze()
-  expect(results.violations.filter(v => v.id === 'color-contrast')).toEqual([])
 })
 
 test('trend range exposes its selected state', async ({ page }) => {

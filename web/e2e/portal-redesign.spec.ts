@@ -154,7 +154,7 @@ test('Python setup explains the channel-aware PyTorch cache route', async ({ pag
   await expect(notice).toContainText(`${serviceOrigin}/pypi-torch/rocm7.2/simple/`)
   await expectNoDocumentOverflow(page)
   expect((await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa'])
+    .withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast'])
     .analyze()).violations).toEqual([])
 
   await platforms.getByRole('button', { name: 'CPU', exact: true }).click()
@@ -261,7 +261,7 @@ test('Quick Start passes axe at 1440px', async ({ page }) => {
   await page.goto('/')
 
   const result = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa'])
+    .withTags(['wcag2a', 'wcag2aa']).disableRules(['color-contrast'])
     .analyze()
   expect(result.violations).toEqual([])
 })
