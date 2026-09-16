@@ -24,29 +24,38 @@ The Portal is not a marketing landing page. Quick Start is the first screen;
 Monitor is the second. Admin is dense, quiet, and optimized for scanning and
 repeated actions.
 
-## Instrument Language
+## Palette
 
-The active visual system is **Instrument**:
+The interface uses **BoardUI's default colour scheme**, adopted unchanged.
+Depsilo does not re-tint it: the accent ramp is BoardUI's blue, status colours
+are BoardUI's lime / yellow / rose, and the neutrals are Tailwind v4's own with
+BoardUI's five documented primitive overrides (`slate-200`, `neutral-100`,
+`neutral-200`, `neutral-925`, `blue-400`).
 
-- Signal green communicates cache hits, healthy state, active navigation, and
-  focus. It replaced the old purple palette.
-- Amber means degraded or partially completed. Red means a real failure,
-  explicit refusal, or destructive action. A cache miss is a normal neutral
-  result; an unknown result means the outcome was not recorded.
+- The **accent** — blue, not the product's brand green — carries active
+  navigation, selection, links, focus, and the primary command.
+- **Success / cache hit** uses BoardUI's lime. Amber means degraded or partially
+  completed. Rose-red means a real failure, explicit refusal, or destructive
+  action. A cache miss is a normal neutral result; an unknown result means the
+  outcome was not recorded.
 - Dark mode is the product default; light mode uses the same semantic roles.
+  The dark page ground is BoardUI's neutral `#121212`, not a brand-tinted
+  charcoal, and the accent ramp is identical in both themes.
 - Light mode uses a pure-white page canvas without ambient grain. Dark mode
   retains one subtle global grain layer mounted by `App`.
-- Surfaces are neutral gray/green-black, with restrained borders and shadows.
-- Restrained green sweeps may appear on rare decorative product surfaces, but
-  never inside the Logo. Purple Aurora backgrounds are not part of the current
-  design.
+- Surfaces are neutral with restrained borders and shadows. Purple Aurora
+  backgrounds are not part of the current design.
 
-Admin surfaces additionally adopt the BoardUI free-tier surface treatment: the
-light Admin canvas is `#FFFFFF` with a neutral `#F6F7F5` rail, and dark Admin
-uses `#141915` with `#181F1A` navigation. These values are scoped to
-`[data-admin-shell]`; Portal and Setup retain the shared Instrument tokens
-above. Admin controls use 6px corners, 40px targets, and green is reserved for
-commands, focus, health, and selection.
+The **brand mark** is the one deliberate exception: `docs/brand/` still fixes it
+at flat `#0A8654` on light and `#3DDC91` on dark, so a green mark now sits
+beside a blue accent. That tension is a recorded consequence of adopting
+BoardUI's defaults, not an oversight.
+
+Admin surfaces carry BoardUI's porcelain / charcoal surface treatment: the
+light Admin canvas is `#FFFFFF` with a `#F7F7F7` rail, and dark Admin uses
+`#121212` with an `oklch(20.5% 0 0)` navigation surface. These values are
+scoped to `[data-admin-shell]`; Portal and Setup inherit the shared tokens
+above. Admin controls use 6px corners and 40px targets.
 
 Do not use the old purple/OKLCH examples, `/status` route, shadcn components,
 `CardV2`, or `MetricCardV2`. They belonged to an earlier design iteration.
@@ -82,13 +91,13 @@ exceptions below; add to it in the same change that vendors a component.
 
 ### Restyle rules for adopted source
 
-Adopted files are restyled to Instrument before they are committed. BoardUI's
-defaults are blue-accented and rounder than this system, and none of that
-travels into Depsilo:
+Adopted files are restyled to Depsilo's tokens before they are committed. The
+palette is BoardUI's, so colour needs no conversion; the shape and density
+conventions are ours:
 
 | BoardUI ships | Depsilo keeps |
 | --- | --- |
-| A blue `--color-accent-50…950` ramp | The Instrument greens, by role: `--btn` for commands, `--brand` for active and selected state, `--hit` for the cache-hit signal |
+| A blue `--color-accent-50…950` ramp | Kept. Maps to `--btn` for commands, `--brand` for active and selected state, `--hit` for the cache-hit signal. |
 | `bg-button-primary` / `bg-button-danger` gradient fills | Flat `--btn` fill. No gradient on commands. |
 | `--radius-2lg: 10px`, `--radius-2-5xl: 20px`, `--radius-notification-card: 10px` | The existing 4/6/10/14px ladder below |
 | Tailwind-default spacing with arbitrary values | The established spacing tokens; no new arbitrary values |
@@ -97,12 +106,19 @@ travels into Depsilo:
 One BoardUI idea is adopted outright: **the command accent and the health
 signal are separate tokens.** BoardUI re-tints every interactive surface from
 one eleven-step accent ramp while charts and status chips keep their own hues.
-Depsilo has the opposite arrangement today: in light mode `--hit` is a literal
-alias of `--brand`, so the Admin shell's `--brand: #245443` override silently
-re-points the cache-hit colour inside Admin, and `--hit` is also used as a plain
-accent fill in Admin chrome rather than only as the hit signal. New work must
-not deepen that coupling — use `--btn` for commands, `--hit` only for the
-cache-hit signal, and treat a token that means both as a bug to fix rather than
+
+Depsilo had the opposite arrangement: `--hit` was a literal alias of `--brand`
+in light mode, so the 2026-09-15 Admin shell refresh — which added scoped
+`--brand` / `--btn` / `--focus-ring` overrides — silently re-pointed the primary
+command, the focus ring, and the cache-hit signal inside Admin. That broke the
+primary command contrast contract set in `cee454d`. Both halves were corrected
+on 2026-09-16: `--hit` now points at the success ramp, and `[data-admin-shell]`
+re-tints **surfaces only** and must not re-declare `--brand*`, `--btn*`, or
+`--focus-ring`.
+
+Keep the roles apart — `--brand` for surfaces, active and selected state;
+`--brand-text` for accent-coloured text; `--btn` for commands; `--hit` only for
+the cache-hit signal. A token that means two things is a bug to fix rather than
 a pattern to copy.
 
 ## Brand Mark
@@ -148,14 +164,15 @@ Tokens live in `web/src/index.css`. Tailwind v4 exposes matching utilities via
 | `--bg-page` | `#FFFFFF` | Pure-white light-mode page background |
 | `--admin-canvas` | `#FFFFFF` | Admin light-mode shell and main canvas |
 | `--bg-card` | `#FFFFFF` | Primary surface |
-| `--bg-soft` | `#F1F3F2` | Inset/secondary surface |
-| `--text` | `#14181A` | Primary text |
-| `--text-muted` | `#586068` | Secondary text |
+| `--bg-soft` | `#F7F7F7` | Inset/secondary surface |
+| `--text` | `oklch(14.5% 0 0)` | Primary text |
+| `--text-muted` | `oklch(55.6% 0 0)` | Secondary text |
 | `--inverse` / `--on-inverse` | `#14181A` / `#FFFFFF` | Compact inverse tooltips and data details |
-| `--brand` / `--hit` | `#0FA86F` | Active, hit, healthy, focus |
-| `--btn-primary-bg` / `--btn` | `#0A8654` | Primary command |
-| `--warn` / `--slow` | `#B5770E` | Slow/degraded/partial |
-| `--danger` | `#CF4444` | Failure/refusal/destructive |
+| `--brand` | `oklch(62.3% 0.214 259.815)` | Active, selected, focus — BoardUI accent-500 |
+| `--hit` | `oklch(45.3% 0.124 130.933)` | Cache hit / healthy — BoardUI state-success |
+| `--btn-primary-bg` / `--btn` | `oklch(54.6% 0.245 262.881)` | Primary command — BoardUI accent-600 |
+| `--warn` / `--slow` | `oklch(47.6% 0.114 61.907)` | Slow/degraded/partial — BoardUI status-yellow |
+| `--danger` | `oklch(63.7% 0.237 25.331)` | Failure/refusal/destructive — BoardUI border-error |
 
 ### State Semantics
 
@@ -163,7 +180,7 @@ Keep these dimensions separate when they appear together in Admin:
 
 | Dimension | Normal result | Attention result |
 | --- | --- | --- |
-| Cache result | `hit` uses signal green; `miss` is neutral because the request was fetched; `unknown` is neutral and means the result was not recorded | Do not turn a miss or unknown into a failure |
+| Cache result | `hit` uses the success colour; `miss` is neutral because the request was fetched; `unknown` is neutral and means the result was not recorded | Do not turn a miss or unknown into a failure |
 | Policy result | `allow` uses the normal success treatment | `deny` is danger because the request was explicitly refused; an unknown decision remains unrecorded |
 | Delivery result | `upstream` or `completed` uses the normal success treatment | `failed` is danger; `cancelled` or a partial outcome uses warning; unknown remains unrecorded |
 
@@ -247,17 +264,53 @@ two popover implementations inside a single dialog.
 
 | Wrapper | React Aria Components |
 | --- | --- |
-| `components/Modal.tsx` | `Modal` + `Dialog` |
-| `components/Drawer.tsx` | `Modal` + `Dialog`, drawer styling |
-| `components/Tabs.tsx` | `Tabs` |
-| `components/Tooltip.tsx` | `Tooltip` |
 | `components/Switch.tsx` | `Switch` |
-| `components/Toast.tsx` | `Toast` |
+| `components/Tabs.tsx` | `Tabs` + `TabList` + `Tab` / `TabPanel` |
+| `components/Tooltip.tsx` | `TooltipTrigger` + `Tooltip` |
+| `components/Modal.tsx` | `Modal` + `Dialog` + `Heading slot="title"` |
+| `components/Drawer.tsx` | `Modal` + `Dialog`, drawer styling |
+| `components/Toast.tsx` | `UNSTABLE_Toast*` + a `ToastQueue` |
 
-**Migration status: not started.** All six wrappers still import Base UI.
-Port them together rather than one at a time — they share focus restoration,
-escape handling, and outside-press dismissal, and a mixed state would be hard
-to test honestly.
+### React Aria composes through context
+
+React Aria hands interaction props to a composed child through React context
+(`FocusableProvider` + `useFocusable`); it does not clone props onto the child.
+A leaf that is a plain DOM element spreading its own props receives nothing, so
+`TooltipTrigger`, `PopoverTrigger`, `MenuTrigger`, and `DialogTrigger` silently
+never open. This is why a naive wrapper-for-wrapper swap does not work.
+
+Every leaf control that a React Aria wrapper composes with must itself be a
+React Aria component. `IconButtonControl` is the only such leaf today: `Tooltip`
+composes it as its trigger, and `Modal`, `Drawer`, and `Toast` compose an
+`IconButton` into their close action. It moves to React Aria's `Button` before
+those four can be ported. Wrappers whose children are only content (`Switch`,
+`Tabs`) are unaffected.
+
+### Other load-bearing differences
+
+- **A switch's role lives on a hidden input.** React Aria wraps a visually
+  hidden `<input type="checkbox" role="switch">` in a label, so the control
+  cannot be clicked through its role locator and reports state through the
+  native `checked` property rather than `aria-checked`. The label carries a
+  `data-switch-control` hook for the browser suite.
+- **Tooltips swallow Escape.** React Aria's tooltip listens on `document` in the
+  capture phase and calls `stopPropagation()`. Base UI opted out of that with
+  `allowPropagation()`. The Modal close button carries a tooltip and opens it on
+  focus, so the dialog Escape path is only correct once both are React Aria.
+- **Modals expose no initial-focus prop.** React Aria's `Modal` has neither
+  `initialFocus` nor `finalFocus`; the wrappers implement the two current
+  consumers explicitly.
+- **Overlay lifecycle attributes differ.** `web/src/index.css` keys overlay
+  transitions off Base UI's `data-starting-style` / `data-ending-style`; React
+  Aria emits `data-entering` / `data-exiting` instead.
+- **Toast is unstable in React Aria.** Its toast primitives are exported with an
+  `UNSTABLE_` prefix and require a queue object, so that wrapper changes shape
+  rather than swapping a component name.
+
+**Migration status:** `Switch` is ported. The rest lands as one unit — leaf
+controls first, then `Tooltip`, `Modal`, `Drawer`, `Toast`, and `Tabs` — because
+a half-ported layer cannot be validated: the tooltip/dialog Escape path and the
+modal portal container are decided by the pair, not by either component alone.
 
 Behaviour is owned by these wrappers, not by pages. Focus trap and restore,
 escape and outside-press dismissal, `aria-*` wiring, reduced-motion handling,
@@ -377,11 +430,11 @@ URL remains reachable so bookmarks and direct links do not break, as do all
 other established Admin URLs.
 
 The light Admin canvas remains pure white, while its persistent workspace rail
-uses a dedicated mint porcelain surface (`#F3F8F5`) and hover
-(`#EAF3EE`). This near-white, brand-adjacent tint separates navigation from the
-canvas without reusing the darker global inset surface. Dark mode retains its
-existing rail and hover appearance. The current workspace receives a filled
-selection on every route within it; the page-local tabs identify the current
+uses BoardUI's secondary surface (`#F7F7F7`) and hover (`#EBEBEB`). This
+near-white tint separates navigation from the canvas without reusing the
+darker global inset surface. Dark mode uses `oklch(20.5% 0 0)` with
+`oklch(26.9% 0 0)` on hover. The current workspace receives a filled selection
+on every route within it; the page-local tabs identify the current
 destination. Language
 and appearance remain adjacent in the utility bar, but each is a flat button
 separated by quiet spacing; do not wrap them in a tinted, bordered preference

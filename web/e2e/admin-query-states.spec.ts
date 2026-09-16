@@ -642,8 +642,10 @@ test('Security legacy-policy disable saves retain per-ecosystem busy, error, and
   const cargoRow = page.locator('[data-policy-ecosystem="cargo"]')
   const pypiSave = pypiRow.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ })
   const cargoSave = cargoRow.getByRole('button', { name: /CARGO.*保存|CARGO.*Save/ })
-  await pypiRow.getByRole('switch').click()
-  await cargoRow.getByRole('switch').click()
+  // React Aria's switch carries role="switch" on a hidden input wrapped by its
+  // label, so the label is the element a pointer actually hits.
+  await pypiRow.locator('[data-switch-control]').click()
+  await cargoRow.locator('[data-switch-control]').click()
   await expect(pypiRow.getByRole('switch')).not.toBeChecked()
   await expect(cargoRow.getByRole('switch')).not.toBeChecked()
   await expect(pypiRow.getByRole('spinbutton')).toBeDisabled()

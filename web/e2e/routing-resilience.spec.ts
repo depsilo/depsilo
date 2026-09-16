@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 
 import { adminApiDefaults, expect, mockAdminApi, test } from './fixtures/admin-api'
+import zh from '../src/i18n/zh'
 
 test('setup status failure blocks every app branch until a validated retry succeeds', { tag: '@smoke' }, async ({ page }) => {
   let setupAttempts = 0
@@ -192,7 +193,9 @@ test('authenticated Admin unknown paths render 404 inside the shell without dash
 test('Admin title derivation follows case-insensitive route matching', async ({ page }) => {
   await page.goto('/ADMIN/CACHE')
 
-  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('缓存管理')
+  // The Cache workspace's first page is titled from nav.cacheManage; read it
+  // from the catalogue so a deliberate rename cannot rot this assertion.
+  await expect(page.locator('[data-admin-breadcrumb]')).toContainText(zh.translation.nav.cacheManage)
   await expect(page.locator('[data-route-state="not-found"]')).toHaveCount(0)
 })
 

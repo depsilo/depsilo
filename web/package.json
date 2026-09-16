@@ -37,6 +37,7 @@
     "i18next": "^26.0.1",
     "lucide-react": "^1.24.0",
     "react": "^19.2.8",
+    "react-aria-components": "^1.21.1",
     "react-dom": "^19.2.8",
     "react-i18next": "^17.0.1",
     "react-router": "^8.3.0",

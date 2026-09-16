@@ -122,9 +122,11 @@ test('security policy controls have distinct ecosystem names and toggle with Spa
   await expect(page.getByRole('spinbutton', { name: 'NPM CVSS 阈值' })).toBeVisible()
 
   await pypiSwitch.focus()
-  const before = await pypiSwitch.getAttribute('aria-checked')
+  // React Aria's switch is a native checkbox input, so the checked state lives
+  // on the input rather than in an aria-checked attribute.
+  const before = await pypiSwitch.isChecked()
   await page.keyboard.press('Space')
-  expect(await pypiSwitch.getAttribute('aria-checked')).not.toBe(before)
+  expect(await pypiSwitch.isChecked()).not.toBe(before)
   await expect(pypiSwitch).toBeDisabled()
 })
 

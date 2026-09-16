@@ -274,7 +274,9 @@ test('Security permits disabling but not re-enabling a legacy exact-only auto-bl
   const autoBlock = goPolicy.getByRole('switch')
   await expect(autoBlock).toBeChecked()
   await expect(autoBlock).toBeEnabled()
-  await autoBlock.click()
+  // The switch role sits on a hidden input inside its label; click the label,
+  // which is the pointer surface a user actually presses.
+  await goPolicy.locator('[data-switch-control]').click()
   await expect(autoBlock).not.toBeChecked()
   await expect(autoBlock).toBeDisabled()
 
@@ -317,7 +319,7 @@ test('Security disables conflicting bulk policy actions while a row save is pend
   await page.goto('/admin/security?tab=policies')
 
   const pypiPolicy = page.locator('[data-policy-ecosystem="pypi"]')
-  await pypiPolicy.getByRole('switch', { name: /PYPI.*自动拦截|PYPI.*Auto-block/ }).click()
+  await pypiPolicy.locator('[data-switch-control]').click()
   await pypiPolicy.getByRole('button', { name: /PYPI.*保存|PYPI.*Save/ }).click()
   await saveStarted
 

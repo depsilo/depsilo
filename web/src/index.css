@@ -42,47 +42,46 @@
   --color-bg-page:   #FFFFFF;
   --color-bg-panel:  #FFFFFF;
   --color-bg-card:   #FFFFFF;
-  --color-bg-soft:   #F1F3F2;
-  --color-bg-hover:  #ECEFEE;
+  --color-bg-soft:   #F7F7F7;
+  --color-bg-hover:  #EBEBEB;
 
-  --color-border:        rgba(12, 22, 17, 0.10);
-  --color-border-soft:   rgba(12, 22, 17, 0.05);
-  --color-border-strong: rgba(12, 22, 17, 0.17);
+  --color-border:        #EBEBEB;
+  --color-border-soft:   #EBEBEB;
+  --color-border-strong: oklch(87% 0 0);
 
-  --color-text:        #14181A;
-  --color-text-muted:  #586068;
-  --color-text-soft:   #626A72;
-  --color-text-subtle: #646C74;
+  --color-text:        oklch(14.5% 0 0);
+  --color-text-muted:  oklch(55.6% 0 0);
+  --color-text-soft:   oklch(70.8% 0 0);
+  --color-text-subtle: oklch(70.8% 0 0);
 
-  /* Brand = the "hit" signal green. Identical token, kept under the
-     old name so every component that reads --color-brand keeps
-     working. New code can use --color-hit. */
-  --color-brand:        #0FA86F;
-  --color-brand-strong: #0C8D5D;
-  --color-brand-soft:   #E4F6EE;
-  --color-brand-border: rgba(15, 168, 111, 0.30);
-  --color-brand-text:   #04321F;
+  /* BoardUI's default accent. The "brand" name is kept so every
+     component that reads --color-brand keeps working. */
+  --color-brand:        oklch(62.3% 0.214 259.815);
+  --color-brand-strong: oklch(54.6% 0.245 262.881);
+  --color-brand-soft:   oklch(97% 0.014 254.604);
+  --color-brand-border: color-mix(in srgb, oklch(62.3% 0.214 259.815) 30%, transparent);
+  --color-brand-text:   oklch(48.8% 0.243 264.376);
 
-  --color-spec-1: #3DDC91;
-  --color-spec-2: #2DBE7A;
-  --color-spec-3: #0FA86F;
-  --color-spec-4: #0A8654;
+  --color-spec-1: #3392ff;
+  --color-spec-2: oklch(62.3% 0.214 259.815);
+  --color-spec-3: oklch(54.6% 0.245 262.881);
+  --color-spec-4: oklch(48.8% 0.243 264.376);
 
-  --color-ok:          #0FA86F;
-  --color-ok-fill:     #E4F6EE;
-  --color-ok-border:   rgba(15, 168, 111, 0.30);
-  --color-ok-text:     #04321F;
+  --color-ok:          oklch(45.3% 0.124 130.933);
+  --color-ok-fill:     oklch(93.8% 0.127 124.321);
+  --color-ok-border:   color-mix(in srgb, oklch(45.3% 0.124 130.933) 30%, transparent);
+  --color-ok-text:     oklch(45.3% 0.124 130.933);
 
-  --color-warn:        #B5770E;
-  --color-warn-fill:   #FBEFD8;
-  --color-warn-border: rgba(181, 119, 14, 0.30);
-  --color-warn-text:   #8A4F00;
+  --color-warn:        oklch(47.6% 0.114 61.907);
+  --color-warn-fill:   oklch(94.5% 0.129 101.54);
+  --color-warn-border: color-mix(in srgb, oklch(47.6% 0.114 61.907) 30%, transparent);
+  --color-warn-text:   oklch(47.6% 0.114 61.907);
 
-  --color-danger:        #CF4444;
-  --color-danger-fill:   #FBE9E9;
-  --color-danger-border: rgba(207, 68, 68, 0.30);
-  --color-danger-text:   #A52E2E;
-  --color-focus-ring:    #0C8D5D;
+  --color-danger:        oklch(63.7% 0.237 25.331);
+  --color-danger-fill:   oklch(89.2% 0.058 10.001);
+  --color-danger-border: color-mix(in srgb, oklch(63.7% 0.237 25.331) 30%, transparent);
+  --color-danger-text:   oklch(45.5% 0.188 13.697);
+  --color-focus-ring:    oklch(62.3% 0.214 259.815);
 
   /* Inter Variable for UI text, Inter Tight only for display headings.
      CJK prefers platform fonts first for a lighter, more native read. */
@@ -125,70 +124,63 @@
   --bg-page:   #FFFFFF;
   --bg-panel:  #FFFFFF;
   --bg-card:   #FFFFFF;
-  --bg-soft:   #F1F3F2;
-  --bg-hover:  #ECEFEE;
+  --bg-soft:   #F7F7F7;   /* BoardUI background-secondary-default */
+  --bg-hover:  #EBEBEB;   /* BoardUI background-secondary-hover */
   --admin-canvas: #FFFFFF;
-  --admin-rail: #F3F8F5;
-  --admin-rail-hover: #EAF3EE;
+  --admin-rail: #F7F7F7;
+  --admin-rail-hover: #EBEBEB;
 
-  --border:        rgba(12, 22, 17, 0.10);
-  --border-soft:   rgba(12, 22, 17, 0.05);
-  --border-strong: rgba(12, 22, 17, 0.17);
+  --border:        #EBEBEB;              /* BoardUI border-button-default */
+  --border-soft:   #EBEBEB;              /* BoardUI separator-border */
+  --border-strong: oklch(87% 0 0);       /* BoardUI border-button-hover */
 
-  --text:        #14181A;
-  --text-muted:  #586068;
-  --text-soft:   #626A72;
-  --text-subtle: #646C74;
+  --text:        oklch(14.5% 0 0);       /* BoardUI text-primary */
+  --text-muted:  oklch(55.6% 0 0);       /* BoardUI text-secondary */
+  --text-soft:   oklch(70.8% 0 0);       /* BoardUI text-tertiary */
+  --text-subtle: oklch(70.8% 0 0);
 
-  /* Brand = the "hit" signal green. Used for links, active nav,
-     focus rings, status dots, cache-hit highlights — wherever the
-     previous purple lived. Per Instrument's "one rule", this is
-     SEPARATE from the primary button fill below. */
-  --brand:        #0FA86F;
-  --brand-strong: #0C8D5D;
-  --brand-soft:   #E4F6EE;
-  --brand-border: rgba(15, 168, 111, 0.30);
-  --brand-text:   #04321F;
+  /* Accent ramp — BoardUI's default blue, not a re-tint. Used for
+     links, active nav, focus rings, status dots, selection fills. */
+  --brand:        oklch(62.3% 0.214 259.815);   /* accent-500 */
+  --brand-strong: oklch(54.6% 0.245 262.881);   /* accent-600 */
+  --brand-soft:   oklch(97% 0.014 254.604);     /* accent-50 */
+  --brand-border: color-mix(in srgb, oklch(62.3% 0.214 259.815) 30%, transparent);
+  --brand-text:   oklch(48.8% 0.243 264.376);   /* accent-700 */
 
-  /* Primary button fill — deeper green than the signal green,
-     ensuring the main action is visually unmistakable even on
-     pages with lots of brand-color use elsewhere. Identical
-     across themes per the brief. */
-  --btn-primary-bg: #0A8654;
+  /* Primary command fill. BoardUI renders this as an accent
+     gradient; Depsilo keeps a flat fill on the same ramp. */
+  --btn-primary-bg: oklch(54.6% 0.245 262.881);    /* accent-600 */
   --btn-primary-fg: #FFFFFF;
-  --btn-primary-press: #097A4B;
+  --btn-primary-press: oklch(48.8% 0.243 264.376); /* accent-700 */
 
-  /* Aurora / brand gradients — repurposed to a green sweep so
-     the few places that still use --grad-brand (active tab
-     underline, brand bars) stay on-palette. */
-  --spec-1: #3DDC91;
-  --spec-2: #2DBE7A;
-  --spec-3: #0FA86F;
-  --spec-4: #0A8654;
+  /* Decorative sweeps, kept on the accent ramp. */
+  --spec-1: #3392ff;                     /* BoardUI's accent-400 override */
+  --spec-2: oklch(62.3% 0.214 259.815);
+  --spec-3: oklch(54.6% 0.245 262.881);
+  --spec-4: oklch(48.8% 0.243 264.376);
 
   --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-  --grad-brand:  linear-gradient(120deg, #2DBE7A 0%, #0A8654 100%);
-  --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(15, 168, 111, 0.45) 25%, rgba(45, 190, 122, 0.45) 60%, transparent 100%);
+  --grad-brand:  linear-gradient(120deg, #3392ff 0%, oklch(54.6% 0.245 262.881) 100%);
+  --grad-rim:    linear-gradient(90deg, transparent 0%, color-mix(in srgb, oklch(62.3% 0.214 259.815) 45%, transparent) 25%, color-mix(in srgb, oklch(54.6% 0.245 262.881) 45%, transparent) 60%, transparent 100%);
 
-  /* OK / success — points at the same green as the brand because
-     "cache hit" and "success" are the same semantic. */
-  --ok:          #0FA86F;
-  --ok-fill:     #E4F6EE;
-  --ok-border:   rgba(15, 168, 111, 0.30);
-  --ok-text:     #04321F;
+  /* Success / cache hit — BoardUI state-success. */
+  --ok:          oklch(45.3% 0.124 130.933);
+  --ok-fill:     oklch(93.8% 0.127 124.321);
+  --ok-border:   color-mix(in srgb, oklch(45.3% 0.124 130.933) 30%, transparent);
+  --ok-text:     oklch(45.3% 0.124 130.933);
 
-  /* Warn / slow — amber per Instrument. */
-  --warn:        #B5770E;
-  --warn-fill:   #FBEFD8;
-  --warn-border: rgba(181, 119, 14, 0.30);
-  --warn-text:   #8A4F00;
+  /* Warn / slow — BoardUI status-yellow. */
+  --warn:        oklch(47.6% 0.114 61.907);
+  --warn-fill:   oklch(94.5% 0.129 101.54);
+  --warn-border: color-mix(in srgb, oklch(47.6% 0.114 61.907) 30%, transparent);
+  --warn-text:   oklch(47.6% 0.114 61.907);
 
-  /* Danger / miss — red per Instrument. */
-  --danger:        #CF4444;
-  --danger-fill:   #FBE9E9;
-  --danger-border: rgba(207, 68, 68, 0.30);
-  --danger-text:   #A52E2E;
-  --focus-ring:    #0C8D5D;
+  /* Danger / refusal — BoardUI status-rose and border-error. */
+  --danger:        oklch(63.7% 0.237 25.331);
+  --danger-fill:   oklch(89.2% 0.058 10.001);
+  --danger-border: color-mix(in srgb, oklch(63.7% 0.237 25.331) 30%, transparent);
+  --danger-text:   oklch(45.5% 0.188 13.697);
+  --focus-ring:    oklch(62.3% 0.214 259.815);
 
   /* Instrument role-named aliases — for new code that wants to use
      the brief's vocabulary directly. Values track the existing
@@ -205,10 +197,14 @@
   --fg-faint:  var(--text-subtle);
   --inverse:   var(--text);
   --on-inverse: var(--bg-page);
-  --hit:       var(--brand);
-  --hit-press: var(--brand-strong);
-  --hit-bg:    var(--brand-soft);
-  --on-hit:    var(--brand-text);
+  /* The cache-hit signal is the success semantic, not the command accent.
+     Aliasing it to --brand is what let a scoped Admin override re-point the
+     hit colour; --brand is BoardUI's blue accent now, so the alias would also
+     make "hit" blue in light mode and lime in dark. */
+  --hit:       var(--ok);
+  --hit-press: var(--ok);
+  --hit-bg:    var(--ok-fill);
+  --on-hit:    var(--ok-text);
   --btn:       var(--btn-primary-bg);
   --btn-press: var(--btn-primary-press);
   --btn-fg:    var(--btn-primary-fg);
@@ -216,9 +212,9 @@
   --slow-bg:   var(--warn-fill);
   --miss:      var(--danger);
   --miss-bg:   var(--danger-fill);
-  --live:      #1F8FB8;
-  --glow:      rgba(15, 168, 111, 0.00);
-  --grid:      rgba(12, 22, 17, 0.025);
+  --live:      #3392ff;
+  --glow:      oklch(62.3% 0.214 259.815 / 0);
+  --grid:      rgba(0, 0, 0, 0.025);
 
   --r-pill: 4px;
   --r-tag:  6px;
@@ -230,26 +226,26 @@
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
   --s-6: 24px; --s-8: 32px; --s-12: 48px;
 
-  --shadow-card: rgba(12, 22, 17, 0.05) 0 6px 18px -6px,
-                 rgba(12, 22, 17, 0.04) 0 3px 9px -3px;
+  --shadow-card: rgb(0 0 0 / 0.05) 0 6px 18px -6px,
+                 rgb(0 0 0 / 0.04) 0 3px 9px -3px;
   /* Surface lift for .card — light theme only. Dark elevation comes
      from surface color + hairline; a glow there would look smoky. */
-  --shadow-surface: rgba(12, 22, 17, 0.04) 0 1px 2px,
-                    rgba(12, 22, 17, 0.06) 0 4px 12px -6px;
-  --shadow-pop:  rgba(12, 22, 17, 0.15) 0 30px 45px -30px,
-                 rgba(12, 22, 17, 0.08) 0 18px 36px -18px;
+  --shadow-surface: rgb(0 0 0 / 0.04) 0 1px 2px,
+                    rgb(0 0 0 / 0.06) 0 4px 12px -6px;
+  --shadow-pop:  rgb(0 0 0 / 0.15) 0 30px 45px -30px,
+                 rgb(0 0 0 / 0.08) 0 18px 36px -18px;
 
   /* Quick Start's primary configuration is the one intentional inverse
      surface in the light Portal. Keeping it tokenized prevents a parallel
      hard-coded palette from leaking into CodeBlock. */
-  --code-bg: #101512;
-  --code-header: #151C18;
-  --code-line: rgba(231, 241, 235, 0.10);
-  --code-fg: #E8F0EB;
-  --code-muted: #98A79F;
-  --code-accent: #55DDA0;
-  --code-danger: #FF9D9D;
-  --code-shadow: rgba(8, 15, 11, 0.28) 0 22px 44px -24px;
+  --code-bg: oklch(20.5% 0 0);
+  --code-header: oklch(26.9% 0 0);
+  --code-line: rgb(255 255 255 / 0.10);
+  --code-fg: oklch(98.5% 0 0);
+  --code-muted: oklch(70.8% 0 0);
+  --code-accent: #3392ff;
+  --code-danger: oklch(70.4% 0.191 22.216);
+  --code-shadow: rgb(0 0 0 / 0.28) 0 22px 44px -24px;
 }
 
 /* ── Dark mode — Instrument default ────────────────────── */
@@ -257,101 +253,99 @@ html.dark,
 [data-theme="dark"] {
   color-scheme: dark;
   --logo-mark: #3DDC91;
-  --bg-page:   #0B0D0F;
-  --bg-panel:  #14181C;
-  --bg-card:   #14181C;
-  --bg-soft:   #1A1F24;
-  --bg-hover:  #20262C;
-  --admin-canvas: #0B0D0F;
-  --admin-rail: #1A1F24;
-  --admin-rail-hover: #20262C;
+  --bg-page:   #121212;              /* BoardUI background-full */
+  --bg-panel:  oklch(26.9% 0 0);     /* BoardUI background-primary-default */
+  --bg-card:   oklch(26.9% 0 0);
+  --bg-soft:   oklch(20.5% 0 0);     /* BoardUI background-secondary-default */
+  --bg-hover:  oklch(26.9% 0 0);
+  --admin-canvas: #121212;
+  --admin-rail: oklch(20.5% 0 0);
+  --admin-rail-hover: oklch(26.9% 0 0);
 
-  --border:        rgba(255, 255, 255, 0.08);
-  --border-soft:   rgba(255, 255, 255, 0.04);
-  --border-strong: rgba(255, 255, 255, 0.15);
+  --border:        oklch(37.1% 0 0); /* BoardUI border-button-default */
+  --border-soft:   oklch(26.9% 0 0); /* BoardUI separator-border */
+  --border-strong: oklch(55.6% 0 0);
 
-  --text:        #E9ECEE;
-  --text-muted:  #98A1A9;
-  --text-soft:   #98A1A9;
-  --text-subtle: #7A8591;
+  --text:        oklch(98.5% 0 0);   /* BoardUI text-primary */
+  --text-muted:  oklch(55.6% 0 0);   /* BoardUI text-secondary */
+  --text-soft:   oklch(43.9% 0 0);   /* BoardUI text-tertiary */
+  --text-subtle: oklch(43.9% 0 0);
 
-  /* Brand / signal-green = lifted to a brighter hit color so it
-     reads vividly on the dark surface. */
-  --brand:        #3DDC91;
-  --brand-strong: #2DBE7A;
-  --brand-soft:   rgba(61, 220, 145, 0.12);
-  --brand-border: rgba(61, 220, 145, 0.30);
-  --brand-text:   #3DDC91;
+  /* BoardUI keeps one accent ramp across both themes. */
+  --brand:        oklch(62.3% 0.214 259.815);
+  --brand-strong: oklch(54.6% 0.245 262.881);
+  --brand-soft:   color-mix(in srgb, oklch(62.3% 0.214 259.815) 16%, transparent);
+  --brand-border: color-mix(in srgb, oklch(62.3% 0.214 259.815) 30%, transparent);
+  --brand-text:   #3392ff;
 
-  /* Primary button stays the same deep green in both themes — the
-     brief is explicit that the CTA color does not flip. */
-  --btn-primary-bg: #0A8654;
+  --btn-primary-bg: oklch(54.6% 0.245 262.881);
   --btn-primary-fg: #FFFFFF;
-  --btn-primary-press: #097A4B;
+  --btn-primary-press: oklch(48.8% 0.243 264.376);
 
-  --spec-1: #3DDC91;
-  --spec-2: #2DBE7A;
-  --spec-3: #0FA86F;
-  --spec-4: #0A8654;
+  --spec-1: #3392ff;
+  --spec-2: oklch(62.3% 0.214 259.815);
+  --spec-3: oklch(54.6% 0.245 262.881);
+  --spec-4: oklch(48.8% 0.243 264.376);
 
   --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-  --grad-brand:  linear-gradient(120deg, #3DDC91 0%, #0FA86F 100%);
-  --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(61, 220, 145, 0.65) 25%, rgba(45, 190, 122, 0.65) 60%, transparent 100%);
+  --grad-brand:  linear-gradient(120deg, #3392ff 0%, oklch(54.6% 0.245 262.881) 100%);
+  --grad-rim:    linear-gradient(90deg, transparent 0%, color-mix(in srgb, oklch(62.3% 0.214 259.815) 65%, transparent) 25%, color-mix(in srgb, oklch(54.6% 0.245 262.881) 65%, transparent) 60%, transparent 100%);
 
-  --ok:          #3DDC91;
-  --ok-fill:     rgba(61, 220, 145, 0.12);
-  --ok-border:   rgba(61, 220, 145, 0.30);
-  --ok-text:     #3DDC91;
+  /* Status colours come from BoardUI's dark status families. */
+  --ok:          oklch(76.8% 0.233 130.85);
+  --ok-fill:     color-mix(in srgb, oklch(27.4% 0.072 132.109) 60%, transparent);
+  --ok-border:   color-mix(in srgb, oklch(76.8% 0.233 130.85) 30%, transparent);
+  --ok-text:     oklch(76.8% 0.233 130.85);
 
-  --warn:        #F2B544;
-  --warn-fill:   rgba(242, 181, 68, 0.13);
-  --warn-border: rgba(242, 181, 68, 0.30);
-  --warn-text:   #F2B544;
+  --warn:        oklch(79.5% 0.184 86.047);
+  --warn-fill:   color-mix(in srgb, oklch(28.6% 0.066 53.813) 60%, transparent);
+  --warn-border: color-mix(in srgb, oklch(79.5% 0.184 86.047) 30%, transparent);
+  --warn-text:   oklch(79.5% 0.184 86.047);
 
-  --danger:        #F76D6D;
-  --danger-fill:   rgba(247, 109, 109, 0.12);
-  --danger-border: rgba(247, 109, 109, 0.30);
-  --danger-text:   #F76D6D;
-  --focus-ring:    #3DDC91;
+  --danger:        oklch(64.5% 0.246 16.439);
+  --danger-fill:   color-mix(in srgb, oklch(27.1% 0.105 12.094) 60%, transparent);
+  --danger-border: color-mix(in srgb, oklch(64.5% 0.246 16.439) 30%, transparent);
+  --danger-text:   oklch(64.5% 0.246 16.439);
+  --focus-ring:    oklch(62.3% 0.214 259.815);
 
   /* Instrument role-named aliases follow the same redefinitions. */
-  --bg:        #0B0D0F;
-  --surface:   #14181C;
-  --inset:     #1A1F24;
-  --hover:     #20262C;
-  --line:      rgba(255, 255, 255, 0.08);
-  --line-2:    rgba(255, 255, 255, 0.15);
-  --fg:        #E9ECEE;
-  --fg-mut:    #98A1A9;
-  --fg-faint:  #5E6770;
-  --hit:       #3DDC91;
-  --hit-press: #2DBE7A;
-  --hit-bg:    rgba(61, 220, 145, 0.12);
-  --on-hit:    #042A1C;
-  --btn:       #0A8654;
-  --btn-press: #097A4B;
+  --bg:        #121212;
+  --surface:   oklch(26.9% 0 0);
+  --inset:     oklch(20.5% 0 0);
+  --hover:     oklch(26.9% 0 0);
+  --line:      oklch(37.1% 0 0);
+  --line-2:    oklch(55.6% 0 0);
+  --fg:        oklch(98.5% 0 0);
+  --fg-mut:    oklch(55.6% 0 0);
+  --fg-faint:  oklch(43.9% 0 0);
+  --hit:       oklch(76.8% 0.233 130.85);
+  --hit-press: oklch(76.8% 0.233 130.85);
+  --hit-bg:    color-mix(in srgb, oklch(27.4% 0.072 132.109) 60%, transparent);
+  --on-hit:    #121212;
+  --btn:       oklch(54.6% 0.245 262.881);
+  --btn-press: oklch(48.8% 0.243 264.376);
   --btn-fg:    #FFFFFF;
-  --slow:      #F2B544;
-  --slow-bg:   rgba(242, 181, 68, 0.13);
-  --miss:      #F76D6D;
-  --miss-bg:   rgba(247, 109, 109, 0.12);
-  --live:      #54C6E6;
-  --glow:      rgba(61, 220, 145, 0.10);
+  --slow:      oklch(79.5% 0.184 86.047);
+  --slow-bg:   color-mix(in srgb, oklch(28.6% 0.066 53.813) 60%, transparent);
+  --miss:      oklch(64.5% 0.246 16.439);
+  --miss-bg:   color-mix(in srgb, oklch(27.1% 0.105 12.094) 60%, transparent);
+  --live:      #3392ff;
+  --glow:      color-mix(in srgb, oklch(62.3% 0.214 259.815) 10%, transparent);
   --grid:      rgba(255, 255, 255, 0.022);
 
-  --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
-                 rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
+  --shadow-card: 0 0 0 1px oklch(62.3% 0.214 259.815 / 0.04),
+                 rgb(0 0 0 / 0.30) 0 6px 18px -6px;
   --shadow-surface: none;
-  --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
-                 rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
+  --shadow-pop:  0 0 0 1px oklch(62.3% 0.214 259.815 / 0.08),
+                 rgb(0 0 0 / 0.50) 0 24px 48px -16px;
 
-  --code-bg: #080C0A;
-  --code-header: #0D120F;
-  --code-line: rgba(232, 244, 237, 0.10);
-  --code-fg: #EDF5F0;
-  --code-muted: #91A097;
-  --code-accent: #61E6AA;
-  --code-danger: #FFAAAA;
+  --code-bg: #121212;
+  --code-header: oklch(20.5% 0 0);
+  --code-line: rgb(255 255 255 / 0.10);
+  --code-fg: oklch(98.5% 0 0);
+  --code-muted: oklch(55.6% 0 0);
+  --code-accent: #3392ff;
+  --code-danger: oklch(70.4% 0.191 22.216);
   --code-shadow: rgba(0, 0, 0, 0.52) 0 24px 48px -22px;
 }
 
@@ -366,96 +360,96 @@ html.dark,
   html:not(.light):not([data-theme="light"]) {
     color-scheme: dark;
     --logo-mark: #3DDC91;
-    --bg-page:   #0B0D0F;
-    --bg-panel:  #14181C;
-    --bg-card:   #14181C;
-    --bg-soft:   #1A1F24;
-    --bg-hover:  #20262C;
-    --admin-canvas: #0B0D0F;
-    --admin-rail: #1A1F24;
-    --admin-rail-hover: #20262C;
+    --bg-page:   #121212;
+    --bg-panel:  oklch(26.9% 0 0);
+    --bg-card:   oklch(26.9% 0 0);
+    --bg-soft:   oklch(20.5% 0 0);
+    --bg-hover:  oklch(26.9% 0 0);
+    --admin-canvas: #121212;
+    --admin-rail: oklch(20.5% 0 0);
+    --admin-rail-hover: oklch(26.9% 0 0);
 
-    --border:        rgba(255, 255, 255, 0.08);
-    --border-soft:   rgba(255, 255, 255, 0.04);
-    --border-strong: rgba(255, 255, 255, 0.15);
+    --border:        oklch(37.1% 0 0);
+    --border-soft:   oklch(26.9% 0 0);
+    --border-strong: oklch(55.6% 0 0);
 
-    --text:        #E9ECEE;
-    --text-muted:  #98A1A9;
-    --text-soft:   #98A1A9;
-    --text-subtle: #7A8591;
+    --text:        oklch(98.5% 0 0);
+    --text-muted:  oklch(55.6% 0 0);
+    --text-soft:   oklch(43.9% 0 0);
+    --text-subtle: oklch(43.9% 0 0);
 
-    --brand:        #3DDC91;
-    --brand-strong: #2DBE7A;
-    --brand-soft:   rgba(61, 220, 145, 0.12);
-    --brand-border: rgba(61, 220, 145, 0.30);
-    --brand-text:   #3DDC91;
+    --brand:        oklch(62.3% 0.214 259.815);
+    --brand-strong: oklch(54.6% 0.245 262.881);
+    --brand-soft:   color-mix(in srgb, oklch(62.3% 0.214 259.815) 16%, transparent);
+    --brand-border: color-mix(in srgb, oklch(62.3% 0.214 259.815) 30%, transparent);
+    --brand-text:   #3392ff;
 
-    --btn-primary-bg: #0A8654;
+    --btn-primary-bg: oklch(54.6% 0.245 262.881);
     --btn-primary-fg: #FFFFFF;
-    --btn-primary-press: #097A4B;
+    --btn-primary-press: oklch(48.8% 0.243 264.376);
 
-    --spec-1: #3DDC91;
-    --spec-2: #2DBE7A;
-    --spec-3: #0FA86F;
-    --spec-4: #0A8654;
+    --spec-1: #3392ff;
+    --spec-2: oklch(62.3% 0.214 259.815);
+    --spec-3: oklch(54.6% 0.245 262.881);
+    --spec-4: oklch(48.8% 0.243 264.376);
 
     --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-    --grad-brand:  linear-gradient(120deg, #3DDC91 0%, #0FA86F 100%);
-    --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(61, 220, 145, 0.65) 25%, rgba(45, 190, 122, 0.65) 60%, transparent 100%);
+    --grad-brand:  linear-gradient(120deg, #3392ff 0%, oklch(54.6% 0.245 262.881) 100%);
+    --grad-rim:    linear-gradient(90deg, transparent 0%, color-mix(in srgb, oklch(62.3% 0.214 259.815) 65%, transparent) 25%, color-mix(in srgb, oklch(54.6% 0.245 262.881) 65%, transparent) 60%, transparent 100%);
 
-    --ok:          #3DDC91;
-    --ok-fill:     rgba(61, 220, 145, 0.12);
-    --ok-border:   rgba(61, 220, 145, 0.30);
-    --ok-text:     #3DDC91;
+    --ok:          oklch(76.8% 0.233 130.85);
+    --ok-fill:     color-mix(in srgb, oklch(27.4% 0.072 132.109) 60%, transparent);
+    --ok-border:   color-mix(in srgb, oklch(76.8% 0.233 130.85) 30%, transparent);
+    --ok-text:     oklch(76.8% 0.233 130.85);
 
-    --warn:        #F2B544;
-    --warn-fill:   rgba(242, 181, 68, 0.13);
-    --warn-border: rgba(242, 181, 68, 0.30);
-    --warn-text:   #F2B544;
+    --warn:        oklch(79.5% 0.184 86.047);
+    --warn-fill:   color-mix(in srgb, oklch(28.6% 0.066 53.813) 60%, transparent);
+    --warn-border: color-mix(in srgb, oklch(79.5% 0.184 86.047) 30%, transparent);
+    --warn-text:   oklch(79.5% 0.184 86.047);
 
-    --danger:        #F76D6D;
-    --danger-fill:   rgba(247, 109, 109, 0.12);
-    --danger-border: rgba(247, 109, 109, 0.30);
-    --danger-text:   #F76D6D;
-    --focus-ring:    #3DDC91;
+    --danger:        oklch(64.5% 0.246 16.439);
+    --danger-fill:   color-mix(in srgb, oklch(27.1% 0.105 12.094) 60%, transparent);
+    --danger-border: color-mix(in srgb, oklch(64.5% 0.246 16.439) 30%, transparent);
+    --danger-text:   oklch(64.5% 0.246 16.439);
+    --focus-ring:    oklch(62.3% 0.214 259.815);
 
-    --bg:        #0B0D0F;
-    --surface:   #14181C;
-    --inset:     #1A1F24;
-    --hover:     #20262C;
-    --line:      rgba(255, 255, 255, 0.08);
-    --line-2:    rgba(255, 255, 255, 0.15);
-    --fg:        #E9ECEE;
-    --fg-mut:    #98A1A9;
-    --fg-faint:  #5E6770;
-    --hit:       #3DDC91;
-    --hit-press: #2DBE7A;
-    --hit-bg:    rgba(61, 220, 145, 0.12);
-    --on-hit:    #042A1C;
-    --btn:       #0A8654;
-    --btn-press: #097A4B;
+    --bg:        #121212;
+    --surface:   oklch(26.9% 0 0);
+    --inset:     oklch(20.5% 0 0);
+    --hover:     oklch(26.9% 0 0);
+    --line:      oklch(37.1% 0 0);
+    --line-2:    oklch(55.6% 0 0);
+    --fg:        oklch(98.5% 0 0);
+    --fg-mut:    oklch(55.6% 0 0);
+    --fg-faint:  oklch(43.9% 0 0);
+    --hit:       oklch(76.8% 0.233 130.85);
+    --hit-press: oklch(76.8% 0.233 130.85);
+    --hit-bg:    color-mix(in srgb, oklch(27.4% 0.072 132.109) 60%, transparent);
+    --on-hit:    #121212;
+    --btn:       oklch(54.6% 0.245 262.881);
+    --btn-press: oklch(48.8% 0.243 264.376);
     --btn-fg:    #FFFFFF;
-    --slow:      #F2B544;
-    --slow-bg:   rgba(242, 181, 68, 0.13);
-    --miss:      #F76D6D;
-    --miss-bg:   rgba(247, 109, 109, 0.12);
-    --live:      #54C6E6;
-    --glow:      rgba(61, 220, 145, 0.10);
+    --slow:      oklch(79.5% 0.184 86.047);
+    --slow-bg:   color-mix(in srgb, oklch(28.6% 0.066 53.813) 60%, transparent);
+    --miss:      oklch(64.5% 0.246 16.439);
+    --miss-bg:   color-mix(in srgb, oklch(27.1% 0.105 12.094) 60%, transparent);
+    --live:      #3392ff;
+    --glow:      color-mix(in srgb, oklch(62.3% 0.214 259.815) 10%, transparent);
     --grid:      rgba(255, 255, 255, 0.022);
 
-    --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
-                   rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
+    --shadow-card: 0 0 0 1px oklch(62.3% 0.214 259.815 / 0.04),
+                   rgb(0 0 0 / 0.30) 0 6px 18px -6px;
     --shadow-surface: none;
-    --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
-                   rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
+    --shadow-pop:  0 0 0 1px oklch(62.3% 0.214 259.815 / 0.08),
+                   rgb(0 0 0 / 0.50) 0 24px 48px -16px;
 
-    --code-bg: #080C0A;
-    --code-header: #0D120F;
-    --code-line: rgba(232, 244, 237, 0.10);
-    --code-fg: #EDF5F0;
-    --code-muted: #91A097;
-    --code-accent: #61E6AA;
-    --code-danger: #FFAAAA;
+    --code-bg: #121212;
+    --code-header: oklch(20.5% 0 0);
+    --code-line: rgb(255 255 255 / 0.10);
+    --code-fg: oklch(98.5% 0 0);
+    --code-muted: oklch(55.6% 0 0);
+    --code-accent: #3392ff;
+    --code-danger: oklch(70.4% 0.191 22.216);
     --code-shadow: rgba(0, 0, 0, 0.52) 0 24px 48px -22px;
   }
 }
@@ -466,7 +460,7 @@ html.dark,
 
 html.dark .aurora-glow::after,
 [data-theme="dark"] .aurora-glow::after {
-  background: radial-gradient(60% 80% at 50% 50%, rgba(61, 220, 145, 0.28), transparent 70%);
+  background: radial-gradient(60% 80% at 50% 50%, oklch(62.3% 0.214 259.815 / 0.28), transparent 70%);
   filter: blur(28px);
 }
 
@@ -678,7 +672,7 @@ html.dark .page-wash::before,
   position: absolute;
   left: -8%; right: -8%;
   top: 30%; bottom: -20%;
-  background: radial-gradient(60% 80% at 50% 50%, rgba(15, 168, 111, 0.10), transparent 70%);
+  background: radial-gradient(60% 80% at 50% 50%, oklch(62.3% 0.214 259.815 / 0.10), transparent 70%);
   filter: blur(24px);
   z-index: -1;
   pointer-events: none;

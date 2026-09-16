@@ -1,7 +1,14 @@
 [data-admin-shell] {
   /* BoardUI-inspired surface treatment, scoped to Admin so Portal and Setup
      keep their established visual language. The role names continue to map
-     to the shared primitives through the existing CSS variables. */
+     to the shared primitives through the existing CSS variables.
+
+     This block re-tints SURFACES only — canvas, rail, borders, text and the
+     control radius. It must not re-declare the semantic action tokens
+     (--brand*, --btn*, --focus-ring). Scoping a second green here re-points
+     every shared Button, the focus ring, and — because --hit aliases --brand
+     in light mode — the cache-hit signal, which is how the 2026-09-15 shell
+     refresh silently broke the primary-command contrast contract. */
   --admin-canvas: #FFFFFF;
   --admin-rail: #F6F7F5;
   --admin-rail-hover: #EAF0E9;
@@ -16,14 +23,6 @@
   --text-muted: #626C64;
   --text-soft: #626C64;
   --text-subtle: #626C64;
-  --brand: #245443;
-  --brand-strong: #1B4133;
-  --brand-soft: #EAF0E9;
-  --brand-text: #245443;
-  --btn: #245443;
-  --btn-press: #1B4133;
-  --btn-fg: #FFFFFF;
-  --focus-ring: #245443;
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 10px;
@@ -44,12 +43,15 @@
 }
 
 [data-admin-shell] .admin-page-destination[aria-current="page"] {
-  color: var(--brand);
+  /* --brand is a surface/action green and fails WCAG AA as 12px text on the
+     light canvas. Brand-coloured *text* uses --brand-text, which is the role
+     the unscoped rule below already relies on. */
+  color: var(--brand-text);
   border-bottom-color: var(--brand);
 }
 
 [data-admin-shell] .admin-page-destination:hover {
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 [data-admin-shell].theme-dark,
@@ -69,14 +71,6 @@ html.dark [data-admin-shell],
   --text-muted: #A5B0A6;
   --text-soft: #A5B0A6;
   --text-subtle: #A5B0A6;
-  --brand: #ABCDB7;
-  --brand-strong: #C0DCC9;
-  --brand-soft: #283A2E;
-  --brand-text: #ABCDB7;
-  --btn: #ABCDB7;
-  --btn-press: #C0DCC9;
-  --btn-fg: #17291E;
-  --focus-ring: #ABCDB7;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -95,14 +89,6 @@ html.dark [data-admin-shell],
     --text-muted: #A5B0A6;
     --text-soft: #A5B0A6;
     --text-subtle: #A5B0A6;
-    --brand: #ABCDB7;
-    --brand-strong: #C0DCC9;
-    --brand-soft: #283A2E;
-    --brand-text: #ABCDB7;
-    --btn: #ABCDB7;
-    --btn-press: #C0DCC9;
-    --btn-fg: #17291E;
-    --focus-ring: #ABCDB7;
   }
 }
 
