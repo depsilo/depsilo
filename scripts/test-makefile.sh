@@ -241,4 +241,52 @@ metadata=$(make -s -C "$ROOT" version \
 [[ "$metadata" == $'version=1.2.3\ncommit=abc123\nbuild_date=2026-01-01T00:00:00Z' ]] \
     || fail "build metadata overrides are no longer reproducible"
 
+# ── UI 验证链 ────────────────────────────────
+# A change to the shared interaction primitives rides on this chain: `check`
+# runs the tagged smoke subset, `verify` runs the full browser suite, and the
+# bundle budget rides along inside verify-web. Pin the composition so a
+# Makefile edit cannot quietly drop a UI gate.
+check_line=$(grep -E '^check:' <<<"$make_db" | head -1)
+for gate in lint test verify-web verify-build test-ui; do
+    assert_contains "$check_line" "$gate"
+done
+if grep -q 'verify-ui' <<<"$check_line"; then
+    fail "make check must stay on the smoke subset instead of the full browser suite"
+fi
+
+verify_line=$(grep -E '^verify:' <<<"$make_db" | head -1)
+for gate in lint verify-web verify-build verify-ui verify-scripts; do
+    assert_contains "$verify_line" "$gate"
+done
+
+pkg="$ROOT/web/package.json"
+pkg_script() {
+    node -e "process.stdout.write(require('$pkg').scripts['$1'])"
+}
+assert_contains "$(pkg_script 'test:ui')" "playwright test"
+assert_contains "$(pkg_script 'test:ui:smoke')" "--grep @smoke"
+assert_contains "$(pkg_script 'check:bundle')" "check-bundle-budget.mjs"
+[[ -f "$ROOT/web/scripts/check-bundle-budget.mjs" ]] \
+    || fail "bundle budget script is missing"
+
+# The fast gate is only meaningful while the smoke subset stays a real subset.
+# Match the tag syntax, not the string — a comment that merely mentions @smoke
+# must not be able to satisfy this contract.
+smoke_specs=$(grep -rl --include='*.spec.ts' "tag: '@smoke'" "$ROOT/web/e2e" | wc -l | tr -d '[:space:]')
+[[ "$smoke_specs" -ge 5 ]] \
+    || fail "the @smoke fast gate shrank to $smoke_specs spec files"
+
+# The fast gate must keep behavioral coverage of the shared interaction
+# primitives. Rendering every route is not enough when the change is inside
+# web/src/components/.
+grep -q "tag: '@smoke'" "$ROOT/web/e2e/admin-query-states.spec.ts" \
+    || fail "the @smoke gate lost its shared-primitive coverage (admin-query-states)"
+
+# Iterating on one specification must not require recalling the npm wrapper,
+# and must not silently fall through to the whole suite.
+focused_recipe=$(grep -A 8 -E '^test-ui-file:' "$ROOT/Makefile")
+assert_contains "$focused_recipe" "usage: make test-ui-file"
+assert_contains "$(make -n -C "$ROOT" test-ui-file SPEC=admin-shell)" "e2e/admin-shell.spec.ts"
+assert_contains "$(make -n -C "$ROOT" test-ui-file FILE=e2e/admin-shell.spec.ts)" "e2e/admin-shell.spec.ts"
+
 echo "makefile workflow tests passed"

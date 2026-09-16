@@ -1,9 +1,16 @@
 # Depsilo Design System
 
-> Status: current implementation reference, updated 2026-08-20. The source of
+> Status: current implementation reference, updated 2026-09-16. The source of
 > truth is `web/src/index.css`, `web/src/components/`, `web/src/portal/`, and
 > `web/src/admin/`. When this document and code differ, update this document in
 > the same change.
+>
+> **Decision of record, not yet in code:** React Aria Components replaces
+> `@base-ui/react` as the interaction behaviour layer. Six wrappers still
+> import Base UI — `Modal`, `Drawer`, `Tabs`, `Tooltip`, `Switch`, `Toast`.
+> Until they are ported, their code wins over
+> [Interaction Behaviour Layer](#interaction-behaviour-layer); everything else
+> in this document is current.
 
 ## Product Surfaces
 
@@ -19,7 +26,7 @@ repeated actions.
 
 ## Instrument Language
 
-The active visual administration is **Instrument**:
+The active visual system is **Instrument**:
 
 - Signal green communicates cache hits, healthy state, active navigation, and
   focus. It replaced the old purple palette.
@@ -34,15 +41,69 @@ The active visual administration is **Instrument**:
   never inside the Logo. Purple Aurora backgrounds are not part of the current
   design.
 
-Admin surfaces additionally use the BoardUI-inspired porcelain / charcoal
-surface treatment: the light Admin canvas is `#FFFFFF` with a neutral
-`#F6F7F5` rail, and dark Admin uses `#141915` with `#181F1A` navigation.
-These values are scoped to `[data-admin-shell]`; Portal and Setup retain the
-shared Instrument tokens above. Admin controls use 6px corners, 40px targets,
-and green is reserved for commands, focus, health, and selection.
+Admin surfaces additionally adopt the BoardUI free-tier surface treatment: the
+light Admin canvas is `#FFFFFF` with a neutral `#F6F7F5` rail, and dark Admin
+uses `#141915` with `#181F1A` navigation. These values are scoped to
+`[data-admin-shell]`; Portal and Setup retain the shared Instrument tokens
+above. Admin controls use 6px corners, 40px targets, and green is reserved for
+commands, focus, health, and selection.
 
 Do not use the old purple/OKLCH examples, `/status` route, shadcn components,
 `CardV2`, or `MetricCardV2`. They belonged to an earlier design iteration.
+BoardUI's registry uses the shadcn *item schema* as a distribution format; that
+is a packaging detail and is not an exception to the shadcn component ban.
+
+## Component Source And Licence Boundary
+
+Depsilo vendors components from **BoardUI's free tier only**. This is a
+licence boundary, not a quality preference: BoardUI free source is MIT, while
+its Pro licence forbids publishing the source in a public repository, and this
+repository is public. Read
+[the BoardUI research record](docs/research/2026-09-16-boardui-design-reference.md)
+before adding anything from that catalogue.
+
+- **Pro source never enters this repository.** That covers the Pro chart cards,
+  the composer and agent components, and the eight page templates. Not as a
+  vendored file, not as a fixture, not as a copy-pasted fragment.
+- **Components arrive as source, not as a dependency.** `npx boardui@latest add
+  <name>` writes the component's `.tsx` files into `web/src/` and installs the
+  npm packages that component needs. Depsilo owns and may modify those files;
+  there is no package to upgrade.
+- **Record provenance.** Keep the item name and installed version in a comment
+  at the top of each adopted file, so a later `boardui add` can be diffed
+  against what has been customised.
+
+Adopted items are listed here. This table is the review surface for the
+exceptions below; add to it in the same change that vendors a component.
+
+| Item | Vendored files | Notes |
+| --- | --- | --- |
+| _(none — no BoardUI source is vendored yet)_ | | |
+
+### Restyle rules for adopted source
+
+Adopted files are restyled to Instrument before they are committed. BoardUI's
+defaults are blue-accented and rounder than this system, and none of that
+travels into Depsilo:
+
+| BoardUI ships | Depsilo keeps |
+| --- | --- |
+| A blue `--color-accent-50…950` ramp | The Instrument greens, by role: `--btn` for commands, `--brand` for active and selected state, `--hit` for the cache-hit signal |
+| `bg-button-primary` / `bg-button-danger` gradient fills | Flat `--btn` fill. No gradient on commands. |
+| `--radius-2lg: 10px`, `--radius-2-5xl: 20px`, `--radius-notification-card: 10px` | The existing 4/6/10/14px ladder below |
+| Tailwind-default spacing with arbitrary values | The established spacing tokens; no new arbitrary values |
+| Composite `text-*` type utilities | Adopted — see Typography And Icons |
+
+One BoardUI idea is adopted outright: **the command accent and the health
+signal are separate tokens.** BoardUI re-tints every interactive surface from
+one eleven-step accent ramp while charts and status chips keep their own hues.
+Depsilo has the opposite arrangement today: in light mode `--hit` is a literal
+alias of `--brand`, so the Admin shell's `--brand: #245443` override silently
+re-points the cache-hit colour inside Admin, and `--hit` is also used as a plain
+accent fill in Admin chrome rather than only as the hit signal. New work must
+not deepen that coupling — use `--btn` for commands, `--hit` only for the
+cache-hit signal, and treat a token that means both as a bug to fix rather than
+a pattern to copy.
 
 ## Brand Mark
 
@@ -137,9 +198,22 @@ cards.
 - Code/data: `JetBrains Mono Variable` with tabular numerals.
 - Icons: tree-shakeable Lucide SVGs, wrapped by `components/Icon.tsx`. The
   wrapper preserves the existing Material-style string names at call sites.
+  Depsilo-authored UI uses this wrapper and nothing else.
+- BoardUI's free components carry `@remixicon/react` glyphs. Vendored source
+  keeps the icons it ships with, because rewriting them would be undone by the
+  next `boardui add`. That is a bounded exception to the single-family rule and
+  it carries three review obligations:
 
-Do not import a second general icon family or inline an SVG for a symbol already
-present in `components/Icon.tsx`.
+  - A symbol that already exists in `components/Icon.tsx` is not re-drawn in
+    Remix, and a Remix glyph is not added to `Icon.tsx`.
+  - One control, row, toolbar, or table never mixes the two families. Where a
+    vendored component sits directly beside Depsilo controls, the row resolves
+    to one family; the vendored file is edited when that is the cheaper side.
+  - Every vendored component that carries a second family is listed in the
+    provenance table above, so the exception stays countable.
+
+Do not import a second general icon family into Depsilo-authored code, and do
+not inline an SVG for a symbol already present in `components/Icon.tsx`.
 Metric values, versions, bytes, latency, and other changing numbers should use
 the mono/tabular treatment to avoid layout movement.
 
@@ -147,15 +221,48 @@ the mono/tabular treatment to avoid layout movement.
 
 Reusable primitives live in `web/src/components/`:
 
-- `Button`, `Input`, `Select`, `Segmented`, `Tabs`
-- `Badge`, `StatusDot`, `Metric`, `SectionHeader`
-- `Modal`, `DataTable`, `EmptyState`
-- `Icon`, `EcoadministrationIcon`, `UpstreamCard`
-- `ThemeToggle`, `LangToggle`, `Logo`
+- Actions and input: `Button`, `IconButton`, `IconButtonControl`, `Input`,
+  `Textarea`, `Select`, `Segmented`, `Switch`
+- Structure and navigation: `Tabs`, `Modal`, `Drawer`, `Toast`, `Tooltip`
+- Content and state: `Badge`, `StatusDot`, `Metric`, `SectionHeader`,
+  `InlineNotice`, `EmptyState`, `QueryErrorState`, `DataTable`,
+  `TableViewport`, `UpstreamCard`
+- Identity and preference: `Icon`, `EcosystemIcon`, `Logo`, `ThemeToggle`,
+  `LangToggle`
 
 Use these before adding a new primitive. Admin-specific composition belongs in
 `web/src/admin/components/`; Portal-specific composition belongs in
 `web/src/portal/components/`.
+
+## Interaction Behaviour Layer
+
+**React Aria Components** (`react-aria-components`, Apache-2.0) is the behaviour
+and accessibility layer for every interactive primitive. It replaces
+`@base-ui/react`, which is removed from `web/package.json` when the port lands.
+
+Exactly one headless interaction library is a hard rule, not a preference.
+BoardUI's free components are built on React Aria Components, so keeping Base
+UI alongside adopted source would put two focus-management implementations and
+two popover implementations inside a single dialog.
+
+| Wrapper | React Aria Components |
+| --- | --- |
+| `components/Modal.tsx` | `Modal` + `Dialog` |
+| `components/Drawer.tsx` | `Modal` + `Dialog`, drawer styling |
+| `components/Tabs.tsx` | `Tabs` |
+| `components/Tooltip.tsx` | `Tooltip` |
+| `components/Switch.tsx` | `Switch` |
+| `components/Toast.tsx` | `Toast` |
+
+**Migration status: not started.** All six wrappers still import Base UI.
+Port them together rather than one at a time — they share focus restoration,
+escape handling, and outside-press dismissal, and a mixed state would be hard
+to test honestly.
+
+Behaviour is owned by these wrappers, not by pages. Focus trap and restore,
+escape and outside-press dismissal, `aria-*` wiring, reduced-motion handling,
+and stable control dimensions stay inside the component; pages own only domain
+composition and query state.
 
 ## Portal
 
@@ -170,7 +277,7 @@ horizontally.
 
 1. A compact title and one-line orientation for choosing an ecosystem and
    package manager, copying the persistent configuration, and verifying it.
-2. The primary setup surface, with `EcoadministrationCatalog` on the left and
+2. The primary setup surface, with `EcosystemCatalog` on the left and
    `ConfigurePane` on the right for the selected technology stack. This
    Precision Workbench is capped at 1440px rather than inheriting the wider
    Admin canvas.
@@ -212,13 +319,13 @@ administrator, write the durable configuration, and restart the service. The
 administrator fields and one completion command remain visible without an
 introductory welcome step or progress tracker.
 
-Port, storage, enabled Ecoadministrations, and Upstreams retain working defaults and
+Port, storage, enabled Ecosystems, and Upstreams retain working defaults and
 are submitted even when their disclosure is closed. They live in one native
 advanced-settings disclosure because the current Admin control plane cannot
-activate an omitted Ecoadministration or edit port and storage after setup. Ecoadministration
+activate an omitted Ecosystem or edit port and storage after setup. Ecosystem
 selection uses one keyboard-operable pressed button per option; it never nests
 a checkbox inside another interactive control. Upstream editors stack on
-narrow screens and expand only for the Ecoadministration the Operator chooses to edit.
+narrow screens and expand only for the Ecosystem the Operator chooses to edit.
 
 Language and appearance controls remain available before initialization.
 Validation names the failed requirement next to the field and never relies on
@@ -232,7 +339,7 @@ may sign in with the credentials still held by the Setup form; a port or origin
 change falls back to Login while preserving the destination. Bootstrap tokens
 never become Admin or package credentials.
 
-`/admin/connect` is the optional first-project loop: choose an Ecoadministration and its
+`/admin/connect` is the optional first-project loop: choose an Ecosystem and its
 package manager, copy configuration generated from the browser-visible origin,
 run a small dependency request when a safe client command exists, then observe
 the request and an optional real cache hit. Python, Node.js, Rust, Java, and Go

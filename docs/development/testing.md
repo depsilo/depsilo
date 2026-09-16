@@ -82,6 +82,53 @@ node scripts/test-vite-proxy-routes.mjs
 make verify-scripts
 ```
 
+## UI change verification
+
+The browser gates are layered by cost. A change under `web/src/components/`
+touches every surface that composes those primitives, so it has to use more
+than the fast gate.
+
+| Gate | Command | Browser scope |
+| --- | --- | --- |
+| Fast gate | `make check` | the `@smoke` subset — 9 cases in 6 spec files |
+| One specification while iterating | `make test-ui-file SPEC=<name>` | that file only |
+| Full browser suite | `make verify` (or `make verify-ui`) | all 263 cases in 41 spec files |
+| Embedded production frontend | `make test-ui-production` | one flow against the built Go binary |
+
+Counts are the 2026-09-16 measurement; re-measure with
+`npx playwright test --list [--grep @smoke]` rather than trusting them later.
+
+- **`make check` covers three of the six shared interaction primitives.** The
+  smoke subset renders every Admin route, resolves locale and theme, and covers
+  Portal, Monitor, setup gating, and expired-session recovery, plus three
+  behavioral cases in `admin-query-states.spec.ts` for **Modal**, **Toast**,
+  and **Switch**: dialog pending state and dismissal, confirmation-dialog state
+  reset across a reopen, and switch busy/error state. **Tabs**, **Tooltip**,
+  and **Drawer** are reached only by the full suite (`admin-layout-primitives`,
+  `admin-dialog-actions`, `admin-shell`). Treat a green `make check` as partial
+  evidence for a `web/src/components/` change, not sufficient evidence.
+- **Iterate with the owning spec.** `make test-ui-file SPEC=admin-shell` runs
+  exactly one file, and the target refuses to run without a selection rather
+  than silently executing the whole suite. The specs that already cover the
+  shared primitives are `admin-dialog-actions`, `admin-query-states`,
+  `admin-settings-layout`, `admin-shell`, and `admin-forms`.
+- **Before handoff, run the full suite.** `make verify` includes `verify-ui`.
+- **`make verify` is not identical to CI, deliberately.** `test-ui-production`
+  and the dependency audit sit outside it and are listed separately in
+  [release verification](../release-verification.md) and the release checklist.
+  CI's frontend job runs both.
+- **The bundle budget is part of `verify-web`.** `npm run check:bundle`
+  enforces a 450 kB entry budget, a 500 kB chunk budget, a 650 kB initial asset
+  graph, and a 320 kB estimated initial transfer. Headroom is the binding
+  constraint when adding a runtime dependency: the production build measured
+  579.61 kB initial / 272.33 kB estimated transfer on 2026-09-16, leaving about
+  70 kB raw and 48 kB gzipped. Raising a budget is a reviewed decision with a
+  measurement attached, not a way to get a build green.
+
+`scripts/test-makefile.sh` pins this chain: it asserts that `check` still runs
+the smoke subset rather than the full suite, that `verify` still runs the full
+suite, and that the `@smoke` tag still exists across enough spec files.
+
 ## Keep the suite lean
 
 - Test through the module interface and assert observable outcomes.

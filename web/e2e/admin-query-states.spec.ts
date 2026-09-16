@@ -490,7 +490,14 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-test('Cache cleanup stays busy until success then closes and toasts the service message', async ({ page }) => {
+// ── @smoke: the shared interaction primitives ─────────────────────────────
+// `make check` runs only the tagged subset, so these three cases are the fast
+// gate's coverage of web/src/components/. They stay behavioral on purpose:
+// dialog pending state and dismissal, confirmation-dialog state reset across a
+// reopen, and switch busy/error state. Tabs, Tooltip, and Drawer are covered
+// only by admin-layout-primitives, admin-dialog-actions, and admin-shell in the
+// full suite.
+test('Cache cleanup stays busy until success then closes and toasts the service message', { tag: '@smoke' }, async ({ page }) => {
   const cleanup = deferred<void>()
   await mockAdminApi(page, {
     'POST /api/v1/admin/cache/cleanup': async () => {
@@ -536,7 +543,7 @@ test('Cache cleanup keeps a partial result visible instead of claiming success',
   await expect(page.locator('[data-toast-tone="success"]')).toHaveCount(0)
 })
 
-test('Cache delete clears an old failure before the confirmation dialog is reopened', async ({ page }) => {
+test('Cache delete clears an old failure before the confirmation dialog is reopened', { tag: '@smoke' }, async ({ page }) => {
   const entry = {
     id: 41, key: 'pypi/simple/fixture/index.html', adapter_type: 'pypi', package_name: 'fixture',
     size: 512, hit_count: 3, last_accessed: '2026-07-10T00:00:00Z', expires_at: '2026-07-11T00:00:00Z',
@@ -602,7 +609,7 @@ test('Blocklist sync exposes a stable held pending state', async ({ page }) => {
   await expect(page.getByRole('button', { name: /立即同步|Sync now/ })).not.toHaveAttribute('aria-busy', 'true')
 })
 
-test('Security legacy-policy disable saves retain per-ecosystem busy, error, and normalized response state', async ({ page }) => {
+test('Security legacy-policy disable saves retain per-ecosystem busy, error, and normalized response state', { tag: '@smoke' }, async ({ page }) => {
   const pypiSuccess = deferred<void>()
   const cargoFailure = deferred<void>()
   const cargoSuccess = deferred<void>()

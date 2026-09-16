@@ -168,7 +168,7 @@ sbom:                           # 维护者：生成 SBOM (CycloneDX + SPDX)
 		echo "wrote dist/sbom/depsilo-$$VERSION-source.spdx.json"
 
 # ─── 测试 ─────────────────────────────────────
-.PHONY: test test-full test-race test-integration test-ui test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade test-v091-upgrade
+.PHONY: test test-full test-race test-integration test-ui test-ui-file test-ui-production test-compiler-cache test-compiler-cache-qualified test-s3 test-v090-upgrade test-v090-compose-upgrade test-v091-upgrade
 
 test: prepare-go                ## 快速 Go 测试（使用缓存，跳过慢速压力边界）
 	go test -short $(GO_TEST_PKGS)
@@ -184,6 +184,14 @@ test-integration: prepare-go    ## 运行集成测试（启动服务 + mock 上�
 
 test-ui:                        ## 快速浏览器冒烟测试（首次需安装 Playwright Chromium）
 	$(NPM_RUN) test:ui:smoke
+
+test-ui-file:                   ## 迭代时运行单个 Playwright spec（SPEC=admin-shell 或 FILE=e2e/x.spec.ts）
+	@test -n "$(SPEC)$(FILE)" || { \
+		echo "usage: make test-ui-file SPEC=<spec-name>"; \
+		echo "       make test-ui-file FILE=e2e/<file>.spec.ts"; \
+		exit 2; \
+	}
+	$(NPM_RUN) test:ui -- $(if $(FILE),$(FILE),e2e/$(SPEC).spec.ts)
 
 test-ui-production: build       ## 用 Go 嵌入的生产前端运行最小浏览器冒烟测试
 	$(NPM_RUN) test:ui:production

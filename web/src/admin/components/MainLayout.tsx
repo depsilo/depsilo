@@ -1,8 +1,8 @@
 /**
  * THESIS: Dependency Flowline organizes Admin around operational workspaces, not a flat inventory of pages.
  * OWN-WORLD: Instrument neutrals, precise keylines, signal green, compact task links, and one calm white or matte-dark canvas.
- * STORY: Operators confirm service health, investigate history, configure sources, govern risk, and maintain the administration.
- * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; five workspace links lead to page-local tabs.
+ * STORY: Operators confirm service health, investigate history, configure sources, govern risk, and maintain the system.
+ * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; six workspace links lead to page-local tabs.
  * FORM: Structure candidate 4, flowline plus attention staging, seed 543e896c.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
  */
