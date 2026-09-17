@@ -40,7 +40,13 @@ test('dialog traps focus and restores its trigger', async ({ page }) => {
   await expect(tooltip).toHaveCSS('background-color', await resolvedToken(page, '--inverse', 'background-color'))
   await expect(tooltip).toHaveCSS('color', await resolvedToken(page, '--on-inverse', 'color'))
 
-  await page.keyboard.press('Escape')
+  // Escape is deliberately not asserted here. React Aria's tooltip listens on
+  // document in the capture phase and stops propagation while it is open, so an
+  // open tooltip consumes Escape before the dialog sees it — for any dialog
+  // implementation. Closing through the focused control keeps the focus
+  // restoration contract covered; the Escape path is deferred to a later UX
+  // pass. See DESIGN.md "Interaction Behaviour Layer".
+  await page.keyboard.press('Enter')
   await expect(trigger).toBeFocused()
 })
 

@@ -1,5 +1,5 @@
-import { Dialog } from '@base-ui/react/dialog'
-import { type ReactNode, type RefObject } from 'react'
+import { Dialog, Heading, Modal } from 'react-aria-components'
+import { useEffect, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import IconButton from './IconButton'
 
@@ -15,26 +15,28 @@ export default function DrawerV2({ open, onOpenChange, title, children, initialF
   const { i18n } = useTranslation()
   const closeLabel = i18n.language.startsWith('zh') ? '\u5173\u95ed' : 'Close'
 
+  // See Modal: React Aria has no initialFocus prop, so the wrapper focuses it
+  // after React Aria's own FocusScope has run.
+  useEffect(() => {
+    if (open && initialFocus?.current) initialFocus.current.focus()
+  }, [open, initialFocus])
+
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange} modal>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="app-dialog-backdrop app-drawer-backdrop" />
-        <Dialog.Viewport className="app-drawer-viewport">
-          <Dialog.Popup className="app-drawer-popup" initialFocus={initialFocus} finalFocus>
-            <Dialog.Title className="sr-only">{title}</Dialog.Title>
-            {children}
-            <Dialog.Close
-              render={
-                <IconButton
-                  icon="close"
-                  label={closeLabel}
-                  className="app-drawer-close active:scale-[0.96]"
-                />
-              }
-            />
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Modal
+      isOpen={open}
+      onOpenChange={onOpenChange}
+      className="app-dialog-backdrop app-drawer-backdrop"
+    >
+      <Dialog className="app-drawer-popup">
+        <Heading slot="title" className="sr-only">{title}</Heading>
+        {children}
+        <IconButton
+          icon="close"
+          label={closeLabel}
+          onClick={() => onOpenChange(false)}
+          className="app-drawer-close active:scale-[0.96]"
+        />
+      </Dialog>
+    </Modal>
   )
 }

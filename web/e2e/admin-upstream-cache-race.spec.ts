@@ -71,7 +71,10 @@ test('late batch checks cannot roll back an edit or resurrect a deletion', async
 
   const betaActions = page.getByText('beta', { exact: true }).locator('..').locator('button')
   await betaActions.nth(2).click()
-  await page.getByRole('button', { name: '删除' }).click()
+  // React Aria hides content outside a modal asynchronously, so immediately
+  // after opening, the row's own icon buttons are still in the accessibility
+  // tree and an unscoped name match is ambiguous. Target the dialog.
+  await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click()
   await expect(page.getByText('beta', { exact: true })).toHaveCount(0)
 
   releaseChecks?.()

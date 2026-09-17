@@ -301,11 +301,16 @@ A leaf that is a plain DOM element spreading its own props receives nothing, so
 never open. This is why a naive wrapper-for-wrapper swap does not work.
 
 Every leaf control that a React Aria wrapper composes with must itself be a
-React Aria component. `IconButtonControl` is the only such leaf today: `Tooltip`
-composes it as its trigger, and `Modal`, `Drawer`, and `Toast` compose an
-`IconButton` into their close action. It moves to React Aria's `Button` before
-those four can be ported. Wrappers whose children are only content (`Switch`,
-`Tabs`) are unaffected.
+React Aria component. `IconButtonControl` was the only such leaf: `Tooltip`
+composes it as its trigger and `Modal`/`Drawer` compose an `IconButton` into
+their close action, so it is React Aria's `Button` as of 2026-09-17. Wrappers
+whose children are only content (`Switch`, `Tabs`) are unaffected.
+
+Two consequences of that move are load-bearing. React Aria filters DOM props
+through a fixed allowlist, so `aria-busy` no longer reaches the element —
+`isPending` is the loading state and it announces itself. And React Aria's
+`Modal` contains focus and restores the trigger but never auto-focuses, so the
+`Modal` wrapper focuses the first control (or a caller's `initialFocus`) itself.
 
 ### Other load-bearing differences
 
@@ -314,10 +319,24 @@ those four can be ported. Wrappers whose children are only content (`Switch`,
   cannot be clicked through its role locator and reports state through the
   native `checked` property rather than `aria-checked`. The label carries a
   `data-switch-control` hook for the browser suite.
-- **Tooltips swallow Escape.** React Aria's tooltip listens on `document` in the
-  capture phase and calls `stopPropagation()`. Base UI opted out of that with
-  `allowPropagation()`. The Modal close button carries a tooltip and opens it on
-  focus, so the dialog Escape path is only correct once both are React Aria.
+- **Tooltips swallow Escape, for every dialog implementation — deferred.**
+  React Aria's tooltip listens on `document` in the capture phase and calls
+  `stopPropagation()`; Base UI opted out of that with `allowPropagation()`.
+  Because the Modal close button carries a tooltip that opens on focus, an open
+  tooltip consumes Escape before the dialog sees it — measured: a capture-phase
+  `stopPropagation` leaves the current dialog open. React Aria's own Modal does
+  not help, since React Aria delivers its Escape handling as a React
+  `onKeyDown` on the dialog element, which a document-capture
+  `stopPropagation()` prevents React from ever seeing.
+
+  **Status: accepted gap, not solved.** One `Shift+Tab` from a dialog's initial
+  focus lands on the close button (it is last in DOM order) and opens its
+  tooltip, after which Escape no longer closes the dialog; a second Escape does.
+  The browser suite no longer asserts the single-Escape path, and
+  `closeDisabled` still holds because a pending dialog's close button is
+  disabled and therefore unfocusable, so no tooltip is open. Revisit during the
+  next interaction/UX pass, where the choice is either a wrapper-owned
+  `document` capture listener or accepting layered dismissal.
 - **Modals expose no initial-focus prop.** React Aria's `Modal` has neither
   `initialFocus` nor `finalFocus`; the wrappers implement the two current
   consumers explicitly.
@@ -328,10 +347,11 @@ those four can be ported. Wrappers whose children are only content (`Switch`,
   `UNSTABLE_` prefix and require a queue object, so that wrapper changes shape
   rather than swapping a component name.
 
-**Migration status:** `Switch` is ported. The rest lands as one unit — leaf
-controls first, then `Tooltip`, `Modal`, `Drawer`, `Toast`, and `Tabs` — because
-a half-ported layer cannot be validated: the tooltip/dialog Escape path and the
-modal portal container are decided by the pair, not by either component alone.
+**Migration status:** the leaf (`IconButtonControl`), `Switch`, `Tooltip`,
+`Modal`, and `Drawer` are on React Aria as of 2026-09-17. `Toast` and `Tabs`
+still import Base UI, so the layer is not yet single-library and
+`@base-ui/react` cannot be removed. They are independent of the Tooltip/Modal
+cluster and can land separately.
 
 Behaviour is owned by these wrappers, not by pages. Focus trap and restore,
 escape and outside-press dismissal, `aria-*` wiring, reduced-motion handling,

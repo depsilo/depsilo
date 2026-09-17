@@ -313,15 +313,15 @@ test('upstream row checks keep independent loading state when responses finish o
   await alphaCheck.click()
   await betaCheck.click()
   await Promise.all([alphaRequestStarted, betaRequestStarted])
-  await expect(alphaCheck).toHaveAttribute('aria-busy', 'true')
-  await expect(betaCheck).toHaveAttribute('aria-busy', 'true')
+  await expect(alphaCheck).toHaveAttribute('data-pending', 'true')
+  await expect(betaCheck).toHaveAttribute('data-pending', 'true')
 
   releaseBeta()
-  await expect(betaCheck).not.toHaveAttribute('aria-busy', 'true')
-  await expect(alphaCheck).toHaveAttribute('aria-busy', 'true')
+  await expect(betaCheck).not.toHaveAttribute('data-pending', 'true')
+  await expect(alphaCheck).toHaveAttribute('data-pending', 'true')
 
   releaseAlpha()
-  await expect(alphaCheck).not.toHaveAttribute('aria-busy', 'true')
+  await expect(alphaCheck).not.toHaveAttribute('data-pending', 'true')
 })
 
 test('direct user enables keep independent loading state when responses finish out of order', async ({ page }) => {
@@ -358,15 +358,15 @@ test('direct user enables keep independent loading state when responses finish o
   await alphaToggle.click()
   await betaToggle.click()
   await Promise.all([alphaRequestStarted, betaRequestStarted])
-  await expect(alphaToggle).toHaveAttribute('aria-busy', 'true')
-  await expect(betaToggle).toHaveAttribute('aria-busy', 'true')
+  await expect(alphaToggle).toHaveAttribute('data-pending', 'true')
+  await expect(betaToggle).toHaveAttribute('data-pending', 'true')
 
   releaseBeta()
-  await expect(betaRow.getByRole('button', { name: /禁用 operator-beta|Disable operator-beta/ })).not.toHaveAttribute('aria-busy', 'true')
-  await expect(alphaToggle).toHaveAttribute('aria-busy', 'true')
+  await expect(betaRow.getByRole('button', { name: /禁用 operator-beta|Disable operator-beta/ })).not.toHaveAttribute('data-pending', 'true')
+  await expect(alphaToggle).toHaveAttribute('data-pending', 'true')
 
   releaseAlpha()
-  await expect(alphaRow.getByRole('button', { name: /禁用 operator-alpha|Disable operator-alpha/ })).not.toHaveAttribute('aria-busy', 'true')
+  await expect(alphaRow.getByRole('button', { name: /禁用 operator-alpha|Disable operator-alpha/ })).not.toHaveAttribute('data-pending', 'true')
 })
 
 test('quarantine uses direct mobile lists and preserves named desktop table regions', async ({ page }) => {
