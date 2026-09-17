@@ -103,7 +103,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
       aria-labelledby={titleId}
       className="border-y border-border"
     >
-      <details className="config-disclosure">
+      <details className="group [&>summary::-webkit-details-marker]:hidden">
         <summary className="stripe-focus-ring flex min-h-[68px] cursor-pointer list-none items-center gap-3 rounded-[6px] py-3">
           <span
             aria-hidden="true"
@@ -129,7 +129,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
             <span className="hidden sm:inline">
               {t('quickstart.pytorchIndexShowCommand')}
             </span>
-            <span className="disclosure-chevron inline-flex">
+            <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
               <Icon name="expand_more" size="sm" />
             </span>
           </span>

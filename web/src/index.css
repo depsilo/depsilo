@@ -373,12 +373,6 @@ code,
 
 /* Legacy class rules that still have live consumers. Each block is deleted in
  * the phase that migrates its owner. */
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-surface);
-}
 
 .admin-kpi-section > header {
   margin-bottom: 0;
@@ -406,48 +400,6 @@ code,
   }
 }
 
-
-/* Quick Start workbench — owned by ConfigurePane/EcosystemCatalog until Phase 8. */
-.eco-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0;
-  background: none;
-  transition: opacity 200ms ease;
-  z-index: 0;
-}
-.eco-tile:hover::before { opacity: 1; }
-.eco-tile > * { position: relative; z-index: 1; }
-
-.manager-picker-viewport {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-@media (hover: hover) {
-  .manager-choice:hover:not([data-active='true']) {
-    background: var(--accent) !important;
-  }
-  .code-block[data-code-tone='ink'] .code-copy-control:hover {
-    background: color-mix(in oklab, var(--code-surface-foreground) 8%, transparent) !important;
-    color: var(--code-surface-foreground) !important;
-  }
-  .code-block[data-code-tone='light'] .code-copy-control:hover {
-    background: var(--accent) !important;
-    color: var(--foreground) !important;
-  }
-}
-
-.config-disclosure > summary::-webkit-details-marker { display: none; }
-.disclosure-chevron {
-  color: var(--muted-foreground);
-  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1), color 140ms ease;
-}
-.config-disclosure[open] > summary .disclosure-chevron {
-  color: var(--foreground);
-  transform: rotate(180deg);
-}
 
 /* Dashboard live download rail — owned by RecentDownloads until Phase 6.8. */
 .live-download-grid { display: grid; grid-template-columns: minmax(0, 1fr); }

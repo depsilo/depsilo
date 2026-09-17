@@ -104,7 +104,7 @@ function ManagerPicker({
         </span>
       </div>
       <div
-        className="manager-picker-viewport overflow-x-auto rounded-[8px] p-1 bg-muted"
+        className="overflow-x-auto rounded-lg bg-muted p-1 [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]"
       >
         <div
           className="grid gap-1"
@@ -172,7 +172,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
 
   return (
     <details
-      className="config-disclosure overflow-hidden rounded-[7px]"
+      className="group overflow-hidden rounded-[7px] [&>summary::-webkit-details-marker]:hidden"
       style={{
         border: '1px solid var(--border)',
         background: 'var(--card)',
@@ -180,7 +180,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
     >
       <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-[13px] font-[540] text-muted-foreground">
         {t('quickstart.whereReadsFrom')}
-        <span className="disclosure-chevron inline-flex">
+        <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
           <Icon name="expand_more" size="sm" />
         </span>
       </summary>
@@ -255,8 +255,9 @@ export default function ConfigurePane({
 
   return (
     <div
-      className={flush ? '' : 'card'}
-      style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column' }}
+      className={flush
+        ? 'flex min-w-0 flex-1 flex-col'
+        : 'flex min-w-0 flex-1 flex-col rounded-lg border border-border bg-card shadow-sm'}
     >
       <div
         className="flex min-h-[72px] items-center gap-3 px-4 py-3.5 sm:px-6 border-b border-border"
@@ -326,7 +327,7 @@ export default function ConfigurePane({
           </section>
 
           {manager.methods && manager.methods.length > 0 && (
-            <details className="config-disclosure border-y border-border py-2">
+            <details className="group border-y border-border py-2 [&>summary::-webkit-details-marker]:hidden">
               <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1">
                 <span className="flex items-start gap-3">
                   <span
@@ -344,7 +345,7 @@ export default function ConfigurePane({
                     </span>
                   </span>
                 </span>
-                <span className="disclosure-chevron inline-flex">
+                <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
                   <Icon name="expand_more" size="sm" />
                 </span>
               </summary>

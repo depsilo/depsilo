@@ -9,6 +9,21 @@ async function expectNoDialogAxeViolations(page: import('@playwright/test').Page
   // the 160ms entry transition to finish so contrast is measured at the state
   // an Operator actually reads, not at an arbitrary animation frame.
   await expect(dialog).toHaveCSS('opacity', '1')
+  // A submit in flight disables its button, and a disabled control is painted
+  // at half opacity — a contrast result from that frame describes a state no
+  // Operator can read. Wait for the mutation to finish first.
+  await expect(dialog.locator('[aria-busy="true"]')).toHaveCount(0)
+  // Axe walks the ancestor chain and blends alpha. A dialog that is still
+  // running its entry or exit animation therefore yields colours no Operator
+  // ever sees, so wait for the finite animations in every open dialog to
+  // finish before measuring. An indefinite one (a spinner) is ignored.
+  await page.waitForFunction(() => (
+    [...document.querySelectorAll('[role="dialog"]')].every(dialog => (
+      dialog.getAnimations({ subtree: true })
+        .filter(animation => animation.effect?.getComputedTiming?.().iterations !== Infinity)
+        .every(animation => animation.playState !== 'running')
+    ))
+  ), undefined, { timeout: 3_000 }).catch(() => undefined)
   const results = await new AxeBuilder({ page })
     .include('[role="dialog"]')
     .withTags(['wcag2a', 'wcag2aa'])

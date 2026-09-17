@@ -47,12 +47,7 @@ function EcosystemButton({
       data-active={active ? 'true' : undefined}
       title={language.name}
       onClick={() => onSelect(language.id)}
-      className="eco-tile stripe-focus-ring active:scale-[0.98]"
-      onMouseMove={event => {
-        const bounds = event.currentTarget.getBoundingClientRect()
-        event.currentTarget.style.setProperty('--spot-x', `${event.clientX - bounds.left}px`)
-        event.currentTarget.style.setProperty('--spot-y', `${event.clientY - bounds.top}px`)
-      }}
+      className="stripe-focus-ring relative overflow-hidden active:scale-[0.98]"
       style={{
         position: 'relative',
         overflow: 'hidden',
