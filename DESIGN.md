@@ -234,6 +234,12 @@ from Git history or including unrelated Portal work.
 See [docs/refactor/shadcn-ui-plan.md](docs/refactor/shadcn-ui-plan.md) for the
 phase list and the audit that motivated it.
 
+Stage B's visual direction, token contract, component guidelines, and page
+order are written but **not implemented**: they live in
+[docs/design/](docs/design/). This document describes what the code does today;
+where the two disagree, the code is right and this document is the one to
+correct.
+
 Completed: the shadcn initialisation; the single-cascade semantic token layer;
 the primitive migration (core, form controls, and overlays); the Admin shell;
 the mechanical token-utility rewrite; the removal of every legacy token name;

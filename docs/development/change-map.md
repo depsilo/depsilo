@@ -20,6 +20,7 @@ owner.
 | Admin UI | `web/src/admin/` | closest Admin Playwright spec; pure logic in `web/unit/` | DESIGN.md, Admin authority guide |
 | Shared UI primitive/theme | `web/src/components/ui/`, `web/src/index.css` | focused browser/accessibility tests | DESIGN.md |
 | Shared application component | `web/src/components/app/` | closest Admin/Portal Playwright spec | DESIGN.md |
+| UI design direction or tokens | `docs/design/` | token contrast checks; `e2e/admin-axe.spec.ts` | DESIGN.md |
 | Release/build pipeline | `.github/workflows/`, `.goreleaser.yaml`, `Dockerfile`, scripts | `scripts/test-*.sh` | release verification guide |
 | Real client behavior | `testground/docker-<ecosystem>/` | `make test-docker-<ecosystem>` | testground README |
 

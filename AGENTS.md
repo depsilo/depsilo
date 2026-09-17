@@ -38,6 +38,7 @@ Use the narrowest current authority for the fact in question:
 - Domain language: [CONTEXT.md](CONTEXT.md).
 - Accepted architectural decisions: relevant files under [docs/adr](docs/adr).
 - UI contracts: [DESIGN.md](DESIGN.md) and the current frontend implementation.
+- Stage B design intent, not yet implemented: [docs/design](docs/design/).
 - Admin runtime authority: [docs/admin-control-plane.md](docs/admin-control-plane.md).
 - Historical specs and research: `docs/specs/` and `docs/research/`; these are
   evidence, not current implementation instructions.

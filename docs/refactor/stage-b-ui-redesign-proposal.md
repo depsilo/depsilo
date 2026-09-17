@@ -8,6 +8,12 @@
 > [Stage A plan](shadcn-ui-plan.md), the current UI contract
 > [`DESIGN.md`](../../DESIGN.md).
 
+> **Step 00 has since been written.** The design set this proposal calls for is
+> in [docs/design/](../design/): principles, visual direction, token contract,
+> component guidelines, and the page order. Read those for the substance; this
+> document records the reasoning that produced them and the questions that
+> remain open.
+
 ## 1. What Stage A left behind
 
 Stage B starts from a substrate, not a blank page. The relevant properties:
