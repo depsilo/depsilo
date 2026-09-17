@@ -131,9 +131,10 @@ be defined.
   SBOM artifacts.
 - Brand assets are available under `docs/brand/`.
 - The Admin interface has automated axe coverage across responsive,
-  light/dark, and Chinese/English variants. Accessibility behaviors also
-  include visible focus, keyboard operation, reduced-motion handling, and
-  bounded horizontal scrolling.
+  light/dark, and Chinese/English variants, with text contrast excepted (see
+  Accessibility & Inclusion). Accessibility behaviors also include visible
+  focus, keyboard operation, reduced-motion handling, and bounded horizontal
+  scrolling.
 - There are no confirmed customer case studies, testimonials, press mentions,
   certifications, or independent performance benchmarks on hand. Existing
   claims such as memory use, deployment time, and LAN-speed delivery must not
@@ -157,6 +158,15 @@ be defined.
 
 Chinese and English are supported product languages. UI work should continue
 to target WCAG 2.1 A/AA behavior, including keyboard access, visible focus,
-semantic status communication, sufficient contrast, responsive layouts, and
-respect for `prefers-reduced-motion`. Existing automated coverage is strongest
-for Admin; Portal and Setup should converge on the same product-wide standard.
+semantic status communication, responsive layouts, and respect for
+`prefers-reduced-motion`. Existing automated coverage is strongest for Admin;
+Portal and Setup should converge on the same product-wide standard.
+
+**Known exception — text contrast.** The interface adopts BoardUI's default
+palette unchanged, and its secondary and tertiary text tokens do not meet AA
+contrast against Depsilo's surfaces in either theme. Automated contrast
+checking is disabled as a result. The affected token pairs and their measured
+ratios are recorded in [DESIGN.md](DESIGN.md), which also states what
+reinstating the guarantee would require. This is the only accessibility
+commitment currently excepted; everything listed above still holds and is still
+gated.
