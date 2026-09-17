@@ -298,7 +298,7 @@ export default function MonitorPage() {
     // Stagger: header first, the upstream panel ~70ms later.
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Page summary */}
-      <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="flex flex-col gap-2.5">
         <div>
           <div
             style={{
@@ -397,7 +397,7 @@ export default function MonitorPage() {
       {/* Upstream health — the page's main content */}
       <div
         data-monitor-upstreams
-        className="fade-up fade-up-d1"
+        className=""
         aria-busy={statsQuery.isPending || undefined}
         style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       >
@@ -448,7 +448,7 @@ export default function MonitorPage() {
                 action={(
                   <Link
                     to="/admin/upstreams"
-                    className="app-button stripe-focus-ring inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-[13px] font-[500] no-underline"
+                    className="inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-[13px] font-medium no-underline"
                     style={{
                       border: '0.5px solid var(--input)',
                       color: 'var(--foreground)',

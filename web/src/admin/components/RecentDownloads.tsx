@@ -110,7 +110,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
       data-query-key="dashboard-recent-downloads"
       aria-labelledby="recent-downloads-title"
       aria-busy={query.isPending || undefined}
-      className="admin-secondary-panel min-w-0 overflow-hidden rounded-lg"
+      className="min-w-0 overflow-hidden rounded-lg bg-muted"
     >
       <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">

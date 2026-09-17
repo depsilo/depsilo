@@ -380,14 +380,6 @@ code,
   box-shadow: var(--shadow-surface);
 }
 
-.admin-primary-panel {
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-}
-.admin-secondary-panel {
-  background: var(--muted);
-}
-
 .admin-kpi-section > header {
   margin-bottom: 0;
 }
@@ -414,16 +406,6 @@ code,
   }
 }
 
-.fade-up {
-  animation: fadeUp 220ms ease both;
-}
-.fade-up-d1 { animation-delay: 70ms; }
-.fade-up-d2 { animation-delay: 140ms; }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
 /* Small header controls sit under the 40px target; this extends the click box
  * vertically without changing the visible chrome. Vertical only, because
  * neighbours are 2–8px apart horizontally. */
@@ -435,20 +417,6 @@ code,
   bottom: -9px;
   left: 0;
   right: 0;
-}
-
-.dot-live {
-  animation: dotPulse 1.6s ease-in-out infinite;
-}
-@keyframes dotPulse {
-  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
-  50%       { box-shadow: 0 0 0 4px transparent; }
-}
-
-@media (pointer: coarse) {
-  .app-button {
-    min-height: 40px;
-  }
 }
 
 /* Portal shell — owned by PortalApp until Phase 8. */

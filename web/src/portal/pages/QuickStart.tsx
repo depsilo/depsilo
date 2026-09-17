@@ -62,7 +62,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-7">
-      <header className="fade-up max-w-[760px]">
+      <header className="max-w-[760px]">
         <h1
           id="quickstart-title"
           className="m-0 font-sans text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-foreground"
@@ -77,7 +77,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <section
         data-quickstart-primary
         aria-labelledby="quickstart-config-title"
-        className="fade-up fade-up-d1"
+        className=""
       >
         <h2 id="quickstart-config-title" className="sr-only">
           {t('quickstart.primaryTitle')}
@@ -108,7 +108,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <section
         data-quickstart-optional
         aria-labelledby="quickstart-optional-title"
-        className="fade-up fade-up-d2 border-t border-border pt-8"
+        className="border-t border-border pt-8"
       >
         <div className="mb-4 max-w-[68ch]">
           <h2

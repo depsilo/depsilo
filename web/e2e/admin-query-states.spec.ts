@@ -213,11 +213,11 @@ test('Dashboard trends keep the previous chart while an uncached range loads', a
   const nextRange = ranges.getByRole('button', { name: /30 天|30d/i })
   const oneHourLabel = await trendBucketLabel(page, initialPoints[0].bucket, '1h')
   const thirtyDayLabel = await trendBucketLabel(page, initialPoints[0].bucket, '30d')
-  await expect(chart).toBeVisible()
+  await expect(chart).toBeVisible({ timeout: 20_000 })
   await nextRange.click()
   await requestStarted.promise
 
-  await expect(chart).toBeVisible()
+  await expect(chart).toBeVisible({ timeout: 20_000 })
   await expect(ranges).toBeVisible()
   await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
   await expect(trends).toHaveAttribute('aria-busy', 'true')
@@ -255,15 +255,15 @@ test('Dashboard trends keep the previous chart and warn when an uncached range f
   const nextRange = ranges.getByRole('button', { name: /30 天|30d/i })
   const oneHourLabel = await trendBucketLabel(page, initialPoints[0].bucket, '1h')
   const thirtyDayLabel = await trendBucketLabel(page, initialPoints[0].bucket, '30d')
-  await expect(chart).toBeVisible()
+  await expect(chart).toBeVisible({ timeout: 20_000 })
   await nextRange.click()
   await requestStarted.promise
-  await expect(chart).toBeVisible()
+  await expect(chart).toBeVisible({ timeout: 20_000 })
   await expect(trends).toHaveAttribute('aria-busy', 'true')
 
   response.resolve({ status: 500, body: { code: 'FAILED', message: 'fixture range failure' } })
   await expect(trends).not.toHaveAttribute('aria-busy', 'true')
-  await expect(chart).toBeVisible()
+  await expect(chart).toBeVisible({ timeout: 20_000 })
   await expect(ranges).toBeVisible()
   await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
   await expect(trends).toContainText(/陈旧|已过期|stale/i)

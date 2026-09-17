@@ -28,6 +28,19 @@ const populatedTrendPoints = [0, 1, 2, 3].map(index => {
   }
 })
 
+/**
+ * Recharts ships in its own lazy chunk. Under parallel load its fetch and parse
+ * can outlast the default expect timeout, which would fail the suite for a
+ * reason unrelated to the chart contract, so the chart gets an explicit budget.
+ */
+const CHART_TIMEOUT = 20_000
+
+async function trendChart(page: import('@playwright/test').Page) {
+  const chart = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper')
+  await expect(chart).toBeVisible({ timeout: CHART_TIMEOUT })
+  return chart
+}
+
 test('light theme admin chrome has no color-contrast violations', async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
   await page.goto('/admin')
@@ -70,7 +83,8 @@ test('trend chart exposes the selected metric and range to assistive technology'
   await page.goto('/admin')
 
   const chartDescription = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper > svg.recharts-surface > desc')
-  await expect(chartDescription).toHaveText('Requests trend for 1h. Use the left and right arrow keys to inspect time points.')
+  await expect(chartDescription)
+    .toHaveText('Requests trend for 1h. Use the left and right arrow keys to inspect time points.', { timeout: CHART_TIMEOUT })
 
   await page.getByRole('group', { name: 'Trend metric' }).getByRole('button', { name: 'Latency' }).click()
   await page.getByRole('group', { name: 'Activity Trend' }).getByRole('button', { name: '24h' }).click()
@@ -126,8 +140,7 @@ test('1h trend tooltips distinguish adjacent ten-second buckets in local time', 
   })
   await page.goto('/admin')
 
-  const chart = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper')
-  await expect(chart).toBeVisible()
+  const chart = await trendChart(page)
   const firstExpected = await exactTrendLabel(page, points[0].bucket, '1h')
   const lastExpected = await exactTrendLabel(page, points[1].bucket, '1h')
 
@@ -149,8 +162,7 @@ test('30d trend tooltips distinguish same-day two-hour buckets in local time', a
     .getByRole('button', { name: /30 天|30d/i })
     .click()
 
-  const chart = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper')
-  await expect(chart).toBeVisible()
+  const chart = await trendChart(page)
   const firstExpected = await exactTrendLabel(page, points[0].bucket, '30d')
   const lastExpected = await exactTrendLabel(page, points[1].bucket, '30d')
 

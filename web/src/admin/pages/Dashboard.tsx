@@ -187,7 +187,7 @@ export default function DashboardV2() {
       actions={(
         <Link
           to={getAdminRouteHref('connect')}
-          className="app-button inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[13px] font-[500] no-underline stripe-focus-ring"
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[13px] font-medium no-underline pointer-coarse:min-h-10"
           style={{ color: 'var(--primary-foreground)', background: 'var(--primary)' }}
         >
           <Icon name="link" size="sm" />
@@ -277,12 +277,12 @@ export default function DashboardV2() {
             {trendsQuery.isPending && !hasTrendData ? (
               <div
                 aria-busy="true"
-                className="admin-primary-panel p-4"
+                className="border-b border-border bg-card p-4"
               >
                 <div aria-hidden="true" className="h-56 animate-pulse rounded-[6px] bg-muted" />
               </div>
             ) : trendsQuery.isError && !hasTrendData ? (
-              <div className="admin-primary-panel p-4">
+              <div className="border-b border-border bg-card p-4">
                 <QueryErrorState
                   message={getApiError(trendsQuery.error).status === 403
                     ? t('common.permissionDenied')

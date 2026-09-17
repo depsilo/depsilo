@@ -84,7 +84,7 @@ export default function DashboardAttention({
       aria-labelledby="dashboard-attention-title"
       aria-describedby="dashboard-attention-description"
       aria-busy={isPending || undefined}
-      className="admin-secondary-panel min-w-0 overflow-hidden rounded-lg"
+      className="min-w-0 overflow-hidden rounded-lg bg-muted"
     >
       <header className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 py-2">
         <div className="min-w-0">

@@ -274,7 +274,7 @@ export default function NowStrip({
       aria-labelledby="dependency-flow-title"
       aria-describedby="dependency-flow-description"
       aria-busy={query.isPending || undefined}
-      className="admin-primary-panel flex h-full min-w-0 flex-col overflow-hidden"
+      className="flex h-full min-w-0 flex-col overflow-hidden border-b border-border bg-card"
     >
       <style>{flowMotion}</style>
       <header className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2">

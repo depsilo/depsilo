@@ -49,7 +49,7 @@ export default function ProRequiredCallout({
         </p>
         <a
           href={upgradeHref}
-          className="app-button stripe-focus-ring inline-flex min-h-9 items-center justify-center rounded-[5px] bg-primary px-3 py-1.5 text-[13px] font-[500] no-underline text-primary-foreground transition-[background,color,transform] duration-150 hover:bg-primary/80 active:scale-[0.96]"
+          className="inline-flex min-h-9 items-center justify-center rounded-[5px] bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/80 pointer-coarse:min-h-10"
           style={{
             boxShadow: 'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
           }}

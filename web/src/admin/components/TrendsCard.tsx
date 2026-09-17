@@ -202,7 +202,7 @@ export default function TrendsCard({
   })
 
   return (
-    <section className="admin-primary-panel min-w-0 overflow-hidden">
+    <section className="min-w-0 overflow-hidden border-b border-border bg-card">
       <div className="px-4 pt-4">
         <SectionHeader
           title={t('dashboard.hitMissTrend')}
