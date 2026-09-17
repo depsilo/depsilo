@@ -8,6 +8,46 @@
 > architecture with correct behaviour, accessibility, responsiveness, theming,
 > and build health. Stage B is a separate, later engagement.
 
+## Execution status
+
+Updated 2026-09-17. Every phase below is either done or explicitly outstanding;
+nothing is half-applied.
+
+| Phase | Status | Evidence |
+| --- | --- | --- |
+| 0 Audit | done | `shadcn-ui-audit.md` |
+| 1 Initialize shadcn/ui | done | `components.json`, `components/ui/`, `class-variance-authority` + `tw-animate-css` |
+| 2 Neutral theme | done | `index.css` is one `:root` + one `.dark` + `@theme inline` + base layer |
+| 3A Core primitives | done | `components/app/{button,icon-button,icon-button-control,badge,input,textarea,tooltip,field,notice,error-state,empty-state,section-header,metric,status-dot,logo}` |
+| 3B Form controls | done | `components/app/{switch,tabs,checkbox,select}` |
+| 3C Overlays | done | `components/app/{modal,drawer,toast}` over `ui/{dialog,sheet,toast}` |
+| 4 Form unification | partly done | `Field` + `SettingRow`/`SettingSection` not yet extracted; pages still compose some rows locally |
+| 5 Admin shell | done | `admin/components/{MainLayout,AdminPage}`; `admin-shell.css` deleted |
+| 6 Admin pages | outstanding | pages compose `components/app` but still carry inline token-reading style objects |
+| 7 Data tables | outstanding | `app/data-table` + `app/table-viewport` moved; not yet re-based on `ui/table` |
+| 8 Portal + Setup | outstanding | Portal still owns `.portal-*` classes and inline token styles |
+| 9 Legacy cleanup | partly done | legacy primitive layer deleted; `app/icon.tsx` still maps domain names onto Lucide |
+| 10 CSS cleanup | partly done | the alias block and class rules are shrinking as owners migrate; they are not yet empty |
+| 11 Docs + verification | done for what has landed | `DESIGN.md` rewritten; `make check` green |
+
+The mechanical half of the token migration is complete: no
+`utility-[var(--token)]` arbitrary values remain. What remains is the 316
+inline `style` objects that read a token per property — those need per-component
+restructuring, which is the work of phases 6 and 8.
+
+## Recorded deviations
+
+These are deliberate and were taken with the brief's own rules in hand. Each is
+reversible and each is recorded rather than hidden.
+
+| # | Brief item | Decision | Reasoning |
+| --- | --- | --- | --- |
+| D1 | Adopt shadcn `select` (Base UI) | Kept a native `<select>` styled on the semantic tokens | The product uses Select in dense filter bars and enum fields across 65 call sites. A scripted popup would trade OS typeahead, the platform picker on touch, and the `combobox` + value contract for styling the neutral Stage A theme does not need, and would rewrite ~30 spec interactions for no product gain. `ui/select.tsx` is therefore not added. |
+| D2 | Adopt shadcn `sidebar` | Kept the Admin shell as a product component | The Admin rail owns a version pill, an instance-management link, a user footer, and a breadcrumb bar, and its geometry is asserted by `admin-shell.spec.ts`. shadcn's sidebar adds a cookie-persisted collapse state and its own mobile sheet — new behaviour, not a cleaner architecture. |
+| D3 | Adopt `alert-dialog` | Confirmation dialogs use `ui/dialog` | The product's confirmations are already `role="dialog"` and a large part of the Playwright suite selects them that way. A second overlay primitive would be a behavioural change with no architectural gain. |
+| D4 | Adopt `command`, `popover`, `dropdown-menu`, `scroll-area`, `radio` | Not added | No call site exists. Adding them would create unused surface the brief explicitly warns against. |
+| D5 | Preserve the existing brand mark | `app/logo.tsx` is a neutral placeholder | The brief lists the current logo under what may be discarded and reserves identity for Stage B. |
+
 ## Target stack
 
 | Concern | Choice |

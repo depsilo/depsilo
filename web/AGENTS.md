@@ -12,8 +12,20 @@ These instructions apply under `web/`. Read the root `AGENTS.md` first.
 - `src/lib`: typed transport contracts and pure domain helpers.
 
 `DESIGN.md` records the current UI contract. `PRODUCT.md` governs claims and
-personas. The implementation and tokens in `src/index.css` are final truth when
-a screenshot or old spec disagrees.
+personas. The implementation, the tokens in `src/index.css`, and the layers in
+`src/components/ui` and `src/components/app` are final truth when a screenshot
+or old spec disagrees.
+
+## UI layers
+
+- `src/components/ui`: shadcn primitives. The only place that may import
+  `@base-ui/react`. Add with `npx shadcn@latest add <name>`, and only when a
+  call site needs it.
+- `src/components/app`: Depsilo application components built on `ui` primitives.
+- `src/admin/components`, `src/portal/components`: surface composition.
+- Pages compose feature and application components; they never import
+  `components/ui` or `@base-ui/react` directly.
+- `src/index.css` holds imports, tokens, the dark variant, and base styles only.
 
 ## Frontend invariants
 
