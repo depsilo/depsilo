@@ -115,6 +115,12 @@ governed*, not about picking a new one. If the tokens step reveals a genuine
 contrast or CVD problem with the family, that is a reason to tune it, not a
 reason to abandon it.
 
+It did reveal one, and it was tuned: the mark's flat `#0A8654` clears 4.61:1 on
+white but only 4.31:1 on the `--muted` rail, so using it as the UI action
+colour would have failed on every label that sits on a rail. The UI action
+green is therefore one step deeper than the mark, which never carries text.
+See [design-tokens.md](design-tokens.md#22-brand-and-action).
+
 ## 5. Typography
 
 - One UI face for the whole product. A separate display face is a marketing

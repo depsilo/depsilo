@@ -39,34 +39,59 @@ A single neutral ramp drives canvas, surface, inset, borders, and text. The ramp
 is tuned once, not per surface: every surface role is one step on the same
 scale, so raising or lowering the whole interface is one edit.
 
-| Role | Ladder position | Notes |
+| Product role | Token | Ladder position |
 | --- | --- | --- |
-| `--canvas` | furthest from text | The page |
-| `--surface` | one step in | Rails, tables, panels |
-| `--inset` | two steps in | Recessed supporting regions |
-| `--hover` / `--active` | interaction steps | Distinguishable from `--surface` without relying on colour alone |
-| `--border` | hairline | One weight |
-| `--text` / `--text-muted` / `--text-faint` | three text weights | `faint` is for labels and metadata only, never for data a decision depends on |
+| Canvas | `--background` | furthest from text |
+| Surface | `--card`, `--popover` | one step in |
+| Inset | `--muted` | two steps in |
+| Hover / selected surface | `--accent` | interaction step; distinguishable from `--surface` without relying on colour alone |
+| Hairline | `--border`, `--input` | one weight |
+| Text | `--foreground` | furthest from the canvas |
+| Secondary text | `--muted-foreground` | mid-ramp |
+
+**The names are shadcn's, and that is a decision.** The primitives in
+`components/ui` are generated against them, so any other vocabulary would need
+a translation layer that every future `shadcn add` would fight. Product
+language ("canvas", "surface", "inset") is how the roles are *discussed*; the
+table above is the mapping.
+
+**Two text weights, not three.** A third, fainter weight cannot render text and
+still clear 4.5:1, so it would be a contrast violation waiting to happen.
+Disabled text is exempt from the requirement and uses opacity instead.
 
 Both themes use the same ladder with inverted direction. Dark is not "light with
 the lights off": if the ladder inverts mechanically, dark mode reads as dimmed
 paper. Dark gets its own tuned values at the same role positions.
 
-### 2.2 Accent
+### 2.2 Brand and action
 
-One accent family, spent only on primary commands, focus, active navigation,
-and the hit signal (see [visual-direction.md](visual-direction.md#4-colour)).
+One brand family, spent only on primary commands, focus, active navigation, and
+the hit signal (see [visual-direction.md](visual-direction.md#4-colour)).
 
-| Role | Meaning |
-| --- | --- |
-| `--accent` | The accent at rest: primary command fill, active state |
-| `--accent-strong` | Pressed / intensified |
-| `--accent-surface` | A tinted area that is *about* the accent, not a status |
-| `--accent-foreground` | Text on `--accent` |
-| `--focus-ring` | Focus. May equal the accent but is a separate role so it can be tuned for contrast independently |
+| Role | Token | Meaning |
+| --- | --- | --- |
+| Action | `--primary` | Primary command fill, active navigation, brand label text |
+| On action | `--primary-foreground` | Text on `--primary` |
+| Focus | `--ring` | Focus. A separate role so it can be tuned for contrast independently |
 
-The family is kept from Stage A (`#0A8654` command, `#0FA86F` signal in light).
-Step 01 re-verifies contrast; it does not go looking for a different hue.
+**`--accent` is not the brand.** shadcn's `--accent` is a hover/selected
+*surface*; using the word for both is the collision this section exists to
+prevent.
+
+The family is kept from the pre-migration palette, with one correction that
+implementation forced:
+
+| Token | Value (light) | Why |
+| --- | --- | --- |
+| `--brand-action` | `oklch(0.52 0.125 158.2)` | One step deeper than the mark |
+| `--brand-focus` | `oklch(0.569 0.126 160.2)` | ≥3:1 on every surface it can outline |
+| `--brand-action-dark` | `oklch(0.796 0.169 157.7)` | The dark counterpart |
+
+`docs/brand/` fixes the flat mark at `#0A8654`. The UI's action green is
+deliberately one step deeper, because the mark never carries text while the
+action colour is used as a *label* on tinted rails as well as a command fill —
+and `#0A8654` clears 4.61:1 on white but only 4.31:1 on `--muted`. Adopting the
+mark's value directly would have failed on every rail in the product.
 
 ### 2.3 Status
 
@@ -97,6 +122,9 @@ The lightness was chosen so each role clears **4.5:1 both as text on the canvas
 and as text on its own surface**. Tuning hue or chroma is fine; dropping
 lightness below this is not.
 
+`--neutral-status` is the fourth role. It exists so a cache miss and an
+unrecorded result have somewhere to live that is neither success nor failure.
+
 Chart series get a **separate five-step categorical ramp** (section 5), so a
 chart never implies health and a status colour never has to double as a series.
 
@@ -116,6 +144,9 @@ no headlines that need one, and the brief's own rules make tight display
 tracking unavailable anyway.
 
 ### 3.2 Scale
+
+> These tokens land in step 02 with the call sites that read them; step 01
+> deliberately defined only what the code could consume immediately.
 
 | Token | Use | Constraint |
 | --- | --- | --- |
@@ -213,10 +244,15 @@ In scope as **tokens and rules**, not as a charting rewrite.
 
 Rules:
 
-- A series is identified by colour **and** by shape or label. The trend chart
-  already distinguishes series by stroke pattern; that survives.
-- The ramp must be distinguishable in greyscale and under the common forms of
-  colour-vision deficiency.
+- **Every series clears 3:1 against the plot surface.** This is the floor for a
+  graphic that carries meaning, and it is the only ramp property the token gate
+  asserts.
+- **Greyscale legibility is not a property of the ramp, and cannot be.** Five
+  hues that all clear 3:1 on white converge on one lightness, so a ramp cannot
+  be both contrast-safe and luminance-separated. Series are therefore
+  distinguished by **shape and label as well as colour** — the trend chart
+  already separates series by stroke pattern, and that is what carries the
+  requirement.
 - A partial series, a missing bucket, and a zero are three different things. A
   gap is drawn as a gap.
 - An empty chart is an empty state, not an axis with no data.
@@ -266,13 +302,27 @@ added without a token fails the tests rather than quietly shipping.
 
 ## 9. Verification gates
 
-Step 01 is not complete until, for both themes:
+`web/e2e/token-contrast.spec.ts` implements this gate and runs in the smoke
+set, so a token edit that breaks a pair fails `make check` rather than
+production:
 
-- every text/background pair in use clears 4.5:1, and every non-text pair that
-  carries meaning (borders, focus rings, chart strokes) clears 3:1;
-- each status role clears 4.5:1 **as text on the canvas** and **as text on its
-  own surface** — these are different pairs and both are checked;
-- the categorical chart ramp is distinguishable in greyscale;
-- `e2e/admin-axe.spec.ts` passes on every Admin route;
-- Portal and Setup converge on the same standard, which [PRODUCT.md](../../PRODUCT.md)
-  records as unfinished today.
+- every text/background pair in use clears **4.5:1**, including each status
+  role as text on the canvas *and* on its own tinted surface — those are
+  different pairs and the tint is the stricter one;
+- the focus ring and every chart series clear **3:1** against the surfaces they
+  can appear on;
+- colours are resolved by painting them and reading the pixels back, so the
+  check works for any colour space or `color-mix` expression and pins no
+  literal value.
+
+Hairline borders are deliberately **not** in the gate. WCAG 1.4.11 applies to
+information required to identify a control, which a separator is not; a
+hairline that clears 3:1 against its surface would render as a heavy rule and
+would make a dense table look like a grid.
+
+Two further gates:
+
+- `e2e/admin-axe.spec.ts` passes on every Admin route, in both themes and both
+  locales;
+- Portal and Setup converge on the same standard, which
+  [PRODUCT.md](../../PRODUCT.md) records as unfinished today.

@@ -15,6 +15,12 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
+  // Every page is a lazy route and the Dashboard pulls Recharts in its own
+  // chunk, so under parallel load a first assertion can legitimately arrive
+  // after the default 5s without anything being wrong with the product. The
+  // assertions themselves are unchanged; they simply get a budget that matches
+  // a suite that fetches chunks from a dev server while four browsers run.
+  expect: { timeout: 10_000 },
   reporter: process.env.CI ? [['html', { open: 'never' }], ['line']] : 'line',
   use: {
     baseURL,

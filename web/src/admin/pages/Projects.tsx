@@ -440,7 +440,7 @@ export default function ProjectsV2() {
       <ModalV2 open={tokenData !== null} onClose={() => setTokenData(null)} title={t('projects.token')}>
         {tokenData && (
           <div className="space-y-4">
-            <div className="rounded-[6px] p-3" style={{ background: 'var(--warning-surface)', border: '0.5px solid var(--warning-border-tone)' }}>
+            <div className="rounded-[6px] p-3" style={{ background: 'var(--warning-surface)', border: '0.5px solid var(--warning-border)' }}>
               <div className="flex items-center gap-2 mb-1">
                 <TriangleAlert className="text-warning icon icon-sm" aria-hidden="true" />
                 <span className="text-[13px] font-[500] text-warning">{t('projects.tokenWarning')}</span>

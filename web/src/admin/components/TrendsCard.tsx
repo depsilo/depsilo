@@ -165,7 +165,7 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
 const axisProps = {
   // Recharts axis props take CSS values rather than classes; the semantic
   // tokens are resolved by the browser, so they still follow the theme.
-  tick: { fill: 'var(--muted-foreground)', fontSize: 10 },
+  tick: { fill: 'var(--chart-axis-label)', fontSize: 10 },
   axisLine: false as const,
   tickLine: false as const,
 }
@@ -299,7 +299,7 @@ export default function TrendsCard({
               margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
               desc={chartDescription}
             >
-            <CartesianGrid stroke="var(--border)" vertical={false} />
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="bucket"
               type="number"
@@ -310,7 +310,7 @@ export default function TrendsCard({
               {...axisProps}
             />
             <Tooltip content={props => <ChartTooltip {...props} dataRange={dataRange} />} />
-            <Legend wrapperStyle={{ color: 'var(--muted-foreground)', fontSize: 11, paddingTop: 6 }} />
+            <Legend wrapperStyle={{ color: 'var(--chart-axis-label)', fontSize: 11, paddingTop: 6 }} />
 
             {tab === 'requests' && (
               <>

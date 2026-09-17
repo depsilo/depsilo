@@ -29,15 +29,29 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
-/* ── Semantic tokens ────────────────────────────────────────────────────────
- * Stage A uses the neutral shadcn base. These are deliberately plain: the
- * product palette is a Stage B decision, and this layer only has to be
- * correct, complete, and single-source.
+/* ── Tokens ─────────────────────────────────────────────────────────────────
+ * Two tiers.
  *
- * Beyond shadcn's defaults the product needs three extra status roles —
- * `success`, `warning`, and `info` — because Depsilo reports cache, policy,
- * and delivery outcomes separately. A cache miss and a slow upstream are
- * normal results and must never read as `destructive`.
+ * PRIMITIVES are raw values with no meaning: one thirteen-step neutral ramp,
+ * and the brand family. The ramp exists because every surface and text role is
+ * a pointer into it, so raising or lowering the whole interface is one edit
+ * rather than a hunt through forty role definitions. Primitives are
+ * deliberately *not* exposed as Tailwind utilities — a component cannot write
+ * `bg-neutral-07` because that would be a colour decision at a call site.
+ *
+ * SEMANTIC roles are what components read. The names are shadcn's, because the
+ * primitives in `components/ui` are generated against them and every future
+ * `shadcn add` would otherwise reintroduce the old vocabulary. Product
+ * language ("canvas", "surface", "inset") maps onto them; see
+ * `docs/design/design-tokens.md` for that mapping.
+ *
+ * Status colours are declared directly at the semantic tier rather than
+ * through primitives: each is chosen for its meaning, nothing else consumes
+ * it, and an extra layer would only make the contrast pairs harder to read.
+ * Depsilo needs four — `success`, `warning`, `destructive`, and a neutral
+ * status for results that are not outcomes at all — because cache, policy, and
+ * delivery results are reported independently. A cache miss and a slow
+ * upstream are normal results and must never read as `destructive`.
  *
  * `--radius` is the single radius seed; the scale below derives from it.
  */
@@ -45,45 +59,82 @@
   --radius: 0.625rem;
   color-scheme: light;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* ── Primitives ── */
+  --neutral-00: oklch(1 0 0);
+  --neutral-01: oklch(0.985 0 0);
+  --neutral-02: oklch(0.97 0 0);
+  --neutral-03: oklch(0.922 0 0);
+  --neutral-04: oklch(0.87 0 0);
+  --neutral-05: oklch(0.708 0 0);
+  --neutral-06: oklch(0.556 0 0);
+  --neutral-07: oklch(0.505 0 0);
+  --neutral-08: oklch(0.439 0 0);
+  --neutral-09: oklch(0.371 0 0);
+  --neutral-10: oklch(0.269 0 0);
+  --neutral-11: oklch(0.205 0 0);
+  --neutral-12: oklch(0.145 0 0);
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  /* The brand. `docs/brand/` fixes the flat mark at `#0A8654`, and the UI's
+     action green is one step deeper than that on purpose: the mark never
+     carries text, while the action colour is used as a label on tinted rails
+     as well as a command fill. `#0A8654` clears 4.61:1 on white but only
+     4.31:1 on `--muted`, so as a *text* colour it would fail on any surface
+     that is not the canvas. These three values clear 4.5:1 as text on every
+     surface the interface can put them on, in both directions. */
+  --brand-action: oklch(0.52 0.125 158.2);
+  --brand-focus: oklch(0.569 0.126 160.2);
+  --brand-action-dark: oklch(0.796 0.169 157.7);
 
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  /* ── Surfaces ── */
+  --background: var(--neutral-00);
+  --card: var(--neutral-00);
+  --popover: var(--neutral-00);
+  --secondary: var(--neutral-02);
+  --muted: var(--neutral-02);
+  /* shadcn's `accent` is a hover/selected *surface*, not the brand colour. */
+  --accent: var(--neutral-02);
 
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.505 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  /* ── Text ── */
+  --foreground: var(--neutral-12);
+  --card-foreground: var(--neutral-12);
+  --popover-foreground: var(--neutral-12);
+  --secondary-foreground: var(--neutral-11);
+  --accent-foreground: var(--neutral-11);
+  /* Two text weights, not three: a third, fainter weight cannot render text
+     and still clear 4.5:1, so it would be a contrast violation waiting to
+     happen. Disabled text is exempt and uses opacity instead. */
+  --muted-foreground: var(--neutral-07);
+
+  /* ── Action ── */
+  --primary: var(--brand-action);
+  --primary-foreground: var(--neutral-00);
 
   /* Status roles are tuned so each stays readable both as a filled surface
-   * under its `-foreground` and as text over its own 14–16% tint, which is how
-   * Depsilo actually renders notices and badges. */
+     * under its `-foreground` and as text over its own 14–16% tint, which is how
+     * Depsilo actually renders notices and badges. */
   --destructive: oklch(0.47 0.2 27);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive-foreground: var(--neutral-00);
   --success: oklch(0.47 0.13 155);
-  --success-foreground: oklch(0.985 0 0);
+  --success-foreground: var(--neutral-00);
   --warning: oklch(0.47 0.12 70);
-  --warning-foreground: oklch(0.985 0 0);
+  --warning-foreground: var(--neutral-00);
   --info: oklch(0.47 0.12 235);
-  --info-foreground: oklch(0.985 0 0);
+  --info-foreground: var(--neutral-00);
+
+  /* A recorded result that is not an outcome. A cache miss and an unrecorded
+     result are facts, not quality judgements, so they get the neutral text
+     role rather than a status colour. */
+  --neutral-status: var(--muted-foreground);
 
   /* Status surfaces and keylines. Notices and badges tint their own status
      colour over the page canvas; deriving the tint here keeps every call site
      on the same value instead of re-mixing it inline. */
   --success-surface: color-mix(in oklab, var(--success) 14%, var(--background));
-  --success-border-tone: color-mix(in oklab, var(--success) 35%, var(--background));
+  --success-border: color-mix(in oklab, var(--success) 35%, var(--background));
   --warning-surface: color-mix(in oklab, var(--warning) 16%, var(--background));
-  --warning-border-tone: color-mix(in oklab, var(--warning) 35%, var(--background));
+  --warning-border: color-mix(in oklab, var(--warning) 35%, var(--background));
   --destructive-surface: color-mix(in oklab, var(--destructive) 14%, var(--background));
-  --destructive-border-tone: color-mix(in oklab, var(--destructive) 35%, var(--background));
+  --destructive-border: color-mix(in oklab, var(--destructive) 35%, var(--background));
 
   /* The code surface is always ink, in both themes: a configuration snippet is
      read as a terminal transcript, and inversion would make it the brightest
@@ -96,24 +147,32 @@
   --code-surface-accent: oklch(0.88 0 0);
   --code-surface-danger: oklch(0.78 0.12 25);
 
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.556 0 0);
+  --border: var(--neutral-03);
+  --input: var(--neutral-03);
+  --ring: var(--brand-focus);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Categorical series ramp, separate from the status axis so a chart never
+     implies health. Every step clears 3:1 against the plot surface — the floor
+     for a graphic that carries meaning — which `e2e/token-contrast.spec.ts`
+     asserts. Greyscale legibility is *not* a property of this ramp and cannot
+     be: five hues that all clear 3:1 on white converge on one lightness, so
+     series are separated by shape and label as well as by colour. */
+  --chart-1: oklch(0.527 0.137 150.1);
+  --chart-2: oklch(0.546 0.215 262.9);
+  --chart-3: oklch(0.555 0.146 49);
+  --chart-4: oklch(0.541 0.247 293);
+  --chart-5: oklch(0.511 0.086 186.4);
+  --chart-grid: var(--neutral-03);
+  --chart-axis-label: var(--muted-foreground);
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: var(--neutral-01);
+  --sidebar-foreground: var(--neutral-12);
+  --sidebar-primary: var(--brand-action);
+  --sidebar-primary-foreground: var(--neutral-00);
+  --sidebar-accent: var(--neutral-02);
+  --sidebar-accent-foreground: var(--neutral-11);
+  --sidebar-border: var(--neutral-03);
+  --sidebar-ring: var(--brand-focus);
 
   --shadow-surface: 0 1px 2px 0 oklch(0 0 0 / 0.05);
   --shadow-card: 0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.06);
@@ -123,51 +182,68 @@
 .dark {
   color-scheme: dark;
 
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  /* The dark ladder is tuned at the same role positions rather than inverted
+     mechanically: a mechanical inversion reads as dimmed paper. */
+  --background: var(--neutral-12);
+  --foreground: var(--neutral-01);
 
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --card: var(--neutral-11);
+  --card-foreground: var(--neutral-01);
+  --popover: var(--neutral-11);
+  --popover-foreground: var(--neutral-01);
 
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: var(--brand-action-dark);
+  --primary-foreground: var(--neutral-12);
 
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: var(--neutral-10);
+  --secondary-foreground: var(--neutral-01);
+  --muted: var(--neutral-10);
+  --muted-foreground: var(--neutral-05);
+  --accent: var(--neutral-10);
+  --accent-foreground: var(--neutral-01);
 
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.145 0 0);
+  --destructive-foreground: var(--neutral-12);
   --success: oklch(0.8 0.14 155);
-  --success-foreground: oklch(0.145 0 0);
+  --success-foreground: var(--neutral-12);
   --warning: oklch(0.82 0.13 80);
-  --warning-foreground: oklch(0.145 0 0);
+  --warning-foreground: var(--neutral-12);
   --info: oklch(0.78 0.11 235);
-  --info-foreground: oklch(0.145 0 0);
+  --info-foreground: var(--neutral-12);
 
+  --neutral-status: var(--muted-foreground);
+
+  --success-surface: color-mix(in oklab, var(--success) 14%, var(--background));
+  --success-border: color-mix(in oklab, var(--success) 35%, var(--background));
+  --warning-surface: color-mix(in oklab, var(--warning) 16%, var(--background));
+  --warning-border: color-mix(in oklab, var(--warning) 35%, var(--background));
+  --destructive-surface: color-mix(in oklab, var(--destructive) 14%, var(--background));
+  --destructive-border: color-mix(in oklab, var(--destructive) 35%, var(--background));
+
+  /* Dark hairlines are alpha, light hairlines are solid. A translucent rule
+     composites over whatever surface it separates, which is what keeps a
+     border on a card and a border on the canvas from being two decisions; a
+     solid light-grey rule on a dark canvas would instead read as chalk. */
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.708 0 0);
+  --ring: var(--brand-action-dark);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.708 0 0);
-  --chart-3: oklch(0.556 0 0);
-  --chart-4: oklch(0.439 0 0);
-  --chart-5: oklch(0.371 0 0);
+  --chart-1: oklch(0.8 0.182 151.7);
+  --chart-2: oklch(0.714 0.143 254.6);
+  --chart-3: oklch(0.837 0.164 84.4);
+  --chart-4: oklch(0.709 0.159 293.5);
+  --chart-5: oklch(0.785 0.133 181.9);
+  --chart-grid: var(--border);
+  --chart-axis-label: var(--muted-foreground);
 
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.922 0 0);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar: var(--neutral-11);
+  --sidebar-foreground: var(--neutral-01);
+  --sidebar-primary: var(--brand-action-dark);
+  --sidebar-primary-foreground: var(--neutral-12);
+  --sidebar-accent: var(--neutral-10);
+  --sidebar-accent-foreground: var(--neutral-01);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: var(--brand-action-dark);
 
   --shadow-surface: 0 1px 2px 0 oklch(0 0 0 / 0.4);
   --shadow-card: 0 1px 3px 0 oklch(0 0 0 / 0.5), 0 1px 2px -1px oklch(0 0 0 / 0.4);
@@ -189,6 +265,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-neutral-status: var(--neutral-status);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -196,12 +273,15 @@
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-surface: var(--success-surface);
+  --color-success-border: var(--success-border);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-surface: var(--warning-surface);
+  --color-warning-border: var(--warning-border);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
   --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-border: var(--destructive-border);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -210,6 +290,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis-label: var(--chart-axis-label);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

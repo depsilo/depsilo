@@ -120,7 +120,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
         data-rule-test-decision={result.allowed ? 'allow' : 'deny'}
         style={{
           background: result.allowed ? 'var(--success-surface)' : 'var(--destructive-surface)',
-          border: `1px solid ${result.allowed ? 'var(--success-border-tone)' : 'var(--destructive)'}`,
+          border: `1px solid ${result.allowed ? 'var(--success-border)' : 'var(--destructive)'}`,
         }}
       >
         <div className="mb-2 flex items-center gap-2">
@@ -355,7 +355,7 @@ export default function RulesV2() {
                 aria-pressed={form.action === 'allow'}
                 onClick={() => setForm({ ...form, action: 'allow' })}
                 className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
-                style={{ background: form.action === 'allow' ? 'var(--success-surface)' : 'var(--muted)', color: form.action === 'allow' ? 'var(--success)' : 'var(--muted-foreground)', border: form.action === 'allow' ? '1px solid var(--success-border-tone)' : '1px solid var(--border)' }}
+                style={{ background: form.action === 'allow' ? 'var(--success-surface)' : 'var(--muted)', color: form.action === 'allow' ? 'var(--success)' : 'var(--muted-foreground)', border: form.action === 'allow' ? '1px solid var(--success-border)' : '1px solid var(--border)' }}
               >
                 {t('rules.allow')}
               </button>

@@ -15,7 +15,10 @@ const TONE_CLASS: Record<NoticeTone, string> = {
   success: 'border-success/35 bg-success/10 text-success',
   warning: 'border-warning/35 bg-warning/10 text-warning',
   danger: 'border-destructive/35 bg-destructive/10 text-destructive',
-  info: 'border-primary/35 bg-primary/10 text-primary',
+  // `info` is a status, not the brand: tinting the brand behind brand text put
+  // the label at 4.05:1, and an informational notice has nothing to do with
+  // the action colour anyway.
+  info: 'border-info/35 bg-info/10 text-info',
 }
 
 /**
