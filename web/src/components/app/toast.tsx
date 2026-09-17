@@ -1,12 +1,12 @@
-import { Toast } from '@base-ui/react/toast'
 import { createContext, type ReactNode, useContext, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import IconButton from '@/components/app/icon-button'
 
-export type ToastTone = 'success' | 'danger' | 'warning'
+import { ToastProvider as UiToastProvider, ToastViewport, useToastManager } from '@/components/ui/toast'
+
+export type { ToastTone } from '@/components/ui/toast'
 
 export interface ToastPayload {
-  tone: ToastTone
+  tone: 'success' | 'danger' | 'warning'
   message: string
 }
 
@@ -18,13 +18,16 @@ export interface AppToastApi {
 const AppToastContext = createContext<AppToastApi | null>(null)
 
 function AppToastController({ children }: { children: ReactNode }) {
-  const manager = Toast.useToastManager()
+  const manager = useToastManager()
   const { i18n } = useTranslation()
   const closeLabel = i18n.language.startsWith('zh') ? '\u5173\u95ed' : 'Close'
+
   const api = useMemo<AppToastApi>(() => ({
     show: ({ tone, message }) => manager.add({
       type: tone,
       description: message,
+      // A failure the Operator may act on must not be cleared by an unrelated
+      // success toast arriving later.
       priority: tone === 'danger' ? 'high' : 'low',
     }),
     close: manager.close,
@@ -33,38 +36,16 @@ function AppToastController({ children }: { children: ReactNode }) {
   return (
     <AppToastContext.Provider value={api}>
       {children}
-      <Toast.Viewport className="app-toast-viewport">
-        {manager.toasts.map((toast) => (
-          <Toast.Root
-            key={toast.id}
-            toast={toast}
-            data-toast-tone={toast.type}
-            className="app-toast-root"
-          >
-            <Toast.Content className="app-toast-content">
-              <Toast.Description className="app-toast-description" />
-              <Toast.Close
-                render={
-                  <IconButton
-                    icon="close"
-                    label={closeLabel}
-                    className="app-toast-close"
-                  />
-                }
-              />
-            </Toast.Content>
-          </Toast.Root>
-        ))}
-      </Toast.Viewport>
+      <ToastViewport closeLabel={closeLabel} />
     </AppToastContext.Provider>
   )
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   return (
-    <Toast.Provider limit={3} timeout={5000}>
+    <UiToastProvider>
       <AppToastController>{children}</AppToastController>
-    </Toast.Provider>
+    </UiToastProvider>
   )
 }
 

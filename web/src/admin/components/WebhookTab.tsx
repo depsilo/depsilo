@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import BadgeV2 from '@/components/app/badge'
 import ButtonV2 from '@/components/app/button'
+import Checkbox from '@/components/app/checkbox'
 import EmptyState from '@/components/app/empty-state'
 import IconButton from '@/components/app/icon-button'
 import InputV2 from '@/components/app/input'
@@ -258,18 +259,15 @@ export default function WebhookTab() {
                 const current = eventValues(form.events)
                 const selected = current.includes(eventName)
                 return (
-                  <label key={eventName} className="flex min-h-10 cursor-pointer items-center gap-2 text-[13px] text-[var(--text-soft)]">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-[var(--brand)] stripe-focus-ring"
-                      checked={selected}
-                      onChange={() => {
-                        const next = selected ? current.filter(value => value !== eventName) : [...current, eventName]
-                        setForm(value => ({ ...value, events: next.join(',') }))
-                      }}
-                    />
-                    {t(`webhook.events_list.${eventName}`)}
-                  </label>
+                  <Checkbox
+                    key={eventName}
+                    label={t(`webhook.events_list.${eventName}`)}
+                    checked={selected}
+                    onCheckedChange={() => {
+                      const next = selected ? current.filter(value => value !== eventName) : [...current, eventName]
+                      setForm(value => ({ ...value, events: next.join(',') }))
+                    }}
+                  />
                 )
               })}
             </div>

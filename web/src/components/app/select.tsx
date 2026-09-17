@@ -1,5 +1,8 @@
 import { useId, type SelectHTMLAttributes } from 'react'
+
+import Field from '@/components/app/field'
 import { mergeDescriptionIds } from '@/lib/aria'
+import { cn } from '@/lib/utils'
 
 interface FeedbackProps {
   label?: string
@@ -7,61 +10,53 @@ interface FeedbackProps {
   error?: string
 }
 
-interface SelectV2Props extends SelectHTMLAttributes<HTMLSelectElement>, FeedbackProps {}
+interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement>, FeedbackProps {}
 
-export default function SelectV2({
+/**
+ * Depsilo's Select is a native `<select>`.
+ *
+ * The product uses selects for dense filter bars and enum fields, where the
+ * native control is the accessible baseline: OS typeahead, the platform picker
+ * on touch devices, `aria-invalid`/`aria-describedby` support, and the
+ * `role="combobox"` + value contract the Admin keyboard specs assert. shadcn's
+ * Base UI select is a scripted popup and would trade all of that for styling
+ * the neutral Stage A theme does not need, so it is deliberately not adopted.
+ */
+export default function Select({
   className = '',
   label,
   hint,
   error,
   children,
-  style,
+  id,
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
   ...rest
-}: SelectV2Props) {
+}: SelectProps) {
   const generatedId = useId()
-  const controlId = rest.id ?? generatedId
-  const descriptionId = hint || error ? `${controlId}-description` : undefined
-  const composedDescriptionIds = mergeDescriptionIds(ariaDescribedBy, descriptionId)
+  const controlId = id ?? generatedId
+  const messageId = hint || error ? `${controlId}-description` : undefined
 
   const select = (
     <select
       {...rest}
       id={controlId}
       aria-invalid={error ? true : ariaInvalid}
-      aria-describedby={composedDescriptionIds}
-      className={`w-full cursor-pointer rounded-[4px] px-3 py-2 text-[16px] md:text-[13px] transition-colors duration-150 stripe-focus-ring ${className}`}
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        color: 'var(--text)',
-        ...style,
-      }}
+      aria-describedby={mergeDescriptionIds(ariaDescribedBy, messageId)}
+      className={cn(
+        'h-9 w-full cursor-pointer rounded-md border border-input bg-transparent px-3 py-1.5 text-[16px] text-foreground',
+        'transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
+        'aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 md:text-[13px]',
+        className,
+      )}
     >
       {children}
     </select>
   )
 
-  if (!label && !descriptionId) return select
-
   return (
-    <div>
-      {label && (
-        <label htmlFor={controlId} className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">
-          {label}
-        </label>
-      )}
+    <Field controlId={controlId} label={label} hint={hint} error={error}>
       {select}
-      {(error || hint) && (
-        <p
-          id={descriptionId}
-          role={error ? 'alert' : undefined}
-          className={`mt-1 text-[12px] ${error ? 'text-[var(--danger-text)]' : 'text-[var(--text-muted)]'}`}
-        >
-          {error || hint}
-        </p>
-      )}
-    </div>
+    </Field>
   )
 }

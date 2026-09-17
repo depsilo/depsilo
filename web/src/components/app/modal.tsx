@@ -1,20 +1,36 @@
-import { Dialog } from '@base-ui/react/dialog'
-import { type ReactNode, type RefObject } from 'react'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import IconButton from '@/components/app/icon-button'
 
-interface ModalV2Props {
+import IconButton from '@/components/app/icon-button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog'
+
+interface ModalProps {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
+  /** Maximum width in px. Long-form dialogs opt into a larger value. */
   width?: number
   initialFocus?: RefObject<HTMLElement | null>
   finalFocus?: RefObject<HTMLElement | null>
+  /**
+   * Keep the dialog open and undismissable. Mutations in flight use this so a
+   * half-applied change can never be abandoned by pressing Escape.
+   */
   closeDisabled?: boolean
 }
 
-export default function ModalV2({
+/**
+ * The product's one dialog. Base UI owns focus trapping, `aria-modal`, and
+ * returning focus to the trigger; this component owns the title, the width,
+ * and the labelled close action.
+ */
+export default function Modal({
   open,
   onClose,
   title,
@@ -23,40 +39,38 @@ export default function ModalV2({
   initialFocus,
   finalFocus,
   closeDisabled = false,
-}: ModalV2Props) {
+}: ModalProps) {
   const { i18n } = useTranslation()
   const closeLabel = i18n.language.startsWith('zh') ? '\u5173\u95ed' : 'Close'
 
   return (
-    <Dialog.Root
+    <Dialog
       open={open}
-      onOpenChange={(nextOpen) => !nextOpen && !closeDisabled && onClose()}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !closeDisabled) onClose()
+      }}
       modal
     >
-      <Dialog.Portal>
-        <Dialog.Backdrop className="app-dialog-backdrop" />
-        <Dialog.Viewport className="app-dialog-viewport">
-          <Dialog.Popup
-            className="modal-card app-dialog-popup"
-            style={{ maxWidth: width }}
-            initialFocus={initialFocus}
-            finalFocus={finalFocus ?? true}
-          >
-            <Dialog.Title className="app-dialog-title">{title}</Dialog.Title>
-            {children}
-            <Dialog.Close
-              render={
-                <IconButton
-                  icon="close"
-                  label={closeLabel}
-                  disabled={closeDisabled}
-                  className="app-dialog-close active:scale-[0.96]"
-                />
-              }
+      <DialogContent
+        showCloseButton={false}
+        initialFocus={initialFocus}
+        finalFocus={finalFocus ?? true}
+        className="gap-4 p-5"
+        style={{ maxWidth: width } as CSSProperties}
+      >
+        <DialogTitle className="pr-10 text-[17px] font-semibold">{title}</DialogTitle>
+        {children}
+        <DialogClose
+          render={
+            <IconButton
+              icon="close"
+              label={closeLabel}
+              disabled={closeDisabled}
+              className="absolute top-2 right-2"
             />
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
+          }
+        />
+      </DialogContent>
+    </Dialog>
   )
 }
