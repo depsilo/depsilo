@@ -1,30 +1,29 @@
 /**
- * THESIS: Dependency Flowline organizes Admin around operational workspaces, not a flat inventory of pages.
- * OWN-WORLD: Instrument neutrals, precise keylines, signal green, compact task links, and one calm white or matte-dark canvas.
- * STORY: Operators confirm service health, investigate history, configure sources, govern risk, and maintain the administration.
- * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; five workspace links lead to page-local tabs.
- * FORM: Structure candidate 4, flowline plus attention staging, seed 543e896c.
- * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+ * The authenticated Admin shell: a persistent workspace rail, a quiet utility
+ * bar, and one content outlet. Stage A keeps the shell's geometry (a 232px
+ * rail, a 48px topbar) and rebuilds it on semantic tokens, so Admin and Portal
+ * share one palette and differ only by layout.
  */
 import { type RefObject, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/app/button'
-import DrawerV2 from '@/components/app/drawer'
+import Button from '@/components/app/button'
+import Drawer from '@/components/app/drawer'
 import Icon, { type IconName } from '@/components/app/icon'
-import InlineNotice from '@/components/app/notice'
-import LangToggle from '@/components/app/language-toggle'
+import LanguageToggle from '@/components/app/language-toggle'
 import Logo from '@/components/app/logo'
+import Notice from '@/components/app/notice'
 import ThemeToggle from '@/components/app/theme-toggle'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { adminApi, authApi, statsApi } from '@/lib/api'
 import type { PolicyStatus } from '@/lib/adminApi.types'
 import { removeLocalStorage } from '@/lib/storage'
-import { formatTime, formatVersion } from '@/lib/utils'
+import { cn, formatTime, formatVersion } from '@/lib/utils'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
-import '../admin-shell.css'
+
+const RAIL_WIDTH = '232px'
 
 interface NavSection {
   id: string
@@ -63,27 +62,24 @@ function SidebarContent({
 
   return (
     <>
-      <div data-admin-sidebar-header className={`flex shrink-0 items-center gap-2.5 py-5 pl-5 ${reserveCloseSpace ? 'pr-16' : 'pr-5'}`}>
+      <div
+        data-admin-sidebar-header
+        className={cn('flex shrink-0 items-center gap-2.5 py-5 pl-5', reserveCloseSpace ? 'pr-16' : 'pr-5')}
+      >
         <Link
           data-admin-brand-link
           to="/"
           onClick={onNavigate}
           aria-label={t('portal.backLink')}
           title={t('portal.backLink')}
-          className="stripe-focus-ring flex min-w-0 items-center gap-2.5 rounded-[6px] no-underline transition-opacity duration-150 hover:opacity-75"
+          className="flex min-w-0 items-center gap-2.5 rounded-md text-foreground no-underline transition-opacity hover:opacity-75"
         >
           <Logo size={26} />
-          <span
-            className="text-[15px] font-[700]"
-            style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
-          >
-            Depsilo
-          </span>
+          <span className="text-[15px] font-bold">Depsilo</span>
         </Link>
         <span
-          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate whitespace-nowrap rounded-[4px] border px-1.5 py-0.5 font-mono text-[11px] tabular-nums"
+          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate rounded-sm border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground"
           title={version}
-          style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
         >
           {formatVersion(version)}
         </span>
@@ -105,28 +101,28 @@ function SidebarContent({
               <div
                 data-admin-workspace-row
                 data-admin-workspace-current={section.active ? 'true' : undefined}
-                className="flex min-w-0 items-center rounded-[7px] transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
-                style={{
-                  background: section.active ? 'var(--brand-soft)' : undefined,
-                }}
+                className={cn(
+                  'flex min-w-0 items-center rounded-md border border-transparent transition-colors hover:bg-sidebar-accent',
+                  section.active && 'border-sidebar-border bg-sidebar-accent',
+                )}
               >
                 <Link
                   ref={section.id === preferredFocusSectionId ? firstNavigationRef : undefined}
                   to={section.href}
                   onClick={onNavigate}
                   aria-current={section.active ? (section.current ? 'page' : 'location') : undefined}
-                  className="stripe-focus-ring flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-[13px] no-underline"
-                  style={{
-                    color: section.active ? 'var(--brand-text)' : 'var(--text-soft)',
-                    fontWeight: section.active ? 650 : 550,
-                  }}
+                  className={cn(
+                    'flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] no-underline',
+                    section.active
+                      ? 'font-semibold text-sidebar-accent-foreground'
+                      : 'font-medium text-muted-foreground hover:text-sidebar-accent-foreground',
+                  )}
                 >
                   <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px]"
-                    style={{
-                      background: section.active ? 'var(--bg-card)' : 'transparent',
-                      color: section.active ? 'var(--brand-text)' : 'var(--text-subtle)',
-                    }}
+                    className={cn(
+                      'flex size-7 shrink-0 items-center justify-center rounded-sm',
+                      section.active ? 'bg-background text-foreground' : 'text-muted-foreground',
+                    )}
                   >
                     <Icon name={section.icon} size="sm" />
                   </span>
@@ -138,34 +134,35 @@ function SidebarContent({
         </div>
       </nav>
 
-      <div data-admin-sidebar-footer className="shrink-0 px-3 py-3" style={{ borderTop: '0.5px solid var(--border)' }}>
+      <div
+        data-admin-sidebar-footer
+        className="shrink-0 border-t border-sidebar-border px-3 py-3"
+      >
         <Link
           to="/admin/users"
           onClick={onNavigate}
           aria-label={t('nav.instanceManagement')}
-          className="stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-[6px] px-2 py-2 text-[13px] font-[550] no-underline transition-colors hover:bg-[var(--admin-rail-hover)]"
-          style={{ color: 'var(--text-soft)' }}
+          className="mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-[13px] font-medium text-muted-foreground no-underline transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           <Icon name="settings" size="sm" />
           <span>{t('nav.instanceManagement')}</span>
         </Link>
-        <div className="group flex cursor-default items-center gap-2.5 rounded-[6px] px-2 py-2 transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-[13px] font-[600]"
-            style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}
-          >
+        <div className="group flex cursor-default items-center gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-sidebar-accent">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-semibold text-primary-foreground">
             {username?.[0]?.toUpperCase() || 'A'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-[500] leading-tight" style={{ color: 'var(--text)' }}>{username}</p>
-            <p className="mt-0.5 text-[11px] leading-tight" style={{ color: 'var(--text-muted)' }}>
+            <p className="truncate text-[13px] leading-tight font-medium text-foreground">{username}</p>
+            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
               {canWrite ? t('nav.admin') : t('nav.readonly')}
             </p>
           </div>
+          {/* Keyboard users must see this control even though pointing devices
+              only reveal it on row hover. */}
           <button
             type="button"
             onClick={onLogout}
-            className="stripe-focus-ring inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-[4px] bg-transparent p-1.5 text-[var(--text-soft)] opacity-100 transition-[opacity,color,transform] duration-150 hover:text-[var(--text)] focus-visible:opacity-100 active:scale-[0.96] lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+            className="inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm bg-transparent p-1.5 text-muted-foreground opacity-100 transition-[opacity,color] hover:text-foreground focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
             aria-label={t('nav.logout')}
           >
             <Icon name="logout" size="sm" />
@@ -199,10 +196,9 @@ interface PolicyStatusBannerProps {
 
 function PolicyStatusBanner({ status, unavailable, refreshing, onRefresh }: PolicyStatusBannerProps) {
   const { t, i18n } = useTranslation()
-  // `degraded` also describes the no-last-known-good case. Only call the
-  // snapshot message when the engine explicitly says that an old snapshot is
-  // being used; otherwise operators must not be told that a snapshot exists
-  // when the first policy load has never succeeded.
+  // `degraded` also covers the no-last-known-good case. Only name the snapshot
+  // message when the engine explicitly says an old snapshot is in use, so an
+  // Operator is never told a snapshot exists when the first load never landed.
   const statusDegraded = status?.using_stale_snapshot === true
   const statusUnavailable = unavailable || (
     status !== undefined
@@ -226,21 +222,21 @@ function PolicyStatusBanner({ status, unavailable, refreshing, onRefresh }: Poli
       aria-atomic="true"
       className="mb-4"
     >
-      <InlineNotice tone="warning">
+      <Notice tone="warning">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-[600]">
+            <p className="font-semibold">
               {statusUnavailable ? t('policy.statusUnavailable') : t('policy.staleSnapshot')}
             </p>
             {!statusUnavailable && (
-              <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-soft)' }}>
+              <p className="mt-0.5 text-[12px]">
                 {refreshTime
                   ? t('policy.lastSuccessfulRefresh', { time: refreshTime })
                   : t('policy.neverRefreshed')}
               </p>
             )}
           </div>
-          <ButtonV2
+          <Button
             type="button"
             variant="secondary"
             size="sm"
@@ -249,14 +245,14 @@ function PolicyStatusBanner({ status, unavailable, refreshing, onRefresh }: Poli
             onClick={() => { void onRefresh() }}
           >
             {refreshing ? t('policy.refreshing') : t('policy.refresh')}
-          </ButtonV2>
+          </Button>
         </div>
-      </InlineNotice>
+      </Notice>
     </div>
   )
 }
 
-export default function MainLayoutV2() {
+export default function AdminShellLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
@@ -265,6 +261,8 @@ export default function MainLayoutV2() {
   const firstMobileNavigationRef = useRef<HTMLAnchorElement>(null)
   const { principal, canWrite } = usePrincipal()
   const activeRoute = resolveAdminRoute(location.pathname)
+  // Policy runtime state belongs to Overview and Security. Other workspaces must
+  // not spend a request or reserve banner space for it.
   const policySurface = activeRoute?.navGroup === 'overview' || activeRoute?.navGroup === 'security'
 
   const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
@@ -284,14 +282,16 @@ export default function MainLayoutV2() {
     retry: false,
   })
 
-  const sections: NavSection[] = adminNavigationGroups.filter(group => !group.hiddenFromSidebar).map(group => ({
-    id: group.id,
-    label: t(group.titleKey),
-    icon: group.icon,
-    href: group.href,
-    active: activeRoute?.navGroup === group.id,
-    current: activeRoute?.href === group.href,
-  }))
+  const sections: NavSection[] = adminNavigationGroups
+    .filter(group => !group.hiddenFromSidebar)
+    .map(group => ({
+      id: group.id,
+      label: t(group.titleKey),
+      icon: group.icon,
+      href: group.href,
+      active: activeRoute?.navGroup === group.id,
+      current: activeRoute?.href === group.href,
+    }))
   const pageTitle = activeRoute ? t(activeRoute.titleKey) : t('notFound.title')
   const activeSection = sections.find(section => section.active)
   const showPageBreadcrumb = !activeSection || activeSection.label !== pageTitle
@@ -303,33 +303,28 @@ export default function MainLayoutV2() {
   }
 
   const handleLogout = async () => {
-    try { await authApi.logout() } catch { /* logout remains local when the server is unavailable */ }
+    try { await authApi.logout() } catch { /* logout stays local when the server is unreachable */ }
     removeLocalStorage('token')
     queryClient.clear()
     navigate('/admin/login', { replace: true })
   }
 
   return (
-    <div
-      data-admin-shell
-      data-admin-concept="dependency-flowline"
-      className="relative z-[1] flex min-h-screen"
-      style={{ background: 'var(--admin-canvas)' }}
-    >
+    <div data-admin-shell className="relative flex min-h-screen bg-background">
       <aside
-        className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col lg:flex"
-        style={{ background: 'var(--admin-rail)', borderRight: '1px solid var(--border-soft)' }}
+        className="fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-sidebar-border bg-sidebar lg:flex"
+        style={{ width: RAIL_WIDTH }}
       >
         <SidebarContent {...sidebarProps} surface="sidebar" onLogout={() => { void handleLogout() }} />
       </aside>
 
-      <DrawerV2
+      <Drawer
         open={mobileNavOpen}
         onOpenChange={setMobileNavOpen}
         title={t('nav.adminNavigation')}
         initialFocus={firstMobileNavigationRef}
       >
-        <div id="admin-mobile-navigation" className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div id="admin-mobile-navigation" className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar">
           <SidebarContent
             {...sidebarProps}
             surface="drawer"
@@ -339,17 +334,16 @@ export default function MainLayoutV2() {
             onLogout={() => { void handleLogout() }}
           />
         </div>
-      </DrawerV2>
+      </Drawer>
 
-      <div data-admin-main className="min-w-0 flex-1 lg:ml-[232px]" style={{ background: 'var(--admin-canvas)' }}>
+      <div data-admin-main className="min-w-0 flex-1 bg-background lg:ml-[232px]">
         <header
           data-admin-topbar
-          className="fixed top-0 right-0 left-0 z-20 flex h-12 items-center gap-x-2.5 border-b border-[var(--border)] px-4 sm:px-6 lg:left-[232px] lg:px-8"
-          style={{ background: 'var(--admin-canvas)' }}
+          className="fixed inset-x-0 top-0 z-20 flex h-12 items-center gap-x-2.5 border-b border-border bg-background px-4 sm:px-6 lg:left-[232px] lg:px-8"
         >
           <button
             type="button"
-            className="inline-flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[6px] bg-transparent text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.96] lg:hidden"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-transparent text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:hidden"
             onClick={() => setMobileNavOpen(true)}
             aria-label={t('nav.openNavigation')}
             aria-expanded={mobileNavOpen}
@@ -357,40 +351,37 @@ export default function MainLayoutV2() {
           >
             <Icon name="menu" size="sm" />
           </button>
-          <div
-            data-admin-breadcrumb
-            className="min-w-0 flex-1"
-          >
+          <div data-admin-breadcrumb className="min-w-0 flex-1">
             <div
-              className={`min-w-0 items-center gap-1.5 text-[12px] font-[550] ${showPageBreadcrumb ? 'flex' : 'flex lg:hidden'}`}
+              className={cn(
+                'min-w-0 items-center gap-1.5 text-[12px] font-medium',
+                showPageBreadcrumb ? 'flex' : 'flex lg:hidden',
+              )}
             >
               {activeSection && (
-                <span className="truncate" style={{ color: showPageBreadcrumb ? 'var(--text-subtle)' : 'var(--text)' }}>
+                <span className={cn('truncate', showPageBreadcrumb ? 'text-muted-foreground' : 'text-foreground')}>
                   {activeSection.label}
                 </span>
               )}
               {showPageBreadcrumb && (
                 <>
                   {activeSection && (
-                    <span aria-hidden="true" className="text-[var(--text-subtle)]">
+                    <span aria-hidden="true" className="text-muted-foreground">
                       <Icon name="chevron_right" size="sm" />
                     </span>
                   )}
-                  <span className="truncate" style={{ color: 'var(--text)' }}>{pageTitle}</span>
+                  <span className="truncate text-foreground">{pageTitle}</span>
                 </>
               )}
             </div>
           </div>
-          <div
-            data-admin-preferences
-            className="flex shrink-0 items-center gap-1"
-          >
-            <LangToggle variant="admin" />
+          <div data-admin-preferences className="flex shrink-0 items-center gap-1">
+            <LanguageToggle variant="admin" />
             <ThemeToggle labeled variant="admin" />
           </div>
         </header>
 
-        <main className="min-h-screen pt-16 pb-6" style={{ background: 'var(--admin-canvas)' }}>
+        <main className="min-h-screen bg-background pt-16 pb-6">
           <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
             {policySurface && (
               <PolicyStatusBanner

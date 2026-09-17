@@ -47,11 +47,23 @@ async function expectNoFocusableRows(page: Page) {
   await expect(page.locator('tr[tabindex]')).toHaveCount(0)
 }
 
+/**
+ * Assert that a region sits inside the mobile canvas.
+ *
+ * The region is re-rendered as the query moves between loading, error, and
+ * empty, so poll the measurement rather than taking one sample between two
+ * renders; a sample taken mid-swap reports no box at all and would fail for a
+ * reason the contract does not care about.
+ */
 async function expectWithinViewport(page: Page, selector: string, width: number) {
-  const bounds = await page.locator(selector).boundingBox()
-  expect(bounds).not.toBeNull()
-  expect(bounds!.x).toBeGreaterThanOrEqual(0)
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1)
+  await expect.poll(async () => {
+    const bounds = await page.locator(selector).boundingBox()
+    if (!bounds) return 'not-rendered'
+    if (bounds.x < 0) return `overflows-left:${bounds.x}`
+    const right = bounds.x + bounds.width
+    if (right > width + 1) return `overflows-right:${right}`
+    return 'inside'
+  }).toBe('inside')
 }
 
 async function navigateClient(page: Page, path: string) {
