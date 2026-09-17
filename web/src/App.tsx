@@ -28,7 +28,6 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <div className="page-wash" />
         <SetupGate>
           <ApplicationRoutes />
         </SetupGate>

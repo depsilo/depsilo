@@ -1,5 +1,38 @@
 import { adminApiDefaults, test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 
+/**
+ * Resolve the shell's surface colours from the semantic tokens themselves.
+ * The shell is one token set: the canvas is shared by the shell, main region,
+ * and topbar, and the navigation rail is the only surface that differs.
+ */
+async function readShellSurfaces(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const probe = document.createElement('span')
+    document.body.appendChild(probe)
+    const resolve = (name: string) => {
+      probe.style.color = `var(${name})`
+      return getComputedStyle(probe).color
+    }
+    const tokens = {
+      canvas: resolve('--background'),
+      rail: resolve('--sidebar'),
+    }
+    probe.remove()
+    const background = (selector: string) => {
+      const element = document.querySelector(selector)
+      if (!element) throw new Error(`missing shell region: ${selector}`)
+      return getComputedStyle(element).backgroundColor
+    }
+    return {
+      tokens,
+      shell: background('[data-admin-shell]'),
+      main: background('[data-admin-main] > main'),
+      topbar: background('[data-admin-topbar]'),
+      sidebar: background('aside'),
+    }
+  })
+}
+
 const legacyAdminHrefs = [
   '/admin',
   '/admin/attention',
@@ -247,18 +280,17 @@ test('desktop Admin chrome uses a clean canvas, brand portal link, and labeled t
   await page.goto('/admin/security')
 
   const shell = page.locator('[data-admin-shell]')
-  const globalWash = page.locator('#root > .page-wash')
-  const main = page.locator('[data-admin-main] > main')
   const topbar = page.locator('[data-admin-topbar]')
-  const sidebar = page.locator('aside')
-  await expect(shell.locator(':scope > .page-wash')).toHaveCount(0)
-  await expect(globalWash).toHaveCSS('z-index', '0')
-  await expect(shell).toHaveCSS('position', 'relative')
-  await expect(shell).toHaveCSS('z-index', '1')
-  await expect(shell).toHaveCSS('background-color', 'rgb(255, 255, 255)')
-  await expect(main).toHaveCSS('background-color', 'rgb(255, 255, 255)')
-  await expect(topbar).toHaveCSS('background-color', 'rgb(255, 255, 255)')
-  await expect(sidebar).toHaveCSS('background-color', 'rgb(246, 247, 245)')
+  await expect(shell).toBeVisible()
+  // The Admin shell no longer forks the palette, and no decorative overlay sits
+  // behind it: every chrome surface resolves from the single token cascade.
+  await expect(page.locator('.page-wash')).toHaveCount(0)
+  const light = await readShellSurfaces(page)
+  expect(light.sidebar).toBe(light.tokens.rail)
+  expect(light.shell).toBe(light.tokens.canvas)
+  expect(light.main).toBe(light.tokens.canvas)
+  expect(light.topbar).toBe(light.tokens.canvas)
+  expect(light.tokens.rail).not.toBe(light.tokens.canvas)
 
   const brandLink = page.locator('[data-admin-nav-surface="sidebar"]')
     .locator('..')
@@ -271,10 +303,13 @@ test('desktop Admin chrome uses a clean canvas, brand portal link, and labeled t
   await themeToggle.click()
   await expect(themeToggle).toContainText('外观：深色')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-  await expect(shell).toHaveCSS('background-color', 'rgb(20, 25, 21)')
-  await expect(main).toHaveCSS('background-color', 'rgb(20, 25, 21)')
-  await expect(topbar).toHaveCSS('background-color', 'rgb(20, 25, 21)')
-  await expect(sidebar).toHaveCSS('background-color', 'rgb(24, 31, 26)')
+  const dark = await readShellSurfaces(page)
+  expect(dark.shell).toBe(dark.tokens.canvas)
+  expect(dark.main).toBe(dark.tokens.canvas)
+  expect(dark.topbar).toBe(dark.tokens.canvas)
+  expect(dark.sidebar).toBe(dark.tokens.rail)
+  expect(dark.tokens.canvas).not.toBe(light.tokens.canvas)
+  expect(dark.tokens.rail).not.toBe(light.tokens.rail)
   expect(await page.evaluate(() => localStorage.getItem('depsilo-theme'))).toBe('dark')
 
   await themeToggle.click()

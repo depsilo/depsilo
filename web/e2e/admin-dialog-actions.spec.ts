@@ -1,5 +1,31 @@
 import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 
+/**
+ * Resolve a semantic token to the exact string Chromium reports for it, so a
+ * tooltip can be asserted against the inverse-surface contract instead of a
+ * literal colour that the token layer is free to change.
+ */
+async function resolvedTokenColor(page: import('@playwright/test').Page, token: string) {
+  return page.evaluate((name) => {
+    const probe = document.createElement('span')
+    probe.style.color = `var(${name})`
+    document.body.appendChild(probe)
+    const value = getComputedStyle(probe).color
+    probe.remove()
+    return value
+  }, token)
+}
+
+/** The floating tooltip is the product's inverse surface: text on canvas. */
+async function expectInverseSurface(page: import('@playwright/test').Page, tooltip: import('@playwright/test').Locator) {
+  const [foreground, background] = await Promise.all([
+    resolvedTokenColor(page, '--foreground'),
+    resolvedTokenColor(page, '--background'),
+  ])
+  await expect(tooltip).toHaveCSS('background-color', foreground)
+  await expect(tooltip).toHaveCSS('color', background)
+}
+
 test('dialog traps focus and restores its trigger', async ({ page }) => {
   await page.goto('/admin/users')
   const trigger = page.getByRole('button', { name: /添加用户/ })
@@ -17,8 +43,7 @@ test('dialog traps focus and restores its trigger', async ({ page }) => {
   await closeButton.focus()
   const tooltip = page.getByRole('tooltip')
   await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'rgb(233, 236, 238)')
-  await expect(tooltip).toHaveCSS('color', 'rgb(11, 13, 15)')
+  await expectInverseSurface(page, tooltip)
 
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
@@ -51,8 +76,7 @@ test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
   await expect(button).toBeFocused()
   const tooltip = page.getByRole('tooltip')
   await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'rgb(20, 24, 26)')
-  await expect(tooltip).toHaveCSS('color', 'rgb(255, 255, 255)')
+  await expectInverseSurface(page, tooltip)
 })
 
 test('user credential dialog explains the enforced password policy', async ({ page }) => {

@@ -1,24 +1,22 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Theme switching is class-based. `index.html` (pre-paint) and
+ * `lib/theme.ts` (runtime) put `light` or `dark` on <html>, so `.dark` on the
+ * root is the single dark switch. There is exactly one token cascade below:
+ * `:root` holds light, `.dark` overrides it. */
+@custom-variant dark (&:is(.dark *));
 
 /* The UI ships Chinese and English locales. Load only each typeface's Latin
  * variable subset; CJK and any other scripts deliberately fall through to
- * the platform font stack below. Importing Fontsource's package root emitted
- * 19 Greek/Cyrillic/Vietnamese/Latin-ext files that these locales never use. */
+ * the platform font stack in `--font-sans`. */
 @font-face {
   font-family: 'Inter Variable';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
   src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
-  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
-}
-
-@font-face {
-  font-family: 'Inter Tight Variable';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 100 900;
-  src: url('@fontsource-variable/inter-tight/files/inter-tight-latin-wght-normal.woff2') format('woff2-variations');
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
@@ -31,700 +29,430 @@
   unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
 
-/* ── Tailwind v4 @theme — turns CSS vars into utility classes ──
- *  These are the LIGHT mode values for the "Instrument" system.
- *  Dark mode (the default) is set on :root below; Tailwind utility
- *  classes that use these tokens render correctly in either mode
- *  because the @theme block only contributes initial values for
- *  the utility-class machinery, while the actual cascading values
- *  on :root override them per data-theme. */
-@theme {
-  --color-bg-page:   #FFFFFF;
-  --color-bg-panel:  #FFFFFF;
-  --color-bg-card:   #FFFFFF;
-  --color-bg-soft:   #F1F3F2;
-  --color-bg-hover:  #ECEFEE;
-
-  --color-border:        rgba(12, 22, 17, 0.10);
-  --color-border-soft:   rgba(12, 22, 17, 0.05);
-  --color-border-strong: rgba(12, 22, 17, 0.17);
-
-  --color-text:        #14181A;
-  --color-text-muted:  #586068;
-  --color-text-soft:   #626A72;
-  --color-text-subtle: #646C74;
-
-  /* Brand = the "hit" signal green. Identical token, kept under the
-     old name so every component that reads --color-brand keeps
-     working. New code can use --color-hit. */
-  --color-brand:        #0FA86F;
-  --color-brand-strong: #0C8D5D;
-  --color-brand-soft:   #E4F6EE;
-  --color-brand-border: rgba(15, 168, 111, 0.30);
-  --color-brand-text:   #04321F;
-
-  --color-spec-1: #3DDC91;
-  --color-spec-2: #2DBE7A;
-  --color-spec-3: #0FA86F;
-  --color-spec-4: #0A8654;
-
-  --color-ok:          #0FA86F;
-  --color-ok-fill:     #E4F6EE;
-  --color-ok-border:   rgba(15, 168, 111, 0.30);
-  --color-ok-text:     #04321F;
-
-  --color-warn:        #B5770E;
-  --color-warn-fill:   #FBEFD8;
-  --color-warn-border: rgba(181, 119, 14, 0.30);
-  --color-warn-text:   #8A4F00;
-
-  --color-danger:        #CF4444;
-  --color-danger-fill:   #FBE9E9;
-  --color-danger-border: rgba(207, 68, 68, 0.30);
-  --color-danger-text:   #A52E2E;
-  --color-focus-ring:    #0C8D5D;
-
-  /* Inter Variable for UI text, Inter Tight only for display headings.
-     CJK prefers platform fonts first for a lighter, more native read. */
-  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  --spacing-1:  4px;
-  --spacing-2:  8px;
-  --spacing-3:  12px;
-  --spacing-4:  16px;
-  --spacing-6:  24px;
-  --spacing-8:  32px;
-  --spacing-12: 48px;
-
-  --radius-pill:  4px;
-  --radius-tag:   6px;
-  --radius-card:  10px;
-  --radius-shell: 14px;
-}
-
-/* ── :root — Instrument LIGHT tokens ──────────────────────
-   These are the LIGHT mode values. Dark is the product default
-   and lives under [data-theme="dark"] below, which is set on
-   <html> by main.tsx before first paint to avoid FOUC.
-
-   Old token NAMES are preserved so every component that uses
-   var(--brand), var(--bg-page), etc. keeps working without
-   touching one line of JSX. The new Instrument NAMES (--bg,
-   --surface, --hit, --btn, ...) are added alongside so new
-   code can use the role-based vocabulary the brief prescribes. */
+/* ── Semantic tokens ────────────────────────────────────────────────────────
+ * Stage A uses the neutral shadcn base. These are deliberately plain: the
+ * product palette is a Stage B decision, and this layer only has to be
+ * correct, complete, and single-source.
+ *
+ * Beyond shadcn's defaults the product needs three extra status roles —
+ * `success`, `warning`, and `info` — because Depsilo reports cache, policy,
+ * and delivery outcomes separately. A cache miss and a slow upstream are
+ * normal results and must never read as `destructive`.
+ *
+ * `--radius` is the single radius seed; the scale below derives from it.
+ */
 :root {
+  --radius: 0.625rem;
   color-scheme: light;
-  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --logo-mark: #0A8654;
 
-  /* Surfaces — old names */
-  --bg-page:   #FFFFFF;
-  --bg-panel:  #FFFFFF;
-  --bg-card:   #FFFFFF;
-  --bg-soft:   #F1F3F2;
-  --bg-hover:  #ECEFEE;
-  --admin-canvas: #FFFFFF;
-  --admin-rail: #F3F8F5;
-  --admin-rail-hover: #EAF3EE;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
 
-  --border:        rgba(12, 22, 17, 0.10);
-  --border-soft:   rgba(12, 22, 17, 0.05);
-  --border-strong: rgba(12, 22, 17, 0.17);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
 
-  --text:        #14181A;
-  --text-muted:  #586068;
-  --text-soft:   #626A72;
-  --text-subtle: #646C74;
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
 
-  /* Brand = the "hit" signal green. Used for links, active nav,
-     focus rings, status dots, cache-hit highlights — wherever the
-     previous purple lived. Per Instrument's "one rule", this is
-     SEPARATE from the primary button fill below. */
-  --brand:        #0FA86F;
-  --brand-strong: #0C8D5D;
-  --brand-soft:   #E4F6EE;
-  --brand-border: rgba(15, 168, 111, 0.30);
-  --brand-text:   #04321F;
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.505 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
 
-  /* Primary button fill — deeper green than the signal green,
-     ensuring the main action is visually unmistakable even on
-     pages with lots of brand-color use elsewhere. Identical
-     across themes per the brief. */
-  --btn-primary-bg: #0A8654;
-  --btn-primary-fg: #FFFFFF;
-  --btn-primary-press: #097A4B;
+  /* Status roles are tuned so each stays readable both as a filled surface
+   * under its `-foreground` and as text over its own 14–16% tint, which is how
+   * Depsilo actually renders notices and badges. */
+  --destructive: oklch(0.47 0.2 27);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.47 0.13 155);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.47 0.12 70);
+  --warning-foreground: oklch(0.985 0 0);
+  --info: oklch(0.47 0.12 235);
+  --info-foreground: oklch(0.985 0 0);
 
-  /* Aurora / brand gradients — repurposed to a green sweep so
-     the few places that still use --grad-brand (active tab
-     underline, brand bars) stay on-palette. */
-  --spec-1: #3DDC91;
-  --spec-2: #2DBE7A;
-  --spec-3: #0FA86F;
-  --spec-4: #0A8654;
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.556 0 0);
 
-  --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-  --grad-brand:  linear-gradient(120deg, #2DBE7A 0%, #0A8654 100%);
-  --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(15, 168, 111, 0.45) 25%, rgba(45, 190, 122, 0.45) 60%, transparent 100%);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
 
-  /* OK / success — points at the same green as the brand because
-     "cache hit" and "success" are the same semantic. */
-  --ok:          #0FA86F;
-  --ok-fill:     #E4F6EE;
-  --ok-border:   rgba(15, 168, 111, 0.30);
-  --ok-text:     #04321F;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.556 0 0);
 
-  /* Warn / slow — amber per Instrument. */
-  --warn:        #B5770E;
-  --warn-fill:   #FBEFD8;
-  --warn-border: rgba(181, 119, 14, 0.30);
-  --warn-text:   #8A4F00;
-
-  /* Danger / miss — red per Instrument. */
-  --danger:        #CF4444;
-  --danger-fill:   #FBE9E9;
-  --danger-border: rgba(207, 68, 68, 0.30);
-  --danger-text:   #A52E2E;
-  --focus-ring:    #0C8D5D;
-
-  /* Instrument role-named aliases — for new code that wants to use
-     the brief's vocabulary directly. Values track the existing
-     tokens so a future find-and-replace from old → new names is a
-     pure rename, not a value migration. */
-  --bg:        var(--bg-page);
-  --surface:   var(--bg-card);
-  --inset:     var(--bg-soft);
-  --hover:     var(--bg-hover);
-  --line:      var(--border);
-  --line-2:    var(--border-strong);
-  --fg:        var(--text);
-  --fg-mut:    var(--text-muted);
-  --fg-faint:  var(--text-subtle);
-  --inverse:   var(--text);
-  --on-inverse: var(--bg-page);
-  --hit:       var(--brand);
-  --hit-press: var(--brand-strong);
-  --hit-bg:    var(--brand-soft);
-  --on-hit:    var(--brand-text);
-  --btn:       var(--btn-primary-bg);
-  --btn-press: var(--btn-primary-press);
-  --btn-fg:    var(--btn-primary-fg);
-  --slow:      var(--warn);
-  --slow-bg:   var(--warn-fill);
-  --miss:      var(--danger);
-  --miss-bg:   var(--danger-fill);
-  --live:      #1F8FB8;
-  --glow:      rgba(15, 168, 111, 0.00);
-  --grid:      rgba(12, 22, 17, 0.025);
-
-  --r-pill: 4px;
-  --r-tag:  6px;
-  --r-card: 10px;
-  --r-shell: 14px;
-  /* Instrument radius aliases */
-  --r-sm: 6px; --r-md: 8px; --r-lg: 10px; --r-xl: 14px;
-
-  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
-  --s-6: 24px; --s-8: 32px; --s-12: 48px;
-
-  --shadow-card: rgba(12, 22, 17, 0.05) 0 6px 18px -6px,
-                 rgba(12, 22, 17, 0.04) 0 3px 9px -3px;
-  /* Surface lift for .card — light theme only. Dark elevation comes
-     from surface color + hairline; a glow there would look smoky. */
-  --shadow-surface: rgba(12, 22, 17, 0.04) 0 1px 2px,
-                    rgba(12, 22, 17, 0.06) 0 4px 12px -6px;
-  --shadow-pop:  rgba(12, 22, 17, 0.15) 0 30px 45px -30px,
-                 rgba(12, 22, 17, 0.08) 0 18px 36px -18px;
-
-  /* Quick Start's primary configuration is the one intentional inverse
-     surface in the light Portal. Keeping it tokenized prevents a parallel
-     hard-coded palette from leaking into CodeBlock. */
-  --code-bg: #101512;
-  --code-header: #151C18;
-  --code-line: rgba(231, 241, 235, 0.10);
-  --code-fg: #E8F0EB;
-  --code-muted: #98A79F;
-  --code-accent: #55DDA0;
-  --code-danger: #FF9D9D;
-  --code-shadow: rgba(8, 15, 11, 0.28) 0 22px 44px -24px;
+  --shadow-surface: 0 1px 2px 0 oklch(0 0 0 / 0.05);
+  --shadow-card: 0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.06);
+  --shadow-pop: 0 16px 36px -18px oklch(0 0 0 / 0.24), 0 4px 12px -6px oklch(0 0 0 / 0.12);
 }
 
-/* ── Dark mode — Instrument default ────────────────────── */
-html.dark,
-[data-theme="dark"] {
+.dark {
   color-scheme: dark;
-  --logo-mark: #3DDC91;
-  --bg-page:   #0B0D0F;
-  --bg-panel:  #14181C;
-  --bg-card:   #14181C;
-  --bg-soft:   #1A1F24;
-  --bg-hover:  #20262C;
-  --admin-canvas: #0B0D0F;
-  --admin-rail: #1A1F24;
-  --admin-rail-hover: #20262C;
 
-  --border:        rgba(255, 255, 255, 0.08);
-  --border-soft:   rgba(255, 255, 255, 0.04);
-  --border-strong: rgba(255, 255, 255, 0.15);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
 
-  --text:        #E9ECEE;
-  --text-muted:  #98A1A9;
-  --text-soft:   #98A1A9;
-  --text-subtle: #7A8591;
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
 
-  /* Brand / signal-green = lifted to a brighter hit color so it
-     reads vividly on the dark surface. */
-  --brand:        #3DDC91;
-  --brand-strong: #2DBE7A;
-  --brand-soft:   rgba(61, 220, 145, 0.12);
-  --brand-border: rgba(61, 220, 145, 0.30);
-  --brand-text:   #3DDC91;
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
 
-  /* Primary button stays the same deep green in both themes — the
-     brief is explicit that the CTA color does not flip. */
-  --btn-primary-bg: #0A8654;
-  --btn-primary-fg: #FFFFFF;
-  --btn-primary-press: #097A4B;
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
 
-  --spec-1: #3DDC91;
-  --spec-2: #2DBE7A;
-  --spec-3: #0FA86F;
-  --spec-4: #0A8654;
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.145 0 0);
+  --success: oklch(0.8 0.14 155);
+  --success-foreground: oklch(0.145 0 0);
+  --warning: oklch(0.82 0.13 80);
+  --warning-foreground: oklch(0.145 0 0);
+  --info: oklch(0.78 0.11 235);
+  --info-foreground: oklch(0.145 0 0);
 
-  --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-  --grad-brand:  linear-gradient(120deg, #3DDC91 0%, #0FA86F 100%);
-  --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(61, 220, 145, 0.65) 25%, rgba(45, 190, 122, 0.65) 60%, transparent 100%);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.708 0 0);
 
-  --ok:          #3DDC91;
-  --ok-fill:     rgba(61, 220, 145, 0.12);
-  --ok-border:   rgba(61, 220, 145, 0.30);
-  --ok-text:     #3DDC91;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.708 0 0);
+  --chart-3: oklch(0.556 0 0);
+  --chart-4: oklch(0.439 0 0);
+  --chart-5: oklch(0.371 0 0);
 
-  --warn:        #F2B544;
-  --warn-fill:   rgba(242, 181, 68, 0.13);
-  --warn-border: rgba(242, 181, 68, 0.30);
-  --warn-text:   #F2B544;
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0);
+  --sidebar-primary-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.708 0 0);
 
-  --danger:        #F76D6D;
-  --danger-fill:   rgba(247, 109, 109, 0.12);
-  --danger-border: rgba(247, 109, 109, 0.30);
-  --danger-text:   #F76D6D;
-  --focus-ring:    #3DDC91;
-
-  /* Instrument role-named aliases follow the same redefinitions. */
-  --bg:        #0B0D0F;
-  --surface:   #14181C;
-  --inset:     #1A1F24;
-  --hover:     #20262C;
-  --line:      rgba(255, 255, 255, 0.08);
-  --line-2:    rgba(255, 255, 255, 0.15);
-  --fg:        #E9ECEE;
-  --fg-mut:    #98A1A9;
-  --fg-faint:  #5E6770;
-  --hit:       #3DDC91;
-  --hit-press: #2DBE7A;
-  --hit-bg:    rgba(61, 220, 145, 0.12);
-  --on-hit:    #042A1C;
-  --btn:       #0A8654;
-  --btn-press: #097A4B;
-  --btn-fg:    #FFFFFF;
-  --slow:      #F2B544;
-  --slow-bg:   rgba(242, 181, 68, 0.13);
-  --miss:      #F76D6D;
-  --miss-bg:   rgba(247, 109, 109, 0.12);
-  --live:      #54C6E6;
-  --glow:      rgba(61, 220, 145, 0.10);
-  --grid:      rgba(255, 255, 255, 0.022);
-
-  --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
-                 rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
-  --shadow-surface: none;
-  --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
-                 rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
-
-  --code-bg: #080C0A;
-  --code-header: #0D120F;
-  --code-line: rgba(232, 244, 237, 0.10);
-  --code-fg: #EDF5F0;
-  --code-muted: #91A097;
-  --code-accent: #61E6AA;
-  --code-danger: #FFAAAA;
-  --code-shadow: rgba(0, 0, 0, 0.52) 0 24px 48px -22px;
+  --shadow-surface: 0 1px 2px 0 oklch(0 0 0 / 0.4);
+  --shadow-card: 0 1px 3px 0 oklch(0 0 0 / 0.5), 0 1px 2px -1px oklch(0 0 0 / 0.4);
+  --shadow-pop: 0 16px 36px -18px oklch(0 0 0 / 0.6), 0 4px 12px -6px oklch(0 0 0 / 0.4);
 }
 
-/* Auto-follow OS when user has selected "system" mode (i.e. no
-   class="light"/"dark" and no data-theme="light"/"dark" on <html>).
-   With dark now being the product default, this branch only kicks in
-   on a fresh install where the user has selected "system" and the OS
-   reports dark — which then matches the standard dark Instrument
-   tokens. Pulls in the same values as [data-theme="dark"] to keep
-   the two paths in lockstep. */
-@media (prefers-color-scheme: dark) {
-  html:not(.light):not([data-theme="light"]) {
-    color-scheme: dark;
-    --logo-mark: #3DDC91;
-    --bg-page:   #0B0D0F;
-    --bg-panel:  #14181C;
-    --bg-card:   #14181C;
-    --bg-soft:   #1A1F24;
-    --bg-hover:  #20262C;
-    --admin-canvas: #0B0D0F;
-    --admin-rail: #1A1F24;
-    --admin-rail-hover: #20262C;
+/* Expose the tokens to Tailwind so `bg-background`, `text-muted-foreground`,
+ * `border-border`, `rounded-lg`, … resolve against the cascade above. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-    --border:        rgba(255, 255, 255, 0.08);
-    --border-soft:   rgba(255, 255, 255, 0.04);
-    --border-strong: rgba(255, 255, 255, 0.15);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
-    --text:        #E9ECEE;
-    --text-muted:  #98A1A9;
-    --text-soft:   #98A1A9;
-    --text-subtle: #7A8591;
-
-    --brand:        #3DDC91;
-    --brand-strong: #2DBE7A;
-    --brand-soft:   rgba(61, 220, 145, 0.12);
-    --brand-border: rgba(61, 220, 145, 0.30);
-    --brand-text:   #3DDC91;
-
-    --btn-primary-bg: #0A8654;
-    --btn-primary-fg: #FFFFFF;
-    --btn-primary-press: #097A4B;
-
-    --spec-1: #3DDC91;
-    --spec-2: #2DBE7A;
-    --spec-3: #0FA86F;
-    --spec-4: #0A8654;
-
-    --grad-aurora: linear-gradient(115deg, var(--spec-1) 0%, var(--spec-2) 40%, var(--spec-3) 75%, var(--spec-4) 100%);
-    --grad-brand:  linear-gradient(120deg, #3DDC91 0%, #0FA86F 100%);
-    --grad-rim:    linear-gradient(90deg, transparent 0%, rgba(61, 220, 145, 0.65) 25%, rgba(45, 190, 122, 0.65) 60%, transparent 100%);
-
-    --ok:          #3DDC91;
-    --ok-fill:     rgba(61, 220, 145, 0.12);
-    --ok-border:   rgba(61, 220, 145, 0.30);
-    --ok-text:     #3DDC91;
-
-    --warn:        #F2B544;
-    --warn-fill:   rgba(242, 181, 68, 0.13);
-    --warn-border: rgba(242, 181, 68, 0.30);
-    --warn-text:   #F2B544;
-
-    --danger:        #F76D6D;
-    --danger-fill:   rgba(247, 109, 109, 0.12);
-    --danger-border: rgba(247, 109, 109, 0.30);
-    --danger-text:   #F76D6D;
-    --focus-ring:    #3DDC91;
-
-    --bg:        #0B0D0F;
-    --surface:   #14181C;
-    --inset:     #1A1F24;
-    --hover:     #20262C;
-    --line:      rgba(255, 255, 255, 0.08);
-    --line-2:    rgba(255, 255, 255, 0.15);
-    --fg:        #E9ECEE;
-    --fg-mut:    #98A1A9;
-    --fg-faint:  #5E6770;
-    --hit:       #3DDC91;
-    --hit-press: #2DBE7A;
-    --hit-bg:    rgba(61, 220, 145, 0.12);
-    --on-hit:    #042A1C;
-    --btn:       #0A8654;
-    --btn-press: #097A4B;
-    --btn-fg:    #FFFFFF;
-    --slow:      #F2B544;
-    --slow-bg:   rgba(242, 181, 68, 0.13);
-    --miss:      #F76D6D;
-    --miss-bg:   rgba(247, 109, 109, 0.12);
-    --live:      #54C6E6;
-    --glow:      rgba(61, 220, 145, 0.10);
-    --grid:      rgba(255, 255, 255, 0.022);
-
-    --shadow-card: 0 0 0 1px rgba(61, 220, 145, 0.04),
-                   rgba(0, 0, 0, 0.30) 0 6px 18px -6px;
-    --shadow-surface: none;
-    --shadow-pop:  0 0 0 1px rgba(61, 220, 145, 0.08),
-                   rgba(0, 0, 0, 0.50) 0 24px 48px -16px;
-
-    --code-bg: #080C0A;
-    --code-header: #0D120F;
-    --code-line: rgba(232, 244, 237, 0.10);
-    --code-fg: #EDF5F0;
-    --code-muted: #91A097;
-    --code-accent: #61E6AA;
-    --code-danger: #FFAAAA;
-    --code-shadow: rgba(0, 0, 0, 0.52) 0 24px 48px -22px;
-  }
+  --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-heading: var(--font-sans);
 }
-
-/* ── Page-level dark effects ── */
-/* (.page-wash intentionally produces no background in dark mode
-    either — see the empty light-mode rule below.) */
-
-html.dark .aurora-glow::after,
-[data-theme="dark"] .aurora-glow::after {
-  background: radial-gradient(60% 80% at 50% 50%, rgba(61, 220, 145, 0.28), transparent 70%);
-  filter: blur(28px);
-}
-
-/* ── Body defaults ── */
-html, body {
-  background: var(--bg-page);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 390;
-  line-height: 1.5;
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-body { margin: 0; }
-#root { overflow-x: hidden; }
-* { box-sizing: border-box; }
 
 @layer base {
-  h1, h2, h3, h4 {
-    font-family: var(--font-display);
-    color: var(--text);
-    font-weight: 660;
-    letter-spacing: -0.025em;
-    line-height: 1.1;
+  html,
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    /* The document viewport must never scroll horizontally; wide tables own
+     * their own named scroll region. */
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* The product's base text size belongs on `body`, never on `html`: a root
+   * font-size other than the browser default silently rescales every
+   * `rem`-based spacing, sizing, and radius utility in the stylesheet. The
+   * previous token layer pinned some spacing tokens statically and left the
+   * rest to `calc(var(--spacing) * n)`, so half the interface was scaled and
+   * half was not. */
+  body {
+    font-size: 13px;
+  }
+
+  #root {
+    overflow-x: hidden;
+  }
+
+  /* No negative tracking anywhere: CJK glyphs have no sidebearings to absorb
+   * it, and `admin-axe.spec.ts` asserts that every visible element resolves to
+   * zero letter spacing. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.25;
     margin: 0;
-    /* Balanced wrapping prevents an orphaned single word on the second
-       line — common in modal titles, section headers, empty-state
-       headlines, "Configure {{name}}", etc. */
     text-wrap: balance;
   }
-  /* Inter Tight is already a tightened cut — stacking aggressive
-     negative tracking on top double-tightens Latin headings (and CJK
-     glyphs have no sidebearings to absorb any of it). Keep display
-     tracking modest. */
-  h1 { font-size: 44px; letter-spacing: -0.028em; line-height: 1.02; }
-  h2 { font-size: 26px; letter-spacing: -0.022em; }
-  h3 { font-size: 17px; letter-spacing: -0.02em; line-height: 1.2; }
-  h4 { font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
-  /* Body copy: pretty wraps to avoid widow/orphan single words at the
-     end. Costs nothing on short labels, materially improves long hints
-     and modal descriptions. */
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1rem; }
+  h4 { font-size: 0.875rem; }
+
   p { text-wrap: pretty; }
+
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+
+  /* Programmatically focused route and setup regions announce a state change
+   * rather than acting as keyboard targets, so a ring would obscure the
+   * actionable control inside. Their buttons keep the normal focus ring. */
+  .programmatic-focus-target:focus-visible {
+    outline: none;
+  }
 }
 
-::selection { background: var(--brand-soft); }
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 
-.num, .mono, [data-tabular] {
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+::selection {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+  border: 2px solid var(--background);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Numeric and machine-readable values use the mono face with tabular figures
+ * so changing digits cannot move layout. */
+.num,
+.mono,
+[data-tabular] {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
 }
 
-/* Code blocks must NOT ligate. Geist Mono's default ligatures fuse `--`
-   into an em-dash, which visually eats the space before the next token
-   (e.g. `pip install --no-cache` looks like `pip install—no-cache`).
-   Also reset letter-spacing so inherited negative tracking doesn't shrink
-   inter-character gaps inside snippets. */
-pre, code, .code-mono {
+/* Code must not ligate: `--` would fuse into an em dash and read as one token. */
+pre,
+code,
+.code-mono {
   font-feature-settings: "liga" 0, "calt" 0;
   font-variant-ligatures: none;
   letter-spacing: 0;
 }
 
-/* ── Inline SVG icons ──
- *  Inline SVGs keep the same fixed box before and after render, avoiding
- *  both font downloads and icon-driven layout shifts. */
+/* Inline SVGs keep a fixed box before and after render, so icons never cause
+ * layout shift while a chunk or font loads. */
 .icon {
-  font-size: 20px;
   display: inline-block;
+  flex-shrink: 0;
   width: 1em;
   height: 1em;
-  flex-shrink: 0;
+  font-size: 20px;
   vertical-align: middle;
 }
 .icon-sm { font-size: 18px; }
 .icon-lg { font-size: 24px; }
 
-/* ── Iridescent utilities ── */
-
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-}
-
-/* Admin is an operational surface: keep every label at neutral tracking so
-   locale and viewport changes cannot alter control geometry. */
-[data-admin-shell] * { letter-spacing: 0; }
-
-.grad-text {
-  background: var(--grad-brand);
-  -webkit-background-clip: text;
-          background-clip: text;
-  -webkit-text-fill-color: transparent;
-          color: transparent;
-}
-
-.grad-text-aurora {
-  background: var(--grad-aurora);
-  -webkit-background-clip: text;
-          background-clip: text;
-  -webkit-text-fill-color: transparent;
-          color: transparent;
-}
-
-/* @layer utilities + :where() so Tailwind position utilities (fixed/absolute/sticky) win the cascade */
-@layer utilities {
-  :where(.aurora-rim, .aurora-rim-bottom) {
-    position: relative;
-  }
-  .aurora-rim::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 12px; right: 12px;
-    height: 1px;
-    background: var(--grad-rim);
-    opacity: 0.9;
-    pointer-events: none;
-    border-radius: 1px;
-  }
-  .aurora-rim-bottom::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 16px; right: 16px;
-    height: 1px;
-    background: var(--grad-rim);
-    opacity: 0.55;
-    pointer-events: none;
-    border-radius: 1px;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
-/* Page-wide ambient surface — intentionally empty. The previous
-   four-blob mesh + noise grain made the page feel tinted (warm
-   copper era) or clinical-cool (purple era) depending on the brand
-   hue. Per user direction we ship the page on its plain --bg-page
-   instead. App mounts one global .page-wash for every route so ambient
-   treatment has a single owner and cannot stack across nested surfaces. */
-.page-wash {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  /* No ambient color: brand-tinted washes have been tried and removed
-     TWICE now (copper/purple mesh era, then the 2026-07-09 green glow)
-     — every time they read as "tinted screen". The page sits on plain
-     --bg-page; this element only carries the film-grain frost below,
-     and the brand green lives in UI elements where it means something. */
-  background: none;
+/* ============================================================================
+ * TEMPORARY — Stage A migration aliases.
+ *
+ * Everything below exists only so components the migration has not reached
+ * yet keep resolving. None of it may be referenced by new code.
+ *
+ * The whole section is deleted in Phase 10; `docs/refactor/shadcn-ui-plan.md`
+ * lists the `rg` census that proves it is gone. Legacy token names are mapped
+ * onto the semantic tokens above — these are renames, not new values.
+ * ==========================================================================*/
+:root {
+  --text: var(--foreground);
+  --text-soft: var(--muted-foreground);
+  --text-muted: var(--muted-foreground);
+  --text-subtle: var(--muted-foreground);
+
+  --bg: var(--background);
+  --bg-page: var(--background);
+  --bg-card: var(--card);
+  --bg-soft: var(--muted);
+  --bg-hover: var(--accent);
+  --surface: var(--card);
+
+  --admin-canvas: var(--background);
+  --admin-rail: var(--sidebar);
+  --admin-rail-hover: var(--sidebar-accent);
+
+  --border-soft: var(--border);
+  --border-strong: var(--input);
+
+  --inverse: var(--foreground);
+  --on-inverse: var(--background);
+
+  --brand: var(--primary);
+  --brand-strong: var(--primary);
+  --brand-soft: var(--accent);
+  --brand-border: var(--border);
+  --brand-text: var(--primary);
+  --hit: var(--primary);
+  --on-hit: var(--primary-foreground);
+  --logo-mark: var(--primary);
+
+  --btn: var(--primary);
+  --btn-fg: var(--primary-foreground);
+  --btn-press: color-mix(in oklab, var(--primary) 82%, var(--background));
+  --btn-primary-bg: var(--primary);
+  --btn-primary-fg: var(--primary-foreground);
+  --btn-primary-press: var(--btn-press);
+
+  --ok: var(--success);
+  --ok-fill: color-mix(in oklab, var(--success) 14%, var(--background));
+  --ok-border: color-mix(in oklab, var(--success) 35%, var(--background));
+  --ok-text: var(--success);
+
+  --warn: var(--warning);
+  --warn-fill: color-mix(in oklab, var(--warning) 16%, var(--background));
+  --warn-border: color-mix(in oklab, var(--warning) 35%, var(--background));
+  --warn-text: var(--warning);
+
+  --danger: var(--destructive);
+  --danger-fill: color-mix(in oklab, var(--destructive) 14%, var(--background));
+  --danger-border: color-mix(in oklab, var(--destructive) 35%, var(--background));
+  --danger-text: var(--destructive);
+
+  --live: var(--info);
+  --focus-ring: var(--ring);
+
+  /* Graph axes and the ecosystem colour ramp both collapse to the neutral
+   * chart scale until Stage B assigns real product colour. */
+  --grid: var(--border);
+  --spec-1: var(--chart-1);
+  --spec-2: var(--chart-2);
+  --spec-3: var(--chart-3);
+  --spec-4: var(--chart-4);
+  --grad-brand: linear-gradient(120deg, var(--primary), var(--primary));
+  --grad-aurora: linear-gradient(120deg, var(--primary), var(--primary));
+  --grad-rim: linear-gradient(90deg, transparent, var(--primary), transparent);
+
+  --font-display: var(--font-sans);
+
+  --r-tag: calc(var(--radius) * 0.6);
+  --r-card: var(--radius);
+  --r-shell: calc(var(--radius) * 1.4);
+  --r-xl: calc(var(--radius) * 1.4);
+
+  /* The code surface stays inverse so contrast survives the neutral theme;
+   * Stage B decides whether it remains the product's ink surface. */
+  --code-bg: var(--foreground);
+  --code-header: color-mix(in oklab, var(--foreground) 92%, var(--background));
+  --code-line: color-mix(in oklab, var(--background) 10%, transparent);
+  --code-fg: var(--background);
+  --code-muted: color-mix(in oklab, var(--background) 62%, var(--foreground));
+  --code-accent: var(--background);
+  --code-danger: color-mix(in oklab, var(--background) 72%, var(--destructive));
+  --code-shadow: 0 18px 36px -20px oklch(0 0 0 / 0.45);
 }
 
-/* Dark-mode film grain — a static tiled SVG texture that adds depth without
-   sitting behind readable content. Light mode deliberately keeps this layer
-   invisible so its canvas remains true #FFFFFF rather than textured gray. */
-.page-wash::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
-  /* Light theme: pure white means no ambient texture. */
-  opacity: 0;
-  mix-blend-mode: multiply;
-}
-html.dark .page-wash::before,
-[data-theme="dark"] .page-wash::before {
-  /* Dark theme: brighter speckle lifted out of the surface. */
-  opacity: 0.07;
-  mix-blend-mode: overlay;
-}
-@media (prefers-color-scheme: dark) {
-  html:not(.light):not([data-theme="light"]) .page-wash::before {
-    opacity: 0.07;
-    mix-blend-mode: overlay;
-  }
-}
-
-@layer utilities {
-  :where(.grad-ring) { position: relative; }
-}
-.grad-ring {
-  background: var(--bg-card);
-  border-radius: inherit;
-}
-.grad-ring::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: var(--grad-aurora);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  pointer-events: none;
-}
-
-@layer utilities {
-  :where(.aurora-glow) { position: relative; }
-}
-.aurora-glow::after {
-  content: '';
-  position: absolute;
-  left: -8%; right: -8%;
-  top: 30%; bottom: -20%;
-  background: radial-gradient(60% 80% at 50% 50%, rgba(15, 168, 111, 0.10), transparent 70%);
-  filter: blur(24px);
-  z-index: -1;
-  pointer-events: none;
-}
-
-@layer utilities {
-  :where(.dot-halo) { position: relative; }
-}
-.dot-halo::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  background: radial-gradient(circle, currentColor 0%, transparent 70%);
-  opacity: 0.25;
-  pointer-events: none;
-}
-
-@keyframes dotPulse {
-  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
-  50%       { box-shadow: 0 0 0 4px transparent; }
-}
-.dot-live {
-  animation: dotPulse 1.6s ease-in-out infinite;
-}
-
+/* Legacy class rules that still have live consumers. Each block is deleted in
+ * the phase that migrates its owner. */
 .card {
-  background: var(--bg-card);
-  border: 0.5px solid var(--border);
-  border-radius: var(--r-card);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-surface);
 }
 
-/* Admin surface hierarchy: the canvas stays pure white in light mode while
-   primary instruments use a precise keyline and supporting rails use the
-   existing inset surface. Depth comes from material contrast, not effects. */
 .admin-primary-panel {
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border-soft);
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
 }
 .admin-secondary-panel {
-  background: var(--bg-soft);
+  background: var(--muted);
 }
 
-/* One continuous data rail keeps Dashboard KPIs from reading as four loose
-   fragments. Mobile gets an internal 2x2 cross; desktop gets one baseline. */
 .admin-kpi-section > header {
   margin-bottom: 0;
 }
@@ -733,10 +461,10 @@ html.dark .page-wash::before,
   padding: 16px 14px 18px;
 }
 .admin-kpi-grid > :nth-child(even) {
-  border-left: 1px solid var(--border-soft);
+  border-left: 1px solid var(--border);
 }
 .admin-kpi-grid > :nth-child(n + 3) {
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--border);
 }
 @media (min-width: 1024px) {
   .admin-kpi-grid > * {
@@ -747,49 +475,23 @@ html.dark .page-wash::before,
     border-left: 0;
   }
   .admin-kpi-grid > :not(:first-child) {
-    border-left: 1px solid var(--border-soft);
+    border-left: 1px solid var(--border);
   }
 }
 
-.shell {
-  background: var(--bg-card);
-  border: 0.5px solid var(--border);
-  border-radius: var(--r-shell);
+.fade-up {
+  animation: fadeUp 220ms ease both;
 }
-
-/* ── Depsilo brand mark ── */
-.depsilo-logo-mark {
-  display: block;
-  flex: none;
-  color: var(--logo-mark);
-}
-
-.divider-h {
-  height: 0.5px;
-  background: var(--border);
-}
-
-.row-hover { transition: background 140ms ease; }
-.row-hover:hover { background: var(--bg-hover); }
-
+.fade-up-d1 { animation-delay: 70ms; }
+.fade-up-d2 { animation-delay: 140ms; }
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.fade-up { animation: fadeUp 220ms ease both; }
-/* Stagger helpers — semantic page blocks enter ~70ms apart instead of
-   the whole page fading in as one slab. `both` fill on .fade-up keeps
-   delayed blocks hidden until their turn. */
-.fade-up-d1 { animation-delay: 70ms; }
-.fade-up-d2 { animation-delay: 140ms; }
-.fade-up-d3 { animation-delay: 210ms; }
 
-/* ── Hit-area extension ───────────────────────────────────
-   Small header controls (endpoint pill, nav tabs, admin link) are
-   visually ~22-30px tall — under the 40px minimum touch target. The
-   ::after plane extends the clickable box vertically without changing
-   the visible chrome. Vertical-only: neighbors sit 2-8px apart
-   horizontally and hit areas must never overlap. */
+/* Small header controls sit under the 40px target; this extends the click box
+ * vertically without changing the visible chrome. Vertical only, because
+ * neighbours are 2–8px apart horizontally. */
 .hit-extend { position: relative; }
 .hit-extend::after {
   content: '';
@@ -800,64 +502,26 @@ html.dark .page-wash::before,
   right: 0;
 }
 
-@keyframes skeletonPulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 0.85; }
+.dot-live {
+  animation: dotPulse 1.6s ease-in-out infinite;
 }
-.skeleton {
-  background: var(--bg-soft);
-  border-radius: 4px;
-  animation: skeletonPulse 1.4s ease-in-out infinite;
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50%       { box-shadow: 0 0 0 4px transparent; }
 }
 
-/* Keep existing animate-* helpers for pages that use them */
-@keyframes ping-health {
-  0%   { transform: scale(1); opacity: 1; }
-  75%  { transform: scale(2.2); opacity: 0; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-@layer utilities {
-  .animate-ping-health { animation: ping-health 1.5s cubic-bezier(0,0,0.2,1) infinite; }
+@media (pointer: coarse) {
+  .app-button {
+    min-height: 40px;
+  }
 }
 
-@keyframes fade-in-down {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@layer utilities {
-  .animate-fade-in { animation: fade-in-down 0.3s ease-out; }
-}
-
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 4px;
-  border: 2px solid var(--bg-page);
-}
-::-webkit-scrollbar-track { background: transparent; }
-
-/* ── Accessibility: keyboard focus + reduced motion ── */
-:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-.stripe-focus-ring:focus-visible {
-  outline-color: var(--focus-ring);
-}
-/* Route and setup state containers receive focus only so assistive technology
-   announces the new state. They are not keyboard targets; drawing the global
-   focus ring around a full-page region obscures the actionable control inside. */
-.programmatic-focus-target:focus-visible {
-  outline: none;
-}
-
-/* Application overlays share Base UI's focus management and lifecycle. */
+/* Base UI overlay chrome — owned by Modal/Drawer/Toast/Tooltip until Phase 3C. */
 .app-dialog-backdrop {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: oklch(0.18 0.012 250 / 0.45);
+  background: oklch(0 0 0 / 0.45);
   backdrop-filter: blur(4px);
 }
 .app-dialog-viewport {
@@ -875,9 +539,9 @@ html.dark .page-wash::before,
   width: 100%;
   margin: auto;
   padding: 22px 22px 20px;
-  border: 0.5px solid var(--border);
-  border-radius: var(--r-xl);
-  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
   box-shadow: var(--shadow-pop);
   transition: opacity 160ms ease, transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -892,29 +556,29 @@ html.dark .page-wash::before,
   top: 8px;
   right: 8px;
   z-index: 1;
-  transition: background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1);
 }
 .app-dialog-close:hover,
 .app-drawer-close:hover,
 .app-toast-close:hover {
-  color: var(--text) !important;
-  background: var(--bg-hover);
+  background: var(--accent);
+  color: var(--foreground);
 }
 .app-dialog-title {
   margin: 0 40px 14px 0;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 17px;
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: 0;
 }
+
 .app-tooltip-positioner { z-index: 80; }
 .app-tooltip-popup {
   max-width: min(240px, calc(100vw - 24px));
   padding: 5px 8px;
-  border-radius: 4px;
-  color: var(--on-inverse);
-  background: var(--inverse);
+  border-radius: var(--radius-sm);
+  color: var(--background);
+  background: var(--foreground);
   box-shadow: var(--shadow-pop);
   font-size: 12px;
   line-height: 1.4;
@@ -925,6 +589,7 @@ html.dark .page-wash::before,
   opacity: 0;
   transform: scale(0.98);
 }
+
 .app-drawer-viewport {
   position: fixed;
   inset: 0;
@@ -937,14 +602,15 @@ html.dark .page-wash::before,
   height: 100%;
   overflow: hidden;
   pointer-events: auto;
-  color: var(--text);
-  background: var(--bg-card);
-  border-right: 0.5px solid var(--border);
+  color: var(--foreground);
+  background: var(--card);
+  border-right: 1px solid var(--border);
   box-shadow: var(--shadow-pop);
   transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .app-drawer-popup[data-starting-style],
 .app-drawer-popup[data-ending-style] { transform: translateX(-100%); }
+
 .app-toast-viewport {
   position: fixed;
   right: 16px;
@@ -958,15 +624,21 @@ html.dark .page-wash::before,
 }
 .app-toast-root {
   pointer-events: auto;
-  border: 0.5px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
   box-shadow: var(--shadow-pop);
   transition: opacity 140ms ease, transform 140ms ease;
 }
-.app-toast-root[data-toast-tone='success'] { border-color: var(--ok-border); }
-.app-toast-root[data-toast-tone='warning'] { border-color: var(--warn-border); }
-.app-toast-root[data-toast-tone='danger'] { border-color: var(--danger-border); }
+.app-toast-root[data-toast-tone='success'] {
+  border-color: color-mix(in oklab, var(--success) 45%, var(--border));
+}
+.app-toast-root[data-toast-tone='warning'] {
+  border-color: color-mix(in oklab, var(--warning) 45%, var(--border));
+}
+.app-toast-root[data-toast-tone='danger'] {
+  border-color: color-mix(in oklab, var(--destructive) 45%, var(--border));
+}
 .app-toast-root[data-starting-style],
 .app-toast-root[data-ending-style] {
   opacity: 0;
@@ -981,25 +653,12 @@ html.dark .page-wash::before,
 }
 .app-toast-description {
   flex: 1;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 13px;
   line-height: 1.45;
 }
-.app-toast-close { transition: background 120ms ease, color 120ms ease; }
-button:focus:not(:focus-visible),
-a:focus:not(:focus-visible) {
-  outline: none;
-}
 
-@media (pointer: coarse) {
-  .app-button {
-    min-height: 40px;
-  }
-}
-
-/* Portal topbar — equal geometry, distinct semantics. Service information and
-   display preferences share quiet segmented rails; Admin is the sole accented
-   navigation action. Every interactive segment keeps a 40px target. */
+/* Portal shell — owned by PortalApp until Phase 8. */
 .portal-header-actions {
   display: flex;
   min-width: 0;
@@ -1011,18 +670,15 @@ a:focus:not(:focus-visible) {
   min-width: 40px;
   min-height: 40px;
 }
-.portal-nav-compact-label {
-  display: none;
-}
+.portal-nav-compact-label { display: none; }
 .portal-header-group {
   display: inline-flex;
   height: 40px;
   flex-shrink: 0;
   align-items: center;
-  border-radius: 7px;
-  background: var(--bg-card);
-  outline: 0.5px solid var(--border);
-  outline-offset: -0.5px;
+  border-radius: var(--radius-md);
+  background: var(--card);
+  border: 1px solid var(--border);
 }
 .portal-header-control {
   display: inline-flex;
@@ -1035,43 +691,34 @@ a:focus:not(:focus-visible) {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
-  transition: background 120ms ease, color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1);
+  transition: background 120ms ease, color 120ms ease;
 }
-button.portal-header-control {
-  cursor: pointer;
-}
+button.portal-header-control { cursor: pointer; }
 .portal-header-group > .portal-header-control:first-child {
-  border-radius: 7px 0 0 7px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
 }
 .portal-header-group > .portal-header-control:last-child {
-  border-radius: 0 7px 7px 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 .portal-header-group > .portal-header-control + .portal-header-control {
-  border-left: 0.5px solid var(--border);
+  border-left: 1px solid var(--border);
 }
 .portal-header-group button.portal-header-control:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-.portal-header-group button.portal-header-control:active {
-  transform: scale(0.97);
+  background: var(--accent);
+  color: var(--foreground);
 }
 .portal-endpoint-pill {
   padding: 0 10px 0 11px;
   font-family: var(--font-mono);
   font-size: 11.5px;
 }
-.portal-endpoint-pill[data-copy-state='failed'] {
-  color: var(--danger-text);
-}
-.portal-endpoint-label {
-  font-variant-numeric: tabular-nums;
-}
+.portal-endpoint-pill[data-copy-state='failed'] { color: var(--destructive); }
+.portal-endpoint-label { font-variant-numeric: tabular-nums; }
 .portal-endpoint-icon {
   position: relative;
   display: inline-flex;
@@ -1086,146 +733,89 @@ button.portal-header-control {
 .portal-status-pill {
   min-width: 68px;
   padding: 0 10px;
-  border-radius: 0 7px 7px 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
-.portal-status-pill[data-status='healthy'] { color: var(--ok-text); }
-.portal-status-pill[data-status='degraded'] { color: var(--warn-text); }
-.portal-status-pill[data-status='failed'] { color: var(--danger-text); }
-.portal-status-pill[data-status='unknown'] { color: var(--text-muted); }
-.portal-status-pill[data-status='loading'] { color: var(--text-muted); }
-.portal-status-pill[data-status='unavailable'] { color: var(--danger-text); }
+.portal-status-pill[data-status='healthy'] { color: var(--success); }
+.portal-status-pill[data-status='degraded'] { color: var(--warning); }
+.portal-status-pill[data-status='failed'] { color: var(--destructive); }
+.portal-status-pill[data-status='unknown'] { color: var(--muted-foreground); }
+.portal-status-pill[data-status='loading'] { color: var(--muted-foreground); }
+.portal-status-pill[data-status='unavailable'] { color: var(--destructive); }
 .portal-status-compact-icon,
 .portal-admin-mobile-label,
-.portal-language-compact-label {
-  display: none;
-}
+.portal-language-compact-label { display: none; }
 .portal-language-control,
-.portal-theme-button {
-  padding: 0 10px;
-}
+.portal-theme-button { padding: 0 10px; }
 .portal-admin-link {
   padding: 0 11px;
-  border: 0.5px solid var(--brand-border);
-  border-radius: 7px;
-  color: var(--brand-text);
-  background: var(--brand-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--primary);
+  background: var(--accent);
   font-weight: 600;
   text-decoration: none;
 }
-.portal-admin-link:hover {
-  background: color-mix(in oklab, var(--brand-soft) 82%, var(--bg-hover));
-}
-.portal-admin-link:active {
-  transform: scale(0.97);
-}
+.portal-admin-link:hover { background: var(--muted); }
 
-/* Keep the copy action available at intermediate widths while collapsing its
-   volatile endpoint text. The full value remains in the accessible name. */
 @media (max-width: 960px) {
-  .portal-endpoint-pill {
-    width: 40px;
-    padding-inline: 0;
-  }
-  .portal-endpoint-label {
-    display: none;
-  }
+  .portal-endpoint-pill { width: 40px; padding-inline: 0; }
+  .portal-endpoint-label { display: none; }
 }
 
 @media (max-width: 760px) {
   .portal-version,
   .portal-language-label,
-  .portal-theme-label {
-    display: none !important;
-  }
-  .portal-language-compact-label {
-    display: inline;
-  }
+  .portal-theme-label { display: none !important; }
+  .portal-language-compact-label { display: inline; }
   .portal-language-control,
-  .portal-theme-button {
-    width: 40px;
-    padding-inline: 0;
-  }
-  .portal-language-control .icon {
-    display: none;
-  }
+  .portal-theme-button { width: 40px; padding-inline: 0; }
+  .portal-language-control .icon { display: none; }
 }
 
 @media (max-width: 560px) {
   .portal-endpoint-pill,
   .portal-admin-label,
-  .portal-status-label {
-    display: none !important;
-  }
+  .portal-status-label { display: none !important; }
   .portal-header-inner {
     gap: 4px !important;
     padding-left: max(10px, env(safe-area-inset-left)) !important;
     padding-right: max(10px, env(safe-area-inset-right)) !important;
   }
-  .portal-header-actions {
-    gap: 4px;
-  }
+  .portal-header-actions { gap: 4px; }
   .portal-header-nav > a {
     min-width: 40px;
     height: 40px;
     justify-content: center;
     padding-inline: 4px !important;
   }
-  .portal-nav-label {
-    display: none;
-  }
-  .portal-nav-compact-label {
-    display: inline;
-  }
+  .portal-nav-label { display: none; }
+  .portal-nav-compact-label { display: inline; }
   .portal-nav-active-indicator {
     right: 8px !important;
     bottom: -6px !important;
     left: 8px !important;
   }
-  .portal-service-group {
-    width: 40px;
-  }
-  .portal-tools-group {
-    width: 80px;
-  }
+  .portal-service-group { width: 40px; }
+  .portal-tools-group { width: 80px; }
   .portal-status-pill {
     width: 40px;
     min-width: 40px;
     padding-inline: 0;
     border-left: 0 !important;
-    border-radius: 7px !important;
+    border-radius: var(--radius-md) !important;
   }
-  .portal-language-control {
-    border-radius: 7px 0 0 7px !important;
-  }
-  .portal-theme-button {
-    border-radius: 0 7px 7px 0 !important;
-  }
-  .portal-status-dot {
-    display: none !important;
-  }
-  .portal-status-compact-icon {
-    display: inline-flex;
-  }
-  .portal-admin-link {
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-  }
-  .portal-admin-link .icon {
-    display: inline-flex;
-  }
-  .portal-admin-mobile-label {
-    display: none;
-  }
-  .portal-monitor-search {
-    width: 100% !important;
-  }
+  .portal-language-control { border-radius: var(--radius-md) 0 0 var(--radius-md) !important; }
+  .portal-theme-button { border-radius: 0 var(--radius-md) var(--radius-md) 0 !important; }
+  .portal-status-dot { display: none !important; }
+  .portal-status-compact-icon { display: inline-flex; }
+  .portal-admin-link { width: 40px; min-width: 40px; padding: 0; }
+  .portal-admin-link .icon { display: inline-flex; }
+  .portal-admin-mobile-label { display: none; }
+  .portal-monitor-search { width: 100% !important; }
 }
 
 @media (max-width: 380px) {
-  .portal-brand-name {
-    display: none !important;
-  }
+  .portal-brand-name { display: none !important; }
 }
 
 @media (max-width: 340px) {
@@ -1234,148 +824,64 @@ button.portal-header-control {
     padding-left: max(4px, env(safe-area-inset-left)) !important;
     padding-right: max(4px, env(safe-area-inset-right)) !important;
   }
-  .portal-header-actions {
-    gap: 2px;
-  }
-  .portal-header-nav > a {
-    padding-inline: 4px !important;
-  }
+  .portal-header-actions { gap: 2px; }
+  .portal-header-nav > a { padding-inline: 4px !important; }
 }
 
-/* ── Cursor-spotlight on ecosystem tiles ──────────────────
-   A radial gradient pinned to the pointer position (set by the
-   component's onMouseMove via --spot-x / --spot-y) shimmers across
-   the tile as the cursor moves. Replaces the static "hover lift"
-   with something that actually responds to the pointer. */
+/* Quick Start workbench — owned by ConfigurePane/EcosystemCatalog until Phase 8. */
 .eco-tile::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0;
-  background: radial-gradient(
-    180px circle at var(--spot-x, 50%) var(--spot-y, 50%),
-    color-mix(in oklab, var(--brand) 22%, transparent),
-    transparent 60%
-  );
+  background: none;
   transition: opacity 200ms ease;
   z-index: 0;
 }
 .eco-tile:hover::before { opacity: 1; }
-/* Content above the spotlight layer. */
 .eco-tile > * { position: relative; z-index: 1; }
 
-/* Quick Start precision workbench. The rail is one control surface rather
-   than a row of detached cards; only the active segment receives lift. */
 .manager-picker-viewport {
   scrollbar-width: thin;
-  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-color: var(--border) transparent;
 }
 @media (hover: hover) {
   .manager-choice:hover:not([data-active='true']) {
-    background: var(--bg-hover) !important;
+    background: var(--accent) !important;
   }
   .code-block[data-code-tone='ink'] .code-copy-control:hover {
     background: color-mix(in oklab, var(--code-fg) 8%, transparent) !important;
     color: var(--code-fg) !important;
   }
   .code-block[data-code-tone='light'] .code-copy-control:hover {
-    background: var(--bg-hover) !important;
-    color: var(--text) !important;
+    background: var(--accent) !important;
+    color: var(--foreground) !important;
   }
 }
 
 .config-disclosure > summary::-webkit-details-marker { display: none; }
 .disclosure-chevron {
-  color: var(--text-subtle);
+  color: var(--muted-foreground);
   transition: transform 160ms cubic-bezier(0.2, 0, 0, 1), color 140ms ease;
 }
 .config-disclosure[open] > summary .disclosure-chevron {
-  color: var(--text);
+  color: var(--foreground);
   transform: rotate(180deg);
 }
 
-@keyframes managerConfigReveal {
-  from {
-    opacity: 0.72;
-    filter: blur(2px);
-    transform: translateY(3px);
-  }
-  to {
-    opacity: 1;
-    filter: blur(0);
-    transform: translateY(0);
-  }
-}
-.manager-config-swap {
-  animation: managerConfigReveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* ── Scroll-driven reveal ─────────────────────────────────
-   Sections fade + nudge up 8px as they enter the viewport. Pure
-   CSS, GPU-composited, no IntersectionObserver. Stagger comes from
-   the explicit animation-range on each child so groups read in a
-   slight cascade rather than all at once. */
-@keyframes svReveal {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@supports (animation-timeline: view()) {
-  .sv-reveal {
-    animation: svReveal linear both;
-    animation-timeline: view();
-    animation-range: entry 0% entry 60%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    /* Also zero delays — a staggered .fade-up-d* block with `both`
-       fill would otherwise sit invisible for its whole delay. */
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-  .dot-live { animation: none; }
-  .fade-up { animation: none; }
-}
-
-/* ── Dashboard live download rail ──────────────────────────
-   The data itself stays still and readable. A quiet signal line plus a short
-   entrance on newly keyed rows provides motion without turning the feed into
-   a marquee. */
-@keyframes liveDownloadEnter {
-  from { opacity: 0; transform: translateX(-8px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes liveDownloadSweep {
-  from { transform: translateX(-140%); }
-  to { transform: translateX(440%); }
-}
-@keyframes liveDownloadPulse {
-  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 color-mix(in oklab, var(--live) 28%, transparent); }
-  50% { opacity: 1; box-shadow: 0 0 0 4px color-mix(in oklab, var(--live) 0%, transparent); }
-}
-.live-download-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
+/* Dashboard live download rail — owned by RecentDownloads until Phase 6.8. */
+.live-download-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
 .live-download-item + .live-download-item {
-  border-top: 0.5px solid var(--border-soft, var(--border));
+  border-top: 1px solid var(--border);
 }
-.live-download-row {
-  animation: liveDownloadEnter 180ms ease-out both;
-}
-.live-download-pulse {
-  animation: liveDownloadPulse 2.4s ease-in-out infinite;
-}
+.live-download-row { animation: liveDownloadEnter 180ms ease-out both; }
+.live-download-pulse { animation: liveDownloadPulse 2.4s ease-in-out infinite; }
 .live-download-flow {
   position: relative;
   height: 1px;
   overflow: hidden;
-  background: var(--border-soft, var(--border));
+  background: var(--border);
 }
 .live-download-flow::after {
   content: '';
@@ -1384,21 +890,28 @@ button.portal-header-control {
   left: 0;
   width: 18%;
   border-radius: 999px;
-  background: var(--live);
+  background: var(--info);
   animation: liveDownloadSweep 3.2s linear infinite;
 }
-.live-download-flow-paused::after {
-  animation: none;
-  opacity: 0;
-}
+.live-download-flow-paused::after { animation: none; opacity: 0; }
 @media (min-width: 640px) {
-  .live-download-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+  .live-download-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .live-download-item + .live-download-item {
     border-top: 0;
-    border-left: 0.5px solid var(--border-soft, var(--border));
+    border-left: 1px solid var(--border);
   }
+}
+@keyframes liveDownloadEnter {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes liveDownloadSweep {
+  from { transform: translateX(-140%); }
+  to   { transform: translateX(440%); }
+}
+@keyframes liveDownloadPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .live-download-row,
@@ -1406,22 +919,4 @@ button.portal-header-control {
   .live-download-flow::after {
     animation: none !important;
   }
-}
-
-/* ── Reusable chip / pill ── */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border: 0.5px solid var(--border);
-  border-radius: var(--r-tag);
-  font-size: 12px;
-  color: var(--text-soft);
-  background: transparent;
-}
-.chip-brand {
-  color: var(--brand-text);
-  background: var(--brand-soft);
-  border-color: var(--brand-border);
 }
