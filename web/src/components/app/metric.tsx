@@ -18,6 +18,7 @@ interface MetricProps {
   size?: CSSProperties['fontSize']
   /** Operational summaries scan left-to-right; report grids stay centred. */
   align?: 'start' | 'center'
+  className?: string
 }
 
 /**
@@ -32,6 +33,7 @@ export default function Metric({
   valueTone = 'default',
   size = 40,
   align = 'center',
+  className,
 }: MetricProps) {
   const changeTone = typeof change !== 'number' || change === 0 || changeIntent === 'neutral'
     ? 'neutral'
@@ -41,7 +43,11 @@ export default function Metric({
 
   return (
     <div
-      className={cn('flex flex-col', align === 'start' ? 'items-start text-left' : 'items-center text-center')}
+      className={cn(
+        'flex flex-col',
+        align === 'start' ? 'items-start text-left' : 'items-center text-center',
+        className,
+      )}
       data-metric-label={label}
     >
       <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>

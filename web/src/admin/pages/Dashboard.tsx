@@ -11,6 +11,7 @@ import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/compon
 import Metric, { type MetricChangeIntent } from '@/components/app/metric'
 import Icon from '@/components/app/icon'
 import QueryErrorState from '@/components/app/error-state'
+import { cn } from '@/lib/utils'
 import SectionHeader from '@/components/app/section-header'
 import { adminApi, statsApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
@@ -30,11 +31,21 @@ interface TrendQueryData {
   range: TrendsRange
 }
 
+/**
+ * One internally divided data rail rather than four loose fragments: a 2x2
+ * cross below `lg`, a single row of divided cells from `lg` up. The mobile
+ * rules are `max-lg:` so they cannot fight the desktop ones.
+ */
+const KPI_CELL =
+  'px-3.5 pt-4 pb-[18px] max-lg:even:border-l max-lg:even:border-border ' +
+  'max-lg:nth-[n+3]:border-t max-lg:nth-[n+3]:border-border ' +
+  'lg:px-6 lg:pt-[18px] lg:pb-5 lg:nth-[n+2]:border-l lg:nth-[n+2]:border-border'
+
 function DashboardKpiSkeleton() {
   return (
-    <div aria-hidden="true" className="admin-kpi-grid grid grid-cols-2 lg:grid-cols-4">
+    <div aria-hidden="true" className="grid grid-cols-2 lg:grid-cols-4">
       {Array.from({ length: 4 }, (_, index) => (
-        <div key={index} className="flex flex-col items-start gap-2">
+        <div key={index} className={cn('flex flex-col items-start gap-2', KPI_CELL)}>
           <div className="h-3 w-20 animate-pulse rounded bg-muted" />
           <div className="h-8 w-28 animate-pulse rounded bg-muted" />
           <div className="h-3 w-16 animate-pulse rounded bg-muted" />
@@ -49,11 +60,13 @@ function StatusMetric({
   value,
   detail,
   tone = 'default',
+  className,
 }: {
   label: string
   value: string
   detail: string
   tone?: 'default' | 'ok' | 'warning' | 'danger'
+  className?: string
 }) {
   const color = tone === 'ok'
     ? 'var(--success)'
@@ -64,7 +77,7 @@ function StatusMetric({
         : 'var(--foreground)'
 
   return (
-    <div className="flex min-w-0 flex-col items-start text-left" data-dashboard-status-metric>
+    <div className={cn('flex min-w-0 flex-col items-start text-left', className)} data-dashboard-status-metric>
       <span className="text-[11px] font-[600] text-muted-foreground">{label}</span>
       <span
         data-metric-value
@@ -201,7 +214,7 @@ export default function DashboardV2() {
           data-dashboard-health
           aria-busy={dashboardQuery.isPending || nowQuery.isPending || undefined}
           aria-label={`${t('dashboard.healthOverview')}. ${t('dashboard.snapshotRange')}`}
-          className="admin-kpi-section"
+          className="[&>header]:mb-0"
         >
           <SectionHeader
             title={t('dashboard.healthOverview')}
@@ -215,14 +228,16 @@ export default function DashboardV2() {
           {(dashboardQuery.isPending || nowQuery.isPending) && !dashboard && !nowData ? (
             <DashboardKpiSkeleton />
           ) : (
-            <div data-dashboard-kpis className="admin-kpi-grid grid grid-cols-2 lg:grid-cols-4">
+            <div data-dashboard-kpis className="grid grid-cols-2 lg:grid-cols-4">
               <StatusMetric
+                className={KPI_CELL}
                 label={t('dashboard.serviceStatus')}
                 value={nowStatus}
                 tone={nowTone}
                 detail={nowInitialError ? t('dashboard.statusUnavailableHint') : nowStale ? t('now.staleData') : t('dashboard.liveRefresh')}
               />
               <Metric
+                className={KPI_CELL}
                 label={metrics[0].label}
                 value={metrics[0].value}
                 change={metrics[0].change}
@@ -231,6 +246,7 @@ export default function DashboardV2() {
                 size="clamp(28px, 4vw, 32px)"
               />
               <StatusMetric
+                className={KPI_CELL}
                 label={t('dashboard.currentHealthyUpstreams')}
                 value={upstreamValue}
                 tone={upstreamTone}
@@ -239,6 +255,7 @@ export default function DashboardV2() {
                   : t('dashboard.statusUnavailableHint')}
               />
               <Metric
+                className={KPI_CELL}
                 label={metrics[1].label}
                 value={metrics[1].value}
                 change={metrics[1].change}

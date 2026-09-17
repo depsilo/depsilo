@@ -227,6 +227,26 @@
   --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-heading: var(--font-sans);
+
+  /* Live-feed motion. Named animations so the reduced-motion behaviour is
+     observable: the global `prefers-reduced-motion` block disables them by
+     name, and the feed's own tests assert exactly that. */
+  --animate-live-enter: liveDownloadEnter 180ms ease-out both;
+  --animate-live-pulse: liveDownloadPulse 2.4s ease-in-out infinite;
+  --animate-live-sweep: liveDownloadSweep 3.2s linear infinite;
+
+  @keyframes liveDownloadEnter {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes liveDownloadPulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+  }
+  @keyframes liveDownloadSweep {
+    from { transform: translateX(-140%); }
+    to   { transform: translateX(440%); }
+  }
 }
 
 @layer base {
@@ -358,96 +378,8 @@ code,
     animation-duration: 0.001ms !important;
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
+    animation-name: none !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-/* ============================================================================
- * TEMPORARY — class rules whose owner has not migrated yet.
- *
- * Every block below is deleted in the phase that migrates its owner. The token
- * alias layer that used to sit beside it is gone: the legacy token names are
- * no longer referenced anywhere in `src/`.
- * ==========================================================================*/
-
-/* Legacy class rules that still have live consumers. Each block is deleted in
- * the phase that migrates its owner. */
-
-.admin-kpi-section > header {
-  margin-bottom: 0;
-}
-.admin-kpi-grid > * {
-  min-width: 0;
-  padding: 16px 14px 18px;
-}
-.admin-kpi-grid > :nth-child(even) {
-  border-left: 1px solid var(--border);
-}
-.admin-kpi-grid > :nth-child(n + 3) {
-  border-top: 1px solid var(--border);
-}
-@media (min-width: 1024px) {
-  .admin-kpi-grid > * {
-    padding: 18px 24px 20px;
-  }
-  .admin-kpi-grid > :nth-child(n) {
-    border-top: 0;
-    border-left: 0;
-  }
-  .admin-kpi-grid > :not(:first-child) {
-    border-left: 1px solid var(--border);
-  }
-}
-
-
-/* Dashboard live download rail — owned by RecentDownloads until Phase 6.8. */
-.live-download-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
-.live-download-item + .live-download-item {
-  border-top: 1px solid var(--border);
-}
-.live-download-row { animation: liveDownloadEnter 180ms ease-out both; }
-.live-download-pulse { animation: liveDownloadPulse 2.4s ease-in-out infinite; }
-.live-download-flow {
-  position: relative;
-  height: 1px;
-  overflow: hidden;
-  background: var(--border);
-}
-.live-download-flow::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 18%;
-  border-radius: 999px;
-  background: var(--info);
-  animation: liveDownloadSweep 3.2s linear infinite;
-}
-.live-download-flow-paused::after { animation: none; opacity: 0; }
-@media (min-width: 640px) {
-  .live-download-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .live-download-item + .live-download-item {
-    border-top: 0;
-    border-left: 1px solid var(--border);
-  }
-}
-@keyframes liveDownloadEnter {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes liveDownloadSweep {
-  from { transform: translateX(-140%); }
-  to   { transform: translateX(440%); }
-}
-@keyframes liveDownloadPulse {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-download-row,
-  .live-download-pulse,
-  .live-download-flow::after {
-    animation: none !important;
   }
 }

@@ -116,7 +116,8 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden
-            className={`h-1.5 w-1.5 shrink-0 rounded-full ${hasConnectionError ? '' : 'live-download-pulse'}`}
+            data-live-pulse
+            className={`size-1.5 shrink-0 rounded-full ${hasConnectionError ? '' : 'animate-live-pulse'}`}
             style={{ background: hasConnectionError ? 'var(--warning)' : 'var(--info)' }}
           />
           <h2 id="recent-downloads-title" className="text-[13px] font-[680] text-foreground">
@@ -135,15 +136,20 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
         </Link>
       </header>
 
-      <div className={`live-download-flow ${hasConnectionError ? 'live-download-flow-paused' : ''}`} aria-hidden />
+      <div
+        data-live-flow
+        aria-hidden
+        className={`relative h-px overflow-hidden bg-border after:absolute after:inset-y-0 after:left-0 after:w-[18%] after:rounded-full after:bg-info after:content-[''] ${hasConnectionError ? 'after:animate-none' : 'after:animate-live-sweep'}`}
+      />
 
       {query.isPending ? (
-        <div aria-hidden="true" className={isRail ? 'grid grid-cols-1' : 'live-download-grid'}>
+        <div aria-hidden="true" className={isRail ? 'grid grid-cols-1' : 'grid grid-cols-1 sm:grid-cols-3'}>
+          {/* Items are divided from `sm` up; on a stacked rail the rule sits above each later row. */}
+
           {Array.from({ length: safeLimit }, (_, index) => (
             <div
               key={index}
-              className={`${isRail ? '' : 'live-download-item'} space-y-2 px-4 py-3`}
-              style={isRail && index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
+              className={`space-y-2 px-4 py-3 ${isRail ? (index > 0 ? 'border-t border-border' : '') : 'sm:[&]:border-l sm:[&]:border-border empty:border-l-0'}`}
             >
               <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
               <div className="h-2.5 w-1/2 animate-pulse rounded bg-muted" />
@@ -176,7 +182,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
               </button>
             </div>
           )}
-          <ol className={isRail ? 'grid grid-cols-1' : 'live-download-grid'} aria-label={t('recentDownloads.listLabel')}>
+          <ol aria-label={t('recentDownloads.listLabel')} className={isRail ? 'grid grid-cols-1' : 'grid grid-cols-1 sm:grid-cols-3'}>
             {items.map((item, index) => {
               const outcome = downloadOutcome(item, t)
               const packageName = item.package_name || t('recentDownloads.unknownPackage')
@@ -188,8 +194,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
                 <li
                   key={item.id}
                   data-download-id={item.id}
-                  className={`${isRail ? '' : 'live-download-item'} live-download-row min-w-0 px-4 py-3`}
-                  style={isRail && index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
+                  className={`min-w-0 animate-live-enter px-4 py-3 ${isRail ? (index > 0 ? 'border-t border-border' : '') : 'sm:border-l sm:border-border'}`}
                   aria-label={t('recentDownloads.itemLabel', {
                     ecosystem,
                     package: fullPackageName,
