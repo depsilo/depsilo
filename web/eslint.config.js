@@ -34,4 +34,15 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // `src/components/ui` holds shadcn-generated component source. Upstream
+    // co-locates a component with its `cva` variant factory (and other
+    // shadcn components import those factories), so the refresh rule cannot
+    // hold here. Everything else in the repo still enforces it, and
+    // `src/components/app` owns all Depsilo-specific composition.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])
