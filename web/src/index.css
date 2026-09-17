@@ -959,8 +959,8 @@ html.dark .page-wash::before,
 .app-toast-root[data-toast-tone='success'] { border-color: var(--ok-border); }
 .app-toast-root[data-toast-tone='warning'] { border-color: var(--warn-border); }
 .app-toast-root[data-toast-tone='danger'] { border-color: var(--danger-border); }
-.app-toast-root[data-starting-style],
-.app-toast-root[data-ending-style] {
+.app-toast-root[data-entering],
+.app-toast-root[data-exiting] {
   opacity: 0;
   transform: translateY(8px);
 }

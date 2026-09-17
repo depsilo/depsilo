@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
-import { Button } from 'react-aria-components'
+import { Button, type ButtonProps } from 'react-aria-components'
 import Icon, { type IconName } from './Icon'
 
 export interface IconButtonControlProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -24,7 +24,11 @@ export default forwardRef<HTMLButtonElement, IconButtonControlProps>(function Ic
 ) {
   return (
     <Button
-      {...rest}
+      // Callers keep a DOM-shaped API (48 call sites pass onClick, disabled,
+      // title, type). React Aria types the same underlying handlers against
+      // Element rather than HTMLButtonElement, so the spread needs one cast at
+      // this boundary; the runtime element is the same <button> either way.
+      {...(rest as ButtonProps)}
       ref={ref}
       // React Aria omits onClick from its Button type to steer callers to
       // onPress, but useButton forwards onClick into usePress, so call sites
