@@ -345,19 +345,19 @@ export default function MonitorPage() {
               }}
             >
               <span>
-                <span className="num">{upstreams.length}</span> {t('monitor.upstreams')}
+                <span className="font-mono tabular-nums">{upstreams.length}</span> {t('monitor.upstreams')}
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <StatusDot status="healthy" />
-                <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
+                <span className="font-mono tabular-nums">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <StatusDot status="degraded" />
-                <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
+                <span className="font-mono tabular-nums">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <StatusDot status="failed" />
-                <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
+                <span className="font-mono tabular-nums">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
               </span>
               {/* Value metrics — compact, 7-day rolling window. Hidden on
                   fresh installs (no traffic yet) so the row never shows a
@@ -369,13 +369,13 @@ export default function MonitorPage() {
                   >
                     <span>
                       {t('monitor.hitRate7d')}{' '}
-                      <span className="num" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                      <span className="font-mono tabular-nums" style={{ color: 'var(--primary)', fontWeight: 600 }}>
                         {(week.hit_rate * 100).toFixed(1)}%
                       </span>
                     </span>
                     <span>
                       {t('monitor.saved7d')}{' '}
-                      <span className="num" style={{ color: 'var(--foreground)', fontWeight: 600 }}>
+                      <span className="font-mono tabular-nums" style={{ color: 'var(--foreground)', fontWeight: 600 }}>
                         {savedFmt.value} {savedFmt.unit}
                       </span>
                     </span>

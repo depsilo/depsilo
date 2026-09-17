@@ -113,10 +113,11 @@ tokens.
 - UI: `Inter Variable` for Latin; Chinese falls through to
   `PingFang SC` / `HarmonyOS Sans SC` / `MiSans` / `Microsoft YaHei`.
 - Code and data: `JetBrains Mono Variable` with tabular numerals.
-- Icons: Lucide. `components/ui` imports `lucide-react` directly. Depsilo's
-  application layer still reaches icons through `components/app/icon.tsx`,
-  which maps domain names onto Lucide components; that indirection is removed
-  by the final migration phase.
+- Icons: Lucide, imported directly from `lucide-react`. `components/app/icon.tsx`
+  is only a sizing box for the places where the glyph is chosen at runtime (a
+  tone map, a prop, a ternary), because a JSX element name cannot be an
+  expression. It is not a name registry: there is no string vocabulary for
+  icons, so a missing glyph is a type error rather than a runtime fallback.
 - Metric values, versions, bytes, and latency use the mono/tabular treatment so
   changing digits cannot move layout.
 
@@ -133,8 +134,8 @@ tokens.
 `checkbox`, `switch`, `tabs`, `field`, `badge`, `notice`, `error-state`,
 `empty-state`, `section-header`, `metric`, `status-dot`, `modal`, `drawer`,
 `tooltip`, `toast`, `confirm-dialog` (via `Modal`), `logo`, `theme-toggle`,
-`language-toggle`, `ecosystem-icon`, `icon`, `upstream-panel`, `data-table`,
-`table-viewport`.
+`language-toggle`, `ecosystem-icon`, `icon` (runtime-glyph sizing box),
+`upstream-panel`, `data-table`, `table-viewport`.
 
 Use these before adding a primitive. Admin-specific composition belongs in
 `admin/components/`; Portal-specific composition belongs in
@@ -231,9 +232,19 @@ from Git history or including unrelated Portal work.
 ## Migration Status
 
 See [docs/refactor/shadcn-ui-plan.md](docs/refactor/shadcn-ui-plan.md) for the
-phase list and the audit that motivated it. Completed: the shadcn
-initialisation, the single-cascade semantic token layer, the primitive
-migration (core, form controls, and overlays), the Admin shell, and the
-mechanical token-utility rewrite. Outstanding: the remaining inline
-token-reading style objects in Admin and Portal pages, the Icon-to-Lucide
-conversion, and the final CSS and dependency cleanup.
+phase list and the audit that motivated it.
+
+Completed: the shadcn initialisation; the single-cascade semantic token layer;
+the primitive migration (core, form controls, and overlays); the Admin shell;
+the mechanical token-utility rewrite; the removal of every legacy token name;
+the removal of every hand-written component class from `index.css`; the
+Lucide icon migration; and the dependency census.
+
+`index.css` is imports, tokens, the dark variant, a base layer, and the icon
+box — no component styling.
+
+Outstanding: the pages still contain ~50 inline `style` objects for values that
+are genuinely dynamic (a state-dependent colour, a chart prop, an avatar
+colour). Those read semantic tokens and are correct; they are not a second
+styling system. A future pass may fold the static ones into utilities as each
+page is redesigned.

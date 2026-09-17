@@ -340,19 +340,10 @@ a:focus:not(:focus-visible) {
   background: transparent;
 }
 
-/* Numeric and machine-readable values use the mono face with tabular figures
- * so changing digits cannot move layout. */
-.num,
-.mono,
-[data-tabular] {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Code must not ligate: `--` would fuse into an em dash and read as one token. */
+/* Code must not ligate: `--` would fuse into an em dash and read as one
+ * token, which makes a pasteable command wrong. */
 pre,
-code,
-.code-mono {
+code {
   font-feature-settings: "liga" 0, "calt" 0;
   font-variant-ligatures: none;
   letter-spacing: 0;

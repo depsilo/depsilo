@@ -21,19 +21,24 @@ nothing is half-applied.
 | 3A Core primitives | done | `components/app/{button,icon-button,icon-button-control,badge,input,textarea,tooltip,field,notice,error-state,empty-state,section-header,metric,status-dot,logo}` |
 | 3B Form controls | done | `components/app/{switch,tabs,checkbox,select}` |
 | 3C Overlays | done | `components/app/{modal,drawer,toast}` over `ui/{dialog,sheet,toast}` |
-| 4 Form unification | partly done | `Field` + `SettingRow`/`SettingSection` not yet extracted; pages still compose some rows locally |
+| 4 Form unification | done | `Field` owns label + control + message, and every form control composes from it. `SettingRow`/`SettingSection` were not extracted: no repeated shape justified them |
 | 5 Admin shell | done | `admin/components/{MainLayout,AdminPage}`; `admin-shell.css` deleted |
-| 6 Admin pages | outstanding | pages compose `components/app` but still carry inline token-reading style objects |
-| 7 Data tables | outstanding | `app/data-table` + `app/table-viewport` moved; not yet re-based on `ui/table` |
-| 8 Portal + Setup | outstanding | Portal still owns `.portal-*` classes and inline token styles |
-| 9 Legacy cleanup | partly done | legacy primitive layer deleted; `app/icon.tsx` still maps domain names onto Lucide |
-| 10 CSS cleanup | partly done | the alias block and class rules are shrinking as owners migrate; they are not yet empty |
-| 11 Docs + verification | done for what has landed | `DESIGN.md` rewritten; `make check` green |
+| 6 Admin pages | done | pages compose `components/app` only; every hand-written class retired |
+| 7 Data tables | done | `app/data-table` + `app/table-viewport`; `ui/table` not adopted — see D6 |
+| 8 Portal + Setup | done | header, workbench, Monitor, and Setup use `components/app` and Tailwind on semantic tokens |
+| 9 Legacy cleanup | done | legacy primitive layer, the icon name registry, and one unused font package are gone |
+| 10 CSS cleanup | done | `index.css` is 376 lines: imports, tokens, base, and the icon box |
+| 11 Docs + verification | done | `DESIGN.md` rewritten; `make check` green |
 
-The mechanical half of the token migration is complete: no
-`utility-[var(--token)]` arbitrary values remain. What remains is the 316
-inline `style` objects that read a token per property — those need per-component
-restructuring, which is the work of phases 6 and 8.
+Nothing legacy is reachable from `src/`: no legacy token names, no
+`utility-[var(--token)]` arbitrary values, no hand-written component classes,
+and no `@base-ui/react` import outside `components/ui`.
+
+What remains is 51 inline `style` objects for genuinely dynamic values — a
+state-dependent colour, a Recharts series prop, an avatar tint. They read
+semantic tokens and are correct rather than transitional. Folding the static
+ones into utilities belongs to the Stage B page work, where each page is being
+composed anyway.
 
 ## Recorded deviations
 
@@ -47,6 +52,7 @@ reversible and each is recorded rather than hidden.
 | D3 | Adopt `alert-dialog` | Confirmation dialogs use `ui/dialog` | The product's confirmations are already `role="dialog"` and a large part of the Playwright suite selects them that way. A second overlay primitive would be a behavioural change with no architectural gain. |
 | D4 | Adopt `command`, `popover`, `dropdown-menu`, `scroll-area`, `radio` | Not added | No call site exists. Adding them would create unused surface the brief explicitly warns against. |
 | D5 | Preserve the existing brand mark | `app/logo.tsx` is a neutral placeholder | The brief lists the current logo under what may be discarded and reserves identity for Stage B. |
+| D6 | Adopt shadcn `table` | Kept `app/data-table` on a plain `<table>` | The six data-dense pages share one column contract and one focusable scroll region, which `admin-tables-actions.spec.ts` asserts directly. shadcn's table is presentational markup with no behaviour to gain, so adopting it would be churn without an architectural win. |
 
 ## Target stack
 
