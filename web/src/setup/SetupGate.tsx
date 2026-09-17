@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import Button from '@/components/Button'
+import Button from '@/components/app/button'
 import { setupApi } from '@/lib/api'
 import { lazyRoute } from '@/routing/lazyRoute'
 

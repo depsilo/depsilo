@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import Icon, { type IconName } from '../src/components/Icon'
+import Icon, { type IconName } from '../src/components/app/icon'
 
 describe('Icon registry', () => {
   it('contains every formerly unresolved product icon', () => {

@@ -36,6 +36,22 @@ export type AdminApiOverrides = Record<string, AdminApiOverride>
 export type UiLocale = 'zh' | 'en'
 export type UiTheme = 'light' | 'dark'
 
+/**
+ * Resolve a semantic token to the exact colour string Chromium reports for it.
+ * Specs assert against tokens rather than literal colours so the token layer
+ * stays free to change without rewriting the behaviour under test.
+ */
+export async function resolvedTokenColor(page: Page, token: string): Promise<string> {
+  return page.evaluate((name) => {
+    const probe = document.createElement('span')
+    probe.style.color = `var(${name})`
+    document.body.appendChild(probe)
+    const value = getComputedStyle(probe).color
+    probe.remove()
+    return value
+  }, token)
+}
+
 const configuredSettings: AdminSettingsSnapshot = {
   server: { host: '127.0.0.1', port: 23333, log_level: 'info' },
   database: { driver: 'sqlite' },

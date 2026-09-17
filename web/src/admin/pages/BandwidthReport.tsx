@@ -4,14 +4,14 @@ import { useTranslation } from 'react-i18next'
 import AdminPage from '@/admin/components/AdminPage'
 import { adminApi } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
-import Metric from '@/components/Metric'
-import SectionHeader from '@/components/SectionHeader'
-import EmptyState from '@/components/EmptyState'
-import ButtonV2 from '@/components/Button'
-import InputV2 from '@/components/Input'
-import InlineNotice from '@/components/InlineNotice'
-import QueryErrorState from '@/components/QueryErrorState'
-import EcosystemIcon from '@/components/EcosystemIcon'
+import Metric from '@/components/app/metric'
+import SectionHeader from '@/components/app/section-header'
+import EmptyState from '@/components/app/empty-state'
+import ButtonV2 from '@/components/app/button'
+import InputV2 from '@/components/app/input'
+import InlineNotice from '@/components/app/notice'
+import QueryErrorState from '@/components/app/error-state'
+import EcosystemIcon from '@/components/app/ecosystem-icon'
 import { getApiError } from '@/lib/apiError'
 import { getEcosystemColor } from '@/lib/ecosystemColors'
 import {
@@ -203,16 +203,16 @@ export default function BandwidthReport() {
       {/* ── Summary metrics ──────────────────────────── */}
       <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
         <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(summary.total_bytes || 0)} />
-        <Metric label={t('bandwidth.trafficSaved')} value={formatBytes(summary.hit_bytes || 0)} valueTone="ok" />
+        <Metric label={t('bandwidth.trafficSaved')} value={formatBytes(summary.hit_bytes || 0)} valueTone="success" />
         <Metric
           label={t('bandwidth.savingsRate')}
           value={summary.savings_rate != null ? `${(summary.savings_rate * 100).toFixed(1)}%` : '0%'}
-          valueTone={summary.savings_rate > 0.5 ? 'ok' : 'default'}
+          valueTone={summary.savings_rate > 0.5 ? 'success' : 'default'}
         />
         <Metric
           label={t('bandwidth.timeSaved')}
           value={formatTimeSaved(summary.time_saved_ms || 0, t)}
-          valueTone="ok"
+          valueTone="success"
         />
       </div>
 

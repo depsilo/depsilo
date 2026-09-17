@@ -1,7 +1,7 @@
 import { Toast } from '@base-ui/react/toast'
 import { createContext, type ReactNode, useContext, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import IconButton from './IconButton'
+import IconButton from '@/components/app/icon-button'
 
 export type ToastTone = 'success' | 'danger' | 'warning'
 

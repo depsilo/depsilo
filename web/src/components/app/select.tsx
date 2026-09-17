@@ -1,5 +1,5 @@
-import { useId, type InputHTMLAttributes } from 'react'
-import { mergeDescriptionIds } from './fieldFeedback'
+import { useId, type SelectHTMLAttributes } from 'react'
+import { mergeDescriptionIds } from '@/lib/aria'
 
 interface FeedbackProps {
   label?: string
@@ -7,54 +7,43 @@ interface FeedbackProps {
   error?: string
 }
 
-interface InputV2Props extends InputHTMLAttributes<HTMLInputElement>, FeedbackProps {
-  mono?: boolean
-}
+interface SelectV2Props extends SelectHTMLAttributes<HTMLSelectElement>, FeedbackProps {}
 
-export default function InputV2({
+export default function SelectV2({
   className = '',
-  mono,
   label,
   hint,
   error,
-  onFocus,
-  onBlur,
+  children,
   style,
   'aria-describedby': ariaDescribedBy,
   'aria-invalid': ariaInvalid,
   ...rest
-}: InputV2Props) {
+}: SelectV2Props) {
   const generatedId = useId()
   const controlId = rest.id ?? generatedId
   const descriptionId = hint || error ? `${controlId}-description` : undefined
   const composedDescriptionIds = mergeDescriptionIds(ariaDescribedBy, descriptionId)
 
-  const input = (
-    <input
+  const select = (
+    <select
       {...rest}
       id={controlId}
       aria-invalid={error ? true : ariaInvalid}
       aria-describedby={composedDescriptionIds}
-      className={`w-full rounded-[4px] px-3 py-2 text-[16px] md:text-[13px] transition-colors duration-150 stripe-focus-ring ${mono ? 'font-mono' : ''} ${className}`}
+      className={`w-full cursor-pointer rounded-[4px] px-3 py-2 text-[16px] md:text-[13px] transition-colors duration-150 stripe-focus-ring ${className}`}
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
         color: 'var(--text)',
-        outline: 'none',
         ...style,
       }}
-      onFocus={(event) => {
-        event.currentTarget.style.borderColor = 'var(--brand)'
-        onFocus?.(event)
-      }}
-      onBlur={(event) => {
-        event.currentTarget.style.borderColor = 'var(--border)'
-        onBlur?.(event)
-      }}
-    />
+    >
+      {children}
+    </select>
   )
 
-  if (!label && !descriptionId) return input
+  if (!label && !descriptionId) return select
 
   return (
     <div>
@@ -63,7 +52,7 @@ export default function InputV2({
           {label}
         </label>
       )}
-      {input}
+      {select}
       {(error || hint) && (
         <p
           id={descriptionId}

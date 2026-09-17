@@ -19,9 +19,9 @@ import {
 } from 'recharts'
 import type { TooltipContentProps, TooltipValueType } from 'recharts'
 
-import ButtonV2 from '@/components/Button'
-import Icon from '@/components/Icon'
-import SectionHeader from '@/components/SectionHeader'
+import ButtonV2 from '@/components/app/button'
+import Icon from '@/components/app/icon'
+import SectionHeader from '@/components/app/section-header'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { formatBytes } from '@/lib/utils'
 

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import Icon from './Icon'
+import Icon from '@/components/app/icon'
 
 interface LangToggleProps {
   variant?: 'default' | 'portal' | 'admin'

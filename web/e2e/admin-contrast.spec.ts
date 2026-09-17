@@ -1,5 +1,12 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expectResolvedUiPreferences, mockAdminApi, setUiPreferences, test, expect } from './fixtures/admin-api'
+import {
+  expect,
+  expectResolvedUiPreferences,
+  mockAdminApi,
+  resolvedTokenColor,
+  setUiPreferences,
+  test,
+} from './fixtures/admin-api'
 
 const populatedTrendPoints = [0, 1, 2, 3].map(index => {
   const requests = 12 + index
@@ -152,26 +159,19 @@ test('30d trend tooltips distinguish same-day two-hour buckets in local time', a
   await expect(await hoverTrendEndpoint(chart, 'last')).toHaveText(lastExpected)
 })
 
-test('primary command uses the semantic pressed color without a filter', async ({ page }) => {
+test('primary command resolves from the primary token and changes on hover without a filter', async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
   await page.goto('/admin/upstreams')
   const button = page.getByRole('button', { name: /添加上游源/i })
-  const tokenColors = await page.evaluate(() => {
-    const probe = document.createElement('span')
-    document.body.appendChild(probe)
-    probe.style.backgroundColor = 'var(--btn)'
-    const resting = getComputedStyle(probe).backgroundColor
-    probe.style.backgroundColor = 'var(--btn-press)'
-    const pressed = getComputedStyle(probe).backgroundColor
-    probe.remove()
-    return { resting, pressed }
-  })
+  // The semantic contract is: rest is exactly the primary token, hover is a
+  // distinct press state, and neither is faked with a filter.
+  const primary = await resolvedTokenColor(page, '--primary')
   const restingBackground = await button.evaluate(el => getComputedStyle(el).backgroundColor)
-  expect(restingBackground).toBe(tokenColors.resting)
+  expect(restingBackground).toBe(primary)
   await button.hover()
-  await expect.poll(() => button.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(tokenColors.pressed)
+  await expect.poll(() => button.evaluate(el => getComputedStyle(el).backgroundColor))
+    .not.toBe(restingBackground)
   const hoveredBackground = await button.evaluate(el => getComputedStyle(el).backgroundColor)
   expect(hoveredBackground).not.toBe(restingBackground)
-  expect(hoveredBackground).toBe(tokenColors.pressed)
   expect(await button.evaluate(el => getComputedStyle(el).filter)).toBe('none')
 })

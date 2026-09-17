@@ -1,5 +1,5 @@
 import { type Key, type ReactNode } from 'react'
-import TableViewport from './TableViewport'
+import TableViewport from '@/components/app/table-viewport'
 
 interface Column<T> {
   key: string

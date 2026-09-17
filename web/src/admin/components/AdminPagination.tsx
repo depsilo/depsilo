@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/Button'
+import ButtonV2 from '@/components/app/button'
 
 interface AdminPaginationProps {
   page: number

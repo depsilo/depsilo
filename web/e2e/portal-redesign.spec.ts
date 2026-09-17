@@ -357,7 +357,7 @@ test('Portal header keeps every visible control in view at 320px', async ({ page
 
   const brand = page.getByRole('link', { name: 'Depsilo', exact: true })
   await expect(brand).toBeVisible()
-  await expect(brand.locator('.depsilo-logo-mark')).toBeVisible()
+  await expect(brand.locator('[data-brand-mark]')).toBeVisible()
   await expect(brand.locator('.portal-brand-name')).toBeHidden()
 
   const navigation = page.getByRole('navigation', { name: 'Portal navigation' })

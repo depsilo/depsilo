@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import Icon from '@/components/Icon'
+import Icon from '@/components/app/icon'
 
 export default function CompileCacheIntro() {
   const { t } = useTranslation()

@@ -572,24 +572,6 @@ code,
   letter-spacing: 0;
 }
 
-.app-tooltip-positioner { z-index: 80; }
-.app-tooltip-popup {
-  max-width: min(240px, calc(100vw - 24px));
-  padding: 5px 8px;
-  border-radius: var(--radius-sm);
-  color: var(--background);
-  background: var(--foreground);
-  box-shadow: var(--shadow-pop);
-  font-size: 12px;
-  line-height: 1.4;
-  transition: opacity 100ms ease, transform 100ms ease;
-}
-.app-tooltip-popup[data-starting-style],
-.app-tooltip-popup[data-ending-style] {
-  opacity: 0;
-  transform: scale(0.98);
-}
-
 .app-drawer-viewport {
   position: fixed;
   inset: 0;

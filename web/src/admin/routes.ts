@@ -1,4 +1,4 @@
-import type { IconName } from '@/components/Icon'
+import type { IconName } from '@/components/app/icon'
 
 const navGroupDefinitions = [
   { id: 'overview', titleKey: 'nav.workspaces.overview', icon: 'dashboard', landingRouteId: 'dashboard' },

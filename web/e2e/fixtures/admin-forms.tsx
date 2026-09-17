@@ -1,8 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import InputV2 from '../../src/components/Input'
-import SelectV2 from '../../src/components/Select'
-import TextareaV2 from '../../src/components/Textarea'
+import InputV2 from '../../src/components/app/input'
+import SelectV2 from '../../src/components/app/select'
+import TextareaV2 from '../../src/components/app/textarea'
 import '../../src/index.css'
 
 const fieldKinds = [

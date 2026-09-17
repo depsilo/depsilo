@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import EcosystemIcon from '@/components/EcosystemIcon'
-import Icon from '@/components/Icon'
-import Input from '@/components/Input'
+import EcosystemIcon from '@/components/app/ecosystem-icon'
+import Icon from '@/components/app/icon'
+import Input from '@/components/app/input'
 import { LANGUAGES, type Language, type LanguageGroup } from '@/lib/ecosystemData'
 
 interface Props {

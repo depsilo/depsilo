@@ -1,4 +1,4 @@
-import { ToastProvider } from '@/components/Toast'
+import { ToastProvider } from '@/components/app/toast'
 import MainLayout from './components/MainLayout'
 
 // The authenticated admin shell owns cross-page UI dependencies such as

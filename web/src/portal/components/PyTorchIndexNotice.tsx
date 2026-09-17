@@ -1,8 +1,8 @@
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Badge from '@/components/Badge'
-import Icon from '@/components/Icon'
-import Input from '@/components/Input'
+import Badge from '@/components/app/badge'
+import Icon from '@/components/app/icon'
+import Input from '@/components/app/input'
 import CodeBlock from '@/portal/components/CodeBlock'
 
 interface Props {

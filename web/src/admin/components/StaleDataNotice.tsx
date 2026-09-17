@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/Button'
-import InlineNotice from '@/components/InlineNotice'
+import ButtonV2 from '@/components/app/button'
+import InlineNotice from '@/components/app/notice'
 
 interface StaleDataNoticeProps {
   onRefresh: () => unknown

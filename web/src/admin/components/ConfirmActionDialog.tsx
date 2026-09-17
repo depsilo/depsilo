@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import ButtonV2 from '@/components/Button'
-import InlineNotice from '@/components/InlineNotice'
-import ModalV2 from '@/components/Modal'
+import ButtonV2 from '@/components/app/button'
+import InlineNotice from '@/components/app/notice'
+import ModalV2 from '@/components/app/modal'
 
 export interface ConfirmActionDetail {
   label: string

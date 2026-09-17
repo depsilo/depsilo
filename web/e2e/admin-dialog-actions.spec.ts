@@ -1,20 +1,4 @@
-import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
-
-/**
- * Resolve a semantic token to the exact string Chromium reports for it, so a
- * tooltip can be asserted against the inverse-surface contract instead of a
- * literal colour that the token layer is free to change.
- */
-async function resolvedTokenColor(page: import('@playwright/test').Page, token: string) {
-  return page.evaluate((name) => {
-    const probe = document.createElement('span')
-    probe.style.color = `var(${name})`
-    document.body.appendChild(probe)
-    const value = getComputedStyle(probe).color
-    probe.remove()
-    return value
-  }, token)
-}
+import { test, expect, mockAdminApi, resolvedTokenColor, setUiPreferences } from './fixtures/admin-api'
 
 /** The floating tooltip is the product's inverse surface: text on canvas. */
 async function expectInverseSurface(page: import('@playwright/test').Page, tooltip: import('@playwright/test').Locator) {
@@ -33,6 +17,9 @@ test('dialog traps focus and restores its trigger', async ({ page }) => {
 
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
+  // Measure the hit target once the entry transition has settled. A running
+  // transform scales the measured box, which is not the size an Operator gets.
+  await expect(dialog).toHaveCSS('opacity', '1')
   for (let index = 0; index < 12; index += 1) {
     await page.keyboard.press('Tab')
   }
@@ -56,6 +43,8 @@ test('every visible icon action is named and at least 40px', async ({ page }) =>
   const button = page.getByRole('dialog').locator('[data-icon-button]:visible')
   await expect(button).toHaveCount(1)
   await expect(button).toHaveAttribute('aria-label', /关闭/)
+  // Measure at rest: a running entry transform scales the reported box.
+  await expect(page.getByRole('dialog')).toHaveCSS('opacity', '1')
 
   const box = await button.boundingBox()
   expect(box?.width).toBeGreaterThanOrEqual(40)

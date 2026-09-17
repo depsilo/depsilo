@@ -2,9 +2,9 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import { getAdminRouteHref } from '@/admin/routes'
-import ButtonV2 from '@/components/Button'
-import Icon, { type IconName } from '@/components/Icon'
-import QueryErrorState from '@/components/QueryErrorState'
+import ButtonV2 from '@/components/app/button'
+import Icon, { type IconName } from '@/components/app/icon'
+import QueryErrorState from '@/components/app/error-state'
 import type { DashboardUpstream } from '@/lib/adminApi.types'
 import { upstreamStatus } from '@/lib/upstreamStatus'
 

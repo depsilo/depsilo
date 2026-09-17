@@ -1,5 +1,5 @@
 import { LANGUAGES } from '@/lib/ecosystemData'
-import EcosystemIcon from '@/components/EcosystemIcon'
+import EcosystemIcon from '@/components/app/ecosystem-icon'
 
 interface Props {
   selected: string

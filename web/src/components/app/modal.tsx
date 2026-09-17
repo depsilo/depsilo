@@ -1,7 +1,7 @@
 import { Dialog } from '@base-ui/react/dialog'
 import { type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import IconButton from './IconButton'
+import IconButton from '@/components/app/icon-button'
 
 interface ModalV2Props {
   open: boolean

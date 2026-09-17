@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 
-import Badge from '@/components/Badge'
+import Badge from '@/components/app/badge'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
 
 /** Page-level destinations are the same workspace projection used by the sidebar. */

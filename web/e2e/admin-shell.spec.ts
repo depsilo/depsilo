@@ -77,7 +77,7 @@ test('pending principal check shows an accessible branded loading state', async 
   await expect(pending).toHaveAttribute('aria-busy', 'true')
   await expect(pending.getByRole('status')).toContainText('Depsilo')
   await expect(pending.getByRole('status')).toContainText('正在验证会话')
-  await expect(pending.locator('.depsilo-logo-mark')).toBeVisible()
+  await expect(pending.getByRole('status').locator('[data-brand-mark]')).toBeVisible()
   await expect(page.locator('[data-admin-outlet]')).toHaveCount(0)
 
   releasePrincipal(adminApiDefaults['GET /api/v1/auth/me'])
