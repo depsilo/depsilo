@@ -153,13 +153,13 @@ function SearchPill({
         width: 'min(100%, 320px)',
         minHeight: 40,
         padding: '0 0 0 10px',
-        background: 'var(--bg-soft)',
-        border: `0.5px solid ${focused ? 'var(--brand-border)' : 'var(--border)'}`,
+        background: 'var(--muted)',
+        border: `0.5px solid ${focused ? 'var(--border)' : 'var(--border)'}`,
         borderRadius: 8,
         transition: 'border-color 120ms ease, background 120ms ease',
       }}
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" style={{ color: 'var(--text-subtle)', flexShrink: 0 }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }}>
         <circle cx="11" cy="11" r="7" />
         <path d="M21 21l-4.3-4.3" />
       </svg>
@@ -186,7 +186,7 @@ function SearchPill({
           outline: 'none',
           fontSize: 12.5,
           fontFamily: 'var(--font-mono)',
-          color: 'var(--text)',
+          color: 'var(--foreground)',
         }}
       />
       {value ? (
@@ -209,12 +209,12 @@ function SearchPill({
             background: 'transparent',
             border: 'none',
             borderRadius: 4,
-            color: 'var(--text-subtle)',
+            color: 'var(--muted-foreground)',
             cursor: 'pointer',
             transition: 'color 120ms ease',
           }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)' }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-subtle)' }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--foreground)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted-foreground)' }}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
             <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
@@ -226,7 +226,7 @@ function SearchPill({
           style={{
             fontSize: 10,
             fontFamily: 'var(--font-mono)',
-            color: 'var(--text-subtle)',
+            color: 'var(--muted-foreground)',
             padding: '0 5px',
             lineHeight: '15px',
             border: '0.5px solid var(--border)',
@@ -318,7 +318,7 @@ export default function MonitorPage() {
                 // and milder still for CJK.
                 letterSpacing: i18n.language === 'zh' ? '-0.02em' : '-0.025em',
                 lineHeight: 1.02,
-                color: 'var(--text)',
+                color: 'var(--foreground)',
               }}
             >
               {t('monitor.title')}
@@ -340,7 +340,7 @@ export default function MonitorPage() {
                 gap: '8px 12px',
                 fontSize: 13,
                 lineHeight: 1.3,
-                color: 'var(--text-muted)',
+                color: 'var(--muted-foreground)',
               }}
             >
               <span>
@@ -368,13 +368,13 @@ export default function MonitorPage() {
                   >
                     <span>
                       {t('monitor.hitRate7d')}{' '}
-                      <span className="num" style={{ color: 'var(--brand-text)', fontWeight: 600 }}>
+                      <span className="num" style={{ color: 'var(--primary)', fontWeight: 600 }}>
                         {(week.hit_rate * 100).toFixed(1)}%
                       </span>
                     </span>
                     <span>
                       {t('monitor.saved7d')}{' '}
-                      <span className="num" style={{ color: 'var(--text)', fontWeight: 600 }}>
+                      <span className="num" style={{ color: 'var(--foreground)', fontWeight: 600 }}>
                         {savedFmt.value} {savedFmt.unit}
                       </span>
                     </span>
@@ -450,9 +450,9 @@ export default function MonitorPage() {
                     to="/admin/upstreams"
                     className="app-button stripe-focus-ring inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-[13px] font-[500] no-underline"
                     style={{
-                      border: '0.5px solid var(--border-strong)',
-                      color: 'var(--text)',
-                      background: 'var(--bg-card)',
+                      border: '0.5px solid var(--input)',
+                      color: 'var(--foreground)',
+                      background: 'var(--card)',
                     }}
                   >
                     {t('monitor.configureUpstreams')}

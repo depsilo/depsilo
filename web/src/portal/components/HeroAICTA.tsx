@@ -60,8 +60,8 @@ export default function HeroAICTA() {
         aria-labelledby="quickstart-optional-ai-title"
         className="flex min-h-full flex-col rounded-lg p-5 sm:p-6"
         style={{
-          background: 'var(--bg-card)',
-          border: '0.5px solid var(--border-strong)',
+          background: 'var(--card)',
+          border: '0.5px solid var(--input)',
           boxShadow: 'var(--shadow-card)',
         }}
       >
@@ -92,8 +92,8 @@ export default function HeroAICTA() {
             disabled={isFetching}
             className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] font-[620] active:scale-[0.97]"
             style={{
-              color: copied ? 'var(--ok-text)' : 'var(--btn-fg)',
-              background: copied ? 'var(--ok-fill)' : 'var(--btn)',
+              color: copied ? 'var(--success)' : 'var(--primary-foreground)',
+              background: copied ? 'var(--success-surface)' : 'var(--primary)',
               border: 0,
               cursor: isFetching ? 'wait' : 'pointer',
               opacity: isFetching ? 0.7 : 1,
@@ -156,7 +156,7 @@ export default function HeroAICTA() {
           <div
             className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] px-3 py-2"
             style={{
-              background: 'var(--bg-soft)',
+              background: 'var(--muted)',
               border: '0.5px solid var(--border)',
             }}
           >
@@ -169,7 +169,7 @@ export default function HeroAICTA() {
             tabIndex={0}
             className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-[6px] p-4 font-mono text-[12px] leading-[1.55] text-foreground"
             style={{
-              background: 'var(--bg-soft)',
+              background: 'var(--muted)',
               border: '0.5px solid var(--border)',
             }}
           >

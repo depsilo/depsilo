@@ -23,7 +23,7 @@ import ButtonV2 from '@/components/app/button'
 import Icon from '@/components/app/icon'
 import SectionHeader from '@/components/app/section-header'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
-import { formatBytes } from '@/lib/utils'
+import { cn, formatBytes } from '@/lib/utils'
 
 export type TrendsRange = '1h' | '24h' | '7d' | '30d'
 export type TrendsTab = 'requests' | 'bandwidth' | 'latency' | 'errors'
@@ -137,8 +137,7 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
   const formattedLabel = typeof label === 'number' ? fmtTooltipTime(label, dataRange) : label
   return (
     <div
-      className="rounded-[6px] px-3 py-2 text-[12px]"
-      style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-pop)' }}
+      className="rounded-md border border-border bg-card px-3 py-2 text-[12px] shadow-lg"
     >
       <p className="font-[400] mb-1 text-foreground">{formattedLabel}</p>
       {payload.map((entry) => {
@@ -164,7 +163,9 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
 }
 
 const axisProps = {
-  tick: { fill: 'var(--text-soft)', fontSize: 10 },
+  // Recharts axis props take CSS values rather than classes; the semantic
+  // tokens are resolved by the browser, so they still follow the theme.
+  tick: { fill: 'var(--muted-foreground)', fontSize: 10 },
   axisLine: false as const,
   tickLine: false as const,
 }
@@ -221,15 +222,12 @@ export default function TrendsCard({
                       type="button"
                       onClick={() => setTab(tb.value)}
                       aria-pressed={active}
-                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-[3px] px-2 text-[11px] transition-[color,border-color] duration-150 sm:px-2.5"
-                      style={{
-                        background: 'transparent',
-                        color: active ? 'var(--text)' : 'var(--text-soft)',
-                        border: '0 solid transparent',
-                        borderBottomWidth: 2,
-                        borderBottomColor: active ? 'var(--brand)' : 'transparent',
-                        fontWeight: active ? 650 : 500,
-                      }}
+                      className={cn(
+                        'min-h-10 min-w-0 cursor-pointer rounded-sm border-b-2 border-transparent bg-transparent px-2 text-[11px] whitespace-nowrap transition-colors sm:px-2.5',
+                        active
+                          ? 'border-b-primary font-semibold text-foreground'
+                          : 'font-medium text-muted-foreground hover:text-foreground',
+                      )}
                     >
                       {t(`dashboard.${tb.key}`)}
                     </button>
@@ -250,12 +248,12 @@ export default function TrendsCard({
                       type="button"
                       onClick={() => onRangeChange(r.value)}
                       aria-pressed={active}
-                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-[5px] px-2 text-[11px] font-[500] transition-[background,color,border-color] duration-150 sm:px-2.5"
-                      style={{
-                        background: active ? 'var(--bg-card)' : 'transparent',
-                        color: active ? 'var(--text)' : 'var(--text-soft)',
-                        border: active ? '1px solid var(--border-strong)' : '1px solid transparent',
-                      }}
+                      className={cn(
+                        'min-h-10 min-w-0 cursor-pointer rounded-sm border px-2 text-[11px] font-medium whitespace-nowrap transition-colors sm:px-2.5',
+                        active
+                          ? 'border-input bg-card text-foreground'
+                          : 'border-transparent text-muted-foreground hover:text-foreground',
+                      )}
                     >
                       {t(`dashboard.${r.key}`)}
                     </button>
@@ -301,7 +299,7 @@ export default function TrendsCard({
               margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
               desc={chartDescription}
             >
-            <CartesianGrid stroke="var(--grid)" vertical={false} />
+            <CartesianGrid stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="bucket"
               type="number"
@@ -312,30 +310,30 @@ export default function TrendsCard({
               {...axisProps}
             />
             <Tooltip content={props => <ChartTooltip {...props} dataRange={dataRange} />} />
-            <Legend wrapperStyle={{ color: 'var(--text-soft)', fontSize: 11, paddingTop: 6 }} />
+            <Legend wrapperStyle={{ color: 'var(--muted-foreground)', fontSize: 11, paddingTop: 6 }} />
 
             {tab === 'requests' && (
               <>
                 <YAxis yAxisId="count" {...axisProps} width={36} />
                 <YAxis yAxisId="rate" orientation="right" domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} {...axisProps} width={36} />
-                <Area yAxisId="count" type="linear" dataKey="hits" stroke="var(--brand)" strokeWidth={1.8} fill="var(--brand)" fillOpacity={0.08} name={t('dashboard.hits')} isAnimationActive={false} />
-                <Area yAxisId="count" type="linear" dataKey="misses" stroke="var(--danger)" strokeOpacity={0.72} strokeWidth={1.35} fill="var(--danger)" fillOpacity={0.05} name={t('dashboard.misses')} isAnimationActive={false} />
-                <Line yAxisId="rate" type="linear" dataKey="hit_rate_pct" stroke="var(--warn-text)" strokeOpacity={0.74} name={t('dashboard.hitRate2')} strokeWidth={1.4} dot={false} strokeDasharray="4 4" isAnimationActive={false} />
+                <Area yAxisId="count" type="linear" dataKey="hits" stroke="var(--primary)" strokeWidth={1.8} fill="var(--primary)" fillOpacity={0.08} name={t('dashboard.hits')} isAnimationActive={false} />
+                <Area yAxisId="count" type="linear" dataKey="misses" stroke="var(--muted-foreground)" strokeOpacity={0.72} strokeWidth={1.35} fill="var(--muted-foreground)" fillOpacity={0.05} name={t('dashboard.misses')} isAnimationActive={false} />
+                <Line yAxisId="rate" type="linear" dataKey="hit_rate_pct" stroke="var(--warning)" strokeOpacity={0.74} name={t('dashboard.hitRate2')} strokeWidth={1.4} dot={false} strokeDasharray="4 4" isAnimationActive={false} />
               </>
             )}
 
             {tab === 'bandwidth' && (
               <>
                 <YAxis yAxisId="bytes" tickFormatter={(v: number) => formatBytes(v)} {...axisProps} width={56} />
-                <Area yAxisId="bytes" type="linear" dataKey="bytes_hit" stroke="var(--ok)" strokeWidth={1.5} fill="var(--ok)" fillOpacity={0.1} name={t('dashboard.bytesHit')} stackId="bw" isAnimationActive={false} />
-                <Area yAxisId="bytes" type="linear" dataKey="bytes_miss" stroke="var(--danger)" strokeWidth={1.5} fill="var(--danger)" fillOpacity={0.08} name={t('dashboard.bytesMiss')} stackId="bw" isAnimationActive={false} />
+                <Area yAxisId="bytes" type="linear" dataKey="bytes_hit" stroke="var(--success)" strokeWidth={1.5} fill="var(--success)" fillOpacity={0.1} name={t('dashboard.bytesHit')} stackId="bw" isAnimationActive={false} />
+                <Area yAxisId="bytes" type="linear" dataKey="bytes_miss" stroke="var(--muted-foreground)" strokeWidth={1.5} fill="var(--muted-foreground)" fillOpacity={0.08} name={t('dashboard.bytesMiss')} stackId="bw" isAnimationActive={false} />
               </>
             )}
 
             {tab === 'latency' && (
               <>
                 <YAxis yAxisId="ms" {...axisProps} width={48} tickFormatter={(v: number) => `${v}ms`} />
-                <Line yAxisId="ms" type="linear" dataKey="avg_latency_ms" stroke="var(--brand)" strokeWidth={1.8} dot={false} name={t('dashboard.avgLatency')} isAnimationActive={false} />
+                <Line yAxisId="ms" type="linear" dataKey="avg_latency_ms" stroke="var(--primary)" strokeWidth={1.8} dot={false} name={t('dashboard.avgLatency')} isAnimationActive={false} />
               </>
             )}
 
@@ -343,8 +341,8 @@ export default function TrendsCard({
               <>
                 <YAxis yAxisId="count" {...axisProps} width={36} />
                 <YAxis yAxisId="rate" orientation="right" domain={[0, 'auto']} tickFormatter={(v: number) => `${v}%`} {...axisProps} width={42} />
-                <Area yAxisId="count" type="linear" dataKey="errors" stroke="var(--danger)" strokeWidth={1.5} fill="var(--danger)" fillOpacity={0.08} name={t('dashboard.trendTabErrors')} isAnimationActive={false} />
-                <Line yAxisId="rate" type="linear" dataKey="error_rate_pct" stroke="var(--warn-text)" name={t('dashboard.errorRate')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" isAnimationActive={false} />
+                <Area yAxisId="count" type="linear" dataKey="errors" stroke="var(--destructive)" strokeWidth={1.5} fill="var(--destructive)" fillOpacity={0.08} name={t('dashboard.trendTabErrors')} isAnimationActive={false} />
+                <Line yAxisId="rate" type="linear" dataKey="error_rate_pct" stroke="var(--warning)" name={t('dashboard.errorRate')} strokeWidth={1.6} dot={false} strokeDasharray="4 3" isAnimationActive={false} />
               </>
             )}
             </ComposedChart>

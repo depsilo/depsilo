@@ -44,10 +44,10 @@ const HEARTBEAT_WIDTH = HEARTBEAT_LIMIT * BEAT_WIDTH + (HEARTBEAT_LIMIT - 1) * B
 // amber tier, and the shared 150ms threshold keeps ticks and status
 // labels aligned across Portal and Admin.
 function beatColor(latency: number | null): string {
-  if (latency === null) return 'color-mix(in oklab, var(--border-strong) 58%, var(--bg-card))'
-  if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
-  if (latency < 150) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
-  return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
+  if (latency === null) return 'color-mix(in oklab, var(--input) 58%, var(--card))'
+  if (latency < 0) return 'color-mix(in oklab, var(--destructive) 78%, var(--card))'
+  if (latency < 150) return 'color-mix(in oklab, var(--success) 82%, var(--card))'
+  return 'color-mix(in oklab, var(--warning) 76%, var(--card))'
 }
 
 function beatLabel(latency: number | null, noDataLabel: string, failedLabel: string): string {
@@ -193,7 +193,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
               background: beatColor(lat),
               opacity: beats.length === 0 || lat === null ? 0.14 : (activeIdx !== null && activeIdx !== i ? 0.42 : 1),
               boxShadow: activeIdx === i
-                ? '0 0 0 1px color-mix(in oklab, var(--text) 22%, transparent) inset'
+                ? '0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent) inset'
                 : 'none',
               transition: 'opacity 90ms ease, box-shadow 90ms ease',
             }}
@@ -209,7 +209,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           aria-live="polite"
           aria-atomic="true"
           className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--inverse)', color: 'var(--on-inverse)', left: tooltipLeft, transform: tooltipTransform }}
+          style={{ background: 'var(--foreground)', color: 'var(--background)', left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
         </div>

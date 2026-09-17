@@ -199,7 +199,7 @@ export default function CacheManageV2() {
           {/* Left: usage + ecosystem breakdown */}
           <section>
             <SectionHeader title={t('cache.storageOverview')} />
-            <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', lineHeight: 1.05 }}>
+            <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--foreground)', lineHeight: 1.05 }}>
               {formatBytes(distribution.total_size)}
               <span className="text-[12px] font-[400] ml-2 text-muted-foreground">
                 / {formatBytes(distribution.max_size)}
@@ -213,7 +213,7 @@ export default function CacheManageV2() {
                   <div
                     key={bt.type}
                     className="h-full"
-                    style={{ width: `${pct}%`, background: ECO_COLORS[bt.type] || 'var(--brand)' }}
+                    style={{ width: `${pct}%`, background: ECO_COLORS[bt.type] || 'var(--primary)' }}
                     title={`${bt.type.toUpperCase()}: ${formatBytes(bt.size)}`}
                   />
                 )
@@ -225,7 +225,7 @@ export default function CacheManageV2() {
                 const pct = distribution.total_size > 0 ? ((bt.size / distribution.total_size) * 100).toFixed(1) : '0'
                 return (
                   <div key={bt.type} className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[bt.type] || 'var(--brand)' }} />
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[bt.type] || 'var(--primary)' }} />
                     {isAdminEcosystem(bt.type) && <EcosystemIcon type={bt.type} size={12} />}
                     <span className="text-[11px] uppercase flex-1 text-foreground">{bt.type}</span>
                     <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{formatBytes(bt.size)}</span>
@@ -244,27 +244,27 @@ export default function CacheManageV2() {
               <ResponsiveContainer width="100%" height={200}>
                 <Treemap
                   data={distribution.top_packages.map((p) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
-                  dataKey="size" aspectRatio={4 / 3} stroke="var(--bg)" isAnimationActive={false}
+                  dataKey="size" aspectRatio={4 / 3} stroke="var(--background)" isAnimationActive={false}
                   content={(node: TreemapNode) => {
                     const { x, y, width, height, name } = node
                     const size = typeof node.size === 'number' ? node.size : node.value
                     if (width < 4 || height < 4) return <g />
                     const showLabel = width > 60 && height > 30 && name
                     const type = distribution.top_packages.find((p) => p.name === name)?.type
-                    const fill = type ? ECO_COLORS[type] || 'var(--brand)' : 'var(--brand)'
+                    const fill = type ? ECO_COLORS[type] || 'var(--primary)' : 'var(--primary)'
                     return (
                       <g>
                         <rect x={x} y={y} width={width} height={height}
                           fill={fill}
                           fillOpacity={0.25 + Math.min(0.5, ((size || 0) / (distribution.top_packages[0]?.size || 1)) * 0.5)}
-                          stroke="var(--bg)" strokeWidth={1.5} rx={3}
+                          stroke="var(--background)" strokeWidth={1.5} rx={3}
                         />
                         {showLabel && (
                           <foreignObject x={x} y={y} width={width} height={height}>
                             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 3, boxSizing: 'border-box', overflow: 'hidden' }}>
-                              <div style={{ maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 4px', borderRadius: 3, background: 'var(--surface)', overflow: 'hidden' }}>
-                                <span style={{ color: 'var(--text)', fontSize: 11, fontWeight: 500, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
-                                <span style={{ color: 'var(--text-soft)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>{formatBytes(size)}</span>
+                              <div style={{ maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 4px', borderRadius: 3, background: 'var(--card)', overflow: 'hidden' }}>
+                                <span style={{ color: 'var(--foreground)', fontSize: 11, fontWeight: 500, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
+                                <span style={{ color: 'var(--muted-foreground)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>{formatBytes(size)}</span>
                               </div>
                             </div>
                           </foreignObject>
@@ -278,7 +278,7 @@ export default function CacheManageV2() {
                     const item: unknown = payload[0]?.payload
                     if (!isCacheTreemapItem(item)) return null
                     return (
-                      <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                      <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
                         <p className="font-[500] text-foreground">{item.name}</p>
                         <p className="text-muted-foreground">{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
                       </div>
@@ -297,7 +297,7 @@ export default function CacheManageV2() {
 
       <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+          <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('cache.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"

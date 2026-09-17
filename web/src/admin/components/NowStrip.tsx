@@ -35,7 +35,7 @@ const flowMotion = `
   bottom: 28px;
   left: 29px;
   width: 1px;
-  background: var(--border-strong);
+  background: var(--input);
 }
 .dependency-flow-beat {
   position: absolute;
@@ -45,7 +45,7 @@ const flowMotion = `
   width: 3px;
   height: 28px;
   border-radius: 999px;
-  background: var(--brand);
+  background: var(--primary);
   animation: dependencyFlowY 2.6s cubic-bezier(.2,.8,.2,1) infinite;
 }
 .dependency-flow-stage {
@@ -66,9 +66,9 @@ const flowMotion = `
   width: 11px;
   height: 11px;
   margin-left: 4px;
-  border: 3px solid var(--bg-card);
+  border: 3px solid var(--card);
   border-radius: 999px;
-  box-shadow: 0 0 0 1px var(--border-strong);
+  box-shadow: 0 0 0 1px var(--input);
 }
 .dependency-flow-title {
   grid-column: 2;
@@ -133,9 +133,9 @@ const flowMotion = `
 `
 
 function statusColor(status: NowResponse['status']): string {
-  if (status === 'healthy') return 'var(--ok)'
-  if (status === 'degraded') return 'var(--warn-text)'
-  return 'var(--danger)'
+  if (status === 'healthy') return 'var(--success)'
+  if (status === 'degraded') return 'var(--warning)'
+  return 'var(--destructive)'
 }
 
 function formatRelative(seconds: number, t: TFunction): string {
@@ -166,10 +166,10 @@ interface FlowStageProps {
 
 function FlowStage({ title, value, detail, loading = false, tone = 'default', action }: FlowStageProps) {
   const color = tone === 'ok'
-    ? 'var(--ok-text)'
+    ? 'var(--success)'
     : tone === 'warning'
-      ? 'var(--warn-text)'
-      : 'var(--text)'
+      ? 'var(--warning)'
+      : 'var(--foreground)'
 
   return (
     <div className="dependency-flow-stage">
@@ -228,14 +228,14 @@ export default function NowStrip({
           ? t('now.statusDegraded')
           : t('now.statusDown')
   const dotColor = hasInitialError
-    ? 'var(--warn-text)'
+    ? 'var(--warning)'
     : query.isPending && !data
-      ? 'var(--text-subtle)'
+      ? 'var(--muted-foreground)'
       : statusColor(data?.status ?? 'down')
 
   if (variant === 'compact') {
     const compactLabel = hasStaleData ? t('now.staleData') : statusLabel
-    const compactDotColor = hasStaleData ? 'var(--warn-text)' : dotColor
+    const compactDotColor = hasStaleData ? 'var(--warning)' : dotColor
     const errorMessage = hasInitialError ? getApiError(query.error).message : undefined
     const accessibleLabel = errorMessage ? `${compactLabel}: ${errorMessage}` : compactLabel
 
@@ -293,7 +293,7 @@ export default function NowStrip({
               width: 8,
               height: 8,
               borderRadius: '50%',
-              background: hasStaleData ? 'var(--warn-text)' : dotColor,
+              background: hasStaleData ? 'var(--warning)' : dotColor,
             }}
           />
           <span className="text-[11px] font-[650] text-muted-foreground">
@@ -352,7 +352,7 @@ export default function NowStrip({
                 <Link
                   to={getAdminRouteHref('upstreams')}
                   className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 font-mono text-[22px] font-[620] leading-none tabular-nums no-underline hover:bg-accent md:text-[27px]"
-                  style={{ color: upstreamTone === 'warning' ? 'var(--warn-text)' : 'var(--ok-text)' }}
+                  style={{ color: upstreamTone === 'warning' ? 'var(--warning)' : 'var(--success)' }}
                   aria-label={t('now.viewUpstreams', {
                     healthy: data.upstreams.healthy,
                     total: data.upstreams.total,

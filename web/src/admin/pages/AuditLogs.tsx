@@ -23,9 +23,9 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AuditLog, AuditLogQuery } from '@/lib/adminApi.types'
 
 function latencyColor(ms: number): string {
-  if (ms < 100) return 'var(--ok)'
-  if (ms < 500) return 'var(--text-soft)'
-  return 'var(--danger)'
+  if (ms < 100) return 'var(--success)'
+  if (ms < 500) return 'var(--muted-foreground)'
+  return 'var(--destructive)'
 }
 
 function resultBadge(result: string, t: (k: string) => string) {
@@ -209,7 +209,7 @@ export default function AuditLogsV2() {
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+          <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('audit.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
@@ -265,8 +265,8 @@ export default function AuditLogsV2() {
               aria-pressed={timeRange === r}
               className="px-2.5 py-1 text-[11px] rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
               style={{
-                background: timeRange === r ? 'var(--btn)' : 'transparent',
-                color: timeRange === r ? 'var(--btn-fg)' : 'var(--text-soft)',
+                background: timeRange === r ? 'var(--primary)' : 'transparent',
+                color: timeRange === r ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
                 border: timeRange === r ? 'none' : '1px solid var(--border)',
               }}
             >

@@ -86,8 +86,8 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
           data-quickstart-shell
           className="grid grid-cols-1 overflow-hidden rounded-xl min-[900px]:grid-cols-[280px_minmax(0,1fr)]"
           style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-strong)',
+            background: 'var(--card)',
+            border: '1px solid var(--input)',
           }}
         >
           <EcosystemCatalog

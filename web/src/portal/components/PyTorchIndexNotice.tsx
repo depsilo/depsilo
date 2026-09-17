@@ -46,9 +46,9 @@ function ChannelButton({
       onClick={onSelect}
       className="stripe-focus-ring flex min-h-12 min-w-0 cursor-pointer flex-col items-start justify-center rounded-[6px] border px-3 py-2 text-left transition-[background,border-color,color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
       style={{
-        background: active ? 'var(--brand-soft)' : 'transparent',
-        borderColor: active ? 'var(--brand-border)' : 'transparent',
-        color: active ? 'var(--brand-text)' : 'var(--text)',
+        background: active ? 'var(--accent)' : 'transparent',
+        borderColor: active ? 'var(--border)' : 'transparent',
+        color: active ? 'var(--primary)' : 'var(--foreground)',
       }}
     >
       <span className="flex w-full min-w-0 items-center justify-between gap-1.5">

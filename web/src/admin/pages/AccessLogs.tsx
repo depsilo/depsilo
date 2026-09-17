@@ -27,9 +27,9 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import type { AccessLog, AccessLogDetail, AccessLogQuery } from '@/lib/adminApi.types'
 
 function latencyColor(ms: number): string {
-  if (ms < 100) return 'var(--ok)'
-  if (ms < 500) return 'var(--text-soft)'
-  return 'var(--danger)'
+  if (ms < 100) return 'var(--success)'
+  if (ms < 500) return 'var(--muted-foreground)'
+  return 'var(--destructive)'
 }
 
 function parsePage(value: string | null): number {
@@ -212,7 +212,7 @@ export default function AccessLogsV2() {
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+          <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('logs.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"

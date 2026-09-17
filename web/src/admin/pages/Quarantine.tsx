@@ -579,7 +579,7 @@ function BlocklistTab() {
           <span className="text-[22px] font-mono font-[600] tabular-nums">{st?.entry_count ?? 0}</span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.last_success')}>
-          <span className="text-[13px] font-mono" style={{ color: st?.last_success_at ? 'var(--text)' : 'var(--warn-text)' }}>
+          <span className="text-[13px] font-mono" style={{ color: st?.last_success_at ? 'var(--foreground)' : 'var(--warning)' }}>
             {st?.last_success_at ? formatTime(st.last_success_at) : t('quarantine.blocklist.never')}
           </span>
         </StatusItem>
@@ -933,8 +933,8 @@ function FilterSelect(props: {
       disabled={props.disabled}
       className="min-h-[40px] w-full cursor-pointer rounded-[6px] px-3 text-[16px] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-[12px]"
       style={{
-        background: 'var(--bg-soft)',
-        color: 'var(--text)',
+        background: 'var(--muted)',
+        color: 'var(--foreground)',
         border: '0.5px solid var(--border)',
       }}
     >

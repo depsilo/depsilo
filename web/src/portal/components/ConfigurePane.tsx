@@ -47,7 +47,7 @@ function ManagerChoice({
         alignItems: 'center',
         justifyContent: 'center',
         padding: '6px 11px',
-        background: active ? 'var(--bg-card)' : 'transparent',
+        background: active ? 'var(--card)' : 'transparent',
         border: '1px solid transparent',
         borderRadius: 6,
         boxShadow: active ? 'var(--shadow-surface)' : 'none',
@@ -59,7 +59,7 @@ function ManagerChoice({
     >
       <span
         style={{
-          color: active ? 'var(--brand-text)' : 'var(--text)',
+          color: active ? 'var(--primary)' : 'var(--foreground)',
           fontSize: 13,
           fontWeight: active ? 660 : 540,
           lineHeight: 1.25,
@@ -175,7 +175,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
       className="config-disclosure overflow-hidden rounded-[7px]"
       style={{
         border: '1px solid var(--border)',
-        background: 'var(--bg-card)',
+        background: 'var(--card)',
       }}
     >
       <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-[13px] font-[540] text-muted-foreground">
@@ -196,7 +196,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
           >
             <span
               style={{
-                color: 'var(--text-muted)',
+                color: 'var(--muted-foreground)',
                 fontSize: 12,
                 fontWeight: 600,
                 whiteSpace: 'nowrap',
@@ -207,7 +207,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
             <span
               style={{
                 overflow: 'hidden',
-                color: 'var(--text)',
+                color: 'var(--foreground)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 12,
                 textOverflow: 'ellipsis',
@@ -270,8 +270,8 @@ export default function ConfigurePane({
             flex: '0 0 38px',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'var(--brand-soft)',
-            border: '1px solid var(--brand-border)',
+            background: 'var(--accent)',
+            border: '1px solid var(--border)',
             borderRadius: 8,
           }}
         >

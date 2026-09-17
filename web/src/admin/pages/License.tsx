@@ -31,9 +31,9 @@ function StatePanel({
   children?: React.ReactNode
 }) {
   const tones = {
-    brand: { bg: 'var(--brand-soft)', iconBg: 'var(--brand-soft)', iconColor: 'var(--brand-text)' },
-    ok:    { bg: 'var(--ok-fill)',    iconBg: 'var(--ok-fill)',    iconColor: 'var(--ok-text)' },
-    danger:{ bg: 'var(--danger-fill)',iconBg: 'var(--danger-fill)',iconColor: 'var(--danger-text)' },
+    brand: { bg: 'var(--accent)', iconBg: 'var(--accent)', iconColor: 'var(--primary)' },
+    ok:    { bg: 'var(--success-surface)',    iconBg: 'var(--success-surface)',    iconColor: 'var(--success)' },
+    danger:{ bg: 'var(--destructive-surface)',iconBg: 'var(--destructive-surface)',iconColor: 'var(--destructive)' },
   } as const
   const t = tones[tone]
   return (

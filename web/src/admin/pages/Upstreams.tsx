@@ -535,9 +535,9 @@ export default function UpstreamsV2() {
                         aria-pressed={active}
                         className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border px-2.5 text-[12px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
                         style={{
-                          background: active ? 'var(--bg-card)' : 'transparent',
-                          borderColor: active ? 'var(--border-strong)' : 'transparent',
-                          color: active ? 'var(--text)' : 'var(--text-muted)',
+                          background: active ? 'var(--card)' : 'transparent',
+                          borderColor: active ? 'var(--input)' : 'transparent',
+                          color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
                         }}
                         onClick={() => setStatusFilter(option.value)}
                       >
@@ -555,7 +555,7 @@ export default function UpstreamsV2() {
                   role="search"
                   className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[360px] bg-card"
                 >
-                  <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+                  <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
                   <input
                     ref={searchInputRef}
                     type="text"

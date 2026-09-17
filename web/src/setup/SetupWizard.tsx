@@ -500,9 +500,9 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     disabled={submitting}
                     className="stripe-focus-ring flex min-h-[48px] items-center gap-2 rounded-[6px] border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
                     style={{
-                      borderColor: selected ? 'var(--brand)' : 'var(--border)',
-                      background: selected ? 'var(--brand-soft)' : 'var(--bg-card)',
-                      color: selected ? 'var(--brand-text)' : 'var(--text)',
+                      borderColor: selected ? 'var(--primary)' : 'var(--border)',
+                      background: selected ? 'var(--accent)' : 'var(--card)',
+                      color: selected ? 'var(--primary)' : 'var(--foreground)',
                     }}
                     onClick={() => toggleEcosystem(ecosystem.key)}
                   >

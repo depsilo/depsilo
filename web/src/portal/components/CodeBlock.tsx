@@ -23,7 +23,7 @@ function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
     return (
       <span
         key={lineIdx}
-        style={{ color: ink ? 'var(--code-muted)' : 'var(--text-subtle)' }}
+        style={{ color: ink ? 'var(--code-surface-muted)' : 'var(--muted-foreground)' }}
       >
         {line}
       </span>
@@ -38,7 +38,7 @@ function highlightLine(line: string, lineIdx: number, ink: boolean): ReactNode {
     parts.push(
       <span
         key={`u${m.index}`}
-        style={{ color: ink ? 'var(--code-accent)' : 'var(--brand-text)', fontWeight: 560 }}
+        style={{ color: ink ? 'var(--code-surface-accent)' : 'var(--primary)', fontWeight: 560 }}
       >
         {m[0]}
       </span>
@@ -84,17 +84,17 @@ export default function CodeBlock({
       className="code-block group"
       data-code-tone={tone}
       style={{
-        background: ink ? 'var(--code-bg)' : 'var(--bg-soft)',
+        background: ink ? 'var(--code-surface)' : 'var(--muted)',
         border: ink ? 'none' : '1px solid var(--border)',
-        borderRadius: 'var(--r-card)',
-        boxShadow: ink ? 'var(--code-shadow)' : 'none',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: ink ? 'var(--shadow-pop)' : 'none',
         overflow: 'hidden',
       }}
     >
       <div
         style={{
-          background: ink ? 'var(--code-header)' : 'var(--bg-card)',
-          borderBottom: `1px solid ${ink ? 'var(--code-line)' : 'var(--border)'}`,
+          background: ink ? 'var(--code-surface-header)' : 'var(--card)',
+          borderBottom: `1px solid ${ink ? 'var(--code-surface-border)' : 'var(--border)'}`,
           minHeight: 42,
           display: 'flex',
           alignItems: 'center',
@@ -106,7 +106,7 @@ export default function CodeBlock({
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 12,
-            color: ink ? 'var(--code-muted)' : 'var(--text-subtle)',
+            color: ink ? 'var(--code-surface-muted)' : 'var(--muted-foreground)',
           }}
         >
           {filename ?? ''}
@@ -123,15 +123,15 @@ export default function CodeBlock({
           style={{
             color: copied
               ? ink
-                ? 'var(--code-accent)'
-                : 'var(--ok-text)'
+                ? 'var(--code-surface-accent)'
+                : 'var(--success)'
               : copyState === 'failed'
                 ? ink
-                  ? 'var(--code-danger)'
-                  : 'var(--danger-text)'
+                  ? 'var(--code-surface-danger)'
+                  : 'var(--destructive)'
                 : ink
-                  ? 'var(--code-muted)'
-                  : 'var(--text-muted)',
+                  ? 'var(--code-surface-muted)'
+                  : 'var(--muted-foreground)',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
@@ -216,7 +216,7 @@ export default function CodeBlock({
           fontFamily: 'var(--font-mono)',
           fontSize: 13,
           lineHeight: ink ? 1.68 : 1.6,
-          color: ink ? 'var(--code-fg)' : 'var(--text)',
+          color: ink ? 'var(--code-surface-foreground)' : 'var(--foreground)',
           overflowX: 'auto',
           background: 'transparent',
         }}

@@ -34,7 +34,7 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
         minWidth: 40,
         minHeight: 40,
         padding: '8px',
-        color: 'var(--text-muted)',
+        color: 'var(--muted-foreground)',
         border: '0.5px solid var(--border)',
         borderRadius: 6,
         fontFamily: 'var(--font-mono)',

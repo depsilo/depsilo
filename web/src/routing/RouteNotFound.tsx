@@ -38,8 +38,8 @@ export default function RouteNotFound({ area }: { area: RouteArea }) {
           to={destination}
           className="stripe-focus-ring mt-5 inline-flex min-h-[40px] items-center justify-center rounded-[5px] px-3 py-1.5 text-[13px] font-[500] no-underline transition-[background,transform] duration-150 active:scale-[0.96]"
           style={{
-            color: 'var(--btn-fg)',
-            background: 'var(--btn)',
+            color: 'var(--primary-foreground)',
+            background: 'var(--primary)',
             boxShadow: 'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
           }}
         >

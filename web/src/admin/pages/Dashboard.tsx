@@ -56,12 +56,12 @@ function StatusMetric({
   tone?: 'default' | 'ok' | 'warning' | 'danger'
 }) {
   const color = tone === 'ok'
-    ? 'var(--ok-text)'
+    ? 'var(--success)'
     : tone === 'warning'
-      ? 'var(--warn-text)'
+      ? 'var(--warning)'
       : tone === 'danger'
-        ? 'var(--danger-text)'
-        : 'var(--text)'
+        ? 'var(--destructive)'
+        : 'var(--foreground)'
 
   return (
     <div className="flex min-w-0 flex-col items-start text-left" data-dashboard-status-metric>
@@ -69,7 +69,7 @@ function StatusMetric({
       <span
         data-metric-value
         className="mt-2 min-w-0 font-[650] leading-[1.15]"
-        style={{ color, fontFamily: 'var(--font-display)', fontSize: 'clamp(20px, 3vw, 28px)' }}
+        style={{ color, fontFamily: 'var(--font-sans)', fontSize: 'clamp(20px, 3vw, 28px)' }}
       >
         {value}
       </span>
@@ -188,7 +188,7 @@ export default function DashboardV2() {
         <Link
           to={getAdminRouteHref('connect')}
           className="app-button inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[13px] font-[500] no-underline stripe-focus-ring"
-          style={{ color: 'var(--btn-fg)', background: 'var(--btn)' }}
+          style={{ color: 'var(--primary-foreground)', background: 'var(--primary)' }}
         >
           <Icon name="link" size="sm" />
           {t('dashboard.connectClient')}

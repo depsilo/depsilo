@@ -9,8 +9,8 @@ export default function CompileCacheIntro() {
       aria-labelledby="portal-compile-cache-title"
       className="flex min-h-full flex-col rounded-lg p-5 sm:p-6"
       style={{
-        background: 'var(--bg-card)',
-        border: '0.5px solid var(--border-strong)',
+        background: 'var(--card)',
+        border: '0.5px solid var(--input)',
         boxShadow: 'var(--shadow-card)',
       }}
     >
@@ -39,9 +39,9 @@ export default function CompileCacheIntro() {
           href="/admin/compile-cache"
           className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] font-[620] no-underline hover:bg-accent active:scale-[0.97]"
           style={{
-            color: 'var(--brand-text)',
+            color: 'var(--primary)',
             background: 'transparent',
-            border: '1px solid var(--brand-border)',
+            border: '1px solid var(--border)',
             transition:
               'background 150ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
           }}

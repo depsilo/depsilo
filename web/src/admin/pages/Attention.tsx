@@ -49,8 +49,8 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
           aria-hidden
           className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px]"
           style={{
-            background: tone === 'danger' ? 'var(--danger-fill)' : 'var(--warn-fill)',
-            color: tone === 'danger' ? 'var(--danger-text)' : 'var(--warn-text)',
+            background: tone === 'danger' ? 'var(--destructive-surface)' : 'var(--warning-surface)',
+            color: tone === 'danger' ? 'var(--destructive)' : 'var(--warning)',
           }}
         >
           <Icon name={icon} size="sm" />

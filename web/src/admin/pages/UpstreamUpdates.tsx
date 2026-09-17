@@ -33,9 +33,9 @@ function isUpdateResult(value: string | null): value is UpstreamUpdateResult {
 }
 
 function latencyColor(latencyMs: number): string {
-  if (latencyMs >= 1000) return 'var(--danger-text)'
-  if (latencyMs >= 500) return 'var(--warn-text)'
-  return 'var(--text-muted)'
+  if (latencyMs >= 1000) return 'var(--destructive)'
+  if (latencyMs >= 500) return 'var(--warning)'
+  return 'var(--muted-foreground)'
 }
 
 export default function UpstreamUpdates() {
@@ -312,7 +312,7 @@ export default function UpstreamUpdates() {
           <div
             className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[420px] bg-card"
           >
-            <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
+            <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
             <input
               type="text"
               aria-label={t('upstreamUpdates.searchLabel')}

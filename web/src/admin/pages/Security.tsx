@@ -204,10 +204,10 @@ function OverviewTab() {
             {severityDist.map((item) => {
               const variant = SEVERITY_BADGE_MAP[item.severity] || 'default'
               const barColors: Record<string, string> = {
-                critical: 'var(--danger)',
-                high: 'var(--warn)',
-                medium: 'var(--text-soft)',
-                low: 'var(--ok)',
+                critical: 'var(--destructive)',
+                high: 'var(--warning)',
+                medium: 'var(--muted-foreground)',
+                low: 'var(--success)',
               }
               return (
                 <div key={item.severity} className="flex items-center gap-3">
@@ -219,7 +219,7 @@ function OverviewTab() {
                       className="h-full rounded-full transition-[width] duration-300 ease-out"
                       style={{
                         width: `${(item.count / maxCount) * 100}%`,
-                        background: barColors[item.severity] || 'var(--brand)',
+                        background: barColors[item.severity] || 'var(--primary)',
                         minWidth: item.count > 0 ? '4px' : '0',
                       }}
                     />
@@ -965,7 +965,7 @@ function PoliciesTab() {
           className="rounded-[4px] p-6 text-center transition-colors duration-150"
           style={{
             border: '2px dashed var(--border)',
-            background: 'var(--bg-soft)',
+            background: 'var(--muted)',
           }}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
           onDrop={(e) => {

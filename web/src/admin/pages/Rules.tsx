@@ -118,17 +118,17 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
         className="rounded-[4px] p-4"
         data-rule-test-decision={result.allowed ? 'allow' : 'deny'}
         style={{
-          background: result.allowed ? 'var(--ok-fill)' : 'var(--danger-fill)',
-          border: `1px solid ${result.allowed ? 'var(--ok-border)' : 'var(--danger)'}`,
+          background: result.allowed ? 'var(--success-surface)' : 'var(--destructive-surface)',
+          border: `1px solid ${result.allowed ? 'var(--success-border-tone)' : 'var(--destructive)'}`,
         }}
       >
         <div className="mb-2 flex items-center gap-2">
           <Icon
             name={result.allowed ? 'check_circle' : 'cancel'}
             size="sm"
-            style={{ color: result.allowed ? 'var(--ok-text)' : 'var(--danger)' }}
+            style={{ color: result.allowed ? 'var(--success)' : 'var(--destructive)' }}
           />
-          <span className="text-[14px] font-[400]" style={{ color: result.allowed ? 'var(--ok-text)' : 'var(--danger)' }}>
+          <span className="text-[14px] font-[400]" style={{ color: result.allowed ? 'var(--success)' : 'var(--destructive)' }}>
             {result.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}
           </span>
         </div>
@@ -181,8 +181,8 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                   data-rule-test-candidate
                   data-selected={selected ? 'true' : 'false'}
                   style={{
-                    background: selected ? 'var(--brand-soft)' : undefined,
-                    borderLeft: selected ? '3px solid var(--brand)' : undefined,
+                    background: selected ? 'var(--accent)' : undefined,
+                    borderLeft: selected ? '3px solid var(--primary)' : undefined,
                     paddingLeft: selected ? '9px' : undefined,
                   }}
                 >
@@ -354,7 +354,7 @@ export default function RulesV2() {
                 aria-pressed={form.action === 'allow'}
                 onClick={() => setForm({ ...form, action: 'allow' })}
                 className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
-                style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}
+                style={{ background: form.action === 'allow' ? 'var(--success-surface)' : 'var(--muted)', color: form.action === 'allow' ? 'var(--success)' : 'var(--muted-foreground)', border: form.action === 'allow' ? '1px solid var(--success-border-tone)' : '1px solid var(--border)' }}
               >
                 {t('rules.allow')}
               </button>
@@ -363,7 +363,7 @@ export default function RulesV2() {
                 aria-pressed={form.action === 'deny'}
                 onClick={() => setForm({ ...form, action: 'deny' })}
                 className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
-                style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}
+                style={{ background: form.action === 'deny' ? 'var(--destructive-surface)' : 'var(--muted)', color: form.action === 'deny' ? 'var(--destructive)' : 'var(--muted-foreground)', border: form.action === 'deny' ? '1px solid var(--destructive)' : '1px solid var(--border)' }}
               >
                 {t('rules.deny')}
               </button>
@@ -402,7 +402,7 @@ export default function RulesV2() {
           <InputV2 label={t('rules.version')} mono value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
           <ButtonV2 type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
           {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
-          {testResult && 'error' in testResult && <div role="alert" className="rounded-[4px] p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px] text-destructive">{testResult.error}</p></div>}
+          {testResult && 'error' in testResult && <div role="alert" className="rounded-[4px] p-4" style={{ background: 'var(--destructive-surface)', border: '1px solid var(--destructive)' }}><p className="text-[14px] text-destructive">{testResult.error}</p></div>}
         </div>
       </ModalV2>
     </div>

@@ -322,9 +322,9 @@ export default function ConnectProject() {
               onClick={() => setLanguageId(candidate.id)}
               className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-[7px] border px-3 text-left text-[13px] font-[600] transition-[background,border-color,color] duration-150"
               style={{
-                background: candidate.id === language?.id ? 'var(--brand-soft)' : 'var(--bg-card)',
-                borderColor: candidate.id === language?.id ? 'var(--brand-border)' : 'var(--border)',
-                color: candidate.id === language?.id ? 'var(--brand-text)' : 'var(--text)',
+                background: candidate.id === language?.id ? 'var(--accent)' : 'var(--card)',
+                borderColor: candidate.id === language?.id ? 'var(--border)' : 'var(--border)',
+                color: candidate.id === language?.id ? 'var(--primary)' : 'var(--foreground)',
               }}
             >
               <EcosystemIcon type={candidate.iconAdapter} size={18} useColor />
@@ -339,7 +339,7 @@ export default function ConnectProject() {
           <h2 id="onboarding-manager-title" className="text-[16px] font-[660] text-foreground">{t('onboarding.chooseManager', { ecosystem: language.name })}</h2>
           <div role="group" aria-label={t('onboarding.managerLabel')} className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-[7px] bg-muted p-1">
             {language.managers.map(candidate => (
-              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-[5px] px-3 text-[13px] font-[600]" style={{ background: candidate.id === manager.id ? 'var(--bg-card)' : 'transparent', color: candidate.id === manager.id ? 'var(--brand-text)' : 'var(--text-muted)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
+              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-[5px] px-3 text-[13px] font-[600]" style={{ background: candidate.id === manager.id ? 'var(--card)' : 'transparent', color: candidate.id === manager.id ? 'var(--primary)' : 'var(--muted-foreground)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
                 {candidate.name}
               </button>
             ))}

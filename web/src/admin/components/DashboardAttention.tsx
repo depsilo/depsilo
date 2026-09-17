@@ -28,8 +28,8 @@ interface AttentionItemProps {
 }
 
 function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemProps) {
-  const toneColor = tone === 'danger' ? 'var(--danger-text)' : 'var(--warn-text)'
-  const toneFill = tone === 'danger' ? 'var(--danger-fill)' : 'var(--warn-fill)'
+  const toneColor = tone === 'danger' ? 'var(--destructive)' : 'var(--warning)'
+  const toneFill = tone === 'danger' ? 'var(--destructive-surface)' : 'var(--warning-surface)'
 
   return (
     <li className="min-w-0 py-1 first:pt-0 last:pb-0">
@@ -98,7 +98,7 @@ export default function DashboardAttention({
         {!isPending && !initialErrorMessage && (
           <span
             className="shrink-0 font-mono text-[12px] font-[650] tabular-nums"
-            style={{ color: hasIssues ? 'var(--warn-text)' : 'var(--ok-text)' }}
+            style={{ color: hasIssues ? 'var(--warning)' : 'var(--success)' }}
             aria-label={t('dashboard.attentionCount', { count: issueCount })}
           >
             {issueCount}

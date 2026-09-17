@@ -11,7 +11,7 @@
 // teal-aligned tones so the palette as a whole still feels cohesive.
 
 export const ECOSYSTEM_COLORS: Record<string, string> = {
-  pypi:     'var(--brand)',
+  pypi:     'var(--primary)',
   apt:      '#3bd671',  // Debian green
   npm:      '#cb3837',  // npm red
   go:       '#00add8',  // Go cyan
@@ -32,12 +32,12 @@ export const ECOSYSTEM_COLORS: Record<string, string> = {
 // Uses the teal/cyan spec-* tokens so unknown series still feel cohesive
 // with the rest of the design system.
 const FALLBACK_PALETTE = [
-  'var(--spec-1)',
-  'var(--spec-2)',
-  'var(--spec-3)',
-  'var(--spec-4)',
-  'var(--brand-strong)',
-  'var(--warn)',
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--primary)',
+  'var(--warning)',
 ]
 
 export function getEcosystemColor(name: string | undefined, indexFallback = 0): string {

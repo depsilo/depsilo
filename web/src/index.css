@@ -75,6 +75,27 @@
   --info: oklch(0.47 0.12 235);
   --info-foreground: oklch(0.985 0 0);
 
+  /* Status surfaces and keylines. Notices and badges tint their own status
+     colour over the page canvas; deriving the tint here keeps every call site
+     on the same value instead of re-mixing it inline. */
+  --success-surface: color-mix(in oklab, var(--success) 14%, var(--background));
+  --success-border-tone: color-mix(in oklab, var(--success) 35%, var(--background));
+  --warning-surface: color-mix(in oklab, var(--warning) 16%, var(--background));
+  --warning-border-tone: color-mix(in oklab, var(--warning) 35%, var(--background));
+  --destructive-surface: color-mix(in oklab, var(--destructive) 14%, var(--background));
+  --destructive-border-tone: color-mix(in oklab, var(--destructive) 35%, var(--background));
+
+  /* The code surface is always ink, in both themes: a configuration snippet is
+     read as a terminal transcript, and inversion would make it the brightest
+     object on a dark page. */
+  --code-surface: oklch(0.16 0 0);
+  --code-surface-header: oklch(0.21 0 0);
+  --code-surface-foreground: oklch(0.97 0 0);
+  --code-surface-muted: oklch(0.66 0 0);
+  --code-surface-border: oklch(1 0 0 / 12%);
+  --code-surface-accent: oklch(0.88 0 0);
+  --code-surface-danger: oklch(0.78 0.12 25);
+
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.556 0 0);
@@ -174,10 +195,13 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-surface: var(--success-surface);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-surface: var(--warning-surface);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-destructive-surface: var(--destructive-surface);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -340,101 +364,12 @@ code,
 }
 
 /* ============================================================================
- * TEMPORARY — Stage A migration aliases.
+ * TEMPORARY — class rules whose owner has not migrated yet.
  *
- * Everything below exists only so components the migration has not reached
- * yet keep resolving. None of it may be referenced by new code.
- *
- * The whole section is deleted in Phase 10; `docs/refactor/shadcn-ui-plan.md`
- * lists the `rg` census that proves it is gone. Legacy token names are mapped
- * onto the semantic tokens above — these are renames, not new values.
+ * Every block below is deleted in the phase that migrates its owner. The token
+ * alias layer that used to sit beside it is gone: the legacy token names are
+ * no longer referenced anywhere in `src/`.
  * ==========================================================================*/
-:root {
-  --text: var(--foreground);
-  --text-soft: var(--muted-foreground);
-  --text-muted: var(--muted-foreground);
-  --text-subtle: var(--muted-foreground);
-
-  --bg: var(--background);
-  --bg-page: var(--background);
-  --bg-card: var(--card);
-  --bg-soft: var(--muted);
-  --bg-hover: var(--accent);
-  --surface: var(--card);
-
-  --admin-canvas: var(--background);
-  --admin-rail: var(--sidebar);
-  --admin-rail-hover: var(--sidebar-accent);
-
-  --border-soft: var(--border);
-  --border-strong: var(--input);
-
-  --inverse: var(--foreground);
-  --on-inverse: var(--background);
-
-  --brand: var(--primary);
-  --brand-strong: var(--primary);
-  --brand-soft: var(--accent);
-  --brand-border: var(--border);
-  --brand-text: var(--primary);
-  --hit: var(--primary);
-  --on-hit: var(--primary-foreground);
-  --logo-mark: var(--primary);
-
-  --btn: var(--primary);
-  --btn-fg: var(--primary-foreground);
-  --btn-press: color-mix(in oklab, var(--primary) 82%, var(--background));
-  --btn-primary-bg: var(--primary);
-  --btn-primary-fg: var(--primary-foreground);
-  --btn-primary-press: var(--btn-press);
-
-  --ok: var(--success);
-  --ok-fill: color-mix(in oklab, var(--success) 14%, var(--background));
-  --ok-border: color-mix(in oklab, var(--success) 35%, var(--background));
-  --ok-text: var(--success);
-
-  --warn: var(--warning);
-  --warn-fill: color-mix(in oklab, var(--warning) 16%, var(--background));
-  --warn-border: color-mix(in oklab, var(--warning) 35%, var(--background));
-  --warn-text: var(--warning);
-
-  --danger: var(--destructive);
-  --danger-fill: color-mix(in oklab, var(--destructive) 14%, var(--background));
-  --danger-border: color-mix(in oklab, var(--destructive) 35%, var(--background));
-  --danger-text: var(--destructive);
-
-  --live: var(--info);
-  --focus-ring: var(--ring);
-
-  /* Graph axes and the ecosystem colour ramp both collapse to the neutral
-   * chart scale until Stage B assigns real product colour. */
-  --grid: var(--border);
-  --spec-1: var(--chart-1);
-  --spec-2: var(--chart-2);
-  --spec-3: var(--chart-3);
-  --spec-4: var(--chart-4);
-  --grad-brand: linear-gradient(120deg, var(--primary), var(--primary));
-  --grad-aurora: linear-gradient(120deg, var(--primary), var(--primary));
-  --grad-rim: linear-gradient(90deg, transparent, var(--primary), transparent);
-
-  --font-display: var(--font-sans);
-
-  --r-tag: calc(var(--radius) * 0.6);
-  --r-card: var(--radius);
-  --r-shell: calc(var(--radius) * 1.4);
-  --r-xl: calc(var(--radius) * 1.4);
-
-  /* The code surface stays inverse so contrast survives the neutral theme;
-   * Stage B decides whether it remains the product's ink surface. */
-  --code-bg: var(--foreground);
-  --code-header: color-mix(in oklab, var(--foreground) 92%, var(--background));
-  --code-line: color-mix(in oklab, var(--background) 10%, transparent);
-  --code-fg: var(--background);
-  --code-muted: color-mix(in oklab, var(--background) 62%, var(--foreground));
-  --code-accent: var(--background);
-  --code-danger: color-mix(in oklab, var(--background) 72%, var(--destructive));
-  --code-shadow: 0 18px 36px -20px oklch(0 0 0 / 0.45);
-}
 
 /* Legacy class rules that still have live consumers. Each block is deleted in
  * the phase that migrates its owner. */
@@ -709,8 +644,8 @@ button.portal-header-control { cursor: pointer; }
     background: var(--accent) !important;
   }
   .code-block[data-code-tone='ink'] .code-copy-control:hover {
-    background: color-mix(in oklab, var(--code-fg) 8%, transparent) !important;
-    color: var(--code-fg) !important;
+    background: color-mix(in oklab, var(--code-surface-foreground) 8%, transparent) !important;
+    color: var(--code-surface-foreground) !important;
   }
   .code-block[data-code-tone='light'] .code-copy-control:hover {
     background: var(--accent) !important;

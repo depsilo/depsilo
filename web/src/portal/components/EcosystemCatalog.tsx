@@ -62,17 +62,17 @@ function EcosystemButton({
         width: '100%',
         minHeight: chip ? 40 : compact ? 40 : 52,
         padding: chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
-        background: active ? 'var(--brand-soft)' : 'transparent',
-        border: `1px solid ${active ? 'var(--brand-border)' : 'transparent'}`,
+        background: active ? 'var(--accent)' : 'transparent',
+        border: `1px solid ${active ? 'var(--border)' : 'transparent'}`,
         borderRadius: chip || compact ? 6 : 8,
-        boxShadow: active ? 'inset 1px 0 0 var(--brand)' : 'none',
+        boxShadow: active ? 'inset 1px 0 0 var(--primary)' : 'none',
         textAlign: 'left',
         cursor: 'pointer',
         transition:
           'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
       }}
       onMouseEnter={event => {
-        if (!active) event.currentTarget.style.background = 'var(--bg-hover)'
+        if (!active) event.currentTarget.style.background = 'var(--accent)'
       }}
       onMouseLeave={event => {
         if (!active) event.currentTarget.style.background = 'transparent'
@@ -89,8 +89,8 @@ function EcosystemButton({
             height: compact ? 24 : 32,
             borderRadius: 6,
             background: active
-              ? 'var(--bg-card)'
-              : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
+              ? 'var(--card)'
+              : 'color-mix(in oklab, var(--muted) 78%, transparent)',
             flexShrink: 0,
           }}
         >
@@ -102,7 +102,7 @@ function EcosystemButton({
           style={{
             display: 'block',
             overflow: 'hidden',
-            color: active ? 'var(--brand-text)' : 'var(--text)',
+            color: active ? 'var(--primary)' : 'var(--foreground)',
             fontSize: chip ? 12 : compact ? 12.5 : 14,
             fontWeight: active ? 640 : 540,
             letterSpacing: compact ? '-0.01em' : undefined,
@@ -119,7 +119,7 @@ function EcosystemButton({
               display: 'block',
               overflow: 'hidden',
               marginTop: 2,
-              color: 'var(--text-muted)',
+              color: 'var(--muted-foreground)',
               fontSize: 12,
               lineHeight: 1.25,
               textOverflow: 'ellipsis',
@@ -212,7 +212,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
       style={{
         minWidth: 0,
         padding: '18px 14px 20px',
-        background: 'var(--bg-card)',
+        background: 'var(--card)',
       }}
     >
       <h3 className="m-0 text-[16px] font-[650] leading-[1.3] text-foreground">
