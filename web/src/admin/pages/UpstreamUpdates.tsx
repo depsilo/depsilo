@@ -303,14 +303,14 @@ export default function UpstreamUpdates() {
           role="search"
           aria-label={t('upstreamUpdates.filtersLabel')}
           data-upstream-updates-toolbar
-          className="flex flex-col gap-3 border-b border-[var(--border)] pb-4 lg:flex-row lg:items-center"
+          className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-center"
           onSubmit={(event) => {
             event.preventDefault()
             applyPackageFilter()
           }}
         >
           <div
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-[var(--border)] px-3 lg:max-w-[420px]"
+            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[420px]"
             style={{ background: 'var(--bg-card)' }}
           >
             <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
@@ -442,7 +442,7 @@ export default function UpstreamUpdates() {
           <>
             <ul
               data-upstream-update-mobile-list
-              className="divide-y divide-[var(--border)] md:hidden"
+              className="divide-y divide-border md:hidden"
             >
               {events.map(event => {
                 const detail = detailLabels[event.detail] ?? event.detail
@@ -482,7 +482,7 @@ export default function UpstreamUpdates() {
                 <table data-upstream-update-table className="w-full text-[12px]">
                   <caption className="sr-only">{t('upstreamUpdates.tableLabel')}</caption>
                   <thead>
-                    <tr className="border-b border-[var(--border)] text-left">
+                    <tr className="border-b border-border text-left">
                       {[
                         t('upstreamUpdates.time'),
                         t('upstreamUpdates.source'),
@@ -505,7 +505,7 @@ export default function UpstreamUpdates() {
                     {events.map(event => (
                       <tr
                         key={event.id}
-                        className="border-b border-[var(--border)] transition-colors duration-75 hover:bg-[var(--bg-soft)]"
+                        className="border-b border-border transition-colors duration-75 hover:bg-muted"
                       >
                         <td className="w-[290px] px-3 py-3 pl-0 align-top">
                           {observation(event)}

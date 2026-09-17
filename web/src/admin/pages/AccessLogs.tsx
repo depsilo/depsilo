@@ -290,7 +290,7 @@ export default function AccessLogsV2() {
               {items.map((row: AccessLog) => (
                 <tr
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
+                  className="transition-colors duration-75 hover:bg-muted"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
                   {/* Time */}

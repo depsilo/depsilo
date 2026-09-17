@@ -185,7 +185,7 @@ export default function ProjectsV2() {
   if (query.isPending) {
     return (
       <AdminPage description={t('projects.subtitle')}>
-        <div role="status" aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">{t('loading')}</div>
+        <div role="status" aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground">{t('loading')}</div>
       </AdminPage>
     )
   }
@@ -238,7 +238,7 @@ export default function ProjectsV2() {
         <section>
           <SectionHeader title={t('projects.overview')} />
           {detailQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+            <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
           ) : detailQuery.isError && !detailData ? (
             <QueryErrorState
               message={getApiError(detailQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(detailQuery.error).message}

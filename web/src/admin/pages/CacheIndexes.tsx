@@ -85,7 +85,7 @@ export default function CacheIndexes() {
   if (query.isPending) {
     return (
       <AdminPage description={t('cacheIndexes.subtitle')}>
-        <div aria-busy="true" className="py-16 text-center text-[13px] text-[var(--text-soft)]">
+        <div aria-busy="true" className="py-16 text-center text-[13px] text-muted-foreground">
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       </AdminPage>
@@ -125,7 +125,7 @@ export default function CacheIndexes() {
         ) : (
           <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 xl:grid-cols-4">
             {summary.map((item) => (
-              <article key={item.adapter_type} className="border-l-2 border-[var(--border)] pl-4">
+              <article key={item.adapter_type} className="border-l-2 border-border pl-4">
                 <div className="mb-3 flex items-center gap-2">
                   {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={15} />}
                   <span className="text-[12px] font-[600] uppercase" style={{ color: 'var(--text)' }}>
@@ -231,7 +231,7 @@ export default function CacheIndexes() {
               {items.map((item) => (
                 <tr
                   key={item.id}
-                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
+                  className="transition-colors duration-75 hover:bg-muted"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
                   <td className="max-w-[280px] py-2 pr-3">

@@ -238,7 +238,7 @@ export default function TrendsCard({
               </div>
               <div
                 data-trend-range-control
-                className="grid grid-cols-4 overflow-hidden rounded-[7px] border-[0.5px] border-[var(--border)] bg-[var(--bg-soft)] sm:flex"
+                className="grid grid-cols-4 overflow-hidden rounded-[7px] border-[0.5px] border-border bg-muted sm:flex"
                 role="group"
                 aria-label={t('dashboard.hitMissTrend')}
               >
@@ -268,7 +268,7 @@ export default function TrendsCard({
       </div>
 
       {isStale && (
-        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-[var(--warn-fill)] px-3 py-2 text-[11px] text-[var(--warn-text)]" role="status">
+        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-[11px] text-warning" role="status">
           <span>{t('now.staleData')}</span>
           {onRetry && (
             <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRetry}>
@@ -282,13 +282,13 @@ export default function TrendsCard({
         <div className="flex min-h-24 items-center justify-center gap-3 px-4 pb-4 text-left">
           <span
             aria-hidden
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--bg-soft)] text-[var(--text-subtle)]"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-muted text-muted-foreground"
           >
             <Icon name="show_chart" size="sm" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-[12px] font-[650] text-[var(--text)]">{t('dashboard.emptyTrendTitle')}</h3>
-            <p className="mt-1 max-w-[52ch] text-[11px] leading-[1.5] text-[var(--text-soft)]">
+            <h3 className="text-[12px] font-[650] text-foreground">{t('dashboard.emptyTrendTitle')}</h3>
+            <p className="mt-1 max-w-[52ch] text-[11px] leading-[1.5] text-muted-foreground">
               {t('dashboard.emptyTrendHint')}
             </p>
           </div>

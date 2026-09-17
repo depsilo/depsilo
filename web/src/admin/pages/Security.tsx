@@ -84,23 +84,23 @@ function CapabilityOverview() {
   return (
     <section aria-label={t('security.capabilityTitle')} className="space-y-3">
       <SectionHeader title={t('security.capabilityTitle')} />
-      {query.isPending && <p className="text-[12px] text-[var(--text-soft)]" aria-busy="true">{t('security.capabilityLoading')}</p>}
+      {query.isPending && <p className="text-[12px] text-muted-foreground" aria-busy="true">{t('security.capabilityLoading')}</p>}
       {query.isError && <InlineNotice tone="warning">{t('security.capabilityUnavailable')}</InlineNotice>}
       {!query.isPending && !query.isError && facts.length === 0 && <InlineNotice tone="warning">{t('security.capabilityNoData')}</InlineNotice>}
       {facts.length > 0 && (
         <div className="space-y-3">
           {[...grouped.entries()].map(([name, rows]) => (
-            <details key={name} className="rounded-[6px] border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
+            <details key={name} className="rounded-[6px] border border-border bg-muted px-3 py-2">
               <summary className="cursor-pointer stripe-focus-ring text-[13px] font-[600]">{label(name)}</summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
-                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-[4px] bg-[var(--bg-page)] p-2 text-[12px]">
+                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-[4px] bg-background p-2 text-[12px]">
                     <div className="mb-1 font-[600]">{fact.ecosystem?.toUpperCase() ?? t('security.capabilityOverall')}</div>
-                    <div><span className="text-[var(--text-soft)]">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
-                    <div><span className="text-[var(--text-soft)]">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
-                    <div><span className="text-[var(--text-soft)]">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
-                    {fact.last_success_at && <div className="text-[var(--text-soft)]">{t('security.capabilityLastSuccess')}: {formatTime(fact.last_success_at)}</div>}
-                    {fact.recent_failure && <div className="break-words text-[var(--danger)]">{t('security.capabilityRecentFailure')}: {fact.recent_failure}</div>}
+                    <div><span className="text-muted-foreground">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
+                    <div><span className="text-muted-foreground">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
+                    <div><span className="text-muted-foreground">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
+                    {fact.last_success_at && <div className="text-muted-foreground">{t('security.capabilityLastSuccess')}: {formatTime(fact.last_success_at)}</div>}
+                    {fact.recent_failure && <div className="break-words text-destructive">{t('security.capabilityRecentFailure')}: {fact.recent_failure}</div>}
                   </div>
                 ))}
               </div>
@@ -444,7 +444,7 @@ function SuggestionsTab() {
           <span>{t('security.manualRuleRequired')}</span>
           <Link
             to={getAdminRouteHref('rules')}
-            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-[5px] px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
+            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-[5px] px-2 text-[12px] font-[650] text-primary no-underline hover:bg-accent"
           >
             {t('security.openPackageRules')}
           </Link>
@@ -760,7 +760,7 @@ function PoliciesTab() {
         {canWrite && (
           <div
             data-security-policy-bulk
-            className="mb-5 grid min-w-0 gap-4 border-b border-[var(--border)] pb-5 md:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)_auto] md:items-end"
+            className="mb-5 grid min-w-0 gap-4 border-b border-border pb-5 md:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)_auto] md:items-end"
           >
             <div className="min-w-0">
               <SwitchV2
@@ -772,7 +772,7 @@ function PoliciesTab() {
                   auto_block_enabled: checked,
                 }))}
               />
-              <p className="mt-1 text-[12px] leading-5 text-[var(--text-soft)]">
+              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                 {t('security.bulkPolicyHint')}
               </p>
             </div>
@@ -802,7 +802,7 @@ function PoliciesTab() {
         )}
         <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <span className="text-[12px] text-[var(--text-soft)]" aria-live="polite">
+            <span className="text-[12px] text-muted-foreground" aria-live="polite">
               {t('security.unsavedCount', { count: dirtyEcosystems.length })}
             </span>
             <SwitchV2
@@ -880,7 +880,7 @@ function PoliciesTab() {
                     {isDirty && <BadgeV2 variant="warning">{t('security.unsaved')}</BadgeV2>}
                   </div>
 
-                  <div className="justify-self-end text-[var(--text-soft)] sm:justify-self-start">
+                  <div className="justify-self-end text-muted-foreground sm:justify-self-start">
                     <SwitchV2
                       label={t('security.autoBlock')}
                       aria-label={`${eco.toUpperCase()} ${t('security.autoBlock')}`}
@@ -921,7 +921,7 @@ function PoliciesTab() {
                   </div>}
                 </div>
                 {!autoBlockSupported && (
-                  <p className="mt-1 text-[12px] leading-5 text-[var(--text-soft)]">
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                     {t(autoBlockUnavailableHint)}
                   </p>
                 )}
@@ -978,7 +978,7 @@ function PoliciesTab() {
         >
           <button
             type="button"
-            className="inline-flex min-h-10 flex-col items-center justify-center rounded-[4px] bg-transparent px-4 py-2 text-[var(--text-soft)] stripe-focus-ring"
+            className="inline-flex min-h-10 flex-col items-center justify-center rounded-[4px] bg-transparent px-4 py-2 text-muted-foreground stripe-focus-ring"
             onClick={() => fileInputRef.current?.click()}
             disabled={importMutation.isPending}
           >

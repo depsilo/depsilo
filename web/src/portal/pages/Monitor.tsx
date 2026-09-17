@@ -364,7 +364,7 @@ export default function MonitorPage() {
               {week && week.total_requests > 0 && (
                 <>
                   <span
-                    className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 border-l border-[var(--border-strong)] pl-3"
+                    className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 border-l border-input pl-3"
                   >
                     <span>
                       {t('monitor.hitRate7d')}{' '}

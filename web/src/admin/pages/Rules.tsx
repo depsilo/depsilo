@@ -348,7 +348,7 @@ export default function RulesV2() {
           {form.ecosystem === 'npm' && <InlineNotice tone="warning">{t('rules.npmVersionHint')}</InlineNotice>}
           {form.ecosystem === 'composer' && <InlineNotice tone="warning">{t('rules.composerVersionHint')}</InlineNotice>}
           <fieldset>
-            <legend className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">{t('rules.action')}</legend>
+            <legend className="mb-1 block text-[14px] font-[400] text-muted-foreground">{t('rules.action')}</legend>
             <div className="flex gap-2">
               <button
                 type="button"

@@ -65,11 +65,11 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <header className="fade-up max-w-[760px]">
         <h1
           id="quickstart-title"
-          className="m-0 font-[var(--font-display)] text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-[var(--text)]"
+          className="m-0 font-sans text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-foreground"
         >
           {t('quickstart.title')}
         </h1>
-        <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.5] text-[var(--text-muted)]">
+        <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.5] text-muted-foreground">
           {t('quickstart.flowIntro')}
         </p>
       </header>
@@ -84,7 +84,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
         </h2>
         <div
           data-quickstart-shell
-          className="grid grid-cols-1 overflow-hidden rounded-[var(--r-shell)] min-[900px]:grid-cols-[280px_minmax(0,1fr)]"
+          className="grid grid-cols-1 overflow-hidden rounded-xl min-[900px]:grid-cols-[280px_minmax(0,1fr)]"
           style={{
             background: 'var(--bg-card)',
             border: '1px solid var(--border-strong)',
@@ -108,16 +108,16 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <section
         data-quickstart-optional
         aria-labelledby="quickstart-optional-title"
-        className="fade-up fade-up-d2 border-t border-[var(--border)] pt-8"
+        className="fade-up fade-up-d2 border-t border-border pt-8"
       >
         <div className="mb-4 max-w-[68ch]">
           <h2
             id="quickstart-optional-title"
-            className="m-0 font-[var(--font-display)] text-[20px] font-[650] leading-[1.2] text-[var(--text)]"
+            className="m-0 font-sans text-[20px] font-[650] leading-[1.2] text-foreground"
           >
             {t('quickstart.optionalTitle')}
           </h2>
-          <p className="mt-1 text-[13px] leading-[1.5] text-[var(--text-muted)]">
+          <p className="mt-1 text-[13px] leading-[1.5] text-muted-foreground">
             {t('quickstart.optionalDescription')}
           </p>
         </div>

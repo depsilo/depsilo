@@ -52,8 +52,8 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
 
   if (labeled) {
     const labeledClassName = variant === 'admin'
-      ? 'stripe-focus-ring inline-flex h-[40px] min-w-[40px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] border-0 bg-transparent px-2.5 text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.98]'
-      : 'stripe-focus-ring inline-flex h-[41px] min-w-[41px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] border border-[var(--border-strong)] bg-[var(--bg-card)] px-2.5 text-[var(--text-soft)] transition-[background,color,border-color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.98]'
+      ? 'stripe-focus-ring inline-flex h-[40px] min-w-[40px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] border-0 bg-transparent px-2.5 text-muted-foreground transition-[background,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98]'
+      : 'stripe-focus-ring inline-flex h-[41px] min-w-[41px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[6px] border border-input bg-card px-2.5 text-muted-foreground transition-[background,color,border-color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98]'
     return (
       <button
         type="button"

@@ -520,12 +520,12 @@ export default function UpstreamsV2() {
             {upstreamItems.length > 0 && (
               <div
                 data-upstream-toolbar
-                className="flex min-w-0 flex-col gap-3 border-b border-[var(--border)] pb-4 lg:flex-row lg:items-center lg:justify-between"
+                className="flex min-w-0 flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-center lg:justify-between"
               >
                 <div
                   role="group"
                   aria-label={t('upstreams.statusFilterLabel')}
-                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-[8px] border border-[var(--border)] bg-[var(--bg-soft)] p-[3px] sm:inline-grid sm:grid-cols-4"
+                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-[8px] border border-border bg-muted p-[3px] sm:inline-grid sm:grid-cols-4"
                 >
                   {statusOptions.map((option) => {
                     const active = statusFilter === option.value
@@ -554,7 +554,7 @@ export default function UpstreamsV2() {
 
                 <div
                   role="search"
-                  className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-[var(--border)] px-3 lg:max-w-[360px]"
+                  className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[360px]"
                   style={{ background: 'var(--bg-card)' }}
                 >
                   <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
@@ -587,7 +587,7 @@ export default function UpstreamsV2() {
                   ) : (
                     <kbd
                       aria-hidden="true"
-                      className="hidden rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-subtle)] sm:inline"
+                      className="hidden rounded-[4px] border border-border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:inline"
                     >
                       /
                     </kbd>
@@ -796,7 +796,7 @@ export default function UpstreamsV2() {
               />
             </fieldset>
 
-            <fieldset className="space-y-3 border-t border-[var(--border)] pt-4" disabled={isSaving}>
+            <fieldset className="space-y-3 border-t border-border pt-4" disabled={isSaving}>
               <legend className="px-1 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
                 {t('upstreams.healthSection')}
               </legend>
@@ -872,7 +872,7 @@ export default function UpstreamsV2() {
                   ecosystem: deleteTarget.adapter_type,
                 })}
               </p>
-              <dl className="space-y-2 border-y border-[var(--border)] py-3 text-[12px]">
+              <dl className="space-y-2 border-y border-border py-3 text-[12px]">
                 <div className="flex min-w-0 items-start justify-between gap-4">
                   <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.url')}</dt>
                   <dd

@@ -178,7 +178,7 @@ export default function UsersV2() {
           action={canWrite ? <ButtonV2 onClick={openCreateUser} size="sm"><Icon name="person_add" size="sm" />{t('users.addUser')}</ButtonV2> : undefined}
         />
         {usersQuery.isPending ? (
-          <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+          <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
         ) : usersQuery.isError && !usersData ? (
           <QueryErrorState message={usersApiError.status === 403 ? t('common.permissionDenied') : usersApiError.message} onRetry={() => { void usersQuery.refetch() }} />
         ) : (

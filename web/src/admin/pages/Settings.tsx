@@ -194,7 +194,7 @@ export default function SettingsV2() {
   if (settingsQuery.isPending) {
     return (
       <AdminPage description={t('settings.subtitle')}>
-        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]">
+        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-muted">
           <span className="sr-only">{t('loading')}</span>
         </div>
       </AdminPage>
@@ -212,7 +212,7 @@ export default function SettingsV2() {
   if (!settingsQuery.data || !draft) {
     return (
       <AdminPage description={t('settings.subtitle')}>
-        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-[var(--bg-soft)]">
+        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-muted">
           <span className="sr-only">{t('loading')}</span>
         </div>
       </AdminPage>
@@ -255,7 +255,7 @@ export default function SettingsV2() {
     </section>
   )
   const fields = (children: ReactNode) => (
-    <div className="divide-y divide-[var(--border-soft)] [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
+    <div className="divide-y divide-border [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
       {children}
     </div>
   )
@@ -410,7 +410,7 @@ export default function SettingsV2() {
         </InlineNotice>
       )}
       {configurationTab && (
-        <div className="flex min-w-0 items-start gap-2 border-b border-[var(--border)] pb-3 text-[12px] text-[var(--text-soft)]">
+        <div className="flex min-w-0 items-start gap-2 border-b border-border pb-3 text-[12px] text-muted-foreground">
           <Icon name="info" size="sm" className="mt-0.5 shrink-0" />
           <span>{t('settings.hotReloadNote')}</span>
         </div>

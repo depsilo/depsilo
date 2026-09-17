@@ -42,7 +42,7 @@ export default function DataTableV2<T extends Record<string, unknown>>({
           {data.map((row, rowIndex) => (
             <tr
               key={rowKey(row, rowIndex)}
-              className="transition-colors duration-100 hover:bg-[var(--bg-soft)]"
+              className="transition-colors duration-100 hover:bg-muted"
               style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
             >
               {columns.map((col) => (

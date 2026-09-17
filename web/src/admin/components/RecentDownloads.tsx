@@ -110,7 +110,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
       data-query-key="dashboard-recent-downloads"
       aria-labelledby="recent-downloads-title"
       aria-busy={query.isPending || undefined}
-      className="admin-secondary-panel min-w-0 overflow-hidden rounded-[var(--r-card)]"
+      className="admin-secondary-panel min-w-0 overflow-hidden rounded-lg"
     >
       <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -119,16 +119,16 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
             className={`h-1.5 w-1.5 shrink-0 rounded-full ${hasConnectionError ? '' : 'live-download-pulse'}`}
             style={{ background: hasConnectionError ? 'var(--warn-text)' : 'var(--live)' }}
           />
-          <h2 id="recent-downloads-title" className="text-[13px] font-[680] text-[var(--text)]">
+          <h2 id="recent-downloads-title" className="text-[13px] font-[680] text-foreground">
             {t('recentDownloads.title')}
           </h2>
-          <span className="text-[11px] text-[var(--text-soft)]">
+          <span className="text-[11px] text-muted-foreground">
             {hasConnectionError ? t('recentDownloads.retrying') : t('recentDownloads.liveRefresh')}
           </span>
         </div>
         <Link
           to={getAdminRouteHref('auditLogs')}
-          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-card)]"
+          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-[12px] font-[600] no-underline text-primary hover:bg-card"
         >
           {t('recentDownloads.viewAudit')}
           <span aria-hidden>→</span>
@@ -145,13 +145,13 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
               className={`${isRail ? '' : 'live-download-item'} space-y-2 px-4 py-3`}
               style={isRail && index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
             >
-              <div className="h-3 w-3/4 animate-pulse rounded bg-[var(--bg-soft)]" />
-              <div className="h-2.5 w-1/2 animate-pulse rounded bg-[var(--bg-soft)]" />
+              <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+              <div className="h-2.5 w-1/2 animate-pulse rounded bg-muted" />
             </div>
           ))}
         </div>
       ) : query.isError && !query.data ? (
-        <div role="alert" className="flex min-h-20 flex-wrap items-center justify-between gap-2 px-4 py-3 text-[12px] text-[var(--warn-text)]">
+        <div role="alert" className="flex min-h-20 flex-wrap items-center justify-between gap-2 px-4 py-3 text-[12px] text-warning">
           <span>
             {getApiError(query.error).status === 403
               ? t('common.permissionDenied')
@@ -162,14 +162,14 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
           </ButtonV2>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex min-h-24 items-center gap-2 px-4 py-3 text-[12px] text-[var(--text-soft)]">
+        <div className="flex min-h-24 items-center gap-2 px-4 py-3 text-[12px] text-muted-foreground">
           <Icon name="download" size="sm" aria-hidden />
           <span>{t('recentDownloads.empty')}</span>
         </div>
       ) : (
         <>
           {hasStaleData && (
-            <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b-[0.5px] border-[var(--warn-border)] bg-[var(--warn-fill)] px-3 py-1.5 text-[11px] text-[var(--warn-text)]">
+            <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b-[0.5px] border-warning/35 bg-warning/10 px-3 py-1.5 text-[11px] text-warning">
               <span>{t('recentDownloads.stale')}</span>
               <button type="button" className="stripe-focus-ring min-h-7 rounded px-2 font-[600]" onClick={() => { void query.refetch() }}>
                 {t('recentDownloads.retry')}
@@ -205,16 +205,16 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
                     ) : (
                       <Icon name="package_2" size="sm" aria-hidden />
                     )}
-                    <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-[550] text-[var(--text)]" title={fullPackageName}>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-[550] text-foreground" title={fullPackageName}>
                       {packageName}
-                      {item.version && <span className="text-[var(--text-subtle)]">@{item.version}</span>}
+                      {item.version && <span className="text-muted-foreground">@{item.version}</span>}
                     </span>
                     <BadgeV2 variant={outcome.variant} className="shrink-0">{outcome.label}</BadgeV2>
                   </div>
-                  <div className="mt-1.5 flex min-w-0 items-center gap-1.5 pl-[21px] text-[11px] text-[var(--text-subtle)]">
+                  <div className="mt-1.5 flex min-w-0 items-center gap-1.5 pl-[21px] text-[11px] text-muted-foreground">
                     <span className="shrink-0 font-[550] uppercase">{ecosystem}</span>
                     <span aria-hidden>·</span>
-                    <span className="min-w-0 flex-1 truncate font-mono tabular-nums text-[var(--text-soft)]">
+                    <span className="min-w-0 flex-1 truncate font-mono tabular-nums text-muted-foreground">
                       {size} · {item.latency_ms} ms
                     </span>
                     <time

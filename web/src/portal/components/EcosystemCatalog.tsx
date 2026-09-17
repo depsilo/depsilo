@@ -183,7 +183,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
         <section key={group} aria-labelledby={`ecosystem-group-${group}`}>
           <h4
             id={`ecosystem-group-${group}`}
-            className="m-0 mb-1 text-[12px] font-[620] text-[var(--text-muted)]"
+            className="m-0 mb-1 text-[12px] font-[620] text-muted-foreground"
           >
             {t(groupLabelKey(group))}
           </h4>
@@ -208,14 +208,14 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
   return (
     <nav
       aria-label={t('quickstart.pickEcosystem')}
-      className="eco-catalog border-b border-[var(--border)] min-[900px]:border-r min-[900px]:border-b-0"
+      className="eco-catalog border-b border-border min-[900px]:border-r min-[900px]:border-b-0"
       style={{
         minWidth: 0,
         padding: '18px 14px 20px',
         background: 'var(--bg-card)',
       }}
     >
-      <h3 className="m-0 text-[16px] font-[650] leading-[1.3] text-[var(--text)]">
+      <h3 className="m-0 text-[16px] font-[650] leading-[1.3] text-foreground">
         {t('quickstart.pickEcosystem')}
       </h3>
 
@@ -223,7 +223,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
         <Icon
           name="search"
           size="sm"
-          className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--text-muted)]"
+          className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
         />
         <Input
           type="search"
@@ -253,7 +253,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
           {matchingLanguages.length > 0 ? (
             renderGroupedLanguages(matchingLanguages)
           ) : (
-            <p className="m-0 py-4 text-[13px] leading-[1.5] text-[var(--text-muted)]">
+            <p className="m-0 py-4 text-[13px] leading-[1.5] text-muted-foreground">
               {t('quickstart.noEcosystemMatch', { query: query.trim() })}
             </p>
           )}
@@ -264,7 +264,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
             <section className="mt-4" aria-labelledby="recent-ecosystems-title">
               <h4
                 id="recent-ecosystems-title"
-                className="m-0 mb-1.5 text-[12px] font-[620] text-[var(--text-muted)]"
+                className="m-0 mb-1.5 text-[12px] font-[620] text-muted-foreground"
               >
                 {t('quickstart.recentEcosystems')}
               </h4>
@@ -285,12 +285,12 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
           )}
 
           <section
-            className="mt-4 border-t border-[var(--border)] pt-3"
+            className="mt-4 border-t border-border pt-3"
             aria-labelledby="all-ecosystems-title"
           >
             <h4
               id="all-ecosystems-title"
-              className="m-0 mb-2 text-[12px] font-[620] text-[var(--text-muted)]"
+              className="m-0 mb-2 text-[12px] font-[620] text-muted-foreground"
             >
               {t('quickstart.allEcosystems')}
             </h4>

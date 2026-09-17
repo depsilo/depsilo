@@ -36,7 +36,7 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
       <Link
         to={to}
         aria-label={action}
-        className="stripe-focus-ring group flex min-h-16 min-w-0 items-center gap-3 rounded-[7px] px-2 py-2 no-underline transition-colors duration-150 hover:bg-[var(--bg-card)]"
+        className="stripe-focus-ring group flex min-h-16 min-w-0 items-center gap-3 rounded-[7px] px-2 py-2 no-underline transition-colors duration-150 hover:bg-card"
       >
         <span
           aria-hidden
@@ -46,14 +46,14 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
           <Icon name={icon} size="sm" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[12px] font-[650] text-[var(--text)]">{title}</h3>
-          <p className="mt-1 text-[11px] leading-[1.55] text-[var(--text-soft)]">{detail}</p>
+          <h3 className="text-[12px] font-[650] text-foreground">{title}</h3>
+          <p className="mt-1 text-[11px] leading-[1.55] text-muted-foreground">{detail}</p>
         </div>
-        <span className="hidden shrink-0 items-center gap-1 text-[11px] font-[650] text-[var(--brand-text)] sm:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1 text-[11px] font-[650] text-primary sm:inline-flex">
           {action}
           <span aria-hidden>→</span>
         </span>
-        <span aria-hidden="true" className="shrink-0 text-[var(--brand-text)] sm:hidden">
+        <span aria-hidden="true" className="shrink-0 text-primary sm:hidden">
           <Icon name="chevron_right" size="sm" />
         </span>
       </Link>
@@ -84,11 +84,11 @@ export default function DashboardAttention({
       aria-labelledby="dashboard-attention-title"
       aria-describedby="dashboard-attention-description"
       aria-busy={isPending || undefined}
-      className="admin-secondary-panel min-w-0 overflow-hidden rounded-[var(--r-card)]"
+      className="admin-secondary-panel min-w-0 overflow-hidden rounded-lg"
     >
-      <header className="flex min-h-12 items-center justify-between gap-3 border-b border-[var(--border-soft)] px-4 py-2">
+      <header className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 py-2">
         <div className="min-w-0">
-          <h2 id="dashboard-attention-title" className="text-[13px] font-[680] text-[var(--text)]">
+          <h2 id="dashboard-attention-title" className="text-[13px] font-[680] text-foreground">
             {t('dashboard.needsAttention')}
           </h2>
           <p id="dashboard-attention-description" className="sr-only">
@@ -108,8 +108,8 @@ export default function DashboardAttention({
 
       {isPending ? (
         <div aria-hidden="true" className="space-y-3 p-4">
-          <div className="h-16 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
-          <div className="h-12 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
+          <div className="h-16 animate-pulse rounded-[6px] bg-muted" />
+          <div className="h-12 animate-pulse rounded-[6px] bg-muted" />
         </div>
       ) : initialErrorMessage ? (
         <div className="p-4">
@@ -120,7 +120,7 @@ export default function DashboardAttention({
           {isStale && (
             <div
               role="status"
-              className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-[var(--warn-fill)] px-3 py-2 text-[11px] text-[var(--warn-text)]"
+              className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-[11px] text-warning"
             >
               <span>{t('attention.queueStale')}</span>
               <ButtonV2
@@ -137,7 +137,7 @@ export default function DashboardAttention({
           )}
 
           {hasIssues ? (
-            <ul className="divide-y divide-[var(--border)]">
+            <ul className="divide-y divide-border">
               {upstreams.length > 0 && (
                 <AttentionItem
                   icon="warning"
@@ -166,15 +166,15 @@ export default function DashboardAttention({
             <div role="status" className="flex min-h-28 items-center gap-3 py-2">
               <span
                 aria-hidden
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[var(--ok-fill)] text-[var(--ok-text)]"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-success/10 text-success"
               >
                 <Icon name="check_circle" size="sm" />
               </span>
               <div className="min-w-0">
-                <h3 className="text-[13px] font-[680] text-[var(--text)]">
+                <h3 className="text-[13px] font-[680] text-foreground">
                   {t('dashboard.noActiveIssues')}
                 </h3>
-                <p className="mt-1.5 text-[12px] leading-[1.55] text-[var(--text-soft)]">
+                <p className="mt-1.5 text-[12px] leading-[1.55] text-muted-foreground">
                   {t('dashboard.noActiveIssuesHint')}
                 </p>
               </div>

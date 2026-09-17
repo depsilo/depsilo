@@ -313,7 +313,7 @@ export default function AuditLogsV2() {
               {items.map((row: AuditLog) => (
                 <tr
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
+                  className="transition-colors duration-75 hover:bg-muted"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
                   <td className="py-2 px-3 pl-0 whitespace-nowrap">

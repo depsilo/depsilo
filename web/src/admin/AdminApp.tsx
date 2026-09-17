@@ -62,25 +62,25 @@ function AdminAuthPending() {
     <main
       data-admin-auth-state="pending"
       aria-busy="true"
-      className="grid min-h-screen place-items-center bg-[var(--bg-page)] p-6"
+      className="grid min-h-screen place-items-center bg-background p-6"
     >
       <div
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className="flex min-h-12 items-center gap-3 text-[var(--text)]"
+        className="flex min-h-12 items-center gap-3 text-foreground"
       >
-        <span className="grid size-10 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand-text)]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-[8px] bg-accent text-primary">
           <Logo size={26} />
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="font-display text-[15px] font-[700] leading-5">Depsilo</span>
-          <span className="text-[12px] leading-4 text-[var(--text-muted)]">{t('auth.verifyingSession')}</span>
+          <span className="text-[12px] leading-4 text-muted-foreground">{t('auth.verifyingSession')}</span>
         </span>
         <Icon
           name="progress_activity"
           size="sm"
-          className="ml-2 shrink-0 animate-spin text-[var(--text-subtle)] motion-reduce:animate-none"
+          className="ml-2 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
         />
       </div>
     </main>

@@ -35,9 +35,9 @@ function DashboardKpiSkeleton() {
     <div aria-hidden="true" className="admin-kpi-grid grid grid-cols-2 lg:grid-cols-4">
       {Array.from({ length: 4 }, (_, index) => (
         <div key={index} className="flex flex-col items-start gap-2">
-          <div className="h-3 w-20 animate-pulse rounded bg-[var(--bg-soft)]" />
-          <div className="h-8 w-28 animate-pulse rounded bg-[var(--bg-soft)]" />
-          <div className="h-3 w-16 animate-pulse rounded bg-[var(--bg-soft)]" />
+          <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+          <div className="h-8 w-28 animate-pulse rounded bg-muted" />
+          <div className="h-3 w-16 animate-pulse rounded bg-muted" />
         </div>
       ))}
     </div>
@@ -207,7 +207,7 @@ export default function DashboardV2() {
             title={t('dashboard.healthOverview')}
             divider={false}
             action={(
-              <span className="text-[11px] text-[var(--text-subtle)]">
+              <span className="text-[11px] text-muted-foreground">
                 {t('dashboard.snapshotRange')}
               </span>
             )}
@@ -279,7 +279,7 @@ export default function DashboardV2() {
                 aria-busy="true"
                 className="admin-primary-panel p-4"
               >
-                <div aria-hidden="true" className="h-56 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
+                <div aria-hidden="true" className="h-56 animate-pulse rounded-[6px] bg-muted" />
               </div>
             ) : trendsQuery.isError && !hasTrendData ? (
               <div className="admin-primary-panel p-4">

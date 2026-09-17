@@ -186,7 +186,7 @@ export default function CacheManageV2() {
       <div className="space-y-12">
       {/* ── Storage overview + Treemap (no card wrappers) ─────────── */}
       {distributionQuery.isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
+        <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
       ) : distributionQuery.isError && !distData ? (
         <QueryErrorState message={distributionErrorMessage} onRetry={() => { void distributionQuery.refetch() }} />
       ) : (
@@ -314,7 +314,7 @@ export default function CacheManageV2() {
       </div>
 
       {isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
+        <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground">
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       ) : isError && !data ? (
@@ -338,7 +338,7 @@ export default function CacheManageV2() {
               {items.map((row) => (
                 <tr
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-[var(--bg-soft)]"
+                  className="transition-colors duration-75 hover:bg-muted"
                   style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
                 >
                   <td className="py-2 px-3 pl-0 max-w-[260px]">
@@ -407,18 +407,18 @@ export default function CacheManageV2() {
       }} title={t('cache.cleanExpiredTitle')} closeDisabled={cleanupMutation.isPending}>
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
         {cleanupPreviewQuery.isPending ? (
-          <div aria-busy="true" className="mb-6 text-[13px] text-[var(--text-soft)]">{t('cache.previewLoading')}</div>
+          <div aria-busy="true" className="mb-6 text-[13px] text-muted-foreground">{t('cache.previewLoading')}</div>
         ) : cleanupPreviewQuery.isError ? (
           <div className="mb-6"><InlineNotice tone="warning">{t('cache.previewUnavailable')}</InlineNotice></div>
         ) : cleanupPreviewQuery.data?.data ? (
           <div className="mb-6 space-y-3" data-testid="cache-cleanup-preview">
-            <p className="text-[13px] text-[var(--text-soft)]">
+            <p className="text-[13px] text-muted-foreground">
               {t('cache.previewSummary', {
                 count: cleanupPreviewQuery.data.data.candidate_count,
                 bytes: formatBytes(cleanupPreviewQuery.data.data.logical_bytes),
               })}
             </p>
-            <p className="text-[13px] text-[var(--text-soft)]">
+            <p className="text-[13px] text-muted-foreground">
               {t('cache.previewPlanned', {
                 count: cleanupPreviewQuery.data.data.planned_count,
                 bytes: formatBytes(cleanupPreviewQuery.data.data.planned_bytes),
@@ -429,12 +429,12 @@ export default function CacheManageV2() {
                 {cleanupPreviewQuery.data.data.items.map((item) => (
                   <li key={item.id} className="flex justify-between gap-3">
                     <span className="truncate">{item.package_name || item.key}</span>
-                    <span className="shrink-0 text-[var(--text-soft)]">{formatBytes(item.size)} · {item.reason}</span>
+                    <span className="shrink-0 text-muted-foreground">{formatBytes(item.size)} · {item.reason}</span>
                   </li>
                 ))}
               </ul>
-            ) : <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewEmpty')}</p>}
-            <p className="text-[12px] text-[var(--text-soft)]">{t('cache.previewSnapshot')}</p>
+            ) : <p className="text-[12px] text-muted-foreground">{t('cache.previewEmpty')}</p>}
+            <p className="text-[12px] text-muted-foreground">{t('cache.previewSnapshot')}</p>
           </div>
         ) : null}
         {cleanupResult && (
@@ -484,16 +484,16 @@ export default function CacheManageV2() {
           {cancelWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
           {retryWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
           {warmupJobId && warmupJobQuery.data?.data && (
-            <div className="space-y-3 rounded-[6px] border border-[var(--border)] p-3" data-testid="warmup-job-status">
+            <div className="space-y-3 rounded-[6px] border border-border p-3" data-testid="warmup-job-status">
               <div className="flex justify-between gap-3 text-[12px]">
                 <span>{t('cache.warmupJobStatus', { status: t(WARMUP_STATUS_KEYS[warmupJobQuery.data.data.status] || 'cache.warmupStatus.unknown') })}</span>
-                <span className="font-mono text-[var(--text-soft)]">{warmupJobId}</span>
+                <span className="font-mono text-muted-foreground">{warmupJobId}</span>
               </div>
               <ul className="max-h-40 overflow-auto space-y-1 text-[12px]" aria-label={t('cache.warmupResults')}>
                 {warmupJobQuery.data.data.items.map(item => (
                   <li key={item.package} className="flex justify-between gap-3">
                     <span className="truncate font-mono">{item.package}</span>
-                    <span className="shrink-0 text-[var(--text-soft)]">{item.detail === 'metadata cached' ? t('cache.warmupItemMetadata') : item.detail === 'request failed' ? t('cache.warmupItemFailed') : item.detail === 'warmup stopped before this package completed' ? t('cache.warmupItemStopped') : t(WARMUP_STATUS_KEYS[item.status] || 'cache.warmupStatus.unknown')}</span>
+                    <span className="shrink-0 text-muted-foreground">{item.detail === 'metadata cached' ? t('cache.warmupItemMetadata') : item.detail === 'request failed' ? t('cache.warmupItemFailed') : item.detail === 'warmup stopped before this package completed' ? t('cache.warmupItemStopped') : t(WARMUP_STATUS_KEYS[item.status] || 'cache.warmupStatus.unknown')}</span>
                   </li>
                 ))}
               </ul>

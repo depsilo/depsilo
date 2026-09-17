@@ -300,7 +300,7 @@ function EventsTab(props: {
         <ul
           aria-label={t('quarantine.events.table')}
           data-quarantine-mobile-list="events"
-          className="divide-y divide-[var(--border)] sm:hidden"
+          className="divide-y divide-border sm:hidden"
         >
           {items.map((ev) => (
             <li key={ev.id} className="space-y-3 py-4 first:pt-0">
@@ -402,7 +402,7 @@ function ApprovalsTab(props: {
     <ul
       aria-label={t('quarantine.approvals.table')}
       data-quarantine-mobile-list="approvals"
-      className="divide-y divide-[var(--border)] sm:hidden"
+      className="divide-y divide-border sm:hidden"
     >
       {items.map((row) => (
         <li key={row.id} className="space-y-3 py-4 first:pt-0">
@@ -625,7 +625,7 @@ function BlocklistTab() {
           {t('quarantine.blocklist.overrides_hint')}
         </p>
         {overridesQ.isPending ? (
-          <p aria-busy="true" className="text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></p>
+          <p aria-busy="true" className="text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
         ) : overridesQ.isError && !overridesQ.data ? (
           <QueryErrorState message={getApiError(overridesQ.error).status === 403 ? t('common.permissionDenied') : getApiError(overridesQ.error).message} onRetry={() => { void overridesQ.refetch() }} />
         ) : (
@@ -642,7 +642,7 @@ function BlocklistTab() {
           <ul
             aria-label={t('quarantine.blocklist.overrides_table')}
             data-quarantine-mobile-list="overrides"
-            className="divide-y divide-[var(--border)] sm:hidden"
+            className="divide-y divide-border sm:hidden"
           >
             {overrides.map((row) => {
               const msLeft = new Date(row.expires_at).getTime() - now

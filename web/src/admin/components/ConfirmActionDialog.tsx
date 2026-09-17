@@ -46,15 +46,15 @@ export default function ConfirmActionDialog({
       closeDisabled={pending}
     >
       <div className="space-y-5">
-        <p className="text-[14px] leading-6 text-[var(--text-soft)]">{description}</p>
+        <p className="text-[14px] leading-6 text-muted-foreground">{description}</p>
 
         {details.length > 0 && (
-          <dl className="space-y-2 border-y border-[var(--border)] py-3 text-[12px]">
+          <dl className="space-y-2 border-y border-border py-3 text-[12px]">
             {details.map((detail) => (
               <div key={detail.label} className="flex min-w-0 items-start justify-between gap-4">
-                <dt className="shrink-0 text-[var(--text-muted)]">{detail.label}</dt>
+                <dt className="shrink-0 text-muted-foreground">{detail.label}</dt>
                 <dd
-                  className={`min-w-0 break-words text-right text-[var(--text)] ${detail.mono ? 'font-mono' : ''}`}
+                  className={`min-w-0 break-words text-right text-foreground ${detail.mono ? 'font-mono' : ''}`}
                 >
                   {detail.value}
                 </dd>

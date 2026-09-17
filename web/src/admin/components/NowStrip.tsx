@@ -174,9 +174,9 @@ function FlowStage({ title, value, detail, loading = false, tone = 'default', ac
   return (
     <div className="dependency-flow-stage">
       <span aria-hidden="true" className="dependency-flow-node" style={{ background: color }} />
-      <p className="dependency-flow-title text-[12px] font-[650] text-[var(--text-soft)]">{title}</p>
+      <p className="dependency-flow-title text-[12px] font-[650] text-muted-foreground">{title}</p>
       {loading ? (
-        <div aria-hidden="true" className="dependency-flow-value h-7 w-20 animate-pulse rounded bg-[var(--bg-soft)]" />
+        <div aria-hidden="true" className="dependency-flow-value h-7 w-20 animate-pulse rounded bg-muted" />
       ) : action ? (
         <div className="dependency-flow-value">{action}</div>
       ) : (
@@ -184,7 +184,7 @@ function FlowStage({ title, value, detail, loading = false, tone = 'default', ac
           {value ?? '—'}
         </p>
       )}
-      <p className="dependency-flow-detail mt-0.5 text-[11px] text-[var(--text-subtle)] md:mt-1.5">{detail}</p>
+      <p className="dependency-flow-detail mt-0.5 text-[11px] text-muted-foreground md:mt-1.5">{detail}</p>
     </div>
   )
 }
@@ -246,7 +246,7 @@ export default function NowStrip({
         aria-busy={query.isPending || undefined}
         aria-label={accessibleLabel}
         title={accessibleLabel}
-        className="inline-flex h-10 min-w-0 items-center gap-2 whitespace-nowrap text-[11px] text-[var(--text-soft)]"
+        className="inline-flex h-10 min-w-0 items-center gap-2 whitespace-nowrap text-[11px] text-muted-foreground"
       >
         <style>{flowMotion}</style>
         <span
@@ -279,7 +279,7 @@ export default function NowStrip({
       <style>{flowMotion}</style>
       <header className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2">
         <div className="min-w-0">
-          <h2 id="dependency-flow-title" className="text-[13px] font-[680] text-[var(--text)]">
+          <h2 id="dependency-flow-title" className="text-[13px] font-[680] text-foreground">
             {t('dashboard.requestPath')}
           </h2>
           <p id="dependency-flow-description" className="sr-only">
@@ -296,14 +296,14 @@ export default function NowStrip({
               background: hasStaleData ? 'var(--warn-text)' : dotColor,
             }}
           />
-          <span className="text-[11px] font-[650] text-[var(--text-soft)]">
+          <span className="text-[11px] font-[650] text-muted-foreground">
             {hasStaleData ? t('now.staleData') : statusLabel}
           </span>
         </div>
       </header>
 
       {hasStaleData && (
-        <div className="flex flex-wrap items-center justify-between gap-2 bg-[var(--warn-fill)] px-4 py-2 text-[11px] text-[var(--warn-text)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-warning/10 px-4 py-2 text-[11px] text-warning">
           <span title={query.dataUpdatedAt ? new Date(query.dataUpdatedAt).toLocaleString() : undefined}>
             {t('now.staleData')}
           </span>
@@ -351,7 +351,7 @@ export default function NowStrip({
               action={data ? (
                 <Link
                   to={getAdminRouteHref('upstreams')}
-                  className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 font-mono text-[22px] font-[620] leading-none tabular-nums no-underline hover:bg-[var(--bg-hover)] md:text-[27px]"
+                  className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 font-mono text-[22px] font-[620] leading-none tabular-nums no-underline hover:bg-accent md:text-[27px]"
                   style={{ color: upstreamTone === 'warning' ? 'var(--warn-text)' : 'var(--ok-text)' }}
                   aria-label={t('now.viewUpstreams', {
                     healthy: data.upstreams.healthy,
@@ -364,12 +364,12 @@ export default function NowStrip({
             />
           </div>
 
-          <footer className="mt-auto flex min-h-10 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--border-soft)] px-4 py-2 text-[11px] text-[var(--text-subtle)]">
+          <footer className="mt-auto flex min-h-10 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
             {data?.last_activity ? (
               <span className="min-w-0 flex-1 truncate">
                 {t('now.lastActivity')}{' '}
                 {formatRelative(data.last_activity.seconds_ago, t)} ·{' '}
-                <span className="text-[var(--text-soft)]">{data.last_activity.adapter_type}</span>
+                <span className="text-muted-foreground">{data.last_activity.adapter_type}</span>
                 {data.last_activity.package_name && (
                   <> · <span className="font-mono">{data.last_activity.package_name}</span></>
                 )}
