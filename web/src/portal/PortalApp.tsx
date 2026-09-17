@@ -1,3 +1,4 @@
+import { Check, CircleHelp, Copy, LoaderCircle, RefreshCw, ShieldUser, TriangleAlert, X } from 'lucide-react'
 import { Routes, Route, Link, NavLink } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -95,7 +96,7 @@ function EndpointPill() {
               transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
             }}
           >
-            <Icon name={copyState === 'failed' ? 'warning' : 'content_copy'} size="sm" />
+            <Icon icon={copyState === 'failed' ? TriangleAlert : Copy} size="sm" />
           </span>
           <span
             className="absolute inset-0 inline-flex items-center justify-center"
@@ -107,7 +108,7 @@ function EndpointPill() {
               transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
             }}
           >
-            <Icon name="check" size="sm" />
+            <Check className="icon icon-sm" aria-hidden="true" />
           </span>
         </span>
       </button>
@@ -204,16 +205,16 @@ export default function PortalAppV2() {
     ? t('portal.retryServiceStatusWithFallback', { status: statusLabel })
     : t('portal.retryServiceStatus')
   const statusIcon = statusTone === 'loading'
-    ? 'progress_activity'
+    ? LoaderCircle
     : statusTone === 'unavailable'
-      ? 'refresh'
+      ? RefreshCw
       : resolvedStatus === 'healthy'
-        ? 'check'
+        ? Check
         : resolvedStatus === 'degraded'
-          ? 'warning'
+          ? TriangleAlert
           : resolvedStatus === 'failed'
-            ? 'close'
-            : 'help'
+            ? X
+            : CircleHelp
   const pytorchIndexPath = data?.extra_indexes?.find(index => index.kind === 'pytorch')?.path
 
   const statusContent = (
@@ -227,7 +228,7 @@ export default function PortalAppV2() {
       </span>
       <span data-portal-status-compact-icon className="hidden max-[560px]:inline-flex" aria-hidden="true">
         <Icon
-          name={statusIcon}
+          icon={statusIcon}
           size="sm"
           className={statusTone === 'loading' ? 'animate-spin motion-reduce:animate-none' : ''}
         />
@@ -352,7 +353,7 @@ export default function PortalAppV2() {
               aria-label={t('portal.adminPanel')}
               title={t('portal.adminPanel')}
             >
-              <Icon name="admin_panel_settings" size="sm" />
+              <ShieldUser className="icon icon-sm" aria-hidden="true" />
               <span data-portal-admin-label className="max-[560px]:hidden">{t('portal.adminPanel')}</span>
             </a>
           </div>

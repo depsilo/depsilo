@@ -1,3 +1,4 @@
+import { Check, Copy, Eye, Lightbulb, LoaderCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -70,7 +71,7 @@ export default function HeroAICTA() {
             aria-hidden="true"
             className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-accent text-primary"
           >
-            <Icon name="lightbulb" />
+            <Lightbulb className="icon" aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <h3
@@ -102,7 +103,7 @@ export default function HeroAICTA() {
             }}
           >
             <Icon
-              name={isFetching ? 'progress_activity' : copied ? 'check' : 'content_copy'}
+              icon={isFetching ? LoaderCircle : copied ? Check : Copy}
               size="sm"
               className={isFetching ? 'animate-spin' : ''}
             />
@@ -123,7 +124,7 @@ export default function HeroAICTA() {
               cursor: isFetching ? 'wait' : 'pointer',
             }}
           >
-            <Icon name="visibility" size="sm" />
+            <Eye className="icon icon-sm" aria-hidden="true" />
             {t('quickstart.heroViewFull')}
           </button>
         </div>

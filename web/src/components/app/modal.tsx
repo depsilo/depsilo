@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -63,7 +64,7 @@ export default function Modal({
         <DialogClose
           render={
             <IconButton
-              icon="close"
+              icon={X}
               label={closeLabel}
               disabled={closeDisabled}
               className="absolute top-2 right-2"

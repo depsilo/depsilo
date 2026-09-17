@@ -1,3 +1,4 @@
+import { ArrowLeft, Check, Copy, Download, Eye, FolderCog, Package, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -5,7 +6,6 @@ import { adminApi } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
 import ButtonV2 from '@/components/app/button'
 import InputV2 from '@/components/app/input'
-import Icon from '@/components/app/icon'
 import BadgeV2 from '@/components/app/badge'
 import ModalV2 from '@/components/app/modal'
 import DataTableV2 from '@/components/app/data-table'
@@ -37,7 +37,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   }
   return (
     <IconButton
-      icon={copied ? 'check' : 'content_copy'}
+      icon={copied ? Check : Copy}
       label={label}
       onClick={handleClick}
       style={{ color: copied ? 'var(--success)' : 'var(--muted-foreground)' }}
@@ -173,7 +173,7 @@ export default function ProjectsV2() {
     return (
       <AdminPage description={t('projects.subtitle')}>
         <ProRequiredCallout
-          icon="folder_managed"
+          icon={FolderCog}
           title={t('projects.proRequired')}
           description={t('projects.proDesc')}
           upgradeLabel={t('projects.upgrade')}
@@ -227,7 +227,7 @@ export default function ProjectsV2() {
         {/* Detail header */}
         <div className="flex min-w-0 items-center gap-3">
           <IconButton
-            icon="arrow_back"
+            icon={ArrowLeft}
             label={t('projects.backToList')}
             onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
           />
@@ -284,7 +284,7 @@ export default function ProjectsV2() {
               </div>
             )}
           </div>
-          ) : <EmptyState icon="folder_managed" title={t('noData')} minHeight={180} />}
+          ) : <EmptyState icon={FolderCog} title={t('noData')} minHeight={180} />}
         </section>
 
         {/* SBOM export */}
@@ -302,7 +302,7 @@ export default function ProjectsV2() {
               ))}
             </SelectV2>
             <ButtonV2 className="w-full sm:w-auto" onClick={handleSbomDownload} disabled={sbomLoading}>
-              <Icon name="download" size="sm" />
+              <Download className="icon icon-sm" aria-hidden="true" />
               {sbomLoading ? t('sbom.generating') : t('sbom.download')}
             </ButtonV2>
           </div>
@@ -332,7 +332,7 @@ export default function ProjectsV2() {
             <div className="space-y-3">
               {pkgData && packagesQuery.isRefetchError && <StaleDataNotice refreshing={packagesQuery.isFetching} onRefresh={() => packagesQuery.refetch()} />}
               {packages.length === 0 ? (
-                <EmptyState icon="inventory_2" title={t('projects.noPackages')} minHeight={200} />
+                <EmptyState icon={Package} title={t('projects.noPackages')} minHeight={200} />
               ) : (
                 <DataTableV2
                   columns={pkgColumns}
@@ -370,10 +370,10 @@ export default function ProjectsV2() {
             aria-label={t('projects.viewNamed', { name: row.name })}
             onClick={() => { setSelectedProject(row); setPkgPage(1); setPkgEcosystem('') }}
           >
-            <Icon name="visibility" size="sm" />
+            <Eye className="icon icon-sm" aria-hidden="true" />
             {t('projects.view')}
           </ButtonV2>
-          {canWrite && <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }} />}
+          {canWrite && <IconButton icon={Trash2} label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }} />}
         </div>
       ),
     },
@@ -384,7 +384,7 @@ export default function ProjectsV2() {
       description={t('projects.subtitle')}
       actions={canWrite ? (
         <ButtonV2 onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
-          <Icon name="add" size="sm" />{t('projects.create')}
+          <Plus className="icon icon-sm" aria-hidden="true" />{t('projects.create')}
         </ButtonV2>
       ) : undefined}
     >
@@ -395,7 +395,7 @@ export default function ProjectsV2() {
 
       {projects.length === 0 ? (
         <EmptyState
-          icon="folder_managed"
+          icon={FolderCog}
           title={t('projects.noProjects')}
           hint={t('projects.noProjectsHint')}
           minHeight={240}
@@ -442,7 +442,7 @@ export default function ProjectsV2() {
           <div className="space-y-4">
             <div className="rounded-[6px] p-3" style={{ background: 'var(--warning-surface)', border: '0.5px solid var(--warning-border-tone)' }}>
               <div className="flex items-center gap-2 mb-1">
-                <Icon className="text-warning" name="warning" size="sm" />
+                <TriangleAlert className="text-warning icon icon-sm" aria-hidden="true" />
                 <span className="text-[13px] font-[500] text-warning">{t('projects.tokenWarning')}</span>
               </div>
             </div>

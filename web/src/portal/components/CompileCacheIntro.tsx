@@ -1,5 +1,5 @@
+import { ArrowRight, ChevronDown, CloudSync, Cpu, HardDrive, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import Icon from '@/components/app/icon'
 
 export default function CompileCacheIntro() {
   const { t } = useTranslation()
@@ -19,7 +19,7 @@ export default function CompileCacheIntro() {
           aria-hidden="true"
           className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-accent text-primary"
         >
-          <Icon name="memory" />
+          <Cpu className="icon" aria-hidden="true" />
         </span>
         <div className="min-w-0">
           <h3
@@ -47,37 +47,25 @@ export default function CompileCacheIntro() {
           }}
         >
           {t('quickstart.compileCacheAction')}
-          <Icon name="arrow_forward" size="sm" />
+          <ArrowRight className="icon icon-sm" aria-hidden="true" />
         </a>
 
         <details className="mt-3 border-t border-border pt-2">
           <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1 text-[13px] font-[560] text-muted-foreground hover:text-foreground">
             {t('quickstart.compileCacheDetails')}
-            <Icon name="expand_more" size="sm" />
+            <ChevronDown className="icon icon-sm" aria-hidden="true" />
           </summary>
           <ul className="mb-1 mt-2 flex list-none flex-col gap-2 p-0 text-[12px] leading-[1.5] text-muted-foreground">
             <li className="flex items-start gap-2">
-              <Icon
-                name="cloud_sync"
-                size="sm"
-                className="mt-0.5 shrink-0 text-primary"
-              />
+              <CloudSync className="mt-0.5 shrink-0 text-primary icon icon-sm" aria-hidden="true" />
               <span>{t('quickstart.compileCacheProtocol')}</span>
             </li>
             <li className="flex items-start gap-2">
-              <Icon
-                name="storage"
-                size="sm"
-                className="mt-0.5 shrink-0 text-primary"
-              />
+              <HardDrive className="mt-0.5 shrink-0 text-primary icon icon-sm" aria-hidden="true" />
               <span>{t('quickstart.compileCacheStorage')}</span>
             </li>
             <li className="flex items-start gap-2">
-              <Icon
-                name="info"
-                size="sm"
-                className="mt-0.5 shrink-0 text-warning"
-              />
+              <Info className="mt-0.5 shrink-0 text-warning icon icon-sm" aria-hidden="true" />
               <span>{t('quickstart.compileCacheLimitation')}</span>
             </li>
           </ul>

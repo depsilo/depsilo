@@ -1,3 +1,4 @@
+import { BellOff, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -195,7 +196,7 @@ export default function WebhookTab() {
               <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />
             </div>
           )}
-          {!query.data?.length ? <EmptyState icon="notifications_off" title={t('webhook.noWebhooks')} minHeight={180} /> : <div className="divide-y divide-border">
+          {!query.data?.length ? <EmptyState icon={BellOff} title={t('webhook.noWebhooks')} minHeight={180} /> : <div className="divide-y divide-border">
             {query.data.map(webhook => (
               <article key={webhook.id} className="flex min-w-0 flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
@@ -225,9 +226,9 @@ export default function WebhookTab() {
                     >
                       {t('webhook.test')}
                     </ButtonV2>
-                    <IconButton icon="edit" label={t('webhook.editNamed', { name: webhook.name })} onClick={() => openEdit(webhook)} />
+                    <IconButton icon={Pencil} label={t('webhook.editNamed', { name: webhook.name })} onClick={() => openEdit(webhook)} />
                     <IconButton
-                      icon="delete"
+                      icon={Trash2}
                       label={t('webhook.deleteNamed', { name: webhook.name })}
                       tone="danger"
                       onClick={event => {

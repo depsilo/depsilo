@@ -1,3 +1,4 @@
+import { Package, RefreshCw, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -6,7 +7,6 @@ import BadgeV2 from '@/components/app/badge'
 import ButtonV2 from '@/components/app/button'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import EmptyState from '@/components/app/empty-state'
-import Icon from '@/components/app/icon'
 import IconButton from '@/components/app/icon-button'
 import QueryErrorState from '@/components/app/error-state'
 import SectionHeader from '@/components/app/section-header'
@@ -117,7 +117,7 @@ export default function CacheIndexes() {
         />
         {summary.length === 0 ? (
           <EmptyState
-            icon="inventory_2"
+            icon={Package}
             title={t('cacheIndexes.noSummaryTitle')}
             hint={t('cacheIndexes.noSummaryHint')}
             minHeight={140}
@@ -165,7 +165,7 @@ export default function CacheIndexes() {
         onSubmit={(event) => { event.preventDefault(); applySearch() }}
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+          <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('cacheIndexes.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
@@ -193,7 +193,7 @@ export default function CacheIndexes() {
 
       {items.length === 0 ? (
         <EmptyState
-          icon="inventory_2"
+          icon={Package}
           title={t('cacheIndexes.emptyTitle')}
           hint={t('cacheIndexes.emptyHint')}
           minHeight={220}
@@ -273,7 +273,7 @@ export default function CacheIndexes() {
                   {canWrite && (
                     <td className="px-3 py-2">
                       <IconButton
-                        icon="refresh"
+                        icon={RefreshCw}
                         label={t('cacheIndexes.refreshNamed', { name: item.package_name || item.key })}
                         loading={refreshMutation.isPending && refreshMutation.variables?.id === item.id}
                         disabled={refreshMutation.isPending}

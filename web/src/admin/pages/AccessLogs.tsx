@@ -1,3 +1,4 @@
+import { ChevronRight, Copy, Download, ReceiptText, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -7,7 +8,6 @@ import { formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/app/button'
 import BadgeV2 from '@/components/app/badge'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
-import Icon from '@/components/app/icon'
 import EmptyState from '@/components/app/empty-state'
 import QueryErrorState from '@/components/app/error-state'
 import SelectV2 from '@/components/app/select'
@@ -200,7 +200,7 @@ export default function AccessLogsV2() {
           disabled={exportMutation.isPending}
           onClick={() => exportMutation.mutate()}
         >
-          <Icon name="download" size="sm" />
+          <Download className="icon icon-sm" aria-hidden="true" />
           {exportMutation.isPending ? t('logs.exporting') : t('logs.export')}
         </ButtonV2>
       )}
@@ -212,7 +212,7 @@ export default function AccessLogsV2() {
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+          <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('logs.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
@@ -272,7 +272,7 @@ export default function AccessLogsV2() {
         <div className="space-y-3">
           {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
-            <EmptyState icon="receipt_long" title={t('logs.noLogs')} hint={t('logs.noLogsHint')} minHeight={240} />
+            <EmptyState icon={ReceiptText} title={t('logs.noLogs')} hint={t('logs.noLogsHint')} minHeight={240} />
           ) : (
             <TableViewport label={t('logs.table')} minWidth={860}>
           <table className="w-full text-[12px]">
@@ -338,7 +338,7 @@ export default function AccessLogsV2() {
                   </td>
 
                   <td className="py-2 px-3 text-right">
-                    <IconButton icon="chevron_right" label={t('logs.viewDetails')} onClick={() => setDetailId(row.id)} />
+                    <IconButton icon={ChevronRight} label={t('logs.viewDetails')} onClick={() => setDetailId(row.id)} />
                   </td>
                 </tr>
               ))}
@@ -363,7 +363,7 @@ export default function AccessLogsV2() {
               <p className="font-mono text-[11px] uppercase text-muted-foreground">{t('logs.detailTitle')}</p>
               <h2 className="mt-1 break-words font-mono text-[16px] text-foreground">{detailQuery.data?.data.package_name || t('logs.loadingDetail')}</h2>
             </div>
-            {detailQuery.data?.data && <IconButton icon="content_copy" label={t('logs.copySummary')} onClick={() => { void copyDiagnosticSummary(detailQuery.data!.data) }} />}
+            {detailQuery.data?.data && <IconButton icon={Copy} label={t('logs.copySummary')} onClick={() => { void copyDiagnosticSummary(detailQuery.data!.data) }} />}
           </div>
           {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground">{t('loading')}</div> : detailQuery.isError ? <InlineNotice tone="danger">{getApiError(detailQuery.error).message}</InlineNotice> : detailQuery.data?.data && <DiagnosticDetail detail={detailQuery.data.data} t={t} />}
         </div>

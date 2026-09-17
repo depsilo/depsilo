@@ -1,3 +1,4 @@
+import { Network, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
@@ -7,7 +8,6 @@ import ButtonV2 from '@/components/app/button'
 import EmptyState from '@/components/app/empty-state'
 import InputV2 from '@/components/app/input'
 import SelectV2 from '@/components/app/select'
-import Icon from '@/components/app/icon'
 import ModalV2 from '@/components/app/modal'
 import InlineNotice from '@/components/app/notice'
 import IconButton from '@/components/app/icon-button'
@@ -472,7 +472,7 @@ export default function UpstreamsV2() {
             onClick={checkAll}
             disabled={checking || checkingIds.size > 0 || allUpstreams.length === 0}
           >
-            <Icon name="refresh" size="sm" />
+            <RefreshCw className="icon icon-sm" aria-hidden="true" />
             {checking ? t('upstreams.checkingProgress', checkProgress) : t('upstreams.checkAll')}
           </ButtonV2>
           <ButtonV2
@@ -481,7 +481,7 @@ export default function UpstreamsV2() {
             className="min-h-[40px] sm:min-h-8"
             onClick={openCreate}
           >
-            <Icon name="add" size="sm" />
+            <Plus className="icon icon-sm" aria-hidden="true" />
             {t('upstreams.addUpstream')}
           </ButtonV2>
         </>
@@ -555,7 +555,7 @@ export default function UpstreamsV2() {
                   role="search"
                   className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[360px] bg-card"
                 >
-                  <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+                  <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
                   <input
                     ref={searchInputRef}
                     type="text"
@@ -573,7 +573,7 @@ export default function UpstreamsV2() {
                   />
                   {search ? (
                     <IconButton
-                      icon="close"
+                      icon={X}
                       label={t('upstreams.clearSearch')}
                       className="-mr-3"
                       onClick={() => {
@@ -609,20 +609,20 @@ export default function UpstreamsV2() {
 
             {upstreamItems.length === 0 ? (
               <EmptyState
-                icon="hub"
+                icon={Network}
                 title={t('upstreams.emptyTitle')}
                 hint={canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}
                 minHeight={220}
                 action={canWrite ? (
                   <ButtonV2 type="button" className="min-h-[40px]" onClick={openCreate}>
-                    <Icon name="add" size="sm" />
+                    <Plus className="icon icon-sm" aria-hidden="true" />
                     {t('upstreams.addFirst')}
                   </ButtonV2>
                 ) : undefined}
               />
             ) : visibleUpstreams.length === 0 ? (
               <EmptyState
-                icon="search"
+                icon={Search}
                 title={normalizedSearch
                   ? t('upstreams.noMatch', { query: summarizedSearch })
                   : t('upstreams.noStatusMatch')}
@@ -686,7 +686,7 @@ export default function UpstreamsV2() {
                   <div className="ml-1 flex gap-0.5">
                     {upstream.id && (
                       <IconButton
-                        icon="refresh"
+                        icon={RefreshCw}
                         label={t('upstreams.checkNamed', { name: upstream.name })}
                         loading={checkingIds.has(upstream.id)}
                         disabled={checking}
@@ -694,13 +694,13 @@ export default function UpstreamsV2() {
                       />
                     )}
                       <IconButton
-                        icon="edit"
+                        icon={Pencil}
                         label={t('upstreams.editNamed', { name: upstream.name })}
                         onClick={() => openEdit(upstream)}
                       />
                     {upstream.id && (
                       <IconButton
-                        icon="delete"
+                        icon={Trash2}
                         label={t('upstreams.deleteNamed', { name: upstream.name })}
                         tone="danger"
                         onClick={() => openDelete(upstream)}

@@ -4,6 +4,7 @@
 //
 // Every API bucket is preserved. Bucket timestamps are rendered in the
 // browser's timezone via Intl.DateTimeFormat.
+import { ChartNoAxesCombined } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -20,7 +21,6 @@ import {
 import type { TooltipContentProps, TooltipValueType } from 'recharts'
 
 import ButtonV2 from '@/components/app/button'
-import Icon from '@/components/app/icon'
 import SectionHeader from '@/components/app/section-header'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { cn, formatBytes } from '@/lib/utils'
@@ -282,7 +282,7 @@ export default function TrendsCard({
             aria-hidden
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-muted text-muted-foreground"
           >
-            <Icon name="show_chart" size="sm" />
+            <ChartNoAxesCombined className="icon icon-sm" aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <h3 className="text-[12px] font-[650] text-foreground">{t('dashboard.emptyTrendTitle')}</h3>

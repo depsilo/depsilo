@@ -1,9 +1,10 @@
-import Icon, { type IconName } from '@/components/app/icon'
+import Icon from '@/components/app/icon'
+import type { LucideIcon } from 'lucide-react'
 import { proAccessUrl } from '@/lib/buy'
 
 interface ProRequiredCalloutProps {
   /** Registered project icon name. */
-  icon: IconName
+  icon: LucideIcon
   /** Already-translated title text */
   title: string
   /** Already-translated description text */
@@ -39,7 +40,7 @@ export default function ProRequiredCallout({
           className="flex items-center justify-center w-14 h-14 rounded-[8px]"
           style={{ background: 'var(--accent)', border: '0.5px solid var(--border)' }}
         >
-          <Icon className="text-primary" name={icon} size="lg" />
+          <Icon icon={icon} className="text-primary" size="lg" />
         </div>
         <h3 className="text-[18px] font-[600]" style={{ color: 'var(--foreground)', letterSpacing: '-0.02em' }}>
           {title}

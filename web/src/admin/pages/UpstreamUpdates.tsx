@@ -1,3 +1,4 @@
+import { History, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -286,7 +287,7 @@ export default function UpstreamUpdates() {
           onClick={() => { void refreshLatest() }}
         >
           <Icon
-            name="refresh"
+            icon={RefreshCw}
             size="sm"
             className={backgroundRefreshing ? 'animate-spin' : ''}
           />
@@ -312,7 +313,7 @@ export default function UpstreamUpdates() {
           <div
             className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[420px] bg-card"
           >
-            <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+            <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
             <input
               type="text"
               aria-label={t('upstreamUpdates.searchLabel')}
@@ -420,7 +421,7 @@ export default function UpstreamUpdates() {
           />
         ) : events.length === 0 ? (
           <EmptyState
-            icon={hasFilters ? 'search' : 'history'}
+            icon={hasFilters ? Search : History}
             title={hasFilters
               ? t('upstreamUpdates.noMatches')
               : t('upstreamUpdates.emptyTitle')}

@@ -1,3 +1,4 @@
+import { Check, Copy, KeyRound, LoaderCircle, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -249,7 +250,7 @@ export default function CompileCache() {
             disabled={isRefreshing}
             onClick={refreshAll}
           >
-            <Icon name={isRefreshing ? 'progress_activity' : 'refresh'} size="sm" />
+            <Icon icon={isRefreshing ? LoaderCircle : RefreshCw} size="sm" />
             {t(isRefreshing ? 'compileCache.refreshing' : 'compileCache.refresh')}
           </ButtonV2>
           {canWrite && (
@@ -263,7 +264,7 @@ export default function CompileCache() {
                 setCleanupOpen(true)
               }}
             >
-              <Icon name="delete_sweep" size="sm" />
+              <Trash2 className="icon icon-sm" aria-hidden="true" />
               {t('compileCache.cleanup')}
             </ButtonV2>
           )}
@@ -363,7 +364,7 @@ export default function CompileCache() {
                             {status.endpoints[client]}
                           </code>
                           <IconButton
-                            icon={copiedValue === target ? 'check' : 'content_copy'}
+                            icon={copiedValue === target ? Check : Copy}
                             label={t('compileCache.copyClientEndpoint', { client })}
                             onClick={() => { void copyValue(status.endpoints[client], target) }}
                           />
@@ -388,7 +389,7 @@ export default function CompileCache() {
             hint={t('compileCache.credentialsHint')}
             action={canWrite ? (
               <ButtonV2 type="button" size="sm" disabled={!status?.enabled} onClick={openCreateDialog}>
-                <Icon name="add" size="sm" />
+                <Plus className="icon icon-sm" aria-hidden="true" />
                 {t('compileCache.createCredential')}
               </ButtonV2>
             ) : undefined}
@@ -414,7 +415,7 @@ export default function CompileCache() {
               )}
               {credentials.length === 0 ? (
                 <EmptyState
-                  icon="key"
+                  icon={KeyRound}
                   title={t('compileCache.noCredentials')}
                   hint={t('compileCache.noCredentialsHint')}
                   minHeight={180}
@@ -529,7 +530,7 @@ export default function CompileCache() {
                       aria-label={t(item.client === 'ccache' ? 'compileCache.copyCCacheConfig' : 'compileCache.copySCCacheConfig')}
                       onClick={() => { void copyValue(item.value, target) }}
                     >
-                      <Icon name={copiedValue === target ? 'check' : 'content_copy'} size="sm" />
+                      <Icon icon={copiedValue === target ? Check : Copy} size="sm" />
                       {t(copiedValue === target
                         ? 'compileCache.copied'
                         : item.client === 'ccache'

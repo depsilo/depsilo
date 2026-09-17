@@ -1,3 +1,4 @@
+import { ArrowRight, Check, CircleCheck, LoaderCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -8,7 +9,6 @@ import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getAdminRouteHref } from '@/admin/routes'
 import Button from '@/components/app/button'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
-import Icon from '@/components/app/icon'
 import QueryErrorState from '@/components/app/error-state'
 import { adminApi } from '@/lib/api'
 import type { OnboardingEvent, OnboardingStatus, OnboardingStatusResponse } from '@/lib/adminApi.types'
@@ -295,7 +295,7 @@ export default function ConnectProject() {
           return (
             <li key={step} aria-current={current ? 'step' : undefined} className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
               <span className={`grid size-6 shrink-0 place-items-center rounded-full font-mono text-[11px] ${complete || current ? 'bg-accent text-primary' : 'bg-muted'}`}>
-                {complete ? <Icon name="check" size="sm" /> : index + 1}
+                {complete ? <Check className="icon icon-sm" aria-hidden="true" /> : index + 1}
               </span>
               <span className="truncate">{t(`onboarding.steps.${step}`)}</span>
             </li>
@@ -370,19 +370,19 @@ export default function ConnectProject() {
         <div className="rounded-[8px] border border-input bg-card p-4 sm:p-5">
           {!session ? (
             <div role="status" aria-busy="true" className="flex items-center gap-3 text-[13px] text-muted-foreground">
-              <Icon name="progress_activity" size="sm" className="animate-spin motion-reduce:animate-none" />
+              <LoaderCircle className="animate-spin motion-reduce:animate-none icon icon-sm" aria-hidden="true" />
               {t('onboarding.preparing')}
             </div>
           ) : firstCacheHit ? (
             <div>
-              <div className="flex items-center gap-2 text-success"><Icon name="check_circle" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstCacheHit')}</h2></div>
+              <div className="flex items-center gap-2 text-success"><CircleCheck className="icon" aria-hidden="true" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstCacheHit')}</h2></div>
               <p className="mt-2 font-mono text-[13px] text-foreground">{eventLabel(firstCacheHit)}</p>
               <p className="mt-1 text-[13px] text-muted-foreground">{t('onboarding.servedFromCache')}</p>
               <p className="mt-4 text-[13px] font-[600] text-foreground">{t('onboarding.ready')}</p>
             </div>
           ) : firstRequest ? (
             <div>
-              <div className="flex items-center gap-2 text-success"><Icon name="check_circle" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstRequest')}</h2></div>
+              <div className="flex items-center gap-2 text-success"><CircleCheck className="icon" aria-hidden="true" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstRequest')}</h2></div>
               <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[13px]">
                 <dt className="text-muted-foreground">{t('onboarding.package')}</dt><dd className="min-w-0 truncate font-mono text-foreground">{eventLabel(firstRequest)}</dd>
                 <dt className="text-muted-foreground">{t('onboarding.ecosystem')}</dt><dd className="text-foreground">{eventEcosystemLabel(firstRequest)}</dd>
@@ -414,7 +414,7 @@ export default function ConnectProject() {
       <div className="mt-5 flex justify-end">
         <Button onClick={() => { void finish() }} disabled={savingChoice}>
           {savingChoice ? t('saving') : firstCacheHit ? t('onboarding.goDashboard') : t('onboarding.continueDashboard')}
-          <Icon name="arrow_forward" size="sm" />
+          <ArrowRight className="icon icon-sm" aria-hidden="true" />
         </Button>
       </div>
     </AdminPage>

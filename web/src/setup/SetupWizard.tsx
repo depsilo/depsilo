@@ -1,3 +1,4 @@
+import { ArrowRight, Check, ChevronDown, CircleCheck, Plus, RefreshCw, SlidersHorizontal, Trash2, TriangleAlert } from 'lucide-react'
 import axios from 'axios'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -386,7 +387,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center"
         >
           <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-accent text-primary">
-            <Icon name={phase === 'ready' ? 'check_circle' : 'sync'} className={phase === 'ready' ? '' : 'animate-spin'} />
+            <Icon icon={phase === 'ready' ? CircleCheck : RefreshCw} className={phase === 'ready' ? '' : 'animate-spin'} />
           </span>
           <h1 className="text-[24px] font-[650] text-foreground">
             {phase === 'ready' ? t('setup.ready') : t('setup.restarting')}
@@ -401,7 +402,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
     return (
       <section className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
         <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-destructive/10 text-destructive">
-          <Icon name="warning" />
+          <TriangleAlert className="icon" aria-hidden="true" />
         </span>
         <h1 className="text-[24px] font-[650] text-foreground">
           {t('setup.restart_failed_title')}
@@ -415,7 +416,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           </p>
         )}
         <Button className="mt-6" type="button" onClick={() => { void monitorReconnect(reconnectURL) }}>
-          <Icon name="refresh" size="sm" />
+          <RefreshCw className="icon icon-sm" aria-hidden="true" />
           {t('setup.retry_connection')}
         </Button>
       </section>
@@ -431,7 +432,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
       >
         <summary className="stripe-focus-ring flex min-h-[52px] cursor-pointer list-none items-center gap-3 rounded-[6px] px-1 text-left [&::-webkit-details-marker]:hidden">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-muted text-muted-foreground">
-            <Icon name="tune" size="sm" />
+            <SlidersHorizontal className="icon icon-sm" aria-hidden="true" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-[600] text-foreground">{t('setup.advanced_settings')}</span>
@@ -440,7 +441,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
             </span>
           </span>
           <Icon
-            name="expand_more"
+            icon={ChevronDown}
             size="sm"
             className={`shrink-0 transition-transform duration-150 ${advancedOpen ? 'rotate-180' : ''}`}
           />
@@ -508,7 +509,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                   >
                     <EcosystemIcon type={ecosystem.key as EcosystemType} size={17} decorative />
                     <span className="min-w-0 flex-1 text-[12px] font-[500] leading-4">{ecosystem.label}</span>
-                    <Icon name={selected ? 'check' : 'add'} size="sm" />
+                    <Icon icon={selected ? Check : Plus} size="sm" />
                   </button>
                 )
               })}
@@ -547,7 +548,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                       <span className="text-[11px] text-muted-foreground">
                         {t('setup.upstreams_count_value', { count: ecosystemUpstreams.length })}
                       </span>
-                      <Icon name="expand_more" size="sm" className={`transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`} />
+                      <ChevronDown aria-hidden="true" size={18} className={`icon icon-sm transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`} />
                     </button>
                     {expanded && (
                       <div id={panelId} className="space-y-4 border-t border-border bg-muted p-3 sm:p-4">
@@ -588,7 +589,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                               })}
                               onClick={() => removeUpstream(ecosystem.key, index)}
                             >
-                              <Icon name="delete" size="sm" />
+                              <Trash2 className="icon icon-sm" aria-hidden="true" />
                             </Button>
                           </div>
                         ))}
@@ -599,7 +600,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                           disabled={submitting}
                           onClick={() => addUpstream(ecosystem.key)}
                         >
-                          <Icon name="add" size="sm" />
+                          <Plus className="icon icon-sm" aria-hidden="true" />
                           {t('setup.add_upstream')}
                         </Button>
                       </div>
@@ -716,9 +717,9 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     className="min-h-[40px] w-full shrink-0 sm:w-auto"
                   >
                     {submitting ? (
-                      <Icon name="sync" size="sm" className="animate-spin" />
+                      <RefreshCw className="animate-spin icon icon-sm" aria-hidden="true" />
                     ) : (
-                      <Icon name="arrow_forward" size="sm" />
+                      <ArrowRight className="icon icon-sm" aria-hidden="true" />
                     )}
                     {submitting ? t('setup.saving') : t('setup.save_and_start')}
                   </Button>

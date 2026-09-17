@@ -1,3 +1,4 @@
+import { Bell, Database, Info, RefreshCcw, Save, Shield, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -5,7 +6,6 @@ import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import WebhookTab from '@/admin/components/WebhookTab'
 import ButtonV2 from '@/components/app/button'
-import Icon from '@/components/app/icon'
 import InlineNotice from '@/components/app/notice'
 import InputV2 from '@/components/app/input'
 import QueryErrorState from '@/components/app/error-state'
@@ -313,7 +313,7 @@ export default function SettingsV2() {
     {
       key: 'basic',
       label: t('settings.basic'),
-      icon: <Icon name="tune" size="sm" />,
+      icon: <SlidersHorizontal className="icon icon-sm" aria-hidden="true" />,
       content: settingsForm('basic', section(t('settings.basic'), fields(<>
         <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} />
         <InputV2 label={fieldLabel('server.port')} value={String(data.configured.server.port)} readOnly hint={fieldHint('server.port')} />
@@ -334,7 +334,7 @@ export default function SettingsV2() {
     {
       key: 'cache',
       label: t('settings.cachePolicy'),
-      icon: <Icon name="cached" size="sm" />,
+      icon: <RefreshCcw className="icon icon-sm" aria-hidden="true" />,
       content: settingsForm('cache', section(t('settings.cachePolicy'), fields(<>
         <InputV2 id="setting-cache-max-size" label={fieldLabel('cache.max_size_gb')} type="number" min={1} step={1} required value={draft.maxSizeGB} onChange={event => updateDraft('maxSizeGB', event.target.value)} disabled={isDisabled('cache.max_size_gb')} hint={fieldHint('cache.max_size_gb')} error={fieldError('maxSizeGB')} />
         <InputV2 id="setting-cache-lru-threshold" label={fieldLabel('cache.lru_threshold')} type="number" min={1} max={100} step={1} required value={draft.lruThreshold} onChange={event => updateDraft('lruThreshold', event.target.value)} disabled={isDisabled('cache.lru_threshold')} hint={fieldHint('cache.lru_threshold')} error={fieldError('lruThreshold')} />
@@ -345,7 +345,7 @@ export default function SettingsV2() {
     {
       key: 'storage',
       label: t('settings.storageBackend'),
-      icon: <Icon name="database" size="sm" />,
+      icon: <Database className="icon icon-sm" aria-hidden="true" />,
       content: settingsForm('storage', section(t('settings.storageBackend'), fields(<>
         <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} />
         <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} />
@@ -355,7 +355,7 @@ export default function SettingsV2() {
     {
       key: 'auth',
       label: t('settings.authSecurity'),
-      icon: <Icon name="shield" size="sm" />,
+      icon: <Shield className="icon icon-sm" aria-hidden="true" />,
       content: settingsForm('auth', section(t('settings.authSecurity'), fields(
         <InputV2 id="setting-auth-token-ttl" label={fieldLabel('auth.token_ttl')} mono required value={draft.tokenTTL} onChange={event => updateDraft('tokenTTL', event.target.value)} disabled={isDisabled('auth.token_ttl')} hint={fieldHint('auth.token_ttl', t('settings.durationHint'))} error={fieldError('tokenTTL')} />
       ))),
@@ -363,7 +363,7 @@ export default function SettingsV2() {
     {
       key: 'webhooks',
       label: t('settings.webhooks'),
-      icon: <Icon name="notifications" size="sm" />,
+      icon: <Bell className="icon icon-sm" aria-hidden="true" />,
       content: <div className="min-w-0 pt-5 md:pt-0"><WebhookTab /></div>,
     },
   ]
@@ -375,7 +375,7 @@ export default function SettingsV2() {
       description={t('settings.subtitle')}
       actions={configurationTab ? (
         <ButtonV2 type="submit" form={`settings-form-${activeTab}`} size="sm" aria-busy={updateMutation.isPending || undefined} disabled={globallyReadOnly || updateMutation.isPending}>
-          <Icon name="save" size="sm" />
+          <Save className="icon icon-sm" aria-hidden="true" />
           {updateMutation.isPending ? t('saving') : t('save')}
         </ButtonV2>
       ) : undefined}
@@ -411,7 +411,7 @@ export default function SettingsV2() {
       )}
       {configurationTab && (
         <div className="flex min-w-0 items-start gap-2 border-b border-border pb-3 text-[12px] text-muted-foreground">
-          <Icon name="info" size="sm" className="mt-0.5 shrink-0" />
+          <Info className="mt-0.5 shrink-0 icon icon-sm" aria-hidden="true" />
           <span>{t('settings.hotReloadNote')}</span>
         </div>
       )}

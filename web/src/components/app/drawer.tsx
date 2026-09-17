@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import type { ReactNode, RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -44,7 +45,7 @@ export default function Drawer({
         {children}
         <SheetClose
           render={
-            <IconButton icon="close" label={closeLabel} className="absolute top-3 right-3" />
+            <IconButton icon={X} label={closeLabel} className="absolute top-3 right-3" />
           }
         />
       </SheetContent>

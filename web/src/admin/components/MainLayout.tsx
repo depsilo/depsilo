@@ -4,6 +4,7 @@
  * rail, a 48px topbar) and rebuilds it on semantic tokens, so Admin and Portal
  * share one palette and differ only by layout.
  */
+import { ChevronRight, LogOut, Menu, Settings } from 'lucide-react'
 import { type RefObject, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
@@ -11,7 +12,8 @@ import { useTranslation } from 'react-i18next'
 
 import Button from '@/components/app/button'
 import Drawer from '@/components/app/drawer'
-import Icon, { type IconName } from '@/components/app/icon'
+import Icon from '@/components/app/icon'
+import type { LucideIcon } from 'lucide-react'
 import LanguageToggle from '@/components/app/language-toggle'
 import Logo from '@/components/app/logo'
 import Notice from '@/components/app/notice'
@@ -28,7 +30,7 @@ const RAIL_WIDTH = '232px'
 interface NavSection {
   id: string
   label: string
-  icon: IconName
+  icon: LucideIcon
   href: string
   active: boolean
   current: boolean
@@ -124,7 +126,7 @@ function SidebarContent({
                       section.active ? 'bg-background text-foreground' : 'text-muted-foreground',
                     )}
                   >
-                    <Icon name={section.icon} size="sm" />
+                    <Icon icon={section.icon} size="sm" />
                   </span>
                   <span className="min-w-0 flex-1 truncate">{section.label}</span>
                 </Link>
@@ -144,7 +146,7 @@ function SidebarContent({
           aria-label={t('nav.instanceManagement')}
           className="mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-[13px] font-medium text-muted-foreground no-underline transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
-          <Icon name="settings" size="sm" />
+          <Settings className="icon icon-sm" aria-hidden="true" />
           <span>{t('nav.instanceManagement')}</span>
         </Link>
         <div className="group flex cursor-default items-center gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-sidebar-accent">
@@ -165,7 +167,7 @@ function SidebarContent({
             className="inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm bg-transparent p-1.5 text-muted-foreground opacity-100 transition-[opacity,color] hover:text-foreground focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
             aria-label={t('nav.logout')}
           >
-            <Icon name="logout" size="sm" />
+            <LogOut className="icon icon-sm" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -349,7 +351,7 @@ export default function AdminShellLayout() {
             aria-expanded={mobileNavOpen}
             aria-controls="admin-mobile-navigation"
           >
-            <Icon name="menu" size="sm" />
+            <Menu className="icon icon-sm" aria-hidden="true" />
           </button>
           <div data-admin-breadcrumb className="min-w-0 flex-1">
             <div
@@ -367,7 +369,7 @@ export default function AdminShellLayout() {
                 <>
                   {activeSection && (
                     <span aria-hidden="true" className="text-muted-foreground">
-                      <Icon name="chevron_right" size="sm" />
+                      <ChevronRight className="icon icon-sm" aria-hidden="true" />
                     </span>
                   )}
                   <span className="truncate text-foreground">{pageTitle}</span>

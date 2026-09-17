@@ -1,3 +1,4 @@
+import { Download, ReceiptText, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -7,7 +8,6 @@ import { formatBytes, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/app/button'
 import BadgeV2 from '@/components/app/badge'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
-import Icon from '@/components/app/icon'
 import EmptyState from '@/components/app/empty-state'
 import QueryErrorState from '@/components/app/error-state'
 import SelectV2 from '@/components/app/select'
@@ -197,7 +197,7 @@ export default function AuditLogsV2() {
           disabled={exportMutation.isPending}
           onClick={() => exportMutation.mutate()}
         >
-          <Icon name="download" size="sm" />
+          <Download className="icon icon-sm" aria-hidden="true" />
           {exportMutation.isPending ? t('audit.exporting') : t('audit.exportCsv')}
         </ButtonV2>
       )}
@@ -209,7 +209,7 @@ export default function AuditLogsV2() {
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+          <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('audit.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
@@ -295,7 +295,7 @@ export default function AuditLogsV2() {
         <div className="space-y-3">
           {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
-            <EmptyState icon="receipt_long" title={t('audit.noLogs')} hint={t('audit.noLogsHint')} minHeight={240} />
+            <EmptyState icon={ReceiptText} title={t('audit.noLogs')} hint={t('audit.noLogsHint')} minHeight={240} />
           ) : (
             <TableViewport label={t('audit.table')} minWidth={1180}>
           <table className="w-full text-[12px]">

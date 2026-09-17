@@ -1,5 +1,5 @@
+import { Languages } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import Icon from '@/components/app/icon'
 
 /**
  * Portal header segments share one geometry: a 40px target that collapses to
@@ -51,7 +51,7 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
     >
       {portal ? (
         <>
-          <Icon name="language" size="sm" className="max-[760px]:hidden" />
+          <Languages className="max-[760px]:hidden icon icon-sm" aria-hidden="true" />
           <span className="max-[760px]:hidden">{isZh ? '中文' : 'EN'}</span>
           <span className="hidden max-[760px]:inline" aria-hidden="true">
             {isZh ? '中' : 'EN'}

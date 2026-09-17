@@ -1,3 +1,4 @@
+import { Check, Copy, KeyRound, Pencil, User, UserPlus, UserRoundX, Users } from 'lucide-react'
 import { useState } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -9,7 +10,6 @@ import ButtonV2 from '@/components/app/button'
 import BadgeV2 from '@/components/app/badge'
 import InputV2 from '@/components/app/input'
 import SelectV2 from '@/components/app/select'
-import Icon from '@/components/app/icon'
 import DataTableV2 from '@/components/app/data-table'
 import ModalV2 from '@/components/app/modal'
 import SectionHeader from '@/components/app/section-header'
@@ -157,7 +157,7 @@ export default function UsersV2() {
     { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'error'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px] text-muted-foreground">{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px] text-muted-foreground">{formatTime(v as string)}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? 'person_off' : 'person'} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }} />}</div>) : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon={Pencil} label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? UserRoundX : User} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }} />}</div>) : null },
   ]
 
   const tokenColumns = [
@@ -175,7 +175,7 @@ export default function UsersV2() {
       <section>
         <SectionHeader
           title={t('users.title')}
-          action={canWrite ? <ButtonV2 onClick={openCreateUser} size="sm"><Icon name="person_add" size="sm" />{t('users.addUser')}</ButtonV2> : undefined}
+          action={canWrite ? <ButtonV2 onClick={openCreateUser} size="sm"><UserPlus className="icon icon-sm" aria-hidden="true" />{t('users.addUser')}</ButtonV2> : undefined}
         />
         {usersQuery.isPending ? (
           <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
@@ -215,7 +215,7 @@ export default function UsersV2() {
               </InlineNotice>
             )}
             {users.length === 0 ? (
-              <EmptyState icon="group" title={t('users.noUsers')} minHeight={180} />
+              <EmptyState icon={Users} title={t('users.noUsers')} minHeight={180} />
             ) : (
               <DataTableV2
                 columns={userColumns}
@@ -233,7 +233,7 @@ export default function UsersV2() {
       <section>
         <SectionHeader
           title={t('users.apiTokensTitle')}
-          action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={() => { createTokenMutation.reset(); setTokenDialogOpen(true) }}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2> : undefined}
+          action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={() => { createTokenMutation.reset(); setTokenDialogOpen(true) }}><KeyRound className="icon icon-sm" aria-hidden="true" />{t('users.generateToken')}</ButtonV2> : undefined}
         />
         {tokensQuery.isPending ? (
           <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
@@ -242,7 +242,7 @@ export default function UsersV2() {
         ) : (
           <div className="space-y-3">
           {tokensData && tokensQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void tokensQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
-          {tokens.length === 0 ? <EmptyState icon="key" title={t('users.noTokens')} minHeight={180} /> : <DataTableV2
+          {tokens.length === 0 ? <EmptyState icon={KeyRound} title={t('users.noTokens')} minHeight={180} /> : <DataTableV2
             columns={tokenColumns}
             data={tokens.map((token) => ({ ...token }))}
             rowKey={(row) => row.id as number}
@@ -283,7 +283,7 @@ export default function UsersV2() {
         <p className="text-[14px] mb-3 text-muted-foreground">{t('users.tokenCopyWarning')}</p>
         <div className="flex items-center gap-2 rounded-[4px] p-3" style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
           <code className="flex-1 font-mono text-[13px] break-all text-foreground">{createdToken}</code>
-          <IconButton icon={copied ? 'check' : 'content_copy'} label={t('users.copyToken')} onClick={copyToken} />
+          <IconButton icon={copied ? Check : Copy} label={t('users.copyToken')} onClick={copyToken} />
         </div>
         <p className="text-[12px] mt-2 text-destructive">{t('users.tokenSaveWarning')}</p>
         <div className="flex justify-end mt-4"><ButtonV2 onClick={() => setTokenResultOpen(false)}>{t('confirm')}</ButtonV2></div>

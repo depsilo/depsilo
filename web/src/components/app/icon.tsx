@@ -1,200 +1,33 @@
-import type { CSSProperties } from 'react'
-import {
-  ArrowLeft,
-  ArrowRight,
-  Award,
-  BadgeCheck,
-  Ban,
-  BarChart3,
-  Bell,
-  BellOff,
-  Bug,
-  ChartNoAxesCombined,
-  ChartPie,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  CircleCheck,
-  CircleHelp,
-  CircleX,
-  CloudOff,
-  CloudSync,
-  Copy,
-  Cpu,
-  Database,
-  Download,
-  Eye,
-  FlaskConical,
-  FolderCog,
-  Gauge,
-  HardDrive,
-  History,
-  Inbox,
-  Info,
-  KeyRound,
-  Languages,
-  LayoutDashboard,
-  LayoutGrid,
-  Link2,
-  Lightbulb,
-  ListChecks,
-  LoaderCircle,
-  LogOut,
-  Menu,
-  Monitor,
-  Moon,
-  Network,
-  Package,
-  Package2,
-  Pencil,
-  Plus,
-  Radar,
-  ReceiptText,
-  RefreshCcw,
-  RefreshCw,
-  Save,
-  Search,
-  Server,
-  Settings,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldQuestion,
-  ShieldUser,
-  ShieldX,
-  SlidersHorizontal,
-  Star,
-  Sun,
-  Trash2,
-  TriangleAlert,
-  Undo2,
-  Upload,
-  User,
-  UserPlus,
-  UserRoundX,
-  Users,
-  X,
-  type LucideIcon,
-} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+
+import { cn } from '@/lib/utils'
 
 /**
- * Keep the existing Material-style string API at call sites while rendering
- * tree-shakeable inline SVGs. Unknown names intentionally get a visible,
- * fixed-size fallback instead of leaking the icon name as text.
+ * Renders a Lucide icon in the product's icon box.
+ *
+ * The icon *family* is Lucide everywhere: call sites import the glyph they
+ * need from `lucide-react` directly. This helper exists only for the places
+ * where the glyph is chosen at runtime — a tone map, a prop, or a ternary —
+ * because a JSX element name cannot be an expression. It owns the shared
+ * inline box (fixed size, no baseline shift, never shrinks in a flex row) so
+ * those dynamic sites cannot drift from the static ones.
  */
-const ICONS = {
-  add: Plus,
-  admin_panel_settings: ShieldUser,
-  arrow_back: ArrowLeft,
-  arrow_forward: ArrowRight,
-  bar_chart: BarChart3,
-  block: Ban,
-  bug_report: Bug,
-  cached: RefreshCcw,
-  cancel: CircleX,
-  check: Check,
-  check_circle: CircleCheck,
-  chevron_left: ChevronLeft,
-  chevron_right: ChevronRight,
-  close: X,
-  cloud_off: CloudOff,
-  cloud_sync: CloudSync,
-  computer: Monitor,
-  content_copy: Copy,
-  dark_mode: Moon,
-  dashboard: LayoutDashboard,
-  database: Database,
-  delete: Trash2,
-  delete_sweep: Trash2,
-  dns: Server,
-  donut_large: ChartPie,
-  download: Download,
-  edit: Pencil,
-  expand_less: ChevronUp,
-  expand_more: ChevronDown,
-  folder_managed: FolderCog,
-  gpp_bad: ShieldX,
-  gpp_maybe: ShieldQuestion,
-  grid_view: LayoutGrid,
-  group: Users,
-  history: History,
-  help: CircleHelp,
-  hub: Network,
-  inbox: Inbox,
-  info: Info,
-  inventory_2: Package,
-  key: KeyRound,
-  language: Languages,
-  light_mode: Sun,
-  lightbulb: Lightbulb,
-  link: Link2,
-  logout: LogOut,
-  menu: Menu,
-  memory: Cpu,
-  monitoring: ChartNoAxesCombined,
-  notifications: Bell,
-  notifications_off: BellOff,
-  package_2: Package2,
-  person: User,
-  person_add: UserPlus,
-  person_off: UserRoundX,
-  policy: ShieldCheck,
-  progress_activity: LoaderCircle,
-  radar: Radar,
-  receipt_long: ReceiptText,
-  refresh: RefreshCw,
-  rule: ListChecks,
-  save: Save,
-  science: FlaskConical,
-  search: Search,
-  security: ShieldCheck,
-  settings: Settings,
-  shield: Shield,
-  shield_lock: ShieldAlert,
-  show_chart: ChartNoAxesCombined,
-  speed: Gauge,
-  star: Star,
-  storage: HardDrive,
-  sync: RefreshCw,
-  task_alt: CircleCheck,
-  tune: SlidersHorizontal,
-  undo: Undo2,
-  update: History,
-  upload_file: Upload,
-  verified: BadgeCheck,
-  verified_user: ShieldUser,
-  visibility: Eye,
-  warning: TriangleAlert,
-  workspace_premium: Award,
-} as const satisfies Readonly<Record<string, LucideIcon>>
-
-export type IconName = keyof typeof ICONS
-
-interface IconProps {
-  name: IconName
-  className?: string
+export default function Icon({
+  icon: Glyph,
+  size = 'md',
+  className,
+}: {
+  icon: LucideIcon
   size?: 'sm' | 'md' | 'lg'
-  style?: CSSProperties
-}
-
-export default function Icon({ name, className = '', size = 'md', style }: IconProps) {
-  // Keep a visible fallback for untyped JavaScript and stale persisted values.
-  // TypeScript call sites are constrained to IconName, so this branch should
-  // only be reached at an external/runtime boundary.
-  const Glyph: LucideIcon = ICONS[name] ?? CircleHelp
-  const usesFallback = !ICONS[name]
-  const sizeClass = size === 'sm' ? 'icon-sm' : size === 'lg' ? 'icon-lg' : ''
-
+  className?: string
+}) {
   return (
     <Glyph
       aria-hidden="true"
       focusable="false"
-      data-icon={name}
-      data-icon-fallback={usesFallback || undefined}
-      className={`icon ${sizeClass} ${className}`}
-      style={style}
+      className={cn('icon', size === 'sm' && 'icon-sm', size === 'lg' && 'icon-lg', className)}
     />
   )
 }
+
+export type { LucideIcon }

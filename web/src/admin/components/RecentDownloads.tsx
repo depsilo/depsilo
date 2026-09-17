@@ -1,3 +1,4 @@
+import { Download, Package2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
@@ -6,7 +7,6 @@ import { Link } from 'react-router'
 import BadgeV2 from '@/components/app/badge'
 import ButtonV2 from '@/components/app/button'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
-import Icon from '@/components/app/icon'
 import { getAdminRouteHref } from '@/admin/routes'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
@@ -169,7 +169,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
         </div>
       ) : items.length === 0 ? (
         <div className="flex min-h-24 items-center gap-2 px-4 py-3 text-[12px] text-muted-foreground">
-          <Icon name="download" size="sm" aria-hidden />
+          <Download className="icon icon-sm" aria-hidden />
           <span>{t('recentDownloads.empty')}</span>
         </div>
       ) : (
@@ -208,7 +208,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
                     {isAdminEcosystem(item.ecosystem) ? (
                       <EcosystemIcon type={item.ecosystem} size={13} decorative />
                     ) : (
-                      <Icon name="package_2" size="sm" aria-hidden />
+                      <Package2 className="icon icon-sm" aria-hidden />
                     )}
                     <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-[550] text-foreground" title={fullPackageName}>
                       {packageName}

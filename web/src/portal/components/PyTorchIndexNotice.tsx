@@ -1,7 +1,7 @@
+import { Check, ChevronDown, Package } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Badge from '@/components/app/badge'
-import Icon from '@/components/app/icon'
 import Input from '@/components/app/input'
 import CodeBlock from '@/portal/components/CodeBlock'
 
@@ -57,7 +57,7 @@ function ChannelButton({
         </span>
         {active && (
           <span aria-hidden="true" className="inline-flex shrink-0">
-            <Icon name="check" size="sm" />
+            <Check className="icon icon-sm" aria-hidden="true" />
           </span>
         )}
       </span>
@@ -109,7 +109,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
             aria-hidden="true"
             className="flex size-8 shrink-0 items-center justify-center rounded-[7px] bg-accent text-primary"
           >
-            <Icon name="inventory_2" size="sm" />
+            <Package className="icon icon-sm" aria-hidden="true" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
@@ -130,7 +130,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
               {t('quickstart.pytorchIndexShowCommand')}
             </span>
             <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
-              <Icon name="expand_more" size="sm" />
+              <ChevronDown className="icon icon-sm" aria-hidden="true" />
             </span>
           </span>
         </summary>

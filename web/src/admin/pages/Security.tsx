@@ -1,3 +1,4 @@
+import { BadgeCheck, CircleCheck, Radar, Search, Upload, X } from 'lucide-react'
 import { useEffect, useState, useRef, type ComponentProps } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -9,7 +10,6 @@ import ButtonV2 from '@/components/app/button'
 import InputV2 from '@/components/app/input'
 import SelectV2 from '@/components/app/select'
 import SwitchV2 from '@/components/app/switch'
-import Icon from '@/components/app/icon'
 import BadgeV2 from '@/components/app/badge'
 import Metric from '@/components/app/metric'
 import SectionHeader from '@/components/app/section-header'
@@ -184,7 +184,7 @@ function OverviewTab() {
               disabled={scanInProgress}
               size="sm"
             >
-              <Icon name="radar" size="sm" />
+              <Radar className="icon icon-sm" aria-hidden="true" />
               {scanInProgress ? t('security.scanning') : t('security.scanNow')}
             </ButtonV2>
           : undefined}
@@ -232,7 +232,7 @@ function OverviewTab() {
             })}
           </div>
         ) : (
-          <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={140} />
+          <EmptyState icon={BadgeCheck} title={t('security.noVulnerabilities')} minHeight={140} />
         )}
       </section>
     </div>
@@ -353,7 +353,7 @@ function VulnerabilitiesTab() {
           />
         </div>
         <ButtonV2 type="submit" size="sm">
-          <Icon name="search" size="sm" />
+          <Search className="icon icon-sm" aria-hidden="true" />
           {t('search')}
         </ButtonV2>
       </form>
@@ -366,7 +366,7 @@ function VulnerabilitiesTab() {
       ) : (
         <div className="space-y-3">
         {data && query.isRefetchError && <StaleDataNotice refreshing={query.isFetching} onRefresh={() => query.refetch()} />}
-        {items.length === 0 ? <EmptyState icon="verified" title={t('security.noVulnerabilities')} minHeight={200} /> : <DataTableV2
+        {items.length === 0 ? <EmptyState icon={BadgeCheck} title={t('security.noVulnerabilities')} minHeight={200} /> : <DataTableV2
           columns={columns}
           data={items.map((item) => ({ ...item }))}
           rowKey={(row) => row.id as number}
@@ -450,7 +450,7 @@ function SuggestionsTab() {
           </Link>
         </div>
       </InlineNotice>}
-      {items.length === 0 ? <EmptyState icon="verified" title={t('security.noSuggestions')} minHeight={240} /> : <>
+      {items.length === 0 ? <EmptyState icon={BadgeCheck} title={t('security.noSuggestions')} minHeight={240} /> : <>
       <div>
         {items.map((item: SecurityVulnerability, idx: number) => {
           const severityVariant = SEVERITY_BADGE_MAP[item.severity] || 'default'
@@ -488,7 +488,7 @@ function SuggestionsTab() {
                   disabled={isActing}
                   onClick={() => openDismiss(item)}
                 >
-                  <Icon name="close" size="sm" />
+                  <X className="icon icon-sm" aria-hidden="true" />
                   {t('security.dismiss')}
                 </ButtonV2>
               </div>}
@@ -841,7 +841,7 @@ function PoliciesTab() {
         <div>
           {visibleEcosystems.length === 0 ? (
             <EmptyState
-              icon="task_alt"
+              icon={CircleCheck}
               title={t('security.noChangedPolicies')}
               hint={t('security.noChangedPoliciesHint')}
               minHeight={160}
@@ -982,7 +982,7 @@ function PoliciesTab() {
             onClick={() => fileInputRef.current?.click()}
             disabled={importMutation.isPending}
           >
-            <Icon name="upload_file" size="lg" />
+            <Upload className="icon icon-lg" aria-hidden="true" />
             <span className="mt-2 text-[13px]">
               {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
             </span>

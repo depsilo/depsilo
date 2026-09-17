@@ -1,3 +1,4 @@
+import { BadgeCheck, Plus, RefreshCw, ShieldCheck, ShieldUser, ShieldX, Undo2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -7,7 +8,6 @@ import { formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/app/button'
 import BadgeV2 from '@/components/app/badge'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
-import Icon from '@/components/app/icon'
 import EmptyState from '@/components/app/empty-state'
 import InlineNotice from '@/components/app/notice'
 import ModalV2 from '@/components/app/modal'
@@ -292,7 +292,7 @@ function EventsTab(props: {
         <div className="space-y-3">
         {Boolean(data) && props.eventsQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void props.eventsQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
         {items.length === 0 ? <EmptyState
-          icon="policy"
+          icon={ShieldCheck}
           title={t('quarantine.events.empty_title')}
           hint={t('quarantine.events.empty_hint')}
         /> : (
@@ -393,7 +393,7 @@ function ApprovalsTab(props: {
     {Boolean(data) && props.approvalsQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void props.approvalsQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
     {items.length === 0 ? (
       <EmptyState
-        icon="verified"
+        icon={BadgeCheck}
         title={t('quarantine.approvals.empty_title')}
         hint={t('quarantine.approvals.empty_hint')}
       />
@@ -426,7 +426,7 @@ function ApprovalsTab(props: {
               variant="danger"
               onClick={() => props.onRevoke(row)}
             >
-              <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
+              <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
             </ButtonV2>
           )}
         </li>
@@ -465,7 +465,7 @@ function ApprovalsTab(props: {
               <Td><span className="text-[12px] text-muted-foreground">{row.reason}</span></Td>
               <Td>
                 {props.canWrite && <ButtonV2 size="sm" variant="danger" onClick={() => props.onRevoke(row)}>
-                  <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
+                  <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
                 </ButtonV2>}
               </Td>
             </tr>
@@ -560,7 +560,7 @@ function BlocklistTab() {
           {statusQ.data && statusQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void statusQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
           {st && !st.enabled ? (
             <EmptyState
-              icon="gpp_bad"
+              icon={ShieldX}
               title={t('quarantine.blocklist.disabled_title')}
               hint={t('quarantine.blocklist.disabled_hint')}
             />
@@ -604,16 +604,16 @@ function BlocklistTab() {
         )}
         {canWrite && <div className="grid w-full grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:ml-auto sm:flex sm:w-auto">
           <ButtonV2 className="min-h-[40px] sm:min-h-9" variant="secondary" onClick={() => { createM.reset(); setCreateOpen(true) }}>
-            <Icon name="add" size="sm" /> {t('quarantine.blocklist.add_override')}
+            <Plus className="icon icon-sm" aria-hidden="true" /> {t('quarantine.blocklist.add_override')}
           </ButtonV2>
           <ButtonV2 className="min-h-[40px] sm:min-h-9" onClick={() => syncM.mutate()} aria-busy={syncM.isPending || undefined} disabled={syncM.isPending || !!st?.running}>
-            <Icon name="sync" size="sm" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
+            <RefreshCw className="icon icon-sm" aria-hidden="true" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
           </ButtonV2>
         </div>}
         {syncM.isError && <div className="basis-full"><InlineNotice tone="danger">{getApiError(syncM.error).message}</InlineNotice></div>}
       </div>
       </>
-          ) : <EmptyState icon="gpp_bad" title={t('noData')} />}
+          ) : <EmptyState icon={ShieldX} title={t('noData')} />}
         </div>
       )}
 
@@ -632,7 +632,7 @@ function BlocklistTab() {
           {overridesQ.data && overridesQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void overridesQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
           {overrides.length === 0 ? (
           <EmptyState
-            icon="verified_user"
+            icon={ShieldUser}
             title={t('quarantine.blocklist.no_overrides_title')}
             hint={t('quarantine.blocklist.no_overrides_hint')}
           />
@@ -678,7 +678,7 @@ function BlocklistTab() {
                       variant="danger"
                       onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}
                     >
-                      <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
+                      <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
                     </ButtonV2>
                   )}
                 </li>
@@ -730,7 +730,7 @@ function BlocklistTab() {
                       <Td>
                         {canWrite && !expired && (
                           <ButtonV2 size="sm" variant="danger" onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}>
-                            <Icon name="undo" size="sm" /> {t('quarantine.revoke.cta')}
+                            <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
                           </ButtonV2>
                         )}
                       </Td>

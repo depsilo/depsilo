@@ -1,8 +1,8 @@
+import { ChevronDown, Link2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import CodeBlock from '@/portal/components/CodeBlock'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
-import Icon from '@/components/app/icon'
 import { LANGUAGES, type ManagerConfig } from '@/lib/ecosystemData'
 import { renderManagerTemplate, resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import PyTorchIndexNotice from '@/portal/components/PyTorchIndexNotice'
@@ -181,7 +181,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
       <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-[13px] font-[540] text-muted-foreground">
         {t('quickstart.whereReadsFrom')}
         <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
-          <Icon name="expand_more" size="sm" />
+          <ChevronDown className="icon icon-sm" aria-hidden="true" />
         </span>
       </summary>
       <div style={{ borderTop: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -289,7 +289,7 @@ export default function ConfigurePane({
           className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-[6px] px-2.5 py-1.5 min-[640px]:flex bg-muted"
           title={resolvedEndpoint}
         >
-          <Icon name="link" size="sm" className="shrink-0 text-muted-foreground" />
+          <Link2 className="shrink-0 text-muted-foreground icon icon-sm" aria-hidden="true" />
           <span className="sr-only">{t('quickstart.endpointLabel')}</span>
           <span className="truncate font-mono text-[11px] text-muted-foreground">
             {resolvedEndpoint}
@@ -346,7 +346,7 @@ export default function ConfigurePane({
                   </span>
                 </span>
                 <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
-                  <Icon name="expand_more" size="sm" />
+                  <ChevronDown className="icon icon-sm" aria-hidden="true" />
                 </span>
               </summary>
               <div className="flex flex-col gap-3 pb-2 pt-3">

@@ -9,6 +9,7 @@
 // /api/v1/stats `week` — a day-scoped rate resets at midnight and
 // swings wildly at low sample counts. Request counts live in the admin
 // dashboard, not here.
+import { Search, Server } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -442,7 +443,7 @@ export default function MonitorPage() {
             )}
             {upstreamItems.length === 0 ? (
               <EmptyState
-                icon="dns"
+                icon={Server}
                 title={t('monitor.noUpstreams')}
                 hint={t('monitor.noUpstreamsHint')}
                 action={(
@@ -461,7 +462,7 @@ export default function MonitorPage() {
               />
             ) : q !== '' && visibleItems.length === 0 ? (
               <EmptyState
-                icon="search"
+                icon={Search}
                 title={t('monitor.noMatch', { q: summarizedQuery })}
                 hint={t('monitor.noMatchHint')}
               />

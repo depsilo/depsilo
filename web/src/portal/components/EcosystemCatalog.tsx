@@ -1,7 +1,7 @@
+import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
-import Icon from '@/components/app/icon'
 import Input from '@/components/app/input'
 import { LANGUAGES, type Language, type LanguageGroup } from '@/lib/ecosystemData'
 
@@ -215,11 +215,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
       </h3>
 
       <div className="relative mt-3" role="search">
-        <Icon
-          name="search"
-          size="sm"
-          className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground"
-        />
+        <Search className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-muted-foreground icon icon-sm" aria-hidden="true" />
         <Input
           type="search"
           value={query}

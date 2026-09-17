@@ -1,9 +1,11 @@
+import { ChevronRight, CircleCheck, HardDrive, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import { getAdminRouteHref } from '@/admin/routes'
 import ButtonV2 from '@/components/app/button'
-import Icon, { type IconName } from '@/components/app/icon'
+import Icon from '@/components/app/icon'
+import type { LucideIcon } from 'lucide-react'
 import QueryErrorState from '@/components/app/error-state'
 import type { DashboardUpstream } from '@/lib/adminApi.types'
 import { upstreamStatus } from '@/lib/upstreamStatus'
@@ -19,7 +21,7 @@ interface DashboardAttentionProps {
 }
 
 interface AttentionItemProps {
-  icon: IconName
+  icon: LucideIcon
   title: string
   detail: string
   tone: 'danger' | 'warning'
@@ -43,7 +45,7 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px]"
           style={{ color: toneColor, background: toneFill }}
         >
-          <Icon name={icon} size="sm" />
+          <Icon icon={icon} size="sm" />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-[12px] font-[650] text-foreground">{title}</h3>
@@ -54,7 +56,7 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
           <span aria-hidden>→</span>
         </span>
         <span aria-hidden="true" className="shrink-0 text-primary sm:hidden">
-          <Icon name="chevron_right" size="sm" />
+          <ChevronRight className="icon icon-sm" aria-hidden="true" />
         </span>
       </Link>
     </li>
@@ -140,7 +142,7 @@ export default function DashboardAttention({
             <ul className="divide-y divide-border">
               {upstreams.length > 0 && (
                 <AttentionItem
-                  icon="warning"
+                  icon={TriangleAlert}
                   title={t('attention.upstreamsTitle')}
                   detail={t('dashboard.upstreamWarning', {
                     count: upstreams.length,
@@ -153,7 +155,7 @@ export default function DashboardAttention({
               )}
               {cacheNeedsAttention && (
                 <AttentionItem
-                  icon="storage"
+                  icon={HardDrive}
                   title={t('attention.cacheTitle')}
                   detail={t('dashboard.storageWarning', { percent: cacheUsagePercent.toFixed(1) })}
                   tone={cacheUsagePercent > 95 ? 'danger' : 'warning'}
@@ -168,7 +170,7 @@ export default function DashboardAttention({
                 aria-hidden
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-success/10 text-success"
               >
-                <Icon name="check_circle" size="sm" />
+                <CircleCheck className="icon icon-sm" aria-hidden="true" />
               </span>
               <div className="min-w-0">
                 <h3 className="text-[13px] font-[680] text-foreground">

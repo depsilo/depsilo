@@ -1,3 +1,4 @@
+import { CircleCheck, CloudOff, HardDrive, Shield, ShieldQuestion } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -8,7 +9,8 @@ import BadgeV2 from '@/components/app/badge'
 import ButtonV2 from '@/components/app/button'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import EmptyState from '@/components/app/empty-state'
-import Icon, { type IconName } from '@/components/app/icon'
+import Icon from '@/components/app/icon'
+import type { LucideIcon } from 'lucide-react'
 import InlineNotice from '@/components/app/notice'
 import SectionHeader from '@/components/app/section-header'
 import { adminApi } from '@/lib/api'
@@ -32,7 +34,7 @@ const ATTENTION_SUGGESTIONS_PARAMS = { page: 1, per_page: 20 } as const
 const ATTENTION_QUARANTINE_PARAMS = { limit: 100 } as const
 
 interface QueueItemProps {
-  icon: IconName
+  icon: LucideIcon
   title: string
   detail: string
   count?: number
@@ -53,7 +55,7 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
             color: tone === 'danger' ? 'var(--destructive)' : 'var(--warning)',
           }}
         >
-          <Icon name={icon} size="sm" />
+          <Icon icon={icon} size="sm" />
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -182,7 +184,7 @@ export default function Attention() {
               )}
               {!queueInitialFailure && queueIsEmpty ? (
                 <EmptyState
-                  icon="task_alt"
+                  icon={CircleCheck}
                   title={t('attention.allClearTitle')}
                   hint={t('attention.allClearHint')}
                   minHeight={180}
@@ -191,7 +193,7 @@ export default function Attention() {
                 <ul className="divide-y divide-border">
                   {unhealthyUpstreams.length > 0 && (
                     <QueueItem
-                      icon="cloud_off"
+                      icon={CloudOff}
                       title={t('attention.upstreamsTitle')}
                       detail={t('attention.upstreamsDetail', {
                         count: unhealthyUpstreams.length,
@@ -205,7 +207,7 @@ export default function Attention() {
                   )}
                   {suggestionCount > 0 && (
                     <QueueItem
-                      icon="gpp_maybe"
+                      icon={ShieldQuestion}
                       title={t('attention.securityTitle')}
                       detail={t('attention.securityDetail', { count: suggestionCount })}
                       count={suggestionCount}
@@ -216,7 +218,7 @@ export default function Attention() {
                   )}
                   {cacheNeedsAttention && (
                     <QueueItem
-                      icon="storage"
+                      icon={HardDrive}
                       title={t('attention.cacheTitle')}
                       detail={t('attention.cacheDetail', { percent: cacheUsagePercent.toFixed(1) })}
                       tone={cacheUsagePercent > 95 ? 'danger' : 'warning'}
@@ -283,7 +285,7 @@ export default function Attention() {
               )}
               {!quarantineInitialFailure && quarantineEvents.length === 0 ? (
                 <EmptyState
-                  icon="shield"
+                  icon={Shield}
                   title={t('attention.noRecentTitle')}
                   hint={t('attention.noRecentHint')}
                   minHeight={160}

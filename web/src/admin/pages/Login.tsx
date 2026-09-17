@@ -1,10 +1,10 @@
+import { ArrowLeft } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import Button from '@/components/app/button'
-import Icon from '@/components/app/icon'
 import Input from '@/components/app/input'
 import Logo from '@/components/app/logo'
 import { authApi } from '@/lib/api'
@@ -94,7 +94,7 @@ export default function Login() {
             onClick={cancelLoginForPortalNavigation}
             className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-2 text-[12px] font-[550] text-muted-foreground no-underline transition-colors duration-150 hover:bg-accent hover:text-foreground"
           >
-            <Icon name="arrow_back" size="sm" />
+            <ArrowLeft className="icon icon-sm" aria-hidden="true" />
             {t('login.backToPortal')}
           </Link>
         </div>

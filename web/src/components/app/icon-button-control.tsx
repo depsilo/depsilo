@@ -1,11 +1,13 @@
+import { LoaderCircle } from 'lucide-react'
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 
 import { Button as UiButton } from '@/components/ui/button'
-import Icon, { type IconName } from '@/components/app/icon'
+import Icon from '@/components/app/icon'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface IconButtonControlProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  icon: IconName
+  icon: LucideIcon
   label: string
   tone?: 'neutral' | 'danger'
   loading?: boolean
@@ -40,7 +42,7 @@ export default forwardRef<HTMLButtonElement, IconButtonControlProps>(function Ic
       )}
     >
       <Icon
-        name={loading ? 'progress_activity' : icon}
+        icon={loading ? LoaderCircle : icon}
         size="sm"
         className={loading ? 'animate-spin motion-reduce:animate-none' : ''}
       />

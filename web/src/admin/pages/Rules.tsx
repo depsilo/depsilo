@@ -1,3 +1,4 @@
+import { CircleCheck, CircleX, FlaskConical, ListChecks, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { AxiosResponse } from 'axios'
 import { useTranslation } from 'react-i18next'
@@ -124,9 +125,9 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
       >
         <div className="mb-2 flex items-center gap-2">
           <Icon
-            name={result.allowed ? 'check_circle' : 'cancel'}
+            icon={result.allowed ? CircleCheck : CircleX}
             size="sm"
-            style={{ color: result.allowed ? 'var(--success)' : 'var(--destructive)' }}
+            className={result.allowed ? 'text-success' : 'text-destructive'}
           />
           <span className="text-[14px] font-[400]" style={{ color: result.allowed ? 'var(--success)' : 'var(--destructive)' }}>
             {result.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}
@@ -305,7 +306,7 @@ export default function RulesV2() {
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="error">{t('rules.deny')}</BadgeV2> },
     { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px] text-muted-foreground" title={v as string}>{(v as string) || '-'}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap text-muted-foreground">{formatTime(v as string, 'relative')}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon="delete" label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => openDeleteDialog(row)} /></div>) : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon={Pencil} label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon={Trash2} label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => openDeleteDialog(row)} /></div>) : null },
   ]
 
   return (
@@ -313,8 +314,8 @@ export default function RulesV2() {
       description={t('rules.subtitle')}
       actions={(
         <>
-          <ButtonV2 variant="ghost" size="sm" onClick={() => { setTestOpen(true); setTestResult(null) }}><Icon name="science" size="sm" />{t('rules.testRule')}</ButtonV2>
-          {canWrite && <ButtonV2 onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</ButtonV2>}
+          <ButtonV2 variant="ghost" size="sm" onClick={() => { setTestOpen(true); setTestResult(null) }}><FlaskConical className="icon icon-sm" aria-hidden="true" />{t('rules.testRule')}</ButtonV2>
+          {canWrite && <ButtonV2 onClick={openCreate}><Plus className="icon icon-sm" aria-hidden="true" />{t('rules.addRule')}</ButtonV2>}
         </>
       )}
     >
@@ -326,7 +327,7 @@ export default function RulesV2() {
       ) : (
         <div className="space-y-3">
         {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
-        {items.length === 0 ? <EmptyState icon="rule" title={t('rules.noRules')} minHeight={200} /> : <DataTableV2
+        {items.length === 0 ? <EmptyState icon={ListChecks} title={t('rules.noRules')} minHeight={200} /> : <DataTableV2
           columns={columns}
           data={items.map((rule) => ({ ...rule }))}
           rowKey={(row) => row.id as number}

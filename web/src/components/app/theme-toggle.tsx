@@ -1,16 +1,18 @@
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useThemePreference, type ThemePreference } from '@/lib/theme'
-import Icon, { type IconName } from '@/components/app/icon'
+import Icon from '@/components/app/icon'
+import type { LucideIcon } from 'lucide-react'
 // The Portal header owns one segment geometry; the language control declares it.
 import { PORTAL_SEGMENT_CLASS } from '@/components/app/language-toggle'
 import IconButtonControl from '@/components/app/icon-button-control'
 
 const CYCLE: ThemePreference[] = ['system', 'light', 'dark']
 
-const ICONS: Record<ThemePreference, IconName> = {
-  light: 'light_mode',
-  dark: 'dark_mode',
-  system: 'computer',
+const ICONS: Record<ThemePreference, LucideIcon> = {
+  light: Sun,
+  dark: Moon,
+  system: Monitor,
 }
 
 interface ThemeToggleProps {
@@ -46,7 +48,7 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
         onClick={cycle}
         className={PORTAL_SEGMENT_CLASS}
       >
-        <Icon name={ICONS[theme]} size="sm" />
+        <Icon icon={ICONS[theme]} size="sm" />
         <span className="max-[760px]:hidden">{LABELS[theme]}</span>
       </button>
     )
@@ -65,7 +67,7 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
         onClick={cycle}
         className={labeledClassName}
       >
-        <Icon name={ICONS[theme]} size="sm" />
+        <Icon icon={ICONS[theme]} size="sm" />
         <span className="text-[11px] font-[600] sm:hidden">{LABELS[theme]}</span>
         <span className="hidden text-[11px] font-[600] sm:inline">
           {visibleLabel}

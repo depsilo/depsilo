@@ -1,3 +1,4 @@
+import { Download, Inbox, LayoutGrid, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -9,7 +10,6 @@ import ButtonV2 from '@/components/app/button'
 import BadgeV2 from '@/components/app/badge'
 import SelectV2 from '@/components/app/select'
 import TextareaV2 from '@/components/app/textarea'
-import Icon from '@/components/app/icon'
 import ModalV2 from '@/components/app/modal'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import SectionHeader from '@/components/app/section-header'
@@ -173,11 +173,11 @@ export default function CacheManageV2() {
       actions={canWrite ? (
         <>
           <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupState({ status: 'idle' }) }}>
-            <Icon name="download" size="sm" />
+            <Download className="icon icon-sm" aria-hidden="true" />
             {t('cache.warmup')}
           </ButtonV2>
           <ButtonV2 type="button" variant="danger" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupResult(null); setCleanupSession(value => value + 1); setCleanupOpen(true) }}>
-            <Icon name="delete_sweep" size="sm" />
+            <Trash2 className="icon icon-sm" aria-hidden="true" />
             {t('cache.cleanExpired')}
           </ButtonV2>
         </>
@@ -287,17 +287,17 @@ export default function CacheManageV2() {
                 </Treemap>
               </ResponsiveContainer>
             ) : (
-              <EmptyState icon="grid_view" title={t('noData')} minHeight={200} />
+              <EmptyState icon={LayoutGrid} title={t('noData')} minHeight={200} />
             )}
           </section>
         </div>
-          ) : <EmptyState icon="grid_view" title={t('noData')} minHeight={200} />}
+          ) : <EmptyState icon={LayoutGrid} title={t('noData')} minHeight={200} />}
         </div>
       )}
 
       <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Icon name="search" size="sm" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+          <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('cache.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
@@ -322,7 +322,7 @@ export default function CacheManageV2() {
         <div className="space-y-3">
           {data && isRefetchError && <StaleDataNotice onRefresh={() => { void refetch() }} />}
           {items.length === 0 ? (
-            <EmptyState icon="inbox" title={t('cache.noCache')} minHeight={200} />
+            <EmptyState icon={Inbox} title={t('cache.noCache')} minHeight={200} />
           ) : (
             <TableViewport label={t('cache.table')} minWidth={820}>
             <table className="w-full text-[12px]">
@@ -359,7 +359,7 @@ export default function CacheManageV2() {
                   </td>
                   <td className="py-2 px-3">
                     {canWrite && <IconButton
-                      icon="delete"
+                      icon={Trash2}
                       label={t('cache.deleteNamed', { key: row.key })}
                       tone="danger"
                       onClick={(e) => { e.stopPropagation(); deleteMutation.reset(); setDeleteTarget(row.id) }}
@@ -524,7 +524,7 @@ export default function CacheManageV2() {
                 }
               }}
             >
-              <Icon name="download" size="sm" />
+              <Download className="icon icon-sm" aria-hidden="true" />
               {warmupState.status === 'submitting' ? t('cache.warmupLoading') : t('cache.warmupStart')}
             </ButtonV2>
           </div>

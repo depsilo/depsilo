@@ -1,3 +1,4 @@
+import { Link2 } from 'lucide-react'
 import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -9,7 +10,6 @@ import NowStrip from '@/admin/components/NowStrip'
 import RecentDownloads from '@/admin/components/RecentDownloads'
 import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/components/TrendsCard'
 import Metric, { type MetricChangeIntent } from '@/components/app/metric'
-import Icon from '@/components/app/icon'
 import QueryErrorState from '@/components/app/error-state'
 import { cn } from '@/lib/utils'
 import SectionHeader from '@/components/app/section-header'
@@ -203,7 +203,7 @@ export default function DashboardV2() {
           className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[13px] font-medium no-underline pointer-coarse:min-h-10"
           style={{ color: 'var(--primary-foreground)', background: 'var(--primary)' }}
         >
-          <Icon name="link" size="sm" />
+          <Link2 className="icon icon-sm" aria-hidden="true" />
           {t('dashboard.connectClient')}
         </Link>
       )}

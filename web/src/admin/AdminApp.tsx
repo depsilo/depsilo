@@ -1,9 +1,9 @@
+import { LoaderCircle } from 'lucide-react'
 import { useEffect, useReducer, type ReactElement } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import QueryErrorState from '@/components/app/error-state'
-import Icon from '@/components/app/icon'
 import Logo from '@/components/app/logo'
 import { useTranslation } from 'react-i18next'
 import { adminApi, AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api'
@@ -77,11 +77,7 @@ function AdminAuthPending() {
           <span className="font-display text-[15px] font-[700] leading-5">Depsilo</span>
           <span className="text-[12px] leading-4 text-muted-foreground">{t('auth.verifyingSession')}</span>
         </span>
-        <Icon
-          name="progress_activity"
-          size="sm"
-          className="ml-2 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
-        />
+        <LoaderCircle className="ml-2 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none icon icon-sm" aria-hidden="true" />
       </div>
     </main>
   )

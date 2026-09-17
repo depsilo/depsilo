@@ -1,3 +1,4 @@
+import { Award, BadgeCheck, ChevronDown, ChevronUp, CircleCheck, RefreshCw, Star, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -6,7 +7,8 @@ import type { EntitlementStatus } from '@/lib/api'
 import { proAccessUrl } from '@/lib/buy'
 import ButtonV2 from '@/components/app/button'
 import InputV2 from '@/components/app/input'
-import Icon, { type IconName } from '@/components/app/icon'
+import Icon from '@/components/app/icon'
+import type { LucideIcon } from 'lucide-react'
 import ModalV2 from '@/components/app/modal'
 import InlineNotice from '@/components/app/notice'
 import QueryErrorState from '@/components/app/error-state'
@@ -25,7 +27,7 @@ function StatePanel({
   children,
 }: {
   tone: 'brand' | 'ok' | 'danger'
-  icon: IconName
+  icon: LucideIcon
   title: React.ReactNode
   description?: React.ReactNode
   children?: React.ReactNode
@@ -43,7 +45,7 @@ function StatePanel({
           className="flex items-center justify-center w-10 h-10 rounded-[8px]"
           style={{ background: t.iconBg, color: t.iconColor }}
         >
-          <Icon name={icon} size="sm" />
+          <Icon icon={icon} size="sm" />
         </span>
         <div>
           <p className="font-[500] text-[14px] text-foreground">{title}</p>
@@ -164,7 +166,7 @@ export default function License() {
       {source === 'none' && !trialUsed && (
         <StatePanel
           tone="brand"
-          icon="workspace_premium"
+          icon={Award}
           title={t('license.trial.start_button')}
           description={t('license.trial.start_explainer')}
         >
@@ -191,7 +193,7 @@ export default function License() {
       {source === 'trial' && (
         <StatePanel
           tone="ok"
-          icon="verified"
+          icon={BadgeCheck}
           title={`${t('license.status.pro')} · ${t('license.status.trial')}`}
           description={`${t('license.trial.days_left', { count: status.days_left })} · ${t('license.trial.expires_at', { date: formatDate(status.expires_at) })}`}
         >
@@ -204,7 +206,7 @@ export default function License() {
       {source === 'none' && trialUsed && (
         <StatePanel
           tone="danger"
-          icon="warning"
+          icon={TriangleAlert}
           title={t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
         >
           <ButtonV2 onClick={() => window.open(proAccessUrl())}>
@@ -216,7 +218,7 @@ export default function License() {
       {source === 'paid' && (
         <StatePanel
           tone="ok"
-          icon="verified"
+          icon={BadgeCheck}
           title={t('license.pro.activated')}
         >
           <div className="space-y-0">
@@ -243,7 +245,7 @@ export default function License() {
             disabled={revalidate.isPending}
             className="mt-4"
           >
-            <Icon name="refresh" size="sm" />
+            <RefreshCw className="icon icon-sm" aria-hidden="true" />
             {t('license.revalidate')}
           </ButtonV2>}
           {revalidate.isError && (
@@ -267,7 +269,7 @@ export default function License() {
           <span className="text-[13px] font-[600] text-foreground">
             {t('license.key.title')}
           </span>
-          <Icon className="text-muted-foreground" name={keySectionOpen ? 'expand_less' : 'expand_more'} size="sm" />
+          <Icon icon={keySectionOpen ? ChevronUp : ChevronDown} className="text-muted-foreground" size="sm" />
         </button>
 
         {keySectionOpen && (
@@ -382,7 +384,7 @@ export default function License() {
             <ul className="space-y-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <li key={i} className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                  <Icon className="text-muted-foreground" name="check_circle" size="sm" />
+                  <CircleCheck className="text-muted-foreground icon icon-sm" aria-hidden="true" />
                   {t(`license.features.free.f${i}`)}
                 </li>
               ))}
@@ -395,7 +397,7 @@ export default function License() {
             <ul className="space-y-2">
               {[1, 2].map((i) => (
                 <li key={i} className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                  <Icon className="text-primary" name="star" size="sm" />
+                  <Star className="text-primary icon icon-sm" aria-hidden="true" />
                   {t(`license.features.pro.f${i}`)}
                 </li>
               ))}

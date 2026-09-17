@@ -1,3 +1,4 @@
+import { ChartNoAxesCombined, ChartPie, Gauge, Package, Server } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -243,7 +244,7 @@ export default function BandwidthReport() {
           </ResponsiveContainer>
         ) : (
           <EmptyState
-            icon="show_chart"
+            icon={ChartNoAxesCombined}
             title={t('bandwidth.emptyTitle')}
             hint={t('bandwidth.emptyHint')}
             minHeight={240}
@@ -280,7 +281,7 @@ export default function BandwidthReport() {
               </div>
             </>
           ) : (
-            <EmptyState icon="donut_large" title={t('noData')} minHeight={180} />
+            <EmptyState icon={ChartPie} title={t('noData')} minHeight={180} />
           )}
         </section>
 
@@ -309,7 +310,7 @@ export default function BandwidthReport() {
               })}
             </div>
           ) : (
-            <EmptyState icon="inventory_2" title={t('noData')} minHeight={180} />
+            <EmptyState icon={Package} title={t('noData')} minHeight={180} />
           )}
         </section>
 
@@ -327,7 +328,7 @@ export default function BandwidthReport() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyState icon="dns" title={t('noData')} minHeight={180} />
+            <EmptyState icon={Server} title={t('noData')} minHeight={180} />
           )}
         </section>
       </div>
@@ -355,7 +356,7 @@ export default function BandwidthReport() {
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <EmptyState icon="speed" title={t('noData')} minHeight={200} />
+          <EmptyState icon={Gauge} title={t('noData')} minHeight={200} />
         )}
       </section>
       </div>
