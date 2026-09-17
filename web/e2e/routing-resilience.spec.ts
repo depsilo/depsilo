@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 
 import { adminApiDefaults, expect, mockAdminApi, test } from './fixtures/admin-api'
+import zh from '../src/i18n/zh'
 
 test('setup status failure blocks every app branch until a validated retry succeeds', { tag: '@smoke' }, async ({ page }) => {
   let setupAttempts = 0
@@ -192,7 +193,11 @@ test('authenticated Admin unknown paths render 404 inside the shell without dash
 test('Admin title derivation follows case-insensitive route matching', async ({ page }) => {
   await page.goto('/ADMIN/CACHE')
 
-  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('缓存管理')
+  // The canonical title comes from the route manifest and the active locale,
+  // not from the raw path segment, so a mixed-case URL must resolve to the
+  // registered page title.
+  await expect(page.locator('[data-admin-breadcrumb]'))
+    .toContainText(zh.translation.nav.cacheManage)
   await expect(page.locator('[data-route-state="not-found"]')).toHaveCount(0)
 })
 
