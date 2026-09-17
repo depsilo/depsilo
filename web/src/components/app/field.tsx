@@ -28,7 +28,7 @@ export default function Field({ controlId, label, hint, error, children, classNa
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
       {label && (
-        <Label htmlFor={controlId} className="text-[13px] font-normal text-muted-foreground">
+        <Label htmlFor={controlId} className="text-body font-normal text-muted-foreground">
           {label}
         </Label>
       )}
@@ -37,7 +37,7 @@ export default function Field({ controlId, label, hint, error, children, classNa
         <p
           id={messageId}
           role={error ? 'alert' : undefined}
-          className={cn('text-[12px]', error ? 'text-destructive' : 'text-muted-foreground')}
+          className={cn('text-label', error ? 'text-destructive' : 'text-muted-foreground')}
         >
           {error || hint}
         </p>

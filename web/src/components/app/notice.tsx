@@ -29,7 +29,7 @@ export default function Notice({ tone, title, children, className }: NoticeProps
   return (
     <div
       role={tone === 'danger' ? 'alert' : undefined}
-      className={cn('rounded-md border px-3 py-2.5 text-[13px] leading-5', TONE_CLASS[tone], className)}
+      className={cn('rounded-md border px-3 py-2.5 text-body leading-5', TONE_CLASS[tone], className)}
     >
       {title && <p className="mb-1 font-semibold">{title}</p>}
       <div>{children}</div>

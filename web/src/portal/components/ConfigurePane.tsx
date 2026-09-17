@@ -95,11 +95,11 @@ function ManagerPicker({
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <span
           id={titleId}
-          className="text-[12px] font-[650] leading-[1.3] text-muted-foreground"
+          className="text-label font-semibold leading-[1.3] text-muted-foreground"
         >
           {t('quickstart.managerPickerLabel')}
         </span>
-        <span className="font-mono text-[11px] text-muted-foreground">
+        <span className="font-mono text-meta text-muted-foreground">
           {t('quickstart.managerCount', { count: managers.length })}
         </span>
       </div>
@@ -125,7 +125,7 @@ function ManagerPicker({
       </div>
       <p
         data-manager-description
-        className="mb-0 mt-2 text-[12px] leading-[1.5] text-muted-foreground"
+        className="mb-0 mt-2 text-label leading-[1.5] text-muted-foreground"
       >
         {activeHint}
       </p>
@@ -148,18 +148,18 @@ function StepHeading({
     <div className="mb-3 flex items-start gap-3">
       <span
         aria-hidden="true"
-        className="mt-0.5 font-mono text-[11px] font-[650] leading-[1.4] text-primary"
+        className="mt-0.5 font-mono text-meta font-semibold leading-[1.4] text-primary"
       >
         {String(number).padStart(2, '0')}
       </span>
       <div>
         <h4
           id={id}
-          className="m-0 text-[15px] font-[660] leading-[1.3] text-foreground"
+          className="m-0 text-title font-semibold leading-[1.3] text-foreground"
         >
           {title}
         </h4>
-        <p className="mb-0 mt-1 text-[13px] leading-[1.5] text-muted-foreground">
+        <p className="mb-0 mt-1 text-body leading-[1.5] text-muted-foreground">
           {description}
         </p>
       </div>
@@ -178,7 +178,7 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
         background: 'var(--card)',
       }}
     >
-      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-[13px] font-[540] text-muted-foreground">
+      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-body font-medium text-muted-foreground">
         {t('quickstart.whereReadsFrom')}
         <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
           <ChevronDown className="icon icon-sm" aria-hidden="true" />
@@ -280,7 +280,7 @@ export default function ConfigurePane({
         </span>
         <div style={{ minWidth: 0 }}>
           <h3
-            className="m-0 font-sans text-[clamp(20px,2vw,24px)] font-[680] leading-[1.15] text-foreground"
+            className="m-0 font-sans text-[clamp(20px,2vw,24px)] font-semibold leading-[1.15] text-foreground"
           >
             {t('quickstart.configureTitle', { name: language.name })}
           </h3>
@@ -291,7 +291,7 @@ export default function ConfigurePane({
         >
           <Link2 className="shrink-0 text-muted-foreground icon icon-sm" aria-hidden="true" />
           <span className="sr-only">{t('quickstart.endpointLabel')}</span>
-          <span className="truncate font-mono text-[11px] text-muted-foreground">
+          <span className="truncate font-mono text-meta text-muted-foreground">
             {resolvedEndpoint}
           </span>
         </div>
@@ -332,15 +332,15 @@ export default function ConfigurePane({
                 <span className="flex items-start gap-3">
                   <span
                     aria-hidden="true"
-                    className="mt-0.5 font-mono text-[11px] font-[650] leading-[1.4] text-primary"
+                    className="mt-0.5 font-mono text-meta font-semibold leading-[1.4] text-primary"
                   >
                     02
                   </span>
                   <span>
-                    <span className="block text-[14px] font-[640] text-foreground">
+                    <span className="block text-body font-semibold text-foreground">
                       {t('quickstart.quickMethods')}
                     </span>
-                    <span className="mt-0.5 block text-[12px] leading-[1.45] text-muted-foreground">
+                    <span className="mt-0.5 block text-label leading-[1.45] text-muted-foreground">
                       {t('quickstart.quickMethodsDescription')}
                     </span>
                   </span>
@@ -352,7 +352,7 @@ export default function ConfigurePane({
               <div className="flex flex-col gap-3 pb-2 pt-3">
                 {manager.methods.map(method => (
                   <div key={`${method.label}-${method.body}`} className="flex flex-col gap-1">
-                    <span className="px-0.5 text-[12px] font-[560] text-muted-foreground">
+                    <span className="px-0.5 text-label font-medium text-muted-foreground">
                       {t(method.label)}
                     </span>
                     <CodeBlock

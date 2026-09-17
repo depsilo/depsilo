@@ -39,7 +39,7 @@ export default function Badge({ variant = 'default', children, className }: Badg
   return (
     <UiBadge
       variant="outline"
-      className={cn('text-[11px] font-semibold tracking-normal', TONE_CLASS[variant], className)}
+      className={cn('text-meta font-semibold tracking-normal', TONE_CLASS[variant], className)}
     >
       {children}
     </UiBadge>

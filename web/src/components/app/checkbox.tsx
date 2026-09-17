@@ -26,7 +26,7 @@ export default function Checkbox({ label, checked, onCheckedChange, disabled, id
         disabled={disabled}
         onCheckedChange={(next) => onCheckedChange(next === true)}
       />
-      <label htmlFor={controlId} className="cursor-pointer text-[13px] select-none">
+      <label htmlFor={controlId} className="cursor-pointer text-body select-none">
         {label}
       </label>
     </div>

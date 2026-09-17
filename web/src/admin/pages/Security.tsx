@@ -84,18 +84,18 @@ function CapabilityOverview() {
   return (
     <section aria-label={t('security.capabilityTitle')} className="space-y-3">
       <SectionHeader title={t('security.capabilityTitle')} />
-      {query.isPending && <p className="text-[12px] text-muted-foreground" aria-busy="true">{t('security.capabilityLoading')}</p>}
+      {query.isPending && <p className="text-label text-muted-foreground" aria-busy="true">{t('security.capabilityLoading')}</p>}
       {query.isError && <InlineNotice tone="warning">{t('security.capabilityUnavailable')}</InlineNotice>}
       {!query.isPending && !query.isError && facts.length === 0 && <InlineNotice tone="warning">{t('security.capabilityNoData')}</InlineNotice>}
       {facts.length > 0 && (
         <div className="space-y-3">
           {[...grouped.entries()].map(([name, rows]) => (
             <details key={name} className="rounded-[6px] border border-border bg-muted px-3 py-2">
-              <summary className="cursor-pointer stripe-focus-ring text-[13px] font-[600]">{label(name)}</summary>
+              <summary className="cursor-pointer stripe-focus-ring text-body font-semibold">{label(name)}</summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
-                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-[4px] bg-background p-2 text-[12px]">
-                    <div className="mb-1 font-[600]">{fact.ecosystem?.toUpperCase() ?? t('security.capabilityOverall')}</div>
+                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-[4px] bg-background p-2 text-label">
+                    <div className="mb-1 font-semibold">{fact.ecosystem?.toUpperCase() ?? t('security.capabilityOverall')}</div>
                     <div><span className="text-muted-foreground">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
                     <div><span className="text-muted-foreground">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
                     <div><span className="text-muted-foreground">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
@@ -191,7 +191,7 @@ function OverviewTab() {
         />
         {scanMutation.isSuccess && <div className="mb-3"><InlineNotice tone="success">{t('security.scanStarted')}</InlineNotice></div>}
         {scanMutation.isError && <div className="mb-3"><InlineNotice tone="danger">{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</InlineNotice></div>}
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-label text-muted-foreground">
           {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
         </p>
       </section>
@@ -224,7 +224,7 @@ function OverviewTab() {
                       }}
                     />
                   </div>
-                  <span className="font-mono text-[12px] tabular-nums w-8 text-right shrink-0 text-foreground">
+                  <span className="font-mono text-label tabular-nums w-8 text-right shrink-0 text-foreground">
                     {item.count}
                   </span>
                 </div>
@@ -270,7 +270,7 @@ function VulnerabilitiesTab() {
       key: 'osv_id',
       label: t('security.osvId'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] font-[400] text-foreground">{v as string}</span>
+        <span className="font-mono text-label font-normal text-foreground">{v as string}</span>
       ),
     },
     {
@@ -287,7 +287,7 @@ function VulnerabilitiesTab() {
       key: 'package_name',
       label: t('security.package'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] text-foreground">{v as string}</span>
+        <span className="font-mono text-label text-foreground">{v as string}</span>
       ),
     },
     {
@@ -303,7 +303,7 @@ function VulnerabilitiesTab() {
       key: 'cvss_score',
       label: t('security.cvssScore'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] tabular-nums text-foreground">
+        <span className="font-mono text-label tabular-nums text-foreground">
           {v != null ? Number(v).toFixed(1) : '-'}
         </span>
       ),
@@ -312,7 +312,7 @@ function VulnerabilitiesTab() {
       key: 'published_at',
       label: t('security.published'),
       render: (v: unknown) => (
-        <span className="text-[12px] whitespace-nowrap text-muted-foreground">{formatDate(v as string)}</span>
+        <span className="text-label whitespace-nowrap text-muted-foreground">{formatDate(v as string)}</span>
       ),
     },
   ]
@@ -360,7 +360,7 @@ function VulnerabilitiesTab() {
 
       {/* Table — bare (no Card wrap) */}
       {query.isPending ? (
-        <div role="status" aria-busy="true" className="py-8 text-center text-[14px] text-muted-foreground">{t('loading')}</div>
+        <div role="status" aria-busy="true" className="py-8 text-center text-body text-muted-foreground">{t('loading')}</div>
       ) : query.isError && !data ? (
         <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
       ) : (
@@ -444,7 +444,7 @@ function SuggestionsTab() {
           <span>{t('security.manualRuleRequired')}</span>
           <Link
             to={getAdminRouteHref('rules')}
-            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-[5px] px-2 text-[12px] font-[650] text-primary no-underline hover:bg-accent"
+            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-[5px] px-2 text-label font-semibold text-primary no-underline hover:bg-accent"
           >
             {t('security.openPackageRules')}
           </Link>
@@ -464,19 +464,19 @@ function SuggestionsTab() {
             >
               <div className="flex-1 min-w-0">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[13px] font-[500] text-foreground">
+                  <span className="font-mono text-body font-medium text-foreground">
                     {item.osv_id}
                   </span>
                   <BadgeV2 variant={severityVariant}>{item.severity?.toUpperCase()}</BadgeV2>
                   {item.cvss_score != null && (
-                    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                    <span className="font-mono text-meta tabular-nums text-muted-foreground">
                       CVSS {Number(item.cvss_score).toFixed(1)}
                     </span>
                   )}
                 </div>
                 <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
                   {item.ecosystem && <EcosystemIcon type={item.ecosystem as EcosystemName} size={14} />}
-                  <span className="min-w-0 break-all font-mono text-[13px] text-foreground">
+                  <span className="min-w-0 break-all font-mono text-body text-foreground">
                     {item.package_name}
                   </span>
                 </div>
@@ -772,7 +772,7 @@ function PoliciesTab() {
                   auto_block_enabled: checked,
                 }))}
               />
-              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+              <p className="mt-1 text-label leading-5 text-muted-foreground">
                 {t('security.bulkPolicyHint')}
               </p>
             </div>
@@ -802,7 +802,7 @@ function PoliciesTab() {
         )}
         <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <span className="text-[12px] text-muted-foreground" aria-live="polite">
+            <span className="text-label text-muted-foreground" aria-live="polite">
               {t('security.unsavedCount', { count: dirtyEcosystems.length })}
             </span>
             <SwitchV2
@@ -874,7 +874,7 @@ function PoliciesTab() {
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <EcosystemIcon type={eco as EcosystemName} size={16} />
-                    <span className="min-w-0 truncate text-[13px] font-[500] text-foreground" title={eco.toUpperCase()}>
+                    <span className="min-w-0 truncate text-body font-medium text-foreground" title={eco.toUpperCase()}>
                       {eco.toUpperCase()}
                     </span>
                     {isDirty && <BadgeV2 variant="warning">{t('security.unsaved')}</BadgeV2>}
@@ -921,7 +921,7 @@ function PoliciesTab() {
                   </div>}
                 </div>
                 {!autoBlockSupported && (
-                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                  <p className="mt-1 text-label leading-5 text-muted-foreground">
                     {t(autoBlockUnavailableHint)}
                   </p>
                 )}
@@ -983,7 +983,7 @@ function PoliciesTab() {
             disabled={importMutation.isPending}
           >
             <Upload className="icon icon-lg" aria-hidden="true" />
-            <span className="mt-2 text-[13px]">
+            <span className="mt-2 text-body">
               {importMutation.isPending ? t('security.importing') : t('security.dropOrClick')}
             </span>
           </button>
@@ -1003,7 +1003,7 @@ function PoliciesTab() {
         {importMutation.isSuccess && (
           <div className="mt-2"><InlineNotice tone="success">
             <p>{t('security.importSuccess', { count: importMutation.data.data.imported })}</p>
-            <p className="mt-1 text-[12px]">
+            <p className="mt-1 text-label">
               {t('security.importSummary', {
                 received: importMutation.data.data.received,
                 packages: importMutation.data.data.packages,

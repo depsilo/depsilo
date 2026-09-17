@@ -1,5 +1,37 @@
 import { clsx, type ClassValue } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+import { extendTailwindMerge } from 'tailwind-merge'
+
+/**
+ * Every type-scale token declared in `index.css` must be listed here.
+ *
+ * `text-*` is a shared prefix: it means both a font size and a text colour. A
+ * custom token such as `text-body` is unknown to tailwind-merge, which falls
+ * back to treating an unrecognised `text-<value>` as a colour — so a button
+ * merging `text-primary-foreground` with `text-body` would have its foreground
+ * *dropped* as a conflict, and the label would inherit whatever colour the
+ * container had. Registering the tokens as the `font-size` group is what makes
+ * them size utilities and keeps `text-<colour>` intact.
+ */
+const TYPE_SCALE = [
+  'micro',
+  'meta',
+  'label',
+  'body',
+  'title',
+  'subhead',
+  'page-title',
+  'metric',
+  'metric-sm',
+  'field',
+]
+
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      'font-size': [{ text: TYPE_SCALE }],
+    },
+  },
+})
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

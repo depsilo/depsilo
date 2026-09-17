@@ -249,7 +249,7 @@ export default function UpstreamUpdates() {
               count: occurrenceCount,
             })}
       >
-        <div className="font-mono text-[12px] tabular-nums text-foreground">
+        <div className="font-mono text-label tabular-nums text-foreground">
           <time dateTime={firstSeenAt}>{firstSeen}</time>
           {isEpisode && (
             <>
@@ -258,7 +258,7 @@ export default function UpstreamUpdates() {
             </>
           )}
         </div>
-        <div className="mt-0.5 text-[12px] text-muted-foreground">
+        <div className="mt-0.5 text-label text-muted-foreground">
           <span aria-label={t('upstreamUpdates.checkCount', { count: occurrenceCount })}>
             {occurrenceCount > 1 ? `×${occurrenceCount}` : occurrenceCount}
           </span>
@@ -318,7 +318,7 @@ export default function UpstreamUpdates() {
               type="text"
               aria-label={t('upstreamUpdates.searchLabel')}
               placeholder={t('upstreamUpdates.searchPlaceholder')}
-              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
+              className="min-w-0 flex-1 bg-transparent text-field outline-none md:text-body text-foreground"
               value={packageDraft}
               onChange={event => setPackageDraft(event.target.value)}
               onKeyDown={event => {
@@ -376,7 +376,7 @@ export default function UpstreamUpdates() {
         {query.data && (
           <div
             data-upstream-updates-summary
-            className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px] text-muted-foreground"
+            className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 text-label text-muted-foreground"
           >
             <span>
               {t('upstreamUpdates.loadedSummary', {
@@ -447,19 +447,19 @@ export default function UpstreamUpdates() {
                   <li key={event.id} className="space-y-2.5 py-4 first:pt-0">
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <span
-                        className="min-w-0 break-words font-mono text-[13px] font-[550] text-foreground"
+                        className="min-w-0 break-words font-mono text-body font-medium text-foreground"
                       >
                         {event.package}
                       </span>
                       {resultBadge(event.result)}
                     </div>
-                    <div className="text-[12px] text-muted-foreground">
+                    <div className="text-label text-muted-foreground">
                       {source(event)}
                     </div>
-                    <p className="text-[13px] leading-[1.5] text-muted-foreground">
+                    <p className="text-body leading-[1.5] text-muted-foreground">
                       {detail}
                     </p>
-                    <div className="grid grid-cols-1 gap-2 text-[12px] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                    <div className="grid grid-cols-1 gap-2 text-label sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                       {observation(event)}
                       <span
                         className="font-mono tabular-nums"
@@ -475,7 +475,7 @@ export default function UpstreamUpdates() {
 
             <div className="hidden md:block">
               <TableViewport label={t('upstreamUpdates.tableLabel')} minWidth={860}>
-                <table data-upstream-update-table className="w-full text-[12px]">
+                <table data-upstream-update-table className="w-full text-label">
                   <caption className="sr-only">{t('upstreamUpdates.tableLabel')}</caption>
                   <thead>
                     <tr className="border-b border-border text-left">
@@ -489,7 +489,7 @@ export default function UpstreamUpdates() {
                         <th
                           key={heading}
                           scope="col"
-                          className="px-3 py-2 text-[11px] font-[600] first:pl-0 text-muted-foreground"
+                          className="px-3 py-2 text-meta font-semibold first:pl-0 text-muted-foreground"
                         >
                           {heading}
                         </th>
@@ -509,7 +509,7 @@ export default function UpstreamUpdates() {
                           {source(event)}
                         </td>
                         <td
-                          className="max-w-[260px] px-3 py-3 text-left align-top font-mono font-[500] text-foreground"
+                          className="max-w-[260px] px-3 py-3 text-left align-top font-mono font-medium text-foreground"
                         >
                           <span className="block break-words">{event.package}</span>
                         </td>

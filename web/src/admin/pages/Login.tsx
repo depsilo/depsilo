@@ -87,12 +87,12 @@ export default function Login() {
             className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-[6px] text-foreground no-underline transition-opacity duration-150 hover:opacity-75"
           >
             <Logo size={28} />
-            <span className="font-display text-[16px] font-[700]">Depsilo</span>
+            <span className="font-display text-field font-bold">Depsilo</span>
           </Link>
           <Link
             to="/"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-2 text-[12px] font-[550] text-muted-foreground no-underline transition-colors duration-150 hover:bg-accent hover:text-foreground"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-2 text-label font-medium text-muted-foreground no-underline transition-colors duration-150 hover:bg-accent hover:text-foreground"
           >
             <ArrowLeft className="icon icon-sm" aria-hidden="true" />
             {t('login.backToPortal')}
@@ -100,10 +100,10 @@ export default function Login() {
         </div>
 
         <header className="mb-8">
-          <h1 className="m-0 font-display text-[30px] font-[650] leading-[1.1] text-foreground">
+          <h1 className="m-0 font-display text-page-title font-semibold leading-[1.1] text-foreground">
             {t('login.title')}
           </h1>
-          <p className="mt-2 max-w-[46ch] text-[14px] leading-6 text-muted-foreground">
+          <p className="mt-2 max-w-[46ch] text-body leading-6 text-muted-foreground">
             {t('login.subtitle')}
           </p>
         </header>
@@ -131,7 +131,7 @@ export default function Login() {
           {error && (
             <p
               role="alert"
-              className="rounded-[6px] border border-destructive/35 bg-destructive/10 px-3 py-2.5 text-[13px] leading-5 text-destructive"
+              className="rounded-[6px] border border-destructive/35 bg-destructive/10 px-3 py-2.5 text-body leading-5 text-destructive"
             >
               {error}
             </p>

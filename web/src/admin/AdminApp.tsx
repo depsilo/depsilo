@@ -74,8 +74,8 @@ function AdminAuthPending() {
           <Logo size={26} />
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="font-display text-[15px] font-[700] leading-5">Depsilo</span>
-          <span className="text-[12px] leading-4 text-muted-foreground">{t('auth.verifyingSession')}</span>
+          <span className="font-display text-title font-bold leading-5">Depsilo</span>
+          <span className="text-label leading-4 text-muted-foreground">{t('auth.verifyingSession')}</span>
         </span>
         <LoaderCircle className="ml-2 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none icon icon-sm" aria-hidden="true" />
       </div>

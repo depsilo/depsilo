@@ -120,16 +120,16 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
             className={`size-1.5 shrink-0 rounded-full ${hasConnectionError ? '' : 'animate-live-pulse'}`}
             style={{ background: hasConnectionError ? 'var(--warning)' : 'var(--info)' }}
           />
-          <h2 id="recent-downloads-title" className="text-[13px] font-[680] text-foreground">
+          <h2 id="recent-downloads-title" className="text-body font-semibold text-foreground">
             {t('recentDownloads.title')}
           </h2>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             {hasConnectionError ? t('recentDownloads.retrying') : t('recentDownloads.liveRefresh')}
           </span>
         </div>
         <Link
           to={getAdminRouteHref('auditLogs')}
-          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-[12px] font-[600] no-underline text-primary hover:bg-card"
+          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-label font-semibold no-underline text-primary hover:bg-card"
         >
           {t('recentDownloads.viewAudit')}
           <span aria-hidden>→</span>
@@ -157,7 +157,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
           ))}
         </div>
       ) : query.isError && !query.data ? (
-        <div role="alert" className="flex min-h-20 flex-wrap items-center justify-between gap-2 px-4 py-3 text-[12px] text-warning">
+        <div role="alert" className="flex min-h-20 flex-wrap items-center justify-between gap-2 px-4 py-3 text-label text-warning">
           <span>
             {getApiError(query.error).status === 403
               ? t('common.permissionDenied')
@@ -168,16 +168,16 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
           </ButtonV2>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex min-h-24 items-center gap-2 px-4 py-3 text-[12px] text-muted-foreground">
+        <div className="flex min-h-24 items-center gap-2 px-4 py-3 text-label text-muted-foreground">
           <Download className="icon icon-sm" aria-hidden />
           <span>{t('recentDownloads.empty')}</span>
         </div>
       ) : (
         <>
           {hasStaleData && (
-            <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b-[0.5px] border-warning/35 bg-warning/10 px-3 py-1.5 text-[11px] text-warning">
+            <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b-[0.5px] border-warning/35 bg-warning/10 px-3 py-1.5 text-meta text-warning">
               <span>{t('recentDownloads.stale')}</span>
-              <button type="button" className="stripe-focus-ring min-h-7 rounded px-2 font-[600]" onClick={() => { void query.refetch() }}>
+              <button type="button" className="stripe-focus-ring min-h-7 rounded px-2 font-semibold" onClick={() => { void query.refetch() }}>
                 {t('recentDownloads.retry')}
               </button>
             </div>
@@ -210,14 +210,14 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
                     ) : (
                       <Package2 className="icon icon-sm" aria-hidden />
                     )}
-                    <span className="min-w-0 flex-1 truncate font-mono text-[13px] font-[550] text-foreground" title={fullPackageName}>
+                    <span className="min-w-0 flex-1 truncate font-mono text-body font-medium text-foreground" title={fullPackageName}>
                       {packageName}
                       {item.version && <span className="text-muted-foreground">@{item.version}</span>}
                     </span>
                     <BadgeV2 variant={outcome.variant} className="shrink-0">{outcome.label}</BadgeV2>
                   </div>
-                  <div className="mt-1.5 flex min-w-0 items-center gap-1.5 pl-[21px] text-[11px] text-muted-foreground">
-                    <span className="shrink-0 font-[550] uppercase">{ecosystem}</span>
+                  <div className="mt-1.5 flex min-w-0 items-center gap-1.5 pl-[21px] text-meta text-muted-foreground">
+                    <span className="shrink-0 font-medium uppercase">{ecosystem}</span>
                     <span aria-hidden>·</span>
                     <span className="min-w-0 flex-1 truncate font-mono tabular-nums text-muted-foreground">
                       {size} · {item.latency_ms} ms

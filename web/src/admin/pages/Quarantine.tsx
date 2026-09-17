@@ -207,7 +207,7 @@ export default function Quarantine() {
       >
         {revokeTarget && (
           <div className="space-y-4">
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version })}
             </p>
             <InputV2
@@ -285,7 +285,7 @@ function EventsTab(props: {
 
       {/* Table */}
       {props.eventsQ.isPending ? (
-        <p aria-busy="true" className="text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
+        <p aria-busy="true" className="text-body text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
       ) : props.eventsQ.isError && !props.eventsQ.data ? (
         <QueryErrorState message={getApiError(props.eventsQ.error).status === 403 ? t('common.permissionDenied') : getApiError(props.eventsQ.error).message} onRetry={() => { void props.eventsQ.refetch() }} />
       ) : (
@@ -339,21 +339,21 @@ function EventsTab(props: {
               {items.map((ev) => (
                 <tr className="border-t-[0.5px] border-border" key={ev.id}>
                   <Td>
-                    <span className="text-[12px] font-mono whitespace-nowrap text-muted-foreground">
+                    <span className="text-label font-mono whitespace-nowrap text-muted-foreground">
                       {formatTime(ev.created_at)}
                     </span>
                   </Td>
                   <Td>
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(ev.ecosystem) && <EcosystemIcon type={ev.ecosystem} size={14} />}
-                      <span className="text-[12px] font-mono">{ev.ecosystem}</span>
+                      <span className="text-label font-mono">{ev.ecosystem}</span>
                     </div>
                   </Td>
-                  <Td><span className="text-[13px] font-mono">{ev.package}</span></Td>
-                  <Td><span className="text-[13px] font-mono text-muted-foreground">{ev.version}</span></Td>
+                  <Td><span className="text-body font-mono">{ev.package}</span></Td>
+                  <Td><span className="text-body font-mono text-muted-foreground">{ev.version}</span></Td>
                   <Td>{actionBadge(ev.action, t)}</Td>
                   <Td>
-                    <span className="text-[12px] text-muted-foreground">{ev.reason}</span>
+                    <span className="text-label text-muted-foreground">{ev.reason}</span>
                   </Td>
                 </tr>
               ))}
@@ -382,7 +382,7 @@ function ApprovalsTab(props: {
   const items = data?.items ?? []
 
   if (props.approvalsQ.isPending) {
-    return <p aria-busy="true" className="text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
+    return <p aria-busy="true" className="text-body text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
   }
   if (props.approvalsQ.isError && !props.approvalsQ.data) {
     const normalized = getApiError(props.approvalsQ.error)
@@ -450,19 +450,19 @@ function ApprovalsTab(props: {
           {items.map((row) => (
             <tr className="border-t-[0.5px] border-border" key={row.id}>
               <Td>
-                <span className="text-[12px] font-mono whitespace-nowrap text-muted-foreground">
+                <span className="text-label font-mono whitespace-nowrap text-muted-foreground">
                   {formatTime(row.created_at)}
                 </span>
               </Td>
               <Td>
                 <div className="flex items-center gap-1.5">
                   {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
-                  <span className="text-[12px] font-mono">{row.ecosystem}</span>
+                  <span className="text-label font-mono">{row.ecosystem}</span>
                 </div>
               </Td>
-              <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
-              <Td><span className="text-[13px] font-mono text-muted-foreground">{row.version}</span></Td>
-              <Td><span className="text-[12px] text-muted-foreground">{row.reason}</span></Td>
+              <Td><span className="text-body font-mono">{row.package}</span></Td>
+              <Td><span className="text-body font-mono text-muted-foreground">{row.version}</span></Td>
+              <Td><span className="text-label text-muted-foreground">{row.reason}</span></Td>
               <Td>
                 {props.canWrite && <ButtonV2 size="sm" variant="danger" onClick={() => props.onRevoke(row)}>
                   <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
@@ -552,7 +552,7 @@ function BlocklistTab() {
     <div className="space-y-5">
       {/* Status card */}
       {statusQ.isPending ? (
-        <p aria-busy="true" className="text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
+        <p aria-busy="true" className="text-body text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
       ) : statusQ.isError && !statusQ.data ? (
         <QueryErrorState message={getApiError(statusQ.error).status === 403 ? t('common.permissionDenied') : getApiError(statusQ.error).message} onRetry={() => { void statusQ.refetch() }} />
       ) : (
@@ -576,15 +576,15 @@ function BlocklistTab() {
           </BadgeV2>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.entries')}>
-          <span className="text-[22px] font-mono font-[600] tabular-nums">{st?.entry_count ?? 0}</span>
+          <span className="text-metric-sm font-mono font-semibold tabular-nums">{st?.entry_count ?? 0}</span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.last_success')}>
-          <span className="text-[13px] font-mono" style={{ color: st?.last_success_at ? 'var(--foreground)' : 'var(--warning)' }}>
+          <span className="text-body font-mono" style={{ color: st?.last_success_at ? 'var(--foreground)' : 'var(--warning)' }}>
             {st?.last_success_at ? formatTime(st.last_success_at) : t('quarantine.blocklist.never')}
           </span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.next_sync')}>
-          <span className="text-[13px] font-mono text-muted-foreground">
+          <span className="text-body font-mono text-muted-foreground">
             {st?.running
               ? t('quarantine.blocklist.syncing')
               : st?.next_sync_at
@@ -593,13 +593,13 @@ function BlocklistTab() {
           </span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.coverage')}>
-          <span className="text-[12px] font-mono text-muted-foreground">
+          <span className="text-label font-mono text-muted-foreground">
             {(st?.ecosystems ?? []).join(' · ')}
           </span>
         </StatusItem>
         {st?.last_error && (
           <StatusItem label={t('quarantine.blocklist.last_error')}>
-            <span className="text-[12px] text-destructive">{st.last_error}</span>
+            <span className="text-label text-destructive">{st.last_error}</span>
           </StatusItem>
         )}
         {canWrite && <div className="grid w-full grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:ml-auto sm:flex sm:w-auto">
@@ -619,12 +619,12 @@ function BlocklistTab() {
 
       {/* Overrides */}
       <div>
-        <h3 className="text-[14px] font-[600] mb-2">{t('quarantine.blocklist.overrides_title')}</h3>
-        <p className="text-[12px] mb-3 text-muted-foreground">
+        <h3 className="text-body font-semibold mb-2">{t('quarantine.blocklist.overrides_title')}</h3>
+        <p className="text-label mb-3 text-muted-foreground">
           {t('quarantine.blocklist.overrides_hint')}
         </p>
         {overridesQ.isPending ? (
-          <p aria-busy="true" className="text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
+          <p aria-busy="true" className="text-body text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></p>
         ) : overridesQ.isError && !overridesQ.data ? (
           <QueryErrorState message={getApiError(overridesQ.error).status === 403 ? t('common.permissionDenied') : getApiError(overridesQ.error).message} onRetry={() => { void overridesQ.refetch() }} />
         ) : (
@@ -708,21 +708,21 @@ function BlocklistTab() {
                       <Td>
                         <div className="flex items-center gap-1.5">
                           {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
-                          <span className="text-[12px] font-mono">{row.ecosystem}</span>
+                          <span className="text-label font-mono">{row.ecosystem}</span>
                         </div>
                       </Td>
-                      <Td><span className="text-[13px] font-mono">{row.package}</span></Td>
+                      <Td><span className="text-body font-mono">{row.package}</span></Td>
                       <Td>
-                        <span className="text-[13px] font-mono text-muted-foreground">
+                        <span className="text-body font-mono text-muted-foreground">
                           {row.version || t('quarantine.blocklist.all_versions')}
                         </span>
                       </Td>
-                      <Td><span className="text-[12px] text-muted-foreground">{row.reason}</span></Td>
+                      <Td><span className="text-label text-muted-foreground">{row.reason}</span></Td>
                       <Td>
                         {expired ? (
                           <BadgeV2>{t('quarantine.blocklist.expired')}</BadgeV2>
                         ) : (
-                          <span className="text-[12px] font-mono tabular-nums text-warning">
+                          <span className="text-label font-mono tabular-nums text-warning">
                             {formatRemaining(msLeft)}
                           </span>
                         )}
@@ -756,7 +756,7 @@ function BlocklistTab() {
         closeDisabled={createM.isPending}
       >
         <div className="space-y-4">
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             {t('quarantine.blocklist.create_body')}
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
@@ -813,7 +813,7 @@ function BlocklistTab() {
       >
         {revokeTarget && (
           <div className="space-y-4">
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-body text-muted-foreground">
               {t('quarantine.revoke.body', { eco: revokeTarget.ecosystem, pkg: revokeTarget.package, ver: revokeTarget.version || t('quarantine.blocklist.all_versions') })}
             </p>
             <InputV2
@@ -846,7 +846,7 @@ function BlocklistTab() {
 function StatusItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-mono font-[600] uppercase text-muted-foreground">
+      <span className="text-micro font-mono font-semibold uppercase text-muted-foreground">
         {label}
       </span>
       {children}
@@ -866,7 +866,7 @@ function formatRemaining(ms: number): string {
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="text-left px-3 py-2.5 text-[11px] font-mono font-[600] uppercase text-muted-foreground"
+    <th className="text-left px-3 py-2.5 text-meta font-mono font-semibold uppercase text-muted-foreground"
 >{children}</th>
   )
 }
@@ -884,10 +884,10 @@ function MobilePackageIdentity(props: { ecosystem: string; packageName: string; 
         </span>
       )}
       <div className="min-w-0">
-        <p className="break-words font-mono text-[14px] font-[550] text-foreground">
+        <p className="break-words font-mono text-body font-medium text-foreground">
           {props.packageName}
         </p>
-        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[12px] text-muted-foreground">
+        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-label text-muted-foreground">
           <span>{props.ecosystem}</span>
           <span aria-hidden="true">·</span>
           <span className="break-all">{props.version}</span>
@@ -904,11 +904,11 @@ function MobileMetadata({ entries }: {
     <dl className="grid grid-cols-1 gap-2.5">
       {entries.map((entry) => (
         <div key={entry.label} className="min-w-0">
-          <dt className="text-[11px] font-[600] text-muted-foreground">
+          <dt className="text-meta font-semibold text-muted-foreground">
             {entry.label}
           </dt>
           <dd
-            className={`mt-0.5 break-words text-[13px] leading-[1.5] text-muted-foreground ${entry.mono ? 'font-mono tabular-nums' : ''}`}
+            className={`mt-0.5 break-words text-body leading-[1.5] text-muted-foreground ${entry.mono ? 'font-mono tabular-nums' : ''}`}
           >
             {entry.value || '—'}
           </dd>
@@ -931,7 +931,7 @@ function FilterSelect(props: {
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
       disabled={props.disabled}
-      className="min-h-[40px] w-full cursor-pointer rounded-[6px] px-3 text-[16px] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-[12px]"
+      className="min-h-[40px] w-full cursor-pointer rounded-[6px] px-3 text-field disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-label"
       style={{
         background: 'var(--muted)',
         color: 'var(--foreground)',

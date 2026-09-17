@@ -74,7 +74,7 @@ function EndpointPill() {
         onClick={handleCopy}
         className={cn(
           HEADER_CONTROL,
-          'cursor-pointer px-2.5 font-mono text-[11.5px] text-muted-foreground hover:bg-accent hover:text-foreground',
+          'cursor-pointer px-2.5 font-mono text-meta text-muted-foreground hover:bg-accent hover:text-foreground',
           'max-[960px]:w-10 max-[960px]:px-0 max-[560px]:hidden',
           copyState === 'failed' && 'text-destructive',
         )}
@@ -136,7 +136,7 @@ function NavTab({ to, label, compactLabel }: NavTabProps) {
       end
       aria-label={label}
       className={({ isActive }) => cn(
-        'relative inline-flex min-h-10 items-center rounded-md px-2.5 py-1.5 text-[13px] no-underline transition-colors',
+        'relative inline-flex min-h-10 items-center rounded-md px-2.5 py-1.5 text-body no-underline transition-colors',
         'max-[560px]:min-w-10 max-[560px]:justify-center max-[560px]:px-1',
         isActive
           ? 'font-semibold text-foreground'
@@ -259,12 +259,12 @@ export default function PortalAppV2() {
             <Logo size={28} />
             <span
               data-portal-brand-name
-              className="text-[15px] font-bold text-foreground max-[380px]:hidden"
+              className="text-title font-bold text-foreground max-[380px]:hidden"
             >
               Depsilo
             </span>
             <span
-              className="ml-0.5 rounded-sm border border-border px-1.5 py-px font-mono text-[10px] text-muted-foreground max-[760px]:hidden"
+              className="ml-0.5 rounded-sm border border-border px-1.5 py-px font-mono text-micro text-muted-foreground max-[760px]:hidden"
               title={data?.service?.version}
             >
               {formatVersion(data?.service?.version)}
@@ -299,7 +299,7 @@ export default function PortalAppV2() {
                   type="button"
                   className={cn(
                     HEADER_CONTROL,
-                    'cursor-pointer px-2.5 text-[12px] font-medium max-[560px]:w-10 max-[560px]:min-w-10 max-[560px]:px-0',
+                    'cursor-pointer px-2.5 text-label font-medium max-[560px]:w-10 max-[560px]:min-w-10 max-[560px]:px-0',
                     STATUS_TONE_CLASS,
                   )}
                   data-portal-status-pill
@@ -315,7 +315,7 @@ export default function PortalAppV2() {
                 <span
                   className={cn(
                     HEADER_CONTROL,
-                    'px-2.5 text-[12px] font-medium max-[560px]:w-10 max-[560px]:min-w-10 max-[560px]:px-0',
+                    'px-2.5 text-label font-medium max-[560px]:w-10 max-[560px]:min-w-10 max-[560px]:px-0',
                     STATUS_TONE_CLASS,
                   )}
                   role="status"
@@ -346,7 +346,7 @@ export default function PortalAppV2() {
               href="/admin"
               className={cn(
                 HEADER_CONTROL,
-                'rounded-md border border-border bg-accent px-2.5 text-[12px] font-semibold text-primary no-underline hover:bg-muted',
+                'rounded-md border border-border bg-accent px-2.5 text-label font-semibold text-primary no-underline hover:bg-muted',
                 'max-[560px]:w-10 max-[560px]:px-0',
               )}
               data-portal-admin-link

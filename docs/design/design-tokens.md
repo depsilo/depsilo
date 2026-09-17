@@ -145,8 +145,39 @@ tracking unavailable anyway.
 
 ### 3.2 Scale
 
-> These tokens land in step 02 with the call sites that read them; step 01
-> deliberately defined only what the code could consume immediately.
+Nine roles, and nothing else. Before step 02 the app layer used seventeen
+arbitrary sizes and twelve arbitrary font weights, which is drift rather than a
+system.
+
+| Token | Size | Role |
+| --- | --- | --- |
+| `--text-micro` | 10px | Eyebrow copy, table headers, dense metadata |
+| `--text-meta` | 11px | Badges, nav labels, secondary metadata |
+| `--text-label` | 12px | Field labels, table cells, secondary copy |
+| `--text-body` | 13px | The default reading size |
+| `--text-title` | 16px | Panel and dialog titles |
+| `--text-subhead` | 18px | Section headings |
+| `--text-page-title` | 26px | The one `h1` per page |
+| `--text-metric-sm` | 22px | An in-rail measured value |
+| `--text-metric` | 30px | The largest value on a page |
+
+Sizes are **px, deliberately**: a dense operator table should not reflow
+because a reader raised their browser's base font size. The one exception is
+`--text-field` (16px), which is not a type choice at all — it is the floor
+below which a focused input makes mobile Safari zoom.
+
+Two landmines are worth knowing before adding a token here:
+
+1. **`text-*` is a shared prefix.** A size token whose name matches a
+   `--color-*` token loses: `--text-input` collided with shadcn's
+   `--color-input`, so `text-input` silently painted text with a translucent
+   outline colour instead of setting a size. It is called `--text-field` for
+   that reason. Check the `--color-*` list before naming a size.
+2. **tailwind-merge must be told.** It only knows Tailwind's built-in sizes, so
+   an unregistered `text-<value>` is treated as a *colour* — which silently
+   dropped a button's `text-primary-foreground` and let the label inherit the
+   container's colour. Every token above is listed in
+   `web/src/lib/utils.ts`, and `unit/cn.test.ts` pins the behaviour.
 
 | Token | Use | Constraint |
 | --- | --- | --- |
@@ -156,7 +187,9 @@ tracking unavailable anyway.
 | `--text-label` | Field labels, table headers, eyebrow copy | Never smaller than the smallest legible size for Chinese |
 | `--text-metadata` | Timestamps, counts, secondary detail | Must stay legible: metadata carries decisions |
 
-Line heights are unitless multipliers so they follow the text size:
+Line heights are unitless multipliers so they follow the text size. Each type
+token carries its own, and a `leading-*` utility at a call site overrides it,
+because Tailwind emits line-height utilities after font-size ones:
 
 - **Single-line operational rows: 1.4.** No inter-line relationship exists, so
   a tighter line box is safe and buys row padding.
@@ -167,18 +200,36 @@ Line heights are unitless multipliers so they follow the text size:
 
 ### 3.3 Numeric
 
-Numbers are a type scale, not a habit:
+**Numeric is a treatment, not a second size scale.** A number in a table cell
+is ordinary body or label text that happens to use the mono face with
+`font-variant-numeric: tabular-nums`; giving it its own size tokens produced
+nothing but duplicates of the text scale.
 
-| Token | Use |
-| --- | --- |
-| `--text-metric` | A KPI value: the largest number on a page |
-| `--text-metric-sm` | A secondary or in-rail metric |
-| `--text-number` | A number inside a table cell |
-| `--text-number-sm` | Latency, byte counts, inline statistics |
+The two exceptions are genuinely distinct sizes and are the only numeric
+tokens: `--text-metric` (the largest value on a page) and `--text-metric-sm`
+(an in-rail value).
 
-All four use the mono face with `font-variant-numeric: tabular-nums`. Values
-that change — latency, sizes, counters — must not be able to move the layout
-beside them, and a column of numbers must align by width alone.
+The requirement is what matters: values that change — latency, sizes, counters
+— must not be able to move the layout beside them, and a column of numbers must
+align by width alone.
+
+### 3.4 Weight
+
+Four weights, and nothing between them: normal (400), medium (500), semibold
+(600), bold (700).
+
+Step 02 collapsed twelve arbitrary weights into these. Anything between two
+steps rounds to the nearer one — 550 became medium, 680 became semibold —
+because a weight that exists at 650 in one place and 680 in another is drift
+that reads as inconsistency rather than nuance.
+
+### 3.5 Where `components/ui` keeps its own sizes
+
+The generated primitives still use Tailwind's named sizes (`text-sm`,
+`text-xs`). They are left alone on purpose: the application layer overrides
+their type at every call site, and editing generated files is a tax on every
+future `shadcn add`. The product's type is decided in `components/app` and the
+surfaces, not in the primitives.
 
 ## 4. Status System
 

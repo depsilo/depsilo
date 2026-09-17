@@ -212,7 +212,7 @@ export default function AuditLogsV2() {
           <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('audit.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
+            className="min-w-0 flex-1 bg-transparent text-field outline-none md:text-body text-foreground"
             placeholder={t('audit.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -263,7 +263,7 @@ export default function AuditLogsV2() {
                 else next.set('range', r)
               })}
               aria-pressed={timeRange === r}
-              className="px-2.5 py-1 text-[11px] rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
+              className="px-2.5 py-1 text-meta rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
               style={{
                 background: timeRange === r ? 'var(--primary)' : 'transparent',
                 color: timeRange === r ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
@@ -286,7 +286,7 @@ export default function AuditLogsV2() {
       </form>
 
       {isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground">
+        <div aria-busy="true" className="py-8 text-center text-body text-muted-foreground">
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       ) : isError && !data ? (
@@ -298,11 +298,11 @@ export default function AuditLogsV2() {
             <EmptyState icon={ReceiptText} title={t('audit.noLogs')} hint={t('audit.noLogsHint')} minHeight={240} />
           ) : (
             <TableViewport label={t('audit.table')} minWidth={1180}>
-          <table className="w-full text-[12px]">
+          <table className="w-full text-label">
             <thead>
               <tr className="border-b border-border">
                 {headers.map(h => (
-                  <th key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0 text-muted-foreground">
+                  <th key={h} scope="col" className="text-left text-meta font-mono font-semibold uppercase py-2 px-3 first:pl-0 text-muted-foreground">
                     {h}
                   </th>
                 ))}
@@ -320,7 +320,7 @@ export default function AuditLogsV2() {
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={13} />}
-                      <span className="text-[11px] uppercase text-foreground">{row.ecosystem}</span>
+                      <span className="text-meta uppercase text-foreground">{row.ecosystem}</span>
                     </div>
                   </td>
                   <td className="py-2 px-3 max-w-[220px]">

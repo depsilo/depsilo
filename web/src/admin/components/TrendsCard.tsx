@@ -137,9 +137,9 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
   const formattedLabel = typeof label === 'number' ? fmtTooltipTime(label, dataRange) : label
   return (
     <div
-      className="rounded-md border border-border bg-card px-3 py-2 text-[12px] shadow-lg"
+      className="rounded-md border border-border bg-card px-3 py-2 text-label shadow-lg"
     >
-      <p className="font-[400] mb-1 text-foreground">{formattedLabel}</p>
+      <p className="font-normal mb-1 text-foreground">{formattedLabel}</p>
       {payload.map((entry) => {
         const v = entry.value
         let display: string
@@ -223,7 +223,7 @@ export default function TrendsCard({
                       onClick={() => setTab(tb.value)}
                       aria-pressed={active}
                       className={cn(
-                        'min-h-10 min-w-0 cursor-pointer rounded-sm border-b-2 border-transparent bg-transparent px-2 text-[11px] whitespace-nowrap transition-colors sm:px-2.5',
+                        'min-h-10 min-w-0 cursor-pointer rounded-sm border-b-2 border-transparent bg-transparent px-2 text-meta whitespace-nowrap transition-colors sm:px-2.5',
                         active
                           ? 'border-b-primary font-semibold text-foreground'
                           : 'font-medium text-muted-foreground hover:text-foreground',
@@ -249,7 +249,7 @@ export default function TrendsCard({
                       onClick={() => onRangeChange(r.value)}
                       aria-pressed={active}
                       className={cn(
-                        'min-h-10 min-w-0 cursor-pointer rounded-sm border px-2 text-[11px] font-medium whitespace-nowrap transition-colors sm:px-2.5',
+                        'min-h-10 min-w-0 cursor-pointer rounded-sm border px-2 text-meta font-medium whitespace-nowrap transition-colors sm:px-2.5',
                         active
                           ? 'border-input bg-card text-foreground'
                           : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -266,7 +266,7 @@ export default function TrendsCard({
       </div>
 
       {isStale && (
-        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-[11px] text-warning" role="status">
+        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-meta text-warning" role="status">
           <span>{t('now.staleData')}</span>
           {onRetry && (
             <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRetry}>
@@ -285,8 +285,8 @@ export default function TrendsCard({
             <ChartNoAxesCombined className="icon icon-sm" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-[12px] font-[650] text-foreground">{t('dashboard.emptyTrendTitle')}</h3>
-            <p className="mt-1 max-w-[52ch] text-[11px] leading-[1.5] text-muted-foreground">
+            <h3 className="text-label font-semibold text-foreground">{t('dashboard.emptyTrendTitle')}</h3>
+            <p className="mt-1 max-w-[52ch] text-meta leading-[1.5] text-muted-foreground">
               {t('dashboard.emptyTrendHint')}
             </p>
           </div>

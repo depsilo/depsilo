@@ -24,13 +24,13 @@ export default function DataTableV2<T extends Record<string, unknown>>({
 }: DataTableV2Props<T>) {
   return (
     <TableViewport label={ariaLabel} minWidth={minWidth}>
-      <table className="w-full text-[12px]">
+      <table className="w-full text-label">
         <thead>
           <tr className="border-b border-border">
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="py-2 px-3 first:pl-0 text-left text-[10px] font-mono font-[600] uppercase text-muted-foreground"
+                className="py-2 px-3 first:pl-0 text-left text-micro font-mono font-semibold uppercase text-muted-foreground"
               >
                 {col.label}
               </th>

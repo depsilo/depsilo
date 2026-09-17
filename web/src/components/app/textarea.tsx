@@ -32,7 +32,7 @@ export default function Textarea({
         id={controlId}
         aria-invalid={error ? true : ariaInvalid}
         aria-describedby={mergeDescriptionIds(ariaDescribedBy, messageId)}
-        className={cn('min-h-20 px-3 py-2 text-[16px] md:text-[13px]', className)}
+        className={cn('min-h-20 px-3 py-2 text-field md:text-body', className)}
       />
     </Field>
   )

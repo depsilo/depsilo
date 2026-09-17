@@ -67,7 +67,7 @@ export default function Tabs({
             value={item.key}
             disabled={item.disabled}
             className={cn(
-              'min-h-10 shrink-0 gap-2 px-4 py-2.5 text-[13px]',
+              'min-h-10 shrink-0 gap-2 px-4 py-2.5 text-body',
               directory
                 ? cn(
                     'justify-start rounded-md text-muted-foreground data-active:bg-accent data-active:text-accent-foreground',

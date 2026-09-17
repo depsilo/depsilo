@@ -178,12 +178,12 @@ export default function CompileCache() {
     {
       key: 'name',
       label: t('name'),
-      render: (value: unknown) => <span className="font-[500] text-foreground">{value as string}</span>,
+      render: (value: unknown) => <span className="font-medium text-foreground">{value as string}</span>,
     },
     {
       key: 'namespace',
       label: t('compileCache.namespace'),
-      render: (value: unknown) => <code className="font-mono text-[12px] text-muted-foreground">{value as string}</code>,
+      render: (value: unknown) => <code className="font-mono text-label text-muted-foreground">{value as string}</code>,
     },
     {
       key: 'permissions',
@@ -201,7 +201,7 @@ export default function CompileCache() {
       key: 'last_used_at',
       label: t('compileCache.lastUsed'),
       render: (value: unknown) => (
-        <span className="font-mono text-[12px] text-muted-foreground">
+        <span className="font-mono text-label text-muted-foreground">
           {value ? formatTime(value as string) : t('compileCache.neverUsed')}
         </span>
       ),
@@ -210,7 +210,7 @@ export default function CompileCache() {
       key: 'expires_at',
       label: t('compileCache.expiresAt'),
       render: (value: unknown) => (
-        <span className="font-mono text-[12px] text-muted-foreground">
+        <span className="font-mono text-label text-muted-foreground">
           {value ? formatTime(value as string) : t('compileCache.neverExpires')}
         </span>
       ),
@@ -287,7 +287,7 @@ export default function CompileCache() {
           <span id="compile-cache-status-heading" className="sr-only">{t('compileCache.statusTitle')}</span>
 
           {statusQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground">
+            <div aria-busy="true" className="py-8 text-center text-body text-muted-foreground">
               <span aria-hidden="true">{t('loading')}</span>
             </div>
           ) : statusQuery.isError && !statusResponse ? (
@@ -330,7 +330,7 @@ export default function CompileCache() {
                   </div>
 
                   <div>
-                    <div className="mb-2 flex items-center justify-between gap-4 text-[11px] text-muted-foreground">
+                    <div className="mb-2 flex items-center justify-between gap-4 text-meta text-muted-foreground">
                       <span>{t('compileCache.capacity')}</span>
                       <span className="font-mono tabular-nums">
                         {formatBytes(status.stats.size_bytes)} / {formatBytes(status.stats.max_bytes)}
@@ -352,15 +352,15 @@ export default function CompileCache() {
                   </div>
 
                   <div className="space-y-3 border-t border-border pt-4">
-                    <span className="text-[11px] font-[600] uppercase text-muted-foreground">
+                    <span className="text-meta font-semibold uppercase text-muted-foreground">
                       {t('compileCache.endpoints')}
                     </span>
                     {(['ccache', 'sccache'] as const).map(client => {
                       const target = `${client}-endpoint` as CopiedValue
                       return (
                         <div key={client} className="flex min-w-0 items-center gap-3">
-                          <span className="w-16 shrink-0 font-mono text-[12px] font-[600] text-foreground">{client}</span>
-                          <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-muted-foreground">
+                          <span className="w-16 shrink-0 font-mono text-label font-semibold text-foreground">{client}</span>
+                          <code className="min-w-0 flex-1 break-all font-mono text-label text-muted-foreground">
                             {status.endpoints[client]}
                           </code>
                           <IconButton
@@ -376,7 +376,7 @@ export default function CompileCache() {
               ) : (
                 <InlineNotice tone="warning" title={t('compileCache.disabledTitle')}>
                   <p>{t('compileCache.disabledHint')}</p>
-                  <pre className="mt-2 overflow-x-auto font-mono text-[12px]">[compile_cache]{'\n'}enabled = true</pre>
+                  <pre className="mt-2 overflow-x-auto font-mono text-label">[compile_cache]{'\n'}enabled = true</pre>
                 </InlineNotice>
               )}
             </div>
@@ -396,7 +396,7 @@ export default function CompileCache() {
           />
 
           {credentialsQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground">
+            <div aria-busy="true" className="py-8 text-center text-body text-muted-foreground">
               <span aria-hidden="true">{t('loading')}</span>
             </div>
           ) : credentialsQuery.isError && !credentialsResponse ? (
@@ -516,10 +516,10 @@ export default function CompileCache() {
                 const target = `${item.client}-config` as CopiedValue
                 return (
                   <section key={item.client} className="flex min-w-0 flex-col rounded-[7px] border border-border p-4">
-                    <h3 className="font-mono text-[14px] font-[650] text-foreground">{item.client}</h3>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{item.label}</p>
+                    <h3 className="font-mono text-body font-semibold text-foreground">{item.client}</h3>
+                    <p className="mt-1 text-meta text-muted-foreground">{item.label}</p>
                     <div className="mt-3 flex-1 rounded-[5px] bg-muted p-3">
-                      <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-5 text-foreground">
+                      <code className="block whitespace-pre-wrap break-all font-mono text-label leading-5 text-foreground">
                         {item.value}
                       </code>
                     </div>
@@ -557,7 +557,7 @@ export default function CompileCache() {
         }}
         title={t('compileCache.revokeTitle')}
       >
-        <p className="text-[13px] leading-5 text-muted-foreground">
+        <p className="text-body leading-5 text-muted-foreground">
           {t('compileCache.revokeHint', { name: revokeTarget?.name, namespace: revokeTarget?.namespace })}
         </p>
         {revokeMutation.isError && (
@@ -593,7 +593,7 @@ export default function CompileCache() {
         }}
         title={t('compileCache.cleanupTitle')}
       >
-        <p className="text-[13px] leading-5 text-muted-foreground">{t('compileCache.cleanupHint')}</p>
+        <p className="text-body leading-5 text-muted-foreground">{t('compileCache.cleanupHint')}</p>
         {cleanupMutation.isError && (
           <div className="mt-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>
         )}

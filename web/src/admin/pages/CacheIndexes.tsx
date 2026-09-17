@@ -85,7 +85,7 @@ export default function CacheIndexes() {
   if (query.isPending) {
     return (
       <AdminPage description={t('cacheIndexes.subtitle')}>
-        <div aria-busy="true" className="py-16 text-center text-[13px] text-muted-foreground">
+        <div aria-busy="true" className="py-16 text-center text-body text-muted-foreground">
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       </AdminPage>
@@ -128,20 +128,20 @@ export default function CacheIndexes() {
               <article key={item.adapter_type} className="border-l-2 border-border pl-4">
                 <div className="mb-3 flex items-center gap-2">
                   {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={15} />}
-                  <span className="text-[12px] font-[600] uppercase text-foreground">
+                  <span className="text-label font-semibold uppercase text-foreground">
                     {item.adapter_type}
                   </span>
                 </div>
                 <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-[10px] font-mono font-[600] uppercase text-muted-foreground">
+                    <p className="text-micro font-mono font-semibold uppercase text-muted-foreground">
                       {t('cacheIndexes.total')}
                     </p>
-                    <p data-metric-value className="mt-1 font-mono text-[28px] font-[600] leading-none tabular-nums text-foreground">
+                    <p data-metric-value className="mt-1 font-mono text-metric font-semibold leading-none tabular-nums text-foreground">
                       {item.total.toLocaleString()}
                     </p>
                   </div>
-                  <div className="space-y-1 text-right text-[11px] font-mono tabular-nums">
+                  <div className="space-y-1 text-right text-meta font-mono tabular-nums">
                     <p className="text-success">
                       {t('cacheIndexes.freshCount', { count: item.fresh })}
                     </p>
@@ -150,7 +150,7 @@ export default function CacheIndexes() {
                     </p>
                   </div>
                 </div>
-                <p className="mt-3 text-[10px] text-muted-foreground">
+                <p className="mt-3 text-micro text-muted-foreground">
                   {t('cacheIndexes.lastUpdated')}: {item.last_updated ? formatTime(item.last_updated) : t('cacheIndexes.neverUpdated')}
                 </p>
               </article>
@@ -168,7 +168,7 @@ export default function CacheIndexes() {
           <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
           <input
             aria-label={t('cacheIndexes.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
+            className="min-w-0 flex-1 bg-transparent text-field outline-none md:text-body text-foreground"
             placeholder={t('cacheIndexes.searchPlaceholder')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -200,7 +200,7 @@ export default function CacheIndexes() {
         />
       ) : (
         <TableViewport label={t('cacheIndexes.tableLabel')} minWidth={canWrite ? 1210 : 1160}>
-          <table className="w-full text-[12px]">
+          <table className="w-full text-label">
             <thead>
               <tr className="border-b border-border">
                 {[
@@ -215,12 +215,12 @@ export default function CacheIndexes() {
                   t('cacheIndexes.expiresAt'),
                   t('cacheIndexes.updatedAt'),
                 ].map((heading) => (
-                  <th key={heading} scope="col" className="px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase first:pl-0 text-muted-foreground">
+                  <th key={heading} scope="col" className="px-3 py-2 text-left font-mono text-micro font-semibold uppercase first:pl-0 text-muted-foreground">
                     {heading}
                   </th>
                 ))}
                 {canWrite && (
-                  <th scope="col" className="px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase text-muted-foreground">
+                  <th scope="col" className="px-3 py-2 text-left font-mono text-micro font-semibold uppercase text-muted-foreground">
                     {t('cacheIndexes.actions')}
                   </th>
                 )}
@@ -233,7 +233,7 @@ export default function CacheIndexes() {
                   className="transition-colors duration-75 hover:bg-muted border-b border-border"
                 >
                   <td className="max-w-[280px] py-2 pr-3">
-                    <span className="block truncate font-mono text-[11px] text-muted-foreground" title={item.key}>
+                    <span className="block truncate font-mono text-meta text-muted-foreground" title={item.key}>
                       {item.key}
                     </span>
                   </td>
@@ -261,7 +261,7 @@ export default function CacheIndexes() {
                   </td>
                   <td className="max-w-[220px] px-3 py-2">
                     {item.etag || item.last_modified ? (
-                      <div className="space-y-0.5 font-mono text-[10px] text-muted-foreground">
+                      <div className="space-y-0.5 font-mono text-micro text-muted-foreground">
                         {item.etag && <p className="truncate" title={item.etag}>ETag: {item.etag}</p>}
                         {item.last_modified && <p className="truncate" title={item.last_modified}>Last-Modified: {item.last_modified}</p>}
                       </div>

@@ -76,11 +76,11 @@ export default function HeroAICTA() {
           <div className="min-w-0">
             <h3
               id="quickstart-optional-ai-title"
-              className="m-0 font-sans text-[18px] font-[650] leading-[1.25] text-foreground"
+              className="m-0 font-sans text-subhead font-semibold leading-[1.25] text-foreground"
             >
               {t('quickstart.optionalAiTitle')}
             </h3>
-            <p className="mt-2 max-w-[62ch] text-[13px] leading-[1.55] text-muted-foreground">
+            <p className="mt-2 max-w-[62ch] text-body leading-[1.55] text-muted-foreground">
               {t('quickstart.optionalAiDescription')}
             </p>
           </div>
@@ -91,7 +91,7 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleCopy()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] font-[620] active:scale-[0.97]"
+            className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-[7px] px-3 text-body font-semibold active:scale-[0.97]"
             style={{
               color: copied ? 'var(--success)' : 'var(--primary-foreground)',
               background: copied ? 'var(--success-surface)' : 'var(--primary)',
@@ -117,7 +117,7 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleReview()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-[7px] px-3 text-[13px] font-[600] text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.97]"
+            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-[7px] px-3 text-body font-semibold text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.97]"
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',
@@ -135,7 +135,7 @@ export default function HeroAICTA() {
         {hasError && (
           <p
             role="alert"
-            className="mb-0 mt-3 text-[13px] leading-[1.5] text-destructive"
+            className="mb-0 mt-3 text-body leading-[1.5] text-destructive"
           >
             {copyFailed
               ? t('quickstart.copyFailed')
@@ -151,7 +151,7 @@ export default function HeroAICTA() {
         width={720}
       >
         <div className="flex flex-col gap-3">
-          <p className="m-0 text-[13px] leading-[1.55] text-muted-foreground">
+          <p className="m-0 text-body leading-[1.55] text-muted-foreground">
             {t('quickstart.aiIntegrationDesc')}
           </p>
           <div
@@ -161,14 +161,14 @@ export default function HeroAICTA() {
               border: '0.5px solid var(--border)',
             }}
           >
-            <span className="min-w-0 flex-1 text-[12px] leading-[1.5] text-muted-foreground">
+            <span className="min-w-0 flex-1 text-label leading-[1.5] text-muted-foreground">
               {t('quickstart.aiIntegrationHowto')}
             </span>
             {prompt && <CopyButton text={prompt} />}
           </div>
           <pre
             tabIndex={0}
-            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-[6px] p-4 font-mono text-[12px] leading-[1.55] text-foreground"
+            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-[6px] p-4 font-mono text-label leading-[1.55] text-foreground"
             style={{
               background: 'var(--muted)',
               border: '0.5px solid var(--border)',

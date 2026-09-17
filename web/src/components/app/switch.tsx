@@ -14,7 +14,7 @@ interface SwitchProps {
  */
 export default function Switch(props: SwitchProps) {
   return (
-    <label className="inline-flex min-h-10 items-center gap-3 text-[13px]">
+    <label className="inline-flex min-h-10 items-center gap-3 text-body">
       <UiSwitch
         checked={props.checked}
         onCheckedChange={props.onCheckedChange}

@@ -49,8 +49,8 @@ function formatTimeSaved(ms: number, t: (key: string) => string): string {
 function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-      <p className="font-[400] mb-1 text-foreground">{label}</p>
+    <div className="rounded-[4px] px-3 py-2 text-label" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+      <p className="font-normal mb-1 text-foreground">{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
           {entry.name}: {formatBytes(Number(entry.value))}
@@ -63,8 +63,8 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipVal
 function LatencyTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-      <p className="font-[400] mb-1 text-foreground">{label}</p>
+    <div className="rounded-[4px] px-3 py-2 text-label" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+      <p className="font-normal mb-1 text-foreground">{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
           {entry.name}: {Math.round(Number(entry.value))} ms
@@ -165,7 +165,7 @@ export default function BandwidthReport() {
             <button
               key={r.value}
               onClick={() => setRange(r.value)}
-              className="whitespace-nowrap rounded-[4px] px-3 py-1 text-[12px] font-[500] transition-colors duration-150 cursor-pointer"
+              className="whitespace-nowrap rounded-[4px] px-3 py-1 text-label font-medium transition-colors duration-150 cursor-pointer"
               style={{
                 background: active ? 'var(--primary)' : 'transparent',
                 color: active ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
@@ -271,7 +271,7 @@ export default function BandwidthReport() {
               </ResponsiveContainer>
               <div className="space-y-1.5 mt-3">
                 {ecoDonutData.slice(0, 6).map((e, i) => (
-                  <div key={e.name} className="flex items-center gap-2 text-[11px]">
+                  <div key={e.name} className="flex items-center gap-2 text-meta">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: getEcosystemColor(e.name, i) }} />
                     {isAdminEcosystem(e.name) && <EcosystemIcon type={e.name} size={12} />}
                     <span className="font-mono text-foreground">{e.name}</span>
@@ -298,10 +298,10 @@ export default function BandwidthReport() {
                     className="flex items-center gap-3 py-1.5"
                     style={{ borderBottom: i < topPackages.length - 1 ? '1px solid var(--border)' : 'none' }}
                   >
-                    <span className="text-[11px] font-mono tabular-nums w-4 shrink-0 text-right text-muted-foreground">{i + 1}</span>
+                    <span className="text-meta font-mono tabular-nums w-4 shrink-0 text-right text-muted-foreground">{i + 1}</span>
                     {isAdminEcosystem(p.ecosystem) && <EcosystemIcon type={p.ecosystem} size={12} />}
-                    <span className="font-mono text-[11px] truncate flex-1 text-foreground">{p.package_name}</span>
-                    <span className="font-mono text-[10px] tabular-nums shrink-0 text-muted-foreground">{formatBytes(p.total_bytes)}</span>
+                    <span className="font-mono text-meta truncate flex-1 text-foreground">{p.package_name}</span>
+                    <span className="font-mono text-micro tabular-nums shrink-0 text-muted-foreground">{formatBytes(p.total_bytes)}</span>
                     <div className="w-14 h-[3px] rounded-full shrink-0 bg-muted">
                       <div className="h-full rounded-full" style={{ width: `${(p.total_bytes / max) * 100}%`, background: 'var(--primary)' }} />
                     </div>
@@ -338,7 +338,7 @@ export default function BandwidthReport() {
         <SectionHeader
           title={t('bandwidth.latencyComparison')}
           action={
-            <span className="text-[11px] font-mono tabular-nums text-success">
+            <span className="text-meta font-mono tabular-nums text-success">
               {t('bandwidth.timeSaved')}: {formatTimeSaved(summary.time_saved_ms || 0, t)}
             </span>
           }

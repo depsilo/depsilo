@@ -293,8 +293,8 @@ export default function ConnectProject() {
           const complete = step === 'account' || (step === 'connect' && Boolean(firstRequest)) || (step === 'verify' && Boolean(firstCacheHit))
           const current = (step === 'connect' && !firstRequest) || (step === 'verify' && Boolean(firstRequest) && !firstCacheHit)
           return (
-            <li key={step} aria-current={current ? 'step' : undefined} className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
-              <span className={`grid size-6 shrink-0 place-items-center rounded-full font-mono text-[11px] ${complete || current ? 'bg-accent text-primary' : 'bg-muted'}`}>
+            <li key={step} aria-current={current ? 'step' : undefined} className="flex min-w-0 items-center gap-2 text-label text-muted-foreground">
+              <span className={`grid size-6 shrink-0 place-items-center rounded-full font-mono text-meta ${complete || current ? 'bg-accent text-primary' : 'bg-muted'}`}>
                 {complete ? <Check className="icon icon-sm" aria-hidden="true" /> : index + 1}
               </span>
               <span className="truncate">{t(`onboarding.steps.${step}`)}</span>
@@ -306,10 +306,10 @@ export default function ConnectProject() {
       <section aria-labelledby="onboarding-ecosystem-title">
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 id="onboarding-ecosystem-title" className="text-[16px] font-[660] text-foreground">{t('onboarding.chooseEcosystem')}</h2>
-            <p className="mt-1 text-[13px] text-muted-foreground">{t('onboarding.chooseEcosystemHint')}</p>
+            <h2 id="onboarding-ecosystem-title" className="text-field font-semibold text-foreground">{t('onboarding.chooseEcosystem')}</h2>
+            <p className="mt-1 text-body text-muted-foreground">{t('onboarding.chooseEcosystemHint')}</p>
           </div>
-          <button type="button" className="stripe-focus-ring min-h-10 rounded-[5px] px-2 text-[12px] font-[600] text-primary hover:bg-accent" onClick={toggleAllEcosystems} aria-expanded={showAll}>
+          <button type="button" className="stripe-focus-ring min-h-10 rounded-[5px] px-2 text-label font-semibold text-primary hover:bg-accent" onClick={toggleAllEcosystems} aria-expanded={showAll}>
             {showAll ? t('onboarding.showFeatured') : t('onboarding.viewAll')}
           </button>
         </div>
@@ -320,7 +320,7 @@ export default function ConnectProject() {
               type="button"
               aria-pressed={candidate.id === language?.id}
               onClick={() => setLanguageId(candidate.id)}
-              className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-[7px] border px-3 text-left text-[13px] font-[600] transition-[background,border-color,color] duration-150"
+              className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-[7px] border px-3 text-left text-body font-semibold transition-[background,border-color,color] duration-150"
               style={{
                 background: candidate.id === language?.id ? 'var(--accent)' : 'var(--card)',
                 borderColor: candidate.id === language?.id ? 'var(--border)' : 'var(--border)',
@@ -336,10 +336,10 @@ export default function ConnectProject() {
 
       {language && manager && (
         <section aria-labelledby="onboarding-manager-title" className="mt-7 border-t border-border pt-6">
-          <h2 id="onboarding-manager-title" className="text-[16px] font-[660] text-foreground">{t('onboarding.chooseManager', { ecosystem: language.name })}</h2>
+          <h2 id="onboarding-manager-title" className="text-field font-semibold text-foreground">{t('onboarding.chooseManager', { ecosystem: language.name })}</h2>
           <div role="group" aria-label={t('onboarding.managerLabel')} className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-[7px] bg-muted p-1">
             {language.managers.map(candidate => (
-              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-[5px] px-3 text-[13px] font-[600]" style={{ background: candidate.id === manager.id ? 'var(--card)' : 'transparent', color: candidate.id === manager.id ? 'var(--primary)' : 'var(--muted-foreground)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
+              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-[5px] px-3 text-body font-semibold" style={{ background: candidate.id === manager.id ? 'var(--card)' : 'transparent', color: candidate.id === manager.id ? 'var(--primary)' : 'var(--muted-foreground)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
                 {candidate.name}
               </button>
             ))}
@@ -347,15 +347,15 @@ export default function ConnectProject() {
 
           <div className="mt-6 space-y-6">
             <div className="min-w-0">
-              <h3 className="text-[14px] font-[650] text-foreground">{t('onboarding.configureManager', { manager: manager.name })}</h3>
-              <p className="mb-3 mt-1 break-words text-[12px] text-muted-foreground">
+              <h3 className="text-body font-semibold text-foreground">{t('onboarding.configureManager', { manager: manager.name })}</h3>
+              <p className="mb-3 mt-1 break-words text-label text-muted-foreground">
                 {manager.configure ? t('onboarding.configCommand') : t('onboarding.configFile', { file: manager.persistent.file })}
               </p>
               <CodeBlock filename={manager.configure ? undefined : manager.persistent.file} code={config} language={configuration.lang} copyName={t('onboarding.configuration')} tone="ink" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-[14px] font-[650] text-foreground">{t('onboarding.testIt')}</h3>
-              <p className={`${testCommand ? 'mb-3' : 'mb-0'} mt-1 text-[12px] leading-5 text-muted-foreground`}>
+              <h3 className="text-body font-semibold text-foreground">{t('onboarding.testIt')}</h3>
+              <p className={`${testCommand ? 'mb-3' : 'mb-0'} mt-1 text-label leading-5 text-muted-foreground`}>
                 {testCommand ? t('onboarding.testHint') : t('onboarding.normalDependencyCommand')}
               </p>
               {testCommand && manager.test && (
@@ -369,28 +369,28 @@ export default function ConnectProject() {
       <section aria-label={t('onboarding.steps.verify')} className="mt-7 border-t border-border pt-6">
         <div className="rounded-[8px] border border-input bg-card p-4 sm:p-5">
           {!session ? (
-            <div role="status" aria-busy="true" className="flex items-center gap-3 text-[13px] text-muted-foreground">
+            <div role="status" aria-busy="true" className="flex items-center gap-3 text-body text-muted-foreground">
               <LoaderCircle className="animate-spin motion-reduce:animate-none icon icon-sm" aria-hidden="true" />
               {t('onboarding.preparing')}
             </div>
           ) : firstCacheHit ? (
             <div>
-              <div className="flex items-center gap-2 text-success"><CircleCheck className="icon" aria-hidden="true" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstCacheHit')}</h2></div>
-              <p className="mt-2 font-mono text-[13px] text-foreground">{eventLabel(firstCacheHit)}</p>
-              <p className="mt-1 text-[13px] text-muted-foreground">{t('onboarding.servedFromCache')}</p>
-              <p className="mt-4 text-[13px] font-[600] text-foreground">{t('onboarding.ready')}</p>
+              <div className="flex items-center gap-2 text-success"><CircleCheck className="icon" aria-hidden="true" /><h2 id="onboarding-verify-title" className="text-title font-semibold">{t('onboarding.firstCacheHit')}</h2></div>
+              <p className="mt-2 font-mono text-body text-foreground">{eventLabel(firstCacheHit)}</p>
+              <p className="mt-1 text-body text-muted-foreground">{t('onboarding.servedFromCache')}</p>
+              <p className="mt-4 text-body font-semibold text-foreground">{t('onboarding.ready')}</p>
             </div>
           ) : firstRequest ? (
             <div>
-              <div className="flex items-center gap-2 text-success"><CircleCheck className="icon" aria-hidden="true" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstRequest')}</h2></div>
-              <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[13px]">
+              <div className="flex items-center gap-2 text-success"><CircleCheck className="icon" aria-hidden="true" /><h2 id="onboarding-verify-title" className="text-title font-semibold">{t('onboarding.firstRequest')}</h2></div>
+              <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-body">
                 <dt className="text-muted-foreground">{t('onboarding.package')}</dt><dd className="min-w-0 truncate font-mono text-foreground">{eventLabel(firstRequest)}</dd>
                 <dt className="text-muted-foreground">{t('onboarding.ecosystem')}</dt><dd className="text-foreground">{eventEcosystemLabel(firstRequest)}</dd>
                 <dt className="text-muted-foreground">{t('onboarding.result')}</dt><dd className="text-foreground">{t(`onboarding.outcomes.${requestKind}`)}</dd>
               </dl>
-              <p className="mt-4 text-[13px] text-muted-foreground">{requestKind === 'blocked' ? t('onboarding.blockedHint') : requestKind === 'error' ? t('onboarding.errorHint') : testCommand ? t('onboarding.runAgain') : t('onboarding.runAgainNormal')}</p>
+              <p className="mt-4 text-body text-muted-foreground">{requestKind === 'blocked' ? t('onboarding.blockedHint') : requestKind === 'error' ? t('onboarding.errorHint') : testCommand ? t('onboarding.runAgain') : t('onboarding.runAgainNormal')}</p>
               {requestKind === 'error' && (
-                <Link to={getAdminRouteHref('accessLogs')} className="stripe-focus-ring mt-3 inline-flex min-h-10 items-center rounded-[5px] px-2 text-[12px] font-[650] text-primary no-underline hover:bg-accent">
+                <Link to={getAdminRouteHref('accessLogs')} className="stripe-focus-ring mt-3 inline-flex min-h-10 items-center rounded-[5px] px-2 text-label font-semibold text-primary no-underline hover:bg-accent">
                   {t('onboarding.viewAccessLogs')}
                 </Link>
               )}
@@ -399,18 +399,18 @@ export default function ConnectProject() {
             <div>
               <div className="flex items-center gap-3">
                 <span aria-hidden="true" className="size-2 rounded-full bg-primary animate-pulse motion-reduce:animate-none" />
-                <h2 id="onboarding-verify-title" className="text-[17px] font-[680] text-foreground">{t('onboarding.waitingTitle')}</h2>
+                <h2 id="onboarding-verify-title" className="text-title font-semibold text-foreground">{t('onboarding.waitingTitle')}</h2>
               </div>
-              <p className="mt-2 text-[13px] text-muted-foreground">{testCommand ? t('onboarding.waitingHint') : t('onboarding.waitingNormalHint')}</p>
-              {showTroubleshooting && <p className="mt-4 border-t border-border pt-4 text-[12px] text-muted-foreground">{t('onboarding.nothingYet')}</p>}
+              <p className="mt-2 text-body text-muted-foreground">{testCommand ? t('onboarding.waitingHint') : t('onboarding.waitingNormalHint')}</p>
+              {showTroubleshooting && <p className="mt-4 border-t border-border pt-4 text-label text-muted-foreground">{t('onboarding.nothingYet')}</p>}
             </div>
           )}
-          {pollError && <p role="status" className="mt-3 text-[12px] text-warning">{t('onboarding.pollError')}</p>}
+          {pollError && <p role="status" className="mt-3 text-label text-warning">{t('onboarding.pollError')}</p>}
         </div>
       </section>
 
       <p className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</p>
-      {choiceError && <p role="alert" className="mt-4 text-[12px] text-destructive">{t('onboarding.saveError')}</p>}
+      {choiceError && <p role="alert" className="mt-4 text-label text-destructive">{t('onboarding.saveError')}</p>}
       <div className="mt-5 flex justify-end">
         <Button onClick={() => { void finish() }} disabled={savingChoice}>
           {savingChoice ? t('saving') : firstCacheHit ? t('onboarding.goDashboard') : t('onboarding.continueDashboard')}

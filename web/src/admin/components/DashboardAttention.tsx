@@ -48,10 +48,10 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
           <Icon icon={icon} size="sm" />
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-[12px] font-[650] text-foreground">{title}</h3>
-          <p className="mt-1 text-[11px] leading-[1.55] text-muted-foreground">{detail}</p>
+          <h3 className="text-label font-semibold text-foreground">{title}</h3>
+          <p className="mt-1 text-meta leading-[1.55] text-muted-foreground">{detail}</p>
         </div>
-        <span className="hidden shrink-0 items-center gap-1 text-[11px] font-[650] text-primary sm:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1 text-meta font-semibold text-primary sm:inline-flex">
           {action}
           <span aria-hidden>→</span>
         </span>
@@ -90,7 +90,7 @@ export default function DashboardAttention({
     >
       <header className="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 py-2">
         <div className="min-w-0">
-          <h2 id="dashboard-attention-title" className="text-[13px] font-[680] text-foreground">
+          <h2 id="dashboard-attention-title" className="text-body font-semibold text-foreground">
             {t('dashboard.needsAttention')}
           </h2>
           <p id="dashboard-attention-description" className="sr-only">
@@ -99,7 +99,7 @@ export default function DashboardAttention({
         </div>
         {!isPending && !initialErrorMessage && (
           <span
-            className="shrink-0 font-mono text-[12px] font-[650] tabular-nums"
+            className="shrink-0 font-mono text-label font-semibold tabular-nums"
             style={{ color: hasIssues ? 'var(--warning)' : 'var(--success)' }}
             aria-label={t('dashboard.attentionCount', { count: issueCount })}
           >
@@ -122,7 +122,7 @@ export default function DashboardAttention({
           {isStale && (
             <div
               role="status"
-              className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-[11px] text-warning"
+              className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-meta text-warning"
             >
               <span>{t('attention.queueStale')}</span>
               <ButtonV2
@@ -173,10 +173,10 @@ export default function DashboardAttention({
                 <CircleCheck className="icon icon-sm" aria-hidden="true" />
               </span>
               <div className="min-w-0">
-                <h3 className="text-[13px] font-[680] text-foreground">
+                <h3 className="text-body font-semibold text-foreground">
                   {t('dashboard.noActiveIssues')}
                 </h3>
-                <p className="mt-1.5 text-[12px] leading-[1.55] text-muted-foreground">
+                <p className="mt-1.5 text-label leading-[1.55] text-muted-foreground">
                   {t('dashboard.noActiveIssuesHint')}
                 </p>
               </div>

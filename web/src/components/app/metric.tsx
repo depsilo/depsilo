@@ -50,7 +50,7 @@ export default function Metric({
       )}
       data-metric-label={label}
     >
-      <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
+      <span className="text-meta font-semibold text-muted-foreground">{label}</span>
       <span
         data-metric-value
         className={cn(
@@ -67,7 +67,7 @@ export default function Metric({
           data-change-intent={changeIntent}
           data-change-tone={changeTone}
           className={cn(
-            'mt-1.5 font-mono text-[11px] tabular-nums',
+            'mt-1.5 font-mono text-meta tabular-nums',
             changeTone === 'positive' && 'text-success',
             changeTone === 'negative' && 'text-destructive',
             changeTone === 'neutral' && 'text-muted-foreground',

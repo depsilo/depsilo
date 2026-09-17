@@ -59,17 +59,17 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
         </span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[13px] font-[600] text-foreground">{title}</h3>
+            <h3 className="text-body font-semibold text-foreground">{title}</h3>
             {count !== undefined && (
               <BadgeV2 variant={tone === 'danger' ? 'error' : 'warning'}>{count.toLocaleString()}</BadgeV2>
             )}
           </div>
-          <p className="mt-1 max-w-2xl text-[12px] leading-5 text-muted-foreground">{detail}</p>
+          <p className="mt-1 max-w-2xl text-label leading-5 text-muted-foreground">{detail}</p>
         </div>
       </div>
       <Link
         to={href}
-        className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-[5px] px-2.5 text-[12px] font-[600] no-underline text-primary transition-colors duration-150 hover:bg-accent sm:self-center"
+        className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-[5px] px-2.5 text-label font-semibold no-underline text-primary transition-colors duration-150 hover:bg-accent sm:self-center"
       >
         {action}
         <span aria-hidden>→</span>
@@ -239,7 +239,7 @@ export default function Attention() {
             action={(
               <Link
                 to={getAdminRouteHref('quarantine')}
-                className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 text-[12px] font-[600] no-underline text-primary hover:bg-accent"
+                className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 text-label font-semibold no-underline text-primary hover:bg-accent"
               >
                 {t('attention.viewQuarantine')}
               </Link>
@@ -303,11 +303,11 @@ export default function Attention() {
                           <EcosystemIcon type={event.ecosystem} size={16} />
                         )}
                         <div className="min-w-0">
-                          <p className="break-all font-mono text-[13px] font-[500] text-foreground">
+                          <p className="break-all font-mono text-body font-medium text-foreground">
                             {event.package}
                             {event.version ? <span className="text-muted-foreground"> @{event.version}</span> : null}
                           </p>
-                          <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-muted-foreground">
+                          <p className="mt-1 line-clamp-2 text-label leading-5 text-muted-foreground">
                             {event.reason || t('attention.noReason')}
                           </p>
                         </div>
@@ -316,7 +316,7 @@ export default function Attention() {
                         <BadgeV2 variant={event.action.includes('blocked') || event.action === 'tamper_detected' ? 'error' : 'warning'}>
                           {t(`quarantine.action.${event.action}`)}
                         </BadgeV2>
-                        <time className="font-mono text-[11px] tabular-nums text-muted-foreground" dateTime={event.created_at}>
+                        <time className="font-mono text-meta tabular-nums text-muted-foreground" dateTime={event.created_at}>
                           {formatTime(event.created_at)}
                         </time>
                       </div>

@@ -64,14 +64,14 @@ export default function AdminPage({
           {(resolvedTitle || description) && (
             <div className="min-w-0 max-w-[72ch]">
               {resolvedTitle && (
-                <h1 data-admin-page-title className="text-[26px] leading-[1.25] font-semibold text-foreground">
+                <h1 data-admin-page-title className="text-page-title leading-[1.25] font-semibold text-foreground">
                   {resolvedTitle}
                 </h1>
               )}
               {description && (
                 <div
                   data-admin-page-description
-                  className={cn('text-[12px] leading-[1.6] text-muted-foreground', resolvedTitle && 'mt-1.5')}
+                  className={cn('text-label leading-[1.6] text-muted-foreground', resolvedTitle && 'mt-1.5')}
                 >
                   {description}
                 </div>
@@ -102,7 +102,7 @@ export default function AdminPage({
                 to={route.href}
                 aria-current={route.id === activeRoute?.id ? 'page' : undefined}
                 className={cn(
-                  'inline-flex min-h-10 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-0.5 py-2 text-[12px] font-medium whitespace-nowrap text-muted-foreground no-underline transition-colors hover:text-foreground',
+                  'inline-flex min-h-10 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-0.5 py-2 text-label font-medium whitespace-nowrap text-muted-foreground no-underline transition-colors hover:text-foreground',
                   'focus-visible:outline-offset-[-3px]',
                   'aria-[current=page]:border-primary aria-[current=page]:font-semibold aria-[current=page]:text-foreground',
                 )}

@@ -44,9 +44,9 @@ export default function Select({
       aria-invalid={error ? true : ariaInvalid}
       aria-describedby={mergeDescriptionIds(ariaDescribedBy, messageId)}
       className={cn(
-        'h-9 w-full cursor-pointer rounded-md border border-input bg-transparent px-3 py-1.5 text-[16px] text-foreground',
+        'h-9 w-full cursor-pointer rounded-md border border-input bg-transparent px-3 py-1.5 text-field text-foreground',
         'transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-        'aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 md:text-[13px]',
+        'aria-invalid:border-destructive disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30 md:text-body',
         className,
       )}
     >

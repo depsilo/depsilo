@@ -42,15 +42,15 @@ export default function ProRequiredCallout({
         >
           <Icon icon={icon} className="text-primary" size="lg" />
         </div>
-        <h3 className="text-[18px] font-[600]" style={{ color: 'var(--foreground)', letterSpacing: '-0.02em' }}>
+        <h3 className="text-subhead font-semibold" style={{ color: 'var(--foreground)', letterSpacing: '-0.02em' }}>
           {title}
         </h3>
-        <p className="text-[14px] max-w-md text-muted-foreground">
+        <p className="text-body max-w-md text-muted-foreground">
           {description}
         </p>
         <a
           href={upgradeHref}
-          className="inline-flex min-h-9 items-center justify-center rounded-[5px] bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/80 pointer-coarse:min-h-10"
+          className="inline-flex min-h-9 items-center justify-center rounded-[5px] bg-primary px-3 py-1.5 text-body font-medium text-primary-foreground no-underline transition-colors hover:bg-primary/80 pointer-coarse:min-h-10"
           style={{
             boxShadow: 'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
           }}

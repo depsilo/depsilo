@@ -306,6 +306,46 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
+  /* Type scale. Nine roles, and nothing else: before this the app layer used
+     seventeen arbitrary sizes and twelve arbitrary font weights, which is
+     drift rather than a system. Sizes are px, deliberately — a dense operator
+     table should not reflow because a reader raised their browser's base
+     font size.
+
+     Each role carries its own line height, so a call site that needs different
+     leading has to say so explicitly with a `leading-*` utility. That utility
+     wins, because Tailwind emits line-height utilities after font-size ones. */
+  --text-micro: 10px;
+  --text-micro--line-height: 1.5;
+  --text-meta: 11px;
+  --text-meta--line-height: 1.5;
+  --text-label: 12px;
+  --text-label--line-height: 1.5;
+  --text-body: 13px;
+  --text-body--line-height: 1.5;
+  --text-title: 16px;
+  --text-title--line-height: 1.5;
+  --text-subhead: 18px;
+  --text-subhead--line-height: 1.4;
+  --text-page-title: 26px;
+  --text-page-title--line-height: 1.25;
+  /* Numeric roles are only the two sizes that are unique to a measured value.
+     A table cell full of numbers is ordinary body text with the mono face and
+     tabular figures, not a different type size. */
+  --text-metric-sm: 22px;
+  --text-metric-sm--line-height: 1;
+  --text-metric: 30px;
+  --text-metric--line-height: 1;
+  /* Not a type choice: 16px is the floor below which a focused field makes
+     mobile Safari zoom, so a form control uses this size on small screens.
+     Named `field`, not `input`: `text-*` is shared between font size and
+     colour, so a size token whose name matches a `--color-*` token loses —
+     `text-input` silently resolved to `--color-input` and gave elements a
+     translucent outline colour instead of a size. */
+
+  --text-field: 16px;
+  --text-field--line-height: 1.5;
+
   --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-heading: var(--font-sans);

@@ -533,7 +533,7 @@ export default function UpstreamsV2() {
                         key={option.value}
                         type="button"
                         aria-pressed={active}
-                        className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border px-2.5 text-[12px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
+                        className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border px-2.5 text-label transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
                         style={{
                           background: active ? 'var(--card)' : 'transparent',
                           borderColor: active ? 'var(--input)' : 'transparent',
@@ -562,7 +562,7 @@ export default function UpstreamsV2() {
                     value={search}
                     aria-label={t('upstreams.searchLabel')}
                     placeholder={t('upstreams.searchPlaceholder')}
-                    className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
+                    className="min-w-0 flex-1 bg-transparent text-field outline-none md:text-body text-foreground"
                     onChange={(event) => setSearch(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Escape') {
@@ -584,7 +584,7 @@ export default function UpstreamsV2() {
                   ) : (
                     <kbd
                       aria-hidden="true"
-                      className="hidden rounded-[4px] border border-border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:inline"
+                      className="hidden rounded-[4px] border border-border px-1.5 py-0.5 font-mono text-meta text-muted-foreground sm:inline"
                     >
                       /
                     </kbd>
@@ -722,7 +722,7 @@ export default function UpstreamsV2() {
         >
           <form onSubmit={handleSubmit} className="space-y-5">
             <fieldset className="space-y-3" disabled={isSaving}>
-              <legend className="mb-3 text-[12px] font-[600] text-foreground">
+              <legend className="mb-3 text-label font-semibold text-foreground">
                 {t('upstreams.connectionSection')}
               </legend>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -794,7 +794,7 @@ export default function UpstreamsV2() {
             </fieldset>
 
             <fieldset className="space-y-3 border-t border-border pt-4" disabled={isSaving}>
-              <legend className="px-1 text-[12px] font-[600] text-foreground">
+              <legend className="px-1 text-label font-semibold text-foreground">
                 {t('upstreams.healthSection')}
               </legend>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -863,13 +863,13 @@ export default function UpstreamsV2() {
         >
           {deleteTarget && (
             <div className="space-y-5">
-              <p className="text-[14px] leading-6 text-muted-foreground">
+              <p className="text-body leading-6 text-muted-foreground">
                 {t('upstreams.confirmDeleteMsg', {
                   name: deleteTarget.name,
                   ecosystem: deleteTarget.adapter_type,
                 })}
               </p>
-              <dl className="space-y-2 border-y border-border py-3 text-[12px]">
+              <dl className="space-y-2 border-y border-border py-3 text-label">
                 <div className="flex min-w-0 items-start justify-between gap-4">
                   <dt className="text-muted-foreground">{t('upstreams.url')}</dt>
                   <dd

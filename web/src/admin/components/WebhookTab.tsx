@@ -178,7 +178,7 @@ export default function WebhookTab() {
   return (
     <div className="min-w-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 text-[13px] leading-5 text-muted-foreground">{t('webhook.description')}</p>
+        <p className="min-w-0 text-body leading-5 text-muted-foreground">{t('webhook.description')}</p>
         {canWrite && (
           <ButtonV2 type="button" onClick={openCreate}>{t('webhook.addWebhook')}</ButtonV2>
         )}
@@ -201,12 +201,12 @@ export default function WebhookTab() {
               <article key={webhook.id} className="flex min-w-0 flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <strong className="text-[14px] font-[600] text-foreground">{webhook.name}</strong>
+                    <strong className="text-body font-semibold text-foreground">{webhook.name}</strong>
                     <BadgeV2>{t(`webhook.platforms.${webhook.platform}`)}</BadgeV2>
                     {!webhook.enabled && <BadgeV2 variant="warning">{t('webhook.disabled')}</BadgeV2>}
                   </div>
-                  <p className="break-all font-mono text-[12px] leading-5 text-muted-foreground">{webhook.url}</p>
-                  <dl className="mt-2 flex min-w-0 flex-col gap-1 text-[12px] text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-4">
+                  <p className="break-all font-mono text-label leading-5 text-muted-foreground">{webhook.url}</p>
+                  <dl className="mt-2 flex min-w-0 flex-col gap-1 text-label text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-x-4">
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.events')}:</dt><dd className="min-w-0 break-words">{webhook.events === '*' ? t('webhook.eventsAll') : webhook.events}</dd></div>
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.cooldown')}:</dt><dd className="min-w-0 break-words">{t('webhook.minutes', { count: webhook.cooldown_minutes })}</dd></div>
                     <div className="flex min-w-0 gap-1"><dt className="shrink-0">{t('webhook.lastSent')}:</dt><dd className="min-w-0 break-words">{formatLastSent(webhook.last_sent_at)}</dd></div>
@@ -251,10 +251,10 @@ export default function WebhookTab() {
           <SelectV2 label={t('webhook.platform')} value={form.platform} onChange={event => setForm(current => ({ ...current, platform: event.target.value as WebhookConfig['platform'] }))}>
             {PLATFORM_OPTIONS.map(platform => <option key={platform} value={platform}>{t(`webhook.platforms.${platform}`)}</option>)}
           </SelectV2>
-          {guide && <p className="text-[12px] leading-5 text-muted-foreground">{t('webhook.guideTitle')}: {guide}</p>}
+          {guide && <p className="text-label leading-5 text-muted-foreground">{t('webhook.guideTitle')}: {guide}</p>}
           <InputV2 label={t('webhook.url')} value={form.url} onChange={event => setForm(current => ({ ...current, url: event.target.value }))} placeholder={t('webhook.urlPlaceholder')} />
           <fieldset aria-invalid={!hasEvents || undefined} aria-describedby={!hasEvents ? 'webhook-events-error' : undefined}>
-            <legend className="mb-2 text-[14px] text-muted-foreground">{t('webhook.events')}</legend>
+            <legend className="mb-2 text-body text-muted-foreground">{t('webhook.events')}</legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {WEBHOOK_EVENTS.map(eventName => {
                 const current = eventValues(form.events)
@@ -273,7 +273,7 @@ export default function WebhookTab() {
               })}
             </div>
             {!hasEvents && (
-              <p id="webhook-events-error" role="alert" className="mt-2 text-[12px] text-destructive">
+              <p id="webhook-events-error" role="alert" className="mt-2 text-label text-destructive">
                 {t('webhook.eventRequired')}
               </p>
             )}
@@ -293,7 +293,7 @@ export default function WebhookTab() {
         finalFocus={deleteTriggerRef}
         closeDisabled={deleteMutation.isPending}
       >
-        <p className="mb-5 text-[13px] leading-5 text-muted-foreground">{t('webhook.deleteWarning')}</p>
+        <p className="mb-5 text-body leading-5 text-muted-foreground">{t('webhook.deleteWarning')}</p>
         <div className="flex justify-end gap-2">
           <ButtonV2 type="button" variant="secondary" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</ButtonV2>
           <ButtonV2 type="button" variant="danger" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>

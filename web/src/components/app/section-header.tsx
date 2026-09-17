@@ -20,8 +20,8 @@ export default function SectionHeader({ title, action, hint, divider = true }: S
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-[14px] font-semibold text-foreground">{title}</h2>
-        {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+        <h2 className="text-body font-semibold text-foreground">{title}</h2>
+        {hint && <p className="mt-1 text-meta text-muted-foreground">{hint}</p>}
       </div>
       {action && (
         <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">{action}</div>

@@ -65,11 +65,11 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <header className="max-w-[760px]">
         <h1
           id="quickstart-title"
-          className="m-0 font-sans text-[clamp(30px,3vw,38px)] font-[680] leading-[1.08] text-foreground"
+          className="m-0 font-sans text-[clamp(30px,3vw,38px)] font-semibold leading-[1.08] text-foreground"
         >
           {t('quickstart.title')}
         </h1>
-        <p className="mt-2 max-w-[68ch] text-[14px] leading-[1.5] text-muted-foreground">
+        <p className="mt-2 max-w-[68ch] text-body leading-[1.5] text-muted-foreground">
           {t('quickstart.flowIntro')}
         </p>
       </header>
@@ -113,11 +113,11 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
         <div className="mb-4 max-w-[68ch]">
           <h2
             id="quickstart-optional-title"
-            className="m-0 font-sans text-[20px] font-[650] leading-[1.2] text-foreground"
+            className="m-0 font-sans text-subhead font-semibold leading-[1.2] text-foreground"
           >
             {t('quickstart.optionalTitle')}
           </h2>
-          <p className="mt-1 text-[13px] leading-[1.5] text-muted-foreground">
+          <p className="mt-1 text-body leading-[1.5] text-muted-foreground">
             {t('quickstart.optionalDescription')}
           </p>
         </div>

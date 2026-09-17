@@ -78,15 +78,15 @@ function StatusMetric({
 
   return (
     <div className={cn('flex min-w-0 flex-col items-start text-left', className)} data-dashboard-status-metric>
-      <span className="text-[11px] font-[600] text-muted-foreground">{label}</span>
+      <span className="text-meta font-semibold text-muted-foreground">{label}</span>
       <span
         data-metric-value
-        className="mt-2 min-w-0 font-[650] leading-[1.15]"
+        className="mt-2 min-w-0 font-semibold leading-[1.15]"
         style={{ color, fontFamily: 'var(--font-sans)', fontSize: 'clamp(20px, 3vw, 28px)' }}
       >
         {value}
       </span>
-      <span className="mt-1.5 text-[11px] leading-[1.45] text-muted-foreground">{detail}</span>
+      <span className="mt-1.5 text-meta leading-[1.45] text-muted-foreground">{detail}</span>
     </div>
   )
 }
@@ -200,7 +200,7 @@ export default function DashboardV2() {
       actions={(
         <Link
           to={getAdminRouteHref('connect')}
-          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[13px] font-medium no-underline pointer-coarse:min-h-10"
+          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-body font-medium no-underline pointer-coarse:min-h-10"
           style={{ color: 'var(--primary-foreground)', background: 'var(--primary)' }}
         >
           <Link2 className="icon icon-sm" aria-hidden="true" />
@@ -220,7 +220,7 @@ export default function DashboardV2() {
             title={t('dashboard.healthOverview')}
             divider={false}
             action={(
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-meta text-muted-foreground">
                 {t('dashboard.snapshotRange')}
               </span>
             )}

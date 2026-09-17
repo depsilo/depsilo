@@ -449,7 +449,7 @@ export default function MonitorPage() {
                 action={(
                   <Link
                     to="/admin/upstreams"
-                    className="inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-[13px] font-medium no-underline"
+                    className="inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-body font-medium no-underline"
                     style={{
                       border: '0.5px solid var(--input)',
                       color: 'var(--foreground)',

@@ -39,8 +39,8 @@ export default function EmptyState({
       style={{ minHeight }}
     >
       <Icon icon={icon} size="lg" />
-      <p className="mt-3 text-[13px] font-medium text-foreground">{title}</p>
-      {hint && <p className="mt-1 max-w-[36ch] text-[12px] text-muted-foreground">{hint}</p>}
+      <p className="mt-3 text-body font-medium text-foreground">{title}</p>
+      {hint && <p className="mt-1 max-w-[36ch] text-label text-muted-foreground">{hint}</p>}
       {action && <div className="mt-3">{action}</div>}
     </div>
   )

@@ -208,7 +208,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
+          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-meta font-mono whitespace-nowrap pointer-events-none z-10"
           style={{ background: 'var(--foreground)', color: 'var(--background)', left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
@@ -235,7 +235,7 @@ export function UpstreamRow({
   const latency = (upstream.avg_latency_ms || 0) <= 1 ? '--' : `${upstream.avg_latency_ms}ms`
   const statusIndicator = (
     <span
-      className="inline-flex shrink-0 items-center gap-1 text-[11px] font-[550] text-muted-foreground"
+      className="inline-flex shrink-0 items-center gap-1 text-meta font-medium text-muted-foreground"
     >
       <StatusDot status={status} />
       {t(`monitor.${status}`)}
@@ -243,7 +243,7 @@ export function UpstreamRow({
   )
   const latencyIndicator = (
     <span
-      className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground"
+      className="shrink-0 font-mono text-meta tabular-nums text-muted-foreground"
     >
       {latency}
     </span>
@@ -255,7 +255,7 @@ export function UpstreamRow({
         <>
           <div className="flex min-w-0 items-center justify-between gap-2">
             <span
-              className="min-w-0 flex-1 truncate text-[12px] font-[400] text-foreground"
+              className="min-w-0 flex-1 truncate text-label font-normal text-foreground"
               title={upstream.name}
             >
               {upstream.name}
@@ -271,7 +271,7 @@ export function UpstreamRow({
             {statusIndicator}
             {latencyIndicator}
             {metadata !== undefined && metadata !== null && metadata !== false && (
-              <div data-upstream-metadata className="min-w-0 text-[11px] text-muted-foreground">
+              <div data-upstream-metadata className="min-w-0 text-meta text-muted-foreground">
                 {metadata}
               </div>
             )}
@@ -281,7 +281,7 @@ export function UpstreamRow({
         <>
           <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
             <span
-              className="min-w-0 flex-1 truncate text-[12px] font-[400] text-foreground"
+              className="min-w-0 flex-1 truncate text-label font-normal text-foreground"
               title={upstream.name}
             >
               {upstream.name}
@@ -294,7 +294,7 @@ export function UpstreamRow({
           {metadata !== undefined && metadata !== null && metadata !== false && (
             <div
               data-upstream-metadata
-              className="mb-1 min-w-0 text-[11px] text-muted-foreground"
+              className="mb-1 min-w-0 text-meta text-muted-foreground"
             >
               {metadata}
             </div>
@@ -371,7 +371,7 @@ export function UpstreamGroupedPanel({
   }, [resolvedUpstreams])
 
   if (upstreams.length === 0) {
-    return <p className="text-[13px] py-4 text-muted-foreground">{t('monitor.noUpstreams')}</p>
+    return <p className="text-body py-4 text-muted-foreground">{t('monitor.noUpstreams')}</p>
   }
 
   const isCards = variant === 'cards'
@@ -383,12 +383,12 @@ export function UpstreamGroupedPanel({
         <div
           data-upstream-history-error
           role="status"
-          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-[6px] border border-warning/35 bg-warning/10 px-3 py-2 text-[12px] text-warning"
+          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-[6px] border border-warning/35 bg-warning/10 px-3 py-2 text-label text-warning"
         >
           <span>{t('monitor.historyUnavailable')}</span>
           <button
             type="button"
-            className="shrink-0 font-[600] underline underline-offset-2 text-foreground"
+            className="shrink-0 font-semibold underline underline-offset-2 text-foreground"
             onClick={() => { void refetchLatencies() }}
           >
             {t('common.retry')}
@@ -429,12 +429,12 @@ export function UpstreamGroupedPanel({
                 >
                   <h2
                     id={headingId}
-                    className="flex min-w-0 items-center gap-2 text-[12px] font-mono font-[600] uppercase tracking-[0.1em] text-foreground"
+                    className="flex min-w-0 items-center gap-2 text-label font-mono font-semibold uppercase tracking-[0.1em] text-foreground"
                   >
                     {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor decorative />}
                     <span className="min-w-0 truncate">{adapter}</span>
                   </h2>
-                  <span className="ml-auto shrink-0 text-[12px] font-mono tabular-nums text-muted-foreground">
+                  <span className="ml-auto shrink-0 text-label font-mono tabular-nums text-muted-foreground">
                     {t('monitor.historySummary', { count: checkCount })} · {t('monitor.healthySummary', { healthy: healthyCount, total: items.length })}
                   </span>
                 </div>

@@ -129,25 +129,25 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
             size="sm"
             className={result.allowed ? 'text-success' : 'text-destructive'}
           />
-          <span className="text-[14px] font-[400]" style={{ color: result.allowed ? 'var(--success)' : 'var(--destructive)' }}>
+          <span className="text-body font-normal" style={{ color: result.allowed ? 'var(--success)' : 'var(--destructive)' }}>
             {result.allowed ? t('rules.resultAllowed') : t('rules.resultDenied')}
           </span>
         </div>
 
         {winner ? (
-          <div className="space-y-1 text-[12px] text-muted-foreground" data-rule-test-winner>
-            <p className="font-[400] text-foreground">{t('rules.winningRule')}</p>
+          <div className="space-y-1 text-label text-muted-foreground" data-rule-test-winner>
+            <p className="font-normal text-foreground">{t('rules.winningRule')}</p>
             <p className="break-all font-mono" data-rule-test-winner-selector>
               {ruleSelector(winner)} → {winner.action === 'allow' ? t('rules.allow') : t('rules.deny')}
             </p>
-            {winnerReason && <p data-rule-test-reason><span className="font-[400] text-foreground">{t('rules.decisionReason')}:</span> {winnerReason}</p>}
-            {precedenceReason && <p data-rule-test-precedence><span className="font-[400] text-foreground">{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
+            {winnerReason && <p data-rule-test-reason><span className="font-normal text-foreground">{t('rules.decisionReason')}:</span> {winnerReason}</p>}
+            {precedenceReason && <p data-rule-test-precedence><span className="font-normal text-foreground">{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
           </div>
         ) : (
-          <div className="space-y-1 text-[12px] text-muted-foreground">
+          <div className="space-y-1 text-label text-muted-foreground">
             <p data-rule-test-no-match>{result.allowed ? t('rules.noMatch') : t('rules.noMatchDenied')}</p>
             {displayReason && <p data-rule-test-reason>{displayReason}</p>}
-            {precedenceReason && <p data-rule-test-precedence><span className="font-[400] text-foreground">{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
+            {precedenceReason && <p data-rule-test-precedence><span className="font-normal text-foreground">{t('rules.precedenceReason')}:</span> {precedenceReason}</p>}
           </div>
         )}
       </div>
@@ -165,7 +165,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
       {!hasCandidateData ? null : candidates.length > 0 ? (
         <section aria-label={t('rules.candidateRules')} data-rule-test-candidates>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-[13px] font-[500] text-foreground">{t('rules.candidateRules')}</h3>
+            <h3 className="text-body font-medium text-foreground">{t('rules.candidateRules')}</h3>
             <BadgeV2 variant="neutral">{candidates.length}</BadgeV2>
           </div>
           <ol className="space-y-2">
@@ -188,7 +188,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                   }}
                 >
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-                    <span className="min-w-0 break-all font-mono text-[12px] text-foreground">
+                    <span className="min-w-0 break-all font-mono text-label text-foreground">
                       {ruleSelector(candidate.rule)}
                     </span>
                     <div className="flex shrink-0 flex-wrap items-center gap-1">
@@ -199,7 +199,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                       {!matched && <BadgeV2 variant="neutral">{t('rules.notMatched')}</BadgeV2>}
                     </div>
                   </div>
-                  <div className="mt-2 grid min-w-0 grid-cols-1 gap-1 text-[11px] sm:grid-cols-3" data-rule-test-levels>
+                  <div className="mt-2 grid min-w-0 grid-cols-1 gap-1 text-meta sm:grid-cols-3" data-rule-test-levels>
                     <span className="min-w-0 break-words text-muted-foreground">
                       <span className="text-muted-foreground">{t('rules.levelEcosystem')}:</span>{' '}
                       {matchLevelLabel(t, 'ecosystem', levels?.ecosystem)}
@@ -214,7 +214,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                     </span>
                   </div>
                   {specificity && (
-                    <p className="mt-1 break-words text-[11px] text-muted-foreground" data-rule-test-specificity>
+                    <p className="mt-1 break-words text-meta text-muted-foreground" data-rule-test-specificity>
                       {t('rules.specificity')}: <span className="font-mono">{specificity}</span>
                     </p>
                   )}
@@ -224,7 +224,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
           </ol>
         </section>
       ) : (
-        <p className="text-[12px] text-muted-foreground" data-rule-test-candidates-empty>
+        <p className="text-label text-muted-foreground" data-rule-test-candidates-empty>
           {t('rules.noCandidates')}
         </p>
       )}
@@ -301,11 +301,11 @@ export default function RulesV2() {
 
   const columns = [
     { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<BadgeV2 variant="ecosystem">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystem.toUpperCase()}</BadgeV2></div> } },
-    { key: 'package_name', label: t('rules.packageName'), render: (v: unknown) => <span className="font-mono text-[12px] text-foreground">{v as string}</span> },
-    { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-[12px] text-muted-foreground">{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
+    { key: 'package_name', label: t('rules.packageName'), render: (v: unknown) => <span className="font-mono text-label text-foreground">{v as string}</span> },
+    { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-label text-muted-foreground">{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
     { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="error">{t('rules.deny')}</BadgeV2> },
-    { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px] text-muted-foreground" title={v as string}>{(v as string) || '-'}</span> },
-    { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap text-muted-foreground">{formatTime(v as string, 'relative')}</span> },
+    { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-label truncate block max-w-[200px] text-muted-foreground" title={v as string}>{(v as string) || '-'}</span> },
+    { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-label whitespace-nowrap text-muted-foreground">{formatTime(v as string, 'relative')}</span> },
     { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon={Pencil} label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon={Trash2} label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => openDeleteDialog(row)} /></div>) : null },
   ]
 
@@ -321,7 +321,7 @@ export default function RulesV2() {
     >
     <div className="space-y-6">
       {query.isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
+        <div aria-busy="true" className="py-8 text-center text-body text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
       ) : query.isError && !data ? (
         <QueryErrorState message={apiError.status === 403 ? t('common.permissionDenied') : apiError.message} onRetry={() => { void query.refetch() }} />
       ) : (
@@ -348,13 +348,13 @@ export default function RulesV2() {
           {form.ecosystem === 'npm' && <InlineNotice tone="warning">{t('rules.npmVersionHint')}</InlineNotice>}
           {form.ecosystem === 'composer' && <InlineNotice tone="warning">{t('rules.composerVersionHint')}</InlineNotice>}
           <fieldset>
-            <legend className="mb-1 block text-[14px] font-[400] text-muted-foreground">{t('rules.action')}</legend>
+            <legend className="mb-1 block text-body font-normal text-muted-foreground">{t('rules.action')}</legend>
             <div className="flex gap-2">
               <button
                 type="button"
                 aria-pressed={form.action === 'allow'}
                 onClick={() => setForm({ ...form, action: 'allow' })}
-                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
+                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-body font-normal transition-colors"
                 style={{ background: form.action === 'allow' ? 'var(--success-surface)' : 'var(--muted)', color: form.action === 'allow' ? 'var(--success)' : 'var(--muted-foreground)', border: form.action === 'allow' ? '1px solid var(--success-border)' : '1px solid var(--border)' }}
               >
                 {t('rules.allow')}
@@ -363,7 +363,7 @@ export default function RulesV2() {
                 type="button"
                 aria-pressed={form.action === 'deny'}
                 onClick={() => setForm({ ...form, action: 'deny' })}
-                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
+                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-body font-normal transition-colors"
                 style={{ background: form.action === 'deny' ? 'var(--destructive-surface)' : 'var(--muted)', color: form.action === 'deny' ? 'var(--destructive)' : 'var(--muted-foreground)', border: form.action === 'deny' ? '1px solid var(--destructive)' : '1px solid var(--border)' }}
               >
                 {t('rules.deny')}
@@ -403,7 +403,7 @@ export default function RulesV2() {
           <InputV2 label={t('rules.version')} mono value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
           <ButtonV2 type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
           {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
-          {testResult && 'error' in testResult && <div role="alert" className="rounded-[4px] p-4" style={{ background: 'var(--destructive-surface)', border: '1px solid var(--destructive)' }}><p className="text-[14px] text-destructive">{testResult.error}</p></div>}
+          {testResult && 'error' in testResult && <div role="alert" className="rounded-[4px] p-4" style={{ background: 'var(--destructive-surface)', border: '1px solid var(--destructive)' }}><p className="text-body text-destructive">{testResult.error}</p></div>}
         </div>
       </ModalV2>
     </div>

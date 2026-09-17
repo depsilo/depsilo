@@ -40,7 +40,7 @@ export default function Button({
       {...rest}
       variant={VARIANT[variant]}
       size={SIZE[size]}
-      className={cn('text-[13px] font-medium', className)}
+      className={cn('text-body font-medium', className)}
     />
   )
 }

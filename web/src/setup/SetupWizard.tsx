@@ -389,10 +389,10 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-accent text-primary">
             <Icon icon={phase === 'ready' ? CircleCheck : RefreshCw} className={phase === 'ready' ? '' : 'animate-spin'} />
           </span>
-          <h1 className="text-[24px] font-[650] text-foreground">
+          <h1 className="text-page-title font-semibold text-foreground">
             {phase === 'ready' ? t('setup.ready') : t('setup.restarting')}
           </h1>
-          <p className="mt-2 max-w-[52ch] text-[13px] leading-6 text-muted-foreground">
+          <p className="mt-2 max-w-[52ch] text-body leading-6 text-muted-foreground">
             {phase === 'ready' ? t('setup.ready_hint') : t('setup.restarting_hint', { url: reconnectURL })}
           </p>
         </section>
@@ -404,14 +404,14 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-destructive/10 text-destructive">
           <TriangleAlert className="icon" aria-hidden="true" />
         </span>
-        <h1 className="text-[24px] font-[650] text-foreground">
+        <h1 className="text-page-title font-semibold text-foreground">
           {t('setup.restart_failed_title')}
         </h1>
-        <p role="alert" className="mt-2 max-w-[52ch] text-[13px] leading-6 text-muted-foreground">
+        <p role="alert" className="mt-2 max-w-[52ch] text-body leading-6 text-muted-foreground">
           {submitError}
         </p>
         {reconnectURL && (
-          <p className="mt-3 max-w-full break-all font-mono text-[12px] text-muted-foreground">
+          <p className="mt-3 max-w-full break-all font-mono text-label text-muted-foreground">
             {t('setup.reconnect_target', { url: reconnectURL })}
           </p>
         )}
@@ -435,8 +435,8 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
             <SlidersHorizontal className="icon icon-sm" aria-hidden="true" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-[600] text-foreground">{t('setup.advanced_settings')}</span>
-            <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
+            <span className="block text-body font-semibold text-foreground">{t('setup.advanced_settings')}</span>
+            <span className="mt-0.5 block truncate text-label text-muted-foreground">
               {t('setup.advanced_summary', { port, count: selectedEcosystems.size })}
             </span>
           </span>
@@ -448,12 +448,12 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         </summary>
 
         <div className="pb-2 pt-5">
-          <p className="mb-5 max-w-[68ch] text-[13px] leading-6 text-muted-foreground">
+          <p className="mb-5 max-w-[68ch] text-body leading-6 text-muted-foreground">
             {t('setup.advanced_hint')}
           </p>
 
           <section aria-labelledby="setup-runtime-heading">
-            <h2 id="setup-runtime-heading" className="mb-3 text-[14px] font-[600] text-foreground">
+            <h2 id="setup-runtime-heading" className="mb-3 text-body font-semibold text-foreground">
               {t('setup.runtime_settings')}
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -481,12 +481,12 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           <section aria-labelledby="setup-ecosystems-heading" className="mt-7">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
               <div>
-                <h2 id="setup-ecosystems-heading" className="text-[14px] font-[600] text-foreground">
+                <h2 id="setup-ecosystems-heading" className="text-body font-semibold text-foreground">
                   {t('setup.select_ecosystems')}
                 </h2>
-                <p className="mt-1 text-[12px] text-muted-foreground">{t('setup.select_ecosystems_hint')}</p>
+                <p className="mt-1 text-label text-muted-foreground">{t('setup.select_ecosystems_hint')}</p>
               </div>
-              <span className="font-mono text-[11px] text-muted-foreground">
+              <span className="font-mono text-meta text-muted-foreground">
                 {t('setup.enabled_count', { count: selectedEcosystems.size })}
               </span>
             </div>
@@ -508,14 +508,14 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     onClick={() => toggleEcosystem(ecosystem.key)}
                   >
                     <EcosystemIcon type={ecosystem.key as EcosystemType} size={17} decorative />
-                    <span className="min-w-0 flex-1 text-[12px] font-[500] leading-4">{ecosystem.label}</span>
+                    <span className="min-w-0 flex-1 text-label font-medium leading-4">{ecosystem.label}</span>
                     <Icon icon={selected ? Check : Plus} size="sm" />
                   </button>
                 )
               })}
             </div>
             {attemptedSubmit && selectedEcosystems.size === 0 && (
-              <p role="alert" className="mt-2 text-[12px] text-destructive">
+              <p role="alert" className="mt-2 text-label text-destructive">
                 {t('setup.ecosystem_required')}
               </p>
             )}
@@ -523,10 +523,10 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
 
           <section aria-labelledby="setup-upstreams-heading" className="mt-7">
             <div className="mb-3">
-              <h2 id="setup-upstreams-heading" className="text-[14px] font-[600] text-foreground">
+              <h2 id="setup-upstreams-heading" className="text-body font-semibold text-foreground">
                 {t('setup.configure_upstreams')}
               </h2>
-              <p className="mt-1 text-[12px] text-muted-foreground">{t('setup.configure_upstreams_hint')}</p>
+              <p className="mt-1 text-label text-muted-foreground">{t('setup.configure_upstreams_hint')}</p>
             </div>
             <div className="space-y-2">
               {selectedList.map((ecosystem) => {
@@ -544,8 +544,8 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                       onClick={() => setExpandedEcosystem(expanded ? null : ecosystem.key)}
                     >
                       <EcosystemIcon type={ecosystem.key as EcosystemType} size={16} decorative />
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-[500]">{ecosystem.label}</span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="min-w-0 flex-1 truncate text-body font-medium">{ecosystem.label}</span>
+                      <span className="text-meta text-muted-foreground">
                         {t('setup.upstreams_count_value', { count: ecosystemUpstreams.length })}
                       </span>
                       <ChevronDown aria-hidden="true" size={18} className={`icon icon-sm transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`} />
@@ -623,7 +623,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         <header className="mb-5 flex min-h-[40px] items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 text-foreground">
             <span className="text-primary"><Logo size={29} /></span>
-            <span className="text-[16px] font-[650]">Depsilo</span>
+            <span className="text-field font-semibold">Depsilo</span>
           </div>
           <div className="flex items-center gap-1">
             <LangToggle />
@@ -639,19 +639,19 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
             <form ref={formRef} noValidate onSubmit={handleSubmit}>
               <div className="px-5 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-8">
                 <header className="mb-7">
-                  <h1 className="text-balance text-[26px] font-[680] leading-tight text-foreground sm:text-[30px]">
+                  <h1 className="text-balance text-page-title font-semibold leading-tight text-foreground sm:text-page-title">
                     {t('setup.title')}
                   </h1>
-                  <p className="mt-2 max-w-[62ch] text-[13px] leading-6 text-muted-foreground">
+                  <p className="mt-2 max-w-[62ch] text-body leading-6 text-muted-foreground">
                     {t('setup.description')}
                   </p>
                 </header>
 
                 <section aria-labelledby="setup-admin-heading" className="mb-7">
-                  <h2 id="setup-admin-heading" className="text-[15px] font-[600] text-foreground">
+                  <h2 id="setup-admin-heading" className="text-title font-semibold text-foreground">
                     {t('setup.admin_account')}
                   </h2>
-                  <p className="mb-4 mt-1 text-[12px] leading-5 text-muted-foreground">
+                  <p className="mb-4 mt-1 text-label leading-5 text-muted-foreground">
                     {t('setup.admin_account_hint')}
                   </p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -701,13 +701,13 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 {renderAdvancedSettings()}
 
                 {submitError && !reconnectURL && (
-                  <p role="alert" className="mt-5 rounded-[6px] bg-destructive/10 px-3 py-2.5 text-[12px] leading-5 text-destructive">
+                  <p role="alert" className="mt-5 rounded-[6px] bg-destructive/10 px-3 py-2.5 text-label leading-5 text-destructive">
                     {submitError}
                   </p>
                 )}
 
                 <div className="mt-6 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[12px] leading-5 text-muted-foreground">
+                  <p className="text-label leading-5 text-muted-foreground">
                     {t('setup.submit_hint')}
                   </p>
                   <Button

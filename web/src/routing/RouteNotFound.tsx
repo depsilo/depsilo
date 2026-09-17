@@ -25,18 +25,18 @@ export default function RouteNotFound({ area }: { area: RouteArea }) {
       className="programmatic-focus-target grid min-h-60 place-items-center px-4 py-12 text-center"
     >
       <div className="max-w-[520px]">
-        <p aria-hidden="true" className="font-mono text-[13px] font-[600] text-primary">
+        <p aria-hidden="true" className="font-mono text-body font-semibold text-primary">
           404
         </p>
-        <Heading id={titleId} className="mt-2 text-[22px] font-[600] text-foreground">
+        <Heading id={titleId} className="mt-2 text-metric-sm font-semibold text-foreground">
           {t('notFound.title')}
         </Heading>
-        <p className="mt-2 text-[13px] leading-6 text-muted-foreground">
+        <p className="mt-2 text-body leading-6 text-muted-foreground">
           {t('notFound.hint')}
         </p>
         <Link
           to={destination}
-          className="stripe-focus-ring mt-5 inline-flex min-h-[40px] items-center justify-center rounded-[5px] px-3 py-1.5 text-[13px] font-[500] no-underline transition-[background,transform] duration-150 active:scale-[0.96]"
+          className="stripe-focus-ring mt-5 inline-flex min-h-[40px] items-center justify-center rounded-[5px] px-3 py-1.5 text-body font-medium no-underline transition-[background,transform] duration-150 active:scale-[0.96]"
           style={{
             color: 'var(--primary-foreground)',
             background: 'var(--primary)',

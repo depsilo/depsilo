@@ -77,10 +77,10 @@ function SidebarContent({
           className="flex min-w-0 items-center gap-2.5 rounded-md text-foreground no-underline transition-opacity hover:opacity-75"
         >
           <Logo size={26} />
-          <span className="text-[15px] font-bold">Depsilo</span>
+          <span className="text-title font-bold">Depsilo</span>
         </Link>
         <span
-          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate rounded-sm border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted-foreground"
+          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate rounded-sm border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 font-mono text-meta tabular-nums text-muted-foreground"
           title={version}
         >
           {formatVersion(version)}
@@ -114,7 +114,7 @@ function SidebarContent({
                   onClick={onNavigate}
                   aria-current={section.active ? (section.current ? 'page' : 'location') : undefined}
                   className={cn(
-                    'flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] no-underline',
+                    'flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-body no-underline',
                     section.active
                       ? 'font-semibold text-sidebar-accent-foreground'
                       : 'font-medium text-muted-foreground hover:text-sidebar-accent-foreground',
@@ -144,18 +144,18 @@ function SidebarContent({
           to="/admin/users"
           onClick={onNavigate}
           aria-label={t('nav.instanceManagement')}
-          className="mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-[13px] font-medium text-muted-foreground no-underline transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-body font-medium text-muted-foreground no-underline transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           <Settings className="icon icon-sm" aria-hidden="true" />
           <span>{t('nav.instanceManagement')}</span>
         </Link>
         <div className="group flex cursor-default items-center gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-sidebar-accent">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary text-[13px] font-semibold text-primary-foreground">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-primary text-body font-semibold text-primary-foreground">
             {username?.[0]?.toUpperCase() || 'A'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] leading-tight font-medium text-foreground">{username}</p>
-            <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">
+            <p className="truncate text-body leading-tight font-medium text-foreground">{username}</p>
+            <p className="mt-0.5 text-meta leading-tight text-muted-foreground">
               {canWrite ? t('nav.admin') : t('nav.readonly')}
             </p>
           </div>
@@ -231,7 +231,7 @@ function PolicyStatusBanner({ status, unavailable, refreshing, onRefresh }: Poli
               {statusUnavailable ? t('policy.statusUnavailable') : t('policy.staleSnapshot')}
             </p>
             {!statusUnavailable && (
-              <p className="mt-0.5 text-[12px]">
+              <p className="mt-0.5 text-label">
                 {refreshTime
                   ? t('policy.lastSuccessfulRefresh', { time: refreshTime })
                   : t('policy.neverRefreshed')}
@@ -356,7 +356,7 @@ export default function AdminShellLayout() {
           <div data-admin-breadcrumb className="min-w-0 flex-1">
             <div
               className={cn(
-                'min-w-0 items-center gap-1.5 text-[12px] font-medium',
+                'min-w-0 items-center gap-1.5 text-label font-medium',
                 showPageBreadcrumb ? 'flex' : 'flex lg:hidden',
               )}
             >

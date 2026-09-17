@@ -59,7 +59,7 @@ export default function Modal({
         className="gap-4 p-5"
         style={{ maxWidth: width } as CSSProperties}
       >
-        <DialogTitle className="pr-10 text-[17px] font-semibold">{title}</DialogTitle>
+        <DialogTitle className="pr-10 text-title font-semibold">{title}</DialogTitle>
         {children}
         <DialogClose
           render={

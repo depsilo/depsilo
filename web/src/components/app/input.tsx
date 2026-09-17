@@ -37,7 +37,7 @@ export default function Input({
         aria-describedby={mergeDescriptionIds(ariaDescribedBy, messageId)}
         className={cn(
           // 16px on small screens keeps mobile Safari from zooming a focused field.
-          'h-9 px-3 text-[16px] md:text-[13px]',
+          'h-9 px-3 text-field md:text-body',
           mono && 'font-mono',
           className,
         )}

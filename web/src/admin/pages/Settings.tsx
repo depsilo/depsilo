@@ -410,7 +410,7 @@ export default function SettingsV2() {
         </InlineNotice>
       )}
       {configurationTab && (
-        <div className="flex min-w-0 items-start gap-2 border-b border-border pb-3 text-[12px] text-muted-foreground">
+        <div className="flex min-w-0 items-start gap-2 border-b border-border pb-3 text-label text-muted-foreground">
           <Info className="mt-0.5 shrink-0 icon icon-sm" aria-hidden="true" />
           <span>{t('settings.hotReloadNote')}</span>
         </div>
