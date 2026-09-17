@@ -140,6 +140,16 @@ if ! grep -Fq -- '--port "23333"' <<<"$dev_dry_run"; then
     echo "make dev does not keep its service and health-check ports aligned" >&2
     exit 1
 fi
+if ! grep -Fq -- '--host "0.0.0.0"' <<<"$dev_dry_run"; then
+    echo "make dev no longer binds every interface by default" >&2
+    exit 1
+fi
+loopback_dry_run=$(make -n -C "$ROOT" dev BIN="$FAKE_BIN" CONFIG="$CONFIG_FILE" \
+    DEV_JWT_SECRET="$SECRET_FILE" DEV_HOST=127.0.0.1)
+if ! grep -Fq -- '--host "127.0.0.1"' <<<"$loopback_dry_run"; then
+    echo "make dev ignores a DEV_HOST override" >&2
+    exit 1
+fi
 if grep -Fq 'DEPSILO_DEV_PRO=1' <<<"$dev_dry_run"; then
     echo "make dev unexpectedly enables Pro development features" >&2
     exit 1
@@ -154,6 +164,10 @@ if ! grep -Fq 'scripts/dev-ui.sh' <<<"$dev_ui_dry_run"; then
 fi
 if ! grep -Fq 'scripts/dev-service.sh start' <<<"$dev_ui_dry_run"; then
     echo "make dev-ui does not start its backend" >&2
+    exit 1
+fi
+if ! grep -Fq -- '--host "0.0.0.0"' <<<"$dev_ui_dry_run"; then
+    echo "make dev-ui backend no longer matches the development bind default" >&2
     exit 1
 fi
 if ! grep -Fq 'http://localhost:24444' <<<"$dev_ui_dry_run"; then

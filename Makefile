@@ -12,6 +12,10 @@ DEV_JWT_SECRET ?= .dev-jwt-secret
 PID_FILE   := .server.pid
 DEV_LOG    := .dev.log
 PORT       ?= 23333
+# The development service is reachable from other machines by default so the
+# Portal can be opened from a phone, a VM, or a second host. Pass
+# DEV_HOST=127.0.0.1 to keep it on this machine; `make run` is unaffected.
+DEV_HOST   ?= 0.0.0.0
 DEV_URL    ?= http://localhost:$(PORT)
 UI_HOST    ?= 127.0.0.1
 UI_PORT    ?= 5173
@@ -121,12 +125,14 @@ run run-pro:
 
 dev: build stop                 ## 编译并后台运行（dev 模式）
 	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/dev-service.sh start \
-		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" --port "$(PORT)"
+		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" \
+		--host "$(DEV_HOST)" --port "$(PORT)"
 
 dev-ui: build-dev-server        ## 同时运行后端与 Vite 热更新（Ctrl-C 一并停止）
 	@bash scripts/dev-service.sh stop "./$(BIN)" "$(PID_FILE)"
 	@DEPSILO_DEV_JWT_FILE="$(DEV_JWT_SECRET)" bash scripts/dev-service.sh start \
-		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" --port "$(PORT)"
+		"./$(BIN)" "$(CONFIG)" "$(PID_FILE)" "$(DEV_LOG)" "$(DEV_URL)" \
+		--host "$(DEV_HOST)" --port "$(PORT)"
 	@bash scripts/dev-ui.sh scripts/dev-service.sh \
 		"./$(BIN)" "$(PID_FILE)" "$(DEV_URL)" -- \
 		"$(VITE_BIN)" "$(WEB_DIR)" --config "$(WEB_DIR)/vite.config.ts" \

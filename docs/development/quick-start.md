@@ -34,6 +34,24 @@ background, and waits for the configured readiness URL. The default URL is
 `http://localhost:23333`; override both listener and readiness probe with, for
 example, `PORT=18080 make dev`.
 
+The development service binds **every interface** by default, so a phone, a
+VM, or another machine on the same network can reach it at
+`http://<this-host>:23333`. Restrict it to this machine when the network is not
+trusted:
+
+```bash
+DEV_HOST=127.0.0.1 make dev
+```
+
+Listening beyond loopback requires a 256-bit `auth.jwt_secret`, which
+`scripts/run-dev.sh` already generates into `.dev-jwt-secret`. If you export
+`DEPSILO_AUTH_JWT_SECRET` yourself, it must be at least 32 bytes of random data
+or the server refuses to start with that instruction. The one-time first-run
+bootstrap token is printed to `.dev.log`, so keep that log off shared machines.
+
+`make run` and `make run-pro` are unaffected: they take the host from
+`config.toml`, `DEPSILO_SERVER_HOST`, or the built-in loopback default.
+
 A project `config.toml` is optional. Without one, the loader uses its normal
 search path and built-in first-run defaults, and the web setup flow owns initial
 configuration. Configuration precedence is:
@@ -70,6 +88,10 @@ owned by that command. Port overrides stay paired, for example:
 ```bash
 PORT=18080 UI_PORT=15173 make dev-ui
 ```
+
+`make dev-ui` binds the backend the same way `make dev` does, but Vite stays on
+loopback. Add `UI_HOST=0.0.0.0` if the hot-reload frontend itself needs to be
+reachable from another device.
 
 The Vite origin is a complete local test entry: it forwards the fixed package
 protocol catalog, Docker and project-scoped routes, compiler-cache routes, and
