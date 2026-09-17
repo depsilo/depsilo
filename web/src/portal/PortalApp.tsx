@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { statsApi } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
-import { formatVersion } from '@/lib/utils'
+import { cn, formatVersion } from '@/lib/utils'
 import Logo from '@/components/app/logo'
 import LangToggle from '@/components/app/language-toggle'
 import ThemeToggle from '@/components/app/theme-toggle'
@@ -21,6 +21,29 @@ interface PortalStats {
   service: { status: string; version: string }
   extra_indexes?: Array<{ kind?: string; path: string }>
 }
+
+/**
+ * One control geometry for the whole header: every segment is 40px tall so the
+ * touch target is real rather than implied by a decorative hit-area shim.
+ */
+const HEADER_CONTROL =
+  'inline-flex h-10 min-h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap transition-colors'
+
+const HEADER_GROUP =
+  'inline-flex h-10 shrink-0 items-center rounded-md border border-border bg-card ' +
+  '[&>*+*]:border-l [&>*+*]:border-border [&>*:first-child]:rounded-l-md [&>*:last-child]:rounded-r-md ' +
+  'max-[560px]:border-0'
+
+/**
+ * Status colour is a semantic role, not a decoration: it must stay readable
+ * and it must never imply that an unknown result is a failure.
+ */
+const STATUS_TONE_CLASS =
+  'data-[status=healthy]:text-success data-[status=degraded]:text-warning ' +
+  'data-[status=failed]:text-destructive data-[status=unavailable]:text-destructive ' +
+  'data-[status=unknown]:text-muted-foreground data-[status=loading]:text-muted-foreground'
+
+const CONTENT_MAX_WIDTH = 'max-w-[clamp(1280px,92vw,1840px)]'
 
 // The endpoint is an action inside the service-information group. The full
 // URL remains available to assistive technology and is always copied even
@@ -48,19 +71,23 @@ function EndpointPill() {
       <button
         type="button"
         onClick={handleCopy}
-        className="portal-header-control portal-endpoint-pill hit-extend stripe-focus-ring"
+        className={cn(
+          HEADER_CONTROL,
+          'cursor-pointer px-2.5 font-mono text-[11.5px] text-muted-foreground hover:bg-accent hover:text-foreground',
+          'max-[960px]:w-10 max-[960px]:px-0 max-[560px]:hidden',
+          copyState === 'failed' && 'text-destructive',
+        )}
         aria-label={t('portal.copyEndpointNamed', { endpoint: url })}
         title={url}
         data-copy-state={copyState}
       >
-        <span className="portal-endpoint-label">{compact}</span>
+        <span className="tabular-nums max-[960px]:hidden">{compact}</span>
         {/* Both icons stay in the DOM and cross-fade so copy success reads as
             a state change instead of a hard snap. */}
-        <span className="portal-endpoint-icon" aria-hidden="true">
+        <span className="relative inline-flex size-4" aria-hidden="true">
           <span
+            className="absolute inset-0 inline-flex items-center justify-center"
             style={{
-              position: 'absolute',
-              inset: 0,
               color: copyState === 'failed' ? 'var(--destructive)' : 'var(--muted-foreground)',
               opacity: copied ? 0 : 1,
               transform: copied ? 'scale(0.25)' : 'scale(1)',
@@ -71,9 +98,8 @@ function EndpointPill() {
             <Icon name={copyState === 'failed' ? 'warning' : 'content_copy'} size="sm" />
           </span>
           <span
+            className="absolute inset-0 inline-flex items-center justify-center"
             style={{
-              position: 'absolute',
-              inset: 0,
               color: 'var(--success)',
               opacity: copied ? 1 : 0,
               transform: copied ? 'scale(1)' : 'scale(0.25)',
@@ -108,45 +134,24 @@ function NavTab({ to, label, compactLabel }: NavTabProps) {
       to={to}
       end
       aria-label={label}
-      className="hit-extend stripe-focus-ring"
-      style={({ isActive }) => ({
-        display: 'inline-flex',
-        alignItems: 'center',
-        textDecoration: 'none',
-        position: 'relative',
-        padding: '6px 10px',
-        fontSize: 13,
-        fontWeight: isActive ? 600 : 500,
-        letterSpacing: isActive ? '-0.005em' : '0',
-        color: isActive ? 'var(--foreground)' : 'var(--muted-foreground)',
-        borderRadius: 6,
-        whiteSpace: 'nowrap',
-        transition: 'color 120ms ease',
-      })}
-      onMouseEnter={event => { event.currentTarget.style.color = 'var(--foreground)' }}
-      onMouseLeave={event => {
-        event.currentTarget.style.color = event.currentTarget.getAttribute('aria-current') === 'page'
-          ? 'var(--foreground)'
-          : 'var(--muted-foreground)'
-      }}
+      className={({ isActive }) => cn(
+        'relative inline-flex min-h-10 items-center rounded-md px-2.5 py-1.5 text-[13px] no-underline transition-colors',
+        'max-[560px]:min-w-10 max-[560px]:justify-center max-[560px]:px-1',
+        isActive
+          ? 'font-semibold text-foreground'
+          : 'font-medium text-muted-foreground hover:text-foreground',
+      )}
     >
       {({ isActive }) => (
         <>
-          <span className="portal-nav-label">{label}</span>
-          <span className="portal-nav-compact-label" aria-hidden="true">{compactLabel}</span>
+          <span className="max-[560px]:hidden">{label}</span>
+          <span data-portal-nav-compact-label className="hidden max-[560px]:inline" aria-hidden="true">
+            {compactLabel}
+          </span>
           {isActive && (
             <span
-              className="portal-nav-active-indicator"
+              className="absolute -bottom-1.5 right-2.5 left-2.5 h-[1.5px] rounded-xs bg-primary max-[560px]:right-2 max-[560px]:left-2"
               aria-hidden="true"
-              style={{
-                position: 'absolute',
-                left: 10,
-                right: 10,
-                bottom: '-15px',
-                height: '1.5px',
-                background: 'var(--primary)',
-                borderRadius: 1,
-              }}
             />
           )}
         </>
@@ -213,93 +218,59 @@ export default function PortalAppV2() {
 
   const statusContent = (
     <>
-      <span className="portal-status-dot" aria-hidden="true">
+      <span data-portal-status-dot className="inline-flex max-[560px]:hidden" aria-hidden="true">
         <StatusDot
           status={statusTone === 'loading' || statusTone === 'unavailable' ? 'unknown' : resolvedStatus}
           size={6}
           live={resolvedStatus === 'healthy' && !isError}
         />
       </span>
-      <span className="portal-status-compact-icon" aria-hidden="true">
+      <span data-portal-status-compact-icon className="hidden max-[560px]:inline-flex" aria-hidden="true">
         <Icon
           name={statusIcon}
           size="sm"
           className={statusTone === 'loading' ? 'animate-spin motion-reduce:animate-none' : ''}
         />
       </span>
-      <span className="portal-status-label" aria-hidden="true">{statusLabel}</span>
+      <span data-portal-status-label className="max-[560px]:hidden" aria-hidden="true">{statusLabel}</span>
     </>
   )
 
   return (
     <div className="min-h-screen bg-background">
-      <header
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 30,
-          background: 'color-mix(in oklab, var(--background) 88%, transparent)',
-          backdropFilter: 'saturate(180%) blur(8px)',
-          WebkitBackdropFilter: 'saturate(180%) blur(8px)',
-          borderBottom: '0.5px solid var(--border)',
-        }}
-      >
+      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-sm backdrop-saturate-150">
+        {/* The inner track matches the main content width, so header controls
+            and page content share edges on very wide displays. */}
         <div
-          className="portal-header-inner"
-          style={{
-            height: 52,
-            // Tracks the main content width below so header content and
-            // page content share edges on wide (2560px+) displays.
-            maxWidth: 'clamp(1280px, 92vw, 1840px)',
-            margin: '0 auto',
-            padding: '0 clamp(12px, 2vw, 28px)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-          }}
+          data-portal-header-inner
+          className={cn(
+            'mx-auto flex h-[52px] w-full items-center gap-4 px-[clamp(12px,2vw,28px)]',
+            CONTENT_MAX_WIDTH,
+            'max-[560px]:gap-1 max-[560px]:pl-[max(10px,env(safe-area-inset-left))] max-[560px]:pr-[max(10px,env(safe-area-inset-right))]',
+            'max-[340px]:gap-0.5 max-[340px]:pl-[max(4px,env(safe-area-inset-left))] max-[340px]:pr-[max(4px,env(safe-area-inset-right))]',
+          )}
         >
           <Link
             to="/"
             aria-label="Depsilo"
-            className="portal-header-brand"
-            style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}
+            className="flex min-h-10 shrink-0 items-center gap-2 no-underline"
           >
             <Logo size={28} />
             <span
-              className="portal-brand-name"
-              style={{
-                fontFamily: 'var(--font-sans)',
-                fontSize: 15,
-                fontWeight: 700,
-                letterSpacing: '-0.025em',
-                color: 'var(--foreground)',
-              }}
+              data-portal-brand-name
+              className="text-[15px] font-bold text-foreground max-[380px]:hidden"
             >
               Depsilo
             </span>
             <span
-              className="portal-version"
+              className="ml-0.5 rounded-sm border border-border px-1.5 py-px font-mono text-[10px] text-muted-foreground max-[760px]:hidden"
               title={data?.service?.version}
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: 'var(--muted-foreground)',
-                padding: '1px 5px',
-                border: '0.5px solid var(--border)',
-                borderRadius: 4,
-                marginLeft: 2,
-              }}
             >
               {formatVersion(data?.service?.version)}
             </span>
           </Link>
 
-          {/* Nav tabs */}
-          <nav
-            aria-label={t('portal.navigation')}
-            className="portal-header-nav"
-            style={{ display: 'flex', alignItems: 'center', gap: 2 }}
-          >
+          <nav aria-label={t('portal.navigation')} className="flex min-w-0 items-center gap-0.5">
             <NavTab
               to="/"
               label={t('portal.quickStart')}
@@ -312,18 +283,25 @@ export default function PortalAppV2() {
             />
           </nav>
 
-          {/* Spacer */}
-          <div style={{ flex: 1 }} />
+          <div className="flex-1" />
 
           {/* Information, preferences, and navigation intentionally use
               separate groups so equal geometry does not flatten semantics. */}
-          <div className="portal-header-actions">
-            <div className="portal-header-group portal-service-group" data-portal-control-group="service">
+          <div className="flex min-w-0 shrink-0 items-center gap-2 max-[560px]:gap-1">
+            <div
+              className={cn(HEADER_GROUP, 'max-[560px]:w-10')}
+              data-portal-control-group="service"
+            >
               <EndpointPill />
               {isError ? (
                 <button
                   type="button"
-                  className="portal-header-control portal-status-pill stripe-focus-ring"
+                  className={cn(
+                    HEADER_CONTROL,
+                    'cursor-pointer px-2.5 text-[12px] font-medium max-[560px]:w-10 max-[560px]:min-w-10 max-[560px]:px-0',
+                    STATUS_TONE_CLASS,
+                  )}
+                  data-portal-status-pill
                   data-status={statusTone}
                   data-query-state={statusQueryState}
                   aria-label={statusRetryLabel}
@@ -334,8 +312,13 @@ export default function PortalAppV2() {
                 </button>
               ) : (
                 <span
-                  className="portal-header-control portal-status-pill"
+                  className={cn(
+                    HEADER_CONTROL,
+                    'px-2.5 text-[12px] font-medium max-[560px]:w-10 max-[560px]:min-w-10 max-[560px]:px-0',
+                    STATUS_TONE_CLASS,
+                  )}
                   role="status"
+                  data-portal-status-pill
                   data-status={statusTone}
                   data-query-state={statusQueryState}
                   aria-label={t('portal.serviceStatusNamed', { status: statusLabel })}
@@ -350,7 +333,7 @@ export default function PortalAppV2() {
               )}
             </div>
             <div
-              className="portal-header-group portal-tools-group"
+              className={cn(HEADER_GROUP, 'max-[560px]:w-20')}
               data-portal-control-group="preferences"
               role="group"
               aria-label={t('portal.displayPreferences')}
@@ -360,19 +343,28 @@ export default function PortalAppV2() {
             </div>
             <a
               href="/admin"
-              className="portal-header-control portal-admin-link hit-extend stripe-focus-ring"
+              className={cn(
+                HEADER_CONTROL,
+                'rounded-md border border-border bg-accent px-2.5 text-[12px] font-semibold text-primary no-underline hover:bg-muted',
+                'max-[560px]:w-10 max-[560px]:px-0',
+              )}
+              data-portal-admin-link
               aria-label={t('portal.adminPanel')}
               title={t('portal.adminPanel')}
             >
               <Icon name="admin_panel_settings" size="sm" />
-              <span className="portal-admin-label">{t('portal.adminPanel')}</span>
-              <span className="portal-admin-mobile-label">{t('portal.adminShort')}</span>
+              <span data-portal-admin-label className="max-[560px]:hidden">{t('portal.adminPanel')}</span>
             </a>
           </div>
         </div>
       </header>
 
-      <main style={{ maxWidth: 'clamp(1280px, 92vw, 1840px)', margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) clamp(16px, 2.1vw, 32px) 48px' }}>
+      <main
+        className={cn(
+          'mx-auto px-[clamp(16px,2.1vw,32px)] pt-[clamp(22px,2.4vw,40px)] pb-12',
+          CONTENT_MAX_WIDTH,
+        )}
+      >
         <Routes>
           <Route index element={<QuickStart pytorchIndexPath={pytorchIndexPath} />} />
           <Route path="monitor" element={<MonitorV2 />} />

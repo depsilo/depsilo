@@ -280,13 +280,13 @@ test('Portal header groups service and preference controls by purpose', async ({
   const status = service.getByRole('status', { name: /Online/i })
   const language = preferences.getByRole('button', { name: /Switch to Chinese/i })
   const theme = preferences.getByRole('button', { name: /current theme: Light/i })
-  const admin = page.locator('.portal-admin-link')
+  const admin = page.locator('[data-portal-admin-link]')
 
   await expect(endpoint).toBeVisible()
   await expect(status).toBeVisible()
   await expect(language).toContainText('EN')
   await expect(theme).toContainText('Light')
-  await expect(admin.locator('.portal-admin-label')).toHaveText('Admin')
+  await expect(admin.locator('[data-portal-admin-label]')).toHaveText('Admin')
 })
 
 test('Portal theme changes recolor theme-sensitive ecosystem icons immediately', async ({ page }) => {
@@ -315,7 +315,7 @@ test('Portal service status distinguishes loading, unknown, and recoverable fail
   })
   await page.goto('/')
 
-  const loading = page.locator('.portal-status-pill[data-query-state="loading"]')
+  const loading = page.locator('[data-portal-status-pill][data-query-state="loading"]')
   await expect(loading).toHaveAttribute('role', 'status')
   await expect(loading).toHaveAccessibleName(/Checking/i)
   await expect(loading).not.toHaveAccessibleName(/unknown/i)
@@ -324,7 +324,7 @@ test('Portal service status distinguishes loading, unknown, and recoverable fail
     ...populatedStats,
     service: { ...populatedStats.service, status: 'mystery' },
   })
-  const unknown = page.locator('.portal-status-pill[data-query-state="success"]')
+  const unknown = page.locator('[data-portal-status-pill][data-query-state="success"]')
   await expect(unknown).toHaveAttribute('data-status', 'unknown')
   await expect(unknown).toHaveAccessibleName(/Status unknown/i)
 
@@ -339,12 +339,12 @@ test('Portal service status distinguishes loading, unknown, and recoverable fail
   })
   await page.reload()
 
-  const retry = page.locator('button.portal-status-pill[data-query-state="error"]')
+  const retry = page.locator('button[data-portal-status-pill][data-query-state="error"]')
   await expect(retry).toHaveAccessibleName(/unavailable.*retry/i)
   await expect(retry).not.toHaveAccessibleName(/unknown/i)
   await retry.click()
   await expect.poll(() => calls).toBe(2)
-  await expect(page.locator('.portal-status-pill[data-query-state="success"]')).toHaveAccessibleName(/Online/i)
+  await expect(page.locator('[data-portal-status-pill][data-query-state="success"]')).toHaveAccessibleName(/Online/i)
 })
 
 test('Portal header keeps every visible control in view at 320px', async ({ page }) => {
@@ -358,27 +358,27 @@ test('Portal header keeps every visible control in view at 320px', async ({ page
   const brand = page.getByRole('link', { name: 'Depsilo', exact: true })
   await expect(brand).toBeVisible()
   await expect(brand.locator('[data-brand-mark]')).toBeVisible()
-  await expect(brand.locator('.portal-brand-name')).toBeHidden()
+  await expect(brand.locator('[data-portal-brand-name]')).toBeHidden()
 
   const navigation = page.getByRole('navigation', { name: 'Portal navigation' })
   await expect(navigation.getByRole('link', { name: 'Quick Start', exact: true })).toBeVisible()
   await expect(navigation.getByRole('link', { name: 'Monitor', exact: true })).toBeVisible()
-  await expect(navigation.locator('.portal-nav-compact-label')).toHaveCount(2)
-  for (const compactLabel of await navigation.locator('.portal-nav-compact-label').all()) {
+  await expect(navigation.locator('[data-portal-nav-compact-label]')).toHaveCount(2)
+  for (const compactLabel of await navigation.locator('[data-portal-nav-compact-label]').all()) {
     await expect(compactLabel).toBeVisible()
   }
 
-  const status = page.locator('.portal-status-pill')
+  const status = page.locator('[data-portal-status-pill]')
   await expect(status).toHaveAttribute('role', 'status')
   await expect(status).toHaveAttribute('aria-label', /Online/i)
-  await expect(status.locator('.portal-status-label')).toBeAttached()
-  await expect(status.locator('.portal-status-compact-icon')).toBeVisible()
-  await expect(status.locator('.portal-status-dot')).toBeHidden()
+  await expect(status.locator('[data-portal-status-label]')).toBeAttached()
+  await expect(status.locator('[data-portal-status-compact-icon]')).toBeVisible()
+  await expect(status.locator('[data-portal-status-dot]')).toBeHidden()
 
   const theme = page.locator('[data-theme-toggle="portal"]')
   await expect(theme).toBeVisible()
 
-  const admin = page.locator('.portal-admin-link')
+  const admin = page.locator('[data-portal-admin-link]')
   await expect(admin).toHaveAccessibleName(/Admin/i)
 
   const clippedControls = await page.locator(

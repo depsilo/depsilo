@@ -133,7 +133,7 @@ test('Monitor exposes unified healthy, degraded, and failed status text and a se
 
   await page.goto('/monitor')
 
-  await expect(page.locator('.portal-status-pill')).toContainText('Degraded')
+  await expect(page.locator('[data-portal-status-pill]')).toContainText('Degraded')
   await expect(page.locator('[data-upstream-row][data-upstream-status="healthy"]')).toContainText('fast mirror')
   await expect(page.locator('[data-upstream-row][data-upstream-status="healthy"]')).toContainText('healthy')
   await expect(page.locator('[data-upstream-row][data-upstream-status="degraded"]')).toContainText('slow mirror')

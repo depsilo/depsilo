@@ -1,6 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/app/icon'
 
+/**
+ * Portal header segments share one geometry: a 40px target that collapses to
+ * its icon before it collapses out of the viewport.
+ */
+export const PORTAL_SEGMENT_CLASS =
+  'inline-flex h-10 min-h-10 shrink-0 cursor-pointer items-center justify-center gap-1.5 bg-transparent px-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-[760px]:w-10 max-[760px]:px-0'
+
 interface LangToggleProps {
   variant?: 'default' | 'portal' | 'admin'
 }
@@ -22,7 +29,7 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
       onClick={toggle}
       data-language-toggle={portal ? 'portal' : admin ? 'admin' : 'default'}
       className={portal
-        ? 'portal-header-control portal-language-control stripe-focus-ring'
+        ? PORTAL_SEGMENT_CLASS
         : admin
           ? 'stripe-focus-ring inline-flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-[6px] border-0 bg-transparent px-2 font-mono text-[11px] font-[500] text-muted-foreground transition-[background,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98]'
           : 'inline-flex items-center justify-center stripe-focus-ring'}
@@ -44,9 +51,9 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
     >
       {portal ? (
         <>
-          <Icon name="language" size="sm" />
-          <span className="portal-language-label">{isZh ? '中文' : 'EN'}</span>
-          <span className="portal-language-compact-label" aria-hidden="true">
+          <Icon name="language" size="sm" className="max-[760px]:hidden" />
+          <span className="max-[760px]:hidden">{isZh ? '中文' : 'EN'}</span>
+          <span className="hidden max-[760px]:inline" aria-hidden="true">
             {isZh ? '中' : 'EN'}
           </span>
         </>

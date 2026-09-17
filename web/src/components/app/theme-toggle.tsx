@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { useThemePreference, type ThemePreference } from '@/lib/theme'
 import Icon, { type IconName } from '@/components/app/icon'
+// The Portal header owns one segment geometry; the language control declares it.
+import { PORTAL_SEGMENT_CLASS } from '@/components/app/language-toggle'
 import IconButtonControl from '@/components/app/icon-button-control'
 
 const CYCLE: ThemePreference[] = ['system', 'light', 'dark']
@@ -42,10 +44,10 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
         aria-label={label}
         title={label}
         onClick={cycle}
-        className="portal-header-control portal-theme-button stripe-focus-ring"
+        className={PORTAL_SEGMENT_CLASS}
       >
         <Icon name={ICONS[theme]} size="sm" />
-        <span className="portal-theme-label">{LABELS[theme]}</span>
+        <span className="max-[760px]:hidden">{LABELS[theme]}</span>
       </button>
     )
   }
