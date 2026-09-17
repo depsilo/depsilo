@@ -39,12 +39,12 @@ export default function ProRequiredCallout({
           className="flex items-center justify-center w-14 h-14 rounded-[8px]"
           style={{ background: 'var(--brand-soft)', border: '0.5px solid var(--brand-border)' }}
         >
-          <Icon name={icon} size="lg" style={{ color: 'var(--brand)' }} />
+          <Icon className="text-primary" name={icon} size="lg" />
         </div>
         <h3 className="text-[18px] font-[600]" style={{ color: 'var(--text)', letterSpacing: '-0.02em' }}>
           {title}
         </h3>
-        <p className="text-[14px] max-w-md" style={{ color: 'var(--text-soft)' }}>
+        <p className="text-[14px] max-w-md text-muted-foreground">
           {description}
         </p>
         <a

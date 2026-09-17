@@ -232,7 +232,7 @@ export default function PortalAppV2() {
   )
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
+    <div className="min-h-screen bg-background">
       <header
         style={{
           position: 'sticky',

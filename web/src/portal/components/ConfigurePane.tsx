@@ -104,8 +104,7 @@ function ManagerPicker({
         </span>
       </div>
       <div
-        className="manager-picker-viewport overflow-x-auto rounded-[8px] p-1"
-        style={{ background: 'var(--bg-soft)' }}
+        className="manager-picker-viewport overflow-x-auto rounded-[8px] p-1 bg-muted"
       >
         <div
           className="grid gap-1"
@@ -260,8 +259,7 @@ export default function ConfigurePane({
       style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column' }}
     >
       <div
-        className="flex min-h-[72px] items-center gap-3 px-4 py-3.5 sm:px-6"
-        style={{ borderBottom: '1px solid var(--border)' }}
+        className="flex min-h-[72px] items-center gap-3 px-4 py-3.5 sm:px-6 border-b border-border"
       >
         <span
           aria-hidden="true"
@@ -287,8 +285,7 @@ export default function ConfigurePane({
           </h3>
         </div>
         <div
-          className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-[6px] px-2.5 py-1.5 min-[640px]:flex"
-          style={{ background: 'var(--bg-soft)' }}
+          className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-[6px] px-2.5 py-1.5 min-[640px]:flex bg-muted"
           title={resolvedEndpoint}
         >
           <Icon name="link" size="sm" className="shrink-0 text-muted-foreground" />

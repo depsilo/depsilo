@@ -214,11 +214,11 @@ export default function ProjectsV2() {
           </div>
         ),
       },
-      { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-      { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) || '-'}</span> },
-      { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
-      { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
-      { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
+      { key: 'package_name', label: t('name'), render: (v: unknown) => <span className="font-mono text-[12px] text-foreground">{v as string}</span> },
+      { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-[12px] text-muted-foreground">{(v as string) || '-'}</span> },
+      { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap text-muted-foreground">{formatProjectTime(v as string)}</span> },
+      { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap text-muted-foreground">{formatProjectTime(v as string)}</span> },
+      { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-[12px] font-mono text-muted-foreground">{(v as number) ?? 0}</span> },
     ]
 
     return (
@@ -231,7 +231,7 @@ export default function ProjectsV2() {
             label={t('projects.backToList')}
             onClick={() => { setSelectedProject(null); setPkgPage(1); setPkgEcosystem('') }}
           />
-          <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere]" style={{ color: 'var(--text)' }}>{projectDetail?.name}</h2>
+          <h2 className="min-w-0 break-words text-[20px] font-[600] [overflow-wrap:anywhere] text-foreground">{projectDetail?.name}</h2>
         </div>
 
         {/* Project info */}
@@ -251,7 +251,7 @@ export default function ProjectsV2() {
               data-project-proxy-row
               className="grid min-w-0 gap-2 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center sm:gap-3"
             >
-              <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('projects.proxyUrl')}</span>
+              <span className="text-[13px] text-muted-foreground">{t('projects.proxyUrl')}</span>
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   data-project-proxy-value
@@ -266,18 +266,18 @@ export default function ProjectsV2() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-[13px] w-32 shrink-0" style={{ color: 'var(--text-soft)' }}>{t('projects.packageCount')}</span>
-              <span className="text-[13px] font-mono tabular-nums" style={{ color: 'var(--text)' }}>{projectDetail?.package_count ?? 0}</span>
+              <span className="text-[13px] w-32 shrink-0 text-muted-foreground">{t('projects.packageCount')}</span>
+              <span className="text-[13px] font-mono tabular-nums text-foreground">{projectDetail?.package_count ?? 0}</span>
             </div>
             {Object.keys(ecosystems).length > 0 && (
               <div className="flex items-start gap-3">
-                <span className="text-[13px] w-32 shrink-0 pt-1" style={{ color: 'var(--text-soft)' }}>{t('projects.ecosystemBreakdown')}</span>
+                <span className="text-[13px] w-32 shrink-0 pt-1 text-muted-foreground">{t('projects.ecosystemBreakdown')}</span>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(ecosystems).map(([eco, count]) => (
-                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)' }}>
+                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-[4px] bg-muted">
                       {isAdminEcosystem(eco) && <EcosystemIcon type={eco} size={12} />}
-                      <span className="text-[12px]" style={{ color: 'var(--text)' }}>{eco.toUpperCase()}</span>
-                      <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{count}</span>
+                      <span className="text-[12px] text-foreground">{eco.toUpperCase()}</span>
+                      <span className="text-[12px] font-mono tabular-nums text-muted-foreground">{count}</span>
                     </div>
                   ))}
                 </div>
@@ -322,7 +322,7 @@ export default function ProjectsV2() {
             }
           />
           {packagesQuery.isPending ? (
-            <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
+            <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground"><span aria-hidden="true">{t('loading')}</span></div>
           ) : packagesQuery.isError && !pkgData ? (
             <QueryErrorState
               message={getApiError(packagesQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(packagesQuery.error).message}
@@ -355,9 +355,9 @@ export default function ProjectsV2() {
 
   // ── List view ──────────────────────────────────────────────────
   const columns = [
-    { key: 'name', label: t('projects.name'), render: (v: unknown) => <span className="font-[500] text-[14px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-    { key: 'package_count', label: t('projects.packageCount'), render: (v: unknown) => <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{(v as number) ?? 0}</span> },
-    { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatProjectTime(v as string)}</span> },
+    { key: 'name', label: t('projects.name'), render: (v: unknown) => <span className="font-[500] text-[14px] text-foreground">{v as string}</span> },
+    { key: 'package_count', label: t('projects.packageCount'), render: (v: unknown) => <span className="text-[12px] font-mono tabular-nums text-muted-foreground">{(v as number) ?? 0}</span> },
+    { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap text-muted-foreground">{formatProjectTime(v as string)}</span> },
     {
       key: 'id',
       label: t('actions'),
@@ -442,12 +442,12 @@ export default function ProjectsV2() {
           <div className="space-y-4">
             <div className="rounded-[6px] p-3" style={{ background: 'var(--warn-fill)', border: '0.5px solid var(--warn-border)' }}>
               <div className="flex items-center gap-2 mb-1">
-                <Icon name="warning" size="sm" style={{ color: 'var(--warn-text)' }} />
-                <span className="text-[13px] font-[500]" style={{ color: 'var(--warn-text)' }}>{t('projects.tokenWarning')}</span>
+                <Icon className="text-warning" name="warning" size="sm" />
+                <span className="text-[13px] font-[500] text-warning">{t('projects.tokenWarning')}</span>
               </div>
             </div>
             <div>
-              <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
+              <label className="block text-[13px] font-[500] mb-1 text-muted-foreground">{t('projects.token')}</label>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.token}
@@ -456,7 +456,7 @@ export default function ProjectsV2() {
               </div>
             </div>
             <div>
-              <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
+              <label className="block text-[13px] font-[500] mb-1 text-muted-foreground">{t('projects.proxyUrl')}</label>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.proxy_url}

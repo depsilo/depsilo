@@ -128,21 +128,21 @@ export default function CacheIndexes() {
               <article key={item.adapter_type} className="border-l-2 border-border pl-4">
                 <div className="mb-3 flex items-center gap-2">
                   {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={15} />}
-                  <span className="text-[12px] font-[600] uppercase" style={{ color: 'var(--text)' }}>
+                  <span className="text-[12px] font-[600] uppercase text-foreground">
                     {item.adapter_type}
                   </span>
                 </div>
                 <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-[10px] font-mono font-[600] uppercase" style={{ color: 'var(--text-subtle)' }}>
+                    <p className="text-[10px] font-mono font-[600] uppercase text-muted-foreground">
                       {t('cacheIndexes.total')}
                     </p>
-                    <p data-metric-value className="mt-1 font-mono text-[28px] font-[600] leading-none tabular-nums" style={{ color: 'var(--text)' }}>
+                    <p data-metric-value className="mt-1 font-mono text-[28px] font-[600] leading-none tabular-nums text-foreground">
                       {item.total.toLocaleString()}
                     </p>
                   </div>
                   <div className="space-y-1 text-right text-[11px] font-mono tabular-nums">
-                    <p style={{ color: 'var(--ok-text)' }}>
+                    <p className="text-success">
                       {t('cacheIndexes.freshCount', { count: item.fresh })}
                     </p>
                     <p style={{ color: item.stale > 0 ? 'var(--warn-text)' : 'var(--text-subtle)' }}>
@@ -150,7 +150,7 @@ export default function CacheIndexes() {
                     </p>
                   </div>
                 </div>
-                <p className="mt-3 text-[10px]" style={{ color: 'var(--text-subtle)' }}>
+                <p className="mt-3 text-[10px] text-muted-foreground">
                   {t('cacheIndexes.lastUpdated')}: {item.last_updated ? formatTime(item.last_updated) : t('cacheIndexes.neverUpdated')}
                 </p>
               </article>
@@ -164,12 +164,11 @@ export default function CacheIndexes() {
         className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
         onSubmit={(event) => { event.preventDefault(); applySearch() }}
       >
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             aria-label={t('cacheIndexes.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-            style={{ color: 'var(--text)' }}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
             placeholder={t('cacheIndexes.searchPlaceholder')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -203,7 +202,7 @@ export default function CacheIndexes() {
         <TableViewport label={t('cacheIndexes.tableLabel')} minWidth={canWrite ? 1210 : 1160}>
           <table className="w-full text-[12px]">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <tr className="border-b border-border">
                 {[
                   t('cacheIndexes.key'),
                   t('cacheIndexes.ecosystem'),
@@ -216,12 +215,12 @@ export default function CacheIndexes() {
                   t('cacheIndexes.expiresAt'),
                   t('cacheIndexes.updatedAt'),
                 ].map((heading) => (
-                  <th key={heading} scope="col" className="px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <th key={heading} scope="col" className="px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase first:pl-0 text-muted-foreground">
                     {heading}
                   </th>
                 ))}
                 {canWrite && (
-                  <th scope="col" className="px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase" style={{ color: 'var(--text-subtle)' }}>
+                  <th scope="col" className="px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase text-muted-foreground">
                     {t('cacheIndexes.actions')}
                   </th>
                 )}
@@ -231,22 +230,21 @@ export default function CacheIndexes() {
               {items.map((item) => (
                 <tr
                   key={item.id}
-                  className="transition-colors duration-75 hover:bg-muted"
-                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                  className="transition-colors duration-75 hover:bg-muted border-b border-border"
                 >
                   <td className="max-w-[280px] py-2 pr-3">
-                    <span className="block truncate font-mono text-[11px]" style={{ color: 'var(--text-soft)' }} title={item.key}>
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground" title={item.key}>
                       {item.key}
                     </span>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={13} />}
-                      <span className="uppercase" style={{ color: 'var(--text)' }}>{item.adapter_type}</span>
+                      <span className="uppercase text-foreground">{item.adapter_type}</span>
                     </div>
                   </td>
                   <td className="max-w-[220px] px-3 py-2">
-                    <span className="block truncate font-mono" style={{ color: 'var(--text)' }} title={item.package_name}>
+                    <span className="block truncate font-mono text-foreground" title={item.package_name}>
                       {item.package_name || '—'}
                     </span>
                   </td>
@@ -255,23 +253,23 @@ export default function CacheIndexes() {
                       {item.status === 'fresh' ? t('cacheIndexes.statusFresh') : t('cacheIndexes.statusStale')}
                     </BadgeV2>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums text-foreground">
                     {formatBytes(item.size)}
                   </td>
-                  <td className="px-3 py-2 font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                  <td className="px-3 py-2 font-mono tabular-nums text-foreground">
                     {item.hit_count.toLocaleString()}
                   </td>
                   <td className="max-w-[220px] px-3 py-2">
                     {item.etag || item.last_modified ? (
-                      <div className="space-y-0.5 font-mono text-[10px]" style={{ color: 'var(--text-soft)' }}>
+                      <div className="space-y-0.5 font-mono text-[10px] text-muted-foreground">
                         {item.etag && <p className="truncate" title={item.etag}>ETag: {item.etag}</p>}
                         {item.last_modified && <p className="truncate" title={item.last_modified}>Last-Modified: {item.last_modified}</p>}
                       </div>
-                    ) : <span style={{ color: 'var(--text-subtle)' }}>{t('cacheIndexes.noValidator')}</span>}
+                    ) : <span className="text-muted-foreground">{t('cacheIndexes.noValidator')}</span>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2" style={{ color: 'var(--text-soft)' }}>{formatTime(item.last_accessed)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatTime(item.last_accessed)}</td>
                   <td className="whitespace-nowrap px-3 py-2" style={{ color: item.status === 'stale' ? 'var(--warn-text)' : 'var(--text-soft)' }}>{formatTime(item.expires_at)}</td>
-                  <td className="whitespace-nowrap px-3 py-2" style={{ color: 'var(--text-soft)' }}>{formatTime(item.updated_at)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatTime(item.updated_at)}</td>
                   {canWrite && (
                     <td className="px-3 py-2">
                       <IconButton

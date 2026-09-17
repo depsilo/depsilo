@@ -46,9 +46,9 @@ function StatePanel({
           <Icon name={icon} size="sm" />
         </span>
         <div>
-          <p className="font-[500] text-[14px]" style={{ color: 'var(--text)' }}>{title}</p>
+          <p className="font-[500] text-[14px] text-foreground">{title}</p>
           {description && (
-            <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-soft)' }}>{description}</p>
+            <p className="text-[12px] mt-0.5 text-muted-foreground">{description}</p>
           )}
         </div>
       </div>
@@ -123,7 +123,7 @@ export default function License() {
   if (statusQuery.isPending) {
     return (
       <AdminPage width="readable" description={t('license.subtitle')}>
-        <div aria-busy="true" className="py-6 text-[14px]" style={{ color: 'var(--text-soft)' }}>
+        <div aria-busy="true" className="py-6 text-[14px] text-muted-foreground">
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       </AdminPage>
@@ -232,8 +232,8 @@ export default function License() {
                 className="flex items-center justify-between py-2"
                 style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
-                <span className="text-[13px]" style={{ color: 'var(--text-soft)' }}>{item.label}</span>
-                <span className="text-[13px]" style={{ color: 'var(--text)' }}>{item.value}</span>
+                <span className="text-[13px] text-muted-foreground">{item.label}</span>
+                <span className="text-[13px] text-foreground">{item.value}</span>
               </div>
             ))}
           </div>
@@ -258,17 +258,16 @@ export default function License() {
       <section>
         <button
           type="button"
-          className="w-full flex items-center justify-between bg-transparent cursor-pointer pb-2 disabled:cursor-not-allowed disabled:opacity-60 stripe-focus-ring"
-          style={{ borderBottom: '1px solid var(--border)' }}
+          className="w-full flex items-center justify-between bg-transparent cursor-pointer pb-2 disabled:cursor-not-allowed disabled:opacity-60 stripe-focus-ring border-b border-border"
           aria-controls="license-key-content"
           aria-expanded={keySectionOpen}
           disabled={setKey.isPending}
           onClick={() => setKeyExpanded(!keySectionOpen)}
         >
-          <span className="text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
+          <span className="text-[13px] font-[600] text-foreground">
             {t('license.key.title')}
           </span>
-          <Icon name={keySectionOpen ? 'expand_less' : 'expand_more'} size="sm" style={{ color: 'var(--text-soft)' }} />
+          <Icon className="text-muted-foreground" name={keySectionOpen ? 'expand_less' : 'expand_more'} size="sm" />
         </button>
 
         {keySectionOpen && (
@@ -304,11 +303,11 @@ export default function License() {
                 </div>
                 {setKey.data && setKey.data.source !== 'paid' && (
                   <div className="space-y-1">
-                    <p className="text-[13px]" style={{ color: 'var(--warn-text)' }}>
+                    <p className="text-[13px] text-warning">
                       {t('license.key.saved_pending_message')}
                     </p>
                     {setKey.data.license_error && (
-                      <p className="text-[12px] opacity-70" style={{ color: 'var(--text-soft)' }}>
+                      <p className="text-[12px] opacity-70 text-muted-foreground">
                         {setKey.data.license_error}
                       </p>
                     )}
@@ -377,26 +376,26 @@ export default function License() {
         <SectionHeader title={t('license.features.heading')} />
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
           <div>
-            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
+            <p className="mb-3 whitespace-nowrap text-[13px] font-[600] text-foreground">
               {t('license.status.free')}
             </p>
             <ul className="space-y-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-soft)' }}>
-                  <Icon name="check_circle" size="sm" style={{ color: 'var(--text-subtle)' }} />
+                <li key={i} className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                  <Icon className="text-muted-foreground" name="check_circle" size="sm" />
                   {t(`license.features.free.f${i}`)}
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <p className="mb-3 whitespace-nowrap text-[13px] font-[600]" style={{ color: 'var(--text)' }}>
+            <p className="mb-3 whitespace-nowrap text-[13px] font-[600] text-foreground">
               {t('license.status.pro')}
             </p>
             <ul className="space-y-2">
               {[1, 2].map((i) => (
-                <li key={i} className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-soft)' }}>
-                  <Icon name="star" size="sm" style={{ color: 'var(--brand)' }} />
+                <li key={i} className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                  <Icon className="text-primary" name="star" size="sm" />
                   {t(`license.features.pro.f${i}`)}
                 </li>
               ))}
@@ -413,7 +412,7 @@ export default function License() {
         }}
         title={t('license.key.remove_confirm_title')}
       >
-        <p className="text-[14px] mb-5" style={{ color: 'var(--text-soft)' }}>
+        <p className="text-[14px] mb-5 text-muted-foreground">
           {t('license.key.remove_confirm_body')}
         </p>
         {clearKey.isError && (

@@ -65,7 +65,7 @@ function StatusMetric({
 
   return (
     <div className="flex min-w-0 flex-col items-start text-left" data-dashboard-status-metric>
-      <span className="text-[11px] font-[600]" style={{ color: 'var(--text-subtle)' }}>{label}</span>
+      <span className="text-[11px] font-[600] text-muted-foreground">{label}</span>
       <span
         data-metric-value
         className="mt-2 min-w-0 font-[650] leading-[1.15]"
@@ -73,7 +73,7 @@ function StatusMetric({
       >
         {value}
       </span>
-      <span className="mt-1.5 text-[11px] leading-[1.45]" style={{ color: 'var(--text-soft)' }}>{detail}</span>
+      <span className="mt-1.5 text-[11px] leading-[1.45] text-muted-foreground">{detail}</span>
     </div>
   )
 }

@@ -238,8 +238,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
           aria-label={t('quickstart.searchEcosystems')}
           placeholder={t('quickstart.searchEcosystemPlaceholder')}
           autoComplete="off"
-          className="pl-9"
-          style={{ background: 'var(--bg-soft)' }}
+          className="pl-9 bg-muted"
         />
       </div>
 

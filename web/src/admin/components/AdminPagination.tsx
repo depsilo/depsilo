@@ -46,7 +46,7 @@ export default function AdminPagination({
       aria-label={t('pagination.label')}
       className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
     >
-      <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
+      <p className="text-[12px] text-muted-foreground">
         {t('pagination.summary', { from, to, total: safeTotal })}
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
@@ -61,8 +61,7 @@ export default function AdminPagination({
         </ButtonV2>
         <span
           aria-live="polite"
-          className="px-1 text-[12px] font-mono tabular-nums"
-          style={{ color: 'var(--text-soft)' }}
+          className="px-1 text-[12px] font-mono tabular-nums text-muted-foreground"
         >
           {t('pagination.page', { page: currentPage, totalPages })}
         </span>

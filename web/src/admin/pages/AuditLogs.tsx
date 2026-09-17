@@ -208,12 +208,11 @@ export default function AuditLogsV2() {
         className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             aria-label={t('audit.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-            style={{ color: 'var(--text)' }}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
             placeholder={t('audit.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -287,7 +286,7 @@ export default function AuditLogsV2() {
       </form>
 
       {isPending ? (
-        <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}>
+        <div aria-busy="true" className="py-8 text-center text-[13px] text-muted-foreground">
           <span aria-hidden="true">{t('loading')}</span>
         </div>
       ) : isError && !data ? (
@@ -301,9 +300,9 @@ export default function AuditLogsV2() {
             <TableViewport label={t('audit.table')} minWidth={1180}>
           <table className="w-full text-[12px]">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <tr className="border-b border-border">
                 {headers.map(h => (
-                  <th key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>
+                  <th key={h} scope="col" className="text-left text-[11px] font-mono font-[600] uppercase py-2 px-3 first:pl-0 text-muted-foreground">
                     {h}
                   </th>
                 ))}
@@ -313,26 +312,25 @@ export default function AuditLogsV2() {
               {items.map((row: AuditLog) => (
                 <tr
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-muted"
-                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                  className="transition-colors duration-75 hover:bg-muted border-b border-border"
                 >
                   <td className="py-2 px-3 pl-0 whitespace-nowrap">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatTime(row.created_at)}</span>
+                    <span className="font-mono tabular-nums text-muted-foreground">{formatTime(row.created_at)}</span>
                   </td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={13} />}
-                      <span className="text-[11px] uppercase" style={{ color: 'var(--text)' }}>{row.ecosystem}</span>
+                      <span className="text-[11px] uppercase text-foreground">{row.ecosystem}</span>
                     </div>
                   </td>
                   <td className="py-2 px-3 max-w-[220px]">
-                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.package_name || '-'}</span>
+                    <span className="font-mono truncate block text-foreground">{row.package_name || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.version || '-'}</span>
+                    <span className="font-mono text-muted-foreground">{row.version || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono whitespace-nowrap" style={{ color: 'var(--text)' }}>{row.action || '-'}</span>
+                    <span className="font-mono whitespace-nowrap text-foreground">{row.action || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
                     {resultBadge(row.cache_result, t)}
@@ -341,13 +339,13 @@ export default function AuditLogsV2() {
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>{row.latency_ms}ms</span>
                   </td>
                   <td className="py-2 px-3 whitespace-nowrap">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(row.bytes_sent)}</span>
+                    <span className="font-mono tabular-nums text-muted-foreground">{formatBytes(row.bytes_sent)}</span>
                   </td>
                   <td className="py-2 px-3 max-w-[180px]">
-                    <span className="font-mono truncate block" title={row.user_agent || undefined} style={{ color: 'var(--text-soft)' }}>{row.user_agent || '-'}</span>
+                    <span className="font-mono truncate block text-muted-foreground" title={row.user_agent || undefined}>{row.user_agent || '-'}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono" style={{ color: 'var(--text-soft)' }}>{row.client_ip || '-'}</span>
+                    <span className="font-mono text-muted-foreground">{row.client_ip || '-'}</span>
                   </td>
                 </tr>
               ))}

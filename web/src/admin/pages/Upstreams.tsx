@@ -503,8 +503,7 @@ export default function UpstreamsV2() {
               {[...Array(4)].map((_, index) => (
                 <div
                   key={index}
-                  className="h-32 animate-pulse rounded-[6px]"
-                  style={{ background: 'var(--bg-soft)' }}
+                  className="h-32 animate-pulse rounded-[6px] bg-muted"
                 />
               ))}
             </div>
@@ -544,7 +543,7 @@ export default function UpstreamsV2() {
                       >
                         {option.dot && <StatusDot status={option.dot} />}
                         <span>{option.label}</span>
-                        <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                        <span className="font-mono tabular-nums text-foreground">
                           {option.count}
                         </span>
                       </button>
@@ -554,8 +553,7 @@ export default function UpstreamsV2() {
 
                 <div
                   role="search"
-                  className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[360px]"
-                  style={{ background: 'var(--bg-card)' }}
+                  className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[360px] bg-card"
                 >
                   <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
                   <input
@@ -564,8 +562,7 @@ export default function UpstreamsV2() {
                     value={search}
                     aria-label={t('upstreams.searchLabel')}
                     placeholder={t('upstreams.searchPlaceholder')}
-                    className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-                    style={{ color: 'var(--text)' }}
+                    className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
                     onChange={(event) => setSearch(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Escape') {
@@ -679,7 +676,7 @@ export default function UpstreamsV2() {
                     ) : <span>{t('upstreams.neverChecked')}</span>}
                     {upstream.proxy && <span>{t('upstreams.proxyEnabled')}</span>}
                     {upstream.id && checkFailures.has(upstream.id) && (
-                      <span style={{ color: 'var(--danger-text)' }}>
+                      <span className="text-destructive">
                         {t('upstreams.checkRequestFailedShort')}
                       </span>
                     )}
@@ -725,7 +722,7 @@ export default function UpstreamsV2() {
         >
           <form onSubmit={handleSubmit} className="space-y-5">
             <fieldset className="space-y-3" disabled={isSaving}>
-              <legend className="mb-3 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+              <legend className="mb-3 text-[12px] font-[600] text-foreground">
                 {t('upstreams.connectionSection')}
               </legend>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -797,7 +794,7 @@ export default function UpstreamsV2() {
             </fieldset>
 
             <fieldset className="space-y-3 border-t border-border pt-4" disabled={isSaving}>
-              <legend className="px-1 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+              <legend className="px-1 text-[12px] font-[600] text-foreground">
                 {t('upstreams.healthSection')}
               </legend>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -866,7 +863,7 @@ export default function UpstreamsV2() {
         >
           {deleteTarget && (
             <div className="space-y-5">
-              <p className="text-[14px] leading-6" style={{ color: 'var(--text-soft)' }}>
+              <p className="text-[14px] leading-6 text-muted-foreground">
                 {t('upstreams.confirmDeleteMsg', {
                   name: deleteTarget.name,
                   ecosystem: deleteTarget.adapter_type,
@@ -874,18 +871,17 @@ export default function UpstreamsV2() {
               </p>
               <dl className="space-y-2 border-y border-border py-3 text-[12px]">
                 <div className="flex min-w-0 items-start justify-between gap-4">
-                  <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.url')}</dt>
+                  <dt className="text-muted-foreground">{t('upstreams.url')}</dt>
                   <dd
-                    className="min-w-0 max-w-[70%] truncate font-mono text-right"
+                    className="min-w-0 max-w-[70%] truncate font-mono text-right text-foreground"
                     title={upstreamEndpointLabel(deleteTarget.url)}
-                    style={{ color: 'var(--text)' }}
                   >
                     {upstreamEndpointLabel(deleteTarget.url)}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-4">
-                  <dt style={{ color: 'var(--text-muted)' }}>{t('upstreams.priority')}</dt>
-                  <dd className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>
+                  <dt className="text-muted-foreground">{t('upstreams.priority')}</dt>
+                  <dd className="font-mono tabular-nums text-foreground">
                     {deleteTarget.priority}
                   </dd>
                 </div>

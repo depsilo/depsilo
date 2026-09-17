@@ -215,10 +215,10 @@ export default function UpstreamUpdates() {
         {isAdminEcosystem(event.ecosystem) && (
           <EcosystemIcon type={event.ecosystem} size={13} useColor decorative />
         )}
-        <span className="shrink-0 uppercase" style={{ color: 'var(--text)' }}>
+        <span className="shrink-0 uppercase text-foreground">
           {event.ecosystem}
         </span>
-        <span aria-hidden="true" style={{ color: 'var(--text-subtle)' }}>·</span>
+        <span className="text-muted-foreground" aria-hidden="true">·</span>
         <span className="min-w-0 truncate" title={event.upstream || undefined}>
           {event.upstream || t('upstreamUpdates.unknownUpstream')}
         </span>
@@ -248,16 +248,16 @@ export default function UpstreamUpdates() {
               count: occurrenceCount,
             })}
       >
-        <div className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--text)' }}>
+        <div className="font-mono text-[12px] tabular-nums text-foreground">
           <time dateTime={firstSeenAt}>{firstSeen}</time>
           {isEpisode && (
             <>
-              <span className="mx-1" aria-hidden="true" style={{ color: 'var(--text-subtle)' }}>→</span>
+              <span className="mx-1 text-muted-foreground" aria-hidden="true">→</span>
               <time dateTime={lastSeenAt}>{lastSeen}</time>
             </>
           )}
         </div>
-        <div className="mt-0.5 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        <div className="mt-0.5 text-[12px] text-muted-foreground">
           <span aria-label={t('upstreamUpdates.checkCount', { count: occurrenceCount })}>
             {occurrenceCount > 1 ? `×${occurrenceCount}` : occurrenceCount}
           </span>
@@ -310,16 +310,14 @@ export default function UpstreamUpdates() {
           }}
         >
           <div
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[420px]"
-            style={{ background: 'var(--bg-card)' }}
+            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[420px] bg-card"
           >
             <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
             <input
               type="text"
               aria-label={t('upstreamUpdates.searchLabel')}
               placeholder={t('upstreamUpdates.searchPlaceholder')}
-              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-              style={{ color: 'var(--text)' }}
+              className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
               value={packageDraft}
               onChange={event => setPackageDraft(event.target.value)}
               onKeyDown={event => {
@@ -377,8 +375,7 @@ export default function UpstreamUpdates() {
         {query.data && (
           <div
             data-upstream-updates-summary
-            className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px]"
-            style={{ color: 'var(--text-muted)' }}
+            className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[12px] text-muted-foreground"
           >
             <span>
               {t('upstreamUpdates.loadedSummary', {
@@ -412,8 +409,7 @@ export default function UpstreamUpdates() {
               <div
                 key={index}
                 aria-hidden="true"
-                className="h-14 animate-pulse rounded-[6px]"
-                style={{ background: 'var(--bg-soft)' }}
+                className="h-14 animate-pulse rounded-[6px] bg-muted"
               />
             ))}
           </div>
@@ -450,17 +446,16 @@ export default function UpstreamUpdates() {
                   <li key={event.id} className="space-y-2.5 py-4 first:pt-0">
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <span
-                        className="min-w-0 break-words font-mono text-[13px] font-[550]"
-                        style={{ color: 'var(--text)' }}
+                        className="min-w-0 break-words font-mono text-[13px] font-[550] text-foreground"
                       >
                         {event.package}
                       </span>
                       {resultBadge(event.result)}
                     </div>
-                    <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                    <div className="text-[12px] text-muted-foreground">
                       {source(event)}
                     </div>
-                    <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--text-soft)' }}>
+                    <p className="text-[13px] leading-[1.5] text-muted-foreground">
                       {detail}
                     </p>
                     <div className="grid grid-cols-1 gap-2 text-[12px] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
@@ -493,8 +488,7 @@ export default function UpstreamUpdates() {
                         <th
                           key={heading}
                           scope="col"
-                          className="px-3 py-2 text-[11px] font-[600] first:pl-0"
-                          style={{ color: 'var(--text-muted)' }}
+                          className="px-3 py-2 text-[11px] font-[600] first:pl-0 text-muted-foreground"
                         >
                           {heading}
                         </th>
@@ -510,19 +504,18 @@ export default function UpstreamUpdates() {
                         <td className="w-[290px] px-3 py-3 pl-0 align-top">
                           {observation(event)}
                         </td>
-                        <td className="max-w-[220px] px-3 py-3 align-top" style={{ color: 'var(--text-muted)' }}>
+                        <td className="max-w-[220px] px-3 py-3 align-top text-muted-foreground">
                           {source(event)}
                         </td>
                         <td
-                          className="max-w-[260px] px-3 py-3 text-left align-top font-mono font-[500]"
-                          style={{ color: 'var(--text)' }}
+                          className="max-w-[260px] px-3 py-3 text-left align-top font-mono font-[500] text-foreground"
                         >
                           <span className="block break-words">{event.package}</span>
                         </td>
                         <td className="max-w-[360px] px-3 py-3 align-top">
                           <div className="flex min-w-0 items-start gap-2">
                             {resultBadge(event.result)}
-                            <span className="min-w-0 leading-[1.5]" style={{ color: 'var(--text-soft)' }}>
+                            <span className="min-w-0 leading-[1.5] text-muted-foreground">
                               {detailLabels[event.detail] ?? event.detail}
                             </span>
                           </div>

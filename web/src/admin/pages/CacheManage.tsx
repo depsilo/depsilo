@@ -201,12 +201,12 @@ export default function CacheManageV2() {
             <SectionHeader title={t('cache.storageOverview')} />
             <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--text)', lineHeight: 1.05 }}>
               {formatBytes(distribution.total_size)}
-              <span className="text-[12px] font-[400] ml-2" style={{ color: 'var(--text-soft)' }}>
+              <span className="text-[12px] font-[400] ml-2 text-muted-foreground">
                 / {formatBytes(distribution.max_size)}
               </span>
             </p>
             {/* Progress bar */}
-            <div className="h-2 rounded-full overflow-hidden flex mb-4" style={{ background: 'var(--bg-soft)' }}>
+            <div className="h-2 rounded-full overflow-hidden flex mb-4 bg-muted">
               {distribution.by_type.map((bt) => {
                 const pct = distribution.max_size > 0 ? (bt.size / distribution.max_size) * 100 : 0
                 return (
@@ -227,10 +227,10 @@ export default function CacheManageV2() {
                   <div key={bt.type} className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full shrink-0" style={{ background: ECO_COLORS[bt.type] || 'var(--brand)' }} />
                     {isAdminEcosystem(bt.type) && <EcosystemIcon type={bt.type} size={12} />}
-                    <span className="text-[11px] uppercase flex-1" style={{ color: 'var(--text)' }}>{bt.type}</span>
-                    <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{formatBytes(bt.size)}</span>
-                    <span className="text-[10px] font-mono tabular-nums w-10 text-right" style={{ color: 'var(--text-subtle)' }}>{pct}%</span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-subtle)' }}>{bt.file_count}f</span>
+                    <span className="text-[11px] uppercase flex-1 text-foreground">{bt.type}</span>
+                    <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{formatBytes(bt.size)}</span>
+                    <span className="text-[10px] font-mono tabular-nums w-10 text-right text-muted-foreground">{pct}%</span>
+                    <span className="text-[10px] text-muted-foreground">{bt.file_count}f</span>
                   </div>
                 )
               })}
@@ -279,8 +279,8 @@ export default function CacheManageV2() {
                     if (!isCacheTreemapItem(item)) return null
                     return (
                       <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                        <p className="font-[500]" style={{ color: 'var(--text)' }}>{item.name}</p>
-                        <p style={{ color: 'var(--text-soft)' }}>{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
+                        <p className="font-[500] text-foreground">{item.name}</p>
+                        <p className="text-muted-foreground">{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
                       </div>
                     )
                   }} />
@@ -296,12 +296,11 @@ export default function CacheManageV2() {
       )}
 
       <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             aria-label={t('cache.searchLabel')}
-            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px]"
-            style={{ color: 'var(--text)' }}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none md:text-[13px] text-foreground"
             placeholder={t('cache.searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1) }}
@@ -328,9 +327,9 @@ export default function CacheManageV2() {
             <TableViewport label={t('cache.table')} minWidth={820}>
             <table className="w-full text-[12px]">
             <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              <tr className="border-b border-border">
                 {['Key', t('type'), t('cache.size'), t('cache.hitCount'), t('cache.lastAccessed'), t('actions')].map(h => (
-                  <th key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0" style={{ color: 'var(--text-subtle)' }}>{h}</th>
+                  <th key={h} scope="col" className="text-left text-[10px] font-mono font-[600] uppercase py-2 px-3 first:pl-0 text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -338,11 +337,10 @@ export default function CacheManageV2() {
               {items.map((row) => (
                 <tr
                   key={row.id}
-                  className="transition-colors duration-75 hover:bg-muted"
-                  style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                  className="transition-colors duration-75 hover:bg-muted border-b border-border"
                 >
                   <td className="py-2 px-3 pl-0 max-w-[260px]">
-                    <span className="font-mono truncate block" style={{ color: 'var(--text)' }}>{row.key}</span>
+                    <span className="font-mono truncate block text-foreground">{row.key}</span>
                   </td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
@@ -351,13 +349,13 @@ export default function CacheManageV2() {
                     </div>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{formatBytes(row.size || 0)}</span>
+                    <span className="font-mono tabular-nums text-foreground">{formatBytes(row.size || 0)}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text)' }}>{row.hit_count || 0}</span>
+                    <span className="font-mono tabular-nums text-foreground">{row.hit_count || 0}</span>
                   </td>
                   <td className="py-2 px-3">
-                    <span style={{ color: 'var(--text-soft)' }}>{formatTime(row.last_accessed)}</span>
+                    <span className="text-muted-foreground">{formatTime(row.last_accessed)}</span>
                   </td>
                   <td className="py-2 px-3">
                     {canWrite && <IconButton
@@ -385,7 +383,7 @@ export default function CacheManageV2() {
         deleteMutation.reset()
         setDeleteTarget(null)
       }} title={t('cache.confirmDelete')} closeDisabled={deleteMutation.isPending}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p>
+        <p className="text-[14px] mb-6 text-muted-foreground">{t('cache.confirmDeleteMsg')}</p>
         {deleteMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(deleteMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" disabled={deleteMutation.isPending} onClick={() => {
@@ -405,7 +403,7 @@ export default function CacheManageV2() {
         setCleanupResult(null)
         setCleanupOpen(false)
       }} title={t('cache.cleanExpiredTitle')} closeDisabled={cleanupMutation.isPending}>
-        <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.cleanExpiredMsg')}</p>
+        <p className="text-[14px] mb-6 text-muted-foreground">{t('cache.cleanExpiredMsg')}</p>
         {cleanupPreviewQuery.isPending ? (
           <div aria-busy="true" className="mb-6 text-[13px] text-muted-foreground">{t('cache.previewLoading')}</div>
         ) : cleanupPreviewQuery.isError ? (

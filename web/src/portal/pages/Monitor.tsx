@@ -408,8 +408,7 @@ export default function MonitorPage() {
               {[...Array(4)].map((_, index) => (
                 <div
                   key={index}
-                  className="h-32 animate-pulse rounded-[10px]"
-                  style={{ background: 'var(--bg-soft)' }}
+                  className="h-32 animate-pulse rounded-[10px] bg-muted"
                 />
               ))}
             </div>

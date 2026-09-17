@@ -146,8 +146,8 @@ function OverviewTab() {
         <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex flex-col items-center gap-3">
-              <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
-              <div className="h-11 w-32 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+              <div className="h-3 w-20 rounded animate-pulse bg-muted" />
+              <div className="h-11 w-32 rounded animate-pulse bg-muted" />
             </div>
           ))}
         </div>
@@ -191,7 +191,7 @@ function OverviewTab() {
         />
         {scanMutation.isSuccess && <div className="mb-3"><InlineNotice tone="success">{t('security.scanStarted')}</InlineNotice></div>}
         {scanMutation.isError && <div className="mb-3"><InlineNotice tone="danger">{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</InlineNotice></div>}
-        <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
+        <p className="text-[12px] text-muted-foreground">
           {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
         </p>
       </section>
@@ -214,7 +214,7 @@ function OverviewTab() {
                   <div className="w-20 shrink-0">
                     <BadgeV2 variant={variant}>{item.severity.toUpperCase()}</BadgeV2>
                   </div>
-                  <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--bg-soft)' }}>
+                  <div className="flex-1 h-2 rounded-full bg-muted">
                     <div
                       className="h-full rounded-full transition-[width] duration-300 ease-out"
                       style={{
@@ -224,7 +224,7 @@ function OverviewTab() {
                       }}
                     />
                   </div>
-                  <span className="font-mono text-[12px] tabular-nums w-8 text-right shrink-0" style={{ color: 'var(--text)' }}>
+                  <span className="font-mono text-[12px] tabular-nums w-8 text-right shrink-0 text-foreground">
                     {item.count}
                   </span>
                 </div>
@@ -270,7 +270,7 @@ function VulnerabilitiesTab() {
       key: 'osv_id',
       label: t('security.osvId'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] font-[400]" style={{ color: 'var(--text)' }}>{v as string}</span>
+        <span className="font-mono text-[12px] font-[400] text-foreground">{v as string}</span>
       ),
     },
     {
@@ -287,7 +287,7 @@ function VulnerabilitiesTab() {
       key: 'package_name',
       label: t('security.package'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span>
+        <span className="font-mono text-[12px] text-foreground">{v as string}</span>
       ),
     },
     {
@@ -303,7 +303,7 @@ function VulnerabilitiesTab() {
       key: 'cvss_score',
       label: t('security.cvssScore'),
       render: (v: unknown) => (
-        <span className="font-mono text-[12px] tabular-nums" style={{ color: 'var(--text)' }}>
+        <span className="font-mono text-[12px] tabular-nums text-foreground">
           {v != null ? Number(v).toFixed(1) : '-'}
         </span>
       ),
@@ -312,7 +312,7 @@ function VulnerabilitiesTab() {
       key: 'published_at',
       label: t('security.published'),
       render: (v: unknown) => (
-        <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatDate(v as string)}</span>
+        <span className="text-[12px] whitespace-nowrap text-muted-foreground">{formatDate(v as string)}</span>
       ),
     },
   ]
@@ -360,7 +360,7 @@ function VulnerabilitiesTab() {
 
       {/* Table — bare (no Card wrap) */}
       {query.isPending ? (
-        <div role="status" aria-busy="true" className="py-8 text-center text-[14px]" style={{ color: 'var(--text-soft)' }}>{t('loading')}</div>
+        <div role="status" aria-busy="true" className="py-8 text-center text-[14px] text-muted-foreground">{t('loading')}</div>
       ) : query.isError && !data ? (
         <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
       ) : (
@@ -424,7 +424,7 @@ function SuggestionsTab() {
       <div aria-busy="true" className="space-y-4">
         <div aria-hidden="true" className="contents">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-20 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+          <div key={i} className="h-20 rounded animate-pulse bg-muted" />
         ))}
         </div>
       </div>
@@ -464,19 +464,19 @@ function SuggestionsTab() {
             >
               <div className="flex-1 min-w-0">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
+                  <span className="font-mono text-[13px] font-[500] text-foreground">
                     {item.osv_id}
                   </span>
                   <BadgeV2 variant={severityVariant}>{item.severity?.toUpperCase()}</BadgeV2>
                   {item.cvss_score != null && (
-                    <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
+                    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
                       CVSS {Number(item.cvss_score).toFixed(1)}
                     </span>
                   )}
                 </div>
                 <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
                   {item.ecosystem && <EcosystemIcon type={item.ecosystem as EcosystemName} size={14} />}
-                  <span className="min-w-0 break-all font-mono text-[13px]" style={{ color: 'var(--text)' }}>
+                  <span className="min-w-0 break-all font-mono text-[13px] text-foreground">
                     {item.package_name}
                   </span>
                 </div>
@@ -736,7 +736,7 @@ function PoliciesTab() {
       <div aria-busy="true" className="space-y-2">
         <div aria-hidden="true" className="contents">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-12 rounded animate-pulse" style={{ background: 'var(--bg-soft)' }} />
+          <div key={i} className="h-12 rounded animate-pulse bg-muted" />
         ))}
         </div>
       </div>
@@ -874,7 +874,7 @@ function PoliciesTab() {
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <EcosystemIcon type={eco as EcosystemName} size={16} />
-                    <span className="min-w-0 truncate text-[13px] font-[500]" title={eco.toUpperCase()} style={{ color: 'var(--text)' }}>
+                    <span className="min-w-0 truncate text-[13px] font-[500] text-foreground" title={eco.toUpperCase()}>
                       {eco.toUpperCase()}
                     </span>
                     {isDirty && <BadgeV2 variant="warning">{t('security.unsaved')}</BadgeV2>}

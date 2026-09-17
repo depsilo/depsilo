@@ -140,7 +140,7 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
       className="rounded-[6px] px-3 py-2 text-[12px]"
       style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-pop)' }}
     >
-      <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{formattedLabel}</p>
+      <p className="font-[400] mb-1 text-foreground">{formattedLabel}</p>
       {payload.map((entry) => {
         const v = entry.value
         let display: string
