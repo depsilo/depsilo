@@ -92,7 +92,7 @@ function RouteFailure({ surface }: { surface: RouteSurface }) {
       className={`programmatic-focus-target grid place-items-center px-4 py-10 ${surfaceClassName(surface)}`}
     >
       <div
-        className="w-full max-w-[520px] rounded-[8px] border border-destructive/35 bg-card p-5 shadow-lg"
+        className="w-full max-w-[520px] rounded-lg border border-destructive/35 bg-card p-5 shadow-lg"
       >
         <h2 id={titleId} className="text-title font-semibold text-foreground">
           {t('routeError.title')}

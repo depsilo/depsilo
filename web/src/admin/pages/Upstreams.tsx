@@ -467,7 +467,7 @@ export default function UpstreamsV2() {
             type="button"
             variant="secondary"
             size="sm"
-            className="min-h-[40px] w-[132px] sm:min-h-8"
+            className="min-h-10 w-[132px] sm:min-h-8"
             aria-busy={checking || undefined}
             onClick={checkAll}
             disabled={checking || checkingIds.size > 0 || allUpstreams.length === 0}
@@ -478,7 +478,7 @@ export default function UpstreamsV2() {
           <ButtonV2
             type="button"
             size="sm"
-            className="min-h-[40px] sm:min-h-8"
+            className="min-h-10 sm:min-h-8"
             onClick={openCreate}
           >
             <Plus className="icon icon-sm" aria-hidden="true" />
@@ -503,7 +503,7 @@ export default function UpstreamsV2() {
               {[...Array(4)].map((_, index) => (
                 <div
                   key={index}
-                  className="h-32 animate-pulse rounded-[6px] bg-muted"
+                  className="h-32 animate-pulse rounded-sm bg-muted"
                 />
               ))}
             </div>
@@ -524,7 +524,7 @@ export default function UpstreamsV2() {
                 <div
                   role="group"
                   aria-label={t('upstreams.statusFilterLabel')}
-                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-[8px] border border-border bg-muted p-[3px] sm:inline-grid sm:grid-cols-4"
+                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-sm border border-border bg-muted p-[3px] sm:inline-grid sm:grid-cols-4"
                 >
                   {statusOptions.map((option) => {
                     const active = statusFilter === option.value
@@ -533,7 +533,7 @@ export default function UpstreamsV2() {
                         key={option.value}
                         type="button"
                         aria-pressed={active}
-                        className={`stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border px-2.5 text-label transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${active ? 'border-input bg-card text-foreground' : 'border-transparent bg-transparent text-muted-foreground'}`}
+                        className={`stripe-focus-ring inline-flex min-h-10 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-2.5 text-label transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${active ? 'border-input bg-card text-foreground' : 'border-transparent bg-transparent text-muted-foreground'}`}
                         onClick={() => setStatusFilter(option.value)}
                       >
                         {option.dot && <StatusDot status={option.dot} />}
@@ -548,7 +548,7 @@ export default function UpstreamsV2() {
 
                 <div
                   role="search"
-                  className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[360px] bg-card"
+                  className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm border border-border px-3 lg:max-w-[360px] bg-card"
                 >
                   <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
                   <input
@@ -579,7 +579,7 @@ export default function UpstreamsV2() {
                   ) : (
                     <kbd
                       aria-hidden="true"
-                      className="hidden rounded-[4px] border border-border px-1.5 py-0.5 font-mono text-meta text-muted-foreground sm:inline"
+                      className="hidden rounded-sm border border-border px-1.5 py-0.5 font-mono text-meta text-muted-foreground sm:inline"
                     >
                       /
                     </kbd>
@@ -609,7 +609,7 @@ export default function UpstreamsV2() {
                 hint={canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}
                 minHeight={220}
                 action={canWrite ? (
-                  <ButtonV2 type="button" className="min-h-[40px]" onClick={openCreate}>
+                  <ButtonV2 type="button" className="min-h-10" onClick={openCreate}>
                     <Plus className="icon icon-sm" aria-hidden="true" />
                     {t('upstreams.addFirst')}
                   </ButtonV2>
@@ -627,7 +627,7 @@ export default function UpstreamsV2() {
                   <ButtonV2
                     type="button"
                     variant="secondary"
-                    className="min-h-[40px]"
+                    className="min-h-10"
                     onClick={() => {
                       setSearch('')
                       setStatusFilter('all')
@@ -830,7 +830,7 @@ export default function UpstreamsV2() {
               <ButtonV2
                 type="button"
                 variant="secondary"
-                className="min-h-[40px]"
+                className="min-h-10"
                 disabled={isSaving}
                 onClick={closeDialog}
               >
@@ -838,7 +838,7 @@ export default function UpstreamsV2() {
               </ButtonV2>
               <ButtonV2
                 type="submit"
-                className="min-h-[40px]"
+                className="min-h-10"
                 aria-busy={isSaving || undefined}
                 disabled={isSaving || !canWrite}
               >
@@ -890,7 +890,7 @@ export default function UpstreamsV2() {
                 <ButtonV2
                   type="button"
                   variant="secondary"
-                  className="min-h-[40px]"
+                  className="min-h-10"
                   disabled={deleteMutation.isPending}
                   onClick={closeDeleteDialog}
                 >
@@ -899,7 +899,7 @@ export default function UpstreamsV2() {
                 <ButtonV2
                   type="button"
                   variant="destructive"
-                  className="min-h-[40px]"
+                  className="min-h-10"
                   aria-busy={deleteMutation.isPending || undefined}
                   disabled={deleteMutation.isPending}
                   onClick={() => deleteMutation.mutate(deleteTarget.id)}

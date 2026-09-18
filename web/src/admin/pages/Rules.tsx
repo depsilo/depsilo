@@ -116,7 +116,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
   return (
     <div className="space-y-3" data-rule-test-result role="status" aria-live="polite">
       <div
-        className={`rounded-[4px] border p-4 ${result.allowed ? 'border-success-border bg-success-surface' : 'border-destructive bg-destructive-surface'}`}
+        className={`rounded-sm border p-4 ${result.allowed ? 'border-success-border bg-success-surface' : 'border-destructive bg-destructive-surface'}`}
         data-rule-test-decision={result.allowed ? 'allow' : 'deny'}
       >
         <div className="mb-2 flex items-center gap-2">
@@ -345,7 +345,7 @@ export default function RulesV2() {
                 type="button"
                 aria-pressed={form.action === 'allow'}
                 onClick={() => setForm({ ...form, action: 'allow' })}
-                className={`stripe-focus-ring flex-1 cursor-pointer rounded-[4px] border py-2 text-body font-normal transition-colors ${form.action === 'allow' ? 'border-success-border bg-success-surface text-success' : 'border-border bg-muted text-muted-foreground'}`}
+                className={`stripe-focus-ring flex-1 cursor-pointer rounded-sm border py-2 text-body font-normal transition-colors ${form.action === 'allow' ? 'border-success-border bg-success-surface text-success' : 'border-border bg-muted text-muted-foreground'}`}
               >
                 {t('rules.allow')}
               </button>
@@ -353,7 +353,7 @@ export default function RulesV2() {
                 type="button"
                 aria-pressed={form.action === 'deny'}
                 onClick={() => setForm({ ...form, action: 'deny' })}
-                className={`stripe-focus-ring flex-1 cursor-pointer rounded-[4px] border py-2 text-body font-normal transition-colors ${form.action === 'deny' ? 'border-destructive bg-destructive-surface text-destructive' : 'border-border bg-muted text-muted-foreground'}`}
+                className={`stripe-focus-ring flex-1 cursor-pointer rounded-sm border py-2 text-body font-normal transition-colors ${form.action === 'deny' ? 'border-destructive bg-destructive-surface text-destructive' : 'border-border bg-muted text-muted-foreground'}`}
               >
                 {t('rules.deny')}
               </button>
@@ -392,7 +392,7 @@ export default function RulesV2() {
           <InputV2 label={t('rules.version')} mono value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
           <ButtonV2 type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
           {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
-          {testResult && 'error' in testResult && <div role="alert" className="rounded-[4px] border border-destructive/35 bg-destructive/10 p-4"><p className="text-body text-destructive">{testResult.error}</p></div>}
+          {testResult && 'error' in testResult && <div role="alert" className="rounded-sm border border-destructive/35 bg-destructive/10 p-4"><p className="text-body text-destructive">{testResult.error}</p></div>}
         </div>
       </ModalV2>
     </div>

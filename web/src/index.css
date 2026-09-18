@@ -53,10 +53,15 @@
  * delivery results are reported independently. A cache miss and a slow
  * upstream are normal results and must never read as `destructive`.
  *
- * `--radius` is the single radius seed; the scale below derives from it.
+ * Radius has two roles, not a scale. A control — row, input, button, chip,
+ * inset, or a code block — shares one small radius; the outermost dialog,
+ * sheet, or panel takes the larger one. Eight arbitrary values (`2px` through
+ * `10px`) had accumulated at call sites, which is a decision made once per
+ * file rather than once per product.
  */
 :root {
-  --radius: 0.625rem;
+  --radius-control: 6px;
+  --radius-surface: 10px;
   color-scheme: light;
 
   /* ── Primitives ── */
@@ -301,10 +306,15 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Every radius utility a component may write resolves to one of the two
+     roles above. The shadcn names are kept because the generated primitives
+     in `components/ui` are written against them, and a future `shadcn add`
+     must not reintroduce a radius nobody chose. */
+  --radius-sm: var(--radius-control);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-control);
+  --radius-xl: var(--radius-surface);
+  --radius-2xl: var(--radius-surface);
 
   /* Type scale. Nine roles, and nothing else: before this the app layer used
      seventeen arbitrary sizes and twelve arbitrary font weights, which is

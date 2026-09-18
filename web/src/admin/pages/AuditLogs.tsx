@@ -213,7 +213,7 @@ export default function AuditLogsV2() {
         className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5 border border-border">
           <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             aria-label={t('audit.searchLabel')}
@@ -268,7 +268,7 @@ export default function AuditLogsV2() {
                 else next.set('range', r)
               })}
               aria-pressed={timeRange === r}
-              className={`cursor-pointer rounded-[4px] px-2.5 py-1 text-meta transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${timeRange === r ? 'bg-primary text-primary-foreground' : 'border border-border bg-transparent text-muted-foreground'}`}
+              className={`cursor-pointer rounded-sm px-2.5 py-1 text-meta transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${timeRange === r ? 'bg-primary text-primary-foreground' : 'border border-border bg-transparent text-muted-foreground'}`}
             >
               {r === 'today' ? t('audit.today') : r === '7d' ? t('audit.days7') : t('audit.days30')}
             </button>

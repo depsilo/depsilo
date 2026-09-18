@@ -231,7 +231,7 @@ export default function TrendsCard({
               </div>
               <div
                 data-trend-range-control
-                className="grid grid-cols-4 overflow-hidden rounded-[7px] border-[0.5px] border-border bg-muted sm:flex"
+                className="grid grid-cols-4 overflow-hidden rounded-sm border-[0.5px] border-border bg-muted sm:flex"
                 role="group"
                 aria-label={t('dashboard.hitMissTrend')}
               >
@@ -261,7 +261,7 @@ export default function TrendsCard({
       </div>
 
       {isStale && (
-        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-meta text-warning" role="status">
+        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm bg-warning/10 px-3 py-2 text-meta text-warning" role="status">
           <span>{t('now.staleData')}</span>
           {onRetry && (
             <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRetry}>
@@ -275,7 +275,7 @@ export default function TrendsCard({
         <div className="flex min-h-24 items-center justify-center gap-3 px-4 pb-4 text-left">
           <span
             aria-hidden
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-muted text-muted-foreground"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-muted text-muted-foreground"
           >
             <ChartNoAxesCombined className="icon icon-sm" aria-hidden="true" />
           </span>

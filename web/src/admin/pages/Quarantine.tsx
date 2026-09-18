@@ -323,7 +323,7 @@ function EventsTab(props: {
         </ul>
         <div className="hidden sm:block">
         <TableViewport label={t('quarantine.events.table')} minWidth={920}>
-          <div className="rounded-[8px] border border-border">
+          <div className="rounded-lg border border-border">
             <table className="w-full border-collapse">
             <thead className="bg-muted">
               <tr>
@@ -422,7 +422,7 @@ function ApprovalsTab(props: {
           />
           {props.canWrite && (
             <ButtonV2
-              className="min-h-[40px] w-full"
+              className="min-h-10 w-full"
               variant="destructive"
               onClick={() => props.onRevoke(row)}
             >
@@ -434,7 +434,7 @@ function ApprovalsTab(props: {
     </ul>
     <div className="hidden sm:block">
     <TableViewport label={t('quarantine.approvals.table')} minWidth={820}>
-      <div className="rounded-[8px] border border-border">
+      <div className="rounded-lg border border-border">
         <table className="w-full border-collapse">
         <thead className="bg-muted">
           <tr>
@@ -569,7 +569,7 @@ function BlocklistTab() {
       {st.mode === 'warn' && (
         <InlineNotice tone="warning">{t('quarantine.blocklist.observe_warning')}</InlineNotice>
       )}
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-[8px] border border-border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-lg border border-border bg-card p-4">
         <StatusItem label={t('quarantine.blocklist.mode')}>
           <BadgeV2 variant={st.mode === 'warn' ? 'warning' : 'success'}>
             {st.mode === 'warn' ? t('quarantine.blocklist.mode_observe') : t('quarantine.blocklist.mode_enforce')}
@@ -603,10 +603,10 @@ function BlocklistTab() {
           </StatusItem>
         )}
         {canWrite && <div className="grid w-full grid-cols-1 gap-2 min-[400px]:grid-cols-2 sm:ml-auto sm:flex sm:w-auto">
-          <ButtonV2 className="min-h-[40px] sm:min-h-9" variant="secondary" onClick={() => { createM.reset(); setCreateOpen(true) }}>
+          <ButtonV2 className="min-h-10 sm:min-h-9" variant="secondary" onClick={() => { createM.reset(); setCreateOpen(true) }}>
             <Plus className="icon icon-sm" aria-hidden="true" /> {t('quarantine.blocklist.add_override')}
           </ButtonV2>
-          <ButtonV2 className="min-h-[40px] sm:min-h-9" onClick={() => syncM.mutate()} aria-busy={syncM.isPending || undefined} disabled={syncM.isPending || !!st?.running}>
+          <ButtonV2 className="min-h-10 sm:min-h-9" onClick={() => syncM.mutate()} aria-busy={syncM.isPending || undefined} disabled={syncM.isPending || !!st?.running}>
             <RefreshCw className="icon icon-sm" aria-hidden="true" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
           </ButtonV2>
         </div>}
@@ -674,7 +674,7 @@ function BlocklistTab() {
                   />
                   {canWrite && !expired && (
                     <ButtonV2
-                      className="min-h-[40px] w-full"
+                      className="min-h-10 w-full"
                       variant="destructive"
                       onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}
                     >
@@ -687,7 +687,7 @@ function BlocklistTab() {
           </ul>
           <div className="hidden sm:block">
           <TableViewport label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
-            <div className="rounded-[8px] border border-border">
+            <div className="rounded-lg border border-border">
               <table className="w-full border-collapse">
               <thead className="bg-muted">
                 <tr>
@@ -931,7 +931,7 @@ function FilterSelect(props: {
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
       disabled={props.disabled}
-      className="min-h-[40px] w-full cursor-pointer rounded-[6px] border-[0.5px] border-border bg-muted px-3 text-field text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-label"
+      className="min-h-10 w-full cursor-pointer rounded-sm border-[0.5px] border-border bg-muted px-3 text-field text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-label"
     >
       {props.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>

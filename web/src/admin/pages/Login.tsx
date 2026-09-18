@@ -84,7 +84,7 @@ export default function Login() {
             to="/"
             aria-label="Depsilo"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-[6px] text-foreground no-underline transition-opacity duration-150 hover:opacity-75"
+            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-sm text-foreground no-underline transition-opacity duration-150 hover:opacity-75"
           >
             <Logo size={28} />
             <span className="font-display text-field font-bold">Depsilo</span>
@@ -92,7 +92,7 @@ export default function Login() {
           <Link
             to="/"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-2 text-label font-medium text-muted-foreground no-underline transition-colors duration-150 hover:bg-accent hover:text-foreground"
+            className="stripe-focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-sm px-2 text-label font-medium text-muted-foreground no-underline transition-colors duration-150 hover:bg-accent hover:text-foreground"
           >
             <ArrowLeft className="icon icon-sm" aria-hidden="true" />
             {t('login.backToPortal')}
@@ -131,7 +131,7 @@ export default function Login() {
           {error && (
             <p
               role="alert"
-              className="rounded-[6px] border border-destructive/35 bg-destructive/10 px-3 py-2.5 text-body leading-5 text-destructive"
+              className="rounded-sm border border-destructive/35 bg-destructive/10 px-3 py-2.5 text-body leading-5 text-destructive"
             >
               {error}
             </p>

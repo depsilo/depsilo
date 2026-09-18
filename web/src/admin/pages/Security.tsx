@@ -84,11 +84,11 @@ function CapabilityOverview() {
       {facts.length > 0 && (
         <div className="space-y-3">
           {[...grouped.entries()].map(([name, rows]) => (
-            <details key={name} className="rounded-[6px] border border-border bg-muted px-3 py-2">
+            <details key={name} className="rounded-sm border border-border bg-muted px-3 py-2">
               <summary className="cursor-pointer stripe-focus-ring text-body font-semibold">{label(name)}</summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
-                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-[4px] bg-background p-2 text-label">
+                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-sm bg-background p-2 text-label">
                     <div className="mb-1 font-semibold">{fact.ecosystem?.toUpperCase() ?? t('security.capabilityOverall')}</div>
                     <div><span className="text-muted-foreground">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
                     <div><span className="text-muted-foreground">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
@@ -435,7 +435,7 @@ function SuggestionsTab() {
           <span>{t('security.manualRuleRequired')}</span>
           <Link
             to={getAdminRouteHref('rules')}
-            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-[5px] px-2 text-label font-semibold text-primary no-underline hover:bg-accent"
+            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-label font-semibold text-primary no-underline hover:bg-accent"
           >
             {t('security.openPackageRules')}
           </Link>
@@ -951,7 +951,7 @@ function PoliciesTab() {
         <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
         {canWrite && <div
           data-security-import-dropzone
-          className="rounded-[4px] border-2 border-dashed border-border bg-muted p-6 text-center transition-colors duration-150"
+          className="rounded-sm border-2 border-dashed border-border bg-muted p-6 text-center transition-colors duration-150"
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
           onDrop={(e) => {
             e.preventDefault()
@@ -963,7 +963,7 @@ function PoliciesTab() {
         >
           <button
             type="button"
-            className="inline-flex min-h-10 flex-col items-center justify-center rounded-[4px] bg-transparent px-4 py-2 text-muted-foreground stripe-focus-ring"
+            className="inline-flex min-h-10 flex-col items-center justify-center rounded-sm bg-transparent px-4 py-2 text-muted-foreground stripe-focus-ring"
             onClick={() => fileInputRef.current?.click()}
             disabled={importMutation.isPending}
           >

@@ -50,7 +50,7 @@ function formatTimeSaved(ms: number, t: (key: string) => string): string {
 function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] border border-border bg-card px-3 py-2 text-label">
+    <div className="rounded-sm border border-border bg-card px-3 py-2 text-label">
       <p className="font-normal mb-1 text-foreground">{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -64,7 +64,7 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipVal
 function LatencyTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] border border-border bg-card px-3 py-2 text-label">
+    <div className="rounded-sm border border-border bg-card px-3 py-2 text-label">
       <p className="font-normal mb-1 text-foreground">{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -166,7 +166,7 @@ export default function BandwidthReport() {
             <button
               key={r.value}
               onClick={() => setRange(r.value)}
-              className="whitespace-nowrap rounded-[4px] px-3 py-1 text-label font-medium transition-colors duration-150 cursor-pointer"
+              className="whitespace-nowrap rounded-sm px-3 py-1 text-label font-medium transition-colors duration-150 cursor-pointer"
               style={{
                 background: active ? 'var(--primary)' : 'transparent',
                 color: active ? 'var(--primary-foreground)' : 'var(--muted-foreground)',

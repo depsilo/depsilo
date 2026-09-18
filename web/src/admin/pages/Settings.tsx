@@ -194,7 +194,7 @@ export default function SettingsV2() {
   if (settingsQuery.isPending) {
     return (
       <AdminPage description={t('settings.subtitle')}>
-        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-muted">
+        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-sm bg-muted">
           <span className="sr-only">{t('loading')}</span>
         </div>
       </AdminPage>
@@ -212,7 +212,7 @@ export default function SettingsV2() {
   if (!settingsQuery.data || !draft) {
     return (
       <AdminPage description={t('settings.subtitle')}>
-        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-[6px] bg-muted">
+        <div role="status" aria-busy="true" className="h-40 animate-pulse rounded-sm bg-muted">
           <span className="sr-only">{t('loading')}</span>
         </div>
       </AdminPage>

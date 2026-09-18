@@ -281,7 +281,7 @@ export default function UpstreamUpdates() {
           type="button"
           variant="secondary"
           size="sm"
-          className="min-h-[40px] sm:min-h-8"
+          className="min-h-10 sm:min-h-8"
           aria-busy={backgroundRefreshing || undefined}
           disabled={query.isPending || query.isFetching || manualRefreshing}
           onClick={() => { void refreshLatest() }}
@@ -311,7 +311,7 @@ export default function UpstreamUpdates() {
           }}
         >
           <div
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[420px] bg-card"
+            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-sm border border-border px-3 lg:max-w-[420px] bg-card"
           >
             <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
             <input
@@ -410,7 +410,7 @@ export default function UpstreamUpdates() {
               <div
                 key={index}
                 aria-hidden="true"
-                className="h-14 animate-pulse rounded-[6px] bg-muted"
+                className="h-14 animate-pulse rounded-sm bg-muted"
               />
             ))}
           </div>

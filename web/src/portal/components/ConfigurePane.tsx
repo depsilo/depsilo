@@ -172,13 +172,13 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
 
   return (
     <details
-      className="group overflow-hidden rounded-[7px] [&>summary::-webkit-details-marker]:hidden"
+      className="group overflow-hidden rounded-sm [&>summary::-webkit-details-marker]:hidden"
       style={{
         border: '1px solid var(--border)',
         background: 'var(--card)',
       }}
     >
-      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-body font-medium text-muted-foreground">
+      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-sm px-3 text-body font-medium text-muted-foreground">
         {t('quickstart.whereReadsFrom')}
         <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
           <ChevronDown className="icon icon-sm" aria-hidden="true" />
@@ -286,7 +286,7 @@ export default function ConfigurePane({
           </h3>
         </div>
         <div
-          className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-[6px] px-2.5 py-1.5 min-[640px]:flex bg-muted"
+          className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-sm px-2.5 py-1.5 min-[640px]:flex bg-muted"
           title={resolvedEndpoint}
         >
           <Link2 className="shrink-0 text-muted-foreground icon icon-sm" aria-hidden="true" />
@@ -328,7 +328,7 @@ export default function ConfigurePane({
 
           {manager.methods && manager.methods.length > 0 && (
             <details className="group border-y border-border py-2 [&>summary::-webkit-details-marker]:hidden">
-              <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1">
+              <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-sm px-1">
                 <span className="flex items-start gap-3">
                   <span
                     aria-hidden="true"

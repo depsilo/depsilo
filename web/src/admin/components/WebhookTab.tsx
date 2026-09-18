@@ -186,7 +186,7 @@ export default function WebhookTab() {
 
       <div aria-busy={query.isPending || undefined} className="min-w-0">
         {query.isPending ? (
-          <div className="h-40 animate-pulse rounded-[6px] bg-muted" />
+          <div className="h-40 animate-pulse rounded-sm bg-muted" />
         ) : query.isError && !query.data ? (
           <QueryErrorState message={getApiError(query.error).status === 403 ? t('common.permissionDenied') : getApiError(query.error).message} onRetry={() => { void query.refetch() }} />
         ) : (

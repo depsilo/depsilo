@@ -386,7 +386,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           aria-busy={phase === 'restarting'}
           className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center"
         >
-          <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-accent text-primary">
+          <span className="mb-5 grid h-11 w-11 place-items-center rounded-sm bg-accent text-primary">
             <Icon icon={phase === 'ready' ? CircleCheck : RefreshCw} className={phase === 'ready' ? '' : 'animate-spin'} />
           </span>
           <h1 className="text-page-title font-semibold text-foreground">
@@ -401,7 +401,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
 
     return (
       <section className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
-        <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-destructive/10 text-destructive">
+        <span className="mb-5 grid h-11 w-11 place-items-center rounded-sm bg-destructive/10 text-destructive">
           <TriangleAlert className="icon" aria-hidden="true" />
         </span>
         <h1 className="text-page-title font-semibold text-foreground">
@@ -430,8 +430,8 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
         className="border-t border-border"
       >
-        <summary className="stripe-focus-ring flex min-h-[52px] cursor-pointer list-none items-center gap-3 rounded-[6px] px-1 text-left [&::-webkit-details-marker]:hidden">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-muted text-muted-foreground">
+        <summary className="stripe-focus-ring flex min-h-13 cursor-pointer list-none items-center gap-3 rounded-sm px-1 text-left [&::-webkit-details-marker]:hidden">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-sm bg-muted text-muted-foreground">
             <SlidersHorizontal className="icon icon-sm" aria-hidden="true" />
           </span>
           <span className="min-w-0 flex-1">
@@ -499,7 +499,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     type="button"
                     aria-pressed={selected}
                     disabled={submitting}
-                    className="stripe-focus-ring flex min-h-[48px] items-center gap-2 rounded-[6px] border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
+                    className="stripe-focus-ring flex min-h-12 items-center gap-2 rounded-sm border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
                     style={{
                       borderColor: selected ? 'var(--primary)' : 'var(--border)',
                       background: selected ? 'var(--accent)' : 'var(--card)',
@@ -534,13 +534,13 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 const ecosystemUpstreams = upstreams[ecosystem.key] || []
                 const panelId = `setup-${ecosystem.key}-upstreams`
                 return (
-                  <div key={ecosystem.key} className="overflow-hidden rounded-[6px] border border-border">
+                  <div key={ecosystem.key} className="overflow-hidden rounded-lg border border-border">
                     <button
                       type="button"
                       aria-expanded={expanded}
                       aria-controls={panelId}
                       disabled={submitting}
-                      className="stripe-focus-ring flex min-h-[44px] w-full items-center gap-2.5 px-3 text-left text-foreground transition-colors duration-150 hover:bg-accent"
+                      className="stripe-focus-ring flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-foreground transition-colors duration-150 hover:bg-accent"
                       onClick={() => setExpandedEcosystem(expanded ? null : ecosystem.key)}
                     >
                       <EcosystemIcon type={ecosystem.key as EcosystemType} size={16} decorative />
@@ -582,7 +582,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                               type="button"
                               variant="destructive"
                               size="sm"
-                              className="min-h-[40px] min-w-[40px] px-2"
+                              className="min-h-10 min-w-10 px-2"
                               disabled={submitting}
                               aria-label={t('setup.remove_upstream', {
                                 name: upstream.name || `${ecosystem.label} ${index + 1}`,
@@ -620,7 +620,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-5 sm:px-6 sm:py-8">
       <div className="mx-auto w-full max-w-[720px]">
-        <header className="mb-5 flex min-h-[40px] items-center justify-between gap-4">
+        <header className="mb-5 flex min-h-10 items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 text-foreground">
             <span className="text-primary"><Logo size={29} /></span>
             <span className="text-field font-semibold">Depsilo</span>
@@ -701,7 +701,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 {renderAdvancedSettings()}
 
                 {submitError && !reconnectURL && (
-                  <p role="alert" className="mt-5 rounded-[6px] bg-destructive/10 px-3 py-2.5 text-label leading-5 text-destructive">
+                  <p role="alert" className="mt-5 rounded-sm bg-destructive/10 px-3 py-2.5 text-label leading-5 text-destructive">
                     {submitError}
                   </p>
                 )}
@@ -714,7 +714,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     type="submit"
                     disabled={submitting}
                     aria-busy={submitting || undefined}
-                    className="min-h-[40px] w-full shrink-0 sm:w-auto"
+                    className="min-h-10 w-full shrink-0 sm:w-auto"
                   >
                     {submitting ? (
                       <RefreshCw className="animate-spin icon icon-sm" aria-hidden="true" />

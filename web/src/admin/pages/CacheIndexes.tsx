@@ -164,7 +164,7 @@ export default function CacheIndexes() {
         className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
         onSubmit={(event) => { event.preventDefault(); applySearch() }}
       >
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5 border border-border">
           <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             aria-label={t('cacheIndexes.searchLabel')}

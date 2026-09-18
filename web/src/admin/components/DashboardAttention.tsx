@@ -42,7 +42,7 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
       <Link
         to={to}
         aria-label={action}
-        className="stripe-focus-ring group flex min-h-16 min-w-0 items-center gap-3 rounded-[7px] px-2 py-2 no-underline transition-colors duration-150 hover:bg-card"
+        className="stripe-focus-ring group flex min-h-16 min-w-0 items-center gap-3 rounded-sm px-2 py-2 no-underline transition-colors duration-150 hover:bg-card"
       >
         <span
           aria-hidden
@@ -115,8 +115,8 @@ export default function DashboardAttention({
 
       {isPending ? (
         <div aria-hidden="true" className="space-y-3 p-4">
-          <div className="h-16 animate-pulse rounded-[6px] bg-muted" />
-          <div className="h-12 animate-pulse rounded-[6px] bg-muted" />
+          <div className="h-16 animate-pulse rounded-sm bg-muted" />
+          <div className="h-12 animate-pulse rounded-sm bg-muted" />
         </div>
       ) : initialErrorMessage ? (
         <div className="p-4">
@@ -127,7 +127,7 @@ export default function DashboardAttention({
           {isStale && (
             <div
               role="status"
-              className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-warning/10 px-3 py-2 text-meta text-warning"
+              className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-sm bg-warning/10 px-3 py-2 text-meta text-warning"
             >
               <span>{t('attention.queueStale')}</span>
               <ButtonV2
@@ -173,7 +173,7 @@ export default function DashboardAttention({
             <div role="status" className="flex min-h-28 items-center gap-3 py-2">
               <span
                 aria-hidden
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-success/10 text-success"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-success/10 text-success"
               >
                 <CircleCheck className="icon icon-sm" aria-hidden="true" />
               </span>

@@ -262,7 +262,7 @@ export default function CacheManageV2() {
                         {showLabel && (
                           <foreignObject x={x} y={y} width={width} height={height}>
                             <div className="box-border flex size-full items-center justify-center overflow-hidden p-[3px]">
-                              <div className="flex max-w-full flex-col items-center overflow-hidden rounded-[3px] bg-card px-1 py-0.5">
+                              <div className="flex max-w-full flex-col items-center overflow-hidden rounded-sm bg-card px-1 py-0.5">
                                 <span className="text-center text-meta font-medium leading-tight break-all text-foreground">{name}</span>
                                 <span className="font-mono text-micro text-muted-foreground">{formatBytes(size)}</span>
                               </div>
@@ -278,7 +278,7 @@ export default function CacheManageV2() {
                     const item: unknown = payload[0]?.payload
                     if (!isCacheTreemapItem(item)) return null
                     return (
-                      <div className="rounded-[4px] border border-border bg-card p-2 text-meta">
+                      <div className="rounded-sm border border-border bg-card p-2 text-meta">
                         <p className="font-medium text-foreground">{item.name}</p>
                         <p className="text-muted-foreground">{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
                       </div>
@@ -296,7 +296,7 @@ export default function CacheManageV2() {
       )}
 
       <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5 border border-border">
           <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             aria-label={t('cache.searchLabel')}
@@ -482,7 +482,7 @@ export default function CacheManageV2() {
           {cancelWarmupMutation.isError && <InlineNotice tone="destructive">{t('cache.warmupActionFailed')}</InlineNotice>}
           {retryWarmupMutation.isError && <InlineNotice tone="destructive">{t('cache.warmupActionFailed')}</InlineNotice>}
           {warmupJobId && warmupJobQuery.data?.data && (
-            <div className="space-y-3 rounded-[6px] border border-border p-3" data-testid="warmup-job-status">
+            <div className="space-y-3 rounded-sm border border-border p-3" data-testid="warmup-job-status">
               <div className="flex justify-between gap-3 text-label">
                 <span>{t('cache.warmupJobStatus', { status: t(WARMUP_STATUS_KEYS[warmupJobQuery.data.data.status] || 'cache.warmupStatus.unknown') })}</span>
                 <span className="font-mono text-muted-foreground">{warmupJobId}</span>

@@ -237,7 +237,7 @@ export default function ProjectsV2() {
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   data-project-proxy-value
-                  className="min-w-0 flex-1 break-all rounded-[4px] px-2 py-1 font-mono text-label leading-5 bg-muted text-foreground"
+                  className="min-w-0 flex-1 break-all rounded-sm px-2 py-1 font-mono text-label leading-5 bg-muted text-foreground"
                 >
                   {proxyUrl}
                 </span>
@@ -255,7 +255,7 @@ export default function ProjectsV2() {
                 <span className="text-body w-32 shrink-0 pt-1 text-muted-foreground">{t('projects.ecosystemBreakdown')}</span>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(ecosystems).map(([eco, count]) => (
-                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-[4px] bg-muted">
+                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-sm bg-muted">
                       {isAdminEcosystem(eco) && <EcosystemIcon type={eco} size={12} />}
                       <span className="text-label text-foreground">{eco.toUpperCase()}</span>
                       <span className="text-label font-mono tabular-nums text-muted-foreground">{count}</span>
@@ -421,7 +421,7 @@ export default function ProjectsV2() {
       <ModalV2 open={tokenData !== null} onClose={() => setTokenData(null)} title={t('projects.token')}>
         {tokenData && (
           <div className="space-y-4">
-            <div className="rounded-[6px] border border-warning/35 bg-warning/10 p-3">
+            <div className="rounded-sm border border-warning/35 bg-warning/10 p-3">
               <div className="flex items-center gap-2 mb-1">
                 <TriangleAlert className="text-warning icon icon-sm" aria-hidden="true" />
                 <span className="text-body font-medium text-warning">{t('projects.tokenWarning')}</span>
@@ -430,7 +430,7 @@ export default function ProjectsV2() {
             <div>
               <span className="mb-1 block text-label font-medium text-muted-foreground">{t('projects.token')}</span>
               <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded-[4px] border border-border bg-muted px-3 py-2 font-mono text-label text-foreground">
+                <code className="flex-1 break-all rounded-sm border border-border bg-muted px-3 py-2 font-mono text-label text-foreground">
                   {tokenData.token}
                 </code>
                 <CopyButton text={tokenData.token} appearance="icon" label={t('projects.copyToken')} />
@@ -439,7 +439,7 @@ export default function ProjectsV2() {
             <div>
               <span className="mb-1 block text-label font-medium text-muted-foreground">{t('projects.proxyUrl')}</span>
               <div className="flex items-center gap-2">
-                <code className="flex-1 break-all rounded-[4px] border border-border bg-muted px-3 py-2 font-mono text-label text-foreground">
+                <code className="flex-1 break-all rounded-sm border border-border bg-muted px-3 py-2 font-mono text-label text-foreground">
                   {tokenData.proxy_url}
                 </code>
                 <CopyButton text={tokenData.proxy_url} appearance="icon" label={t('projects.copyProxyUrl')} />

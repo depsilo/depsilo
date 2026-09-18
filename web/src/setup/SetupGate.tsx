@@ -40,7 +40,7 @@ function SetupUnavailable({ retrying, onRetry }: { retrying: boolean; onRetry: (
         role="alert"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="programmatic-focus-target w-full max-w-[560px] rounded-[8px] border border-destructive/35 bg-card p-5 shadow-lg"
+        className="programmatic-focus-target w-full max-w-[560px] rounded-lg border border-destructive/35 bg-card p-5 shadow-lg"
       >
         <h1 id={titleId} className="text-subhead font-semibold text-foreground">
           {t('setupGate.title')}

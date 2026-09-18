@@ -49,7 +49,7 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <span
           aria-hidden
-          className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] ${tone === 'destructive' ? 'bg-destructive-surface text-destructive' : 'bg-warning-surface text-warning'}`}
+          className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm ${tone === 'destructive' ? 'bg-destructive-surface text-destructive' : 'bg-warning-surface text-warning'}`}
         >
           <Icon icon={icon} size="sm" />
         </span>
@@ -65,7 +65,7 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
       </div>
       <Link
         to={href}
-        className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-[5px] px-2.5 text-label font-semibold no-underline text-primary transition-colors duration-150 hover:bg-accent sm:self-center"
+        className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-sm px-2.5 text-label font-semibold no-underline text-primary transition-colors duration-150 hover:bg-accent sm:self-center"
       >
         {action}
         <span aria-hidden>→</span>
@@ -78,7 +78,7 @@ function AttentionSkeleton() {
   return (
     <div aria-busy="true" className="space-y-3">
       {[0, 1, 2].map(index => (
-        <div key={index} aria-hidden className="h-16 animate-pulse rounded-[6px] bg-muted" />
+        <div key={index} aria-hidden className="h-16 animate-pulse rounded-sm bg-muted" />
       ))}
     </div>
   )
@@ -235,7 +235,7 @@ export default function Attention() {
             action={(
               <Link
                 to={getAdminRouteHref('quarantine')}
-                className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 text-label font-semibold no-underline text-primary hover:bg-accent"
+                className="stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-label font-semibold no-underline text-primary hover:bg-accent"
               >
                 {t('attention.viewQuarantine')}
               </Link>

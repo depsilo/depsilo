@@ -39,10 +39,10 @@ function StatePanel({
   } as const
   const t = tones[tone]
   return (
-    <div className={`rounded-[6px] p-5 ${t.card}`}>
+    <div className={`rounded-lg p-5 ${t.card}`}>
       <div className="flex items-center gap-3 mb-4">
         <span
-          className={`flex h-10 w-10 items-center justify-center rounded-[8px] ${t.icon}`}
+          className={`flex h-10 w-10 items-center justify-center rounded-sm ${t.icon}`}
         >
           <Icon icon={icon} size="sm" />
         </span>

@@ -17,7 +17,7 @@ export default function CompileCacheIntro() {
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
-          className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-accent text-primary"
+          className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-accent text-primary"
         >
           <Cpu className="icon" aria-hidden="true" />
         </span>
@@ -37,7 +37,7 @@ export default function CompileCacheIntro() {
       <div className="mt-auto pt-5">
         <a
           href="/admin/compile-cache"
-          className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-[7px] px-3 text-body font-semibold no-underline hover:bg-accent active:scale-[0.97]"
+          className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-sm px-3 text-body font-semibold no-underline hover:bg-accent active:scale-[0.97]"
           style={{
             color: 'var(--primary)',
             background: 'transparent',
@@ -51,7 +51,7 @@ export default function CompileCacheIntro() {
         </a>
 
         <details className="mt-3 border-t border-border pt-2">
-          <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1 text-body font-medium text-muted-foreground hover:text-foreground">
+          <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-sm px-1 text-body font-medium text-muted-foreground hover:text-foreground">
             {t('quickstart.compileCacheDetails')}
             <ChevronDown className="icon icon-sm" aria-hidden="true" />
           </summary>

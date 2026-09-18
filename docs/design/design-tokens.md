@@ -15,7 +15,7 @@ Two tiers, no third:
 | Tier | Purpose | Example |
 | --- | --- | --- |
 | **Primitive** | A raw value with no meaning | `--neutral-3`, `--green-600` |
-| **Semantic** | A role the UI refers to | `--surface`, `--success`, `--row-height` |
+| **Semantic** | A role the UI refers to | `--card`, `--success`, `--radius-control` |
 
 Components only ever read semantic tokens. A primitive appearing in a component
 is a defect: it means someone made a colour decision at a call site.
@@ -369,13 +369,18 @@ Rules:
 
 | Token group | Contract |
 | --- | --- |
-| Spacing | One 4px base ladder. Page padding, section rhythm, and control padding all draw from it |
-| `--row-height` | **40px.** One value for rows and controls, per [product-ui-principles.md](product-ui-principles.md#4-rhythm-one-row-not-three) |
-| `--tap-target-min` | **40px.** The accessibility floor; never overridden downward |
-| `--control-height` | **36px** for fields and standard buttons. The 40px floor is a *target* floor — it applies to icon-only controls and to row rhythm, not to a text field, and a field that is 40px tall inside a 40px row has no breathing room |
-| `--radius-control` | Small, shared by rows, inputs, and buttons |
-| `--radius-surface` | The outer radius for panels and dialogs |
+| Spacing | One 4px base ladder — the Tailwind step itself (`min-h-10` is 40px), not a second scale on top of it. Arbitrary `[Npx]` values are drift and have been collapsed to the ladder |
+| Row height | **40px**, the ladder's `10`. One value for rows and controls, per [product-ui-principles.md](product-ui-principles.md#4-rhythm-one-row-not-three) |
+| Tap target floor | **40px.** The accessibility floor, never overridden downward, and asserted on `[data-icon-button]` and the segmented controls by `e2e/admin-axe.spec.ts` and the responsive-grid specs |
+| Control height | **36px**, the ladder's `9`, for fields and standard buttons. The 40px floor is a *target* floor — it applies to icon-only controls and to row rhythm, not to a text field, and a field that is 40px tall inside a 40px row has no breathing room |
+| `--radius-control` | **`6px`.** Rows, inputs, buttons, chips, insets, code blocks, skeletons — anything a reader points at or reads as one unit |
+| `--radius-surface` | **`10px`.** The outermost frame: dialogs, sheets, panels, and table wrappers |
 | `--focus-ring-width` / `-offset` | Fixed, and identical in both themes |
+
+The two radii are the only two in the stylesheet. `--radius-sm`, `--radius-md`,
+and `--radius-lg` all resolve to `--radius-control`, `--radius-xl` and
+`--radius-2xl` resolve to `--radius-surface`, and a call site that writes a
+third value is making a decision the design has already made.
 
 ## 7. Elevation and layering
 

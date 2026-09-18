@@ -409,7 +409,7 @@ export default function MonitorPage() {
               {[...Array(4)].map((_, index) => (
                 <div
                   key={index}
-                  className="h-32 animate-pulse rounded-[10px] bg-muted"
+                  className="h-32 animate-pulse rounded-sm bg-muted"
                 />
               ))}
             </div>
@@ -449,7 +449,7 @@ export default function MonitorPage() {
                 action={(
                   <Link
                     to="/admin/upstreams"
-                    className="inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-body font-medium no-underline"
+                    className="inline-flex min-h-10 items-center justify-center rounded-sm px-3 text-body font-medium no-underline"
                     style={{
                       border: '0.5px solid var(--input)',
                       color: 'var(--foreground)',

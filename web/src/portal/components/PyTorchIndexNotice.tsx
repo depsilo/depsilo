@@ -44,7 +44,7 @@ function ChannelButton({
       aria-label={choice.label}
       aria-pressed={active}
       onClick={onSelect}
-      className="stripe-focus-ring flex min-h-12 min-w-0 cursor-pointer flex-col items-start justify-center rounded-[6px] border px-3 py-2 text-left transition-[background,border-color,color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
+      className="stripe-focus-ring flex min-h-12 min-w-0 cursor-pointer flex-col items-start justify-center rounded-sm border px-3 py-2 text-left transition-[background,border-color,color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
       style={{
         background: active ? 'var(--accent)' : 'transparent',
         borderColor: active ? 'var(--border)' : 'transparent',
@@ -104,10 +104,10 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
       className="border-y border-border"
     >
       <details className="group [&>summary::-webkit-details-marker]:hidden">
-        <summary className="stripe-focus-ring flex min-h-[68px] cursor-pointer list-none items-center gap-3 rounded-[6px] py-3">
+        <summary className="stripe-focus-ring flex min-h-[68px] cursor-pointer list-none items-center gap-3 rounded-sm py-3">
           <span
             aria-hidden="true"
-            className="flex size-8 shrink-0 items-center justify-center rounded-[7px] bg-accent text-primary"
+            className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-accent text-primary"
           >
             <Package className="icon icon-sm" aria-hidden="true" />
           </span>
@@ -144,7 +144,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
               {t('quickstart.pytorchIndexPlatformLabel')}
             </legend>
             <div
-              className="grid max-w-[760px] gap-1 rounded-[8px] bg-muted p-1"
+              className="grid max-w-[760px] gap-1 rounded-sm bg-muted p-1"
               style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(106px, 1fr))' }}
             >
               {channelChoices.map(choice => (
@@ -201,7 +201,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
               <div
                 aria-live="polite"
                 aria-atomic="true"
-                className="mb-3 mt-3 flex min-w-0 flex-col gap-1 rounded-[6px] bg-muted px-3 py-2"
+                className="mb-3 mt-3 flex min-w-0 flex-col gap-1 rounded-sm bg-muted px-3 py-2"
               >
                 <span className="text-meta font-semibold text-muted-foreground">
                   {t('quickstart.pytorchIndexEndpointLabel')}

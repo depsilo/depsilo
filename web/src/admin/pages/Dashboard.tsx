@@ -312,7 +312,7 @@ export default function DashboardV2() {
                 aria-busy="true"
                 className="border-b border-border bg-card p-4"
               >
-                <div aria-hidden="true" className="h-56 animate-pulse rounded-[6px] bg-muted" />
+                <div aria-hidden="true" className="h-56 animate-pulse rounded-sm bg-muted" />
               </div>
             ) : trendsQuery.isError && !hasTrendData ? (
               <div className="border-b border-border bg-card p-4">

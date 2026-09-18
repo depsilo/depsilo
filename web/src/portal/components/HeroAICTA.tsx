@@ -69,7 +69,7 @@ export default function HeroAICTA() {
         <div className="flex items-start gap-3">
           <span
             aria-hidden="true"
-            className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-accent text-primary"
+            className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-accent text-primary"
           >
             <Lightbulb className="icon" aria-hidden="true" />
           </span>
@@ -91,7 +91,7 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleCopy()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-[7px] px-3 text-body font-semibold active:scale-[0.97]"
+            className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-sm px-3 text-body font-semibold active:scale-[0.97]"
             style={{
               color: copied ? 'var(--success)' : 'var(--primary-foreground)',
               background: copied ? 'var(--success-surface)' : 'var(--primary)',
@@ -117,7 +117,7 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleReview()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-[7px] px-3 text-body font-semibold text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.97]"
+            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-sm px-3 text-body font-semibold text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.97]"
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',
@@ -155,7 +155,7 @@ export default function HeroAICTA() {
             {t('quickstart.aiIntegrationDesc')}
           </p>
           <div
-            className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] px-3 py-2"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-sm px-3 py-2"
             style={{
               background: 'var(--muted)',
               border: '0.5px solid var(--border)',
@@ -168,7 +168,7 @@ export default function HeroAICTA() {
           </div>
           <pre
             tabIndex={0}
-            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-[6px] p-4 font-mono text-label leading-[1.55] text-foreground"
+            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-sm p-4 font-mono text-label leading-[1.55] text-foreground"
             style={{
               background: 'var(--muted)',
               border: '0.5px solid var(--border)',

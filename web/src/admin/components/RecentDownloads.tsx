@@ -137,7 +137,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
         </div>
         <Link
           to={getAdminRouteHref('auditLogs')}
-          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-label font-semibold no-underline text-primary hover:bg-card"
+          className="stripe-focus-ring inline-flex min-h-10 items-center gap-1 rounded-sm px-2 whitespace-nowrap text-label font-semibold no-underline text-primary hover:bg-card"
         >
           {t('recentDownloads.viewAudit')}
           <span aria-hidden>→</span>
