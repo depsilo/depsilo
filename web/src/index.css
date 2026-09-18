@@ -357,6 +357,22 @@
   --animate-live-pulse: liveDownloadPulse 2.4s ease-in-out infinite;
   --animate-live-sweep: liveDownloadSweep 3.2s linear infinite;
 
+  /* The request flowline's travelling signal: it crosses horizontally once the
+     three stages sit in a row, and vertically while they are stacked. */
+  --animate-flow-x: dependencyFlowX 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  --animate-flow-y: dependencyFlowY 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+
+  @keyframes dependencyFlowX {
+    0% { left: 16.666%; opacity: 0; }
+    14%, 84% { opacity: 1; }
+    100% { left: calc(83.333% - 36px); opacity: 0; }
+  }
+  @keyframes dependencyFlowY {
+    0% { top: 28px; opacity: 0; }
+    14%, 84% { opacity: 1; }
+    100% { top: calc(100% - 56px); opacity: 0; }
+  }
+
   @keyframes liveDownloadEnter {
     from { opacity: 0; transform: translateX(-8px); }
     to   { opacity: 1; transform: translateX(0); }

@@ -10,127 +10,40 @@ import QueryErrorState from '@/components/app/error-state'
 import type { NowResponse } from '@/lib/adminApi.types'
 import { statsApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
+import { cn } from '@/lib/utils'
 
-const flowMotion = `
-@keyframes dependencyFlowX {
-  0% { left: 16.666%; opacity: 0; }
-  14%, 84% { opacity: 1; }
-  100% { left: calc(83.333% - 36px); opacity: 0; }
-}
-@keyframes dependencyFlowY {
-  0% { top: 28px; opacity: 0; }
-  14%, 84% { opacity: 1; }
-  100% { top: calc(100% - 56px); opacity: 0; }
-}
-.dependency-flow-track {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr;
-  padding: 8px 0;
-}
-.dependency-flow-track::before {
-  content: '';
-  position: absolute;
-  top: 28px;
-  bottom: 28px;
-  left: 29px;
-  width: 1px;
-  background: var(--input);
-}
-.dependency-flow-beat {
-  position: absolute;
-  z-index: 0;
-  top: 28px;
-  left: 28px;
-  width: 3px;
-  height: 28px;
-  border-radius: 999px;
-  background: var(--primary);
-  animation: dependencyFlowY 2.6s cubic-bezier(.2,.8,.2,1) infinite;
-}
-.dependency-flow-stage {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  min-width: 0;
-  min-height: 56px;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: 12px;
-  padding: 6px 20px;
-}
-.dependency-flow-node {
-  grid-column: 1;
-  grid-row: 1 / 3;
-  width: 11px;
-  height: 11px;
-  margin-left: 4px;
-  border: 3px solid var(--card);
-  border-radius: 999px;
-  box-shadow: 0 0 0 1px var(--input);
-}
-.dependency-flow-title {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: end;
-}
-.dependency-flow-detail {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: start;
-}
-.dependency-flow-value {
-  grid-column: 3;
-  grid-row: 1 / 3;
-  align-self: center;
-  justify-self: end;
-}
-@media (min-width: 768px) {
-  .dependency-flow-track {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 24px;
-    padding: 0;
-  }
-  .dependency-flow-track::before {
-    top: 5px;
-    right: 16.666%;
-    bottom: auto;
-    left: 16.666%;
-    width: auto;
-    height: 1px;
-  }
-  .dependency-flow-beat {
-    top: 4px;
-    left: 16.666%;
-    width: 36px;
-    height: 3px;
-    animation-name: dependencyFlowX;
-  }
-  .dependency-flow-stage {
-    display: flex;
-    min-height: 112px;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 0 8px;
-    text-align: center;
-  }
-  .dependency-flow-node {
-    flex: 0 0 auto;
-    margin: 0 0 13px;
-  }
-  .dependency-flow-title,
-  .dependency-flow-detail,
-  .dependency-flow-value {
-    align-self: auto;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dependency-flow-beat { animation: none; }
-  .dependency-flow-beat { opacity: 1; }
-}
-`
+/**
+ * The request flowline: three stages on one axis, with a signal travelling
+ * along it. Stacked below `md`, in a row from `md` up, and the axis turns with
+ * the stages.
+ *
+ * This used to be a component-local `<style>` block of eight classes plus two
+ * keyframes. It is Tailwind now, and the travelling signal is a named token
+ * animation, so the global reduced-motion switch reaches it like every other.
+ */
+const FLOW_TRACK =
+  'relative grid min-w-0 grid-cols-1 py-2 ' +
+  "before:absolute before:top-7 before:bottom-7 before:left-[29px] before:w-px before:bg-input before:content-[''] " +
+  'md:grid-cols-3 md:gap-6 md:p-0 ' +
+  'md:before:top-[5px] md:before:right-[16.666%] md:before:bottom-auto ' +
+  'md:before:left-[16.666%] md:before:h-px md:before:w-auto'
+
+const FLOW_BEAT =
+  'absolute top-7 left-7 z-0 h-7 w-[3px] animate-flow-y rounded-full bg-primary ' +
+  'md:top-1 md:left-[16.666%] md:h-[3px] md:w-9 md:animate-flow-x'
+
+const FLOW_STAGE =
+  'relative z-[1] grid min-h-14 min-w-0 grid-cols-[20px_minmax(0,1fr)_auto] grid-rows-[auto_auto] ' +
+  'items-center gap-x-3 px-5 py-1.5 ' +
+  'md:flex md:min-h-28 md:flex-col md:items-center md:justify-start md:px-2 md:py-0 md:text-center'
+
+const FLOW_NODE =
+  'col-start-1 row-span-2 ml-1 size-[11px] rounded-full border-[3px] border-card shadow-[0_0_0_1px_var(--input)] ' +
+  'md:mb-[13px] md:ml-0 md:shrink-0'
+
+const FLOW_TITLE = 'col-start-2 row-start-1 self-end md:self-auto'
+const FLOW_DETAIL = 'col-start-2 row-start-2 self-start md:self-auto'
+const FLOW_VALUE = 'col-start-3 row-span-2 self-center justify-self-end md:self-auto'
 
 function statusColor(status: NowResponse['status']): string {
   if (status === 'healthy') return 'var(--success)'
@@ -165,26 +78,26 @@ interface FlowStageProps {
 }
 
 function FlowStage({ title, value, detail, loading = false, tone = 'default', action }: FlowStageProps) {
-  const color = tone === 'ok'
-    ? 'var(--success)'
-    : tone === 'warning'
-      ? 'var(--warning)'
-      : 'var(--foreground)'
+  // The node is filled and the value is text, so they take the same tone
+  // through different properties. One map carrying both would paint a
+  // background behind the number.
+  const nodeClass = tone === 'ok' ? 'bg-success' : tone === 'warning' ? 'bg-warning' : 'bg-foreground'
+  const valueClass = tone === 'ok' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-foreground'
 
   return (
-    <div className="dependency-flow-stage">
-      <span aria-hidden="true" className="dependency-flow-node" style={{ background: color }} />
-      <p className="dependency-flow-title text-label font-semibold text-muted-foreground">{title}</p>
+    <div className={FLOW_STAGE}>
+      <span aria-hidden="true" className={`${FLOW_NODE} ${nodeClass}`} />
+      <p className={`${FLOW_TITLE} text-label font-semibold text-muted-foreground`}>{title}</p>
       {loading ? (
-        <div aria-hidden="true" className="dependency-flow-value h-7 w-20 animate-pulse rounded bg-muted" />
+        <div aria-hidden="true" className={`${FLOW_VALUE} h-7 w-20 animate-pulse rounded bg-muted`} />
       ) : action ? (
-        <div className="dependency-flow-value">{action}</div>
+        <div className={FLOW_VALUE}>{action}</div>
       ) : (
-        <p className="dependency-flow-value font-mono text-metric-sm font-semibold leading-none tabular-nums md:text-metric" style={{ color }}>
+          <p className={`${FLOW_VALUE} font-mono text-metric-sm font-semibold leading-none tabular-nums md:text-metric ${valueClass}`}>
           {value ?? '—'}
         </p>
       )}
-      <p className="dependency-flow-detail mt-0.5 text-meta text-muted-foreground md:mt-1.5">{detail}</p>
+      <p className={`${FLOW_DETAIL} mt-0.5 text-meta text-muted-foreground md:mt-1.5`}>{detail}</p>
     </div>
   )
 }
@@ -248,8 +161,7 @@ export default function NowStrip({
         title={accessibleLabel}
         className="inline-flex h-10 min-w-0 items-center gap-2 whitespace-nowrap text-meta text-muted-foreground"
       >
-        <style>{flowMotion}</style>
-        <span
+          <span
           aria-hidden
           style={{
             width: 8,
@@ -264,25 +176,30 @@ export default function NowStrip({
     )
   }
 
-  const upstreamTone = data && data.upstreams.healthy < data.upstreams.total ? 'warning' : 'ok'
+  // No upstreams is *unknown*, not healthy. Rendering `0 / 0` in the success
+  // colour would claim a clean bill of health for something never observed.
+  const upstreamsKnown = Boolean(data && data.upstreams.total > 0)
+  const upstreamsAllHealthy = Boolean(
+    data && data.upstreams.total > 0 && data.upstreams.healthy >= data.upstreams.total,
+  )
+  const upstreamTone = !upstreamsKnown ? 'default' : upstreamsAllHealthy ? 'ok' : 'warning'
   const upstreamValue = data ? `${data.upstreams.healthy}/${data.upstreams.total}` : undefined
   const hitRateValue = typeof cacheHitRate === 'number' ? `${(cacheHitRate * 100).toFixed(1)}%` : undefined
 
   return (
     <section
       data-query-key="now"
-      aria-labelledby="dependency-flow-title"
-      aria-describedby="dependency-flow-description"
+      aria-labelledby="request-flow-title"
+      aria-describedby="request-flow-description"
       aria-busy={query.isPending || undefined}
       className="flex h-full min-w-0 flex-col overflow-hidden border-b border-border bg-card"
     >
-      <style>{flowMotion}</style>
       <header className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2">
         <div className="min-w-0">
-          <h2 id="dependency-flow-title" className="text-body font-semibold text-foreground">
+          <h2 id="request-flow-title" className="text-body font-semibold text-foreground">
             {t('dashboard.requestPath')}
           </h2>
-          <p id="dependency-flow-description" className="sr-only">
+          <p id="request-flow-description" className="sr-only">
             {t('dashboard.requestPathHint')}
           </p>
         </div>
@@ -327,9 +244,9 @@ export default function NowStrip({
           <div
             role="group"
             aria-label={t('dashboard.flowlineDescription')}
-            className="dependency-flow-track min-w-0"
+            className={FLOW_TRACK}
           >
-            {!hasStaleData && data && <span className="dependency-flow-beat" aria-hidden />}
+            {!hasStaleData && data && <span className={FLOW_BEAT} aria-hidden />}
             <FlowStage
               title={t('dashboard.clientIngress')}
               value={data ? String(data.rate.requests_per_min ?? 0) : undefined}
@@ -351,8 +268,12 @@ export default function NowStrip({
               action={data ? (
                 <Link
                   to={getAdminRouteHref('upstreams')}
-                  className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 font-mono text-metric-sm font-semibold leading-none tabular-nums no-underline hover:bg-accent md:text-metric"
-                  style={{ color: upstreamTone === 'warning' ? 'var(--warning)' : 'var(--success)' }}
+                  className={cn(
+                    'inline-flex min-h-10 items-center rounded-md px-2 font-mono text-metric-sm font-semibold leading-none tabular-nums no-underline hover:bg-accent md:text-metric',
+                    !upstreamsKnown
+                      ? 'text-muted-foreground'
+                      : upstreamsAllHealthy ? 'text-success' : 'text-warning',
+                  )}
                   aria-label={t('now.viewUpstreams', {
                     healthy: data.upstreams.healthy,
                     total: data.upstreams.total,

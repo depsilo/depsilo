@@ -340,6 +340,16 @@ In scope as **tokens and rules**, not as a charting rewrite.
 | `--chart-grid` | The one grid weight |
 | `--chart-axis-label` | Tick labels |
 
+**Which palette a chart uses depends on what its series are.**
+
+- A chart whose series are **outcomes** uses the status axis. The Dashboard's
+  activity trend plots cache results, and the product has already taught the
+  Operator that a hit is green; recolouring hits blue to satisfy a categorical
+  ramp would trade a learned association for tidiness.
+- A chart whose series are **categories** uses the ramp: per-ecosystem traffic,
+  per-upstream share. None of these is better or worse than another, and the
+  ramp says so while the status axis would not.
+
 Rules:
 
 - **Every series clears 3:1 against the plot surface.** This is the floor for a

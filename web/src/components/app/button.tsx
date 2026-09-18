@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes } from 'react'
+import { Link, type LinkProps } from 'react-router'
 
-import { Button as UiButton } from '@/components/ui/button'
+import { Button as UiButton, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
@@ -44,6 +45,39 @@ export default function Button({
       variant={VARIANT[variant]}
       size={SIZE[size]}
       className={cn('text-body font-medium', className)}
+    />
+  )
+}
+
+interface LinkButtonProps extends Omit<LinkProps, 'className'> {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  className?: string
+}
+
+/**
+ * A link that measures and reads exactly like a button.
+ *
+ * A navigation action is an anchor: it has an `href`, it can be middle-clicked
+ * and copied, and it shows its target. It is not a `<button>` with an
+ * `onClick`, and it is not a hand-rolled set of button classes either — the app
+ * had seven of those, each with its own height and colour decision, which is
+ * how a command ends up 4px shorter than the control beside it.
+ */
+export function LinkButton({
+  variant = 'primary',
+  size = 'md',
+  className,
+  ...rest
+}: LinkButtonProps) {
+  return (
+    <Link
+      {...rest}
+      className={cn(
+        buttonVariants({ variant: VARIANT[variant], size: SIZE[size] }),
+        'text-body font-medium no-underline',
+        className,
+      )}
     />
   )
 }

@@ -1,4 +1,5 @@
 import { ChevronRight, CircleCheck, HardDrive, TriangleAlert } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -30,8 +31,11 @@ interface AttentionItemProps {
 }
 
 function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemProps) {
-  const toneColor = tone === 'destructive' ? 'var(--destructive)' : 'var(--warning)'
-  const toneFill = tone === 'destructive' ? 'var(--destructive-surface)' : 'var(--warning-surface)'
+  // The attention tone is the shared vocabulary's, not a local colour pick:
+  // a refusal or a failure outranks a degraded or partial result.
+  const toneClass = tone === 'destructive'
+    ? 'bg-destructive/10 text-destructive'
+    : 'bg-warning/10 text-warning'
 
   return (
     <li className="min-w-0 py-1 first:pt-0 last:pb-0">
@@ -42,8 +46,7 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
       >
         <span
           aria-hidden
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px]"
-          style={{ color: toneColor, background: toneFill }}
+          className={`inline-flex size-8 shrink-0 items-center justify-center rounded-md ${toneClass}`}
         >
           <Icon icon={icon} size="sm" />
         </span>
@@ -99,8 +102,10 @@ export default function DashboardAttention({
         </div>
         {!isPending && !initialErrorMessage && (
           <span
-            className="shrink-0 font-mono text-label font-semibold tabular-nums"
-            style={{ color: hasIssues ? 'var(--warning)' : 'var(--success)' }}
+            className={cn(
+              'shrink-0 font-mono text-label font-semibold tabular-nums',
+              hasIssues ? 'text-warning' : 'text-success',
+            )}
             aria-label={t('dashboard.attentionCount', { count: issueCount })}
           >
             {issueCount}

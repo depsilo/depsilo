@@ -2,7 +2,6 @@ import { Link2 } from 'lucide-react'
 import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
 import DashboardAttention from '@/admin/components/DashboardAttention'
@@ -11,6 +10,7 @@ import RecentDownloads from '@/admin/components/RecentDownloads'
 import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/components/TrendsCard'
 import Metric, { type MetricChangeIntent } from '@/components/app/metric'
 import QueryErrorState from '@/components/app/error-state'
+import { LinkButton } from '@/components/app/button'
 import { cn } from '@/lib/utils'
 import SectionHeader from '@/components/app/section-header'
 import { adminApi, statsApi } from '@/lib/api'
@@ -221,17 +221,13 @@ export default function DashboardV2() {
   return (
     <AdminPage
       actions={(
-        <Link
-          to={getAdminRouteHref('connect')}
-          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-body font-medium no-underline pointer-coarse:min-h-10"
-          style={{ color: 'var(--primary-foreground)', background: 'var(--primary)' }}
-        >
+        <LinkButton to={getAdminRouteHref('connect')}>
           <Link2 className="icon icon-sm" aria-hidden="true" />
           {t('dashboard.connectClient')}
-        </Link>
+        </LinkButton>
       )}
     >
-      <div className="w-full space-y-7 lg:space-y-8">
+      <div className="w-full space-y-6">
         <section
           data-query-key="dashboard-snapshot"
           data-dashboard-health
