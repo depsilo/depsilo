@@ -93,7 +93,48 @@ for Depsilo belongs one layer up.
 - A field blocked by an environment variable or a read-only config file says
   so, and says which one.
 
-## 6. Tables
+## 6. Navigation
+
+Three navigation elements, each with one job.
+
+### The workspace rail (Admin)
+
+- Six workspace links, always visible from `lg` up, in one flat list. No child
+  destinations and no disclosure controls: page-level destinations belong to the
+  destination rail below the page title.
+- **Exactly one item is active at a time**, marked by a single brand rule at the
+  rail's own left edge plus a neutral fill and a weight change. The active
+  workspace is *not* marked by tinting the whole row: a rail six items tall
+  would spend the accent six times over, and position is what the accent marks.
+- The icon inherits the item's colour. It does not sit in its own chip, tile, or
+  square — that is a card inside a row.
+- A workspace whose route is not its landing page carries `aria-current`
+  `location`; the landing page carries `page`.
+- The footer holds instance management, the signed-in Operator, and sign-out.
+  The instance link is a **destination**, so it takes the same active treatment
+  as a workspace. Without it, a rail whose instance group is hidden from the
+  workspace list shows nothing selected at `/admin/settings`.
+- Sign-out is revealed on row hover for pointing devices, and always visible to
+  a keyboard user (`focus-visible`), because a control that exists only on hover
+  does not exist for a keyboard.
+
+### The destination rail
+
+- Page-local destinations for the current workspace, projected from the route
+  manifest. A workspace with one page renders no rail at all.
+- An underline marks the current destination; the label gains weight and
+  full-strength text colour. Nothing else about the row changes.
+- The rail scrolls horizontally rather than wrapping, and never widens the
+  document past the viewport.
+
+### The mobile drawer
+
+- The same six workspaces in a sheet, reached from the topbar trigger. Drawer
+  and rail render the same component, so a workspace cannot exist in one and not
+  the other.
+- Escape closes it and returns focus to the trigger.
+
+## 7. Tables
 
 - Dense data is a table on wide viewports and a divided list on narrow ones.
   The list keeps the identifying value, the outcome, and the primary action
@@ -105,7 +146,7 @@ for Depsilo belongs one layer up.
 - Each row shows at most one status signal (see
   [design-tokens.md](design-tokens.md#43-one-signal-per-row)).
 
-## 7. States
+## 8. States
 
 Every data region owns five, and they must be distinguishable from each other:
 
@@ -120,7 +161,7 @@ Every data region owns five, and they must be distinguishable from each other:
 Independent sibling queries own independent states. One panel failing does not
 erase another panel's data.
 
-## 8. Accessibility, per component
+## 9. Accessibility, per component
 
 - Every icon-only control: label, tooltip, 40px target, in every state.
 - Focus is visible in both themes. Programmatically focused regions suppress the
@@ -132,7 +173,7 @@ erase another panel's data.
 - Motion honours `prefers-reduced-motion`; the tests assert this by animation
   name.
 
-## 9. Do not build
+## 10. Do not build
 
 | Do not build | Instead |
 | --- | --- |
@@ -144,7 +185,7 @@ erase another panel's data.
 | A chart to fill a gap in a layout | An empty state, or nothing |
 | A component-level colour value | A semantic token |
 
-## 10. The check before merging a component change
+## 11. The check before merging a component change
 
 1. Does it live in the right layer, and does it import only downwards?
 2. Is it the *only* implementation of that control?

@@ -166,8 +166,14 @@ test('desktop navigation shows only workspaces and keeps destinations in page ta
     }
   }
 
-  await page.locator('[data-admin-sidebar-footer]').getByRole('link', { name: 'Instance management', exact: true }).click()
+  const instanceLink = page.locator('[data-admin-sidebar-footer]')
+    .getByRole('link', { name: 'Instance management', exact: true })
+  // The instance group is hidden from the workspace list, so without an active
+  // state on this link the rail would show nothing selected at /admin/settings.
+  await expect(instanceLink).not.toHaveAttribute('aria-current', 'page')
+  await instanceLink.click()
   await expect(page).toHaveURL(/\/admin\/users$/)
+  await expect(instanceLink).toHaveAttribute('aria-current', 'page')
   const instanceNavigation = page.locator('[data-admin-page-navigation="instance"]')
   await expect(instanceNavigation).toBeVisible()
   await expect(instanceNavigation.locator('a')).toHaveCount(3)

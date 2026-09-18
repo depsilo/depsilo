@@ -50,6 +50,10 @@ const TEXT_PAIRS: ReadonlyArray<readonly [string, string]> = [
 const GRAPHIC_PAIRS: ReadonlyArray<readonly [string, string]> = [
   ['--ring', '--background'],
   ['--ring', '--card'],
+  // The rail's active-workspace rule is the only thing marking position
+  // inside navigation, so it has to be visible on both rail surfaces.
+  ['--sidebar-primary', '--sidebar'],
+  ['--sidebar-primary', '--sidebar-accent'],
   ['--chart-1', '--background'],
   ['--chart-2', '--background'],
   ['--chart-3', '--background'],

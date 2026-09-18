@@ -39,6 +39,8 @@ interface NavSection {
 interface SidebarContentProps {
   sections: NavSection[]
   surface: 'sidebar' | 'drawer'
+  /** True when the current route belongs to the instance-management group. */
+  instanceActive: boolean
   username?: string
   canWrite: boolean
   version?: string
@@ -51,6 +53,7 @@ interface SidebarContentProps {
 function SidebarContent({
   sections,
   surface,
+  instanceActive,
   username,
   canWrite,
   version,
@@ -80,7 +83,7 @@ function SidebarContent({
           <span className="text-title font-bold">Depsilo</span>
         </Link>
         <span
-          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate rounded-sm border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 font-mono text-meta tabular-nums text-muted-foreground"
+          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate rounded-sm bg-sidebar-accent px-1.5 py-0.5 font-mono text-meta tabular-nums text-muted-foreground"
           title={version}
         >
           {formatVersion(version)}
@@ -93,7 +96,7 @@ function SidebarContent({
         aria-label={t('nav.adminNavigation')}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2"
       >
-        <div className="space-y-2 px-2.5">
+        <div className="space-y-0.5 px-2.5">
           {sections.map(section => (
             <div
               key={section.id}
@@ -104,10 +107,20 @@ function SidebarContent({
                 data-admin-workspace-row
                 data-admin-workspace-current={section.active ? 'true' : undefined}
                 className={cn(
-                  'flex min-w-0 items-center rounded-md border border-transparent transition-colors hover:bg-sidebar-accent',
-                  section.active && 'border-sidebar-border bg-sidebar-accent',
+                  'relative flex min-w-0 items-center rounded-md transition-colors',
+                  section.active ? 'bg-sidebar-accent' : 'hover:bg-sidebar-accent',
                 )}
               >
+                {/* The active workspace is marked by one brand rule at the rail's
+                    own edge rather than by tinting the whole row: the accent is
+                    for marking position, and a tinted row would spend it six
+                    times over in a rail this short. */}
+                {section.active && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-sidebar-primary"
+                  />
+                )}
                 <Link
                   ref={section.id === preferredFocusSectionId ? firstNavigationRef : undefined}
                   to={section.href}
@@ -116,18 +129,11 @@ function SidebarContent({
                   className={cn(
                     'flex min-h-10 min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-body no-underline',
                     section.active
-                      ? 'font-semibold text-sidebar-accent-foreground'
-                      : 'font-medium text-muted-foreground hover:text-sidebar-accent-foreground',
+                      ? 'font-semibold text-foreground'
+                      : 'font-medium text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <span
-                    className={cn(
-                      'flex size-7 shrink-0 items-center justify-center rounded-sm',
-                      section.active ? 'bg-background text-foreground' : 'text-muted-foreground',
-                    )}
-                  >
-                    <Icon icon={section.icon} size="sm" />
-                  </span>
+                  <Icon icon={section.icon} size="sm" className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{section.label}</span>
                 </Link>
               </div>
@@ -144,8 +150,20 @@ function SidebarContent({
           to="/admin/users"
           onClick={onNavigate}
           aria-label={t('nav.instanceManagement')}
-          className="mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-body font-medium text-muted-foreground no-underline transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          aria-current={instanceActive ? 'page' : undefined}
+          className={cn(
+            'relative mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-body no-underline transition-colors',
+            instanceActive
+              ? 'bg-sidebar-accent font-semibold text-foreground'
+              : 'font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+          )}
         >
+          {instanceActive && (
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-sidebar-primary"
+            />
+          )}
           <Settings className="icon icon-sm" aria-hidden="true" />
           <span>{t('nav.instanceManagement')}</span>
         </Link>
@@ -299,6 +317,7 @@ export default function AdminShellLayout() {
   const showPageBreadcrumb = !activeSection || activeSection.label !== pageTitle
   const sidebarProps = {
     sections,
+    instanceActive: activeRoute?.navGroup === 'instance',
     username: principal?.username,
     canWrite,
     version: stats?.service?.version,
