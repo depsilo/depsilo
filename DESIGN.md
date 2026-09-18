@@ -1,16 +1,17 @@
 # Depsilo Design System
 
-> Status: current implementation reference, rewritten 2026-09-17 for the
-> shadcn/ui + Base UI migration. The source of truth is `web/src/index.css`,
+> Status: current implementation reference, rewritten 2026-09-18 at the end of
+> Stage B. The source of truth is `web/src/index.css`,
 > `web/src/components/ui/`, `web/src/components/app/`, `web/src/admin/`, and
 > `web/src/portal/`. When this document and the code disagree, fix the
 > document in the same change.
 >
-> **The product is mid-migration.** Stage A replaces the UI architecture and
-> deliberately does not design a new visual language. The theme below is a
-> neutral, temporary base. Stage B owns brand, palette, typography, and page
-> composition. Do not treat any colour or spacing value here as a product
-> decision.
+> This document says what the system *is*: its layers, tokens, component
+> contracts, states, and the invariants the suite encodes. The reasoning behind
+> each value — why the ramp is shaped this way, why a control is 36px and a row
+> 40px, why a status has three axes — lives in [docs/design/](docs/design/),
+> which is the working reference for design work. One decision is still open
+> there and here: see [Brand](#brand).
 
 ## Product Surfaces
 
@@ -84,7 +85,11 @@ There is no third `prefers-color-scheme` copy of the palette.
 | `info` | Neutral operational signal (live activity) |
 | `border` / `input` / `ring` | Keylines, control outlines, focus |
 | `sidebar*` | The Admin navigation rail |
-| `radius` | Single radius seed; the scale derives from it |
+| `radius-control` / `radius-surface` | 6px and 10px. `rounded-sm`, `-md`, and `-lg` are the control radius; `-xl` is the surface radius. There is no third value |
+| `shadow-surface` / `-card` / `-pop` | Three elevation levels. `-pop` is the only one used over content (tooltips, an ink code block) |
+| `code-surface*` | The one deliberate dark surface in both themes: a command a reader is meant to paste |
+| `chart-*` | Series, grid, and axis label colours. Charts are part of the system, not a page-local palette |
+| Type scale | Nine roles (`micro` … `page-title`) plus the two metric sizes and the 16px `field` floor, each carrying its own line height. See [design-tokens.md](docs/design/design-tokens.md#3-typography) |
 
 `success`, `warning`, and `info` exist because Depsilo reports cache, delivery,
 and policy outcomes separately. A cache miss and a slow upstream are normal
@@ -92,9 +97,10 @@ results and must never render as `destructive`. See "State Semantics".
 
 ### Deliberate constraints
 
-- **No negative letter spacing anywhere.** CJK glyphs have no sidebearings to
-  absorb it, and `e2e/admin-axe.spec.ts` asserts that every visible element
-  resolves to zero letter spacing. Do not add `tracking-*` utilities.
+- **No letter spacing anywhere, in either direction.** CJK glyphs have no
+  sidebearings to absorb it, and `e2e/fixtures/a11y.ts` asserts that every
+  visible element resolves to zero letter spacing on every surface. Do not add
+  `tracking-*` utilities.
 - **The root font size is the browser default.** The product's base text size
   lives on `body`. Before the migration `html` carried `font-size: 13px` while
   some spacing tokens were pinned statically, so half the interface was scaled
@@ -120,6 +126,11 @@ tokens.
   icons, so a missing glyph is a type error rather than a runtime fallback.
 - Metric values, versions, bytes, and latency use the mono/tabular treatment so
   changing digits cannot move layout.
+- Nine type roles and four weights (400/500/600/700). A size or a weight that
+  sits between two steps is drift: it reads as inconsistency rather than
+  nuance. Sizes are px so a dense operator table cannot reflow when a reader
+  changes their browser's base font size; the single exception is the 16px
+  field floor that stops mobile Safari from zooming a focused input.
 
 ## Shared Components
 
@@ -167,7 +178,9 @@ Use these before adding a primitive. Admin-specific composition belongs in
 - The Admin shell is a product component, not shadcn's `sidebar` primitive; it
   keeps a 232px rail, a 48px topbar, and the `data-admin-*` hooks the
   Playwright suite asserts.
-- `Logo` is a neutral placeholder. The brand mark is a Stage B decision.
+- `Logo` is a neutral placeholder until the brand decision under
+  [Brand](#brand) is made. The favicon still carries the mark `PRODUCT.md`
+  declares canonical, so the two disagree in the product today.
 
 ## State Semantics
 
@@ -221,40 +234,57 @@ make check
 
 `make check` runs the fast Go and browser smoke layers plus frontend contracts.
 Before merging broad UI changes run `make verify` for the complete Playwright
-suite. Accessibility coverage visits every Admin route once and checks API
-contracts, WCAG 2.1 A/AA rules, target sizes, layout caps, and Portal token
-regressions. Keep screenshots failure-only; do not commit full-page pixel
-snapshots.
+suite. Accessibility coverage visits every Admin route once, and the Portal,
+Monitor, and first-run Setup through the same contract in
+`e2e/fixtures/a11y.ts`, checking API contracts, WCAG 2.1 A/AA rules, target
+sizes, layout caps, and token contrast. Keep screenshots failure-only; do not
+commit full-page pixel snapshots.
 
 Specs assert against semantic tokens rather than literal colours wherever the
 token layer is expected to move. Do not reintroduce a hex value into a spec.
 
-The repository has unrelated historical lint debt. The manifest is the exact
-Admin remediation scope: fix errors in those files without deriving a new list
-from Git history or including unrelated Portal work.
+`web/admin-remediation-eslint-files.txt` records the historical Admin lint
+remediation scope. It is not a live manifest and nothing reads it.
 
-## Migration Status
+## Brand
 
-See [docs/refactor/shadcn-ui-plan.md](docs/refactor/shadcn-ui-plan.md) for the
-phase list and the audit that motivated it.
+**Open decision.** The in-app mark is a neutral Stage A placeholder, because
+the migration brief lists the old logo under what may be discarded. But
+[PRODUCT.md](PRODUCT.md) and [docs/brand/README.md](docs/brand/README.md)
+declare the **Dependency Shelf / 层仓栈** mark canonical and keep a complete
+master set under `docs/brand/` — light and dark icons, horizontal and stacked
+wordmarks, and a 16px optical favicon, which `web/public/favicon.svg` still
+carries. The browser tab and the app header therefore show two different marks
+today.
 
-Stage B's visual direction, token contract, component guidelines, and page
-order are written but **not implemented**: they live in
-[docs/design/](docs/design/). This document describes what the code does today;
-where the two disagree, the code is right and this document is the one to
-correct.
+This is a conflict between two sources of truth, and it is the last item in
+[docs/design/page-redesign-plan.md](docs/design/page-redesign-plan.md). It is
+not resolved here, and the favicon and `docs/brand/` should not be changed
+until it is:
 
-Completed: the shadcn initialisation; the single-cascade semantic token layer;
-the primitive migration (core, form controls, and overlays); the Admin shell;
-the mechanical token-utility rewrite; the removal of every legacy token name;
-the removal of every hand-written component class from `index.css`; the
-Lucide icon migration; and the dependency census.
+- **If `PRODUCT.md` is current**, the mark stays canonical and the app header
+  adopts `docs/brand/` — optical refinement, sizing, and the light/dark pair.
+  The placeholder is a temporary divergence to close.
+- **If the brief supersedes `PRODUCT.md`**, that document's Brand Commitments
+  section, `docs/brand/`, the favicon, and the release assets all move in the
+  same change.
+
+## Stage Status
+
+Stage A (architecture) is complete: the shadcn initialisation on Base UI, the
+single-cascade semantic token layer, the primitive migration, the Admin shell,
+the removal of every legacy token name and hand-written component class from
+`index.css`, the Lucide migration, and the dependency census. See
+[docs/refactor/shadcn-ui-plan.md](docs/refactor/shadcn-ui-plan.md).
+
+Stage B (redesign) shipped through step 14 — tokens, typography, navigation,
+page layout, status vocabulary, tables, forms, Dashboard, the remaining Admin
+pages, and the Portal and Setup. Step 15, brand, is the open decision above.
+The plan and its reasoning are in
+[docs/design/page-redesign-plan.md](docs/design/page-redesign-plan.md).
 
 `index.css` is imports, tokens, the dark variant, a base layer, and the icon
-box — no component styling.
-
-Outstanding: the pages still contain ~50 inline `style` objects for values that
-are genuinely dynamic (a state-dependent colour, a chart prop, an avatar
-colour). Those read semantic tokens and are correct; they are not a second
-styling system. A future pass may fold the static ones into utilities as each
-page is redesigned.
+box — no component styling. Pages still carry inline `style` objects where the
+value is genuinely dynamic (a state-dependent colour, a chart prop, a computed
+grid). Those read semantic tokens and are correct; they are not a second
+styling system.
