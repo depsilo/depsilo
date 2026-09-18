@@ -202,7 +202,7 @@ export default function UpstreamUpdates() {
   function resultBadge(result: UpstreamUpdateResult) {
     return (
       <Badge
-        variant={result === 'error' ? 'error' : result === 'updated' ? 'success' : 'neutral'}
+        variant={result === 'error' ? 'destructive' : result === 'updated' ? 'success' : 'neutral'}
         className="shrink-0 whitespace-nowrap"
       >
         {resultLabels[result]}
@@ -536,7 +536,7 @@ export default function UpstreamUpdates() {
 
             <div className="space-y-3">
               {query.isFetchNextPageError && (
-                <InlineNotice tone="danger">
+                <InlineNotice tone="destructive">
                   {t('upstreamUpdates.nextPageError')}
                 </InlineNotice>
               )}

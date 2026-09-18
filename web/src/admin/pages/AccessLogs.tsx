@@ -7,6 +7,7 @@ import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/app/button'
 import BadgeV2 from '@/components/app/badge'
+import { cacheTone, type CacheOutcome } from '@/lib/status'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import EmptyState from '@/components/app/empty-state'
 import QueryErrorState from '@/components/app/error-state'
@@ -127,7 +128,7 @@ export default function AccessLogsV2() {
       toast.show({ tone: 'success', message: t('logs.exportSuccess', { filename }) })
     },
     onError: (mutationError) => {
-      toast.show({ tone: 'danger', message: t('logs.exportFailed', { reason: getApiError(mutationError).message }) })
+      toast.show({ tone: 'destructive', message: t('logs.exportFailed', { reason: getApiError(mutationError).message }) })
     },
   })
 
@@ -313,7 +314,7 @@ export default function AccessLogsV2() {
                   {/* Result */}
                   <td className="py-2 px-3">
                     <span title={t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}>
-                      <BadgeV2 variant={cacheResult(row) === 'hit' ? 'success' : 'neutral'}>
+                      <BadgeV2 variant={cacheTone(cacheResult(row) as CacheOutcome)}>
                         {cacheResult(row) === 'hit' ? 'HIT' : cacheResult(row) === 'miss' ? 'MISS' : 'UNKNOWN'}
                       </BadgeV2>
                       <span className="sr-only">{t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}</span>
@@ -365,7 +366,7 @@ export default function AccessLogsV2() {
             </div>
             {detailQuery.data?.data && <IconButton icon={Copy} label={t('logs.copySummary')} onClick={() => { void copyDiagnosticSummary(detailQuery.data!.data) }} />}
           </div>
-          {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-body text-muted-foreground">{t('loading')}</div> : detailQuery.isError ? <InlineNotice tone="danger">{getApiError(detailQuery.error).message}</InlineNotice> : detailQuery.data?.data && <DiagnosticDetail detail={detailQuery.data.data} t={t} />}
+          {detailQuery.isPending ? <div aria-busy="true" className="py-8 text-center text-body text-muted-foreground">{t('loading')}</div> : detailQuery.isError ? <InlineNotice tone="destructive">{getApiError(detailQuery.error).message}</InlineNotice> : detailQuery.data?.data && <DiagnosticDetail detail={detailQuery.data.data} t={t} />}
         </div>
       </DrawerV2>
     </AdminPage>

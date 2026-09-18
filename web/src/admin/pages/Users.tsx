@@ -154,7 +154,7 @@ export default function UsersV2() {
   const userColumns = [
     { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-body font-medium shrink-0" style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-medium text-foreground">{row.username}</span></div>) },
     { key: 'role', label: t('users.role'), render: (v: unknown) => <BadgeV2 variant={(v as string) === 'admin' ? 'ecosystem' : 'default'}>{v as string}</BadgeV2> },
-    { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'error'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
+    { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'neutral'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-label text-muted-foreground">{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-label text-muted-foreground">{formatTime(v as string)}</span> },
     { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon={Pencil} label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? UserRoundX : User} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }} />}</div>) : null },
@@ -186,7 +186,7 @@ export default function UsersV2() {
             {usersData && usersQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void usersQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
             {enableFailure && (
               <InlineNotice
-                tone="danger"
+                tone="destructive"
                 title={t('users.enableFailed', { name: enableFailure.user.username })}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -258,7 +258,7 @@ export default function UsersV2() {
           <InputV2 label={t('login.username')} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
           <InputV2 label={editUserId ? t('users.newPasswordHint') : t('login.password')} hint={t('users.passwordPolicy')} type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
           <SelectV2 label={t('users.role')} value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">admin</option><option value="readonly">readonly</option></SelectV2>
-          {userSaveError && <InlineNotice tone="danger">{getApiError(userSaveError).message}</InlineNotice>}
+          {userSaveError && <InlineNotice tone="destructive">{getApiError(userSaveError).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={isUserSaving} onClick={closeUserDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</ButtonV2></div>
         </form>
       </ModalV2>
@@ -274,7 +274,7 @@ export default function UsersV2() {
           />
           <SelectV2 label={t('users.permissions')} value={tokenForm.permissions} onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value as TokenPermissions })}><option value="readonly">{t('users.readonly')}</option><option value="readwrite">{t('users.readwrite')}</option></SelectV2>
           <SelectV2 label={t('users.validity')} value={tokenForm.ttl} onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value as CreateAPITokenRequest['ttl'] })}><option value="7d">{t('users.days7')}</option><option value="30d">{t('users.days30')}</option><option value="90d">{t('users.days90')}</option><option value="never">{t('users.neverExpires')}</option></SelectV2>
-          {createTokenMutation.isError && <InlineNotice tone="danger">{getApiError(createTokenMutation.error).message}</InlineNotice>}
+          {createTokenMutation.isError && <InlineNotice tone="destructive">{getApiError(createTokenMutation.error).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={createTokenMutation.isPending} onClick={() => setTokenDialogOpen(false)}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</ButtonV2></div>
         </form>
       </ModalV2>

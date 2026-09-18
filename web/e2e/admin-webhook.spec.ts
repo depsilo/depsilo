@@ -31,7 +31,7 @@ test('failed webhook test renders a danger toast', async ({ page }) => {
   await page.getByRole('tab', { name: /Webhook/ }).click()
   await page.getByRole('button', { name: /测试/ }).click()
   await expect(page.getByRole('alert')).toContainText('delivery failed')
-  await expect(page.locator('[data-toast-tone="danger"]')).toContainText('delivery failed')
+  await expect(page.locator('[data-toast-tone="destructive"]')).toContainText('delivery failed')
 })
 
 test('renders loading before an empty successful Webhook response', async ({ page }) => {

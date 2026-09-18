@@ -10,7 +10,7 @@ interface EmptyStateProps {
   title: string
   hint?: string
   action?: ReactNode
-  tone?: 'neutral' | 'danger' | 'warn'
+  tone?: 'neutral' | 'destructive' | 'warn'
   /** Minimum box height so a section never collapses to nothing. */
   minHeight?: number
 }
@@ -18,7 +18,7 @@ interface EmptyStateProps {
 const TONE_CLASS = {
   neutral: 'text-muted-foreground',
   warn: 'text-warning',
-  danger: 'text-destructive',
+  destructive: 'text-destructive',
 } as const
 
 /**

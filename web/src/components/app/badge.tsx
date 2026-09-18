@@ -7,7 +7,7 @@ export type BadgeTone =
   | 'default'
   | 'neutral'
   | 'success'
-  | 'error'
+  | 'destructive'
   | 'warning'
   | 'info'
   | 'pro'
@@ -20,7 +20,7 @@ interface BadgeProps {
 }
 
 /**
- * Tints carry product meaning rather than decoration: success/warning/error map
+ * Tints carry product meaning rather than decoration: success/warning/destructive map
  * onto cache, delivery, and policy outcomes, and `pro` marks an entitlement.
  * They live here instead of `components/ui` for that reason.
  */
@@ -29,7 +29,7 @@ const TONE_CLASS: Record<BadgeTone, string> = {
   neutral: 'border-border bg-muted text-muted-foreground',
   success: 'border-transparent bg-success/10 text-success',
   warning: 'border-transparent bg-warning/10 text-warning',
-  error: 'border-transparent bg-destructive/10 text-destructive',
+  destructive: 'border-transparent bg-destructive/10 text-destructive',
   info: 'border-transparent bg-info/10 text-info',
   pro: 'border-primary/40 text-primary',
   ecosystem: 'border-transparent bg-accent text-accent-foreground',

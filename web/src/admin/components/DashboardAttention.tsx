@@ -24,14 +24,14 @@ interface AttentionItemProps {
   icon: LucideIcon
   title: string
   detail: string
-  tone: 'danger' | 'warning'
+  tone: 'destructive' | 'warning'
   to: string
   action: string
 }
 
 function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemProps) {
-  const toneColor = tone === 'danger' ? 'var(--destructive)' : 'var(--warning)'
-  const toneFill = tone === 'danger' ? 'var(--destructive-surface)' : 'var(--warning-surface)'
+  const toneColor = tone === 'destructive' ? 'var(--destructive)' : 'var(--warning)'
+  const toneFill = tone === 'destructive' ? 'var(--destructive-surface)' : 'var(--warning-surface)'
 
   return (
     <li className="min-w-0 py-1 first:pt-0 last:pb-0">
@@ -148,7 +148,7 @@ export default function DashboardAttention({
                     count: upstreams.length,
                     names: upstreamNames,
                   })}
-                  tone={upstreams.some(item => upstreamStatus(item) === 'failed') ? 'danger' : 'warning'}
+                  tone={upstreams.some(item => upstreamStatus(item) === 'failed') ? 'destructive' : 'warning'}
                   to={getAdminRouteHref('upstreams')}
                   action={t('dashboard.viewUpstreams')}
                 />
@@ -158,7 +158,7 @@ export default function DashboardAttention({
                   icon={HardDrive}
                   title={t('attention.cacheTitle')}
                   detail={t('dashboard.storageWarning', { percent: cacheUsagePercent.toFixed(1) })}
-                  tone={cacheUsagePercent > 95 ? 'danger' : 'warning'}
+                  tone={cacheUsagePercent > 95 ? 'destructive' : 'warning'}
                   to={getAdminRouteHref('cache')}
                   action={t('dashboard.manageCache')}
                 />

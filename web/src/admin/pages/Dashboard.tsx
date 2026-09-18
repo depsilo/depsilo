@@ -88,14 +88,14 @@ function StatusMetric({
   label: string
   value: string
   detail: string
-  tone?: 'default' | 'ok' | 'warning' | 'danger'
+  tone?: 'default' | 'ok' | 'warning' | 'destructive'
   className?: string
 }) {
   const color = tone === 'ok'
     ? 'var(--success)'
     : tone === 'warning'
       ? 'var(--warning)'
-      : tone === 'danger'
+      : tone === 'destructive'
         ? 'var(--destructive)'
         : 'var(--foreground)'
 
@@ -180,7 +180,7 @@ export default function DashboardV2() {
       : nowData?.status === 'degraded'
         ? 'warning'
         : nowData
-          ? 'danger'
+          ? 'destructive'
           : 'default'
   const requestCount = last24h?.total_requests
   const hitRate = last24h && last24h.total_requests > 0 ? last24h.hit_rate : null

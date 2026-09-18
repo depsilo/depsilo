@@ -251,6 +251,53 @@ one signal is the most likely design failure in this product.
 A request can legitimately be a cache miss, policy-allowed, and delivered
 successfully. That is three true facts and zero problems.
 
+### 4.1a Definition versus outcome
+
+The same words appear in two different jobs, and they are coloured differently
+on purpose:
+
+- A **rule's action** (`allow` / `deny`) is a *definition* — what the rule
+  says. Two distinguishable kinds, so they are distinguished: allow reads as
+  success, deny as destructive. Scanned in a rules table, that is the point.
+- A **request's decision** (`allow` / `deny`) is an *outcome*. An allow is the
+  normal case and stays neutral; a deny is an explicit refusal and reads as
+  destructive. Colouring every allowed request green would paint every row of
+  every log.
+
+### 4.1b Vocabulary lives in code
+
+`web/src/lib/status.ts` is the authority, and `unit/status.test.ts` pins it.
+A surface picks a *dimension* and asks for its tone; it never chooses a colour:
+
+```ts
+<Badge variant={policyTone('deny')}>{t('audit.blocked')}</Badge>
+```
+
+This exists because the same fact was previously coloured differently on
+different surfaces — a cache miss was `warning` in the dashboard feed and
+neutral in the logs — and because a refusal was rendering as `warning`, which
+says "degraded" about a decision the Operator deliberately made.
+
+Tones are named after the token they read, so the vocabulary, the CSS, and
+`components/ui` all say **`destructive`** for the same thing. Before this, the
+app layer said `danger` in one component and `error` in another while the
+tokens said `destructive`.
+
+### 4.1c Severity is a fourth dimension
+
+Vulnerability severity is not an outcome. A critical finding and a failed
+request are different kinds of fact, and giving them the same colour by
+accident would make a security page and an operations page mean the same thing.
+
+| Severity | Tone |
+| --- | --- |
+| `critical` | destructive |
+| `high` | warning |
+| `medium`, `low`, `unknown` | neutral |
+
+A finding is never a success. `low` previously rendered green, which said the
+opposite of what it meant.
+
 ### 4.2 Health
 
 | Value | Meaning |

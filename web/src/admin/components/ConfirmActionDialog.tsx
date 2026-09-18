@@ -17,7 +17,7 @@ interface ConfirmActionDialogProps {
   cancelLabel: string
   confirmLabel: string
   pendingLabel: string
-  confirmVariant?: 'primary' | 'danger'
+  confirmVariant?: 'primary' | 'destructive'
   pending: boolean
   errorMessage?: string | null
   onClose: () => void
@@ -32,7 +32,7 @@ export default function ConfirmActionDialog({
   cancelLabel,
   confirmLabel,
   pendingLabel,
-  confirmVariant = 'danger',
+  confirmVariant = 'destructive',
   pending,
   errorMessage,
   onClose,
@@ -63,7 +63,7 @@ export default function ConfirmActionDialog({
           </dl>
         )}
 
-        {errorMessage && <InlineNotice tone="danger">{errorMessage}</InlineNotice>}
+        {errorMessage && <InlineNotice tone="destructive">{errorMessage}</InlineNotice>}
 
         <div className="flex flex-wrap justify-end gap-3">
           <ButtonV2

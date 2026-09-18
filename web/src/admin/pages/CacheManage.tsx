@@ -122,7 +122,7 @@ export default function CacheManageV2() {
         setCleanupOpen(false)
         toast.show({ tone: 'success', message: result.message })
       } else {
-        toast.show({ tone: outcome === 'failed' ? 'danger' : 'warning', message: result.message })
+        toast.show({ tone: outcome === 'failed' ? 'destructive' : 'warning', message: result.message })
       }
     },
     onSettled: () => {
@@ -176,7 +176,7 @@ export default function CacheManageV2() {
             <Download className="icon icon-sm" aria-hidden="true" />
             {t('cache.warmup')}
           </ButtonV2>
-          <ButtonV2 type="button" variant="danger" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupResult(null); setCleanupSession(value => value + 1); setCleanupOpen(true) }}>
+          <ButtonV2 type="button" variant="destructive" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupResult(null); setCleanupSession(value => value + 1); setCleanupOpen(true) }}>
             <Trash2 className="icon icon-sm" aria-hidden="true" />
             {t('cache.cleanExpired')}
           </ButtonV2>
@@ -361,7 +361,7 @@ export default function CacheManageV2() {
                     {canWrite && <IconButton
                       icon={Trash2}
                       label={t('cache.deleteNamed', { key: row.key })}
-                      tone="danger"
+                      tone="destructive"
                       onClick={(e) => { e.stopPropagation(); deleteMutation.reset(); setDeleteTarget(row.id) }}
                     />}
                   </td>
@@ -384,13 +384,13 @@ export default function CacheManageV2() {
         setDeleteTarget(null)
       }} title={t('cache.confirmDelete')} closeDisabled={deleteMutation.isPending}>
         <p className="text-body mb-6 text-muted-foreground">{t('cache.confirmDeleteMsg')}</p>
-        {deleteMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(deleteMutation.error).message}</InlineNotice></div>}
+        {deleteMutation.isError && <div className="mb-4"><InlineNotice tone="destructive">{getApiError(deleteMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" disabled={deleteMutation.isPending} onClick={() => {
             deleteMutation.reset()
             setDeleteTarget(null)
           }}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending || !canWrite} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
+          <ButtonV2 variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending || !canWrite} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
             {deleteMutation.isPending ? t('deleting') : t('delete')}
           </ButtonV2>
         </div>
@@ -437,7 +437,7 @@ export default function CacheManageV2() {
         ) : null}
         {cleanupResult && (
           <div className="mb-4">
-            <InlineNotice tone={cleanupResult.outcome === 'failed' || cleanupResult.interrupted ? 'danger' : 'warning'}>
+            <InlineNotice tone={cleanupResult.outcome === 'failed' || cleanupResult.interrupted ? 'destructive' : 'warning'}>
               {t('cache.cleanupResult', {
                 message: cleanupResult.message,
                 deleted: cleanupResult.deleted,
@@ -448,14 +448,14 @@ export default function CacheManageV2() {
             </InlineNotice>
           </div>
         )}
-        {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
+        {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="destructive">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
           <ButtonV2 variant="secondary" disabled={cleanupMutation.isPending} onClick={() => {
             cleanupMutation.reset()
             setCleanupResult(null)
             setCleanupOpen(false)
           }}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !!cleanupResult || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
+          <ButtonV2 variant="destructive" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !!cleanupResult || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
             {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
           </ButtonV2>
         </div>
@@ -477,10 +477,10 @@ export default function CacheManageV2() {
           />
           {warmupState.status === 'submitting' && <InlineNotice tone="warning">{t('cache.warmupSubmitting')}</InlineNotice>}
           {warmupState.status === 'accepted' && <InlineNotice tone="info">{t('cache.warmupAccepted', { count: warmupState.count })}</InlineNotice>}
-          {warmupState.status === 'failed' && <InlineNotice tone="danger">{t('cache.warmupFailed', { reason: warmupState.message })}</InlineNotice>}
-          {warmupJobId && warmupJobQuery.isError && <InlineNotice tone="danger">{getApiError(warmupJobQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(warmupJobQuery.error).status === 404 ? t('cache.warmupJobExpired') : t('cache.warmupJobLoadFailed')}</InlineNotice>}
-          {cancelWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
-          {retryWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
+          {warmupState.status === 'failed' && <InlineNotice tone="destructive">{t('cache.warmupFailed', { reason: warmupState.message })}</InlineNotice>}
+          {warmupJobId && warmupJobQuery.isError && <InlineNotice tone="destructive">{getApiError(warmupJobQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(warmupJobQuery.error).status === 404 ? t('cache.warmupJobExpired') : t('cache.warmupJobLoadFailed')}</InlineNotice>}
+          {cancelWarmupMutation.isError && <InlineNotice tone="destructive">{t('cache.warmupActionFailed')}</InlineNotice>}
+          {retryWarmupMutation.isError && <InlineNotice tone="destructive">{t('cache.warmupActionFailed')}</InlineNotice>}
           {warmupJobId && warmupJobQuery.data?.data && (
             <div className="space-y-3 rounded-[6px] border border-border p-3" data-testid="warmup-job-status">
               <div className="flex justify-between gap-3 text-label">

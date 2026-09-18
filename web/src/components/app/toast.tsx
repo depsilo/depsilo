@@ -6,7 +6,7 @@ import { ToastProvider as UiToastProvider, ToastViewport, useToastManager } from
 export type { ToastTone } from '@/components/ui/toast'
 
 export interface ToastPayload {
-  tone: 'success' | 'danger' | 'warning'
+  tone: 'success' | 'destructive' | 'warning'
   message: string
 }
 
@@ -28,7 +28,7 @@ function AppToastController({ children }: { children: ReactNode }) {
       description: message,
       // A failure the Operator may act on must not be cleared by an unrelated
       // success toast arriving later.
-      priority: tone === 'danger' ? 'high' : 'low',
+      priority: tone === 'destructive' ? 'high' : 'low',
     }),
     close: manager.close,
   }), [manager])

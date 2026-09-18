@@ -38,7 +38,7 @@ interface QueueItemProps {
   title: string
   detail: string
   count?: number
-  tone: 'danger' | 'warning'
+  tone: 'destructive' | 'warning'
   href: string
   action: string
 }
@@ -51,8 +51,8 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
           aria-hidden
           className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px]"
           style={{
-            background: tone === 'danger' ? 'var(--destructive-surface)' : 'var(--warning-surface)',
-            color: tone === 'danger' ? 'var(--destructive)' : 'var(--warning)',
+            background: tone === 'destructive' ? 'var(--destructive-surface)' : 'var(--warning-surface)',
+            color: tone === 'destructive' ? 'var(--destructive)' : 'var(--warning)',
           }}
         >
           <Icon icon={icon} size="sm" />
@@ -61,7 +61,7 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-body font-semibold text-foreground">{title}</h3>
             {count !== undefined && (
-              <BadgeV2 variant={tone === 'danger' ? 'error' : 'warning'}>{count.toLocaleString()}</BadgeV2>
+              <BadgeV2 variant={tone === 'destructive' ? 'destructive' : 'warning'}>{count.toLocaleString()}</BadgeV2>
             )}
           </div>
           <p className="mt-1 max-w-2xl text-label leading-5 text-muted-foreground">{detail}</p>
@@ -149,7 +149,7 @@ export default function Attention() {
           ) : (
             <div className="space-y-3">
               {queueInitialFailure && (
-                <InlineNotice tone="danger">
+                <InlineNotice tone="destructive">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.queueUnavailable')}</span>
                     <ButtonV2
@@ -200,7 +200,7 @@ export default function Attention() {
                         names: unhealthyUpstreams.slice(0, 3).map(item => item.name).join(t('dashboard.listSeparator')),
                       })}
                       count={unhealthyUpstreams.length}
-                      tone={unhealthyUpstreams.some(item => upstreamStatus(item) === 'failed') ? 'danger' : 'warning'}
+                      tone={unhealthyUpstreams.some(item => upstreamStatus(item) === 'failed') ? 'destructive' : 'warning'}
                       href={getAdminRouteHref('upstreams')}
                       action={t('attention.reviewUpstreams')}
                     />
@@ -221,7 +221,7 @@ export default function Attention() {
                       icon={HardDrive}
                       title={t('attention.cacheTitle')}
                       detail={t('attention.cacheDetail', { percent: cacheUsagePercent.toFixed(1) })}
-                      tone={cacheUsagePercent > 95 ? 'danger' : 'warning'}
+                      tone={cacheUsagePercent > 95 ? 'destructive' : 'warning'}
                       href={getAdminRouteHref('cache')}
                       action={t('attention.manageCache')}
                     />
@@ -250,7 +250,7 @@ export default function Attention() {
           ) : (
             <div className="space-y-3">
               {quarantineInitialFailure && (
-                <InlineNotice tone="danger">
+                <InlineNotice tone="destructive">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.recentUnavailable')}</span>
                     <ButtonV2
@@ -313,7 +313,7 @@ export default function Attention() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-3 pl-6 sm:justify-end sm:pl-0">
-                        <BadgeV2 variant={event.action.includes('blocked') || event.action === 'tamper_detected' ? 'error' : 'warning'}>
+                        <BadgeV2 variant={event.action.includes('blocked') || event.action === 'tamper_detected' ? 'destructive' : 'warning'}>
                           {t(`quarantine.action.${event.action}`)}
                         </BadgeV2>
                         <time className="font-mono text-meta tabular-nums text-muted-foreground" dateTime={event.created_at}>

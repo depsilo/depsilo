@@ -411,7 +411,7 @@ export default function UpstreamsV2() {
       if (reconciliation.failures.length === 0) return
       setCheckFailures((current) => new Set(current).add(id))
       toast.show({
-        tone: 'danger',
+        tone: 'destructive',
         message: t('upstreams.checkFailed', {
           name: upstream.name,
           reason: upstreamErrorMessage(checkError, t),
@@ -702,7 +702,7 @@ export default function UpstreamsV2() {
                       <IconButton
                         icon={Trash2}
                         label={t('upstreams.deleteNamed', { name: upstream.name })}
-                        tone="danger"
+                        tone="destructive"
                         onClick={() => openDelete(upstream)}
                       />
                     )}
@@ -829,7 +829,7 @@ export default function UpstreamsV2() {
             </fieldset>
 
             {saveError && (
-              <InlineNotice tone="danger">{upstreamErrorMessage(saveError, t)}</InlineNotice>
+              <InlineNotice tone="destructive">{upstreamErrorMessage(saveError, t)}</InlineNotice>
             )}
             <div className="flex justify-end gap-3 pt-1">
               <ButtonV2
@@ -887,7 +887,7 @@ export default function UpstreamsV2() {
                 </div>
               </dl>
               {deleteMutation.error && (
-                <InlineNotice tone="danger">
+                <InlineNotice tone="destructive">
                   {upstreamErrorMessage(deleteMutation.error, t)}
                 </InlineNotice>
               )}
@@ -903,7 +903,7 @@ export default function UpstreamsV2() {
                 </ButtonV2>
                 <ButtonV2
                   type="button"
-                  variant="danger"
+                  variant="destructive"
                   className="min-h-[40px]"
                   aria-busy={deleteMutation.isPending || undefined}
                   disabled={deleteMutation.isPending}

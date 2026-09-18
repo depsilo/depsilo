@@ -59,14 +59,14 @@ comment explaining why, so the reason survives the next `shadcn add`.
 
 | Component | Contract |
 | --- | --- |
-| `button` | `primary` / `secondary` / `ghost` / `danger`, `sm` / `md`. Does not default `type`, so browser submit behaviour is preserved. Every button that mutates carries `aria-busy` while pending |
+| `button` | `primary` / `secondary` / `ghost` / `destructive`, `sm` / `md`. Does not default `type`, so browser submit behaviour is preserved. Every button that mutates carries `aria-busy` while pending |
 | `icon-button`, `icon-button-control` | Mandatory label + tooltip; `data-icon-button`; **40×40 in every state**, including pending. This is asserted across every Admin route |
 | `field` | Owns label + control + description/error and the `aria-describedby` merge. An error replaces the hint rather than stacking a second line |
 | `input`, `textarea`, `select` | Compose `field`. 16px below `md` so a focused field cannot trigger mobile zoom |
 | `select` | **Native `<select>`**, deliberately. OS typeahead, the platform picker on touch, and the `combobox` + value contract beat a styled popup for the filter bars and enum fields this product is made of |
 | `checkbox`, `switch` | The label is part of the click target |
 | `tabs` | `underline` for page-local destinations, `directory` for an indexed list. Selection is state, not decoration |
-| `notice` | `success` / `warning` / `danger` / `info`. Warning and danger are different things and never merge |
+| `notice` | `success` / `warning` / `destructive` / `info`. Warning and destructive are different things and never merge. The tone names match the tokens and `components/ui`, so one word means one thing across the stack |
 | `error-state` | The one initial-error presentation: names the failure, keeps Retry beside it |
 | `empty-state` | Only after a response has *proved* the collection is empty. Four registers: no data yet, no results for this filter, nothing to do, and unavailable |
 | `section-header` | Title, optional hint, optional action. Do not restate the page title |

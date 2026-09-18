@@ -26,7 +26,7 @@ function StatePanel({
   description,
   children,
 }: {
-  tone: 'brand' | 'ok' | 'danger'
+  tone: 'brand' | 'ok' | 'destructive'
   icon: LucideIcon
   title: React.ReactNode
   description?: React.ReactNode
@@ -35,7 +35,7 @@ function StatePanel({
   const tones = {
     brand: { bg: 'var(--accent)', iconBg: 'var(--accent)', iconColor: 'var(--primary)' },
     ok:    { bg: 'var(--success-surface)',    iconBg: 'var(--success-surface)',    iconColor: 'var(--success)' },
-    danger:{ bg: 'var(--destructive-surface)',iconBg: 'var(--destructive-surface)',iconColor: 'var(--destructive)' },
+    destructive:{ bg: 'var(--destructive-surface)',iconBg: 'var(--destructive-surface)',iconColor: 'var(--destructive)' },
   } as const
   const t = tones[tone]
   return (
@@ -184,7 +184,7 @@ export default function License() {
           </div>
           {activateTrial.isError && (
             <div className="mt-3">
-              <InlineNotice tone="danger">{getApiError(activateTrial.error).message}</InlineNotice>
+              <InlineNotice tone="destructive">{getApiError(activateTrial.error).message}</InlineNotice>
             </div>
           )}
         </StatePanel>
@@ -205,7 +205,7 @@ export default function License() {
 
       {source === 'none' && trialUsed && (
         <StatePanel
-          tone="danger"
+          tone="destructive"
           icon={TriangleAlert}
           title={t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
         >
@@ -250,7 +250,7 @@ export default function License() {
           </ButtonV2>}
           {revalidate.isError && (
             <div className="mt-3">
-              <InlineNotice tone="danger">{getApiError(revalidate.error).message}</InlineNotice>
+              <InlineNotice tone="destructive">{getApiError(revalidate.error).message}</InlineNotice>
             </div>
           )}
         </StatePanel>
@@ -326,7 +326,7 @@ export default function License() {
                     </div>
                   </div>
                 )}
-                {setKey.isError && <InlineNotice tone="danger">{getApiError(setKey.error).message}</InlineNotice>}
+                {setKey.isError && <InlineNotice tone="destructive">{getApiError(setKey.error).message}</InlineNotice>}
                 {replacingKey && (
                   <ButtonV2
                     type="button"
@@ -359,7 +359,7 @@ export default function License() {
                   </ButtonV2>
                 )}
                 {canWrite && !replacingKey && <ButtonV2
-                  variant="danger"
+                  variant="destructive"
                   onClick={() => {
                     clearKey.reset()
                     setRemoveOpen(true)
@@ -419,7 +419,7 @@ export default function License() {
         </p>
         {clearKey.isError && (
           <div className="mb-4">
-            <InlineNotice tone="danger">{getApiError(clearKey.error).message}</InlineNotice>
+            <InlineNotice tone="destructive">{getApiError(clearKey.error).message}</InlineNotice>
           </div>
         )}
         <div className="flex justify-end gap-3">
@@ -427,7 +427,7 @@ export default function License() {
             {t('license.paywall.dismiss')}
           </ButtonV2>
           <ButtonV2
-            variant="danger"
+            variant="destructive"
             aria-busy={clearKey.isPending || undefined}
             onClick={() => {
               clearKey.mutate()

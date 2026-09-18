@@ -7,6 +7,7 @@ import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
 import ButtonV2 from '@/components/app/button'
 import BadgeV2 from '@/components/app/badge'
+import { cacheTone, deliveryTone, policyTone } from '@/lib/status'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import EmptyState from '@/components/app/empty-state'
 import QueryErrorState from '@/components/app/error-state'
@@ -29,11 +30,13 @@ function latencyColor(ms: number): string {
 }
 
 function resultBadge(result: string, t: (k: string) => string) {
-  if (result === 'hit') return <BadgeV2 variant="success">{t('audit.hit')}</BadgeV2>
-  if (result === 'success') return <BadgeV2 variant="success">{t('audit.success')}</BadgeV2>
-  if (result === 'error') return <BadgeV2 variant="error">{t('audit.error')}</BadgeV2>
-  if (result === 'blocked') return <BadgeV2 variant="warning">{t('audit.blocked')}</BadgeV2>
-  if (result === 'miss') return <BadgeV2>{t('audit.miss')}</BadgeV2>
+  // The shared vocabulary, not a local opinion: a refusal is destructive, a
+  // miss is neutral, and only a real failure is a failure.
+  if (result === 'blocked') return <BadgeV2 variant={policyTone('deny')}>{t('audit.blocked')}</BadgeV2>
+  if (result === 'hit') return <BadgeV2 variant={cacheTone('hit')}>{t('audit.hit')}</BadgeV2>
+  if (result === 'miss') return <BadgeV2 variant={cacheTone('miss')}>{t('audit.miss')}</BadgeV2>
+  if (result === 'error') return <BadgeV2 variant={deliveryTone('failed')}>{t('audit.error')}</BadgeV2>
+  if (result === 'success') return <BadgeV2 variant={deliveryTone('completed')}>{t('audit.success')}</BadgeV2>
   return <BadgeV2>{result || '-'}</BadgeV2>
 }
 
@@ -134,7 +137,7 @@ export default function AuditLogsV2() {
       toast.show({ tone: 'success', message: t('audit.exportSuccess', { filename }) })
     },
     onError: (mutationError) => {
-      toast.show({ tone: 'danger', message: t('audit.exportFailed', { reason: getApiError(mutationError).message }) })
+      toast.show({ tone: 'destructive', message: t('audit.exportFailed', { reason: getApiError(mutationError).message }) })
     },
   })
 

@@ -15,7 +15,7 @@ interface ErrorStateProps {
 export default function ErrorState({ message, onRetry }: ErrorStateProps) {
   const { t } = useTranslation()
   return (
-    <Notice tone="danger">
+    <Notice tone="destructive">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>{message}</span>
         <Button type="button" variant="secondary" size="sm" onClick={onRetry}>

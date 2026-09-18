@@ -61,7 +61,7 @@ export default function CacheIndexes() {
     },
     onError: (error, { name }) => {
       toast.show({
-        tone: 'danger',
+        tone: 'destructive',
         message: t('cacheIndexes.refreshFailed', { name, reason: getApiError(error).message }),
       })
     },

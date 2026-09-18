@@ -580,7 +580,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                             />
                             <Button
                               type="button"
-                              variant="danger"
+                              variant="destructive"
                               size="sm"
                               className="min-h-[40px] min-w-[40px] px-2"
                               disabled={submitting}

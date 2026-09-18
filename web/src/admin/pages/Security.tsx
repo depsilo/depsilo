@@ -11,6 +11,7 @@ import InputV2 from '@/components/app/input'
 import SelectV2 from '@/components/app/select'
 import SwitchV2 from '@/components/app/switch'
 import BadgeV2 from '@/components/app/badge'
+import { severityTone, type Severity } from '@/lib/status'
 import Metric from '@/components/app/metric'
 import SectionHeader from '@/components/app/section-header'
 import EmptyState from '@/components/app/empty-state'
@@ -34,13 +35,6 @@ import type {
   UpdateSecurityPolicyRequest,
   CapabilityFact,
 } from '@/lib/adminApi.types'
-
-const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'success'> = {
-  critical: 'error',
-  high: 'warning',
-  medium: 'default',
-  low: 'success',
-}
 
 const POLICY_SAVE_CONCURRENCY = 4
 
@@ -190,7 +184,7 @@ function OverviewTab() {
           : undefined}
         />
         {scanMutation.isSuccess && <div className="mb-3"><InlineNotice tone="success">{t('security.scanStarted')}</InlineNotice></div>}
-        {scanMutation.isError && <div className="mb-3"><InlineNotice tone="danger">{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</InlineNotice></div>}
+        {scanMutation.isError && <div className="mb-3"><InlineNotice tone="destructive">{getApiError(scanMutation.error).status === 409 ? t('security.scanConflict') : getApiError(scanMutation.error).message}</InlineNotice></div>}
         <p className="text-label text-muted-foreground">
           {t('security.lastScan')}: {dashboard?.last_scan_at ? formatTime(dashboard.last_scan_at, 'relative') : t('security.never')}
         </p>
@@ -202,7 +196,7 @@ function OverviewTab() {
         {severityDist.length > 0 ? (
           <div className="space-y-3">
             {severityDist.map((item) => {
-              const variant = SEVERITY_BADGE_MAP[item.severity] || 'default'
+              const variant = severityTone(item.severity as Severity)
               const barColors: Record<string, string> = {
                 critical: 'var(--destructive)',
                 high: 'var(--warning)',
@@ -295,7 +289,7 @@ function VulnerabilitiesTab() {
       label: t('security.severity'),
       render: (v: unknown) => {
         const s = v as string
-        const variant = SEVERITY_BADGE_MAP[s] || 'default'
+        const variant = severityTone(s as Severity)
         return <BadgeV2 variant={variant}>{s?.toUpperCase()}</BadgeV2>
       },
     },
@@ -453,7 +447,7 @@ function SuggestionsTab() {
       {items.length === 0 ? <EmptyState icon={BadgeCheck} title={t('security.noSuggestions')} minHeight={240} /> : <>
       <div>
         {items.map((item: SecurityVulnerability, idx: number) => {
-          const severityVariant = SEVERITY_BADGE_MAP[item.severity] || 'default'
+          const severityVariant = severityTone(item.severity as Severity)
           const isActing = dismissMutation.isPending && dismissMutation.variables === item.id
 
           return (
@@ -925,7 +919,7 @@ function PoliciesTab() {
                     {t(autoBlockUnavailableHint)}
                   </p>
                 )}
-                {saveState?.error ? <div className="mt-2"><InlineNotice tone="danger">{getApiError(saveState.error).message}</InlineNotice></div> : null}
+                {saveState?.error ? <div className="mt-2"><InlineNotice tone="destructive">{getApiError(saveState.error).message}</InlineNotice></div> : null}
               </div>
             )
           })}
@@ -1014,7 +1008,7 @@ function PoliciesTab() {
           </InlineNotice></div>
         )}
         {importMutation.isError && (
-          <div className="mt-2"><InlineNotice tone="danger">{getApiError(importMutation.error).message}</InlineNotice></div>
+          <div className="mt-2"><InlineNotice tone="destructive">{getApiError(importMutation.error).message}</InlineNotice></div>
         )}
       </section>
     </div>

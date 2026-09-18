@@ -373,7 +373,7 @@ export default function ProjectsV2() {
             <Eye className="icon icon-sm" aria-hidden="true" />
             {t('projects.view')}
           </ButtonV2>
-          {canWrite && <IconButton icon={Trash2} label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }} />}
+          {canWrite && <IconButton icon={Trash2} label={t('projects.deleteNamed', { name: row.name })} tone="destructive" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }} />}
         </div>
       ),
     },
@@ -426,7 +426,7 @@ export default function ProjectsV2() {
             onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
             placeholder={t('projects.descPlaceholder')}
           />
-          {createMutation.isError && <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>}
+          {createMutation.isError && <InlineNotice tone="destructive">{getApiError(createMutation.error).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2">
             <ButtonV2 type="button" variant="secondary" disabled={createMutation.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
             <ButtonV2 type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>

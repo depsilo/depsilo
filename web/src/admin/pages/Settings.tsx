@@ -388,7 +388,7 @@ export default function SettingsV2() {
           onRefresh={() => settingsQuery.refetch()}
         />
       )}
-      {configurationTab && inlineError && <InlineNotice tone="danger" title={t('settings.saveError')}>{inlineError}</InlineNotice>}
+      {configurationTab && inlineError && <InlineNotice tone="destructive" title={t('settings.saveError')}>{inlineError}</InlineNotice>}
       {configurationTab && lastResult && (
         <div className="space-y-2">
           {resultList(t('settings.appliedNowTitle'), lastResult.applied_now, 'success')}

@@ -6,7 +6,7 @@ import type { ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
 
-export type ToastTone = "success" | "danger" | "warning"
+export type ToastTone = "success" | "destructive" | "warning"
 
 /**
  * Base UI toast primitives, presented in the product's neutral scale.
@@ -37,7 +37,7 @@ function useToastManager() {
 const TONE_CLASS: Record<ToastTone, string> = {
   success: "border-success/45",
   warning: "border-warning/45",
-  danger: "border-destructive/45",
+  destructive: "border-destructive/45",
 }
 
 function ToastViewport({ closeLabel }: { closeLabel: string }) {

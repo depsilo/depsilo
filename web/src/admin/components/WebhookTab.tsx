@@ -79,7 +79,7 @@ export default function WebhookTab() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'webhooks'] })
   const showFailure = (error: unknown, fallback: string) => {
-    toast.show({ tone: 'danger', message: getApiError(error).message || fallback })
+    toast.show({ tone: 'destructive', message: getApiError(error).message || fallback })
   }
 
   const createMutation = useMutation({
@@ -230,7 +230,7 @@ export default function WebhookTab() {
                     <IconButton
                       icon={Trash2}
                       label={t('webhook.deleteNamed', { name: webhook.name })}
-                      tone="danger"
+                      tone="destructive"
                       onClick={event => {
                         deleteTriggerRef.current = event.currentTarget
                         setDeleteId(webhook.id)
@@ -296,7 +296,7 @@ export default function WebhookTab() {
         <p className="mb-5 text-body leading-5 text-muted-foreground">{t('webhook.deleteWarning')}</p>
         <div className="flex justify-end gap-2">
           <ButtonV2 type="button" variant="secondary" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</ButtonV2>
-          <ButtonV2 type="button" variant="danger" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>
+          <ButtonV2 type="button" variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>
             {deleteMutation.isPending ? t('deleting') : t('delete')}
           </ButtonV2>
         </div>

@@ -79,11 +79,11 @@ type MalwareOverride = {
 function actionBadge(action: string, t: (k: string) => string) {
   switch (action) {
     case 'blocked':
-      return <BadgeV2 variant="error">{t('quarantine.action.blocked')}</BadgeV2>
+      return <BadgeV2 variant="destructive">{t('quarantine.action.blocked')}</BadgeV2>
     case 'malware_blocked':
-      return <BadgeV2 variant="error">{t('quarantine.action.malware_blocked')}</BadgeV2>
+      return <BadgeV2 variant="destructive">{t('quarantine.action.malware_blocked')}</BadgeV2>
     case 'tamper_detected':
-      return <BadgeV2 variant="error">{t('quarantine.action.tamper_detected')}</BadgeV2>
+      return <BadgeV2 variant="destructive">{t('quarantine.action.tamper_detected')}</BadgeV2>
     case 'served_eligible':
       return <BadgeV2 variant="warning">{t('quarantine.action.served_eligible')}</BadgeV2>
     case 'bypassed':
@@ -218,13 +218,13 @@ export default function Quarantine() {
               disabled={revokeM.isPending}
               autoFocus
             />
-            {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
+            {revokeM.isError && <InlineNotice tone="destructive">{getApiError(revokeM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
               <ButtonV2 variant="secondary" onClick={() => setRevokeOpen(false)} disabled={revokeM.isPending}>
                 {t('cancel')}
               </ButtonV2>
               <ButtonV2
-                variant="danger"
+                variant="destructive"
                 onClick={() => revokeM.mutate()}
                 aria-busy={revokeM.isPending || undefined}
                 disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}
@@ -423,7 +423,7 @@ function ApprovalsTab(props: {
           {props.canWrite && (
             <ButtonV2
               className="min-h-[40px] w-full"
-              variant="danger"
+              variant="destructive"
               onClick={() => props.onRevoke(row)}
             >
               <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
@@ -464,7 +464,7 @@ function ApprovalsTab(props: {
               <Td><span className="text-body font-mono text-muted-foreground">{row.version}</span></Td>
               <Td><span className="text-label text-muted-foreground">{row.reason}</span></Td>
               <Td>
-                {props.canWrite && <ButtonV2 size="sm" variant="danger" onClick={() => props.onRevoke(row)}>
+                {props.canWrite && <ButtonV2 size="sm" variant="destructive" onClick={() => props.onRevoke(row)}>
                   <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
                 </ButtonV2>}
               </Td>
@@ -610,7 +610,7 @@ function BlocklistTab() {
             <RefreshCw className="icon icon-sm" aria-hidden="true" /> {syncM.isPending || st?.running ? t('quarantine.blocklist.syncing') : t('quarantine.blocklist.sync_now')}
           </ButtonV2>
         </div>}
-        {syncM.isError && <div className="basis-full"><InlineNotice tone="danger">{getApiError(syncM.error).message}</InlineNotice></div>}
+        {syncM.isError && <div className="basis-full"><InlineNotice tone="destructive">{getApiError(syncM.error).message}</InlineNotice></div>}
       </div>
       </>
           ) : <EmptyState icon={ShieldX} title={t('noData')} />}
@@ -675,7 +675,7 @@ function BlocklistTab() {
                   {canWrite && !expired && (
                     <ButtonV2
                       className="min-h-[40px] w-full"
-                      variant="danger"
+                      variant="destructive"
                       onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}
                     >
                       <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
@@ -729,7 +729,7 @@ function BlocklistTab() {
                       </Td>
                       <Td>
                         {canWrite && !expired && (
-                          <ButtonV2 size="sm" variant="danger" onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}>
+                          <ButtonV2 size="sm" variant="destructive" onClick={() => { revokeM.reset(); setRevokeTarget(row); setRevokeReason('') }}>
                             <Undo2 className="icon icon-sm" aria-hidden="true" /> {t('quarantine.revoke.cta')}
                           </ButtonV2>
                         )}
@@ -790,7 +790,7 @@ function BlocklistTab() {
             onChange={(e) => setForm({ ...form, reason: e.target.value })}
             disabled={createM.isPending}
           />
-          {createM.isError && <InlineNotice tone="danger">{getApiError(createM.error).message}</InlineNotice>}
+          {createM.isError && <InlineNotice tone="destructive">{getApiError(createM.error).message}</InlineNotice>}
           <div className="flex justify-end gap-2">
             <ButtonV2 variant="secondary" onClick={() => setCreateOpen(false)} disabled={createM.isPending}>{t('cancel')}</ButtonV2>
             <ButtonV2
@@ -824,11 +824,11 @@ function BlocklistTab() {
               disabled={revokeM.isPending}
               autoFocus
             />
-            {revokeM.isError && <InlineNotice tone="danger">{getApiError(revokeM.error).message}</InlineNotice>}
+            {revokeM.isError && <InlineNotice tone="destructive">{getApiError(revokeM.error).message}</InlineNotice>}
             <div className="flex justify-end gap-2">
               <ButtonV2 variant="secondary" onClick={() => setRevokeTarget(null)} disabled={revokeM.isPending}>{t('cancel')}</ButtonV2>
               <ButtonV2
-                variant="danger"
+                variant="destructive"
                 onClick={() => revokeM.mutate()}
                 aria-busy={revokeM.isPending || undefined}
                 disabled={revokeReason.trim().length < 3 || revokeM.isPending || !canWrite}

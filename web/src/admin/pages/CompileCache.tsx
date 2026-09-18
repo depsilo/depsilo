@@ -221,7 +221,7 @@ export default function CompileCache() {
       render: (_value: unknown, row: CompileCacheCredential & Record<string, unknown>) => canWrite ? (
         <ButtonV2
           type="button"
-          variant="danger"
+          variant="destructive"
           size="sm"
           disabled={revokeMutation.isPending}
           aria-label={t('compileCache.revokeNamed', { name: row.name })}
@@ -256,7 +256,7 @@ export default function CompileCache() {
           {canWrite && (
             <ButtonV2
               type="button"
-              variant="danger"
+              variant="destructive"
               size="sm"
               disabled={!status?.enabled}
               onClick={() => {
@@ -480,7 +480,7 @@ export default function CompileCache() {
             <option value="0">{t('compileCache.neverExpires')}</option>
           </SelectV2>
           {createMutation.isError && (
-            <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>
+            <InlineNotice tone="destructive">{getApiError(createMutation.error).message}</InlineNotice>
           )}
           <div className="flex justify-end gap-3 pt-2">
             <ButtonV2 type="button" variant="secondary" disabled={createMutation.isPending} onClick={closeCreateDialog}>
@@ -561,7 +561,7 @@ export default function CompileCache() {
           {t('compileCache.revokeHint', { name: revokeTarget?.name, namespace: revokeTarget?.namespace })}
         </p>
         {revokeMutation.isError && (
-          <div className="mt-4"><InlineNotice tone="danger">{getApiError(revokeMutation.error).message}</InlineNotice></div>
+          <div className="mt-4"><InlineNotice tone="destructive">{getApiError(revokeMutation.error).message}</InlineNotice></div>
         )}
         <div className="mt-5 flex justify-end gap-3">
           <ButtonV2
@@ -574,7 +574,7 @@ export default function CompileCache() {
           </ButtonV2>
           <ButtonV2
             type="button"
-            variant="danger"
+            variant="destructive"
             aria-busy={revokeMutation.isPending || undefined}
             disabled={!revokeTarget || revokeMutation.isPending || !canWrite}
             onClick={() => revokeTarget && revokeMutation.mutate(revokeTarget.id)}
@@ -595,7 +595,7 @@ export default function CompileCache() {
       >
         <p className="text-body leading-5 text-muted-foreground">{t('compileCache.cleanupHint')}</p>
         {cleanupMutation.isError && (
-          <div className="mt-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>
+          <div className="mt-4"><InlineNotice tone="destructive">{getApiError(cleanupMutation.error).message}</InlineNotice></div>
         )}
         <div className="mt-5 flex justify-end gap-3">
           <ButtonV2
@@ -608,7 +608,7 @@ export default function CompileCache() {
           </ButtonV2>
           <ButtonV2
             type="button"
-            variant="danger"
+            variant="destructive"
             aria-busy={cleanupMutation.isPending || undefined}
             disabled={cleanupMutation.isPending || !status?.enabled || !canWrite}
             onClick={() => cleanupMutation.mutate()}

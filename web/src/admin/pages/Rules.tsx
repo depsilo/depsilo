@@ -192,7 +192,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                       {ruleSelector(candidate.rule)}
                     </span>
                     <div className="flex shrink-0 flex-wrap items-center gap-1">
-                      <BadgeV2 variant={action === 'allow' ? 'success' : 'error'}>
+                      <BadgeV2 variant={action === 'allow' ? 'success' : 'destructive'}>
                         {action === 'allow' ? t('rules.allow') : t('rules.deny')}
                       </BadgeV2>
                       {selected && <BadgeV2 variant="success">{t('rules.selected')}</BadgeV2>}
@@ -303,10 +303,10 @@ export default function RulesV2() {
     { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<BadgeV2 variant="ecosystem">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystem.toUpperCase()}</BadgeV2></div> } },
     { key: 'package_name', label: t('rules.packageName'), render: (v: unknown) => <span className="font-mono text-label text-foreground">{v as string}</span> },
     { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-label text-muted-foreground">{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
-    { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="error">{t('rules.deny')}</BadgeV2> },
+    { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="destructive">{t('rules.deny')}</BadgeV2> },
     { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-label truncate block max-w-[200px] text-muted-foreground" title={v as string}>{(v as string) || '-'}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-label whitespace-nowrap text-muted-foreground">{formatTime(v as string, 'relative')}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon={Pencil} label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon={Trash2} label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => openDeleteDialog(row)} /></div>) : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon={Pencil} label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon={Trash2} label={t('rules.deleteNamed', { name: row.package_name })} tone="destructive" onClick={() => openDeleteDialog(row)} /></div>) : null },
   ]
 
   return (
@@ -371,7 +371,7 @@ export default function RulesV2() {
             </div>
           </fieldset>
           <TextareaV2 label={t('rules.reason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder={t('rules.reasonPlaceholder')} rows={2} className="resize-none" />
-          {saveError && <InlineNotice tone="danger">{getApiError(saveError).message}</InlineNotice>}
+          {saveError && <InlineNotice tone="destructive">{getApiError(saveError).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={isSaving} onClick={closeDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</ButtonV2></div>
         </form>
       </ModalV2>

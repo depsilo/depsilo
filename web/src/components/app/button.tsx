@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes } from 'react'
 import { Button as UiButton } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive'
 type ButtonSize = 'sm' | 'md'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -21,7 +21,7 @@ const VARIANT: Record<ButtonVariant, 'default' | 'outline' | 'ghost' | 'destruct
   primary: 'default',
   secondary: 'outline',
   ghost: 'ghost',
-  danger: 'destructive',
+  destructive: 'destructive',
 }
 
 const SIZE: Record<ButtonSize, 'sm' | 'default'> = {

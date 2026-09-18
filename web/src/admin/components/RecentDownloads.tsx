@@ -11,6 +11,7 @@ import { getAdminRouteHref } from '@/admin/routes'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem, type RecentDownload } from '@/lib/adminApi.types'
+import { cacheTone, deliveryTone, type Tone } from '@/lib/status'
 import { formatBytes } from '@/lib/utils'
 
 const REFRESH_INTERVAL_MS = 5_000
@@ -23,7 +24,7 @@ interface RecentDownloadsProps {
 
 type DownloadOutcome = {
   label: string
-  variant: 'default' | 'success' | 'error' | 'warning'
+  variant: Tone
 }
 
 function normalizeLimit(limit: number) {
@@ -43,22 +44,30 @@ function normalizeItems(items: RecentDownload[], limit: number) {
     .slice(0, limit)
 }
 
+/**
+ * A download's outcome is a cache result and a delivery result. They are
+ * mapped through the shared vocabulary rather than decided here, because this
+ * feed showing a cache miss as a warning while the logs showed it as neutral
+ * is exactly the inconsistency the vocabulary exists to prevent: a miss is how
+ * a cache behaves the first time, not a problem.
+ */
 function downloadOutcome(item: RecentDownload, t: TFunction): DownloadOutcome {
-  if (item.status_code >= 400 || item.cache_result === 'error') {
+  if (item.status_code >= 400) {
     return {
-      label: item.status_code > 0
-        ? t('recentDownloads.httpError', { status: item.status_code })
-        : t('recentDownloads.failed'),
-      variant: 'error',
+      label: t('recentDownloads.httpError', { status: item.status_code }),
+      variant: deliveryTone('failed'),
     }
   }
+  if (item.cache_result === 'error') {
+    return { label: t('recentDownloads.failed'), variant: cacheTone('error') }
+  }
   if (item.cache_result === 'hit') {
-    return { label: t('recentDownloads.cacheHit'), variant: 'success' }
+    return { label: t('recentDownloads.cacheHit'), variant: cacheTone('hit') }
   }
   if (item.cache_result === 'miss') {
-    return { label: t('recentDownloads.upstreamFetch'), variant: 'warning' }
+    return { label: t('recentDownloads.upstreamFetch'), variant: cacheTone('miss') }
   }
-  return { label: t('recentDownloads.completed'), variant: 'default' }
+  return { label: t('recentDownloads.completed'), variant: deliveryTone('completed') }
 }
 
 function relativeTime(value: string, t: TFunction) {

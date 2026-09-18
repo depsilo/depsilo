@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 export interface IconButtonControlProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon: LucideIcon
   label: string
-  tone?: 'neutral' | 'danger'
+  tone?: 'neutral' | 'destructive'
   loading?: boolean
 }
 
@@ -37,7 +37,7 @@ export default forwardRef<HTMLButtonElement, IconButtonControlProps>(function Ic
       disabled={disabled || loading}
       className={cn(
         ICON_BUTTON_SIZE_CLASS,
-        tone === 'danger' ? 'text-destructive hover:text-destructive' : 'text-muted-foreground',
+        tone === 'destructive' ? 'text-destructive hover:text-destructive' : 'text-muted-foreground',
         className,
       )}
     >
