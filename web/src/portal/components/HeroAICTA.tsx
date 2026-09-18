@@ -7,6 +7,7 @@ import Modal from '@/components/app/modal'
 import CopyButton from '@/components/app/copy-button'
 import { useTransientFlag } from '@/hooks/useTransientFlag'
 import { copyText } from '@/lib/clipboard'
+import { cn } from '@/lib/utils'
 
 export default function HeroAICTA() {
   const { t } = useTranslation()
@@ -59,12 +60,7 @@ export default function HeroAICTA() {
     <>
       <article
         aria-labelledby="quickstart-optional-ai-title"
-        className="flex min-h-full flex-col rounded-lg p-5 sm:p-6"
-        style={{
-          background: 'var(--card)',
-          border: '0.5px solid var(--input)',
-          boxShadow: 'var(--shadow-card)',
-        }}
+        className="flex min-h-full flex-col rounded-lg border border-input bg-card p-5 shadow-card sm:p-6"
       >
         <div className="flex items-start gap-3">
           <span
@@ -91,16 +87,11 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleCopy()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-sm px-3 text-body font-semibold active:scale-[0.97]"
-            style={{
-              color: copied ? 'var(--success)' : 'var(--primary-foreground)',
-              background: copied ? 'var(--success-surface)' : 'var(--primary)',
-              border: 0,
-              cursor: isFetching ? 'wait' : 'pointer',
-              opacity: isFetching ? 0.7 : 1,
-              transition:
-                'background 150ms ease, color 150ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-            }}
+            className={cn(
+              'inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-sm border-0 px-3 text-body font-semibold transition-[background,color,opacity,transform] duration-150 active:scale-[0.97]',
+              copied ? 'bg-success-surface text-success' : 'bg-primary text-primary-foreground',
+              isFetching ? 'cursor-wait opacity-70' : 'cursor-pointer',
+            )}
           >
             <Icon
               icon={isFetching ? LoaderCircle : copied ? Check : Copy}
@@ -117,12 +108,10 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleReview()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-sm px-3 text-body font-semibold text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.97]"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              cursor: isFetching ? 'wait' : 'pointer',
-            }}
+            className={cn(
+              'inline-flex min-h-10 items-center gap-2 rounded-sm border border-border bg-transparent px-3 text-body font-semibold text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97]',
+              isFetching ? 'cursor-wait' : 'cursor-pointer',
+            )}
           >
             <Eye className="icon icon-sm" aria-hidden="true" />
             {t('quickstart.heroViewFull')}
@@ -155,11 +144,7 @@ export default function HeroAICTA() {
             {t('quickstart.aiIntegrationDesc')}
           </p>
           <div
-            className="flex flex-wrap items-center justify-between gap-3 rounded-sm px-3 py-2"
-            style={{
-              background: 'var(--muted)',
-              border: '0.5px solid var(--border)',
-            }}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-muted px-3 py-2"
           >
             <span className="min-w-0 flex-1 text-label leading-[1.5] text-muted-foreground">
               {t('quickstart.aiIntegrationHowto')}
@@ -168,11 +153,7 @@ export default function HeroAICTA() {
           </div>
           <pre
             tabIndex={0}
-            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-sm p-4 font-mono text-label leading-[1.55] text-foreground"
-            style={{
-              background: 'var(--muted)',
-              border: '0.5px solid var(--border)',
-            }}
+            className="m-0 max-h-[60vh] min-h-30 overflow-auto whitespace-pre rounded-sm border border-border bg-muted p-4 font-mono text-label leading-relaxed text-foreground"
           >
             {prompt && <code>{prompt}</code>}
           </pre>

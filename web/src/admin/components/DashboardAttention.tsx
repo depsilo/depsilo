@@ -42,7 +42,7 @@ function AttentionItem({ icon, title, detail, tone, to, action }: AttentionItemP
       <Link
         to={to}
         aria-label={action}
-        className="stripe-focus-ring group flex min-h-16 min-w-0 items-center gap-3 rounded-sm px-2 py-2 no-underline transition-colors duration-150 hover:bg-card"
+        className="group flex min-h-16 min-w-0 items-center gap-3 rounded-sm px-2 py-2 no-underline transition-colors duration-150 hover:bg-card"
       >
         <span
           aria-hidden

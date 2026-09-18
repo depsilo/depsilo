@@ -109,9 +109,9 @@ invariants, or change behaviour that the suite encodes.
 | --- | --- |
 | Five query states per data region, distinguishable | `admin-query-states.spec.ts` |
 | A pending mutation cannot be abandoned | `admin-dialog-actions.spec.ts` |
-| Every icon-only control is ≥40×40 in every state | `admin-axe.spec.ts` |
-| No negative letter spacing, anywhere, in both locales | `admin-axe.spec.ts` |
-| No horizontal document scroll at 320px | `admin-axe.spec.ts`, responsive specs |
+| Every icon-only control is ≥40×40 in every state | `fixtures/a11y.ts`, asserted by the Admin, Portal, and Setup specs |
+| No letter spacing, anywhere, in both locales | `fixtures/a11y.ts`, asserted by the Admin, Portal, and Setup specs |
+| No horizontal document scroll at 320px | `fixtures/a11y.ts`, responsive specs |
 | Filters and pagination survive reload, Back, and deep links | log and settings workspace specs |
 | The same health rule drives every health display | Portal Monitor and Admin Upstreams specs |
 | Chinese and English stay in parity | `make lint-i18n` |
@@ -128,11 +128,13 @@ invariants, or change behaviour that the suite encodes.
 | 7 | `admin-forms`, `admin-settings` | `make check` |
 | 8 | `admin-contrast`, `admin-responsive-grids`, `admin-page-layout`, `admin-recent-downloads` | `make verify` |
 | 9–13 | the owning spec per page | `make check`, then full `make test-ui` |
-| 14 | `portal-redesign`, `portal-monitor`, `auth-setup-state` | `make verify` |
+| 14 | `portal-axe`, `portal-redesign`, `portal-monitor`, `auth-setup-state` | `make verify` |
 | 15 | `light-theme-canvas`, brand asset checks | `make verify` |
 
-Every step also re-runs `e2e/admin-axe.spec.ts`, because it is the check that
-catches a redesign quietly breaking a floor.
+Every step also re-runs the accessibility contract (`e2e/admin-axe.spec.ts` for
+Admin, `e2e/portal-axe.spec.ts` for the Portal and Setup, both built on
+`e2e/fixtures/a11y.ts`), because it is the check that catches a redesign
+quietly breaking a floor.
 
 ## 6. Commit strategy
 

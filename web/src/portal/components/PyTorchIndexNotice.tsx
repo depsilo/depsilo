@@ -3,7 +3,8 @@ import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Badge from '@/components/app/badge'
 import Input from '@/components/app/input'
-import CodeBlock from '@/portal/components/CodeBlock'
+import CodeBlock from '@/components/app/code-block'
+import { cn } from '@/lib/utils'
 
 interface Props {
   endpoint: string
@@ -44,12 +45,10 @@ function ChannelButton({
       aria-label={choice.label}
       aria-pressed={active}
       onClick={onSelect}
-      className="stripe-focus-ring flex min-h-12 min-w-0 cursor-pointer flex-col items-start justify-center rounded-sm border px-3 py-2 text-left transition-[background,border-color,color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
-      style={{
-        background: active ? 'var(--accent)' : 'transparent',
-        borderColor: active ? 'var(--border)' : 'transparent',
-        color: active ? 'var(--primary)' : 'var(--foreground)',
-      }}
+      className={cn(
+        'flex min-h-12 min-w-0 cursor-pointer flex-col items-start justify-center rounded-sm border px-3 py-2 text-left transition-[background,border-color,color,transform] duration-150 hover:bg-accent active:scale-[0.98]',
+        active ? 'border-border bg-accent text-primary' : 'border-transparent bg-transparent text-foreground',
+      )}
     >
       <span className="flex w-full min-w-0 items-center justify-between gap-1.5">
         <span className="truncate text-body font-semibold leading-[1.25]">
@@ -104,7 +103,7 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
       className="border-y border-border"
     >
       <details className="group [&>summary::-webkit-details-marker]:hidden">
-        <summary className="stripe-focus-ring flex min-h-[68px] cursor-pointer list-none items-center gap-3 rounded-sm py-3">
+        <summary className="flex min-h-[68px] cursor-pointer list-none items-center gap-3 rounded-sm py-3">
           <span
             aria-hidden="true"
             className="flex size-8 shrink-0 items-center justify-center rounded-sm bg-accent text-primary"

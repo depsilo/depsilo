@@ -13,6 +13,7 @@ import ThemeToggle from '@/components/app/theme-toggle'
 import { adminApi, authApi, setupApi } from '../lib/api'
 import { adminLoginURL } from '../lib/adminLoginDestination'
 import { writeLocalStorage } from '../lib/storage'
+import { cn } from '../lib/utils'
 import { ecosystemDefaults, type UpstreamDefault } from './defaults'
 
 interface SetupWizardProps {
@@ -430,7 +431,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
         className="border-t border-border"
       >
-        <summary className="stripe-focus-ring flex min-h-13 cursor-pointer list-none items-center gap-3 rounded-sm px-1 text-left [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-13 cursor-pointer list-none items-center gap-3 rounded-sm px-1 text-left [&::-webkit-details-marker]:hidden">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-sm bg-muted text-muted-foreground">
             <SlidersHorizontal className="icon icon-sm" aria-hidden="true" />
           </span>
@@ -499,12 +500,12 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     type="button"
                     aria-pressed={selected}
                     disabled={submitting}
-                    className="stripe-focus-ring flex min-h-12 items-center gap-2 rounded-sm border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
-                    style={{
-                      borderColor: selected ? 'var(--primary)' : 'var(--border)',
-                      background: selected ? 'var(--accent)' : 'var(--card)',
-                      color: selected ? 'var(--primary)' : 'var(--foreground)',
-                    }}
+                    className={cn(
+                      'flex min-h-12 items-center gap-2 rounded-sm border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]',
+                      selected
+                        ? 'border-primary bg-accent text-primary'
+                        : 'border-border bg-card text-foreground',
+                    )}
                     onClick={() => toggleEcosystem(ecosystem.key)}
                   >
                     <EcosystemIcon type={ecosystem.key as EcosystemType} size={17} decorative />
@@ -540,7 +541,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                       aria-expanded={expanded}
                       aria-controls={panelId}
                       disabled={submitting}
-                      className="stripe-focus-ring flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-foreground transition-colors duration-150 hover:bg-accent"
+                      className="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-foreground transition-colors duration-150 hover:bg-accent"
                       onClick={() => setExpandedEcosystem(expanded ? null : ecosystem.key)}
                     >
                       <EcosystemIcon type={ecosystem.key as EcosystemType} size={16} decorative />

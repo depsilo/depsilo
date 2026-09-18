@@ -65,7 +65,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
       <header className="max-w-[760px]">
         <h1
           id="quickstart-title"
-          className="m-0 font-sans text-[clamp(30px,3vw,38px)] font-semibold leading-[1.08] text-foreground"
+          className="m-0 text-page-title text-foreground"
         >
           {t('quickstart.title')}
         </h1>
@@ -84,11 +84,7 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
         </h2>
         <div
           data-quickstart-shell
-          className="grid grid-cols-1 overflow-hidden rounded-xl min-[900px]:grid-cols-[280px_minmax(0,1fr)]"
-          style={{
-            background: 'var(--card)',
-            border: '1px solid var(--input)',
-          }}
+          className="grid grid-cols-1 overflow-hidden rounded-lg border border-input bg-card min-[900px]:grid-cols-[280px_minmax(0,1fr)]"
         >
           <EcosystemCatalog
             selected={language}

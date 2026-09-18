@@ -345,7 +345,7 @@ export default function RulesV2() {
                 type="button"
                 aria-pressed={form.action === 'allow'}
                 onClick={() => setForm({ ...form, action: 'allow' })}
-                className={`stripe-focus-ring flex-1 cursor-pointer rounded-sm border py-2 text-body font-normal transition-colors ${form.action === 'allow' ? 'border-success-border bg-success-surface text-success' : 'border-border bg-muted text-muted-foreground'}`}
+                className={`flex-1 cursor-pointer rounded-sm border py-2 text-body font-normal transition-colors ${form.action === 'allow' ? 'border-success-border bg-success-surface text-success' : 'border-border bg-muted text-muted-foreground'}`}
               >
                 {t('rules.allow')}
               </button>
@@ -353,7 +353,7 @@ export default function RulesV2() {
                 type="button"
                 aria-pressed={form.action === 'deny'}
                 onClick={() => setForm({ ...form, action: 'deny' })}
-                className={`stripe-focus-ring flex-1 cursor-pointer rounded-sm border py-2 text-body font-normal transition-colors ${form.action === 'deny' ? 'border-destructive bg-destructive-surface text-destructive' : 'border-border bg-muted text-muted-foreground'}`}
+                className={`flex-1 cursor-pointer rounded-sm border py-2 text-body font-normal transition-colors ${form.action === 'deny' ? 'border-destructive bg-destructive-surface text-destructive' : 'border-border bg-muted text-muted-foreground'}`}
               >
                 {t('rules.deny')}
               </button>

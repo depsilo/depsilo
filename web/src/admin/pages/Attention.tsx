@@ -65,7 +65,7 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
       </div>
       <Link
         to={href}
-        className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-sm px-2.5 text-label font-semibold no-underline text-primary transition-colors duration-150 hover:bg-accent sm:self-center"
+        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-sm px-2.5 text-label font-semibold no-underline text-primary transition-colors duration-150 hover:bg-accent sm:self-center"
       >
         {action}
         <span aria-hidden>→</span>
@@ -235,7 +235,7 @@ export default function Attention() {
             action={(
               <Link
                 to={getAdminRouteHref('quarantine')}
-                className="stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-label font-semibold no-underline text-primary hover:bg-accent"
+                className="inline-flex min-h-10 items-center rounded-sm px-2 text-label font-semibold no-underline text-primary hover:bg-accent"
               >
                 {t('attention.viewQuarantine')}
               </Link>

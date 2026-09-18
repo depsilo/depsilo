@@ -112,7 +112,7 @@ This is derived, not arbitrary:
 
 1. The accessibility contract requires every icon-only control to be at least
    40×40 in every state, and it is enforced across every Admin route by
-   `e2e/admin-axe.spec.ts`.
+   the shared contract in `e2e/fixtures/a11y.ts`, asserted on every surface.
 2. Depsilo's data rows carry icon actions — 17 of them across the log, user,
    rule, quarantine, project, and upstream surfaces.
 3. A 32px row cannot contain a 40px control. A "dense" tier would therefore

@@ -1,11 +1,12 @@
 import { ChevronDown, Link2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import CodeBlock from '@/portal/components/CodeBlock'
+import CodeBlock from '@/components/app/code-block'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import { LANGUAGES, type ManagerConfig } from '@/lib/ecosystemData'
 import { renderManagerTemplate, resolveServiceOrigin } from '@/lib/packageManagerConfig'
 import PyTorchIndexNotice from '@/portal/components/PyTorchIndexNotice'
+import { cn } from '@/lib/utils'
 
 interface Props {
   languageId: string
@@ -39,33 +40,12 @@ function ManagerChoice({
       aria-pressed={active}
       data-active={active ? 'true' : undefined}
       onClick={() => onChange(manager.id)}
-      className="manager-choice stripe-focus-ring active:scale-[0.97]"
-      style={{
-        display: 'flex',
-        minWidth: 82,
-        minHeight: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '6px 11px',
-        background: active ? 'var(--card)' : 'transparent',
-        border: '1px solid transparent',
-        borderRadius: 6,
-        boxShadow: active ? 'var(--shadow-surface)' : 'none',
-        textAlign: 'center',
-        cursor: 'pointer',
-        transition:
-          'background 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-      }}
+      className={cn(
+        'inline-flex min-h-10 min-w-[82px] cursor-pointer items-center justify-center rounded-sm border border-transparent px-3 py-1.5 text-center transition-[background,box-shadow,color,transform] duration-150 active:scale-[0.97]',
+        active ? 'bg-card text-primary shadow-surface' : 'bg-transparent text-foreground',
+      )}
     >
-      <span
-        style={{
-          color: active ? 'var(--primary)' : 'var(--foreground)',
-          fontSize: 13,
-          fontWeight: active ? 660 : 540,
-          lineHeight: 1.25,
-          whiteSpace: 'nowrap',
-        }}
-      >
+      <span className={cn('whitespace-nowrap text-body leading-tight', active ? 'font-semibold' : 'font-medium')}>
         {manager.name}
       </span>
     </button>
@@ -172,47 +152,25 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
 
   return (
     <details
-      className="group overflow-hidden rounded-sm [&>summary::-webkit-details-marker]:hidden"
-      style={{
-        border: '1px solid var(--border)',
-        background: 'var(--card)',
-      }}
+      className="group overflow-hidden rounded-sm border border-border bg-card [&>summary::-webkit-details-marker]:hidden"
     >
-      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-sm px-3 text-body font-medium text-muted-foreground">
+      <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-sm px-3 text-body font-medium text-muted-foreground">
         {t('quickstart.whereReadsFrom')}
         <span className="inline-flex text-muted-foreground transition-transform group-open:rotate-180 group-open:text-foreground">
           <ChevronDown className="icon icon-sm" aria-hidden="true" />
         </span>
       </summary>
-      <div style={{ borderTop: '1px solid var(--border)', overflow: 'hidden' }}>
-        {paths.map((path, index) => (
+      <div className="divide-y divide-border overflow-hidden border-t border-border">
+        {paths.map((path) => (
           <div
             key={`${path.os}-${path.path}`}
             className="grid grid-cols-1 gap-1 px-3 py-2 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-center sm:gap-3"
-            style={{
-              borderBottom:
-                index < paths.length - 1 ? '1px solid var(--border)' : 'none',
-            }}
           >
-            <span
-              style={{
-                color: 'var(--muted-foreground)',
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <span className="whitespace-nowrap font-semibold text-label text-muted-foreground">
               {path.os}
             </span>
             <span
-              style={{
-                overflow: 'hidden',
-                color: 'var(--foreground)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 12,
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
+              className="truncate font-mono text-label text-foreground"
               title={path.path}
             >
               {path.path}
@@ -257,30 +215,20 @@ export default function ConfigurePane({
     <div
       className={flush
         ? 'flex min-w-0 flex-1 flex-col'
-        : 'flex min-w-0 flex-1 flex-col rounded-lg border border-border bg-card shadow-sm'}
+        : 'flex min-w-0 flex-1 flex-col rounded-lg border border-border bg-card shadow-card'}
     >
       <div
-        className="flex min-h-[72px] items-center gap-3 px-4 py-3.5 sm:px-6 border-b border-border"
+        className="flex min-h-18 items-center gap-3 border-b border-border px-4 py-3.5 sm:px-6"
       >
         <span
           aria-hidden="true"
-          style={{
-            display: 'inline-flex',
-            width: 38,
-            height: 38,
-            flex: '0 0 38px',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--accent)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-          }}
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-accent"
         >
           <EcosystemIcon type={language.iconAdapter} size={20} useColor />
         </span>
-        <div style={{ minWidth: 0 }}>
+        <div className="min-w-0">
           <h3
-            className="m-0 font-sans text-[clamp(20px,2vw,24px)] font-semibold leading-[1.15] text-foreground"
+            className="m-0 text-subhead font-semibold text-foreground"
           >
             {t('quickstart.configureTitle', { name: language.name })}
           </h3>
@@ -304,7 +252,7 @@ export default function ConfigurePane({
           onChange={setManagerId}
         />
 
-        <div key={manager.id} className="manager-config-swap flex flex-col gap-7">
+        <div key={manager.id} className="flex flex-col gap-7">
           <section aria-labelledby="quickstart-config-step">
             <StepHeading
               id="quickstart-config-step"
@@ -328,7 +276,7 @@ export default function ConfigurePane({
 
           {manager.methods && manager.methods.length > 0 && (
             <details className="group border-y border-border py-2 [&>summary::-webkit-details-marker]:hidden">
-              <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-sm px-1">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-sm px-1">
                 <span className="flex items-start gap-3">
                   <span
                     aria-hidden="true"

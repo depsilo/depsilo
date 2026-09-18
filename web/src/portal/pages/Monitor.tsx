@@ -23,6 +23,7 @@ import StatusDot from '@/components/app/status-dot'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/app/upstream-panel'
 import { LANGUAGES, type MirrorStatus } from '@/lib/ecosystemData'
 import { upstreamStatus } from '@/lib/upstreamStatus'
+import { cn } from '@/lib/utils'
 
 interface LatencyPoint {
   time: string
@@ -146,19 +147,7 @@ function SearchPill({
   return (
     <div
       role="search"
-      className="portal-monitor-search"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 7,
-        width: 'min(100%, 320px)',
-        minHeight: 40,
-        padding: '0 0 0 10px',
-        background: 'var(--muted)',
-        border: `0.5px solid ${focused ? 'var(--border)' : 'var(--border)'}`,
-        borderRadius: 8,
-        transition: 'border-color 120ms ease, background 120ms ease',
-      }}
+      className="inline-flex w-[min(100%,320px)] min-h-10 items-center gap-1.5 rounded-sm border border-border bg-muted pl-2.5 transition-colors duration-150"
     >
       <svg className="shrink-0 text-muted-foreground" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
         <circle cx="11" cy="11" r="7" />
@@ -179,16 +168,7 @@ function SearchPill({
         }}
         placeholder={placeholder}
         aria-label={placeholder}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          background: 'transparent',
-          border: 'none',
-          outline: 'none',
-          fontSize: 12.5,
-          fontFamily: 'var(--font-mono)',
-          color: 'var(--foreground)',
-        }}
+        className="min-w-0 flex-1 border-0 bg-transparent font-mono text-field text-foreground outline-none md:text-label"
       />
       {value ? (
         <button
@@ -198,24 +178,7 @@ function SearchPill({
             ref.current?.focus()
           }}
           aria-label={clearLabel}
-          className="portal-monitor-search-clear stripe-focus-ring"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 40,
-            height: 40,
-            flexShrink: 0,
-            padding: 0,
-            background: 'transparent',
-            border: 'none',
-            borderRadius: 4,
-            color: 'var(--muted-foreground)',
-            cursor: 'pointer',
-            transition: 'color 120ms ease',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = 'var(--foreground)' }}
-          onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted-foreground)' }}
+          className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-transparent text-muted-foreground transition-colors duration-150 hover:text-foreground"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
             <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
@@ -224,17 +187,10 @@ function SearchPill({
       ) : (
         <kbd
           aria-hidden
-          style={{
-            fontSize: 10,
-            fontFamily: 'var(--font-mono)',
-            color: 'var(--muted-foreground)',
-            padding: '0 5px',
-            lineHeight: '15px',
-            border: '0.5px solid var(--border)',
-            borderRadius: 4,
-            opacity: focused ? 0 : 1,
-            transition: 'opacity 120ms ease',
-          }}
+          className={cn(
+            'rounded-sm border-[0.5px] border-border px-1.5 font-mono text-micro leading-[15px] text-muted-foreground transition-opacity duration-150',
+            focused ? 'opacity-0' : 'opacity-100',
+          )}
         >
           /
         </kbd>
@@ -297,31 +253,14 @@ export default function MonitorPage() {
 
   return (
     // Stagger: header first, the upstream panel ~70ms later.
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="flex flex-col gap-4.5">
       {/* Page summary */}
       <div className="flex flex-col gap-2.5">
         <div>
           <div
-            style={{
-              display: 'flex',
-              alignItems: 'flex-end',
-              justifyContent: 'space-between',
-              gap: '12px 16px',
-              flexWrap: 'wrap',
-            }}
+            className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3"
           >
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 'clamp(32px, 5vw, 44px)',
-                fontWeight: 700,
-                // Inter Tight is pre-tightened — mild tracking only,
-                // and milder still for CJK.
-                letterSpacing: i18n.language === 'zh' ? '-0.02em' : '-0.025em',
-                lineHeight: 1.02,
-                color: 'var(--foreground)',
-              }}
-            >
+            <h1 className="m-0 text-page-title text-foreground">
               {t('monitor.title')}
             </h1>
             <SearchPill
@@ -333,29 +272,20 @@ export default function MonitorPage() {
           </div>
           {statsQuery.data && (
             <p
-              style={{
-                margin: '10px 0 0 0',
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '8px 12px',
-                fontSize: 13,
-                lineHeight: 1.3,
-                color: 'var(--muted-foreground)',
-              }}
+              className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 text-body text-muted-foreground"
             >
               <span>
                 <span className="font-mono tabular-nums">{upstreams.length}</span> {t('monitor.upstreams')}
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span className="inline-flex items-center gap-1.5">
                 <StatusDot status="healthy" />
                 <span className="font-mono tabular-nums">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span className="inline-flex items-center gap-1.5">
                 <StatusDot status="degraded" />
                 <span className="font-mono tabular-nums">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
               </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span className="inline-flex items-center gap-1.5">
                 <StatusDot status="failed" />
                 <span className="font-mono tabular-nums">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
               </span>
@@ -369,13 +299,13 @@ export default function MonitorPage() {
                   >
                     <span>
                       {t('monitor.hitRate7d')}{' '}
-                      <span className="font-mono tabular-nums" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                      <span className="font-mono font-semibold tabular-nums text-primary">
                         {(week.hit_rate * 100).toFixed(1)}%
                       </span>
                     </span>
                     <span>
                       {t('monitor.saved7d')}{' '}
-                      <span className="font-mono tabular-nums" style={{ color: 'var(--foreground)', fontWeight: 600 }}>
+                      <span className="font-mono font-semibold tabular-nums text-foreground">
                         {savedFmt.value} {savedFmt.unit}
                       </span>
                     </span>
@@ -398,9 +328,8 @@ export default function MonitorPage() {
       {/* Upstream health — the page's main content */}
       <div
         data-monitor-upstreams
-        className=""
+        className="flex flex-col gap-3"
         aria-busy={statsQuery.isPending || undefined}
-        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
       >
         {statsQuery.isPending ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -449,12 +378,7 @@ export default function MonitorPage() {
                 action={(
                   <Link
                     to="/admin/upstreams"
-                    className="inline-flex min-h-10 items-center justify-center rounded-sm px-3 text-body font-medium no-underline"
-                    style={{
-                      border: '0.5px solid var(--input)',
-                      color: 'var(--foreground)',
-                      background: 'var(--card)',
-                    }}
+                    className="inline-flex min-h-10 items-center justify-center rounded-sm border-[0.5px] border-input bg-card px-3 text-body font-medium text-foreground no-underline"
                   >
                     {t('monitor.configureUpstreams')}
                   </Link>

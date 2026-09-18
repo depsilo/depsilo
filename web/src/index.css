@@ -297,6 +297,17 @@
   --color-chart-5: var(--chart-5);
   --color-chart-grid: var(--chart-grid);
   --color-chart-axis-label: var(--chart-axis-label);
+  /* The code surface is the one place the product goes dark on purpose: a
+     command a reader is meant to paste should not sit on the canvas, and it
+     must look the same in both themes. Its ramp is therefore semantic, not a
+     use of the neutral ladder. */
+  --color-code-surface: var(--code-surface);
+  --color-code-surface-header: var(--code-surface-header);
+  --color-code-surface-foreground: var(--code-surface-foreground);
+  --color-code-surface-muted: var(--code-surface-muted);
+  --color-code-surface-border: var(--code-surface-border);
+  --color-code-surface-accent: var(--code-surface-accent);
+  --color-code-surface-danger: var(--code-surface-danger);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -315,6 +326,13 @@
   --radius-lg: var(--radius-control);
   --radius-xl: var(--radius-surface);
   --radius-2xl: var(--radius-surface);
+
+  /* Elevation, three levels and no more. `@theme inline` does not emit these
+     names into `:root`, so the self-reference is a mapping, not a cycle: the
+     value stays in `:root` above and the utility inlines `var(--shadow-*)`. */
+  --shadow-surface: var(--shadow-surface);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
 
   /* Type scale. Nine roles, and nothing else: before this the app layer used
      seventeen arbitrary sizes and twelve arbitrary font weights, which is

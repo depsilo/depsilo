@@ -31,7 +31,7 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
       className={portal
         ? PORTAL_SEGMENT_CLASS
         : admin
-          ? 'stripe-focus-ring inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent px-2 font-mono text-meta font-medium text-muted-foreground transition-[background,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98]'
+          ? 'inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent px-2 font-mono text-meta font-medium text-muted-foreground transition-[background,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98]'
           : 'inline-flex size-10 cursor-pointer items-center justify-center rounded-sm border border-border bg-transparent font-mono text-meta font-medium text-muted-foreground'}
       aria-label={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
       title={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}

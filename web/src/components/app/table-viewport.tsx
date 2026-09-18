@@ -13,7 +13,7 @@ export default function TableViewport({ label, minWidth = 720, children }: Table
       role="region"
       aria-label={label}
       tabIndex={0}
-      className="stripe-focus-ring w-full overflow-x-auto"
+      className="w-full overflow-x-auto"
     >
       <div style={{ minWidth }}>{children}</div>
     </div>

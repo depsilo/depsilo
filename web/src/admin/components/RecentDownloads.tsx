@@ -137,7 +137,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
         </div>
         <Link
           to={getAdminRouteHref('auditLogs')}
-          className="stripe-focus-ring inline-flex min-h-10 items-center gap-1 rounded-sm px-2 whitespace-nowrap text-label font-semibold no-underline text-primary hover:bg-card"
+          className="inline-flex min-h-10 items-center gap-1 rounded-sm px-2 whitespace-nowrap text-label font-semibold no-underline text-primary hover:bg-card"
         >
           {t('recentDownloads.viewAudit')}
           <span aria-hidden>→</span>
@@ -185,7 +185,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
           {hasStaleData && (
             <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b-[0.5px] border-warning/35 bg-warning/10 px-3 py-1.5 text-meta text-warning">
               <span>{t('recentDownloads.stale')}</span>
-              <button type="button" className="stripe-focus-ring min-h-7 rounded px-2 font-semibold" onClick={() => { void query.refetch() }}>
+              <button type="button" className="min-h-7 rounded px-2 font-semibold" onClick={() => { void query.refetch() }}>
                 {t('recentDownloads.retry')}
               </button>
             </div>

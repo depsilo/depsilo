@@ -258,7 +258,7 @@ export default function License() {
       <section>
         <button
           type="button"
-          className="w-full flex items-center justify-between bg-transparent cursor-pointer pb-2 disabled:cursor-not-allowed disabled:opacity-60 stripe-focus-ring border-b border-border"
+          className="w-full flex items-center justify-between bg-transparent cursor-pointer pb-2 disabled:cursor-not-allowed disabled:opacity-60 border-b border-border"
           aria-controls="license-key-content"
           aria-expanded={keySectionOpen}
           disabled={setKey.isPending}

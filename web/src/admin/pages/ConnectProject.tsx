@@ -28,7 +28,7 @@ import {
   removeSessionStorage,
   writeSessionStorage,
 } from '@/lib/storage'
-import CodeBlock from '@/portal/components/CodeBlock'
+import CodeBlock from '@/components/app/code-block'
 
 const pollIntervalMs = 2_500
 const troubleshootingDelayMs = 30_000
@@ -309,7 +309,7 @@ export default function ConnectProject() {
             <h2 id="onboarding-ecosystem-title" className="text-field font-semibold text-foreground">{t('onboarding.chooseEcosystem')}</h2>
             <p className="mt-1 text-body text-muted-foreground">{t('onboarding.chooseEcosystemHint')}</p>
           </div>
-          <button type="button" className="stripe-focus-ring min-h-10 rounded-sm px-2 text-label font-semibold text-primary hover:bg-accent" onClick={toggleAllEcosystems} aria-expanded={showAll}>
+          <button type="button" className="min-h-10 rounded-sm px-2 text-label font-semibold text-primary hover:bg-accent" onClick={toggleAllEcosystems} aria-expanded={showAll}>
             {showAll ? t('onboarding.showFeatured') : t('onboarding.viewAll')}
           </button>
         </div>
@@ -320,7 +320,7 @@ export default function ConnectProject() {
               type="button"
               aria-pressed={candidate.id === language?.id}
               onClick={() => setLanguageId(candidate.id)}
-              className={`stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-sm border border-border px-3 text-left text-body font-semibold transition-[background,border-color,color] duration-150 ${candidate.id === language?.id ? 'bg-accent text-primary' : 'bg-card text-foreground'}`}
+              className={`flex min-h-12 min-w-0 items-center gap-2 rounded-sm border border-border px-3 text-left text-body font-semibold transition-[background,border-color,color] duration-150 ${candidate.id === language?.id ? 'bg-accent text-primary' : 'bg-card text-foreground'}`}
             >
               <EcosystemIcon type={candidate.iconAdapter} size={18} useColor />
               <span className="truncate">{candidate.name}</span>
@@ -334,7 +334,7 @@ export default function ConnectProject() {
           <h2 id="onboarding-manager-title" className="text-field font-semibold text-foreground">{t('onboarding.chooseManager', { ecosystem: language.name })}</h2>
           <div role="group" aria-label={t('onboarding.managerLabel')} className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-sm bg-muted p-1">
             {language.managers.map(candidate => (
-              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className={`stripe-focus-ring min-h-10 shrink-0 rounded-sm px-3 text-body font-semibold ${candidate.id === manager.id ? 'bg-card text-primary shadow-[var(--shadow-surface)]' : 'bg-transparent text-muted-foreground'}`}>
+              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className={`min-h-10 shrink-0 rounded-sm px-3 text-body font-semibold ${candidate.id === manager.id ? 'bg-card text-primary shadow-surface' : 'bg-transparent text-muted-foreground'}`}>
                 {candidate.name}
               </button>
             ))}
@@ -385,7 +385,7 @@ export default function ConnectProject() {
               </dl>
               <p className="mt-4 text-body text-muted-foreground">{requestKind === 'blocked' ? t('onboarding.blockedHint') : requestKind === 'error' ? t('onboarding.errorHint') : testCommand ? t('onboarding.runAgain') : t('onboarding.runAgainNormal')}</p>
               {requestKind === 'error' && (
-                <Link to={getAdminRouteHref('accessLogs')} className="stripe-focus-ring mt-3 inline-flex min-h-10 items-center rounded-sm px-2 text-label font-semibold text-primary no-underline hover:bg-accent">
+                <Link to={getAdminRouteHref('accessLogs')} className="mt-3 inline-flex min-h-10 items-center rounded-sm px-2 text-label font-semibold text-primary no-underline hover:bg-accent">
                   {t('onboarding.viewAccessLogs')}
                 </Link>
               )}

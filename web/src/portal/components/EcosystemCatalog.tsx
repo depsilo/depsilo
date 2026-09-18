@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import Input from '@/components/app/input'
 import { LANGUAGES, type Language, type LanguageGroup } from '@/lib/ecosystemData'
+import { cn } from '@/lib/utils'
 
 interface Props {
   selected: string
@@ -47,80 +48,42 @@ function EcosystemButton({
       data-active={active ? 'true' : undefined}
       title={language.name}
       onClick={() => onSelect(language.id)}
-      className="stripe-focus-ring relative overflow-hidden active:scale-[0.98]"
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        display: 'flex',
-        alignItems: 'center',
-        gap: compact ? 6 : 11,
-        width: '100%',
-        minHeight: chip ? 40 : compact ? 40 : 52,
-        padding: chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
-        background: active ? 'var(--accent)' : 'transparent',
-        border: `1px solid ${active ? 'var(--border)' : 'transparent'}`,
-        borderRadius: chip || compact ? 6 : 8,
-        boxShadow: active ? 'inset 1px 0 0 var(--primary)' : 'none',
-        textAlign: 'left',
-        cursor: 'pointer',
-        transition:
-          'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-      }}
-      onMouseEnter={event => {
-        if (!active) event.currentTarget.style.background = 'var(--accent)'
-      }}
-      onMouseLeave={event => {
-        if (!active) event.currentTarget.style.background = 'transparent'
-      }}
+      className={cn(
+        'relative flex w-full cursor-pointer items-center overflow-hidden rounded-sm border text-left transition-[background,border-color,transform] duration-150 active:scale-[0.98]',
+        chip
+          ? 'min-h-10 gap-1.5 px-2.5 py-1.5'
+          : compact
+            ? 'min-h-10 gap-1.5 px-1 py-1'
+            : 'min-h-13 gap-3 px-2.5 py-2',
+        active
+          ? 'border-border bg-accent shadow-[inset_1px_0_0_var(--primary)]'
+          : 'border-transparent bg-transparent hover:bg-accent',
+      )}
     >
       {!chip && (
         <span
           aria-hidden="true"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: compact ? 24 : 32,
-            height: compact ? 24 : 32,
-            borderRadius: 6,
-            background: active
-              ? 'var(--card)'
-              : 'color-mix(in oklab, var(--muted) 78%, transparent)',
-            flexShrink: 0,
-          }}
+          className={cn(
+            'inline-flex shrink-0 items-center justify-center rounded-sm',
+            compact ? 'size-6' : 'size-8',
+            active ? 'bg-card' : 'bg-muted/80',
+          )}
         >
           <EcosystemIcon type={language.iconAdapter} size={compact ? 14 : 18} useColor />
         </span>
       )}
-      <span style={{ minWidth: 0, flex: 1 }}>
+      <span className="min-w-0 flex-1">
         <span
-          style={{
-            display: 'block',
-            overflow: 'hidden',
-            color: active ? 'var(--primary)' : 'var(--foreground)',
-            fontSize: chip ? 12 : compact ? 12.5 : 14,
-            fontWeight: active ? 640 : 540,
-            letterSpacing: compact ? '-0.01em' : undefined,
-            lineHeight: 1.25,
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
+          className={cn(
+            'block truncate leading-tight',
+            chip || compact ? 'text-label' : 'text-body',
+            active ? 'font-semibold text-primary' : 'font-medium text-foreground',
+          )}
         >
           {language.name}
         </span>
         {!compact && !chip && (
-          <span
-            style={{
-              display: 'block',
-              overflow: 'hidden',
-              marginTop: 2,
-              color: 'var(--muted-foreground)',
-              fontSize: 12,
-              lineHeight: 1.25,
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
+          <span className="mt-0.5 block truncate text-label leading-tight text-muted-foreground">
             {subtitle}
           </span>
         )}
@@ -203,12 +166,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
   return (
     <nav
       aria-label={t('quickstart.pickEcosystem')}
-      className="eco-catalog border-b border-border min-[900px]:border-r min-[900px]:border-b-0"
-      style={{
-        minWidth: 0,
-        padding: '18px 14px 20px',
-        background: 'var(--card)',
-      }}
+      className="min-w-0 border-b border-border bg-card px-3.5 pb-5 pt-4.5 min-[900px]:border-b-0 min-[900px]:border-r"
     >
       <h3 className="m-0 text-field font-semibold leading-[1.3] text-foreground">
         {t('quickstart.pickEcosystem')}

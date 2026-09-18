@@ -84,7 +84,7 @@ export default function Login() {
             to="/"
             aria-label="Depsilo"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-sm text-foreground no-underline transition-opacity duration-150 hover:opacity-75"
+            className="inline-flex min-h-10 items-center gap-2 rounded-sm text-foreground no-underline transition-opacity duration-150 hover:opacity-75"
           >
             <Logo size={28} />
             <span className="font-display text-field font-bold">Depsilo</span>
@@ -92,7 +92,7 @@ export default function Login() {
           <Link
             to="/"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-sm px-2 text-label font-medium text-muted-foreground no-underline transition-colors duration-150 hover:bg-accent hover:text-foreground"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-sm px-2 text-label font-medium text-muted-foreground no-underline transition-colors duration-150 hover:bg-accent hover:text-foreground"
           >
             <ArrowLeft className="icon icon-sm" aria-hidden="true" />
             {t('login.backToPortal')}

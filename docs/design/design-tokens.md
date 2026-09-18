@@ -25,7 +25,13 @@ Rules carried from Stage A, which step 01 must not undo:
 - One cascade. Light is `:root`, dark is `.dark`. No third copy of the palette.
 - `@custom-variant dark` keyed on the root class, set before first paint.
 - `@theme inline` exposes every semantic token as a Tailwind utility.
-- **No negative letter spacing anywhere.** Enforced by `e2e/admin-axe.spec.ts`.
+- **No letter spacing anywhere, in either direction.** Every visible element
+  must resolve to `letter-spacing: 0`; do not reach for `tracking-*`. Enforced
+  on every surface by `e2e/fixtures/a11y.ts`, which the Admin, Portal, and
+  Setup specs share. The rule is stated as "no negative" in places because
+  that is the direction the old display titles used; the check is stricter
+  because positive tracking is a Latin-only device and a drift vector of its
+  own.
 - **The root font size stays at the browser default.** The product's base text
   size lives on `body`. A non-default root size silently rescales every
   `rem`-based utility; Stage A found and removed exactly that trap.
@@ -437,5 +443,6 @@ Two further gates:
 
 - `e2e/admin-axe.spec.ts` passes on every Admin route, in both themes and both
   locales;
-- Portal and Setup converge on the same standard, which
-  [PRODUCT.md](../../PRODUCT.md) records as unfinished today.
+- Portal and Setup pass the same contract — same helper, same floors — through
+  `e2e/portal-axe.spec.ts`, which is what [PRODUCT.md](../../PRODUCT.md) listed
+  as unfinished before step 14.

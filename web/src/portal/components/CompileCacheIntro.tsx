@@ -7,12 +7,7 @@ export default function CompileCacheIntro() {
   return (
     <article
       aria-labelledby="portal-compile-cache-title"
-      className="flex min-h-full flex-col rounded-lg p-5 sm:p-6"
-      style={{
-        background: 'var(--card)',
-        border: '0.5px solid var(--input)',
-        boxShadow: 'var(--shadow-card)',
-      }}
+      className="flex min-h-full flex-col rounded-lg border border-input bg-card p-5 shadow-card sm:p-6"
     >
       <div className="flex items-start gap-3">
         <span
@@ -37,21 +32,14 @@ export default function CompileCacheIntro() {
       <div className="mt-auto pt-5">
         <a
           href="/admin/compile-cache"
-          className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-sm px-3 text-body font-semibold no-underline hover:bg-accent active:scale-[0.97]"
-          style={{
-            color: 'var(--primary)',
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            transition:
-              'background 150ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-          }}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border border-border bg-transparent px-3 text-body font-semibold text-primary no-underline transition-[background,transform] duration-150 hover:bg-accent active:scale-[0.97]"
         >
           {t('quickstart.compileCacheAction')}
           <ArrowRight className="icon icon-sm" aria-hidden="true" />
         </a>
 
         <details className="mt-3 border-t border-border pt-2">
-          <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-sm px-1 text-body font-medium text-muted-foreground hover:text-foreground">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-sm px-1 text-body font-medium text-muted-foreground hover:text-foreground">
             {t('quickstart.compileCacheDetails')}
             <ChevronDown className="icon icon-sm" aria-hidden="true" />
           </summary>

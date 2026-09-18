@@ -533,7 +533,7 @@ export default function UpstreamsV2() {
                         key={option.value}
                         type="button"
                         aria-pressed={active}
-                        className={`stripe-focus-ring inline-flex min-h-10 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-2.5 text-label transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${active ? 'border-input bg-card text-foreground' : 'border-transparent bg-transparent text-muted-foreground'}`}
+                        className={`inline-flex min-h-10 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-2.5 text-label transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${active ? 'border-input bg-card text-foreground' : 'border-transparent bg-transparent text-muted-foreground'}`}
                         onClick={() => setStatusFilter(option.value)}
                       >
                         {option.dot && <StatusDot status={option.dot} />}

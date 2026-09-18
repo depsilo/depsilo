@@ -127,7 +127,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   return (
     <div
       data-upstream-heartbeat
-      className="stripe-focus-ring relative w-full min-w-0 rounded-sm"
+      className="relative w-full min-w-0 rounded-sm"
       style={{ height: 40, maxWidth: HEARTBEAT_WIDTH }}
       tabIndex={0}
       aria-label={t('monitor.latencyHistoryNamed', { name: upstream.name })}
@@ -418,9 +418,8 @@ export function UpstreamGroupedPanel({
                 data-upstream-group={adapter}
                 data-upstream-group-layout={usesAdaptiveItemGrid ? 'full' : 'tile'}
                 aria-labelledby={headingId}
-                className={isCards ? 'card min-w-0' : 'min-w-0'}
+                className={isCards ? 'min-w-0 rounded-lg border border-border bg-card p-3.5' : 'min-w-0'}
                 style={{
-                  ...(isCards ? { padding: '12px 14px' } : undefined),
                   ...(usesAdaptiveItemGrid ? { gridColumn: '1 / -1' } : undefined),
                 }}
               >
@@ -429,7 +428,7 @@ export function UpstreamGroupedPanel({
                 >
                   <h2
                     id={headingId}
-                    className="flex min-w-0 items-center gap-2 text-label font-mono font-semibold uppercase tracking-[0.1em] text-foreground"
+                    className="flex min-w-0 items-center gap-2 text-label font-mono font-semibold uppercase text-foreground"
                   >
                     {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor decorative />}
                     <span className="min-w-0 truncate">{adapter}</span>

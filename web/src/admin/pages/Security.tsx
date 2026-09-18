@@ -85,7 +85,7 @@ function CapabilityOverview() {
         <div className="space-y-3">
           {[...grouped.entries()].map(([name, rows]) => (
             <details key={name} className="rounded-sm border border-border bg-muted px-3 py-2">
-              <summary className="cursor-pointer stripe-focus-ring text-body font-semibold">{label(name)}</summary>
+              <summary className="cursor-pointer text-body font-semibold">{label(name)}</summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
                   <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-sm bg-background p-2 text-label">
@@ -435,7 +435,7 @@ function SuggestionsTab() {
           <span>{t('security.manualRuleRequired')}</span>
           <Link
             to={getAdminRouteHref('rules')}
-            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-label font-semibold text-primary no-underline hover:bg-accent"
+            className="inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-label font-semibold text-primary no-underline hover:bg-accent"
           >
             {t('security.openPackageRules')}
           </Link>
@@ -963,7 +963,7 @@ function PoliciesTab() {
         >
           <button
             type="button"
-            className="inline-flex min-h-10 flex-col items-center justify-center rounded-sm bg-transparent px-4 py-2 text-muted-foreground stripe-focus-ring"
+            className="inline-flex min-h-10 flex-col items-center justify-center rounded-sm bg-transparent px-4 py-2 text-muted-foreground"
             onClick={() => fileInputRef.current?.click()}
             disabled={importMutation.isPending}
           >

@@ -87,26 +87,19 @@ function EndpointPill() {
             a state change instead of a hard snap. */}
         <span className="relative inline-flex size-4" aria-hidden="true">
           <span
-            className="absolute inset-0 inline-flex items-center justify-center"
-            style={{
-              color: copyState === 'failed' ? 'var(--destructive)' : 'var(--muted-foreground)',
-              opacity: copied ? 0 : 1,
-              transform: copied ? 'scale(0.25)' : 'scale(1)',
-              filter: copied ? 'blur(4px)' : 'blur(0)',
-              transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
-            }}
+            className={cn(
+              'absolute inset-0 inline-flex items-center justify-center transition-[opacity,transform,filter] duration-200 ease-out',
+              copyState === 'failed' ? 'text-destructive' : 'text-muted-foreground',
+              copied ? 'scale-25 opacity-0 blur-xs' : 'scale-100 opacity-100 blur-none',
+            )}
           >
             <Icon icon={copyState === 'failed' ? TriangleAlert : Copy} size="sm" />
           </span>
           <span
-            className="absolute inset-0 inline-flex items-center justify-center"
-            style={{
-              color: 'var(--success)',
-              opacity: copied ? 1 : 0,
-              transform: copied ? 'scale(1)' : 'scale(0.25)',
-              filter: copied ? 'blur(0)' : 'blur(4px)',
-              transition: 'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1), filter 200ms cubic-bezier(0.2, 0, 0, 1)',
-            }}
+            className={cn(
+              'absolute inset-0 inline-flex items-center justify-center text-success transition-[opacity,transform,filter] duration-200 ease-out',
+              copied ? 'scale-100 opacity-100 blur-none' : 'scale-25 opacity-0 blur-xs',
+            )}
           >
             <Check className="icon icon-sm" aria-hidden="true" />
           </span>

@@ -1,49 +1,17 @@
 import AxeBuilder from '@axe-core/playwright'
-import type { Page } from '@playwright/test'
 import { adminRouteManifest } from '../src/admin/routes'
+import {
+  assertAccessibleDocument,
+  assertAccessibleRoute,
+  assertAxe,
+  type AccessibilityCase,
+} from './fixtures/a11y'
 import {
   expect,
   expectResolvedUiPreferences,
   setUiPreferences,
   test,
-  type UiLocale,
-  type UiTheme,
 } from './fixtures/admin-api'
-
-interface AccessibilityCase {
-  route: string
-  width: number
-  theme: UiTheme
-  locale: UiLocale
-}
-
-async function assertAxe(page: Page) {
-  const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
-  expect(result.violations).toEqual([])
-}
-
-async function assertAccessibleDocument(page: Page, width: number) {
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
-  expect(await page.locator('button:visible').evaluateAll(buttons => buttons.filter(button => {
-    const rect = button.getBoundingClientRect()
-    return button.dataset.iconButton === '' && (rect.width < 40 || rect.height < 40)
-  }).length)).toBe(0)
-  expect(await page.locator('#root *:visible').evaluateAll(elements => elements.filter(element => {
-    const spacing = getComputedStyle(element).letterSpacing
-    return spacing !== 'normal' && Math.abs(Number.parseFloat(spacing)) > 0.01
-  }).length)).toBe(0)
-  await assertAxe(page)
-}
-
-async function assertAccessibleRoute(page: Page, testCase: AccessibilityCase) {
-  const { route, width, theme, locale } = testCase
-  await page.setViewportSize({ width, height: width <= 390 ? 844 : 1000 })
-  await setUiPreferences(page, theme, locale)
-  await page.goto(route)
-  await expectResolvedUiPreferences(page, theme, locale)
-  await expect(page.locator('h1')).toBeVisible()
-  await assertAccessibleDocument(page, width)
-}
 
 test('every registered Admin route passes the desktop accessibility contract', async ({ page }) => {
   test.setTimeout(120_000)

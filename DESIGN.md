@@ -135,7 +135,7 @@ tokens.
 `empty-state`, `section-header`, `metric`, `status-dot`, `modal`, `drawer`,
 `tooltip`, `toast`, `confirm-dialog` (via `Modal`), `logo`, `theme-toggle`,
 `language-toggle`, `ecosystem-icon`, `icon` (runtime-glyph sizing box),
-`upstream-panel`, `data-table`, `table-viewport`.
+`upstream-panel`, `data-table`, `table-viewport`, `code-block`, `copy-button`.
 
 Use these before adding a primitive. Admin-specific composition belongs in
 `admin/components/`; Portal-specific composition belongs in
@@ -156,8 +156,12 @@ Use these before adding a primitive. Admin-specific composition belongs in
   devices, and the `combobox` + value contract matter more than a styled
   popup. shadcn's Base UI select is deliberately not adopted.
 - `IconButton` and `IconButtonControl` set `data-icon-button` and keep a
-  40×40 target in every state, including pending. `e2e/admin-axe.spec.ts`
-  measures both.
+  40×40 target in every state, including pending. The shared contract in
+  `e2e/fixtures/a11y.ts` measures both on every surface.
+- `CodeBlock` holds its own copy action, because the action's accessible name
+  has to name *that* block; `CopyButton` is the one copy control, with a
+  labelled, an inline, and an icon-only presentation. Admin onboarding and the
+  Portal share both, so a copied command cannot behave two ways.
 - `Modal` keeps `closeDisabled` for mutations in flight: the dialog cannot be
   dismissed while a change is half-applied.
 - The Admin shell is a product component, not shadcn's `sidebar` primitive; it
