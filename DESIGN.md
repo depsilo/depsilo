@@ -243,9 +243,6 @@ commit full-page pixel snapshots.
 Specs assert against semantic tokens rather than literal colours wherever the
 token layer is expected to move. Do not reintroduce a hex value into a spec.
 
-`web/admin-remediation-eslint-files.txt` records the historical Admin lint
-remediation scope. It is not a live manifest and nothing reads it.
-
 ## Brand
 
 **Open decision.** The in-app mark is a neutral Stage A placeholder, because
