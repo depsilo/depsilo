@@ -152,7 +152,7 @@ export default function UsersV2() {
   const tokensApiError = getApiError(tokensQuery.error)
 
   const userColumns = [
-    { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-body font-medium shrink-0" style={{ background: 'var(--primary)', color: 'var(--primary-foreground)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-medium text-foreground">{row.username}</span></div>) },
+    { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-[6px] text-body font-medium shrink-0 bg-primary text-primary-foreground">{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-medium text-foreground">{row.username}</span></div>) },
     { key: 'role', label: t('users.role'), render: (v: unknown) => <BadgeV2 variant={(v as string) === 'admin' ? 'ecosystem' : 'default'}>{v as string}</BadgeV2> },
     { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'neutral'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-label text-muted-foreground">{formatTime(v as string)}</span> },
@@ -281,7 +281,7 @@ export default function UsersV2() {
 
       <ModalV2 open={tokenResultOpen} onClose={() => setTokenResultOpen(false)} title={t('users.tokenGenerated')}>
         <p className="text-body mb-3 text-muted-foreground">{t('users.tokenCopyWarning')}</p>
-        <div className="flex items-center gap-2 rounded-[4px] p-3" style={{ background: 'var(--muted)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-2 rounded-[4px] border border-border bg-muted p-3">
           <code className="flex-1 font-mono text-body break-all text-foreground">{createdToken}</code>
           <IconButton icon={copied ? Check : Copy} label={t('users.copyToken')} onClick={copyToken} />
         </div>

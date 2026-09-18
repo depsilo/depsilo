@@ -199,7 +199,7 @@ export default function CacheManageV2() {
           {/* Left: usage + ecosystem breakdown */}
           <section>
             <SectionHeader title={t('cache.storageOverview')} />
-            <p data-metric-value className="mb-2 whitespace-nowrap font-mono tabular-nums" style={{ fontSize: 32, fontWeight: 600, color: 'var(--foreground)', lineHeight: 1.05 }}>
+            <p data-metric-value className="mb-2 whitespace-nowrap font-mono text-metric font-semibold text-foreground tabular-nums">
               {formatBytes(distribution.total_size)}
               <span className="text-label font-normal ml-2 text-muted-foreground">
                 / {formatBytes(distribution.max_size)}
@@ -261,10 +261,10 @@ export default function CacheManageV2() {
                         />
                         {showLabel && (
                           <foreignObject x={x} y={y} width={width} height={height}>
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 3, boxSizing: 'border-box', overflow: 'hidden' }}>
-                              <div style={{ maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 4px', borderRadius: 3, background: 'var(--card)', overflow: 'hidden' }}>
-                                <span style={{ color: 'var(--foreground)', fontSize: 11, fontWeight: 500, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
-                                <span style={{ color: 'var(--muted-foreground)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>{formatBytes(size)}</span>
+                            <div className="box-border flex size-full items-center justify-center overflow-hidden p-[3px]">
+                              <div className="flex max-w-full flex-col items-center overflow-hidden rounded-[3px] bg-card px-1 py-0.5">
+                                <span className="text-center text-meta font-medium leading-tight break-all text-foreground">{name}</span>
+                                <span className="font-mono text-micro text-muted-foreground">{formatBytes(size)}</span>
                               </div>
                             </div>
                           </foreignObject>
@@ -278,7 +278,7 @@ export default function CacheManageV2() {
                     const item: unknown = payload[0]?.payload
                     if (!isCacheTreemapItem(item)) return null
                     return (
-                      <div className="rounded-[4px] p-2 text-meta" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+                      <div className="rounded-[4px] border border-border bg-card p-2 text-meta">
                         <p className="font-medium text-foreground">{item.name}</p>
                         <p className="text-muted-foreground">{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
                       </div>
@@ -297,7 +297,7 @@ export default function CacheManageV2() {
 
       <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+          <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             aria-label={t('cache.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-field outline-none md:text-body text-foreground"

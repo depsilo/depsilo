@@ -33,17 +33,16 @@ function StatePanel({
   children?: React.ReactNode
 }) {
   const tones = {
-    brand: { bg: 'var(--accent)', iconBg: 'var(--accent)', iconColor: 'var(--primary)' },
-    ok:    { bg: 'var(--success-surface)',    iconBg: 'var(--success-surface)',    iconColor: 'var(--success)' },
-    destructive:{ bg: 'var(--destructive-surface)',iconBg: 'var(--destructive-surface)',iconColor: 'var(--destructive)' },
+    brand: { card: 'bg-accent', icon: 'bg-accent text-primary' },
+    ok: { card: 'bg-success-surface', icon: 'bg-success-surface text-success' },
+    destructive: { card: 'bg-destructive-surface', icon: 'bg-destructive-surface text-destructive' },
   } as const
   const t = tones[tone]
   return (
-    <div className="rounded-[6px] p-5" style={{ background: t.bg }}>
+    <div className={`rounded-[6px] p-5 ${t.card}`}>
       <div className="flex items-center gap-3 mb-4">
         <span
-          className="flex items-center justify-center w-10 h-10 rounded-[8px]"
-          style={{ background: t.iconBg, color: t.iconColor }}
+          className={`flex h-10 w-10 items-center justify-center rounded-[8px] ${t.icon}`}
         >
           <Icon icon={icon} size="sm" />
         </span>
@@ -221,18 +220,17 @@ export default function License() {
           icon={BadgeCheck}
           title={t('license.pro.activated')}
         >
-          <div className="space-y-0">
+          <div className="flex flex-col divide-y divide-border">
             {[
               { label: t('license.pro.key_label'), value: <code className="font-mono text-body">{status.license_key_masked}</code> },
               ...(status.expires_at
                 ? [{ label: t('license.pro.expires_at', { date: '' }).replace('：', ':').split(':')[0], value: formatDate(status.expires_at) }]
                 : []),
               { label: t('license.pro.last_checked', { relative_time: '' }).replace(/：.*$/, '').replace(/:.+$/, ''), value: formatRelative(status.last_checked) },
-            ].map((item, i, arr) => (
+            ].map((item) => (
               <div
-                key={i}
+                key={item.label}
                 className="flex items-center justify-between py-2"
-                style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
                 <span className="text-body text-muted-foreground">{item.label}</span>
                 <span className="text-body text-foreground">{item.value}</span>

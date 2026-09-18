@@ -83,7 +83,7 @@ export default function ThemeToggle({ labeled = false, variant = 'default' }: Th
       label={label}
       title={label}
       onClick={cycle}
-      style={{ border: '0.5px solid var(--border)', background: 'var(--muted)' }}
+      className="border border-border bg-muted"
     />
   )
 }

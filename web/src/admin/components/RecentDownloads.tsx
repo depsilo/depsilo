@@ -126,8 +126,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
           <span
             aria-hidden
             data-live-pulse
-            className={`size-1.5 shrink-0 rounded-full ${hasConnectionError ? '' : 'animate-live-pulse'}`}
-            style={{ background: hasConnectionError ? 'var(--warning)' : 'var(--info)' }}
+            className={`size-1.5 shrink-0 rounded-full ${hasConnectionError ? 'bg-warning' : 'bg-info'} ${hasConnectionError ? '' : 'animate-live-pulse'}`}
           />
           <h2 id="recent-downloads-title" className="text-body font-semibold text-foreground">
             {t('recentDownloads.title')}

@@ -1,5 +1,3 @@
-import type { CSSProperties } from 'react'
-
 import { cn } from '@/lib/utils'
 
 export type MetricChangeIntent = 'neutral' | 'higher-is-better' | 'lower-is-better'
@@ -14,8 +12,12 @@ interface MetricProps {
    */
   changeIntent?: MetricChangeIntent
   valueTone?: 'default' | 'success'
-  /** Override the default 40px KPI size; pass 28 for secondary metric rows. */
-  size?: CSSProperties['fontSize']
+  /**
+   * A KPI value is one of the two metric tokens, not a caller-supplied
+   * font size. Callers used to pass a `clamp(...)`, which meant the largest
+   * number on a page was the one piece of type outside the scale.
+   */
+  size?: 'default' | 'sm'
   /** Operational summaries scan left-to-right; report grids stay centred. */
   align?: 'start' | 'center'
   className?: string
@@ -31,7 +33,7 @@ export default function Metric({
   change,
   changeIntent = 'neutral',
   valueTone = 'default',
-  size = 40,
+  size = 'default',
   align = 'center',
   className,
 }: MetricProps) {
@@ -54,10 +56,10 @@ export default function Metric({
       <span
         data-metric-value
         className={cn(
-          'mt-2 font-mono tabular-nums leading-none font-semibold',
+          'mt-2 font-mono font-semibold tabular-nums',
+          size === 'sm' ? 'text-metric-sm' : 'text-metric-sm lg:text-metric',
           valueTone === 'success' ? 'text-success' : 'text-foreground',
         )}
-        style={{ fontSize: size }}
       >
         {value}
       </span>

@@ -91,21 +91,20 @@ function StatusMetric({
   tone?: 'default' | 'ok' | 'warning' | 'destructive'
   className?: string
 }) {
-  const color = tone === 'ok'
-    ? 'var(--success)'
+  const valueClass = tone === 'ok'
+    ? 'text-success'
     : tone === 'warning'
-      ? 'var(--warning)'
+      ? 'text-warning'
       : tone === 'destructive'
-        ? 'var(--destructive)'
-        : 'var(--foreground)'
+        ? 'text-destructive'
+        : 'text-foreground'
 
   return (
     <div className={cn('flex min-w-0 flex-col items-start text-left', className)} data-dashboard-status-metric>
       <span className="text-meta font-semibold text-muted-foreground">{label}</span>
       <span
         data-metric-value
-        className="mt-2 min-w-0 font-semibold leading-[1.15]"
-        style={{ color, fontFamily: 'var(--font-sans)', fontSize: 'clamp(20px, 3vw, 28px)' }}
+        className={cn('mt-2 min-w-0 font-mono text-metric-sm font-semibold lg:text-metric', valueClass)}
       >
         {value}
       </span>
@@ -262,7 +261,6 @@ export default function DashboardV2() {
                 change={metrics[0].change}
                 changeIntent={metrics[0].changeIntent}
                 align="start"
-                size="clamp(28px, 4vw, 32px)"
               />
               <StatusMetric
                 className={KPI_CELL}
@@ -280,7 +278,6 @@ export default function DashboardV2() {
                 change={metrics[1].change}
                 changeIntent={metrics[1].changeIntent}
                 align="start"
-                size="clamp(28px, 4vw, 32px)"
               />
             </div>
           )}

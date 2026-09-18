@@ -49,11 +49,7 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <span
           aria-hidden
-          className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px]"
-          style={{
-            background: tone === 'destructive' ? 'var(--destructive-surface)' : 'var(--warning-surface)',
-            color: tone === 'destructive' ? 'var(--destructive)' : 'var(--warning)',
-          }}
+          className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] ${tone === 'destructive' ? 'bg-destructive-surface text-destructive' : 'bg-warning-surface text-warning'}`}
         >
           <Icon icon={icon} size="sm" />
         </span>
@@ -291,12 +287,11 @@ export default function Attention() {
                   minHeight={160}
                 />
               ) : quarantineEvents.length > 0 ? (
-                <ol>
-                  {quarantineEvents.map((event, index) => (
+                <ol className="divide-y divide-border">
+                  {quarantineEvents.map((event) => (
                     <li
                       key={event.id}
                       className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center"
-                      style={{ borderBottom: index < quarantineEvents.length - 1 ? '1px solid var(--border)' : 'none' }}
                     >
                       <div className="flex min-w-0 flex-1 items-start gap-2.5">
                         {isAdminEcosystem(event.ecosystem) && (

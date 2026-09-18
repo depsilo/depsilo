@@ -208,8 +208,8 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-meta font-mono whitespace-nowrap pointer-events-none z-10"
-          style={{ background: 'var(--foreground)', color: 'var(--background)', left: tooltipLeft, transform: tooltipTransform }}
+          className="pointer-events-none absolute bottom-full z-10 mb-1 whitespace-nowrap rounded-[3px] bg-foreground px-2 py-0.5 font-mono text-meta text-background"
+          style={{ left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
         </div>

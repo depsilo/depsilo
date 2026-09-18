@@ -15,6 +15,7 @@ import QueryErrorState from '@/components/app/error-state'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import { getApiError } from '@/lib/apiError'
 import { getEcosystemColor } from '@/lib/ecosystemColors'
+import { CHART_AXIS_TICK, CHART_GRID_STROKE, CHART_LEGEND } from '@/lib/chartTheme'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -49,7 +50,7 @@ function formatTimeSaved(ms: number, t: (key: string) => string): string {
 function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-label" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+    <div className="rounded-[4px] border border-border bg-card px-3 py-2 text-label">
       <p className="font-normal mb-1 text-foreground">{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -63,7 +64,7 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipVal
 function LatencyTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-label" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+    <div className="rounded-[4px] border border-border bg-card px-3 py-2 text-label">
       <p className="font-normal mb-1 text-foreground">{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -233,11 +234,11 @@ export default function BandwidthReport() {
                   <stop offset="100%" stopColor="var(--destructive)" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => formatBytes(v)} />
+              <CartesianGrid stroke={CHART_GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" tick={CHART_AXIS_TICK} axisLine={false} tickLine={false} />
+              <YAxis tick={CHART_AXIS_TICK} axisLine={false} tickLine={false} width={50} tickFormatter={(v: number) => formatBytes(v)} />
               <Tooltip content={ChartTooltip} />
-              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+              <Legend wrapperStyle={CHART_LEGEND} />
               <Area type="monotone" dataKey="hit_bytes" stackId="1" stroke="var(--success)" strokeWidth={1.5} fill="url(#gradHitBytes)" name={t('bandwidth.hitBytes')} />
               <Area type="monotone" dataKey="miss_bytes" stackId="1" stroke="var(--destructive)" strokeWidth={1.5} fill="url(#gradMissBytes)" name={t('bandwidth.missBytes')} />
             </AreaChart>
@@ -289,14 +290,13 @@ export default function BandwidthReport() {
         <section>
           <SectionHeader title={t('bandwidth.topPackages')} />
           {topPackages.length > 0 ? (
-            <div>
+            <div className="divide-y divide-border">
               {topPackages.map((p, i) => {
                 const max = topPackages[0]?.total_bytes || 1
                 return (
                   <div
                     key={`${p.ecosystem}-${p.package_name}`}
                     className="flex items-center gap-3 py-1.5"
-                    style={{ borderBottom: i < topPackages.length - 1 ? '1px solid var(--border)' : 'none' }}
                   >
                     <span className="text-meta font-mono tabular-nums w-4 shrink-0 text-right text-muted-foreground">{i + 1}</span>
                     {isAdminEcosystem(p.ecosystem) && <EcosystemIcon type={p.ecosystem} size={12} />}
@@ -320,9 +320,9 @@ export default function BandwidthReport() {
           {byUpstream.length > 0 ? (
             <ResponsiveContainer width="100%" height={Math.max(160, byUpstream.length * 32)}>
               <BarChart data={byUpstream} layout="vertical" margin={{ left: 0, right: 10 }}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatBytes(v)} />
-                <YAxis type="category" dataKey="upstream" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
+                <CartesianGrid stroke={CHART_GRID_STROKE} strokeDasharray="3 3" horizontal={false} />
+                <XAxis type="number" tick={CHART_AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatBytes(v)} />
+                <YAxis type="category" dataKey="upstream" tick={CHART_AXIS_TICK} axisLine={false} tickLine={false} width={80} />
                 <Tooltip formatter={(value) => formatBytes(Number(value))} />
                 <Bar dataKey="miss_bytes" fill="var(--primary)" radius={[0, 3, 3, 0]} barSize={16} name={t('bandwidth.totalBandwidth')} />
               </BarChart>
@@ -346,11 +346,11 @@ export default function BandwidthReport() {
         {latencyData.length > 0 ? (
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={latencyData} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="ecosystem" tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}ms`} />
+              <CartesianGrid stroke={CHART_GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="ecosystem" tick={CHART_AXIS_TICK} axisLine={false} tickLine={false} />
+              <YAxis tick={CHART_AXIS_TICK} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}ms`} />
               <Tooltip content={LatencyTooltip} />
-              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+              <Legend wrapperStyle={CHART_LEGEND} />
               <Bar dataKey="hit" fill="var(--success)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgHitLatency')} />
               <Bar dataKey="miss" fill="var(--destructive)" radius={[3, 3, 0, 0]} barSize={20} name={t('bandwidth.avgMissLatency')} />
             </BarChart>

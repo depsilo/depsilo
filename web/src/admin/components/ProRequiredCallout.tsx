@@ -32,17 +32,15 @@ export default function ProRequiredCallout({
 }: ProRequiredCalloutProps) {
   return (
     <div
-      className="text-center py-12 rounded-[10px]"
-      style={{ background: 'var(--accent)', border: '0.5px solid var(--border)' }}
+      className="rounded-lg border border-border bg-accent py-12 text-center"
     >
       <div className="flex flex-col items-center gap-4">
         <div
-          className="flex items-center justify-center w-14 h-14 rounded-[8px]"
-          style={{ background: 'var(--accent)', border: '0.5px solid var(--border)' }}
+          className="flex size-14 items-center justify-center rounded-md border border-border bg-accent"
         >
           <Icon icon={icon} className="text-primary" size="lg" />
         </div>
-        <h3 className="text-subhead font-semibold" style={{ color: 'var(--foreground)', letterSpacing: '-0.02em' }}>
+        <h3 className="text-subhead font-semibold text-foreground">
           {title}
         </h3>
         <p className="text-body max-w-md text-muted-foreground">

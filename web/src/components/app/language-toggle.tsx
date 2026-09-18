@@ -32,22 +32,9 @@ export default function LangToggle({ variant = 'default' }: LangToggleProps) {
         ? PORTAL_SEGMENT_CLASS
         : admin
           ? 'stripe-focus-ring inline-flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-[6px] border-0 bg-transparent px-2 font-mono text-meta font-medium text-muted-foreground transition-[background,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98]'
-          : 'inline-flex items-center justify-center stripe-focus-ring'}
+          : 'inline-flex size-10 cursor-pointer items-center justify-center rounded-[6px] border border-border bg-transparent font-mono text-meta font-medium text-muted-foreground'}
       aria-label={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
       title={t(isZh ? 'language.switchToEnglish' : 'language.switchToChinese')}
-      style={portal || admin ? undefined : {
-        fontSize: 11,
-        fontWeight: 500,
-        minWidth: 40,
-        minHeight: 40,
-        padding: '8px',
-        color: 'var(--muted-foreground)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 6,
-        fontFamily: 'var(--font-mono)',
-        background: 'none',
-        cursor: 'pointer',
-      }}
     >
       {portal ? (
         <>

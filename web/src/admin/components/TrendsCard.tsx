@@ -23,6 +23,7 @@ import type { TooltipContentProps, TooltipValueType } from 'recharts'
 import ButtonV2 from '@/components/app/button'
 import SectionHeader from '@/components/app/section-header'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { CHART_AXIS, CHART_GRID_STROKE, CHART_LEGEND } from '@/lib/chartTheme'
 import { cn, formatBytes } from '@/lib/utils'
 
 export type TrendsRange = '1h' | '24h' | '7d' | '30d'
@@ -162,13 +163,7 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
   )
 }
 
-const axisProps = {
-  // Recharts axis props take CSS values rather than classes; the semantic
-  // tokens are resolved by the browser, so they still follow the theme.
-  tick: { fill: 'var(--chart-axis-label)', fontSize: 10 },
-  axisLine: false as const,
-  tickLine: false as const,
-}
+const axisProps = CHART_AXIS
 
 export default function TrendsCard({
   raw,
@@ -299,7 +294,7 @@ export default function TrendsCard({
               margin={{ top: 4, right: 12, bottom: 0, left: 0 }}
               desc={chartDescription}
             >
-            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+            <CartesianGrid stroke={CHART_GRID_STROKE} vertical={false} />
             <XAxis
               dataKey="bucket"
               type="number"
@@ -310,7 +305,7 @@ export default function TrendsCard({
               {...axisProps}
             />
             <Tooltip content={props => <ChartTooltip {...props} dataRange={dataRange} />} />
-            <Legend wrapperStyle={{ color: 'var(--chart-axis-label)', fontSize: 11, paddingTop: 6 }} />
+            <Legend wrapperStyle={CHART_LEGEND} />
 
             {tab === 'requests' && (
               <>

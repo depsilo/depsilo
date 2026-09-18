@@ -145,7 +145,7 @@ export default function CacheIndexes() {
                     <p className="text-success">
                       {t('cacheIndexes.freshCount', { count: item.fresh })}
                     </p>
-                    <p style={{ color: item.stale > 0 ? 'var(--warning)' : 'var(--muted-foreground)' }}>
+                    <p className={item.stale > 0 ? 'text-warning' : 'text-muted-foreground'}>
                       {t('cacheIndexes.staleCount', { count: item.stale })}
                     </p>
                   </div>
@@ -165,7 +165,7 @@ export default function CacheIndexes() {
         onSubmit={(event) => { event.preventDefault(); applySearch() }}
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+          <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             aria-label={t('cacheIndexes.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-field outline-none md:text-body text-foreground"
@@ -268,7 +268,7 @@ export default function CacheIndexes() {
                     ) : <span className="text-muted-foreground">{t('cacheIndexes.noValidator')}</span>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatTime(item.last_accessed)}</td>
-                  <td className="whitespace-nowrap px-3 py-2" style={{ color: item.status === 'stale' ? 'var(--warning)' : 'var(--muted-foreground)' }}>{formatTime(item.expires_at)}</td>
+                  <td className={`whitespace-nowrap px-3 py-2 ${item.status === 'stale' ? 'text-warning' : 'text-muted-foreground'}`}>{formatTime(item.expires_at)}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatTime(item.updated_at)}</td>
                   {canWrite && (
                     <td className="px-3 py-2">

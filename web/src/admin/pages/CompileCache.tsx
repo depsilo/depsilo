@@ -310,22 +310,22 @@ export default function CompileCache() {
                     <Metric
                       label={t('compileCache.capacityUsed')}
                       value={formatBytes(status.stats.size_bytes)}
-                      size={30}
+                      size="sm"
                     />
                     <Metric
                       label={t('compileCache.entries')}
                       value={`${numberFormatter.format(status.stats.entries)} / ${numberFormatter.format(status.stats.max_entries)}`}
-                      size={24}
+                      size="sm"
                     />
                     <Metric
                       label={t('compileCache.hits')}
                       value={numberFormatter.format(status.stats.hits)}
-                      size={30}
+                      size="sm"
                     />
                     <Metric
                       label={t('compileCache.namespaces')}
                       value={numberFormatter.format(status.stats.namespace_count)}
-                      size={30}
+                      size="sm"
                     />
                   </div>
 

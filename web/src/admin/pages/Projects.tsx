@@ -237,8 +237,7 @@ export default function ProjectsV2() {
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   data-project-proxy-value
-                  className="min-w-0 flex-1 break-all rounded-[4px] px-2 py-1 font-mono text-label leading-5"
-                  style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
+                  className="min-w-0 flex-1 break-all rounded-[4px] px-2 py-1 font-mono text-label leading-5 bg-muted text-foreground"
                 >
                   {proxyUrl}
                 </span>
@@ -422,7 +421,7 @@ export default function ProjectsV2() {
       <ModalV2 open={tokenData !== null} onClose={() => setTokenData(null)} title={t('projects.token')}>
         {tokenData && (
           <div className="space-y-4">
-            <div className="rounded-[6px] p-3" style={{ background: 'var(--warning-surface)', border: '0.5px solid var(--warning-border)' }}>
+            <div className="rounded-[6px] border border-warning/35 bg-warning/10 p-3">
               <div className="flex items-center gap-2 mb-1">
                 <TriangleAlert className="text-warning icon icon-sm" aria-hidden="true" />
                 <span className="text-body font-medium text-warning">{t('projects.tokenWarning')}</span>
@@ -431,7 +430,7 @@ export default function ProjectsV2() {
             <div>
               <span className="mb-1 block text-label font-medium text-muted-foreground">{t('projects.token')}</span>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-label font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--muted)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
+                <code className="flex-1 break-all rounded-[4px] border border-border bg-muted px-3 py-2 font-mono text-label text-foreground">
                   {tokenData.token}
                 </code>
                 <CopyButton text={tokenData.token} appearance="icon" label={t('projects.copyToken')} />
@@ -440,7 +439,7 @@ export default function ProjectsV2() {
             <div>
               <span className="mb-1 block text-label font-medium text-muted-foreground">{t('projects.proxyUrl')}</span>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-label font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--muted)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
+                <code className="flex-1 break-all rounded-[4px] border border-border bg-muted px-3 py-2 font-mono text-label text-foreground">
                   {tokenData.proxy_url}
                 </code>
                 <CopyButton text={tokenData.proxy_url} appearance="icon" label={t('projects.copyProxyUrl')} />

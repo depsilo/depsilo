@@ -320,12 +320,7 @@ export default function ConnectProject() {
               type="button"
               aria-pressed={candidate.id === language?.id}
               onClick={() => setLanguageId(candidate.id)}
-              className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-[7px] border px-3 text-left text-body font-semibold transition-[background,border-color,color] duration-150"
-              style={{
-                background: candidate.id === language?.id ? 'var(--accent)' : 'var(--card)',
-                borderColor: candidate.id === language?.id ? 'var(--border)' : 'var(--border)',
-                color: candidate.id === language?.id ? 'var(--primary)' : 'var(--foreground)',
-              }}
+              className={`stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-[7px] border border-border px-3 text-left text-body font-semibold transition-[background,border-color,color] duration-150 ${candidate.id === language?.id ? 'bg-accent text-primary' : 'bg-card text-foreground'}`}
             >
               <EcosystemIcon type={candidate.iconAdapter} size={18} useColor />
               <span className="truncate">{candidate.name}</span>
@@ -339,7 +334,7 @@ export default function ConnectProject() {
           <h2 id="onboarding-manager-title" className="text-field font-semibold text-foreground">{t('onboarding.chooseManager', { ecosystem: language.name })}</h2>
           <div role="group" aria-label={t('onboarding.managerLabel')} className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-[7px] bg-muted p-1">
             {language.managers.map(candidate => (
-              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-[5px] px-3 text-body font-semibold" style={{ background: candidate.id === manager.id ? 'var(--card)' : 'transparent', color: candidate.id === manager.id ? 'var(--primary)' : 'var(--muted-foreground)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
+              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className={`stripe-focus-ring min-h-10 shrink-0 rounded-[5px] px-3 text-body font-semibold ${candidate.id === manager.id ? 'bg-card text-primary shadow-[var(--shadow-surface)]' : 'bg-transparent text-muted-foreground'}`}>
                 {candidate.name}
               </button>
             ))}

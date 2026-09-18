@@ -214,7 +214,7 @@ export default function AuditLogsV2() {
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
         <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5 border border-border">
-          <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+          <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             aria-label={t('audit.searchLabel')}
             className="min-w-0 flex-1 bg-transparent text-field outline-none md:text-body text-foreground"
@@ -268,12 +268,7 @@ export default function AuditLogsV2() {
                 else next.set('range', r)
               })}
               aria-pressed={timeRange === r}
-              className="px-2.5 py-1 text-meta rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
-              style={{
-                background: timeRange === r ? 'var(--primary)' : 'transparent',
-                color: timeRange === r ? 'var(--primary-foreground)' : 'var(--muted-foreground)',
-                border: timeRange === r ? 'none' : '1px solid var(--border)',
-              }}
+              className={`cursor-pointer rounded-[4px] px-2.5 py-1 text-meta transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${timeRange === r ? 'bg-primary text-primary-foreground' : 'border border-border bg-transparent text-muted-foreground'}`}
             >
               {r === 'today' ? t('audit.today') : r === '7d' ? t('audit.days7') : t('audit.days30')}
             </button>

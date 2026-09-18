@@ -324,7 +324,7 @@ function EventsTab(props: {
         <div className="hidden sm:block">
         <TableViewport label={t('quarantine.events.table')} minWidth={920}>
           <div className="rounded-[8px] border border-border">
-            <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+            <table className="w-full border-collapse">
             <thead className="bg-muted">
               <tr>
                 <Th>{t('quarantine.col.time')}</Th>
@@ -435,7 +435,7 @@ function ApprovalsTab(props: {
     <div className="hidden sm:block">
     <TableViewport label={t('quarantine.approvals.table')} minWidth={820}>
       <div className="rounded-[8px] border border-border">
-        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+        <table className="w-full border-collapse">
         <thead className="bg-muted">
           <tr>
             <Th>{t('quarantine.col.created_at')}</Th>
@@ -579,7 +579,7 @@ function BlocklistTab() {
           <span className="text-metric-sm font-mono font-semibold tabular-nums">{st?.entry_count ?? 0}</span>
         </StatusItem>
         <StatusItem label={t('quarantine.blocklist.last_success')}>
-          <span className="text-body font-mono" style={{ color: st?.last_success_at ? 'var(--foreground)' : 'var(--warning)' }}>
+          <span className={`font-mono text-body ${st?.last_success_at ? 'text-foreground' : 'text-warning'}`}>
             {st?.last_success_at ? formatTime(st.last_success_at) : t('quarantine.blocklist.never')}
           </span>
         </StatusItem>
@@ -647,7 +647,7 @@ function BlocklistTab() {
               const msLeft = new Date(row.expires_at).getTime() - now
               const expired = msLeft <= 0
               return (
-                <li key={row.id} className="space-y-3 py-4 first:pt-0" style={{ opacity: expired ? 0.55 : 1 }}>
+                <li key={row.id} className={`space-y-3 py-4 first:pt-0 ${expired ? 'opacity-55' : ''}`}>
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <MobilePackageIdentity
                       ecosystem={row.ecosystem}
@@ -688,7 +688,7 @@ function BlocklistTab() {
           <div className="hidden sm:block">
           <TableViewport label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
             <div className="rounded-[8px] border border-border">
-              <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+              <table className="w-full border-collapse">
               <thead className="bg-muted">
                 <tr>
                   <Th>{t('quarantine.col.ecosystem')}</Th>
@@ -704,7 +704,7 @@ function BlocklistTab() {
                   const msLeft = new Date(row.expires_at).getTime() - now
                   const expired = msLeft <= 0
                   return (
-                    <tr key={row.id} style={{ borderTop: '0.5px solid var(--border)', opacity: expired ? 0.55 : 1 }}>
+                    <tr key={row.id} className={`border-t border-border ${expired ? 'opacity-55' : ''}`}>
                       <Td>
                         <div className="flex items-center gap-1.5">
                           {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
@@ -931,12 +931,7 @@ function FilterSelect(props: {
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
       disabled={props.disabled}
-      className="min-h-[40px] w-full cursor-pointer rounded-[6px] px-3 text-field disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-label"
-      style={{
-        background: 'var(--muted)',
-        color: 'var(--foreground)',
-        border: '0.5px solid var(--border)',
-      }}
+      className="min-h-[40px] w-full cursor-pointer rounded-[6px] border-[0.5px] border-border bg-muted px-3 text-field text-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-label"
     >
       {props.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>

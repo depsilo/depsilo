@@ -198,10 +198,10 @@ function OverviewTab() {
             {severityDist.map((item) => {
               const variant = severityTone(item.severity as Severity)
               const barColors: Record<string, string> = {
-                critical: 'var(--destructive)',
-                high: 'var(--warning)',
-                medium: 'var(--muted-foreground)',
-                low: 'var(--success)',
+                critical: 'bg-destructive',
+                high: 'bg-warning',
+                medium: 'bg-muted-foreground',
+                low: 'bg-success',
               }
               return (
                 <div key={item.severity} className="flex items-center gap-3">
@@ -210,12 +210,8 @@ function OverviewTab() {
                   </div>
                   <div className="flex-1 h-2 rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full transition-[width] duration-300 ease-out"
-                      style={{
-                        width: `${(item.count / maxCount) * 100}%`,
-                        background: barColors[item.severity] || 'var(--primary)',
-                        minWidth: item.count > 0 ? '4px' : '0',
-                      }}
+                      className={`h-full rounded-full transition-[width] duration-300 ease-out ${barColors[item.severity] || 'bg-primary'} ${item.count > 0 ? 'min-w-[4px]' : ''}`}
+                      style={{ width: `${(item.count / maxCount) * 100}%` }}
                     />
                   </div>
                   <span className="font-mono text-label tabular-nums w-8 text-right shrink-0 text-foreground">
@@ -446,8 +442,8 @@ function SuggestionsTab() {
         </div>
       </InlineNotice>}
       {items.length === 0 ? <EmptyState icon={BadgeCheck} title={t('security.noSuggestions')} minHeight={240} /> : <>
-      <div>
-        {items.map((item: SecurityVulnerability, idx: number) => {
+      <div className="divide-y divide-border">
+        {items.map((item: SecurityVulnerability) => {
           const severityVariant = severityTone(item.severity as Severity)
           const isActing = dismissMutation.isPending && dismissMutation.variables === item.id
 
@@ -455,7 +451,6 @@ function SuggestionsTab() {
             <div
               key={item.id}
               className="flex min-w-0 flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
-              style={{ borderBottom: idx < items.length - 1 ? '1px solid var(--border)' : 'none' }}
             >
               <div className="flex-1 min-w-0">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -833,7 +828,7 @@ function PoliciesTab() {
             </div>
           )}
         </div>
-        <div>
+        <div className="divide-y divide-border">
           {visibleEcosystems.length === 0 ? (
             <EmptyState
               icon={CircleCheck}
@@ -841,7 +836,7 @@ function PoliciesTab() {
               hint={t('security.noChangedPoliciesHint')}
               minHeight={160}
             />
-          ) : visibleEcosystems.map((eco, idx) => {
+          ) : visibleEcosystems.map((eco) => {
             const policy = getPolicy(eco)
             const saveState = policySaveStates[eco]
             const isSaving = saveState?.isPending ?? false
@@ -861,7 +856,6 @@ function PoliciesTab() {
                 key={eco}
                 data-policy-ecosystem={eco}
                 className="py-3"
-                style={{ borderBottom: idx < visibleEcosystems.length - 1 ? '1px solid var(--border)' : 'none' }}
               >
                 <div
                   data-security-policy-layout
@@ -957,11 +951,7 @@ function PoliciesTab() {
         <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
         {canWrite && <div
           data-security-import-dropzone
-          className="rounded-[4px] p-6 text-center transition-colors duration-150"
-          style={{
-            border: '2px dashed var(--border)',
-            background: 'var(--muted)',
-          }}
+          className="rounded-[4px] border-2 border-dashed border-border bg-muted p-6 text-center transition-colors duration-150"
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
           onDrop={(e) => {
             e.preventDefault()

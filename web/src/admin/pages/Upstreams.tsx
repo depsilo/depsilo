@@ -533,12 +533,7 @@ export default function UpstreamsV2() {
                         key={option.value}
                         type="button"
                         aria-pressed={active}
-                        className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border px-2.5 text-label transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
-                        style={{
-                          background: active ? 'var(--card)' : 'transparent',
-                          borderColor: active ? 'var(--input)' : 'transparent',
-                          color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
-                        }}
+                        className={`stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border px-2.5 text-label transition-[background,color,border-color,transform] duration-150 active:scale-[0.96] ${active ? 'border-input bg-card text-foreground' : 'border-transparent bg-transparent text-muted-foreground'}`}
                         onClick={() => setStatusFilter(option.value)}
                       >
                         {option.dot && <StatusDot status={option.dot} />}
@@ -555,7 +550,7 @@ export default function UpstreamsV2() {
                   role="search"
                   className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-border px-3 lg:max-w-[360px] bg-card"
                 >
-                  <Search className="icon icon-sm" aria-hidden="true" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+                  <Search className="icon icon-sm shrink-0 text-muted-foreground" aria-hidden="true" />
                   <input
                     ref={searchInputRef}
                     type="text"
