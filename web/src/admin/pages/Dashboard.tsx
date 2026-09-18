@@ -11,11 +11,10 @@ import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/compon
 import Metric, { type MetricChangeIntent } from '@/components/app/metric'
 import QueryErrorState from '@/components/app/error-state'
 import { LinkButton } from '@/components/app/button'
-import { cn } from '@/lib/utils'
+import { cn, formatBytes } from '@/lib/utils'
 import SectionHeader from '@/components/app/section-header'
-import { adminApi, statsApi } from '@/lib/api'
+import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
-import type { NowResponse } from '@/lib/adminApi.types'
 import { getAdminRouteHref } from '@/admin/routes'
 import { upstreamStatus } from '@/lib/upstreamStatus'
 
@@ -48,20 +47,15 @@ const KPI_CELL =
  */
 const RAIL_WIDTH = '[--rail-w:320px] 2xl:[--rail-w:380px]'
 
-/** Rail first, main instrument second. Both stretch, so the request path fills the row. */
-const SPLIT_RAIL_FIRST =
-  `grid min-w-0 gap-5 ${RAIL_WIDTH} ` +
-  'xl:grid-cols-[minmax(var(--rail-w),1fr)_minmax(0,2fr)] ' +
-  '2xl:grid-cols-[var(--rail-w)_minmax(0,1fr)]'
-
 /**
- * Main column first, supporting rail second. `items-start` deliberately stops
- * the rail stretching to the main column's height, which is what the previous
- * row wanted and this one does not.
+ * One operational canvas: the live request path and trend stay together as
+ * the primary instrument, while attention and activity form a compact rail.
+ * Keeping this order in the DOM also makes the first mobile viewport answer
+ * the most important question before it asks the operator to investigate.
  */
-const SPLIT_RAIL_LAST =
+const DASHBOARD_LAYOUT =
   `grid min-w-0 items-start gap-5 ${RAIL_WIDTH} ` +
-  'xl:grid-cols-[minmax(0,2fr)_minmax(var(--rail-w),1fr)] ' +
+  'xl:grid-cols-[minmax(0,1fr)_minmax(var(--rail-w),0.38fr)] ' +
   '2xl:grid-cols-[minmax(0,1fr)_var(--rail-w)]'
 
 function DashboardKpiSkeleton() {
@@ -78,55 +72,10 @@ function DashboardKpiSkeleton() {
   )
 }
 
-function StatusMetric({
-  label,
-  value,
-  detail,
-  tone = 'default',
-  className,
-}: {
-  label: string
-  value: string
-  detail: string
-  tone?: 'default' | 'ok' | 'warning' | 'destructive'
-  className?: string
-}) {
-  const valueClass = tone === 'ok'
-    ? 'text-success'
-    : tone === 'warning'
-      ? 'text-warning'
-      : tone === 'destructive'
-        ? 'text-destructive'
-        : 'text-foreground'
-
-  return (
-    <div className={cn('flex min-w-0 flex-col items-start text-left', className)} data-dashboard-status-metric>
-      <span className="text-meta font-semibold text-muted-foreground">{label}</span>
-      <span
-        data-metric-value
-        className={cn('mt-2 min-w-0 font-mono text-metric-sm font-semibold lg:text-metric', valueClass)}
-      >
-        {value}
-      </span>
-      <span className="mt-1.5 text-meta leading-[1.45] text-muted-foreground">{detail}</span>
-    </div>
-  )
-}
-
 export default function DashboardV2() {
   const { t } = useTranslation()
   const [range, setRange] = useState<TrendsRange>('1h')
   const [retainedTrendData, setRetainedTrendData] = useState<TrendQueryData>()
-
-  const nowQuery = useQuery<NowResponse>({
-    queryKey: ['admin', 'now'],
-    queryFn: async ({ signal }) => (await statsApi.getNow({ signal })).data,
-    refetchInterval: 5_000,
-    refetchIntervalInBackground: false,
-    staleTime: 4_000,
-    refetchOnWindowFocus: 'always',
-    retry: false,
-  })
 
   const dashboardQuery = useQuery({
     queryKey: ['admin', 'dashboard'],
@@ -158,35 +107,8 @@ export default function DashboardV2() {
   const hasTrendData = activeTrendData !== undefined
   const dashboardInitialError = dashboardQuery.isError && !dashboardQuery.data
   const dashboardError = dashboardInitialError ? getApiError(dashboardQuery.error) : undefined
-  const nowData = nowQuery.data
-  const nowInitialError = nowQuery.isError && !nowData
-  const nowStale = nowQuery.isRefetchError && Boolean(nowData)
-  const nowStatus = nowInitialError
-    ? t('now.statusUnavailable')
-    : nowQuery.isPending && !nowData
-      ? t('loading')
-      : nowStale
-        ? t('now.staleData')
-        : nowData?.status === 'healthy'
-          ? t(nowData.last_activity || nowData.rate.requests_per_min > 0 ? 'now.statusHealthy' : 'now.statusReady')
-          : nowData?.status === 'degraded'
-            ? t('now.statusDegraded')
-            : t('now.statusDown')
-  const nowTone = nowInitialError || nowStale
-    ? 'warning'
-    : nowData?.status === 'healthy'
-      ? 'ok'
-      : nowData?.status === 'degraded'
-        ? 'warning'
-        : nowData
-          ? 'destructive'
-          : 'default'
   const requestCount = last24h?.total_requests
   const hitRate = last24h && last24h.total_requests > 0 ? last24h.hit_rate : null
-  const upstreamValue = nowData ? `${nowData.upstreams.healthy} / ${nowData.upstreams.total}` : '—'
-  const upstreamTone = nowData && nowData.upstreams.total > 0
-    ? nowData.upstreams.healthy < nowData.upstreams.total ? 'warning' : 'ok'
-    : 'default'
 
   function handleTrendRangeChange(nextRange: TrendsRange) {
     if (trendsQuery.data) setRetainedTrendData(trendsQuery.data)
@@ -215,6 +137,18 @@ export default function DashboardV2() {
         : null,
       changeIntent: 'neutral',
     },
+    {
+      label: t('dashboard.bytesServed'),
+      value: last24h ? formatBytes(last24h.bytes_served) : '—',
+      change: null,
+      changeIntent: 'neutral',
+    },
+    {
+      label: t('dashboard.avgLatency'),
+      value: last24h ? `${Math.round(last24h.avg_latency_ms)} ${t('dashboard.msUnit')}` : '—',
+      change: null,
+      changeIntent: 'neutral',
+    },
   ]
 
   return (
@@ -230,7 +164,7 @@ export default function DashboardV2() {
         <section
           data-query-key="dashboard-snapshot"
           data-dashboard-health
-          aria-busy={dashboardQuery.isPending || nowQuery.isPending || undefined}
+          aria-busy={dashboardQuery.isPending || undefined}
           aria-label={`${t('dashboard.healthOverview')}. ${t('dashboard.snapshotRange')}`}
           className="[&>header]:mb-0"
         >
@@ -243,99 +177,79 @@ export default function DashboardV2() {
               </span>
             )}
           />
-          {(dashboardQuery.isPending || nowQuery.isPending) && !dashboard && !nowData ? (
+          {dashboardQuery.isPending && !dashboard ? (
             <DashboardKpiSkeleton />
           ) : (
             <div data-dashboard-kpis className="grid grid-cols-2 lg:grid-cols-4">
-              <StatusMetric
-                className={KPI_CELL}
-                label={t('dashboard.serviceStatus')}
-                value={nowStatus}
-                tone={nowTone}
-                detail={nowInitialError ? t('dashboard.statusUnavailableHint') : nowStale ? t('now.staleData') : t('dashboard.liveRefresh')}
-              />
-              <Metric
-                className={KPI_CELL}
-                label={metrics[0].label}
-                value={metrics[0].value}
-                change={metrics[0].change}
-                changeIntent={metrics[0].changeIntent}
-                align="start"
-              />
-              <StatusMetric
-                className={KPI_CELL}
-                label={t('dashboard.currentHealthyUpstreams')}
-                value={upstreamValue}
-                tone={upstreamTone}
-                detail={nowData
-                  ? nowData.upstreams.total > 0 ? t('dashboard.healthyUpstreams') : t('dashboard.noUpstreams')
-                  : t('dashboard.statusUnavailableHint')}
-              />
-              <Metric
-                className={KPI_CELL}
-                label={metrics[1].label}
-                value={metrics[1].value}
-                change={metrics[1].change}
-                changeIntent={metrics[1].changeIntent}
-                align="start"
-              />
+              {metrics.map(metric => (
+                <Metric
+                  key={metric.label}
+                  className={KPI_CELL}
+                  label={metric.label}
+                  value={metric.value}
+                  change={metric.change}
+                  changeIntent={metric.changeIntent}
+                  size="sm"
+                  align="start"
+                />
+              ))}
             </div>
           )}
         </section>
 
-        <div className={SPLIT_RAIL_FIRST}>
-          <DashboardAttention
-            isPending={dashboardQuery.isPending}
-            isFetching={dashboardQuery.isFetching}
-            initialErrorMessage={dashboardError?.status === 403
-              ? t('common.permissionDenied')
-              : dashboardError?.message}
-            isStale={Boolean(dashboardQuery.data && dashboardQuery.isRefetchError)}
-            upstreams={upstreamsNeedingAttention}
-            cacheUsagePercent={dashboard?.cache_usage_percent}
-            onRetry={() => { void dashboardQuery.refetch() }}
-          />
-          <NowStrip
-            cacheHitRate={last24h?.hit_rate}
-            cacheDataPending={dashboardQuery.isPending}
-          />
-        </div>
-
-        <div className={SPLIT_RAIL_LAST}>
-          <div
-            data-query-key="dashboard-trends"
-            aria-busy={trendsQuery.isFetching || undefined}
-            className="min-w-0"
-          >
-            {trendsQuery.isPending && !hasTrendData ? (
-              <div
-                aria-busy="true"
-                className="border-b border-border bg-card p-4"
-              >
-                <div aria-hidden="true" className="h-56 animate-pulse rounded-sm bg-muted" />
-              </div>
-            ) : trendsQuery.isError && !hasTrendData ? (
-              <div className="border-b border-border bg-card p-4">
-                <QueryErrorState
-                  message={getApiError(trendsQuery.error).status === 403
-                    ? t('common.permissionDenied')
-                    : getApiError(trendsQuery.error).message}
+        <div className={DASHBOARD_LAYOUT}>
+          <div className="grid min-w-0 gap-5">
+            <NowStrip
+              cacheHitRate={last24h?.hit_rate}
+              cacheDataPending={dashboardQuery.isPending}
+            />
+            <div
+              data-query-key="dashboard-trends"
+              aria-busy={trendsQuery.isFetching || undefined}
+              className="min-w-0"
+            >
+              {trendsQuery.isPending && !hasTrendData ? (
+                <div
+                  aria-busy="true"
+                  className="border-b border-border bg-card p-4"
+                >
+                  <div aria-hidden="true" className="h-56 animate-pulse rounded-sm bg-muted" />
+                </div>
+              ) : trendsQuery.isError && !hasTrendData ? (
+                <div className="border-b border-border bg-card p-4">
+                  <QueryErrorState
+                    message={getApiError(trendsQuery.error).status === 403
+                      ? t('common.permissionDenied')
+                      : getApiError(trendsQuery.error).message}
+                    onRetry={() => { void trendsQuery.refetch() }}
+                  />
+                </div>
+              ) : (
+                <TrendsCard
+                  raw={rawTrendPoints}
+                  range={range}
+                  dataRange={dataRange}
+                  isStale={Boolean(hasTrendData && trendsQuery.isError)}
                   onRetry={() => { void trendsQuery.refetch() }}
+                  onRangeChange={handleTrendRangeChange}
                 />
-              </div>
-            ) : (
-              <TrendsCard
-                raw={rawTrendPoints}
-                range={range}
-                dataRange={dataRange}
-                isStale={Boolean(hasTrendData && trendsQuery.isError)}
-                onRetry={() => { void trendsQuery.refetch() }}
-                onRangeChange={handleTrendRangeChange}
-              />
-            )}
+              )}
+            </div>
           </div>
-
-          <RecentDownloads limit={3} variant="rail" />
+          <aside className="grid min-w-0 gap-5">
+            <DashboardAttention
+              isPending={dashboardQuery.isPending}
+              isFetching={dashboardQuery.isFetching}
+              initialErrorMessage={dashboardError?.status === 403
+                ? t('common.permissionDenied')
+                : dashboardError?.message}
+              isStale={Boolean(dashboardQuery.data && dashboardQuery.isRefetchError)}
+              upstreams={upstreamsNeedingAttention}
+              cacheUsagePercent={dashboard?.cache_usage_percent}
+              onRetry={() => { void dashboardQuery.refetch() }}
+            />
+            <RecentDownloads limit={3} variant="rail" />
+          </aside>
         </div>
       </div>
     </AdminPage>
