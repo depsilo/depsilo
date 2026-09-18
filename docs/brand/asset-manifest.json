@@ -1,0 +1,12 @@
+{
+  "kit_version": "1.0.0-draft",
+  "brand": "Depsilo",
+  "source_concept": "open repository boundary + cached dependency module",
+  "canonical_assets": [
+    "logo/mark/depsilo-mark-color.svg",
+    "logo/lockups/depsilo-horizontal-light.svg",
+    "logo/lockups/depsilo-horizontal-dark.svg",
+    "icons/depsilo-favicon.svg",
+    "social/depsilo-og-image.png"
+  ]
+}

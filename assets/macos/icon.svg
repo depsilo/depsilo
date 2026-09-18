@@ -1,10 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <title>Depsilo</title>
-  <rect width="1024" height="1024" rx="225" fill="#0A8654"/>
-  <g transform="translate(58.4 51.2) scale(7.2)" fill="#FFFFFF">
-    <path d="M25 18H88V40H25A11 11 0 0 1 25 18Z"/>
-    <path d="M39 53H88V75H39A11 11 0 0 1 39 53Z"/>
-    <path d="M53 88H88V110H53A11 11 0 0 1 53 88Z"/>
-    <path d="M82 18H91C102.6 18 112 27.4 112 39V89C112 100.6 102.6 110 91 110H82Z"/>
+  <!--
+    The app icon from docs/brand/depsilo-app-icon-light.svg, on the platform's
+    rounded square. The brand kit ships a full square; macOS renders bundle
+    icons with their own shape, so the rounding is applied here rather than
+    left to the launcher. The Linux tray icon reuses this same file.
+
+    The kit's app icon uses the gradient mark. This file uses the flat variant
+    instead, because the install scripts fall back to ImageMagick when
+    rsvg-convert is absent, and ImageMagick paints a referenced gradient black
+    — which would ship a black tray icon to Linux desktops without librsvg.
+  -->
+  <rect width="1024" height="1024" rx="225" fill="#FFFFFF"/>
+  <g transform="translate(128,128) scale(3)">
+    <path d="M28 76 L108 30 L108 62 L60 90 L60 166 L108 194 L108 226 L28 180 Z" fill="#2563EB"/>
+    <path d="M124 20 L228 80 L228 176 L124 236 L124 204 L196 162 L196 98 L124 56 Z" fill="#3B82F6"/>
+    <path d="M128 88 L170 112 L128 136 L86 112 Z" fill="#22C55E"/>
+    <path d="M86 122 L128 146 L170 122 L170 160 L128 184 L86 160 Z" fill="#16A34A"/>
   </g>
 </svg>

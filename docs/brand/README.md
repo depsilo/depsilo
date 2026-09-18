@@ -1,62 +1,71 @@
 # Depsilo Brand Assets
 
-`docs/brand/` 是 Depsilo 品牌资产的唯一母版。Web、桌面应用、文档和
-发布物应从这里同步，不要在下游维护另一套图形。
+`docs/brand/` 是 Depsilo 品牌资产的唯一母版，来自设计方交付的
+`depsilo-brand-kit`（kit 版本 `1.0.0-draft`）。Web、桌面应用、文档和发布物
+都从这里同步，不要在下游维护另一套图形。
 
-## 品牌标记
+## 品牌概念
 
-正式标记名为 **Dependency Shelf / 层仓栈**：三层由长到短、逐级错位的依赖
-层汇入右侧连续的圆弧仓壁。层栈表示一个项目从直接依赖到传递依赖的收拢，
-仓壁表示统一索引、本地缓存与沉淀制品；合在一起就是 Depsilo 的“依赖入仓”。
-图形不依赖首字母、数据库圆柱、包裹方块、网络节点、盾牌或闪电等常见母题。
+标记由**开放的仓库边界**与中心一枚**已缓存的依赖模块**组成：两片不对称的
+蓝色仓壁围出开口，中间的绿色模块表示已经落进本地的依赖。仓壁的开口是标记的
+识别特征，因此不要把两半收成封闭的正六边形。
 
-正式字标始终写作 **Depsilo**。中文名“依仓”可以作为本地化说明出现，
-但不能替代正式字标。Logo 本身不附带 tagline。
+- 正式名称：**Depsilo**（中文可作“依仓”，但不能替代正式字标）
+- Descriptor：`Repository Cache Control`
+- Tagline：`Dependencies closer. Builds faster.`
+- Logo 本身不附带 tagline；需要 tagline 时使用 `lockups/*-tagline-*`
 
 ## 资产
 
-| 文件 | 背景 | 用途 |
-| --- | --- | --- |
-| `icon-light.svg` | 浅色 | 浅色 UI、独立图标母版 |
-| `icon-dark.svg` | 深色 | 深色 UI、深色发布物 |
-| `logo-horizontal-light.svg` | 浅色 | 网站页眉、横向文档版头 |
-| `logo-horizontal-dark.svg` | 深色 | 深色页眉和横向版头 |
-| `logo-stacked-light.svg` | 浅色 | README、启动页、关于页面 |
-| `logo-stacked-dark.svg` | 深色 | 深色 README 和展示场景 |
-| `web/public/favicon.svg` | 自动 | 16px 光学校正版，随系统主题切换颜色 |
+| 文件 | 用途 |
+| --- | --- |
+| `mark/depsilo-mark-color.svg` | 首选标记，带蓝色渐变 |
+| `mark/depsilo-mark-flat.svg` | 平涂标记，**UI 与代码场景使用这个** |
+| `mark/depsilo-mark-monochrome-light.svg` | 单色白标记，用于深色底或单色印刷 |
+| `mark/depsilo-mark-monochrome-dark.svg` | 单色墨色标记，用于浅色底或单色印刷 |
+| `lockups/depsilo-horizontal-{light,dark}.svg` | 默认横排锁定（标记 + 字标） |
+| `lockups/depsilo-horizontal-compact-{light,dark}.svg` | 紧凑横排锁定，窄版头使用 |
+| `lockups/depsilo-horizontal-tagline-{light,dark}.svg` | 带 descriptor 与 tagline 的横排 |
+| `lockups/depsilo-stacked-light.svg` | 堆叠锁定，README、启动页 |
+| `wordmark/depsilo-wordmark-{light,dark}.svg` | 仅字标 |
+| `depsilo-favicon.svg` | 浏览器图标（已按 16px 光学校正） |
+| `depsilo-app-icon-{light,dark}.svg` | 应用图标：底色 + 标记 |
+| `depsilo-og-image.svg`、`depsilo-github-social-preview.svg` | 分享图 |
 
-文件名描述其适用的背景主题，而不是图形自身的明暗。支持主题切换的场景
-应同时提供 light/dark 版本，并以 light 版本作为无法识别主题时的回退。
+文件名中的 light / dark 指**适用背景**，不是图形本身的明暗。同一场景要同时
+提供两版时，无法识别主题就以 light 版本回退。
+
+PNG 导出可按需从 SVG 重新生成；本目录只保留 SVG 母版，避免同一图形多份来源。
+锁定版本的字标使用 `<text>` 引用 Inter，未转曲：发布环境需保证 Inter 可用，
+或改用导出的 PNG。
 
 ## 色彩
 
-| 场景 | 色值 |
-| --- | --- |
-| 浅色背景标记 | `#0A8654` |
-| 深色背景标记 | `#3DDC91` |
-| 浅色背景字标 | `#14181A` |
-| 深色背景字标 | `#E9ECEE` |
-| favicon | 浅色 `#0A8654` / 深色 `#3DDC91`，透明背景 |
-| 应用图标 | `#0A8654` 底色 + 白色反白标记 |
+| Token | 色值 | 角色 |
+| --- | --- | --- |
+| Electric Blue | `#3B82F6` | 主品牌色、速度、基础设施 |
+| Deep Blue | `#2563EB` | 结构与深度；浅色主题的交互色 |
+| Cache Green | `#22C55E` | 缓存命中、已存储依赖、效率 |
+| Deep Green | `#16A34A` | 缓存模块的深度 |
+| Ink | `#0F172A` | 字标、正文、深色底 |
+| Slate | `#64748B` | 次级文案 |
+| Surface | `#E5E7EB` | 边框与中性面 |
+| Paper / Dark surface | `#FFFFFF` / `#0B1220` | 浅色画布 / 深色画布 |
 
-Logo 只使用平涂色，不添加渐变、阴影或发光。状态色仍由产品设计 token
-管理，不能为了匹配 Logo 而改变警告、错误或健康状态的语义。
+标记只使用平涂与 kit 自带的两道蓝色渐变，不添加投影、发光或描边；状态色由
+产品设计 token 管理，不能为了匹配标记而改变警告、错误或健康状态的语义。
 
 ## 使用约束
 
-- 图标在 16、24、28、32px 下必须清晰；不得压缩、旋转或添加箭头。
-- 三层依赖必须保持由长到短的错位关系，右侧仓壁必须连续且保留圆弧外轮廓；
-  等长、镜像或拆散各层都会丢失品牌特征。
-- 正式主标采用 128 单位网格、22 单位层高和 11 单位圆角；仓壁与三层重叠，
-  形成一个完整轮廓，不使用描边。
-- 四周保留至少一个层高的净空，不在标记内部放置文字或状态点。
-- UI 中图标与文字组合时使用正式大小写 `Depsilo`。
-- 不把 Logo 当作状态图标；健康、命中和警告继续使用各自语义组件。
-- SVG 必须自包含，不能加载远程字体、滤镜或其他网络资源。
-- 正式横排与堆叠字标必须使用已转曲轮廓，避免发布环境的字体回退改变比例。
-- 16px favicon 使用独立光学校正版：保留全部三层语义，在同一 128 单位网格
-  上将层高加粗到 24 单位，并按像素栅格调整间距和仓壁曲线。
-- 修改母版时，同步 Web favicon、运行时图标和桌面应用图标，并检查浅色、
-  深色及最小尺寸。
+- 净空：标记四周至少保留 **0.25× 标记宽度**；紧凑场景中，相邻图标或文字不得
+  进入标记内部的开口。
+- 最小尺寸：单独标记 16px（推荐 24px）；横排锁定 140px 宽（推荐 180px）；
+  带 descriptor/tagline 时 240px 宽。
+- 不要：把两片仓壁闭合成正六边形；单独给缓存模块改色来表示某个随机 UI 状态；
+  给正式标记加投影；拉伸、倾斜、旋转或加描边；在低对比的蓝/绿底上使用彩色版。
+- 不要用标记代替状态图标：健康、命中、警告继续使用各自语义组件。
+- SVG 必须自包含，不加载远程字体、滤镜或其他网络资源。
 
-完整界面规范见仓库根目录的 [`DESIGN.md`](../../DESIGN.md)。
+Web 端的落地位置：`web/public/favicon.svg`（浏览器图标）与
+`web/src/components/app/logo.tsx`（应用与侧栏标记）；桌面端为
+`assets/macos/icon.svg`。改母版时同步这三处。

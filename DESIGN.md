@@ -10,8 +10,7 @@
 > contracts, states, and the invariants the suite encodes. The reasoning behind
 > each value — why the ramp is shaped this way, why a control is 36px and a row
 > 40px, why a status has three axes — lives in [docs/design/](docs/design/),
-> which is the working reference for design work. One decision is still open
-> there and here: see [Brand](#brand).
+> which is the working reference for design work.
 
 ## Product Surfaces
 
@@ -77,10 +76,11 @@ There is no third `prefers-color-scheme` copy of the palette.
 | --- | --- |
 | `background` / `foreground` | Page canvas and primary text |
 | `card` / `popover` | Raised surfaces |
-| `primary` | Commands, links, focus, active navigation |
-| `secondary` / `muted` / `accent` | Quiet fills and hover surfaces |
+| `primary` | Commands, links, focus, active navigation. The brand's Deep Blue (`#2563EB`), or its lighter step (`#60A5FA`) on the dark canvas |
+| `secondary` / `muted` | Quiet fills and insets |
+| `accent` | Hover and selected surfaces, tinted with the brand blue so "selected" never reads as "a shade darker" |
 | `destructive` | Real failures, explicit refusals, destructive commands |
-| `success` | Cache hits, healthy state, completed work |
+| `success` | Cache hits, healthy state, completed work. The brand kit's cache green family |
 | `warning` | Degraded or partially completed work |
 | `info` | Neutral operational signal (live activity) |
 | `border` / `input` / `ring` | Keylines, control outlines, focus |
@@ -178,9 +178,10 @@ Use these before adding a primitive. Admin-specific composition belongs in
 - The Admin shell is a product component, not shadcn's `sidebar` primitive; it
   keeps a 232px rail, a 48px topbar, and the `data-admin-*` hooks the
   Playwright suite asserts.
-- `Logo` is a neutral placeholder until the brand decision under
-  [Brand](#brand) is made. The favicon still carries the mark `PRODUCT.md`
-  declares canonical, so the two disagree in the product today.
+- `Logo` renders the brand kit's flat mark. It carries its own colours rather
+  than `currentColor`: the kit fixes them, they read on both canvases, and a
+  mark that inherits the surrounding text colour is a status icon wearing the
+  brand's shape. The favicon and the desktop icon are the same geometry.
 
 ## State Semantics
 
@@ -245,26 +246,23 @@ token layer is expected to move. Do not reintroduce a hex value into a spec.
 
 ## Brand
 
-**Open decision.** The in-app mark is a neutral Stage A placeholder, because
-the migration brief lists the old logo under what may be discarded. But
-[PRODUCT.md](PRODUCT.md) and [docs/brand/README.md](docs/brand/README.md)
-declare the **Dependency Shelf / 层仓栈** mark canonical and keep a complete
-master set under `docs/brand/` — light and dark icons, horizontal and stacked
-wordmarks, and a 16px optical favicon, which `web/public/favicon.svg` still
-carries. The browser tab and the app header therefore show two different marks
-today.
+The mark is an **open repository boundary around a cached dependency module**,
+from the delivered brand kit. Its masters are in
+[docs/brand/](docs/brand/README.md): Electric Blue `#3B82F6` / Deep Blue
+`#2563EB` for the two shells, Cache Green `#22C55E` / Deep Green `#16A34A` for
+the module, on the kit's Ink/Slate/Surface neutrals. The tagline is
+*Dependencies closer. Builds faster.* and the descriptor is *Repository Cache
+Control*; both are lockup assets, not UI copy.
 
-This is a conflict between two sources of truth, and it is the last item in
-[docs/design/page-redesign-plan.md](docs/design/page-redesign-plan.md). It is
-not resolved here, and the favicon and `docs/brand/` should not be changed
-until it is:
+Three files carry it, and they move together: `web/public/favicon.svg`,
+`components/app/logo.tsx` (the flat variant, which the kit nominates for UI),
+and `assets/macos/icon.svg` for the desktop bundle and the Linux tray.
 
-- **If `PRODUCT.md` is current**, the mark stays canonical and the app header
-  adopts `docs/brand/` — optical refinement, sizing, and the light/dark pair.
-  The placeholder is a temporary divergence to close.
-- **If the brief supersedes `PRODUCT.md`**, that document's Brand Commitments
-  section, `docs/brand/`, the favicon, and the release assets all move in the
-  same change.
+In the token layer this makes **blue the action colour** and leaves **green
+meaning cache**: the kit gives the module its own green, which is the same fact
+the status vocabulary already reports for a hit. See
+[visual-direction.md §8](docs/design/visual-direction.md#8-brand) for why the
+two earlier marks were superseded.
 
 ## Stage Status
 
@@ -274,11 +272,10 @@ the removal of every legacy token name and hand-written component class from
 `index.css`, the Lucide migration, and the dependency census. See
 [docs/refactor/shadcn-ui-plan.md](docs/refactor/shadcn-ui-plan.md).
 
-Stage B (redesign) shipped through step 14 — tokens, typography, navigation,
+Stage B (redesign) is complete through step 15: tokens, typography, navigation,
 page layout, status vocabulary, tables, forms, Dashboard, the remaining Admin
-pages, and the Portal and Setup. Step 15, brand, is the open decision above.
-The plan and its reasoning are in
-[docs/design/page-redesign-plan.md](docs/design/page-redesign-plan.md).
+pages, the Portal and Setup, and the brand kit. The plan and its reasoning are
+in [docs/design/page-redesign-plan.md](docs/design/page-redesign-plan.md).
 
 `index.css` is imports, tokens, the dark variant, a base layer, and the icon
 box — no component styling. Pages still carry inline `style` objects where the

@@ -101,25 +101,21 @@ never look like a branded system, and a failure must never look like a call to
 action. See [design-tokens.md](design-tokens.md#4-status-system) — Depsilo has
 an unusually specific status problem and it gets its own section there.
 
-### 4.3 Keep the green
+### 4.3 The action hue
 
-**Recommendation: keep the existing green family as the accent.**
+**Superseded by the brand kit.** This section originally recommended keeping the
+green family as the accent, because green is load-bearing in the product's
+semantics: a cache hit is green, and Operators have muscle memory for it.
 
-The current values (`#0A8654` command, `#0FA86F` signal) already read as
-technical infrastructure rather than marketing, and green is load-bearing in
-this product's semantics — a cache hit is green, and Operators have muscle
-memory for it. Replacing the hue would be novelty at the cost of legibility.
+The delivered kit resolves that tension rather than ignoring it. Blue is the
+brand and the action colour — an open repository boundary — and green stays
+exactly where the product's meaning needs it: the cached module, and therefore
+the cache-hit status. The two hues no longer compete for the same job, which is
+the outcome the earlier recommendation was protecting.
 
-Stage B's colour work is therefore about *how the accent is spent and
-governed*, not about picking a new one. If the tokens step reveals a genuine
-contrast or CVD problem with the family, that is a reason to tune it, not a
-reason to abandon it.
-
-It did reveal one, and it was tuned: the mark's flat `#0A8654` clears 4.61:1 on
-white but only 4.31:1 on the `--muted` rail, so using it as the UI action
-colour would have failed on every label that sits on a rail. The UI action
-green is therefore one step deeper than the mark, which never carries text.
-See [design-tokens.md](design-tokens.md#22-brand-and-action).
+The kit's blue also needs no tuning to pass the gates the old green needed:
+`#2563EB` clears 5.2:1 as a fill with white text and 4.7:1 as a label on the
+muted rail. See [design-tokens.md](design-tokens.md#22-brand-and-action).
 
 ## 5. Typography
 
@@ -154,29 +150,42 @@ An icon-only control always has a label and a tooltip, and always reaches 40px.
 
 ## 8. Brand
 
-**Open decision — do not design past it.**
+**Resolved: the delivered brand kit supersedes both earlier marks.**
 
-Stage A replaced the in-app mark with a neutral placeholder, per the migration
-brief, which lists the current logo under what may be discarded. But
-[PRODUCT.md](../../PRODUCT.md) and [docs/brand/README.md](../brand/README.md)
-declare the mark *canonical*, name it **Dependency Shelf / 层仓栈**, and
-specify it in detail — three long-to-short staggered layers feeding a continuous
-curved spine, flat colour, no gradients, no attached tagline — with
-`docs/brand/` as the single master for every surface.
+Stage A replaced the in-app mark with a neutral placeholder because the
+migration brief made the logo discardable. `PRODUCT.md` meanwhile still named
+the earlier **Dependency Shelf** mark canonical, and `web/public/favicon.svg`
+carried it — so the browser tab and the app header disagreed for two steps.
 
-That is a live conflict between two sources of truth, and it should be resolved
-before this step is implemented, because the answer changes the work:
+The product owner has since delivered `depsilo-brand-kit`, and it is now the
+single identity: an **open repository boundary around a cached dependency
+module**, in Electric Blue `#3B82F6` / Deep Blue `#2563EB` with Cache Green
+`#22C55E` / Deep Green `#16A34A`, tagged *Dependencies closer. Builds faster.*
+The masters live in [docs/brand/](../brand/README.md), and the three places
+that must move together are the favicon, `components/app/logo.tsx`, and the
+desktop icon.
 
-- **If PRODUCT.md is current**, Stage B "brand refinement" means optical
-  refinement, sizing, placement, and the light/dark pair — not a new identity.
-  The in-app placeholder is a temporary divergence to be closed.
-- **If the brief supersedes PRODUCT.md**, PRODUCT.md's Brand Commitments section
-  must be updated in the same change, `docs/brand/` must be retired or
-  rewritten, and the favicon, README, and release assets move with it.
+What that means for the design system, which is the part step 15 owns:
 
-There is a third state today that should not persist either way: the in-app
-logo is a placeholder while `web/public/favicon.svg` still carries the real
-mark, so the browser tab and the app header currently disagree.
+- **Blue is the action colour.** It replaces the green that Stage A carried
+  through the token layer. `#2563EB` is the light theme's command fill and
+  label colour; `#60A5FA` is the dark theme's, with navy text on it.
+- **Green means cache, not "brand".** The kit gives the module its own green,
+  and that is the same fact the status vocabulary already reports: a cache hit
+  is `success`. The two meanings reinforce each other, so the status family
+  stays where it was and simply draws its hue from the kit.
+- **The neutrals are the kit's slate family**, with the kit's navy for the dark
+  canvas. The old ramp was pure grey; a slate ladder is warmer against the blue
+  and is what makes the mark look placed rather than pasted.
+- **The wordmark is Inter 700–800**, which the product already ships. Lockups
+  that carry the descriptor or the tagline are assets, not UI: a page header
+  shows the mark and the name, never the tagline.
+
+Two values deviate from the kit's literal hexes, both for contrast, both
+documented in [design-tokens.md](design-tokens.md#2-colour): the secondary text
+role takes the step below the kit's Slate, and the light status colours take
+the step below the kit's headline green and red. The kit's values carry large
+fills and the mark; these carry 12px text on a tint.
 
 ## 9. Explicitly refused
 

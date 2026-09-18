@@ -64,67 +64,100 @@
   --radius-surface: 10px;
   color-scheme: light;
 
-  /* ── Primitives ── */
-  --neutral-00: oklch(1 0 0);
-  --neutral-01: oklch(0.985 0 0);
-  --neutral-02: oklch(0.97 0 0);
-  --neutral-03: oklch(0.922 0 0);
-  --neutral-04: oklch(0.87 0 0);
-  --neutral-05: oklch(0.708 0 0);
-  --neutral-06: oklch(0.556 0 0);
-  --neutral-07: oklch(0.505 0 0);
-  --neutral-08: oklch(0.439 0 0);
-  --neutral-09: oklch(0.371 0 0);
-  --neutral-10: oklch(0.269 0 0);
-  --neutral-11: oklch(0.205 0 0);
-  --neutral-12: oklch(0.145 0 0);
+  /* ── Primitives ──
+     The brand kit's palette, written as the kit's own hexes so this file can
+     be audited against `docs/brand/README.md` line by line. The light ladder
+     is the slate family the kit's Ink/Slate/Surface come from; the dark
+     canvas is the navy family the kit specifies separately, because #0F172A
+     is a text colour and #0B1220 is a page. */
+  --paper: #ffffff;
+  --neutral-01: #f8fafc;   /* slate-50  */
+  --neutral-02: #f1f5f9;   /* slate-100 */
+  --neutral-03: #e5e7eb;   /* the kit's Surface */
+  --neutral-04: #cbd5e1;   /* slate-300 */
+  --neutral-05: #94a3b8;   /* slate-400 */
+  --neutral-06: #64748b;   /* the kit's Slate */
+  --neutral-07: #475569;   /* slate-600 */
+  --neutral-08: #334155;   /* slate-700 */
+  --neutral-09: #1e293b;   /* slate-800 */
+  --neutral-10: #172033;   /* navy inset   */
+  --neutral-11: #111c2e;   /* navy surface */
+  --neutral-12: #0b1220;   /* navy canvas  */
+  --ink: #0f172a;          /* the kit's Ink */
 
-  /* The brand. `docs/brand/` fixes the flat mark at `#0A8654`, and the UI's
-     action green is one step deeper than that on purpose: the mark never
-     carries text, while the action colour is used as a label on tinted rails
-     as well as a command fill. `#0A8654` clears 4.61:1 on white but only
-     4.31:1 on `--muted`, so as a *text* colour it would fail on any surface
-     that is not the canvas. These three values clear 4.5:1 as text on every
-     surface the interface can put them on, in both directions. */
-  --brand-action: oklch(0.52 0.125 158.2);
-  --brand-focus: oklch(0.569 0.126 160.2);
-  --brand-action-dark: oklch(0.796 0.169 157.7);
+  --brand-blue: #3b82f6;        /* Electric Blue */
+  --brand-blue-deep: #2563eb;   /* Deep Blue     */
+  --brand-blue-darker: #1d4ed8;
+  --brand-blue-light: #60a5fa;
+  --brand-blue-50: #eff6ff;
+  --brand-blue-200: #bfdbfe;
+  --brand-blue-300: #93c5fd;
+  --brand-green: #22c55e;       /* Cache Green */
+  --brand-green-deep: #16a34a;  /* Deep Green  */
+  --brand-green-darker: #166534;
+  --brand-navy-sidebar: #0d1727;
+  --brand-navy-accent: #12264a;
+  --brand-navy-line: #24324a;
+
+  /* The action colour is Deep Blue, the kit's second brand colour, and it is
+     used both as a command fill and as a label on tinted surfaces. White on
+     `#2563EB` clears 5.2:1 and `#2563EB` on the muted step clears 4.7:1, so
+     the kit's own value needs no adjustment here. */
+  --brand-action: var(--brand-blue-deep);
+  --brand-focus: var(--brand-blue);
+  --brand-action-dark: var(--brand-blue-light);
 
   /* ── Surfaces ── */
-  --background: var(--neutral-00);
-  --card: var(--neutral-00);
-  --popover: var(--neutral-00);
+  --background: var(--paper);
+  --card: var(--paper);
+  --popover: var(--paper);
   --secondary: var(--neutral-02);
   --muted: var(--neutral-02);
-  /* shadcn's `accent` is a hover/selected *surface*, not the brand colour. */
-  --accent: var(--neutral-02);
+  /* shadcn's `accent` is a hover/selected *surface*, not the brand colour.
+     The kit tints it blue, which is what makes a selected row read as
+     "chosen" rather than "one step darker". */
+  --accent: var(--brand-blue-50);
 
   /* ── Text ── */
-  --foreground: var(--neutral-12);
-  --card-foreground: var(--neutral-12);
-  --popover-foreground: var(--neutral-12);
-  --secondary-foreground: var(--neutral-11);
-  --accent-foreground: var(--neutral-11);
+  --foreground: var(--ink);
+  --card-foreground: var(--ink);
+  --popover-foreground: var(--ink);
+  --secondary-foreground: var(--neutral-09);
+  --accent-foreground: var(--brand-blue-darker);
   /* Two text weights, not three: a third, fainter weight cannot render text
      and still clear 4.5:1, so it would be a contrast violation waiting to
-     happen. Disabled text is exempt and uses opacity instead. */
+     happen. Disabled text is exempt and uses opacity instead.
+
+     The kit's Slate (`--neutral-06`, #64748B) is the secondary-copy colour,
+     and on the canvas it clears 4.76:1. On the muted step it measures 4.34:1
+     — under the 4.5 floor this product holds itself to — so the *text* role
+     takes one step deeper in the same family. Slate stays the ramp's midpoint
+     and is what borders and disabled states are drawn from. */
   --muted-foreground: var(--neutral-07);
 
   /* ── Action ── */
   --primary: var(--brand-action);
-  --primary-foreground: var(--neutral-00);
+  --primary-foreground: var(--paper);
 
   /* Status roles are tuned so each stays readable both as a filled surface
-     * under its `-foreground` and as text over its own 14–16% tint, which is how
-     * Depsilo actually renders notices and badges. */
-  --destructive: oklch(0.47 0.2 27);
-  --destructive-foreground: var(--neutral-00);
-  --success: oklch(0.47 0.13 155);
-  --success-foreground: var(--neutral-00);
-  --warning: oklch(0.47 0.12 70);
-  --warning-foreground: var(--neutral-00);
-  --info: oklch(0.47 0.12 235);
-  --info-foreground: var(--neutral-00);
+     under its `-foreground` and as text over its own 14–16% tint, which is how
+     Depsilo actually renders notices and badges.
+
+     The families are the kit's: green for a cache hit, and the same
+     Tailwind-derived reds, ambers, and cyans the kit's palette is built from.
+     Each is one step deeper than the kit's headline value, because the
+     headline values (`#22C55E`, `#EF4444`) carry the mark and large fills
+     rather than 12px text on a tint, where a lighter step measures 3.3–3.9:1.
+     Dark mode takes the brighter step of each family instead: there the tint
+     is a wash over a navy canvas and the light step is the readable one. */
+  --destructive: #b91c1c;
+  --destructive-foreground: var(--paper);
+  --success: var(--brand-green-darker);
+  --success-foreground: var(--paper);
+  --warning: #92400e;
+  --warning-foreground: var(--paper);
+  --info: #155e75;
+  --info-foreground: var(--paper);
 
   /* A recorded result that is not an outcome. A cache miss and an unrecorded
      result are facts, not quality judgements, so they get the neutral text
@@ -141,16 +174,16 @@
   --destructive-surface: color-mix(in oklab, var(--destructive) 14%, var(--background));
   --destructive-border: color-mix(in oklab, var(--destructive) 35%, var(--background));
 
-  /* The code surface is always ink, in both themes: a configuration snippet is
-     read as a terminal transcript, and inversion would make it the brightest
-     object on a dark page. */
-  --code-surface: oklch(0.16 0 0);
-  --code-surface-header: oklch(0.21 0 0);
-  --code-surface-foreground: oklch(0.97 0 0);
-  --code-surface-muted: oklch(0.66 0 0);
-  --code-surface-border: oklch(1 0 0 / 12%);
-  --code-surface-accent: oklch(0.88 0 0);
-  --code-surface-danger: oklch(0.78 0.12 25);
+  /* The code surface is always the kit's navy, in both themes: a
+     configuration snippet is read as a terminal transcript, and inversion
+     would make it the brightest object on a dark page. */
+  --code-surface: var(--neutral-12);
+  --code-surface-header: var(--neutral-11);
+  --code-surface-foreground: #f8fafc;
+  --code-surface-muted: var(--neutral-05);
+  --code-surface-border: rgb(255 255 255 / 12%);
+  --code-surface-accent: var(--brand-blue-300);
+  --code-surface-danger: #fca5a5;
 
   --border: var(--neutral-03);
   --input: var(--neutral-03);
@@ -162,20 +195,20 @@
      asserts. Greyscale legibility is *not* a property of this ramp and cannot
      be: five hues that all clear 3:1 on white converge on one lightness, so
      series are separated by shape and label as well as by colour. */
-  --chart-1: oklch(0.527 0.137 150.1);
-  --chart-2: oklch(0.546 0.215 262.9);
-  --chart-3: oklch(0.555 0.146 49);
-  --chart-4: oklch(0.541 0.247 293);
-  --chart-5: oklch(0.511 0.086 186.4);
+  --chart-1: var(--brand-blue-deep);
+  --chart-2: var(--brand-green-deep);
+  --chart-3: #b45309;
+  --chart-4: #7c3aed;
+  --chart-5: #0f766e;
   --chart-grid: var(--neutral-03);
   --chart-axis-label: var(--muted-foreground);
 
   --sidebar: var(--neutral-01);
-  --sidebar-foreground: var(--neutral-12);
+  --sidebar-foreground: var(--ink);
   --sidebar-primary: var(--brand-action);
-  --sidebar-primary-foreground: var(--neutral-00);
-  --sidebar-accent: var(--neutral-02);
-  --sidebar-accent-foreground: var(--neutral-11);
+  --sidebar-primary-foreground: var(--paper);
+  --sidebar-accent: var(--brand-blue-50);
+  --sidebar-accent-foreground: var(--brand-blue-darker);
   --sidebar-border: var(--neutral-03);
   --sidebar-ring: var(--brand-focus);
 
@@ -204,16 +237,16 @@
   --secondary-foreground: var(--neutral-01);
   --muted: var(--neutral-10);
   --muted-foreground: var(--neutral-05);
-  --accent: var(--neutral-10);
-  --accent-foreground: var(--neutral-01);
+  --accent: var(--brand-navy-accent);
+  --accent-foreground: var(--brand-blue-200);
 
-  --destructive: oklch(0.704 0.191 22.216);
+  --destructive: #f87171;
   --destructive-foreground: var(--neutral-12);
-  --success: oklch(0.8 0.14 155);
+  --success: #4ade80;
   --success-foreground: var(--neutral-12);
-  --warning: oklch(0.82 0.13 80);
+  --warning: #fbbf24;
   --warning-foreground: var(--neutral-12);
-  --info: oklch(0.78 0.11 235);
+  --info: #67e8f9;
   --info-foreground: var(--neutral-12);
 
   --neutral-status: var(--muted-foreground);
@@ -225,29 +258,27 @@
   --destructive-surface: color-mix(in oklab, var(--destructive) 14%, var(--background));
   --destructive-border: color-mix(in oklab, var(--destructive) 35%, var(--background));
 
-  /* Dark hairlines are alpha, light hairlines are solid. A translucent rule
-     composites over whatever surface it separates, which is what keeps a
-     border on a card and a border on the canvas from being two decisions; a
-     solid light-grey rule on a dark canvas would instead read as chalk. */
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
+  /* The kit names a navy hairline for dark surfaces, so the rule and the
+     surface come from one palette instead of a white alpha over it. */
+  --border: var(--brand-navy-line);
+  --input: var(--brand-navy-line);
   --ring: var(--brand-action-dark);
 
-  --chart-1: oklch(0.8 0.182 151.7);
-  --chart-2: oklch(0.714 0.143 254.6);
-  --chart-3: oklch(0.837 0.164 84.4);
-  --chart-4: oklch(0.709 0.159 293.5);
-  --chart-5: oklch(0.785 0.133 181.9);
+  --chart-1: var(--brand-blue-light);
+  --chart-2: #4ade80;
+  --chart-3: #fbbf24;
+  --chart-4: #a78bfa;
+  --chart-5: #5eead4;
   --chart-grid: var(--border);
   --chart-axis-label: var(--muted-foreground);
 
-  --sidebar: var(--neutral-11);
+  --sidebar: var(--brand-navy-sidebar);
   --sidebar-foreground: var(--neutral-01);
   --sidebar-primary: var(--brand-action-dark);
   --sidebar-primary-foreground: var(--neutral-12);
-  --sidebar-accent: var(--neutral-10);
-  --sidebar-accent-foreground: var(--neutral-01);
-  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-accent: var(--brand-navy-accent);
+  --sidebar-accent-foreground: var(--brand-blue-200);
+  --sidebar-border: var(--brand-navy-line);
   --sidebar-ring: var(--brand-action-dark);
 
   --shadow-surface: 0 1px 2px 0 oklch(0 0 0 / 0.4);

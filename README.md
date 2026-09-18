@@ -1,9 +1,9 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-stacked-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/brand/logo-stacked-light.svg">
-  <img src="docs/brand/logo-stacked-light.svg" alt="Depsilo" width="200">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/lockups/depsilo-horizontal-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/brand/lockups/depsilo-horizontal-light.svg">
+  <img src="docs/brand/lockups/depsilo-horizontal-light.svg" alt="Depsilo" width="280">
 </picture>
 
 **Self-hosted dependency proxy, cache, and supply-chain enforcement for

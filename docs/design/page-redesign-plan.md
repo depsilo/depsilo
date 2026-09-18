@@ -29,7 +29,7 @@ begins. Two amendments to the brief's sequence are marked **◆**.
 | 12 | Cache: Artifacts, Index Cache, Compiler Cache | Storage operations, highest-risk destructive actions | Destructive actions are confirmed and reported honestly |
 | 13 | Instance: Settings, Users, License | Rarely visited, high consequence | Configured vs effective, and what needs a restart, are unmistakable |
 | 14 | Portal and Setup | Anonymous surfaces; Setup is a live multi-step submit | Both meet the Admin accessibility standard |
-| 15 | Brand | Last, because it depends on everything above | Resolves the conflict in [visual-direction.md](visual-direction.md#8-brand) |
+| 15 | Brand | Last, because it depends on everything above | The delivered brand kit is in `docs/brand/`, the token layer carries its blue and green, and the mark is the same in the tab, the app, and the desktop icon — see [visual-direction.md](visual-direction.md#8-brand) |
 
 **Why step 5 moved ahead of 6.** The status system is what the tables render.
 Designing tables first means designing the cell that holds a status before
@@ -167,6 +167,7 @@ design(brand): resolve the Depsilo identity
 - The design documents match what shipped; where they do not, the documents are
   corrected in the same change.
 - The brand conflict in [visual-direction.md](visual-direction.md#8-brand) is
-  resolved and `PRODUCT.md`, `docs/brand/`, and the code agree.
+  resolved and `PRODUCT.md`, `docs/brand/`, and the code agree: the delivered
+  brand kit is the identity.
 - `DESIGN.md` is rewritten a final time to describe the redesigned system, and
   this `docs/design/` set becomes the working reference.

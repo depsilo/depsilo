@@ -41,9 +41,16 @@ Rules carried from Stage A, which step 01 must not undo:
 
 ### 2.1 Neutrals
 
-A single neutral ramp drives canvas, surface, inset, borders, and text. The ramp
-is tuned once, not per surface: every surface role is one step on the same
-scale, so raising or lowering the whole interface is one edit.
+One neutral ramp drives canvas, surface, inset, borders, and text. The ramp is
+tuned once, not per surface: every surface role is one step on the same scale,
+so raising or lowering the whole interface is one edit.
+
+The ramp is the brand kit's **slate** family, and the dark canvas uses the kit's
+separate **navy** family (`#0B1220` canvas, `#111C2E` surface, `#172033` inset,
+`#24324A` hairline). That second family is not a ramp on the same scale: the
+kit treats `#0F172A` as Ink, a text colour, and `#0B1220` as the page it sits
+on, so the dark theme takes the kit's navy rather than reusing the slate steps
+inverted.
 
 | Product role | Token | Ladder position |
 | --- | --- | --- |
@@ -54,6 +61,13 @@ scale, so raising or lowering the whole interface is one edit.
 | Hairline | `--border`, `--input` | one weight |
 | Text | `--foreground` | furthest from the canvas |
 | Secondary text | `--muted-foreground` | mid-ramp |
+
+**One deviation, for contrast.** The kit's Slate (`#64748B`) is the secondary
+copy colour and clears 4.76:1 on the canvas — but only 4.34:1 on the muted
+step, under this product's 4.5:1 floor. The *text* role therefore takes one
+step deeper in the same family (`#475569`). Slate remains the ramp's midpoint
+and is what disabled states and large non-text uses draw from; the hue is
+unchanged, so the kit's intent survives the rounding.
 
 **The names are shadcn's, and that is a decision.** The primitives in
 `components/ui` are generated against them, so any other vocabulary would need
@@ -72,7 +86,7 @@ paper. Dark gets its own tuned values at the same role positions.
 ### 2.2 Brand and action
 
 One brand family, spent only on primary commands, focus, active navigation, and
-the hit signal (see [visual-direction.md](visual-direction.md#4-colour)).
+the mark (see [visual-direction.md](visual-direction.md#4-colour)).
 
 | Role | Token | Meaning |
 | --- | --- | --- |
@@ -84,20 +98,18 @@ the hit signal (see [visual-direction.md](visual-direction.md#4-colour)).
 *surface*; using the word for both is the collision this section exists to
 prevent.
 
-The family is kept from the pre-migration palette, with one correction that
-implementation forced:
+The family is the brand kit's blue, and it needs no adjustment this time:
 
-| Token | Value (light) | Why |
+| Token | Value | Why |
 | --- | --- | --- |
-| `--brand-action` | `oklch(0.52 0.125 158.2)` | One step deeper than the mark |
-| `--brand-focus` | `oklch(0.569 0.126 160.2)` | ≥3:1 on every surface it can outline |
-| `--brand-action-dark` | `oklch(0.796 0.169 157.7)` | The dark counterpart |
+| `--primary` (light) | `--brand-blue-deep` `#2563EB` | White on it clears 5.2:1 as a command fill, and 4.7:1 as a label on `--muted` |
+| `--primary` (dark) | `--brand-blue-light` `#60A5FA` | 7.4:1 as a label on the navy canvas, 7.0:1 with navy text on it as a fill |
+| `--ring` | `--brand-blue` `#3B82F6` / `#60A5FA` | ≥3:1 on every surface it can outline, in both themes |
 
-`docs/brand/` fixes the flat mark at `#0A8654`. The UI's action green is
-deliberately one step deeper, because the mark never carries text while the
-action colour is used as a *label* on tinted rails as well as a command fill —
-and `#0A8654` clears 4.61:1 on white but only 4.31:1 on `--muted`. Adopting the
-mark's value directly would have failed on every rail in the product.
+The previous identity's green action carried a note here about a colour that
+failed on tinted rails. The brand kit's blue passes both roles at its own
+value, which is the simpler case: the family is spent as written, and green is
+left to mean *cache*.
 
 ### 2.3 Status
 
@@ -112,13 +124,20 @@ Four status roles, deliberately **not** derived from the accent hue:
 
 Each role has four members: the base colour, `-surface` (a tint over the
 canvas), `-border`, and `-foreground` (text legible on both the canvas and its
-own surface). Stage A's values are a verified baseline:
+own surface). The families are the kit's — green for a cache hit, and the
+Tailwind-derived reds and ambers its palette is built from — with cyan standing
+in for the neutral operational signal the kit does not name:
 
 | Token | Value | Theme |
 | --- | --- | --- |
-| `--success` | `oklch(0.47 0.13 155)` | light |
-| `--destructive` | `oklch(0.47 0.20 27)` | light |
-| `--warning` | `oklch(0.47 0.12 70)` | light |
+| `--success` | `--brand-green-darker` `#166534` | light |
+| `--destructive` | `#B91C1C` | light |
+| `--warning` | `#92400E` | light |
+| `--info` | `#155E75` | light |
+| `--success` | `#4ADE80` | dark |
+| `--destructive` | `#F87171` | dark |
+| `--warning` | `#FBBF24` | dark |
+| `--info` | `#67E8F9` | dark |
 | `--neutral-status` | same as `--text-muted` | both |
 | `--success-surface` | `color-mix(in oklab, var(--success) 14%, var(--canvas))` | light |
 | `--warning-surface` | `color-mix(in oklab, var(--warning) 16%, var(--canvas))` | light |
@@ -127,6 +146,12 @@ own surface). Stage A's values are a verified baseline:
 The lightness was chosen so each role clears **4.5:1 both as text on the canvas
 and as text on its own surface**. Tuning hue or chroma is fine; dropping
 lightness below this is not.
+
+That is why the light status colours sit one step below the kit's headline
+values. Cache Green `#22C55E` and the kit's `#EF4444` are meant for the mark
+and for large fills; as 12px text on their own 14% tint they measure 3.3–3.9:1.
+The dark theme takes the brighter step of each family instead, because there
+the tint is a wash over navy and the lighter value is the readable one.
 
 `--neutral-status` is the fourth role. It exists so a cache miss and an
 unrecorded result have somewhere to live that is neither success nor failure.
@@ -345,6 +370,11 @@ In scope as **tokens and rules**, not as a charting rewrite.
 | `--chart-1` … `--chart-5` | Categorical series ramp, distinct from the status axis |
 | `--chart-grid` | The one grid weight |
 | `--chart-axis-label` | Tick labels |
+
+The ramp opens on the brand's two colours, because per-ecosystem traffic is the
+chart this product draws most and blue-then-green reads as Depsilo before it
+reads as a palette: `#2563EB`, `#16A34A`, `#B45309`, `#7C3AED`, `#0F766E` in
+light; `#60A5FA`, `#4ADE80`, `#FBBF24`, `#A78BFA`, `#5EEAD4` in dark.
 
 **Which palette a chart uses depends on what its series are.**
 
