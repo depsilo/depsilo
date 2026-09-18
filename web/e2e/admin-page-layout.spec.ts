@@ -24,6 +24,33 @@ test('readable and fluid pages preserve distinct desktop widths', async ({ page 
   expect(fluidWidth).toBeGreaterThan(readableWidth)
 })
 
+test('the Admin frame owns one width cap and one padding ladder', async ({ page }) => {
+  // Wide enough that both caps are actually reached, so the numbers below are
+  // the caps rather than the viewport.
+  await page.setViewportSize({ width: 2400, height: 1000 })
+
+  await page.goto('/admin/upstream-updates')
+  const outlet = page.locator('[data-admin-outlet]')
+  const fluid = page.locator('[data-admin-page-width="fluid"]')
+  const outletBox = await outlet.boundingBox()
+  const fluidBox = await fluid.boundingBox()
+  expect(outletBox).not.toBeNull()
+  expect(fluidBox).not.toBeNull()
+
+  // The cap is border-box, so the outlet is 1840 wide and its content — the
+  // page frame — is 1840 minus the `lg` padding. A fluid page inherits that
+  // rather than declaring a second cap of its own.
+  expect(Math.round(outletBox!.width)).toBe(1840)
+  expect(Math.abs(fluidBox!.width - (outletBox!.width - 2 * 32))).toBeLessThanOrEqual(1)
+  expect(Math.abs(fluidBox!.x - (outletBox!.x + 32))).toBeLessThanOrEqual(1)
+
+  await page.goto('/admin/license')
+  const readable = await page.locator('[data-admin-page-width="readable"]').boundingBox()
+  expect(readable).not.toBeNull()
+  expect(Math.round(readable!.width)).toBe(768)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(2400)
+})
+
 test('workspace destinations are available as a local page navigation', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/admin/cache')

@@ -41,6 +41,29 @@ const KPI_CELL =
   'max-lg:nth-[n+3]:border-t max-lg:nth-[n+3]:border-border ' +
   'lg:px-6 lg:pt-[18px] lg:pb-5 lg:nth-[n+2]:border-l lg:nth-[n+2]:border-border'
 
+/**
+ * The supporting rail's width, decided once: a 320px minimum from `xl`, a
+ * fixed 380px from `2xl`. Spelled out per row, the same value appeared in four
+ * different grid templates.
+ */
+const RAIL_WIDTH = '[--rail-w:320px] 2xl:[--rail-w:380px]'
+
+/** Rail first, main instrument second. Both stretch, so the request path fills the row. */
+const SPLIT_RAIL_FIRST =
+  `grid min-w-0 gap-5 ${RAIL_WIDTH} ` +
+  'xl:grid-cols-[minmax(var(--rail-w),1fr)_minmax(0,2fr)] ' +
+  '2xl:grid-cols-[var(--rail-w)_minmax(0,1fr)]'
+
+/**
+ * Main column first, supporting rail second. `items-start` deliberately stops
+ * the rail stretching to the main column's height, which is what the previous
+ * row wanted and this one does not.
+ */
+const SPLIT_RAIL_LAST =
+  `grid min-w-0 items-start gap-5 ${RAIL_WIDTH} ` +
+  'xl:grid-cols-[minmax(0,2fr)_minmax(var(--rail-w),1fr)] ' +
+  '2xl:grid-cols-[minmax(0,1fr)_var(--rail-w)]'
+
 function DashboardKpiSkeleton() {
   return (
     <div aria-hidden="true" className="grid grid-cols-2 lg:grid-cols-4">
@@ -267,7 +290,7 @@ export default function DashboardV2() {
           )}
         </section>
 
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(320px,1fr)_minmax(0,2fr)] 2xl:grid-cols-[380px_minmax(0,1fr)]">
+        <div className={SPLIT_RAIL_FIRST}>
           <DashboardAttention
             isPending={dashboardQuery.isPending}
             isFetching={dashboardQuery.isFetching}
@@ -285,7 +308,7 @@ export default function DashboardV2() {
           />
         </div>
 
-        <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] 2xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className={SPLIT_RAIL_LAST}>
           <div
             data-query-key="dashboard-trends"
             aria-busy={trendsQuery.isFetching || undefined}

@@ -16,8 +16,14 @@ interface AdminPageProps {
   width?: AdminPageWidth
 }
 
+/**
+ * `fluid` inherits the Admin outlet's cap rather than declaring its own. The
+ * cap used to be written twice — once on the outlet and once here — which is
+ * two places to change and one place for the policy-status banner (rendered
+ * above this frame) to drift out of alignment with the page below it.
+ */
 const WIDTH_CLASS: Record<AdminPageWidth, string> = {
-  fluid: 'max-w-[1840px]',
+  fluid: '',
   readable: 'max-w-3xl',
 }
 

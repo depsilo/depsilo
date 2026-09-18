@@ -403,6 +403,9 @@ export default function AdminShellLayout() {
         </header>
 
         <main className="min-h-screen bg-background pt-16 pb-6">
+          {/* One width cap for every Admin surface, owned here so that a
+              banner rendered above the page frame still aligns with the page
+              below it. `readable` pages cap themselves narrower again. */}
           <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
             {policySurface && (
               <PolicyStatusBanner

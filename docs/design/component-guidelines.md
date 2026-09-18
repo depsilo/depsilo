@@ -93,7 +93,37 @@ for Depsilo belongs one layer up.
 - A field blocked by an environment variable or a read-only config file says
   so, and says which one.
 
-## 6. Navigation
+## 6. Page layout
+
+## 7. Navigation
+
+Every Admin route renders through the same frame, and the frame owns the
+decisions a page must not re-make.
+
+| Element | Contract |
+| --- | --- |
+| Outlet | The **one** width cap (1840px, border-box) and the padding ladder (16 / 24 / 32px at base / `sm` / `lg`). A banner rendered above the page frame aligns with the page because the cap lives here |
+| Page | `fluid` inherits the outlet's cap; `readable` caps itself at 768px for a page whose content is prose rather than data |
+| Header | One `h1` per page, a description capped at `72ch`, and actions that wrap rather than shrink |
+| Destination rail | Page-local navigation, or nothing when the workspace has one page |
+| Content | Edge-aligned with the page header. The Dashboard snapshot spec asserts this to the pixel |
+
+Three composition rules:
+
+1. **A page's sections are separated by space, not by frames.** A titled
+   region uses `SectionHeader`; a rule under a title is a separator, not a
+   container. Nothing wraps a whole page in a card.
+2. **One main column, optionally one supporting rail.** The rail's width is
+   decided once (320px from `xl`, 380px from `2xl`) and both arrangements —
+   rail first or rail last — draw from it. Four hand-written grid templates for
+   two arrangements is the drift this replaces.
+3. **A page does not pad itself.** The frame owns the horizontal gutter; a page
+   that adds its own padding breaks edge alignment with the header above it.
+
+Rhythm inside a section is the section's own business, drawn from the 4px
+ladder. The page-level rhythm is one value per page rather than a different gap
+between every pair of sections; pages that use eight different vertical gaps
+are describing a layout that has not been decided yet.
 
 Three navigation elements, each with one job.
 
@@ -134,7 +164,7 @@ Three navigation elements, each with one job.
   the other.
 - Escape closes it and returns focus to the trigger.
 
-## 7. Tables
+## 8. Tables
 
 - Dense data is a table on wide viewports and a divided list on narrow ones.
   The list keeps the identifying value, the outcome, and the primary action
@@ -146,7 +176,7 @@ Three navigation elements, each with one job.
 - Each row shows at most one status signal (see
   [design-tokens.md](design-tokens.md#43-one-signal-per-row)).
 
-## 8. States
+## 9. States
 
 Every data region owns five, and they must be distinguishable from each other:
 
@@ -161,7 +191,7 @@ Every data region owns five, and they must be distinguishable from each other:
 Independent sibling queries own independent states. One panel failing does not
 erase another panel's data.
 
-## 9. Accessibility, per component
+## 10. Accessibility, per component
 
 - Every icon-only control: label, tooltip, 40px target, in every state.
 - Focus is visible in both themes. Programmatically focused regions suppress the
@@ -173,7 +203,7 @@ erase another panel's data.
 - Motion honours `prefers-reduced-motion`; the tests assert this by animation
   name.
 
-## 10. Do not build
+## 11. Do not build
 
 | Do not build | Instead |
 | --- | --- |
@@ -185,7 +215,7 @@ erase another panel's data.
 | A chart to fill a gap in a layout | An empty state, or nothing |
 | A component-level colour value | A semantic token |
 
-## 11. The check before merging a component change
+## 12. The check before merging a component change
 
 1. Does it live in the right layer, and does it import only downwards?
 2. Is it the *only* implementation of that control?
