@@ -866,7 +866,7 @@ function formatRemaining(ms: number): string {
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="text-left px-3 py-2.5 text-meta font-mono font-semibold uppercase text-muted-foreground"
+    <th scope="col" className="text-left px-3 py-2.5 text-meta font-mono font-semibold uppercase text-muted-foreground"
 >{children}</th>
   )
 }

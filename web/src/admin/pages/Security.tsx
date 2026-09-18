@@ -296,6 +296,7 @@ function VulnerabilitiesTab() {
     {
       key: 'cvss_score',
       label: t('security.cvssScore'),
+      align: 'end' as const,
       render: (v: unknown) => (
         <span className="font-mono text-label tabular-nums text-foreground">
           {v != null ? Number(v).toFixed(1) : '-'}

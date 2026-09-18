@@ -426,3 +426,25 @@ test('quarantine uses direct mobile lists and preserves named desktop table regi
   await expect(approvals).toBeVisible()
   expect(await approvals.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
 })
+
+test('measured columns end-align so their digits line up as a column', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/logs': populated['GET /api/v1/admin/logs'],
+  })
+  await page.goto('/admin/logs')
+
+  const table = page.locator('[data-table-viewport] table').first()
+  const latencyHeader = table.getByRole('columnheader').filter({ hasText: /耗时|Latency/ })
+  await expect(latencyHeader).toHaveCSS('text-align', 'right')
+
+  // The value cell follows its column: a left-aligned `9 ms` and `1 240 ms`
+  // put their units in different places, which defeats the column.
+  const latencyCell = table.locator('tbody td').filter({ hasText: /ms$/ }).first()
+  await expect(latencyCell).toHaveCSS('text-align', 'right')
+
+  // The action column is right-aligned too, and its header now says so
+  // instead of labelling the column from the opposite edge.
+  const actionHeader = table.getByRole('columnheader').filter({ hasText: /操作|Actions/ })
+  await expect(actionHeader).toHaveCSS('text-align', 'right')
+})

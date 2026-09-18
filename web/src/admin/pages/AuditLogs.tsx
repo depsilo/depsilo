@@ -182,10 +182,12 @@ export default function AuditLogsV2() {
   // Audit logs moved to open-source on 2026-06-28 — the page no longer
   // 402s, so there is no Pro paywall branch to render.
 
-  const headers = [
-    t('audit.time'), t('audit.ecosystem'), t('audit.packageName'), t('audit.version'),
-    t('audit.action'), t('audit.result'), t('audit.latency'), t('audit.bytes'),
-    t('audit.actor'), t('audit.clientIp'),
+  const headers: Array<{ label: string; align?: 'end' }> = [
+    { label: t('audit.time') }, { label: t('audit.ecosystem') },
+    { label: t('audit.packageName') }, { label: t('audit.version') },
+    { label: t('audit.action') }, { label: t('audit.result') },
+    { label: t('audit.latency'), align: 'end' }, { label: t('audit.bytes'), align: 'end' },
+    { label: t('audit.actor') }, { label: t('audit.clientIp') },
   ]
 
   return (
@@ -305,8 +307,8 @@ export default function AuditLogsV2() {
             <thead>
               <tr className="border-b border-border">
                 {headers.map(h => (
-                  <th key={h} scope="col" className="text-left text-meta font-mono font-semibold uppercase py-2 px-3 first:pl-0 text-muted-foreground">
-                    {h}
+                  <th key={h.label} scope="col" className={`text-meta font-mono font-semibold uppercase py-2 px-3 first:pl-0 text-muted-foreground ${h.align === 'end' ? 'text-right' : 'text-left'}`}>
+                    {h.label}
                   </th>
                 ))}
               </tr>
@@ -338,10 +340,10 @@ export default function AuditLogsV2() {
                   <td className="py-2 px-3">
                     {resultBadge(row.cache_result, t)}
                   </td>
-                  <td className="py-2 px-3 whitespace-nowrap">
+                  <td className="py-2 px-3 text-right whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>{row.latency_ms}ms</span>
                   </td>
-                  <td className="py-2 px-3 whitespace-nowrap">
+                  <td className="py-2 px-3 text-right whitespace-nowrap">
                     <span className="font-mono tabular-nums text-muted-foreground">{formatBytes(row.bytes_sent)}</span>
                   </td>
                   <td className="py-2 px-3 max-w-[180px]">

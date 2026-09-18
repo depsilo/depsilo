@@ -279,9 +279,15 @@ export default function AccessLogsV2() {
           <table className="w-full text-label">
             <thead>
               <tr className="border-b border-border">
-                {[t('logs.time'), t('type'), t('logs.packageName'), t('logs.result'), t('logs.latency'), t('logs.upstream'), t('logs.clientIp'), t('actions')].map(h => (
-                  <th key={h} scope="col" className="text-left text-meta font-mono font-semibold uppercase py-2 px-3 first:pl-0 text-muted-foreground">
-                    {h}
+                {[
+                  { label: t('logs.time') }, { label: t('type') },
+                  { label: t('logs.packageName') }, { label: t('logs.result') },
+                  { label: t('logs.latency'), align: 'end' as const },
+                  { label: t('logs.upstream') }, { label: t('logs.clientIp') },
+                  { label: t('actions'), align: 'end' as const },
+                ].map(h => (
+                  <th key={h.label} scope="col" className={`text-meta font-mono font-semibold uppercase py-2 px-3 first:pl-0 text-muted-foreground ${h.align === 'end' ? 'text-right' : 'text-left'}`}>
+                    {h.label}
                   </th>
                 ))}
               </tr>
@@ -322,7 +328,7 @@ export default function AccessLogsV2() {
                   </td>
 
                   {/* Latency */}
-                  <td className="py-2 px-3 whitespace-nowrap">
+                  <td className="py-2 px-3 text-right whitespace-nowrap">
                     <span className="font-mono tabular-nums" style={{ color: latencyColor(row.latency_ms) }}>
                       {row.latency_ms}ms
                     </span>

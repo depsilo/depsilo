@@ -166,15 +166,35 @@ Three navigation elements, each with one job.
 
 ## 8. Tables
 
-- Dense data is a table on wide viewports and a divided list on narrow ones.
-  The list keeps the identifying value, the outcome, and the primary action
-  together; it is not a horizontally scrolling table.
-- Wide tables scroll inside their own named, focusable region. The document
-  never gains horizontal scroll.
-- Numbers are right-aligned and tabular; text is left-aligned.
-- Column headers are labels, not sentences.
-- Each row shows at most one status signal (see
-  [design-tokens.md](design-tokens.md#43-one-signal-per-row)).
+**A table scrolls; it does not become a list.** At 390px a log row is compared
+column by column with the rows above it, and a stacked list destroys the
+comparison — so the table scrolls horizontally inside its own named, focusable
+region and the document never gains horizontal scroll. This corrects an earlier
+version of this document, which said dense data always becomes a list on narrow
+viewports. It does not, and the specification has always asserted the
+opposite.
+
+**The exception is a row whose action is essential.** Quarantine decisions and
+metadata-refresh episodes switch to a divided list below `sm`, because there
+the action has to stay reachable and a horizontally scrolling row would push it
+off screen. The list keeps the identifying value, the outcome, and the primary
+action together; it is not a scrolling table in a different shape.
+
+**Numbers end-align; text starts-align.** `9 ms` and `1 240 ms` left-aligned
+put their units in different places and defeat the column; end-aligned, the
+digits and the unit line up. The header follows its own column's alignment —
+a header labelling a right-aligned column from the left edge is the same bug
+one row up. Measured columns use the mono face with tabular figures as well.
+
+**Every header carries `scope="col"`.** This is not a WCAG A/AA failure, so
+axe does not report it, which is exactly why it has to be a rule rather than a
+review note.
+
+**Rows are never focusable; the row's action is.** Asserted across every table.
+
+**Each row shows at most one status signal** (see
+[design-tokens.md](design-tokens.md#43-one-signal-per-row)). Column headers are
+labels, not sentences.
 
 ## 9. States
 

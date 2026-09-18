@@ -218,7 +218,7 @@ export default function ProjectsV2() {
       { key: 'version', label: t('projects.version'), render: (v: unknown) => <span className="font-mono text-label text-muted-foreground">{(v as string) || '-'}</span> },
       { key: 'first_seen_at', label: t('projects.firstSeen'), render: (v: unknown) => <span className="text-label whitespace-nowrap text-muted-foreground">{formatProjectTime(v as string)}</span> },
       { key: 'last_seen_at', label: t('projects.lastSeen'), render: (v: unknown) => <span className="text-label whitespace-nowrap text-muted-foreground">{formatProjectTime(v as string)}</span> },
-      { key: 'download_count', label: t('projects.downloads'), render: (v: unknown) => <span className="text-label font-mono text-muted-foreground">{(v as number) ?? 0}</span> },
+      { key: 'download_count', label: t('projects.downloads'), align: 'end' as const, render: (v: unknown) => <span className="text-label font-mono text-muted-foreground">{(v as number) ?? 0}</span> },
     ]
 
     return (
@@ -356,7 +356,7 @@ export default function ProjectsV2() {
   // ── List view ──────────────────────────────────────────────────
   const columns = [
     { key: 'name', label: t('projects.name'), render: (v: unknown) => <span className="font-medium text-body text-foreground">{v as string}</span> },
-    { key: 'package_count', label: t('projects.packageCount'), render: (v: unknown) => <span className="text-label font-mono tabular-nums text-muted-foreground">{(v as number) ?? 0}</span> },
+    { key: 'package_count', label: t('projects.packageCount'), align: 'end' as const, render: (v: unknown) => <span className="text-label font-mono tabular-nums text-muted-foreground">{(v as number) ?? 0}</span> },
     { key: 'last_activity_at', label: t('projects.lastActivity'), render: (v: unknown) => <span className="text-label whitespace-nowrap text-muted-foreground">{formatProjectTime(v as string)}</span> },
     {
       key: 'id',
