@@ -362,7 +362,7 @@ Rules:
 | Spacing | One 4px base ladder. Page padding, section rhythm, and control padding all draw from it |
 | `--row-height` | **40px.** One value for rows and controls, per [product-ui-principles.md](product-ui-principles.md#4-rhythm-one-row-not-three) |
 | `--tap-target-min` | **40px.** The accessibility floor; never overridden downward |
-| `--control-height` | 40px for standard controls; 32px only for controls that are not touch targets (inline chips) |
+| `--control-height` | **36px** for fields and standard buttons. The 40px floor is a *target* floor — it applies to icon-only controls and to row rhythm, not to a text field, and a field that is 40px tall inside a 40px row has no breathing room |
 | `--radius-control` | Small, shared by rows, inputs, and buttons |
 | `--radius-surface` | The outer radius for panels and dialogs |
 | `--focus-ring-width` / `-offset` | Fixed, and identical in both themes |

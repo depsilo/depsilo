@@ -8,6 +8,7 @@ interface FeedbackProps {
   label?: string
   hint?: string
   error?: string
+  layout?: 'stacked' | 'row'
 }
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement>, FeedbackProps {}
@@ -27,6 +28,7 @@ export default function Select({
   label,
   hint,
   error,
+  layout,
   children,
   id,
   'aria-describedby': ariaDescribedBy,
@@ -55,7 +57,7 @@ export default function Select({
   )
 
   return (
-    <Field controlId={controlId} label={label} hint={hint} error={error}>
+    <Field controlId={controlId} label={label} hint={hint} error={error} layout={layout}>
       {select}
     </Field>
   )

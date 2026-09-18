@@ -11,10 +11,12 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string
   /** Machine-readable values (endpoints, tokens, globs) use the mono face. */
   mono?: boolean
+  layout?: 'stacked' | 'row'
 }
 
 export default function Input({
   className,
+  layout,
   mono,
   label,
   hint,
@@ -29,7 +31,7 @@ export default function Input({
   const messageId = hint || error ? `${controlId}-description` : undefined
 
   return (
-    <Field controlId={controlId} label={label} hint={hint} error={error}>
+    <Field controlId={controlId} label={label} hint={hint} error={error} layout={layout}>
       <UiInput
         {...rest}
         id={controlId}

@@ -74,7 +74,9 @@ comment explaining why, so the reason survives the next `shadcn add`.
 | `status-dot`, `badge` | The status axis. See [design-tokens.md](design-tokens.md#4-status-system) |
 | `modal`, `drawer` | Base UI owns focus trap, `aria-modal`, and focus restoration. `closeDisabled` exists so an in-flight mutation cannot be abandoned |
 | `toast` | Transient confirmation only. A failure the Operator must act on stays inline, in context |
-| `data-table`, `table-viewport` | One column contract and one focusable scroll region. Rows are not focusable; the row's action is |
+| `data-table`, `table-viewport` | One column contract and one focusable scroll region. Rows are not focusable; the row's action is. A page marks a measured column with `align="end"` rather than styling cells |
+| `copy-button` | One copy control with two presentations: the labelled action beside a code block, and the compact action beside a read-only value. Projects and the Portal both used to have their own, which meant a copy could behave two ways |
+| `setting-section` | A titled group whose rows are divided. It owns the list rhythm; each row's internal arrangement belongs to `Field` |
 | `upstream-panel` | Shared by Portal Monitor and Admin Upstreams, so an Upstream's status vocabulary cannot diverge between the two surfaces |
 
 ### `components/ui`
@@ -84,14 +86,32 @@ for Depsilo belongs one layer up.
 
 ## 5. Form layout
 
-- Labels above controls, always visible. A placeholder is not a label.
-- One column by default. Two columns only when fields are genuinely paired
-  (`sm` and up).
-- Required, validation, and blocked-by-environment states are stated in text
-  next to the field that failed. A disabled submit button is never the only
-  explanation of what is wrong.
-- A field blocked by an environment variable or a read-only config file says
-  so, and says which one.
+- **`Field` owns the label.** One component renders label, control, hint, and
+  error, and computes the `aria-describedby` merge. A page never assembles its
+  own label + control + message, and never repositions a label with a
+  descendant selector — that is styling another component's internals, and it
+  breaks silently when those internals change. Where the label sits is a
+  `layout` prop: `stacked` above the control (dialogs, two-column forms) or
+  `row` beside it (settings lists, where the labels form a scannable column).
+- **One column by default.** Two columns only when fields are genuinely paired,
+  and only from `sm` up.
+- **A placeholder is not a label.** Every control has a visible label. The two
+  exceptions are a `sr-only` label for a control that is visually named by
+  adjacent content, and `<span>` for a read-only value that is not a form
+  control — a `<label>` pointing at nothing is announced as a label with no
+  control.
+- **Errors are inline and specific.** Required, validation, and
+  blocked-by-environment states are stated in text next to the field that
+  failed, naming the environment variable or the read-only config file. A
+  disabled submit button is never the only explanation of what is wrong.
+- **Control height is 36px.** Fields and standard buttons share it, so a button
+  sitting beside a select in a filter bar lines up instead of sitting 4px
+  short. The 40px floor in [design-tokens.md](design-tokens.md#6-space-size-radius)
+  is the *target* floor for icon-only controls and the row rhythm, not the
+  height of a text field.
+- **A row's rhythm belongs to its container.** `SettingSection` owns the
+  separators and the vertical spacing between rows; a row does not pad itself
+  into alignment with its neighbours.
 
 ## 6. Page layout
 

@@ -1,15 +1,15 @@
-import { ArrowLeft, Check, Copy, Download, Eye, FolderCog, Package, Plus, Trash2, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, Download, Eye, FolderCog, Package, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
-import { copyText } from '@/lib/clipboard'
 import ButtonV2 from '@/components/app/button'
 import InputV2 from '@/components/app/input'
 import BadgeV2 from '@/components/app/badge'
 import ModalV2 from '@/components/app/modal'
 import DataTableV2 from '@/components/app/data-table'
 import SelectV2 from '@/components/app/select'
+import CopyButton from '@/components/app/copy-button'
 import EcosystemIcon from '@/components/app/ecosystem-icon'
 import SectionHeader from '@/components/app/section-header'
 import EmptyState from '@/components/app/empty-state'
@@ -25,25 +25,7 @@ import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
-import { useTransientFlag } from '@/hooks/useTransientFlag'
 import type { CreateProjectRequest, ProjectDetail, ProjectSBOMFormat, ProjectSummary } from '@/lib/adminApi.types'
-
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, showCopied] = useTransientFlag()
-  async function handleClick() {
-    if (await copyText(text)) {
-      showCopied()
-    }
-  }
-  return (
-    <IconButton
-      icon={copied ? Check : Copy}
-      label={label}
-      onClick={handleClick}
-      style={{ color: copied ? 'var(--success)' : 'var(--muted-foreground)' }}
-    />
-  )
-}
 
 export default function ProjectsV2() {
   const { t, i18n } = useTranslation()
@@ -261,7 +243,7 @@ export default function ProjectsV2() {
                   {proxyUrl}
                 </span>
                 <div data-project-proxy-copy className="shrink-0">
-                  <CopyButton text={proxyUrl} label={t('projects.copyProxyUrl')} />
+                  <CopyButton text={proxyUrl} appearance="icon" label={t('projects.copyProxyUrl')} />
                 </div>
               </div>
             </div>
@@ -447,21 +429,21 @@ export default function ProjectsV2() {
               </div>
             </div>
             <div>
-              <label className="block text-body font-medium mb-1 text-muted-foreground">{t('projects.token')}</label>
+              <span className="mb-1 block text-label font-medium text-muted-foreground">{t('projects.token')}</span>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-label font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--muted)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
                   {tokenData.token}
                 </code>
-                <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
+                <CopyButton text={tokenData.token} appearance="icon" label={t('projects.copyToken')} />
               </div>
             </div>
             <div>
-              <label className="block text-body font-medium mb-1 text-muted-foreground">{t('projects.proxyUrl')}</label>
+              <span className="mb-1 block text-label font-medium text-muted-foreground">{t('projects.proxyUrl')}</span>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-label font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--muted)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
                   {tokenData.proxy_url}
                 </code>
-                <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />
+                <CopyButton text={tokenData.proxy_url} appearance="icon" label={t('projects.copyProxyUrl')} />
               </div>
             </div>
             <div className="flex justify-end pt-2">

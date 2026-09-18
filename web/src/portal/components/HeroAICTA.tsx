@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import Icon from '@/components/app/icon'
 import Modal from '@/components/app/modal'
-import CopyButton from '@/portal/components/CopyButton'
+import CopyButton from '@/components/app/copy-button'
 import { useTransientFlag } from '@/hooks/useTransientFlag'
 import { copyText } from '@/lib/clipboard'
 

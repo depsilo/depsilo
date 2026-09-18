@@ -9,10 +9,12 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string
   hint?: string
   error?: string
+  layout?: 'stacked' | 'row'
 }
 
 export default function Textarea({
   className,
+  layout,
   label,
   hint,
   error,
@@ -26,7 +28,7 @@ export default function Textarea({
   const messageId = hint || error ? `${controlId}-description` : undefined
 
   return (
-    <Field controlId={controlId} label={label} hint={hint} error={error}>
+    <Field controlId={controlId} label={label} hint={hint} error={error} layout={layout}>
       <UiTextarea
         {...rest}
         id={controlId}

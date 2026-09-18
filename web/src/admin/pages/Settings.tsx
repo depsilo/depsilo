@@ -9,7 +9,7 @@ import ButtonV2 from '@/components/app/button'
 import InlineNotice from '@/components/app/notice'
 import InputV2 from '@/components/app/input'
 import QueryErrorState from '@/components/app/error-state'
-import SectionHeader from '@/components/app/section-header'
+import SettingSection from '@/components/app/setting-section'
 import SelectV2 from '@/components/app/select'
 import TabsV2 from '@/components/app/tabs'
 import { useAppToast } from '@/components/app/toast'
@@ -249,13 +249,15 @@ export default function SettingsV2() {
     </InlineNotice>
   ) : null
   const section = (title: string, children: ReactNode) => (
-    <section className="min-w-0 max-w-[720px] [&_input]:h-10 [&_select]:h-10">
-      <SectionHeader title={title} />
+    <SettingSection title={title} className="max-w-[720px]">
       {children}
-    </section>
+    </SettingSection>
   )
+  // The rows are a list, so the container owns the separator and the vertical
+  // rhythm between rows. It does not reach inside a field: each row's label
+  // placement is `Field layout="row"`.
   const fields = (children: ReactNode) => (
-    <div className="divide-y divide-border [&>div]:grid [&>div]:gap-x-6 [&>div]:py-5 [&>div:first-child]:pt-0 [&_label]:mb-2 sm:[&>div]:grid-cols-[160px_minmax(0,1fr)] sm:[&_label]:mb-0 sm:[&_label]:pt-2.5 sm:[&_p]:col-start-2">
+    <div className="flex flex-col divide-y divide-border [&>*]:min-w-0 [&>*]:py-5 [&>*:first-child]:pt-0">
       {children}
     </div>
   )
@@ -315,11 +317,12 @@ export default function SettingsV2() {
       label: t('settings.basic'),
       icon: <SlidersHorizontal className="icon icon-sm" aria-hidden="true" />,
       content: settingsForm('basic', section(t('settings.basic'), fields(<>
-        <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} />
-        <InputV2 label={fieldLabel('server.port')} value={String(data.configured.server.port)} readOnly hint={fieldHint('server.port')} />
+        <InputV2 label={fieldLabel('server.host')} value={data.configured.server.host} readOnly hint={fieldHint('server.host')} layout="row" />
+        <InputV2 label={fieldLabel('server.port')} value={String(data.configured.server.port)} readOnly hint={fieldHint('server.port')} layout="row" />
         <SelectV2
           label={fieldLabel('server.log_level')}
           value={draft.logLevel}
+          layout="row"
           onChange={event => updateDraft('logLevel', event.target.value as SettingsDraft['logLevel'])}
           disabled={isDisabled('server.log_level')}
           hint={fieldHint('server.log_level')}
@@ -347,9 +350,9 @@ export default function SettingsV2() {
       label: t('settings.storageBackend'),
       icon: <Database className="icon icon-sm" aria-hidden="true" />,
       content: settingsForm('storage', section(t('settings.storageBackend'), fields(<>
-        <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} />
-        <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} />
-        <InputV2 label={fieldLabel('database.driver')} value={data.configured.database.driver} readOnly hint={fieldHint('database.driver')} />
+        <InputV2 label={fieldLabel('storage.type')} value={data.configured.storage.type} readOnly hint={fieldHint('storage.type')} layout="row" />
+        <InputV2 label={fieldLabel('storage.path')} value={data.configured.storage.path} readOnly mono hint={fieldHint('storage.path')} layout="row" />
+        <InputV2 label={fieldLabel('database.driver')} value={data.configured.database.driver} readOnly hint={fieldHint('database.driver')} layout="row" />
       </>))),
     },
     {

@@ -24,9 +24,12 @@ const VARIANT: Record<ButtonVariant, 'default' | 'outline' | 'ghost' | 'destruct
   destructive: 'destructive',
 }
 
-const SIZE: Record<ButtonSize, 'sm' | 'default'> = {
+const SIZE: Record<ButtonSize, 'sm' | 'lg'> = {
   sm: 'sm',
-  md: 'default',
+  // `default` is 32px in the shadcn primitive. Depsilo's standard control is
+  // 36px, which is the field height, so a button sitting beside a select or an
+  // input in a filter bar lines up with it instead of sitting 4px short.
+  md: 'lg',
 }
 
 export default function Button({
