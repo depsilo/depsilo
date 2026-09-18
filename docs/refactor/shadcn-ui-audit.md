@@ -1,8 +1,15 @@
 # Depsilo UI audit — shadcn/ui + Base UI migration (Stage A, Phase 0)
 
-> Status: Phase 0 inventory. Evidence collected 2026-09-17 from the working
-> tree at `master` / `23eb652`. This document is the audit; the executable plan
-> is [shadcn-ui-plan.md](shadcn-ui-plan.md).
+> Status: historical evidence, not instructions. The inventory below was
+> collected 2026-09-17 from the working tree at `master` / `23eb652`, before
+> the migration began; every item in it has since been migrated, replaced, or
+> deleted. It is kept as the record of what the legacy UI actually contained,
+> which is what the migration was argued from.
+>
+> The executable plan that followed it, and the Stage B proposal after that,
+> are in git history rather than the working tree, per
+> [docs/README.md](../README.md). What the migration produced is in
+> [DESIGN.md](../../DESIGN.md) and the [design set](../design/README.md).
 >
 > Scope: `web/` only. Backend, package protocols, and the Admin control-plane
 > authority model are unchanged by this migration.
@@ -350,43 +357,15 @@ supersedes that sentence. The conflict is recorded here and resolved by the
 | R11 | `admin-shell.spec.ts`, `portal-redesign.spec.ts` and friends assert layout geometry | Medium | Run the full `make test-ui` after each phase, not just at the end. |
 | R12 | Two locales with 1,644 keys each; every new user-visible string needs both | Low | No new copy is introduced in Stage A beyond placeholder text already keyed. `make lint-i18n` after each phase. |
 
-## 12. Stage A phase list
+## 12. What happened next
 
-| Phase | Name | Output | Exit gate |
-| --- | --- | --- | --- |
-| 0 | Audit | this document + `shadcn-ui-plan.md` | review |
-| 1 | Initialize shadcn/ui | `components.json`, `components/ui/`, `lib/utils.ts`, `class-variance-authority`, `tw-animate-css` | `npm run build` |
-| 2 | Neutral theme | single-source semantic tokens, one dark cascade, z-index scale | light/dark render |
-| 3 | Primitive migration (3 batches) | `components/ui/*` complete; `components/app/*` created | type-check, `make test-ui` |
-| 4 | Form unification | `Field`, `SettingRow`, `SettingSection`; all `label`+control pairs unified | `admin-forms.spec.ts` |
-| 5 | Admin shell | `sidebar`, `breadcrumb`, page container, mobile nav | `admin-shell.spec.ts`, `admin-axe.spec.ts` |
-| 6 | Admin pages | 19 pages, in 8 sub-steps | `make test-ui` |
-| 7 | Data tables | `DataTable`, `DataTableToolbar`, `DataTablePagination`, `DataTableColumnHeader`, `DataTableEmpty` | `admin-tables-actions.spec.ts` |
-| 8 | Portal + Setup | Portal shell, QuickStart, Monitor, SetupWizard | `portal-*.spec.ts`, `auth-setup-state.spec.ts` |
-| 9 | Legacy cleanup | delete `src/components/*` legacy, `admin-shell.css`, `Icon.tsx`; dependency census | `rg` census returns empty |
-| 10 | CSS cleanup | `index.css` = imports + tokens + base only; alias block deleted | `rg "var\(--(bg|text|brand|ok|warn|danger|btn|admin)"` empty |
-| 11 | Docs + verification | `DESIGN.md` rewritten; full `make verify` | `make verify` |
+This audit fed a phased plan: initialize shadcn/ui, establish one neutral token
+layer, migrate the primitives in three batches by risk, unify forms, rebuild the
+Admin shell, then the pages, the tables, the Portal and Setup, and finish with
+the legacy and CSS cleanup. The shell moved before the pages because every
+page's layout is expressed relative to it, and Setup moved last because it owns
+a live multi-step submission.
 
-## 13. Recommended migration order
-
-Lowest risk first, so the architecture stabilises before the dense surfaces
-move:
-
-```text
-shadcn init → neutral tokens → Button/Badge/Input/Textarea/Separator/Skeleton/Card/Tooltip
-  → Checkbox/Switch/Select/Tabs/DropdownMenu/Popover
-  → Dialog/AlertDialog/Sheet/Command/ScrollArea
-  → forms → Admin shell → Settings/License/Users → Projects/Upstreams
-  → Security/Quarantine/Rules → Logs → Dashboard → DataTables
-  → Portal → Setup → legacy cleanup → CSS cleanup → docs
-```
-
-The Admin shell moves **before** the pages, because every page's layout is
-expressed relative to it; migrating pages against the old shell would mean
-touching them twice.
-
-Portal moves after Admin because Admin is the larger, denser surface and its
-shell work produces the `components/app` components Portal reuses.
-
-Setup moves last because it owns a live, multi-step form submission that is the
-most expensive thing in the codebase to debug.
+All of it shipped. The plan itself is in git history rather than the working
+tree, per [docs/README.md](../README.md); the architecture it produced is
+described in [DESIGN.md](../../DESIGN.md).

@@ -21,7 +21,13 @@ contains the stable repository rules and links into these guides.
 - [PRODUCT.md](../PRODUCT.md): current users, product intent, constraints, and
   honest capability boundaries.
 - [CONTEXT.md](../CONTEXT.md): domain vocabulary.
-- [DESIGN.md](../DESIGN.md): current Portal and Admin design contract.
+- [DESIGN.md](../DESIGN.md): current Portal and Admin design contract — the
+  layers, token roles, component inventory, states, and what must not regress.
+- [Design set](design/README.md): why the interface serves what it serves, why
+  it looks like this, every value with the floors it must clear, and how
+  components compose. Start here for any UI change.
+- [Brand assets](brand/README.md): the mark and the palette it fixes, with the
+  clear-space and minimum-size rules.
 - [Deployment defaults](deployment.md): zero-config state paths, persistence,
   and advanced overrides.
 - [Admin control plane](admin-control-plane.md): configuration/database
@@ -40,6 +46,9 @@ contains the stable repository rules and links into these guides.
 
 - `docs/adr/` contains accepted architectural decisions. Read only the ADRs
   touching the module being changed.
+- [The UI audit](refactor/shadcn-ui-audit.md) is the inventory of the legacy
+  frontend that the shadcn/ui migration was argued from. Evidence, not
+  instructions: everything in it has since been migrated or deleted.
 - `docs/specs/` contains dated design snapshots. A shipped implementation may
   have evolved after its spec.
 - `docs/research/` contains dated research records, not evergreen guidance.

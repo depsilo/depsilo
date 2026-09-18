@@ -1,9 +1,10 @@
 # Depsilo Visual Direction
 
-> Stage B step 00. How Depsilo should look and feel, and — more usefully —
-> what it should refuse to be. Principles are in
-> [product-ui-principles.md](product-ui-principles.md); the values that
-> implement this direction are in [design-tokens.md](design-tokens.md).
+> How Depsilo should look and feel, and — more usefully — what it should refuse
+> to be. Principles are in [product-ui-principles.md](product-ui-principles.md);
+> the values that implement this direction are in
+> [design-tokens.md](design-tokens.md); the contract is
+> [DESIGN.md](../../DESIGN.md). Start at the [design set index](README.md).
 
 ## 1. Working thesis
 
@@ -165,7 +166,7 @@ The masters live in [docs/brand/](../brand/README.md), and the three places
 that must move together are the favicon, `components/app/logo.tsx`, and the
 desktop icon.
 
-What that means for the design system, which is the part step 15 owns:
+What that means for the design system:
 
 - **Blue is the action colour.** It replaces the green that Stage A carried
   through the token layer. `#2563EB` is the light theme's command fill and
@@ -206,3 +207,7 @@ The failure mode this list guards against is the AI-SaaS template: an
 interface that looks considered at a glance and communicates nothing on the
 second look. Depsilo's whole value is what it refuses to serve, so its
 interface should look like something that refuses things.
+
+This is the device-level list. What the *product* refuses to be — a landing
+page, a BI dashboard, an enterprise console — is in
+[product-ui-principles.md §7](product-ui-principles.md#7-what-this-interface-is-not).

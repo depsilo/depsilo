@@ -1,9 +1,10 @@
 # Depsilo Component Guidelines
 
-> Stage B step 00. How the component layers are meant to be used, what each
-> component is for, and what must never be built again. Values are in
+> How the component layers are meant to be used, what each component is for,
+> and what must never be built again. Values are in
 > [design-tokens.md](design-tokens.md); the current inventory is in
-> [DESIGN.md](../../DESIGN.md) and `web/src/components/`.
+> [DESIGN.md](../../DESIGN.md) and `web/src/components/`. Start at the
+> [design set index](README.md).
 
 ## 1. The layers
 
@@ -218,18 +219,17 @@ labels, not sentences.
 
 ## 9. States
 
-Every data region owns five, and they must be distinguishable from each other:
+The contract itself — the five states, plus mutation pending and permission
+denied — is [DESIGN.md § Query-State Contract](../../DESIGN.md#query-state-contract).
+What belongs here is the component-level consequence:
 
-| State | Presentation |
-| --- | --- |
-| Initial pending | The region is `aria-busy`; skeletons are hidden from assistive technology; no empty message |
-| Initial error | `error-state`, naming the failure, with Retry |
-| Successful empty | `empty-state`, only after a success proves emptiness |
-| Cached data + failed refresh | Cached data stays visible with a stale notice |
-| Permission denied | Explicit denial, never rendered as an empty collection |
-
-Independent sibling queries own independent states. One panel failing does not
-erase another panel's data.
+- A component that fetches owns all of them. It never renders an empty state
+  before a response has proved emptiness, and never renders a zero as a failure.
+- Independent sibling queries own independent states; one panel failing does not
+  erase another panel's data.
+- `empty-state` and `error-state` are the only two presentations for those
+  cases. A page-local "nothing here" paragraph is a second implementation of
+  one of them.
 
 ## 10. Accessibility, per component
 

@@ -1,13 +1,12 @@
 # Depsilo UI Principles
 
-> Stage B step 00. This document states what the interface is *for* before
-> anything is drawn. Values and composition follow in
-> [visual-direction.md](visual-direction.md) and
-> [design-tokens.md](design-tokens.md).
+> What the interface is *for*, before anything is drawn. The look and the
+> refusals follow in [visual-direction.md](visual-direction.md); the values are
+> in [design-tokens.md](design-tokens.md); the contract is
+> [DESIGN.md](../../DESIGN.md). Start at the [design set index](README.md).
 >
-> Sources: [PRODUCT.md](../../PRODUCT.md), [CONTEXT.md](../../CONTEXT.md),
-> [docs/adr](../adr/), and the Stage A
-> [audit](../refactor/shadcn-ui-audit.md).
+> Sources: [PRODUCT.md](../../PRODUCT.md), [CONTEXT.md](../../CONTEXT.md), and
+> [docs/adr](../adr/).
 
 ## 1. Who the interface serves
 
@@ -129,7 +128,71 @@ If a future read-only surface genuinely benefits from 32px, it must carry text
 actions only, and the decision is made then, on that surface, with that
 constraint.
 
-## 5. What this interface is not
+## 5. What each surface must prove
+
+Stated in the Operator's terms. The third column is the test: a surface whose
+first viewport does not answer its question is unfinished, however good it
+looks.
+
+### Portal (anonymous)
+
+| Surface | Intent | First viewport must show |
+| --- | --- | --- |
+| Quick Start `/` | Get one package manager pointed at Depsilo in minutes, with no account | The ecosystem/manager choice, the resulting configuration, and how to verify it |
+| Monitor `/monitor` | Is the service healthy, and are my Upstreams reachable | Health, hit rate, and the Upstreams needing attention |
+
+The Portal is a workbench, not a landing page. It is the first 90 seconds of
+the product and is read by someone who has never seen Depsilo.
+
+### Setup (first run)
+
+A single-page security gate: verify the bootstrap token if required, create the
+first administrator, write the durable configuration, restart. It is not a
+product tour, and it does not get a welcome step.
+
+### Admin
+
+| Surface | Intent | First viewport must show |
+| --- | --- | --- |
+| Dashboard `/admin` | Is anything wrong right now, and what is the request path doing | Service state, the four KPIs, and the first thing needing attention |
+| Bandwidth `/admin/bandwidth` | Where is the traffic and what is it costing | Saved bytes and the top consumers |
+| Access Logs `/admin/logs` | What happened to this request | Filters, then rows that can be opened |
+| Audit Logs `/admin/audit` | The same, in domain terms, with policy outcomes | Filters, then outcomes |
+| Metadata Refreshes `/admin/upstream-updates` | Which upstream metadata refreshes are failing | Result filter and episode history |
+| Upstreams `/admin/upstreams` | Which Upstreams exist, are they reachable, and what do I change | Search, health filter, and the inventory |
+| Package Rules `/admin/rules` | What am I refusing, and why | Rules and a way to test one |
+| Security `/admin/security` | What does Depsilo know about vulnerability in what I serve | The intelligence view and its score |
+| Quarantine `/admin/quarantine` | What was withheld, and what needs approval | Events needing a decision |
+| Artifacts `/admin/cache` | What is cached, and what can I safely remove | Size, pressure, and the destructive actions with their consequences |
+| Index Cache `/admin/indexes` | Which package indexes are cached | Per-ecosystem cache state |
+| Compiler Cache `/admin/compile-cache` | Is ccache/sccache working, and who can use it | Status, hit rate, and credentials |
+| Settings `/admin/settings` | What is configured, what is effective, what needs a restart | The distinction between configured and applied |
+| Users `/admin/users` | Who can act, and with what tokens | Operators and their access |
+| License `/admin/license` | What this deployment is entitled to | The entitlement, stated plainly |
+| Projects `/admin/projects` | Which projects connect here, and how | The project list |
+| Attention `/admin/attention` | The merged queue behind the Dashboard's attention rail | Nothing needing attention, or what does |
+| Connect `/admin/connect` | First-project onboarding loop | The chosen ecosystem's configuration and its verification |
+
+## 6. Product honesty requirements
+
+These come from [PRODUCT.md](../../PRODUCT.md) and are interface obligations,
+not copy preferences:
+
+- The **minimum-release-age gate is safety-disabled**. It must not appear as an
+  available switch, and a positive threshold must not read as usable.
+- The **commercial model is undecided**. Licence and Pro surfaces state the
+  current entitlement precisely and carry no pricing, trial, or tier language
+  presented as durable truth.
+- **General-purpose artifact repository support has not shipped.** It is not
+  presented as a current capability.
+- **Delivered, unreleased, and planned capabilities are described by actual
+  release state**, never as uniformly available.
+
+## 7. What this interface is not
+
+Positioning, not styling. The devices it refuses — glow, nested cards,
+decorative charts — are listed in
+[visual-direction.md §9](visual-direction.md#9-explicitly-refused).
 
 | Not this | Because |
 | --- | --- |
@@ -139,7 +202,7 @@ constraint.
 | An enterprise console | The deployment is single-instance and self-hosted; scale theatre is dishonest. |
 | A showcase for visual effects | Effects compete with the data for attention. |
 
-## 6. Product-meaning rules
+## 8. Product-meaning rules
 
 These belong in the interface layer (`components/app`), not in the generic
 primitives (`components/ui`):
@@ -153,7 +216,7 @@ primitives (`components/ui`):
 If a colour or a badge exists to express one of these, it is a product token and
 it is documented in [design-tokens.md](design-tokens.md) as such.
 
-## 7. How to tell whether a screen obeys this document
+## 9. How to tell whether a screen obeys this document
 
 For any screen, answer these without hedging:
 

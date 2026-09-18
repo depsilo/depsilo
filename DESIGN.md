@@ -6,11 +6,24 @@
 > `web/src/portal/`. When this document and the code disagree, fix the
 > document in the same change.
 >
-> This document says what the system *is*: its layers, tokens, component
-> contracts, states, and the invariants the suite encodes. The reasoning behind
-> each value — why the ramp is shaped this way, why a control is 36px and a row
-> 40px, why a status has three axes — lives in [docs/design/](docs/design/),
-> which is the working reference for design work.
+> This document says what the system *is*: its layers, token roles, component
+> inventory, states, and the invariants the suite encodes. It is also the
+> contract a change is measured against.
+>
+> Which document is authoritative for what:
+>
+> | Fact | Home |
+> | --- | --- |
+> | The system as it stands (this document) | `DESIGN.md` |
+> | Why the interface serves what it serves | [product-ui-principles.md](docs/design/product-ui-principles.md) |
+> | Why it looks like this, and what it refuses | [visual-direction.md](docs/design/visual-direction.md) |
+> | Every value: colour, type, space, radius, elevation, motion, charts, status | [design-tokens.md](docs/design/design-tokens.md) |
+> | How components compose, and what must never be built | [component-guidelines.md](docs/design/component-guidelines.md) |
+> | The mark and the palette it fixes | [docs/brand/](docs/brand/README.md) |
+>
+> [docs/design/README.md](docs/design/README.md) is the index to that set. The
+> values live in `web/src/index.css`; a document that disagrees with it is the
+> thing to correct.
 
 ## Product Surfaces
 
@@ -22,7 +35,8 @@
 
 The Portal is not a marketing landing page. Quick Start is the first screen;
 Monitor is the second. Admin is dense and optimised for scanning and repeated
-actions.
+actions. What each surface must prove in its first viewport is in
+[product-ui-principles.md §5](docs/design/product-ui-principles.md#5-what-each-surface-must-prove).
 
 ## Architecture
 
@@ -72,11 +86,15 @@ There is no third `prefers-color-scheme` copy of the palette.
 
 ### Roles
 
+The full value table for every role — and the floors each pair must clear — is
+[design-tokens.md §2](docs/design/design-tokens.md#2-colour). This table is the
+map: what each role is *for*.
+
 | Token | Meaning |
 | --- | --- |
 | `background` / `foreground` | Page canvas and primary text |
 | `card` / `popover` | Raised surfaces |
-| `primary` | Commands, links, focus, active navigation. The brand's Deep Blue (`#2563EB`), or its lighter step (`#60A5FA`) on the dark canvas |
+| `primary` | Commands, links, focus, active navigation. The brand's blue |
 | `secondary` / `muted` | Quiet fills and insets |
 | `accent` | Hover and selected surfaces, tinted with the brand blue so "selected" never reads as "a shade darker" |
 | `destructive` | Real failures, explicit refusals, destructive commands |
@@ -85,7 +103,7 @@ There is no third `prefers-color-scheme` copy of the palette.
 | `info` | Neutral operational signal (live activity) |
 | `border` / `input` / `ring` | Keylines, control outlines, focus |
 | `sidebar*` | The Admin navigation rail |
-| `radius-control` / `radius-surface` | 6px and 10px. `rounded-sm`, `-md`, and `-lg` are the control radius; `-xl` is the surface radius. There is no third value |
+| `radius-control` / `radius-surface` | Two radii and no third: `rounded-sm`, `-md`, and `-lg` are the control radius; `-xl` is the surface radius |
 | `shadow-surface` / `-card` / `-pop` | Three elevation levels. `-pop` is the only one used over content (tooltips, an ink code block) |
 | `code-surface*` | The one deliberate dark surface in both themes: a command a reader is meant to paste |
 | `chart-*` | Series, grid, and axis label colours. Charts are part of the system, not a page-local palette |
@@ -185,7 +203,10 @@ Use these before adding a primitive. Admin-specific composition belongs in
 
 ## State Semantics
 
-Keep these dimensions separate when they appear together in Admin:
+The full vocabulary — the dimensions, the tones, severity, health, and the
+one-signal-per-row rule — is
+[design-tokens.md §4](docs/design/design-tokens.md#4-status-system). Keep these
+dimensions separate when they appear together in Admin:
 
 | Dimension | Normal result | Attention result |
 | --- | --- | --- |
@@ -224,6 +245,24 @@ boundaries. A failure in one panel must not erase successful data in another.
 - Motion honours `prefers-reduced-motion`.
 - Responsive tables scroll inside a named region; the document must never gain
   horizontal overflow at 320px.
+
+## What Must Not Regress
+
+The redesign changes how states look. It does not remove states, weaken an
+invariant, or change behaviour the suite encodes. Each row names the spec that
+holds it.
+
+| Invariant | Enforced by |
+| --- | --- |
+| Five query states per data region, distinguishable | `admin-query-states.spec.ts` |
+| A pending mutation cannot be abandoned | `admin-dialog-actions.spec.ts` |
+| Every icon-only control is ≥40×40 in every state | `fixtures/a11y.ts`, asserted by the Admin, Portal, and Setup specs |
+| No letter spacing, anywhere, in both locales | `fixtures/a11y.ts`, same three |
+| No horizontal document scroll at 320px | `fixtures/a11y.ts`, responsive specs |
+| Filters and pagination survive reload, Back, and deep links | log and settings workspace specs |
+| The same health rule drives every health display | Portal Monitor and Admin Upstreams specs |
+| Chinese and English stay in parity | `make lint-i18n` |
+| An Admin route never falls through to the Portal SPA | routing specs |
 
 ## Verification
 
@@ -266,16 +305,16 @@ two earlier marks were superseded.
 
 ## Stage Status
 
-Stage A (architecture) is complete: the shadcn initialisation on Base UI, the
-single-cascade semantic token layer, the primitive migration, the Admin shell,
-the removal of every legacy token name and hand-written component class from
-`index.css`, the Lucide migration, and the dependency census. See
-[docs/refactor/shadcn-ui-plan.md](docs/refactor/shadcn-ui-plan.md).
+Both stages are complete: Stage A migrated the UI architecture to shadcn/ui on
+Base UI without redesigning anything, and Stage B rebuilt the visual system on
+top of it — tokens, typography, navigation, page layout, status vocabulary,
+tables, forms, the Dashboard, the remaining Admin pages, the Portal and Setup,
+and the brand kit.
 
-Stage B (redesign) is complete through step 15: tokens, typography, navigation,
-page layout, status vocabulary, tables, forms, Dashboard, the remaining Admin
-pages, the Portal and Setup, and the brand kit. The plan and its reasoning are
-in [docs/design/page-redesign-plan.md](docs/design/page-redesign-plan.md).
+There is no migration plan left to follow. The task-by-task plans and the
+proposal that preceded them are in git history rather than the working tree,
+per [docs/README.md](docs/README.md); what remains here is the system they
+produced and the rules it must keep.
 
 `index.css` is imports, tokens, the dark variant, a base layer, and the icon
 box — no component styling. Pages still carry inline `style` objects where the

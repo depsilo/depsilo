@@ -1,12 +1,14 @@
 # Depsilo Design Tokens
 
-> Stage B step 00. The token contract that step 01 implements. Intent is in
+> The token contract, and the only document that holds values. Intent is in
 > [visual-direction.md](visual-direction.md); principles are in
-> [product-ui-principles.md](product-ui-principles.md).
+> [product-ui-principles.md](product-ui-principles.md); the contract a
+> component is measured against is [DESIGN.md](../../DESIGN.md). Start at the
+> [design set index](README.md).
 >
-> Stage A built the structure this document fills in: one `:root`, one `.dark`,
-> and a `@theme inline` block in `web/src/index.css`. Nothing here changes that
-> architecture — it changes the values and adds the roles below.
+> The structure is one `:root`, one `.dark`, and a `@theme inline` block in
+> `web/src/index.css`. This document explains what each role means and which
+> floors it must clear; the stylesheet is where the values physically live.
 
 ## 1. Architecture
 
@@ -20,7 +22,7 @@ Two tiers, no third:
 Components only ever read semantic tokens. A primitive appearing in a component
 is a defect: it means someone made a colour decision at a call site.
 
-Rules carried from Stage A, which step 01 must not undo:
+Rules the token layer has to keep:
 
 - One cascade. Light is `:root`, dark is `.dark`. No third copy of the palette.
 - `@custom-variant dark` keyed on the root class, set before first paint.
@@ -176,9 +178,9 @@ tracking unavailable anyway.
 
 ### 3.2 Scale
 
-Nine roles, and nothing else. Before step 02 the app layer used seventeen
-arbitrary sizes and twelve arbitrary font weights, which is drift rather than a
-system.
+Nine roles, and nothing else. Before the type scale was established the app
+layer used seventeen arbitrary sizes and twelve arbitrary font weights, which
+is drift rather than a system.
 
 | Token | Size | Role |
 | --- | --- | --- |
