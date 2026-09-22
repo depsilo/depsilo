@@ -40,6 +40,7 @@ type Upstream struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	client        *http.Client
+	traffic       trafficCounter
 	// directNetworkGuard means hostname targets are resolved and authorized by
 	// the guarded dialer before the exact resolved IP is used for the socket.
 	// Configured HTTP proxies own their DNS and egress boundary instead.
@@ -254,6 +255,7 @@ func newUpstreamFromRecord(record db.UpstreamRecord) (*Upstream, error) {
 		Proxy: record.Proxy, Priority: record.Priority, ProbeMode: mode, ProbeInterval: interval,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, client: client,
 		directNetworkGuard: record.Proxy == "",
+		traffic:            trafficCounter{startedAt: time.Now().UTC()},
 		health: healthState{
 			healthy: record.Healthy, avgLatency: time.Duration(record.AvgLatencyMs) * time.Millisecond,
 			successRate: record.SuccessRate, lastCheckedAt: record.LastCheckedAt,
@@ -336,6 +338,7 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 		return nil, fmt.Errorf("fetch %s: upstream client unavailable", safeURLOrigin(reqURL))
 	}
 	client := *u.client
+	client.Transport = u.measuredTransport()
 	client.CheckRedirect = u.secureRedirectCheck(client.CheckRedirect)
 	recovery, err := u.admitExchange()
 	if err != nil {
@@ -397,6 +400,7 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 		return nil, fmt.Errorf("fetch %s: upstream client unavailable", safeURLOrigin(reqURL))
 	}
 	client := *u.client
+	client.Transport = u.measuredTransport()
 	client.CheckRedirect = u.secureRedirectCheck(client.CheckRedirect)
 	recovery, err := u.admitExchange()
 	if err != nil {

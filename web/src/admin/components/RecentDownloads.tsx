@@ -119,36 +119,29 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
       data-query-key="dashboard-recent-downloads"
       aria-labelledby="recent-downloads-title"
       aria-busy={query.isPending || undefined}
-      className="min-w-0 overflow-hidden rounded-lg bg-muted"
+      className="min-w-0 overflow-hidden border-t border-border"
     >
       <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            aria-hidden
-            data-live-pulse
-            className={`size-1.5 shrink-0 rounded-full ${hasConnectionError ? 'bg-warning' : 'bg-info'} ${hasConnectionError ? '' : 'animate-live-pulse'}`}
-          />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h2 id="recent-downloads-title" className="text-body font-semibold text-foreground">
             {t('recentDownloads.title')}
           </h2>
-          <span className="text-meta text-muted-foreground">
-            {hasConnectionError ? t('recentDownloads.retrying') : t('recentDownloads.liveRefresh')}
-          </span>
+          {hasConnectionError && <span className="text-meta text-warning">{t('recentDownloads.retrying')}</span>}
         </div>
         <Link
-          to={getAdminRouteHref('auditLogs')}
+          to={getAdminRouteHref('accessLogs')}
           className="inline-flex min-h-10 items-center gap-1 rounded-sm px-2 whitespace-nowrap text-label font-semibold no-underline text-primary hover:bg-card"
         >
-          {t('recentDownloads.viewAudit')}
+          {t('recentDownloads.viewRequests')}
           <span aria-hidden>→</span>
         </Link>
       </header>
 
-      <div
-        data-live-flow
-        aria-hidden
-        className={`relative h-px overflow-hidden bg-border after:absolute after:inset-y-0 after:left-0 after:w-[18%] after:rounded-full after:bg-info after:content-[''] ${hasConnectionError ? 'after:animate-none' : 'after:animate-live-sweep'}`}
-      />
+      <details className="px-4 pb-2 text-meta text-muted-foreground">
+        <summary className="cursor-pointer rounded-sm py-1">{t('recentDownloads.updateDetails')}</summary>
+        <p>{t('dashboard.fetchedAt', { time: query.dataUpdatedAt ? exactTime(new Date(query.dataUpdatedAt).toISOString(), locale) : '—', seconds: 5 })}</p>
+      </details>
+      {hasStaleData && <p role="status" className="px-4 pb-2 text-meta text-warning">{t('recentDownloads.stale')}</p>}
 
       {query.isPending ? (
         <div aria-hidden="true" className={isRail ? 'grid grid-cols-1' : 'grid grid-cols-1 sm:grid-cols-3'}>
@@ -176,20 +169,12 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
           </ButtonV2>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex min-h-24 items-center gap-2 px-4 py-3 text-label text-muted-foreground">
+        <div className="flex min-h-16 items-center gap-2 px-4 py-3 text-label text-muted-foreground">
           <Download className="icon icon-sm" aria-hidden />
           <span>{t('recentDownloads.empty')}</span>
         </div>
       ) : (
         <>
-          {hasStaleData && (
-            <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b-[0.5px] border-warning/35 bg-warning/10 px-3 py-1.5 text-meta text-warning">
-              <span>{t('recentDownloads.stale')}</span>
-              <button type="button" className="min-h-7 rounded px-2 font-semibold" onClick={() => { void query.refetch() }}>
-                {t('recentDownloads.retry')}
-              </button>
-            </div>
-          )}
           <ol aria-label={t('recentDownloads.listLabel')} className={isRail ? 'grid grid-cols-1' : 'grid grid-cols-1 sm:grid-cols-3'}>
             {items.map((item, index) => {
               const outcome = downloadOutcome(item, t)
@@ -202,7 +187,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
                 <li
                   key={item.id}
                   data-download-id={item.id}
-                  className={`min-w-0 animate-live-enter px-4 py-3 ${isRail ? (index > 0 ? 'border-t border-border' : '') : 'sm:border-l sm:border-border'}`}
+                  className={`min-w-0 px-4 py-3 ${isRail ? (index > 0 ? 'border-t border-border' : '') : 'sm:border-l sm:border-border'}`}
                   aria-label={t('recentDownloads.itemLabel', {
                     ecosystem,
                     package: fullPackageName,
@@ -212,15 +197,15 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
                     time: when,
                   })}
                 >
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-start gap-2">
                     {isAdminEcosystem(item.ecosystem) ? (
                       <EcosystemIcon type={item.ecosystem} size={13} decorative />
                     ) : (
                       <Package2 className="icon icon-sm" aria-hidden />
                     )}
-                    <span className="min-w-0 flex-1 truncate font-mono text-body font-medium text-foreground" title={fullPackageName}>
+                    <span className="min-w-0 basis-[65%] flex-1 break-words [overflow-wrap:anywhere] font-mono text-body font-medium text-foreground" title={fullPackageName}>
                       {packageName}
-                      {item.version && <span className="text-muted-foreground">@{item.version}</span>}
+                      {item.version && <span className="block max-w-full truncate text-meta text-muted-foreground">@{item.version}</span>}
                     </span>
                     <BadgeV2 variant={outcome.variant} className="shrink-0">{outcome.label}</BadgeV2>
                   </div>

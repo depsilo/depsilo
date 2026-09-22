@@ -1,0 +1,545 @@
+/* Dashboard-only visual language. The shared Admin tokens remain untouched. */
+.overview {
+  --dashboard-canvas: #f3f6fa;
+  --dashboard-surface: #ffffff;
+  --dashboard-inner: #f8fafd;
+  --dashboard-border: #e4eaf2;
+  --dashboard-divider: #e6edf5;
+  --dashboard-muted: #596a80;
+  --dashboard-shadow: 0 1px 3px rgba(20, 35, 60, 0.03);
+  --dashboard-cpu: #16a365;
+  --dashboard-cpu-soft: #e8f7ef;
+  --dashboard-service: #2563eb;
+  --dashboard-service-soft: #eaf2ff;
+  --dashboard-cache: #8055de;
+  --dashboard-cache-soft: #f0eafc;
+  --dashboard-upstream: #d88416;
+  --dashboard-upstream-soft: #fff3e2;
+  --dashboard-download: #159b72;
+  --dashboard-download-soft: #e7f7f0;
+  position: relative;
+  box-sizing: border-box;
+  container-type: inline-size;
+  padding: 1rem 1.25rem 2.25rem;
+  border-radius: 0.75rem;
+  background: var(--dashboard-canvas);
+}
+
+.overview h1 {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+}
+
+.overview h2 {
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 650;
+}
+
+.overview :global([data-dashboard-panel]) {
+  border-color: var(--dashboard-border);
+  border-radius: 0.625rem;
+  background: var(--dashboard-surface);
+  box-shadow: var(--dashboard-shadow);
+}
+
+.overview :global([data-dashboard-section]) {
+  padding: 0.875rem 1.125rem;
+}
+
+.overview :global([data-dashboard-section] > h2) {
+  margin-bottom: 0.75rem;
+  min-height: 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.overview :global(.dashboard-resource-panel) {
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+.overview :global(.dashboard-resource-panel > h2) {
+  margin-bottom: 0.625rem;
+}
+
+.overview :global([data-dashboard-panel] [data-dashboard-card]) {
+  border-color: color-mix(in srgb, var(--dashboard-divider) 78%, transparent);
+  background: var(--dashboard-inner);
+  border-radius: 0.5rem;
+}
+
+.overview :global([data-dashboard-label]) {
+  color: var(--dashboard-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.overview :global([data-dashboard-value]) {
+  font-family: inherit;
+  font-size: 1.875rem;
+  line-height: 2.2rem;
+  font-weight: 650;
+}
+
+.overview :global([data-dashboard-value-number]) {
+  font-size: inherit;
+}
+
+.overview :global([data-dashboard-value-unit]) {
+  margin-left: 0.4rem;
+  color: var(--dashboard-muted);
+  font-size: 0.9rem;
+  font-weight: 550;
+}
+
+.overview :global(.dashboard-benefit-value) {
+  margin-top: 0.5rem;
+  font-size: 2rem;
+  line-height: 2.25rem;
+}
+
+.overview :global(.dashboard-network-meta) {
+  font-size: 0.75rem;
+}
+
+.overview :global(.dashboard-network-rates) {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.overview :global(.dashboard-network-rate) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--dashboard-muted);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
+.overview :global(.dashboard-network-rate strong) {
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.overview :global([data-dashboard-meta]) {
+  color: var(--dashboard-muted);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.overview :global([data-dashboard-status-strip]) {
+  padding: 0.875rem 1.125rem;
+}
+
+.overview :global([data-dashboard-status-strip] > div) {
+  column-gap: 0;
+  row-gap: 0.75rem;
+}
+
+.overview :global([data-dashboard-status-strip] > div > div) {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.1rem 1.125rem;
+  border-left: 1px solid var(--dashboard-divider);
+}
+
+.overview :global([data-dashboard-status-strip] > div > button) {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.1rem 1.125rem;
+}
+
+.overview :global([data-dashboard-status-strip] > div > div > div) {
+  min-height: 3.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.overview :global([data-dashboard-status-strip] > div > button > div) {
+  min-height: 3.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.overview :global([data-dashboard-status-strip] > div > div:first-child) {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.overview :global([data-dashboard-status-strip] > div > button:first-child) {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.metricPanels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr));
+  align-items: start;
+  gap: 1rem;
+}
+
+.metricPanels > section {
+  min-width: 0;
+  container: metric-panel / inline-size;
+}
+
+.overview :global([data-dashboard-resource-grid]),
+.overview :global([data-dashboard-traffic-grid]) {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.625rem;
+}
+
+/* Use the panel's available space, not the viewport: two panels may share a row. */
+@container metric-panel (min-width: 28rem) {
+  .overview :global([data-dashboard-resource-grid]),
+  .overview :global([data-dashboard-traffic-grid]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container metric-panel (min-width: 56rem) {
+  .overview :global([data-dashboard-resource-grid]),
+  .overview :global([data-dashboard-traffic-grid]) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.overview :global([data-dashboard-resource-card]),
+.overview :global([data-dashboard-traffic-card]) {
+  position: relative;
+  min-height: 6rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.overview :global(.dashboard-metric-card) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.overview :global(.dashboard-metric-heading) {
+  flex: 1 1 5rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.overview :global(.dashboard-metric-content) {
+  flex: 2 1 8rem;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.overview :global(.dashboard-benefits-panel),
+.overview :global(.dashboard-attention-panel) {
+  align-self: start;
+}
+
+.overview :global(.dashboard-benefits-grid) {
+  gap: 1.25rem;
+}
+
+.overview :global(.dashboard-benefit-card) {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.9fr) minmax(0, 1.1fr);
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.overview :global(.dashboard-benefit-heading) {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.overview :global(.dashboard-benefit-heading p) {
+  min-width: 0;
+}
+
+.overview :global(.dashboard-benefit-content) {
+  min-width: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.overview :global(.dashboard-attention-body) {
+  padding: 0.75rem 1rem 0.875rem;
+}
+
+.overview :global(.dashboard-attention-item) {
+  min-height: 0;
+}
+
+.overview :global([data-dashboard-resource-card] [data-dashboard-value]),
+.overview :global([data-dashboard-traffic-card] [data-dashboard-value]) {
+  margin-top: 0;
+}
+
+.overview :global([data-dashboard-progress]) {
+  height: 0.35rem;
+  margin-top: 0.7rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dashboard-cache-soft);
+}
+
+.overview :global([data-dashboard-progress] > span) {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dashboard-cache);
+}
+
+.overview :global(.dashboard-resource-icon),
+.overview :global(.dashboard-traffic-icon),
+.overview :global(.dashboard-benefit-icon) {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.overview :global(.dashboard-resource-icon) {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+}
+
+.overview :global(.dashboard-traffic-icon) {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+}
+
+.overview :global(.dashboard-benefit-icon) {
+  width: 2.125rem;
+  height: 2.125rem;
+  border-radius: 0.625rem;
+}
+
+.overview :global(.dashboard-tone-cpu) {
+  color: var(--dashboard-cpu);
+  background: var(--dashboard-cpu-soft);
+}
+
+.overview :global(.dashboard-tone-service),
+.overview :global(.dashboard-tone-memory) {
+  color: var(--dashboard-service);
+  background: var(--dashboard-service-soft);
+}
+
+.overview :global(.dashboard-tone-cache) {
+  color: var(--dashboard-cache);
+  background: var(--dashboard-cache-soft);
+}
+
+.overview :global(.dashboard-tone-upstream) {
+  color: var(--dashboard-upstream);
+  background: var(--dashboard-upstream-soft);
+}
+
+.overview :global(.dashboard-tone-download) {
+  color: var(--dashboard-download);
+  background: var(--dashboard-download-soft);
+}
+
+.overview :global(.dashboard-resource-card--cpu .dashboard-resource-sparkline) {
+  color: var(--dashboard-cpu);
+}
+
+.overview :global(.dashboard-resource-card--memory .dashboard-resource-sparkline) {
+  color: var(--dashboard-service);
+}
+
+.overview :global(.dashboard-resource-card--cache .dashboard-resource-sparkline) {
+  color: var(--dashboard-cache);
+}
+
+.overview :global(.dashboard-resource-card--service .dashboard-resource-sparkline) {
+  color: var(--dashboard-service);
+}
+
+.overview :global(.dashboard-network-rate--service::before),
+.overview :global(.dashboard-network-rate--upstream::before) {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: 0 0 auto;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+  background: var(--dashboard-service);
+}
+
+.overview :global(.dashboard-network-rate--upstream::before) {
+  background: var(--dashboard-upstream);
+}
+
+.overview :global(.dashboard-network-rate--service),
+.overview :global(.dashboard-network-rate--upstream) {
+  justify-content: flex-start;
+}
+
+.overview :global(.dashboard-network-rate--service strong),
+.overview :global(.dashboard-network-rate--upstream strong) {
+  margin-left: auto;
+}
+
+.overview :global(.dashboard-trend-service) {
+  color: var(--dashboard-service);
+}
+
+.overview :global(.dashboard-trend-upstream) {
+  color: var(--dashboard-upstream);
+}
+
+.overview :global(.dashboard-trend-miss) {
+  color: var(--dashboard-muted);
+}
+
+.overview :global(.dashboard-resource-sparkline) {
+  display: block;
+  flex: 0 0 3rem;
+  width: 3rem;
+  height: 1.25rem;
+  margin-left: auto;
+  overflow: visible;
+  color: var(--dashboard-service);
+}
+
+.overview :global(.dashboard-resource-sparkline path) {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.overview :global([data-dashboard-status-icon]) {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #2563eb;
+}
+
+.overview :global(.dashboard-status-ok) {
+  background: #e3f7ed;
+  color: #0f9f5a;
+}
+
+.overview :global(.dashboard-status-attention) {
+  background: #fff2df;
+  color: #b45309;
+}
+
+.overview :global(.dashboard-status-unknown) {
+  background: #edf1f6;
+  color: #64748b;
+}
+
+@media (min-width: 640px) and (max-width: 1279px) {
+  .overview :global([data-dashboard-status-strip] > div > div:nth-child(odd)) {
+    border-left: 0;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .overview {
+    padding: 1rem 0.875rem 2rem;
+    border-radius: 0;
+  }
+
+  .overview :global([data-dashboard-status-strip] > div > div) {
+    border-left: 0;
+    border-top: 1px solid var(--dashboard-divider);
+    padding: 0.75rem 0;
+  }
+
+  .overview :global([data-dashboard-status-strip] > div > div:first-child) {
+    border-top: 0;
+  }
+
+  .overview :global(.dashboard-resource-sparkline) {
+    display: none;
+  }
+}
+
+:global(.dark) .overview {
+  --dashboard-canvas: var(--background);
+  --dashboard-surface: #142033;
+  --dashboard-inner: #17263c;
+  --dashboard-border: #263852;
+  --dashboard-divider: #263852;
+  --dashboard-muted: #9aabc2;
+  --dashboard-shadow: 0 2px 10px rgba(0, 0, 0, 0.16);
+  --dashboard-cpu: #55d692;
+  --dashboard-cpu-soft: #123c2a;
+  --dashboard-service: #83b4ff;
+  --dashboard-service-soft: #1b3557;
+  --dashboard-cache: #b59aff;
+  --dashboard-cache-soft: #322650;
+  --dashboard-upstream: #f6c16e;
+  --dashboard-upstream-soft: #4c3315;
+  --dashboard-download: #63d7ae;
+  --dashboard-download-soft: #123c32;
+}
+
+:global(.dark) .overview :global([data-dashboard-card]) {
+  background: #17263c;
+}
+
+:global(.dark) .overview :global([data-dashboard-progress]) {
+  background: var(--dashboard-cache-soft);
+}
+
+:global(.dark) .overview :global([data-dashboard-status-icon]) {
+  background: #1b3557;
+  color: #83b4ff;
+}
+
+:global(.dark) .overview :global(.dashboard-status-ok) {
+  background: #123c2a;
+  color: #62d99b;
+}
+
+:global(.dark) .overview :global(.dashboard-status-attention) {
+  background: #4c3315;
+  color: #f6c16e;
+}
+
+:global(.dark) .overview :global(.dashboard-status-unknown) {
+  background: #273247;
+  color: #b7c4d7;
+}
+
+.layout {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  gap: 24px;
+}
+
+@container (min-width: 1120px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}

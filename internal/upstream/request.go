@@ -109,6 +109,7 @@ func (u *Upstream) request(
 		return nil, fmt.Errorf("request %s: upstream client unavailable", safeURLOrigin(reqURL))
 	}
 	client := *u.client
+	client.Transport = u.measuredTransport()
 	if !followRedirects {
 		client.CheckRedirect = func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse

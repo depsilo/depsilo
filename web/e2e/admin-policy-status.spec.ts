@@ -1,6 +1,6 @@
 import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 
-test('Admin shows when policy decisions use a stale snapshot and can refresh it', async ({ page }) => {
+test('Admin keeps policy freshness contextual instead of rendering a global banner', async ({ page }) => {
   let calls = 0
   await mockAdminApi(page, {
     'GET /api/v1/admin/policy/status': () => {
@@ -29,15 +29,10 @@ test('Admin shows when policy decisions use a stale snapshot and can refresh it'
   await page.goto('/admin/rules')
 
   const banner = page.locator('[data-admin-policy-status-banner]')
-  await expect(banner).toBeVisible()
-  await expect(banner).toContainText('Policy rules are using a stale snapshot.')
-  await expect(banner).toContainText('Last successful refresh: 12 minutes ago')
+  await expect(banner).toHaveCount(0)
   await expect(page.locator('[data-admin-topbar]')).toHaveCSS('height', '48px')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
-
-  await banner.getByRole('button', { name: 'Refresh policy status' }).click()
-  await expect.poll(() => calls).toBe(2)
-  await expect(banner).toHaveCount(0)
+  expect(calls).toBe(0)
 })
 
 test('Admin does not present an unavailable policy probe as healthy', async ({ page }) => {
@@ -57,10 +52,7 @@ test('Admin does not present an unavailable policy probe as healthy', async ({ p
   await setUiPreferences(page, 'light', 'en')
   await page.goto('/admin/security')
 
-  const banner = page.locator('[data-admin-policy-status-banner]')
-  await expect(banner).toBeVisible()
-  await expect(banner).toContainText('Policy status is temporarily unavailable.')
-  await expect(banner).not.toContainText('Policy rules are using a stale snapshot.')
+  await expect(page.locator('[data-admin-policy-status-banner]')).toHaveCount(0)
 })
 
 test('policy status belongs to Overview and Governance, including client-side navigation', async ({ page }) => {
@@ -88,7 +80,8 @@ test('policy status belongs to Overview and Governance, including client-side na
 
   const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
   await navigation.locator('a[href="/admin"]').click()
-  await expect(banner).toContainText('Policy rules are using a stale snapshot.')
+  await expect(banner).toHaveCount(0)
+  await expect.poll(() => calls).toBeGreaterThan(0)
 
   await page.locator('aside [data-admin-sidebar-footer] a[href="/admin/users"]').click()
   await expect(page).toHaveURL(/\/admin\/users$/)
@@ -96,5 +89,5 @@ test('policy status belongs to Overview and Governance, including client-side na
 
   await navigation.locator('a[href="/admin/security"]').click()
   await page.locator('[data-admin-page-navigation="security"] a[href="/admin/rules"]').click()
-  await expect(banner).toContainText('Policy rules are using a stale snapshot.')
+  await expect(banner).toHaveCount(0)
 })

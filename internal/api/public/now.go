@@ -53,18 +53,28 @@ type lastActivity struct {
 }
 
 type rateBlock struct {
-	// All rates derived from the same rolling 60-second window so the
-	// strip never shows internally inconsistent numbers (e.g. "X req/min
-	// but 0 bytes/s"). Egress is bytes_sent to clients (hit + miss).
-	// Ingress is bytes_sent on the miss path only — we stream upstream
-	// through to the client so bytes-from-upstream ≈ bytes-to-client for
-	// misses. Clients gauge "cache savings" as egress / (egress + ingress).
-	RequestsPerMin int64   `json:"requests_per_min"`
-	EgressBps      float64 `json:"egress_bps"`
-	IngressBps     float64 `json:"ingress_bps"`
-	// HasData is false when the window observed zero requests; the
-	// frontend uses it to render "—" instead of misleading "0"s.
-	HasData bool `json:"has_data"`
+	// Client rates are derived from one rolling 60-second access-log window.
+	// Egress is bytes_sent to clients (hit + miss). Ingress is retained for
+	// compatibility with the original /now contract and means miss delivery
+	// bytes; it is not an upstream-read measurement. Actual upstream reads are
+	// reported by the separate upstream_* fields below.
+	RequestsPerMin         int64   `json:"requests_per_min"` // retained for API compatibility; this is a 60s count
+	UpstreamRequestsPerMin int64   `json:"upstream_requests_per_min"`
+	RequestsPerSecond      float64 `json:"requests_per_second"`
+	UpstreamRequestsPerSec float64 `json:"upstream_requests_per_second"`
+	UpstreamBps            float64 `json:"upstream_bps"`
+	UpstreamTrafficKnown   bool    `json:"upstream_traffic_known"` // true only after a complete collector window
+	EgressBps              float64 `json:"egress_bps"`
+	IngressBps             float64 `json:"ingress_bps"`
+	// HasData is true for a complete, successful zero-request window. During
+	// startup sampling or an unavailable query it remains false so callers can
+	// distinguish a measured zero from missing data.
+	HasData                 bool   `json:"has_data"`
+	State                   string `json:"state"` // sampling | ready | unavailable
+	CoverageSeconds         int64  `json:"coverage_seconds"`
+	UpstreamState           string `json:"upstream_state"` // sampling | ready | unavailable
+	UpstreamCoverageSeconds int64  `json:"upstream_coverage_seconds"`
+	Error                   string `json:"error,omitempty"`
 }
 
 type upstreamRollup struct {
@@ -143,29 +153,94 @@ func (h *NowHandler) lastActivity(now time.Time) *lastActivity {
 	}
 }
 
-// rate computes req/min + egress + ingress over the last 60s. One scan over
-// raw access_logs (bounded — 60s of traffic even on a busy server caps at
-// thousands of rows). bytes_sent on miss rows doubles as a proxy for
-// upstream-ingress because the cache streams upstream → client.
+// rate computes client counts and delivery bytes over the last 60s. One scan
+// over raw access_logs is bounded to the active window. Upstream requests and
+// bytes come from the pool's transport/body collector instead of inferring
+// them from cache misses.
 func (h *NowHandler) rate(now time.Time) rateBlock {
 	since := now.Add(-60 * time.Second)
+	coverageStart := since
+	if !h.startTime.IsZero() && h.startTime.After(coverageStart) {
+		coverageStart = h.startTime
+	}
 	var agg struct {
 		Requests int64
 		Egress   int64
 		Ingress  int64
 	}
-	h.db.Model(&db.AccessLog{}).
+	result := h.db.Model(&db.AccessLog{}).
 		Select(`COUNT(*) AS requests,
 			COALESCE(SUM(bytes_sent), 0) AS egress,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS ingress`).
-		Where("created_at >= ?", since).
+		Where("created_at >= ? AND created_at < ?", coverageStart, now).
 		Scan(&agg)
+	coverage := int64(now.Sub(coverageStart) / time.Second)
+	if coverage < 0 {
+		coverage = 0
+	}
+	if coverage > 60 {
+		coverage = 60
+	}
+	state := "ready"
+	if result.Error != nil {
+		state = "unavailable"
+	}
+	if result.Error == nil && coverage < 60 {
+		state = "sampling"
+	}
+	denominator := coverage
+	if denominator <= 0 {
+		denominator = 1
+	}
+	var upstreamTraffic upstream.Traffic
+	upstreamState := "unavailable"
+	upstreamCoverage := int64(0)
+	sourceCount := 0
+	for _, pool := range h.pools {
+		if pool == nil {
+			continue
+		}
+		for _, source := range pool.Snapshot() {
+			sourceCount++
+			window := source.RecentTrafficWindow(now)
+			upstreamTraffic.Requests += window.Requests
+			upstreamTraffic.Bytes += window.Bytes
+			if sourceCount == 1 || window.CoverageSeconds < upstreamCoverage {
+				upstreamCoverage = window.CoverageSeconds
+			}
+		}
+	}
+	if sourceCount > 0 {
+		upstreamState = "ready"
+		if upstreamCoverage < 60 {
+			upstreamState = "sampling"
+		}
+	}
+	upstreamDenominator := upstreamCoverage
+	if upstreamDenominator <= 0 {
+		upstreamDenominator = 1
+	}
+	if result.Error != nil {
+		return rateBlock{
+			State: state, Error: "stats_unavailable", CoverageSeconds: coverage,
+			UpstreamState: upstreamState, UpstreamCoverageSeconds: upstreamCoverage,
+		}
+	}
 
 	return rateBlock{
-		RequestsPerMin: agg.Requests,
-		EgressBps:      float64(agg.Egress) / 60.0,
-		IngressBps:     float64(agg.Ingress) / 60.0,
-		HasData:        agg.Requests > 0,
+		RequestsPerMin:          agg.Requests,
+		UpstreamRequestsPerMin:  upstreamTraffic.Requests,
+		RequestsPerSecond:       float64(agg.Requests) / float64(denominator),
+		UpstreamRequestsPerSec:  float64(upstreamTraffic.Requests) / float64(upstreamDenominator),
+		UpstreamBps:             float64(upstreamTraffic.Bytes) / float64(upstreamDenominator),
+		UpstreamTrafficKnown:    upstreamState == "ready",
+		EgressBps:               float64(agg.Egress) / float64(denominator),
+		IngressBps:              float64(agg.Ingress) / float64(denominator),
+		HasData:                 agg.Requests > 0 || state == "ready",
+		State:                   state,
+		CoverageSeconds:         coverage,
+		UpstreamState:           upstreamState,
+		UpstreamCoverageSeconds: upstreamCoverage,
 	}
 }
 

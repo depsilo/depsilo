@@ -53,9 +53,20 @@ def parse_locale(path: str) -> tuple[set[str], list[tuple[str, int]], dict[str, 
     # Track keys per parent namespace path to detect siblings with same name.
     seen_per_ns: dict[tuple[str, ...], set[str]] = {}
     stack: list[str] = []
+    pending: tuple[str, tuple[str, ...]] | None = None
     with open(path, encoding="utf-8") as f:
         for lineno, line in enumerate(f, start=1):
             stripped = line.rstrip()
+            if pending is not None:
+                value_match = re.match(r"^\s*(['\"])((?:\\.|(?!\1).)*)\1\s*,?\s*$", stripped)
+                if value_match:
+                    k, parent = pending
+                    full = ".".join(parent + (k,))
+                    keys.add(full)
+                    values[full] = value_match.group(2)
+                    pending = None
+                    continue
+                pending = None
             if re.match(r"^\s*\},?\s*$", stripped):
                 if stack:
                     stack.pop()
@@ -79,6 +90,17 @@ def parse_locale(path: str) -> tuple[set[str], list[tuple[str, int]], dict[str, 
                 full = ".".join(stack + [k])
                 keys.add(full)
                 values[full] = m.group(3)
+                continue
+            # Locale files use a readable two-line form for longer strings:
+            # `key:` followed by the quoted value on the next line.
+            m = re.match(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*$", stripped)
+            if m:
+                k = m.group(1)
+                parent = tuple(stack)
+                if k in seen_per_ns.get(parent, set()):
+                    duplicates.append((".".join(stack + [k]), lineno))
+                seen_per_ns.setdefault(parent, set()).add(k)
+                pending = (k, parent)
     return keys, duplicates, values
 
 

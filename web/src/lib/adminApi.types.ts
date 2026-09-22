@@ -45,9 +45,19 @@ export interface NowResponse {
   last_activity?: NowLastActivity
   rate: {
     requests_per_min: number
+    upstream_requests_per_min?: number
+    requests_per_second?: number
+    upstream_requests_per_second?: number
+    upstream_bps?: number
+    upstream_traffic_known?: boolean
     egress_bps: number
     ingress_bps: number
     has_data: boolean
+    state?: 'sampling' | 'ready' | 'unavailable' | string
+    coverage_seconds?: number
+    upstream_state?: 'sampling' | 'ready' | 'unavailable' | string
+    upstream_coverage_seconds?: number
+    error?: string
   }
   upstreams: {
     total: number
@@ -506,6 +516,33 @@ export interface DashboardResponse {
   upstreams: DashboardUpstream[]
   top_packages: Partial<Record<AdminEcosystem, DashboardTopPackage[]>>
   cache_usage_percent?: number
+  runtime?: {
+    heap_alloc_bytes: number
+    heap_sys_bytes: number
+    goroutines: number
+    sampled_at: string
+    cpu?: {
+      state: 'sampling' | 'ready' | 'unsupported' | 'error' | string
+      percent?: number
+      window_seconds?: number
+      sampled_at?: string
+      scope?: string
+      basis?: string
+    }
+    memory?: {
+      state: 'sampling' | 'ready' | 'unsupported' | 'error' | string
+      rss_bytes?: number
+      sampled_at?: string
+      scope?: string
+    }
+  }
+  cache_usage?: {
+    state: 'ready' | 'unsupported' | 'error' | string
+    used_bytes?: number
+    quota_bytes?: number
+    sampled_at?: string
+    basis?: string
+  }
 }
 export interface DashboardTrendsResponse { points: Array<{ bucket: number; date: string; requests: number; hits: number; misses: number; hit_rate: number; bytes_served: number; bytes_hit: number; bytes_miss: number; sum_latency_ms: number; avg_latency_ms: number; errors: number }> }
 

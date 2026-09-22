@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,7 @@ import (
 
 	"depsilo/internal/accesslog"
 	"depsilo/internal/db"
+	"depsilo/internal/runtimeinfo"
 	"depsilo/internal/upstream"
 )
 
@@ -21,6 +23,7 @@ type DashboardHandler struct {
 	useRollup  bool
 	maxSizeGB  int
 	now        func() time.Time
+	runtime    *runtimeinfo.Sampler
 }
 
 func NewDashboardHandler(database *gorm.DB, pools map[string]*upstream.Pool, ecosystems []string, useRollup bool, maxSizeGB int) *DashboardHandler {
@@ -31,6 +34,7 @@ func NewDashboardHandler(database *gorm.DB, pools map[string]*upstream.Pool, eco
 		useRollup:  useRollup,
 		maxSizeGB:  maxSizeGB,
 		now:        time.Now,
+		runtime:    runtimeinfo.New(),
 	}
 }
 
@@ -159,6 +163,41 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		"upstreams":    upstreams,
 		"top_packages": topPackages,
 	}
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	sampler := h.runtime
+	if sampler == nil {
+		sampler = runtimeinfo.New()
+	}
+	process := sampler.Snapshot(now)
+	runtimeResponse := gin.H{
+		"heap_alloc_bytes": mem.HeapAlloc,
+		"heap_sys_bytes":   mem.HeapSys,
+		"goroutines":       runtime.NumGoroutine(),
+		"sampled_at":       now,
+		"cpu": gin.H{
+			"state":          process.CPUState,
+			"scope":          "process",
+			"basis":          "single_core",
+			"window_seconds": process.CPUWindow,
+		},
+		"memory": gin.H{
+			"state": process.MemoryState,
+			"scope": "process",
+		},
+	}
+	if process.CPUPercent != nil {
+		runtimeResponse["cpu"].(gin.H)["percent"] = *process.CPUPercent
+		runtimeResponse["cpu"].(gin.H)["sampled_at"] = process.CPUSampledAt
+	}
+	if process.RSSBytes != nil {
+		runtimeResponse["memory"].(gin.H)["state"] = process.MemoryState
+		runtimeResponse["memory"].(gin.H)["rss_bytes"] = *process.RSSBytes
+		runtimeResponse["memory"].(gin.H)["sampled_at"] = process.MemorySampledAt
+	}
+	response["runtime"] = runtimeResponse
+
+	cacheUsage := gin.H{"state": "unsupported", "basis": "logical_inventory"}
 	if h.maxSizeGB > 0 {
 		var totalSize int64
 		result := h.db.Model(&db.CacheEntry{}).
@@ -166,11 +205,17 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 			Scan(&totalSize)
 		if result.Error != nil {
 			zap.L().Warn("load dashboard cache usage", zap.Error(result.Error))
+			cacheUsage["state"] = "error"
 		} else {
 			const bytesPerGiB = 1024 * 1024 * 1024
-			response["cache_usage_percent"] = float64(totalSize) / (float64(h.maxSizeGB) * bytesPerGiB) * 100
+			quotaBytes := int64(h.maxSizeGB) * bytesPerGiB
+			cacheUsage["state"] = "ready"
+			cacheUsage["used_bytes"] = totalSize
+			cacheUsage["quota_bytes"] = quotaBytes
+			response["cache_usage_percent"] = float64(totalSize) / float64(quotaBytes) * 100
 		}
 	}
+	response["cache_usage"] = cacheUsage
 
 	c.JSON(http.StatusOK, response)
 }
@@ -259,7 +304,11 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"points": points})
+	window := makeTrendWindow(now, spec)
+	if len(points) > 0 {
+		window.start = time.Unix(points[0].Bucket, 0).UTC()
+	}
+	c.JSON(http.StatusOK, gin.H{"points": points, "window": gin.H{"start": window.start, "end": now, "range": rangeParam}})
 }
 
 // trendPoint is one row in the trends response. Carries every dimension the
@@ -267,30 +316,34 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 // switch is a pure render — no refetch. Bucket is unix seconds at the
 // bucket's UTC start; the frontend formats it in the browser's timezone.
 type trendPoint struct {
-	Bucket       int64   `json:"bucket"`
-	Date         string  `json:"date"` // legacy display label (UTC); prefer formatting Bucket client-side
-	Requests     int64   `json:"requests"`
-	Hits         int64   `json:"hits"`
-	Misses       int64   `json:"misses"`
-	HitRate      float64 `json:"hit_rate"`
-	BytesServed  int64   `json:"bytes_served"`
-	BytesHit     int64   `json:"bytes_hit"`
-	BytesMiss    int64   `json:"bytes_miss"`
-	SumLatencyMs int64   `json:"sum_latency_ms"`
-	AvgLatencyMs float64 `json:"avg_latency_ms"`
-	Errors       int64   `json:"errors"`
+	Bucket        int64   `json:"bucket"`
+	Date          string  `json:"date"` // legacy display label (UTC); prefer formatting Bucket client-side
+	Requests      int64   `json:"requests"`
+	Hits          int64   `json:"hits"`
+	Misses        int64   `json:"misses"`
+	HitRate       float64 `json:"hit_rate"`
+	BytesServed   int64   `json:"bytes_served"`
+	BytesHit      int64   `json:"bytes_hit"`
+	BytesMiss     int64   `json:"bytes_miss"`
+	SumLatencyMs  int64   `json:"sum_latency_ms"`
+	HitLatencyMs  int64   `json:"hit_latency_ms"`
+	MissLatencyMs int64   `json:"miss_latency_ms"`
+	AvgLatencyMs  float64 `json:"avg_latency_ms"`
+	Errors        int64   `json:"errors"`
 }
 
 // trendHourBucket is the common aggregate row all three sources produce.
 type trendHourBucket struct {
-	Bucket       int64
-	Requests     int64
-	Hits         int64
-	Misses       int64
-	BytesHit     int64
-	BytesMiss    int64
-	SumLatencyMs int64
-	Errors       int64
+	Bucket        int64
+	Requests      int64
+	Hits          int64
+	Misses        int64
+	BytesHit      int64
+	BytesMiss     int64
+	SumLatencyMs  int64
+	HitLatencyMs  int64
+	MissLatencyMs int64
+	Errors        int64
 }
 
 func (b *trendHourBucket) add(other trendHourBucket) {
@@ -300,6 +353,8 @@ func (b *trendHourBucket) add(other trendHourBucket) {
 	b.BytesHit += other.BytesHit
 	b.BytesMiss += other.BytesMiss
 	b.SumLatencyMs += other.SumLatencyMs
+	b.HitLatencyMs += other.HitLatencyMs
+	b.MissLatencyMs += other.MissLatencyMs
 	b.Errors += other.Errors
 }
 
@@ -314,7 +369,8 @@ func (b trendHourBucket) toPoint(bucketStart time.Time) trendPoint {
 		BytesMiss:    b.BytesMiss,
 		BytesServed:  b.BytesHit + b.BytesMiss,
 		SumLatencyMs: b.SumLatencyMs,
-		Errors:       b.Errors,
+		HitLatencyMs: b.HitLatencyMs, MissLatencyMs: b.MissLatencyMs,
+		Errors: b.Errors,
 	}
 	if b.Requests > 0 {
 		p.HitRate = float64(b.Hits) / float64(b.Requests)
@@ -377,6 +433,8 @@ func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWind
 			COALESCE(SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END), 0) AS bytes_hit,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS bytes_miss,
 			COALESCE(SUM(latency_ms), 0) AS sum_latency_ms,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN latency_ms ELSE 0 END), 0) AS hit_latency_ms,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN latency_ms ELSE 0 END), 0) AS miss_latency_ms,
 			COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`,
 			intervalSec, intervalSec).
 		Where("created_at >= ? AND created_at <= ? AND (cache_result IN (?, ?) OR cache_result = '')", window.start, window.now, "hit", "miss").
@@ -410,6 +468,8 @@ func (h *DashboardHandler) trendsFiveMinutelyWindow(ctx context.Context, window 
 			COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
 			COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN sum_latency_ms ELSE 0 END), 0) AS hit_latency_ms,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN sum_latency_ms ELSE 0 END), 0) AS miss_latency_ms,
 			COALESCE(SUM(error_count), 0) AS errors`,
 			intervalSec, intervalSec).
 		Where("bucket_start >= ? AND bucket_start <= ?", window.start.Unix(), window.now.Unix()).
@@ -451,15 +511,17 @@ func (h *DashboardHandler) trendsHourlyGrouped(ctx context.Context, spec trendSp
 
 func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
 	type hourlyRow struct {
-		Date         string
-		Hour         int
-		Requests     int64
-		Hits         int64
-		Misses       int64
-		BytesHit     int64
-		BytesMiss    int64
-		SumLatencyMs int64
-		Errors       int64
+		Date          string
+		Hour          int
+		Requests      int64
+		Hits          int64
+		Misses        int64
+		BytesHit      int64
+		BytesMiss     int64
+		SumLatencyMs  int64
+		HitLatencyMs  int64
+		MissLatencyMs int64
+		Errors        int64
 	}
 
 	var rows []hourlyRow
@@ -471,6 +533,8 @@ func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window
 			COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
 			COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN sum_latency_ms ELSE 0 END), 0) AS hit_latency_ms,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN sum_latency_ms ELSE 0 END), 0) AS miss_latency_ms,
 			COALESCE(SUM(error_count), 0) AS errors`).
 		Where(`(date > ? OR (date = ? AND hour >= ?))
 			AND (date < ? OR (date = ? AND hour <= ?))`,
@@ -499,7 +563,8 @@ func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window
 			BytesHit:     row.BytesHit,
 			BytesMiss:    row.BytesMiss,
 			SumLatencyMs: row.SumLatencyMs,
-			Errors:       row.Errors,
+			HitLatencyMs: row.HitLatencyMs, MissLatencyMs: row.MissLatencyMs,
+			Errors: row.Errors,
 		})
 		grouped[bucket] = aggregate
 	}

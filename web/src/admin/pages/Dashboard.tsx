@@ -1,257 +1,485 @@
-import { Link2 } from 'lucide-react'
-import { useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { Activity, CheckCircle2, Clock3, Server } from "lucide-react";
+import AdminPage from "@/admin/components/AdminPage";
+import DashboardHeader from "@/admin/components/DashboardHeader";
+import DashboardAttention from "@/admin/components/DashboardAttention";
+import TrendsCard, {
+  type RawTrendPoint,
+  type TrendsRange,
+} from "@/admin/components/TrendsCard";
+import {
+  CacheBenefits,
+  RecentRequests,
+  RequestDetailsDialog,
+  RuntimeResources,
+  TrafficOverview,
+  UpstreamHealthSummary,
+} from "@/admin/components/DashboardPanels";
+import type {
+  AccessLog,
+  BandwidthReportResponse,
+  NowResponse,
+  PolicyStatus,
+} from "@/lib/adminApi.types";
+import { adminApi, statsApi } from "@/lib/api";
+import { getApiError } from "@/lib/apiError";
+import { dashboardStatus } from "@/admin/dashboardStatus";
+import { cn } from "@/lib/utils";
+import QueryErrorState from "@/components/app/error-state";
+import TrafficAnalysis from "@/admin/components/TrafficAnalysis";
+import styles from "./Dashboard.module.css";
 
-import AdminPage from '@/admin/components/AdminPage'
-import DashboardAttention from '@/admin/components/DashboardAttention'
-import NowStrip from '@/admin/components/NowStrip'
-import RecentDownloads from '@/admin/components/RecentDownloads'
-import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/components/TrendsCard'
-import Metric, { type MetricChangeIntent } from '@/components/app/metric'
-import QueryErrorState from '@/components/app/error-state'
-import { LinkButton } from '@/components/app/button'
-import { cn, formatBytes } from '@/lib/utils'
-import SectionHeader from '@/components/app/section-header'
-import { adminApi } from '@/lib/api'
-import { getApiError } from '@/lib/apiError'
-import { getAdminRouteHref } from '@/admin/routes'
-import { upstreamStatus } from '@/lib/upstreamStatus'
+const RANGES: TrendsRange[] = ["1h", "24h", "7d", "30d"];
+const RANGE_LABELS: Record<TrendsRange, string> = {
+  "1h": "1h",
+  "24h": "24h",
+  "7d": "7d",
+  "30d": "30d",
+};
 
-const TREND_REFRESH_INTERVAL: Record<TrendsRange, number> = {
-  '1h': 5_000,
-  '24h': 15_000,
-  '7d': 30_000,
-  '30d': 60_000,
+function formatLastActivity(
+  seconds: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (seconds < 60) return t("now.justNow");
+  if (seconds < 3600)
+    return t("now.minutesAgo", { count: Math.floor(seconds / 60) });
+  if (seconds < 86400)
+    return t("now.hoursAgo", { count: Math.floor(seconds / 3600) });
+  return t("now.daysAgo", { count: Math.floor(seconds / 86400) });
 }
 
-interface TrendQueryData {
-  response: Awaited<ReturnType<typeof adminApi.getDashboardTrends>>
-  range: TrendsRange
-}
-
-/**
- * One internally divided data rail rather than four loose fragments: a 2x2
- * cross below `lg`, a single row of divided cells from `lg` up. The mobile
- * rules are `max-lg:` so they cannot fight the desktop ones.
- */
-const KPI_CELL =
-  'px-3.5 pt-4 pb-[18px] max-lg:even:border-l max-lg:even:border-border ' +
-  'max-lg:nth-[n+3]:border-t max-lg:nth-[n+3]:border-border ' +
-  'lg:px-6 lg:pt-[18px] lg:pb-5 lg:nth-[n+2]:border-l lg:nth-[n+2]:border-border'
-
-/**
- * The supporting rail's width, decided once: a 320px minimum from `xl`, a
- * fixed 380px from `2xl`. Spelled out per row, the same value appeared in four
- * different grid templates.
- */
-const RAIL_WIDTH = '[--rail-w:320px] 2xl:[--rail-w:380px]'
-
-/**
- * One operational canvas: the live request path and trend stay together as
- * the primary instrument, while attention and activity form a compact rail.
- * Keeping this order in the DOM also makes the first mobile viewport answer
- * the most important question before it asks the operator to investigate.
- */
-const DASHBOARD_LAYOUT =
-  `grid min-w-0 items-start gap-5 ${RAIL_WIDTH} ` +
-  'xl:grid-cols-[minmax(0,1fr)_minmax(var(--rail-w),0.38fr)] ' +
-  '2xl:grid-cols-[minmax(0,1fr)_var(--rail-w)]'
-
-function DashboardKpiSkeleton() {
-  return (
-    <div aria-hidden="true" className="grid grid-cols-2 lg:grid-cols-4">
-      {Array.from({ length: 4 }, (_, index) => (
-        <div key={index} className={cn('flex flex-col items-start gap-2', KPI_CELL)}>
-          <div className="h-3 w-20 animate-pulse rounded bg-muted" />
-          <div className="h-8 w-28 animate-pulse rounded bg-muted" />
-          <div className="h-3 w-16 animate-pulse rounded bg-muted" />
-        </div>
-      ))}
-    </div>
-  )
+function formatUptime(
+  seconds: number | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (seconds == null) return "—";
+  if (seconds < 60) return t("dashboard.uptimeUnderMinute");
+  if (seconds < 3600)
+    return t("dashboard.uptimeMinutes", { count: Math.floor(seconds / 60) });
+  if (seconds < 86400)
+    return t("dashboard.uptimeHours", { count: Math.floor(seconds / 3600) });
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor(seconds / 3600) % 24;
+  return hours
+    ? `${t("dashboard.uptimeDays", { count: days })} ${t("dashboard.uptimeHours", { count: hours })}`
+    : t("dashboard.uptimeDays", { count: days });
 }
 
 export default function DashboardV2() {
-  const { t } = useTranslation()
-  const [range, setRange] = useState<TrendsRange>('1h')
-  const [retainedTrendData, setRetainedTrendData] = useState<TrendQueryData>()
-
+  const { t, i18n } = useTranslation();
+  const [search, setSearch] = useSearchParams();
+  const rawRange = search.get("range") ?? search.get("trendRange");
+  const range: TrendsRange = RANGES.includes(rawRange as TrendsRange)
+    ? (rawRange as TrendsRange)
+    : "30d";
+  const reportSupported = range === "7d" || range === "30d";
+  const [selectedLog, setSelectedLog] = useState<AccessLog | null>(null);
+  const [statusDetailsOpen, setStatusDetailsOpen] = useState(false);
+  const [loadedTrendRange, setLoadedTrendRange] = useState<TrendsRange>(range);
+  const [retainedTrendPoints, setRetainedTrendPoints] = useState<
+    RawTrendPoint[] | undefined
+  >();
   const dashboardQuery = useQuery({
-    queryKey: ['admin', 'dashboard'],
+    queryKey: ["admin", "dashboard"],
     queryFn: ({ signal }) => adminApi.getDashboard({ signal }),
     refetchInterval: 30_000,
     retry: false,
-  })
-
-  const trendsQuery = useQuery({
-    queryKey: ['admin', 'dashboard', 'trends', range],
-    queryFn: async ({ signal }): Promise<TrendQueryData> => ({
-      response: await adminApi.getDashboardTrends(range, { signal }),
-      range,
-    }),
-    placeholderData: keepPreviousData,
-    refetchInterval: TREND_REFRESH_INTERVAL[range],
-    refetchOnWindowFocus: 'always',
+  });
+  const nowQuery = useQuery<NowResponse>({
+    queryKey: ["admin", "now"],
+    queryFn: ({ signal }) =>
+      statsApi.getNow({ signal }).then((response) => response.data),
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: "always",
+    staleTime: 4_000,
     retry: false,
-  })
+  });
+  const policyQuery = useQuery<PolicyStatus>({
+    queryKey: ["admin", "policy", "status"],
+    queryFn: ({ signal }) =>
+      adminApi.getPolicyStatus({ signal }).then((response) => response.data),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const trendsQuery = useQuery({
+    queryKey: ["admin", "dashboard", "trends", range],
+    queryFn: ({ signal }) => adminApi.getDashboardTrends(range, { signal }),
+    placeholderData: keepPreviousData,
+    refetchInterval: range === "1h" ? 5_000 : 30_000,
+    refetchOnWindowFocus: "always",
+    retry: false,
+  });
+  const reportQuery = useQuery<BandwidthReportResponse>({
+    queryKey: ["admin", "dashboard", "period", range],
+    queryFn: ({ signal }) =>
+      adminApi
+        .getBandwidthReport({ range }, { signal })
+        .then((response) => response.data),
+    placeholderData: keepPreviousData,
+    refetchInterval: 60_000,
+    enabled: reportSupported,
+    retry: false,
+  });
+  const requestsQuery = useQuery({
+    queryKey: ["admin", "dashboard", "requests"],
+    queryFn: ({ signal }) =>
+      adminApi
+        .listLogs({ page: 1, page_size: 5 }, { signal })
+        .then((response) => response.data),
+    refetchInterval: 30_000,
+    retry: false,
+  });
 
-  const dashboard = dashboardQuery.data?.data
-  const last24h = dashboard?.last_24h
-  const prev24h = dashboard?.prev_24h
-  const upstreams = dashboard?.upstreams ?? []
-  const upstreamsNeedingAttention = upstreams.filter(item => upstreamStatus(item) !== 'healthy')
-  const activeTrendData = trendsQuery.data ?? retainedTrendData
-  const rawTrendPoints: RawTrendPoint[] = activeTrendData?.response.data.points ?? []
-  const dataRange = activeTrendData?.range ?? range
-  const hasTrendData = activeTrendData !== undefined
-  const dashboardInitialError = dashboardQuery.isError && !dashboardQuery.data
-  const dashboardError = dashboardInitialError ? getApiError(dashboardQuery.error) : undefined
-  const requestCount = last24h?.total_requests
-  const hitRate = last24h && last24h.total_requests > 0 ? last24h.hit_rate : null
+  useEffect(() => {
+    if (
+      trendsQuery.data &&
+      !trendsQuery.isPlaceholderData &&
+      !trendsQuery.isRefetchError &&
+      !trendsQuery.isFetching
+    ) {
+      // Query state is the external source of truth for the retained range.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoadedTrendRange(range);
+      setRetainedTrendPoints(
+        (trendsQuery.data.data.points ?? []) as RawTrendPoint[],
+      );
+    }
+  }, [
+    range,
+    trendsQuery.data,
+    trendsQuery.isFetching,
+    trendsQuery.isPlaceholderData,
+    trendsQuery.isRefetchError,
+  ]);
 
-  function handleTrendRangeChange(nextRange: TrendsRange) {
-    if (trendsQuery.data) setRetainedTrendData(trendsQuery.data)
-    setRange(nextRange)
-  }
-
-  const metrics: Array<{
-    label: string
-    value: string
-    change: number | null
-    changeIntent: MetricChangeIntent
-  }> = [
-    {
-      label: t('dashboard.hitRate'),
-      value: hitRate === null ? '—' : `${(hitRate * 100).toFixed(1)}%`,
-      change: hitRate !== null && prev24h?.hit_rate
-        ? ((hitRate - prev24h.hit_rate) / prev24h.hit_rate * 100)
-        : null,
-      changeIntent: 'higher-is-better',
-    },
-    {
-      label: t('dashboard.last24hRequests'),
-      value: requestCount === undefined ? '—' : requestCount.toLocaleString(),
-      change: requestCount !== undefined && prev24h?.total_requests
-        ? ((requestCount - prev24h.total_requests) / prev24h.total_requests * 100)
-        : null,
-      changeIntent: 'neutral',
-    },
-    {
-      label: t('dashboard.bytesServed'),
-      value: last24h ? formatBytes(last24h.bytes_served) : '—',
-      change: null,
-      changeIntent: 'neutral',
-    },
-    {
-      label: t('dashboard.avgLatency'),
-      value: last24h ? `${Math.round(last24h.avg_latency_ms)} ${t('dashboard.msUnit')}` : '—',
-      change: null,
-      changeIntent: 'neutral',
-    },
-  ]
+  const dashboard = dashboardQuery.data?.data;
+  const now = nowQuery.data;
+  const {
+    upstreamHealth,
+    attention: upstreamsNeedingAttention,
+    policyState,
+    overall,
+    issueCategories,
+  } = dashboardStatus(dashboard, policyQuery.data, {
+    snapshotError: dashboardQuery.isError,
+    policyError: policyQuery.isError,
+    proxyResponding: Boolean(now && !nowQuery.isError),
+  });
+  const points = (trendsQuery.data?.data.points ??
+    retainedTrendPoints ??
+    []) as RawTrendPoint[];
+  const period =
+    trendsQuery.isError ||
+    loadedTrendRange !== range ||
+    trendsQuery.isPlaceholderData
+      ? undefined
+      : points.reduce(
+          (total, point) => ({
+            requests: total.requests + point.requests,
+            hits: total.hits + point.hits,
+            bytes: total.bytes + point.bytes_served,
+          }),
+          { requests: 0, hits: 0, bytes: 0 },
+        );
+  const report =
+    reportSupported &&
+    !reportQuery.isPlaceholderData &&
+    !reportQuery.isRefetchError
+      ? reportQuery.data
+      : undefined;
+  const trendBusy =
+    trendsQuery.isFetching ||
+    (!trendsQuery.isError &&
+      !trendsQuery.isRefetchError &&
+      loadedTrendRange !== range);
+  const updatedAt = dashboardQuery.dataUpdatedAt || nowQuery.dataUpdatedAt;
+  const updatedLabel = updatedAt
+    ? new Date(updatedAt).toLocaleTimeString(i18n.language, {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+  const refresh = () => {
+    void Promise.all([
+      dashboardQuery.refetch(),
+      nowQuery.refetch(),
+      policyQuery.refetch(),
+      ...(reportSupported ? [reportQuery.refetch()] : []),
+      requestsQuery.refetch(),
+    ]);
+  };
+  const changeRange = (next: TrendsRange) => {
+    setSearch(() => {
+      // Read the latest URL so a metric-tab update from TrendsCard cannot be
+      // lost when the header period control is clicked immediately after it.
+      const params = new URLSearchParams(window.location.search);
+      params.set("range", next);
+      params.delete("trendRange");
+      return params;
+    });
+  };
 
   return (
-    <AdminPage
-      actions={(
-        <LinkButton to={getAdminRouteHref('connect')}>
-          <Link2 className="icon icon-sm" aria-hidden="true" />
-          {t('dashboard.connectClient')}
-        </LinkButton>
-      )}
-    >
-      <div className="w-full space-y-6">
-        <section
-          data-query-key="dashboard-snapshot"
-          data-dashboard-health
-          aria-busy={dashboardQuery.isPending || undefined}
-          aria-label={`${t('dashboard.healthOverview')}. ${t('dashboard.snapshotRange')}`}
-          className="[&>header]:mb-0"
-        >
-          <SectionHeader
-            title={t('dashboard.healthOverview')}
-            divider={false}
-            action={(
-              <span className="text-meta text-muted-foreground">
-                {t('dashboard.snapshotRange')}
-              </span>
-            )}
-          />
-          {dashboardQuery.isPending && !dashboard ? (
-            <DashboardKpiSkeleton />
-          ) : (
-            <div data-dashboard-kpis className="grid grid-cols-2 lg:grid-cols-4">
-              {metrics.map(metric => (
-                <Metric
-                  key={metric.label}
-                  className={KPI_CELL}
-                  label={metric.label}
-                  value={metric.value}
-                  change={metric.change}
-                  changeIntent={metric.changeIntent}
-                  size="sm"
-                  align="start"
-                />
+    <AdminPage title={false}>
+      <div
+        data-dashboard-overview
+        className={cn(
+          styles.overview,
+          "mx-auto w-full max-w-[1600px] space-y-3",
+        )}
+      >
+        <DashboardHeader
+          upstreamHealth={upstreamHealth}
+          policyState={policyState}
+          proxyResponding={Boolean(now && !nowQuery.isError)}
+          snapshotUpdatedAt={dashboardQuery.dataUpdatedAt}
+          policyUpdatedAt={policyQuery.dataUpdatedAt}
+          proxyUpdatedAt={nowQuery.dataUpdatedAt}
+          snapshotError={dashboardQuery.isError}
+          policyError={policyQuery.isError}
+          proxyError={nowQuery.isError}
+          uptimeSeconds={now?.uptime_seconds}
+          refreshing={
+            dashboardQuery.isFetching ||
+            nowQuery.isFetching ||
+            policyQuery.isFetching
+          }
+          onRefresh={refresh}
+          updatedAt={updatedLabel}
+          statusDetailsOpen={statusDetailsOpen}
+          onStatusDetailsChange={setStatusDetailsOpen}
+          periodControl={
+            <div
+              className="inline-flex rounded-md border border-border bg-card p-1"
+              role="group"
+              aria-label={t("dashboard.period")}
+            >
+              {RANGES.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={cn(
+                    "min-h-9 rounded px-3 text-sm",
+                    range === item
+                      ? "bg-accent font-semibold text-foreground"
+                      : "text-muted-foreground",
+                  )}
+                  aria-pressed={range === item}
+                  onClick={() => changeRange(item)}
+                >
+                  {RANGE_LABELS[item]}
+                </button>
               ))}
             </div>
-          )}
-        </section>
-
-        <div className={DASHBOARD_LAYOUT}>
-          <div className="grid min-w-0 gap-5">
-            <NowStrip
-              cacheHitRate={last24h?.hit_rate}
-              cacheDataPending={dashboardQuery.isPending}
-            />
-            <div
-              data-query-key="dashboard-trends"
-              aria-busy={trendsQuery.isFetching || undefined}
-              className="min-w-0"
+          }
+        />
+        <div data-query-key="dashboard-snapshot">
+          <section
+            data-query-key="now"
+            data-dashboard-panel
+            data-dashboard-status-strip
+            className="rounded-lg border border-border bg-card p-4"
+          >
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            <button
+              type="button"
+              className="group flex min-w-0 items-center gap-3 py-1 text-left focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+              aria-haspopup="dialog"
+              aria-expanded={statusDetailsOpen}
+              onClick={() => setStatusDetailsOpen(true)}
             >
-              {trendsQuery.isPending && !hasTrendData ? (
-                <div
-                  aria-busy="true"
-                  className="border-b border-border bg-card p-4"
+              <span
+                data-dashboard-status-icon
+                className={cn(
+                  overall === "healthy"
+                    ? "dashboard-status-ok"
+                    : overall === "attention"
+                      ? "dashboard-status-attention"
+                      : "dashboard-status-unknown",
+                )}
+                aria-hidden="true"
+              >
+                {overall === "healthy" ? (
+                  <CheckCircle2 className="size-4" />
+                ) : (
+                  <Server className="size-4" />
+                )}
+              </span>
+              <div className="min-w-0 break-words">
+                <p className="text-sm text-muted-foreground">
+                  {t("dashboard.serviceStatus")}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 text-lg font-semibold",
+                    overall === "healthy"
+                      ? "text-success"
+                      : overall === "attention"
+                        ? "text-warning"
+                        : "text-muted-foreground",
+                  )}
                 >
-                  <div aria-hidden="true" className="h-56 animate-pulse rounded-sm bg-muted" />
-                </div>
-              ) : trendsQuery.isError && !hasTrendData ? (
-                <div className="border-b border-border bg-card p-4">
-                  <QueryErrorState
-                    message={getApiError(trendsQuery.error).status === 403
-                      ? t('common.permissionDenied')
-                      : getApiError(trendsQuery.error).message}
-                    onRetry={() => { void trendsQuery.refetch() }}
+                  {t(
+                    overall === "healthy"
+                      ? "dashboard.overallHealthy"
+                      : overall === "attention"
+                        ? "dashboard.overallAttention"
+                        : "dashboard.overallUnknown",
+                  )}
+                </p>
+                <div className="mt-2">
+                  <UpstreamHealthSummary
+                    upstreams={dashboard?.upstreams ?? []}
+                    known={Boolean(dashboard)}
                   />
                 </div>
-              ) : (
-                <TrendsCard
-                  raw={rawTrendPoints}
-                  range={range}
-                  dataRange={dataRange}
-                  isStale={Boolean(hasTrendData && trendsQuery.isError)}
-                  onRetry={() => { void trendsQuery.refetch() }}
-                  onRangeChange={handleTrendRangeChange}
-                />
-              )}
+              </div>
+            </button>
+            <div>
+              <span data-dashboard-status-icon aria-hidden="true">
+                <Activity className="size-4" />
+              </span>
+              <div className="min-w-0 break-words">
+                <p className="text-sm text-muted-foreground">
+                  {t("dashboard.currentActivity")}
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {now?.rate.state === "ready" ||
+                  (now?.rate.state == null && now?.rate.has_data)
+                    ? t("dashboard.serving")
+                    : now?.rate.state === "sampling"
+                      ? t("dashboard.resourceSampling")
+                      : nowQuery.isError
+                      ? "—"
+                      : t("dashboard.idle")}
+                </p>
+                {nowQuery.isError && (
+                  <p role="status" className="text-sm text-warning">
+                    {nowQuery.data
+                      ? t("dashboard.liveStale")
+                      : t("dashboard.liveUnavailable")}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div>
+              <span data-dashboard-status-icon aria-hidden="true">
+                <Clock3 className="size-4" />
+              </span>
+              <div className="min-w-0 break-words">
+                <p className="text-sm text-muted-foreground">
+                  {t("now.lastActivity")}
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {now?.last_activity?.package_name || "—"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {now?.last_activity
+                    ? now.last_activity.seconds_ago < 60
+                      ? t("now.justNow")
+                      : formatLastActivity(now.last_activity.seconds_ago, t)
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            <div>
+              <span data-dashboard-status-icon aria-hidden="true">
+                <Server className="size-4" />
+              </span>
+              <div className="min-w-0 break-words">
+                <p className="text-sm text-muted-foreground">
+                  {t("dashboard.uptime")}
+                </p>
+                <p className="mt-1 text-lg font-semibold tabular-nums">
+                  {formatUptime(now?.uptime_seconds, t)}
+                </p>
+              </div>
             </div>
           </div>
-          <aside className="grid min-w-0 gap-5">
-            <DashboardAttention
-              isPending={dashboardQuery.isPending}
-              isFetching={dashboardQuery.isFetching}
-              initialErrorMessage={dashboardError?.status === 403
-                ? t('common.permissionDenied')
-                : dashboardError?.message}
-              isStale={Boolean(dashboardQuery.data && dashboardQuery.isRefetchError)}
-              upstreams={upstreamsNeedingAttention}
-              cacheUsagePercent={dashboard?.cache_usage_percent}
-              onRetry={() => { void dashboardQuery.refetch() }}
-            />
-            <RecentDownloads limit={3} variant="rail" />
-          </aside>
+          </section>
         </div>
+        <div className={styles.metricPanels} data-dashboard-metric-panels>
+          <RuntimeResources dashboard={dashboard} now={now} />
+          <TrafficOverview now={now} period={period} />
+        </div>
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+          <CacheBenefits report={report} period={period} />
+          <DashboardAttention
+            issues={issueCategories}
+            isPending={dashboardQuery.isPending}
+            isFetching={dashboardQuery.isFetching}
+            initialErrorMessage={
+              dashboardQuery.isError
+                ? getApiError(dashboardQuery.error).message
+                : undefined
+            }
+            isStale={Boolean(
+              dashboardQuery.data && dashboardQuery.isRefetchError,
+            )}
+            upstreams={upstreamsNeedingAttention}
+            policyState={policyQuery.isPending ? undefined : policyState}
+            onRetryPolicy={() => {
+              void policyQuery.refetch();
+            }}
+            policyRefreshing={policyQuery.isFetching}
+            cacheUsagePercent={dashboard?.cache_usage_percent}
+            onRetry={() => {
+              void dashboardQuery.refetch();
+            }}
+          />
+        </div>
+        <div className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+          <section
+            data-query-key="dashboard-trends"
+            aria-busy={trendBusy || undefined}
+            className="min-w-0"
+          >
+            {trendsQuery.isError &&
+            !trendsQuery.data &&
+            retainedTrendPoints === undefined ? (
+              <QueryErrorState
+                message={t("dashboard.trendsUnavailable")}
+                onRetry={() => {
+                  void trendsQuery.refetch();
+                }}
+              />
+            ) : (
+              <TrendsCard
+                raw={points}
+                range={range}
+                dataRange={loadedTrendRange}
+                summary={
+                  period && (
+                    <span className="tabular-nums">
+                      {period.requests.toLocaleString()}{" "}
+                      {t("dashboard.requestsLabel")}
+                    </span>
+                  )
+                }
+                isFetching={trendBusy}
+                isStale={trendsQuery.isRefetchError}
+                onRetry={() => {
+                  void trendsQuery.refetch();
+                }}
+              />
+            )}
+          </section>
+          <RecentRequests
+            items={requestsQuery.data?.items ?? []}
+            onSelect={setSelectedLog}
+          />
+        </div>
+        {search.has("analysisRange") && <TrafficAnalysis />}
+        <RequestDetailsDialog
+          item={selectedLog}
+          onClose={() => setSelectedLog(null)}
+        />
       </div>
     </AdminPage>
-  )
+  );
 }

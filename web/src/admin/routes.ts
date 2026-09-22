@@ -24,7 +24,7 @@ interface AdminRouteDefinition {
 
 const routeDefinitions = [
   { id: 'dashboard', path: '', titleKey: 'nav.workspaces.overview', icon: LayoutDashboard, navGroup: 'overview' },
-  { id: 'bandwidth', path: 'bandwidth', titleKey: 'bandwidth.title', icon: BarChart3, navGroup: 'overview' },
+  { id: 'bandwidth', path: 'bandwidth', titleKey: 'bandwidth.title', icon: BarChart3, navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'connect', path: 'connect', titleKey: 'onboarding.title', icon: Link2, navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'attention', path: 'attention', titleKey: 'nav.attention', icon: Inbox, navGroup: 'overview', hiddenFromNavigation: true },
   { id: 'upstreams', path: 'upstreams', titleKey: 'nav.upstreams', icon: CloudSync, navGroup: 'upstreams' },

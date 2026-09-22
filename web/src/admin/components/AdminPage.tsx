@@ -53,7 +53,7 @@ export default function AdminPage({
 
   const workspace = adminNavigationGroups.find(group => group.id === activeRoute?.navGroup)
   const showDestinations = Boolean(
-    workspace && workspace.routes.length > 1 && activeRoute?.id !== 'connect',
+    workspace && workspace.routes.length > 1 && activeRoute?.id !== 'connect' && activeRoute?.id !== 'dashboard' && activeRoute?.id !== 'bandwidth',
   )
 
   return (

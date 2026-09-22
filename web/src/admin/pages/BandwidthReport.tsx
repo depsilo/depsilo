@@ -1,14 +1,14 @@
 import { ChartNoAxesCombined, ChartPie, Gauge, Package, Server } from 'lucide-react'
-import { useState } from 'react'
+import { useSearchParams } from 'react-router'
+import { analysisHref, bandwidthQuery, byteShare, estimatedTimeSaved, reportParams, reportRange } from '@/admin/bandwidthAnalysis'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import AdminPage from '@/admin/components/AdminPage'
-import { adminApi } from '@/lib/api'
 import { formatBytes } from '@/lib/utils'
 import Metric from '@/components/app/metric'
 import SectionHeader from '@/components/app/section-header'
 import EmptyState from '@/components/app/empty-state'
-import ButtonV2 from '@/components/app/button'
+import ButtonV2, { LinkButton } from '@/components/app/button'
 import InputV2 from '@/components/app/input'
 import InlineNotice from '@/components/app/notice'
 import QueryErrorState from '@/components/app/error-state'
@@ -38,7 +38,7 @@ const EMPTY_SUMMARY: BandwidthSummary = {
 }
 
 function formatTimeSaved(ms: number, t: (key: string) => string): string {
-  if (ms <= 0) return '0s'
+  if (ms < 1000) return `${ms.toLocaleString()} ms`
   const seconds = Math.floor(ms / 1000)
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
@@ -77,23 +77,24 @@ function LatencyTooltip({ active, payload, label }: TooltipContentProps<TooltipV
 
 export default function BandwidthReport() {
   const { t } = useTranslation()
-  const [range, setRange] = useState('7d')
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
-  const invalidCustomRange = !!customStart && !!customEnd && customStart > customEnd
-
-  const params = range === 'custom'
-    ? { range: 'custom', start: customStart, end: customEnd }
-    : { range }
-  const queryEnabled = range !== 'custom' || (!!customStart && !!customEnd && !invalidCustomRange)
-
-  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
-    queryKey: ['admin', 'bandwidth', params],
-    queryFn: ({ signal }) => adminApi.getBandwidthReport(params, { signal }),
-    enabled: queryEnabled,
-    refetchInterval: 60000,
-    retry: false,
+  const [search, setSearch] = useSearchParams()
+  const range = reportRange(search.get('range'))
+  const customStart = search.get('start') ?? ''
+  const customEnd = search.get('end') ?? ''
+  const update = (key: string, value: string) => setSearch(previous => {
+    const next = new URLSearchParams(previous)
+    next.set(key, value)
+    return next
   })
+  const setRange = (value: string) => update('range', value)
+  const setCustomStart = (value: string) => update('start', value)
+  const setCustomEnd = (value: string) => update('end', value)
+  const invalidCustomRange = !!customStart && !!customEnd && customStart > customEnd
+  const params = reportParams(range, customStart, customEnd)
+  const options = bandwidthQuery(params)
+  const queryEnabled = options.enabled
+  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery(options)
+  const backLink = <LinkButton variant="secondary" size="sm" to={analysisHref('dashboard', search)}>← {t('dashboard.backOverview')}</LinkButton>
 
   const report = data?.data
   const summary = report?.summary ?? EMPTY_SUMMARY
@@ -125,7 +126,7 @@ export default function BandwidthReport() {
 
   if (queryEnabled && isPending) {
     return (
-      <AdminPage description={t('bandwidth.subtitle')}>
+      <AdminPage description={t('bandwidth.subtitle')} actions={backLink}>
         <div aria-busy="true" className="space-y-12">
           <div aria-hidden="true">
             <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
@@ -146,14 +147,14 @@ export default function BandwidthReport() {
   if (queryEnabled && isError && !data) {
     const normalized = getApiError(error)
     return (
-      <AdminPage description={t('bandwidth.subtitle')}>
+      <AdminPage description={t('bandwidth.subtitle')} actions={backLink}>
         <QueryErrorState message={normalized.status === 403 ? t('common.permissionDenied') : normalized.message} onRetry={() => { void refetch() }} />
       </AdminPage>
     )
   }
 
   return (
-    <AdminPage description={t('bandwidth.subtitle')}>
+    <AdminPage description={t('bandwidth.subtitle')} actions={backLink}>
       <div className="space-y-12">
       {data && isRefetchError && (
         <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
@@ -202,18 +203,26 @@ export default function BandwidthReport() {
         )}
       </div>
 
+      {report?.range && <p className="text-label text-muted-foreground">{t('dashboard.reportWindow', report.range)}</p>}
+      <details className="text-label text-muted-foreground">
+        <summary className="cursor-pointer">{t('dashboard.analysisBasis')}</summary>
+        <p className="mt-2 max-w-3xl">{t('dashboard.reportBasis')}</p>
+        <p className="mt-2 max-w-3xl">{t('dashboard.cacheBenefitBasis')}</p>
+        <p className="mt-2 max-w-3xl">{t('dashboard.timeSavedBasis')}</p>
+      </details>
+
       {/* ── Summary metrics ──────────────────────────── */}
       <div className="grid grid-cols-2 gap-6 py-2 lg:grid-cols-4 lg:gap-8">
-        <Metric label={t('bandwidth.totalTraffic')} value={formatBytes(summary.total_bytes || 0)} />
-        <Metric label={t('bandwidth.trafficSaved')} value={formatBytes(summary.hit_bytes || 0)} valueTone="success" />
+        <Metric label={t('bandwidth.totalTraffic')} value={report ? formatBytes(summary.total_bytes) : '—'} />
+        <Metric label={t('dashboard.cacheServedTraffic')} value={report ? formatBytes(summary.hit_bytes) : '—'} />
         <Metric
-          label={t('bandwidth.savingsRate')}
-          value={summary.savings_rate != null ? `${(summary.savings_rate * 100).toFixed(1)}%` : '0%'}
+          label={t('dashboard.cacheByteShare')}
+          value={byteShare(summary.hit_bytes, summary.total_bytes) === null ? '—' : `${(summary.hit_bytes / summary.total_bytes * 100).toFixed(1)}%`}
           valueTone={summary.savings_rate > 0.5 ? 'success' : 'default'}
         />
         <Metric
-          label={t('bandwidth.timeSaved')}
-          value={formatTimeSaved(summary.time_saved_ms || 0, t)}
+          label={t('dashboard.estimatedTimeSaved')}
+          value={estimatedTimeSaved(summary) === null ? '—' : formatTimeSaved(summary.time_saved_ms, t)}
           valueTone="success"
         />
       </div>
@@ -339,7 +348,7 @@ export default function BandwidthReport() {
           title={t('bandwidth.latencyComparison')}
           action={
             <span className="text-meta font-mono tabular-nums text-success">
-              {t('bandwidth.timeSaved')}: {formatTimeSaved(summary.time_saved_ms || 0, t)}
+              {t('dashboard.estimatedTimeSaved')}: {estimatedTimeSaved(summary) === null ? '—' : formatTimeSaved(summary.time_saved_ms, t)}
             </span>
           }
         />

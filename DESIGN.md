@@ -58,8 +58,9 @@ Rules:
 2. `components/app/` holds Depsilo-wide reusable components. No route data.
 3. `@base-ui/react` may be imported **only** from `components/ui/`. No other
    file in `src/` imports it.
-4. Pages do not import `components/ui` or `@base-ui/react` directly. They
-   compose feature and application components.
+4. Pages compose feature and application components, reusing existing product
+   behaviour where applicable. They may also use shadcn components from
+   `components/ui/` directly; `@base-ui/react` stays inside the primitive layer.
 5. There is exactly one implementation of each control. A page-local button,
    input, dialog, or badge is a defect.
 6. `index.css` holds imports, tokens, the dark variant, and base styles. It
@@ -69,6 +70,10 @@ Rules:
 base, neutral base colour, CSS variables, `@/components/ui` alias, Lucide
 icons. Add primitives with `npx shadcn@latest add <name>` and only when an
 owning call site exists.
+
+shadcn/ui is the supported component foundation. The native controls and
+product-specific compositions documented below describe current implementation
+choices, not restrictions on adopting shadcn components.
 
 ## Token Layer
 
@@ -181,9 +186,8 @@ Use these before adding a primitive. Admin-specific composition belongs in
 - `Input`, `Textarea`, and `Select` use 16px text below `md` so a focused field
   cannot trigger mobile zoom.
 - `Select` is a **native** `<select>`. The product uses it for dense filter
-  bars and enum fields, where OS typeahead, the platform picker on touch
-  devices, and the `combobox` + value contract matter more than a styled
-  popup. shadcn's Base UI select is deliberately not adopted.
+  bars and enum fields, with OS typeahead, the platform picker on touch
+  devices, and the `combobox` + value contract.
 - `IconButton` and `IconButtonControl` set `data-icon-button` and keep a
   40×40 target in every state, including pending. The shared contract in
   `e2e/fixtures/a11y.ts` measures both on every surface.
@@ -193,9 +197,22 @@ Use these before adding a primitive. Admin-specific composition belongs in
   Portal share both, so a copied command cannot behave two ways.
 - `Modal` keeps `closeDisabled` for mutations in flight: the dialog cannot be
   dismissed while a change is half-applied.
-- The Admin shell is a product component, not shadcn's `sidebar` primitive; it
-  keeps a 232px rail, a 48px topbar, and the `data-admin-*` hooks the
-  Playwright suite asserts.
+- The Admin shell composes the product navigation with a 232px rail, a 48px
+  topbar, and the `data-admin-*` hooks the
+  Playwright suite asserts. Overview and its analysis detail use their own
+  page header on desktop; only mobile retains the navigation bar. The report
+  route stays available as a drilldown, without parallel Overview/Report tabs.
+  Operational KPIs remain rolling 24h; report summaries and distributions
+  share a separately labelled UTC date range because their API boundaries
+  differ from the main trend buckets.
+- The Admin Overview uses a pale blue-gray local canvas (`#f3f6fa`) with white
+  primary panels and a quieter inner surface (`#f8fafd`). Its four resource and four
+  traffic values are the primary visual metrics; the retired duplicate KPI
+  rail must not be reintroduced. The header owns the trend period selector,
+  while the chart keeps only metric selection and a short selected-period
+  summary. Bandwidth report-backed benefits are available only for ranges the
+  report API supports (currently 7d and 30d); unsupported ranges remain
+  explicitly unavailable rather than silently falling back to another period.
 - `Logo` renders the brand kit's flat mark. It carries its own colours rather
   than `currentColor`: the kit fixes them, they read on both canvases, and a
   mark that inherits the surrounding text colour is a status icon wearing the
