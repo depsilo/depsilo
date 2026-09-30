@@ -31,13 +31,13 @@ export default function ProRequiredCallout({
 }: ProRequiredCalloutProps) {
   return (
     <div
-      className="text-center py-12 rounded-[10px]"
-      style={{ background: 'var(--brand-soft)', border: '0.5px solid var(--brand-border)' }}
+      className="text-center py-12 rounded-lg"
+      style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}
     >
       <div className="flex flex-col items-center gap-4">
         <div
-          className="flex items-center justify-center w-14 h-14 rounded-[8px]"
-          style={{ background: 'var(--brand-soft)', border: '0.5px solid var(--brand-border)' }}
+          className="flex items-center justify-center w-14 h-14 rounded-md"
+          style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}
         >
           <Icon name={icon} size="lg" style={{ color: 'var(--brand)' }} />
         </div>
@@ -49,7 +49,7 @@ export default function ProRequiredCallout({
         </p>
         <a
           href={upgradeHref}
-          className="app-button stripe-focus-ring inline-flex min-h-9 items-center justify-center rounded-[5px] bg-[var(--btn)] px-3 py-1.5 text-[13px] font-[500] no-underline text-[var(--btn-fg)] transition-[background,color,transform] duration-150 hover:bg-[var(--btn-press)] active:scale-[0.96]"
+          className="app-button stripe-focus-ring inline-flex min-h-9 items-center justify-center rounded-sm bg-[var(--btn)] px-3 py-1.5 text-[13px] font-[500] no-underline text-[var(--btn-fg)] transition-[background,color,transform] duration-150 hover:bg-[var(--btn-press)] active:scale-[0.96]"
           style={{
             boxShadow: 'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
           }}

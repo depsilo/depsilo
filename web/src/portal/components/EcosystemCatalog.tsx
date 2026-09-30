@@ -47,32 +47,25 @@ function EcosystemButton({
       data-active={active ? 'true' : undefined}
       title={language.name}
       onClick={() => onSelect(language.id)}
-      className="eco-tile stripe-focus-ring active:scale-[0.98]"
-      onMouseMove={event => {
-        const bounds = event.currentTarget.getBoundingClientRect()
-        event.currentTarget.style.setProperty('--spot-x', `${event.clientX - bounds.left}px`)
-        event.currentTarget.style.setProperty('--spot-y', `${event.clientY - bounds.top}px`)
-      }}
+      className="stripe-focus-ring active:scale-[0.98]"
       style={{
-        position: 'relative',
-        overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         gap: compact ? 6 : 11,
         width: '100%',
         minHeight: chip ? 40 : compact ? 40 : 52,
         padding: chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
-        background: active ? 'var(--brand-soft)' : 'transparent',
-        border: `1px solid ${active ? 'var(--brand-border)' : 'transparent'}`,
+        // shadcn selection: the accent surface carries state, not a keyline.
+        background: active ? 'var(--accent)' : 'transparent',
+        border: `1px solid ${active ? 'var(--border)' : 'transparent'}`,
         borderRadius: chip || compact ? 6 : 8,
-        boxShadow: active ? 'inset 1px 0 0 var(--brand)' : 'none',
         textAlign: 'left',
         cursor: 'pointer',
         transition:
           'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
       }}
       onMouseEnter={event => {
-        if (!active) event.currentTarget.style.background = 'var(--bg-hover)'
+        if (!active) event.currentTarget.style.background = 'var(--accent)'
       }}
       onMouseLeave={event => {
         if (!active) event.currentTarget.style.background = 'transparent'

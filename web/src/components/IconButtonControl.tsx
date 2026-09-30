@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
+import { Button } from '@/components/ui/button'
 import Icon, { type IconName } from './Icon'
 
 export interface IconButtonControlProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -16,15 +17,17 @@ export default forwardRef<HTMLButtonElement, IconButtonControlProps>(function Ic
   ref,
 ) {
   return (
-    <button
+    <Button
       {...rest}
       ref={ref}
       type={rest.type ?? 'button'}
+      variant="ghost"
+      size="icon"
       data-icon-button
       aria-label={label}
       aria-busy={loading || undefined}
       disabled={disabled || loading}
-      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] bg-transparent stripe-focus-ring disabled:opacity-50 disabled:pointer-events-none ${className}`}
+      className={`shrink-0 rounded-md bg-transparent ${className}`}
       style={{
         width: 41,
         height: 41,
@@ -39,6 +42,6 @@ export default forwardRef<HTMLButtonElement, IconButtonControlProps>(function Ic
         size="sm"
         className={loading ? 'animate-spin' : ''}
       />
-    </button>
+    </Button>
   )
 })

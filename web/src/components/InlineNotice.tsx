@@ -20,7 +20,7 @@ export default function InlineNotice({ tone, title, children }: InlineNoticeProp
   return (
     <div
       role={tone === 'danger' ? 'alert' : undefined}
-      className="rounded-[6px] border px-3 py-2.5 text-[13px] leading-5"
+      className="rounded-md border px-3 py-2.5 text-[13px] leading-5"
       style={{ background: colors.background, borderColor: colors.border, color: colors.color }}
     >
       {title && <p className="mb-1 font-[600]">{title}</p>}

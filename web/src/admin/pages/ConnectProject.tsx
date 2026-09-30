@@ -309,7 +309,7 @@ export default function ConnectProject() {
             <h2 id="onboarding-ecosystem-title" className="text-[16px] font-[660] text-[var(--text)]">{t('onboarding.chooseEcosystem')}</h2>
             <p className="mt-1 text-[13px] text-[var(--text-muted)]">{t('onboarding.chooseEcosystemHint')}</p>
           </div>
-          <button type="button" className="stripe-focus-ring min-h-10 rounded-[5px] px-2 text-[12px] font-[600] text-[var(--brand-text)] hover:bg-[var(--bg-hover)]" onClick={toggleAllEcosystems} aria-expanded={showAll}>
+          <button type="button" className="stripe-focus-ring min-h-10 rounded-sm px-2 text-[12px] font-[600] text-[var(--brand-text)] hover:bg-[var(--bg-hover)]" onClick={toggleAllEcosystems} aria-expanded={showAll}>
             {showAll ? t('onboarding.showFeatured') : t('onboarding.viewAll')}
           </button>
         </div>
@@ -320,7 +320,7 @@ export default function ConnectProject() {
               type="button"
               aria-pressed={candidate.id === language?.id}
               onClick={() => setLanguageId(candidate.id)}
-              className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-[7px] border px-3 text-left text-[13px] font-[600] transition-[background,border-color,color] duration-150"
+              className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-md border px-3 text-left text-[13px] font-[600] transition-[background,border-color,color] duration-150"
               style={{
                 background: candidate.id === language?.id ? 'var(--brand-soft)' : 'var(--bg-card)',
                 borderColor: candidate.id === language?.id ? 'var(--brand-border)' : 'var(--border)',
@@ -337,9 +337,9 @@ export default function ConnectProject() {
       {language && manager && (
         <section aria-labelledby="onboarding-manager-title" className="mt-7 border-t border-[var(--border)] pt-6">
           <h2 id="onboarding-manager-title" className="text-[16px] font-[660] text-[var(--text)]">{t('onboarding.chooseManager', { ecosystem: language.name })}</h2>
-          <div role="group" aria-label={t('onboarding.managerLabel')} className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-[7px] bg-[var(--bg-soft)] p-1">
+          <div role="group" aria-label={t('onboarding.managerLabel')} className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-md bg-[var(--bg-soft)] p-1">
             {language.managers.map(candidate => (
-              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-[5px] px-3 text-[13px] font-[600]" style={{ background: candidate.id === manager.id ? 'var(--bg-card)' : 'transparent', color: candidate.id === manager.id ? 'var(--brand-text)' : 'var(--text-muted)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
+              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-sm px-3 text-[13px] font-[600]" style={{ background: candidate.id === manager.id ? 'var(--bg-card)' : 'transparent', color: candidate.id === manager.id ? 'var(--brand-text)' : 'var(--text-muted)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
                 {candidate.name}
               </button>
             ))}
@@ -367,7 +367,7 @@ export default function ConnectProject() {
       )}
 
       <section aria-label={t('onboarding.steps.verify')} className="mt-7 border-t border-[var(--border)] pt-6">
-        <div className="rounded-[8px] border border-[var(--border-strong)] bg-[var(--bg-card)] p-4 sm:p-5">
+        <div className="rounded-md border border-[var(--border-strong)] bg-[var(--bg-card)] p-4 sm:p-5">
           {!session ? (
             <div role="status" aria-busy="true" className="flex items-center gap-3 text-[13px] text-[var(--text-muted)]">
               <Icon name="progress_activity" size="sm" className="animate-spin motion-reduce:animate-none" />
@@ -390,7 +390,7 @@ export default function ConnectProject() {
               </dl>
               <p className="mt-4 text-[13px] text-[var(--text-muted)]">{requestKind === 'blocked' ? t('onboarding.blockedHint') : requestKind === 'error' ? t('onboarding.errorHint') : testCommand ? t('onboarding.runAgain') : t('onboarding.runAgainNormal')}</p>
               {requestKind === 'error' && (
-                <Link to={getAdminRouteHref('accessLogs')} className="stripe-focus-ring mt-3 inline-flex min-h-10 items-center rounded-[5px] px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]">
+                <Link to={getAdminRouteHref('accessLogs')} className="stripe-focus-ring mt-3 inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]">
                   {t('onboarding.viewAccessLogs')}
                 </Link>
               )}

@@ -1,9 +1,9 @@
 # Depsilo Design System
 
-> Status: current implementation reference, updated 2026-08-20. The source of
-> truth is `web/src/index.css`, `web/src/components/`, `web/src/portal/`, and
-> `web/src/admin/`. When this document and code differ, update this document in
-> the same change.
+> Status: current implementation reference, updated 2026-09-29. The source of
+> truth is `web/src/index.css`, `web/src/components/ui/`,
+> `web/src/components/`, `web/src/portal/`, and `web/src/admin/`. When this
+> document and code differ, update this document in the same change.
 
 ## Product Surfaces
 
@@ -17,32 +17,97 @@ The Portal is not a marketing landing page. Quick Start is the first screen;
 Monitor is the second. Admin is dense, quiet, and optimized for scanning and
 repeated actions.
 
-## Instrument Language
+## Visual Language
 
-The active visual administration is **Instrument**:
+The interface **is** the shadcn/ui default theme (neutral base). shadcn owns
+surfaces, radii, control geometry, focus rings, and component behaviour; this
+document records only what Depsilo adds or constrains.
 
-- Signal green communicates cache hits, healthy state, active navigation, and
-  focus. It replaced the old purple palette.
-- Amber means degraded or partially completed. Red means a real failure,
-  explicit refusal, or destructive action. A cache miss is a normal neutral
-  result; an unknown result means the outcome was not recorded.
-- Dark mode is the product default; light mode uses the same semantic roles.
-- Light mode uses a pure-white page canvas without ambient grain. Dark mode
-  retains one subtle global grain layer mounted by `App`.
-- Surfaces are neutral gray/green-black, with restrained borders and shadows.
-- Restrained green sweeps may appear on rare decorative product surfaces, but
-  never inside the Logo. Purple Aurora backgrounds are not part of the current
-  design.
+- Surfaces are neutral, zero-chroma greys — pure white canvases in light mode,
+  `oklch(0.145 0 0)` in dark — with 1px borders and one elevation system
+  (Tailwind's `shadow-sm` / `shadow-md` / `shadow-lg`).
+- The command colour is shadcn's neutral `--primary`: near-black in light mode
+  and near-white in dark. Focus rings use `--ring`, never a brand hue.
+- Colour carries state, not decoration. Green marks a cache hit, a healthy
+  service, or a successful outcome; amber marks degraded or partially
+  completed work; red marks a real failure, an explicit refusal, or a
+  destructive action. A cache miss is a neutral result, and an unknown result
+  means the outcome was not recorded.
+- Dark mode is the product default. Both themes share one token set and
+  nothing is themed per surface, so Admin, Portal, and Setup are one world.
+- No ambient grain, gradient text, glow, cursor spotlight, or decorative
+  sweep. The page sits on a plain canvas.
 
-Admin surfaces additionally use the BoardUI-inspired porcelain / charcoal
-surface treatment: the light Admin canvas is `#FFFFFF` with a neutral
-`#F6F7F5` rail, and dark Admin uses `#141915` with `#181F1A` navigation.
-These values are scoped to `[data-admin-shell]`; Portal and Setup retain the
-shared Instrument tokens above. Admin controls use 6px corners, 40px targets,
-and green is reserved for commands, focus, health, and selection.
+The brand mark is the one deliberate colour exception: the Dependency Shelf
+stays green (see [Brand Mark](#brand-mark)).
 
-Do not use the old purple/OKLCH examples, `/status` route, shadcn components,
-`CardV2`, or `MetricCardV2`. They belonged to an earlier design iteration.
+Everything not listed in [Deviations From Upstream](#deviations-from-upstream)
+follows shadcn/ui as shipped.
+
+Two colour rules do not yet agree with each other and are open work: the trend
+chart draws its series from `--brand` / `--danger` / `--warn-text`, so after
+the neutral-primary change the "hits" series no longer carries the status
+green this section promises. Series identity needs its own differentiated
+ramp rather than reusing status or chrome tokens.
+
+Do not reintroduce the Instrument palette (signal-green chrome, 0.5px
+hairlines, BoardUI porcelain/charcoal Admin surfaces), the `/status` route,
+`CardV2`, or `MetricCardV2`.
+
+## Component Layer
+
+shadcn/ui is the component library. It is a source distribution, not a runtime
+dependency: the components are vendored under `web/src/components/ui/` and are
+ours to edit.
+
+- `web/components.json` holds the shadcn configuration. Style `base-nova`,
+  base library `@base-ui/react`, icon library `lucide`. Add components with
+  `npx shadcn@latest add <name>` from `web/`; keep the `base-nova` style so the
+  vendored files stay comparable with upstream.
+- `web/src/components/ui/` is the primitive layer: `button`, `input`,
+  `textarea`, `label`, `native-select`, `select`, `badge`, `dialog`, `sheet`,
+  `tabs`, `switch`, `tooltip`, `table`, `toggle`, `toggle-group`, `separator`,
+  `sonner`. These files keep upstream's composition, class strings, and variant
+  APIs; only the size ladder, the semantic badge variants, and the destructive
+  button pair deviate, each for a reason recorded below.
+- `web/src/components/` holds the app-facing adapters (`Button`, `Input`,
+  `Modal`, `Drawer`, `Tabs`, `Toast`, ...). They keep Depsilo's prop names,
+  i18n, and accessibility contracts so call sites do not track the component
+  library. Compose UI from the adapters first and reach for `components/ui/`
+  only when a screen needs a primitive the adapters do not expose.
+- `web/src/lib/utils.ts` exports the `cn` helper every vendored component uses.
+
+`tw-animate-css` supplies the enter/exit animations and `shadcn/tailwind.css`
+supplies the state variants (`data-open`, `data-checked`, `data-active`,
+`data-horizontal`, ...) that the vendored components reference.
+
+## Deviations From Upstream
+
+This is the single list. Anything not here follows shadcn/ui as shipped; each
+entry below names the constraint that earns it.
+
+Theme:
+
+| Deviation | Earned by |
+| --- | --- |
+| Controls keep 36px (`h-9`) and 40px (`h-10` / icon) heights instead of upstream's 32/28px ladder | Admin's 40px touch-target contract, enforced by the accessibility suite |
+| `--muted-foreground` is `oklch(0.52 0 0)`, one step darker than upstream's `oklch(0.556 0 0)` | Upstream clears 4.5:1 on white but only reaches 4.34:1 on `--muted`, and Admin puts secondary text on muted panels |
+| Destructive buttons use the tinted danger pair, not solid red | Solid red against white text measures 2.9:1 in dark mode |
+| The spacing scale is pinned in px (`4/8/12/16/24/32/48`) | The document sets a 13px root font size, so Tailwind's `rem`-derived steps would land on 3.25/6.5/9.75… instead of the grid the layout is drawn on |
+| The type stack stays Inter / Inter Tight / JetBrains Mono | shadcn's default face is Geist, which has no CJK coverage; this product ships Chinese and English from one component tree |
+| The brand mark keeps its green (`#0A8654` light, `#3DDC91` dark) | It is a confirmed asset (see [Brand Mark](#brand-mark)) — the one colour that is identity rather than role |
+
+Components:
+
+| Deviation | Earned by |
+| --- | --- |
+| `Select` is the platform `<select>` (shadcn's `native-select` recipe), not the Base UI listbox | Native keyboard, typeahead, and form semantics, plus the `combobox` + `<option>` contract operators and Playwright rely on. `components/ui/select` is vendored for option sets that need richer rows |
+| Toasts render through Sonner's own markup | Tone rides on Sonner's `data-type` (`success` / `warning` / `error`) instead of the old `data-toast-tone`, and the live region is polite. Danger toasts are not assertive `role="alert"` elements; in-page failures use `InlineNotice` |
+| `Dialog` keeps a scroll viewport and caps the popup height | Tall Admin forms stay reachable on short screens; upstream centres a fixed popup |
+| `Sheet` keeps an explicit 320px rail width | The Admin navigation stays legible at 320px viewports, where upstream's `w-3/4` cannot fit the brand block plus the reserved close-button space |
+| `Badge` keeps semantic variants (`success`, `warning`, `destructive`, `pro`, `neutral`) | They name product state, which upstream's generic set does not |
+| `Table` does not ship upstream's scroll container | `TableViewport` owns the labelled, focusable region the accessibility contract depends on |
+| `IconButton` holds a 41px box and the 40px target in an inline style | The icon contract is asserted by tests; folding it into the Button size ladder is open cleanup |
 
 ## Brand Mark
 
@@ -76,25 +141,45 @@ cube, network node, shield, lightning bolt, and other category-default motifs.
 
 ## Token Source
 
-Tokens live in `web/src/index.css`. Tailwind v4 exposes matching utilities via
-`@theme`; runtime light/dark values are defined on `:root` and
-`[data-theme="dark"]`.
+Tokens live in `web/src/index.css`. The shadcn semantic roles
+(`--background`, `--foreground`, `--primary`, `--muted`, `--border`, `--ring`,
+`--radius`, ...) are the source of truth and hold shadcn's default neutral
+values; they are declared on `:root` and re-declared per theme on
+`[data-theme="dark"]`, and `@theme inline` exposes them to Tailwind utilities.
+The `@theme` block itself carries no colour — only the type stack and the
+px-pinned spacing steps — so there is exactly one owner per colour.
+
+The Instrument names this codebase grew up with (`--bg-page`, `--bg-card`,
+`--text-muted`, `--border`, `--btn`, `--brand`, ...) remain as **compatibility
+aliases** pointing at the shadcn roles, so existing `var(--…)` call sites did
+not have to move. `--brand*` resolves to the neutral accent (selection, links,
+active navigation); green survives only in `--ok*` and `--hit*`, where it is a
+status and not chrome. The compatibility set is now only what something
+actually reads — `--inverse`, `--on-inverse`, `--hit`, `--on-hit`, `--btn`,
+`--btn-press`, `--btn-fg`, `--live`, `--grid`, `--r-tag`, `--r-card`; the
+unread rest (`--bg`, `--surface`, `--inset`, `--hover`, `--line*`, `--fg*`,
+`--slow*`, `--miss*`, `--glow`, `--hit-press`, `--hit-bg`, `--r-pill`) was
+deleted rather than carried.
+
+Do not give a role a literal colour that duplicates an existing token, and do
+not add a second palette to `@theme`; point at the token instead.
 
 ### Core Roles
 
 | Role | Current light value | Use |
 | --- | --- | --- |
-| `--bg-page` | `#FFFFFF` | Pure-white light-mode page background |
-| `--admin-canvas` | `#FFFFFF` | Admin light-mode shell and main canvas |
-| `--bg-card` | `#FFFFFF` | Primary surface |
-| `--bg-soft` | `#F1F3F2` | Inset/secondary surface |
-| `--text` | `#14181A` | Primary text |
-| `--text-muted` | `#586068` | Secondary text |
-| `--inverse` / `--on-inverse` | `#14181A` / `#FFFFFF` | Compact inverse tooltips and data details |
-| `--brand` / `--hit` | `#0FA86F` | Active, hit, healthy, focus |
-| `--btn-primary-bg` / `--btn` | `#0A8654` | Primary command |
-| `--warn` / `--slow` | `#B5770E` | Slow/degraded/partial |
-| `--danger` | `#CF4444` | Failure/refusal/destructive |
+| `--background` / `--bg-page` | `oklch(1 0 0)` | Page canvas |
+| `--card` / `--bg-card` | `oklch(1 0 0)` | Primary surface |
+| `--muted` / `--bg-soft` | `oklch(0.97 0 0)` | Inset and secondary surface |
+| `--foreground` / `--text` | `oklch(0.145 0 0)` | Primary text |
+| `--muted-foreground` / `--text-muted` | `oklch(0.52 0 0)` | Secondary text |
+| `--primary` / `--btn` | `oklch(0.205 0 0)` | Command button, selection |
+| `--border` | `oklch(0.922 0 0)` | Hairlines and controls |
+| `--ring` / `--focus-ring` | `oklch(0.708 0 0)` | Focus ring |
+| `--ok` / `--ok-text` | `oklch(0.596 0.145 163.225)` | Hit, healthy, success |
+| `--warn` / `--warn-text` | `oklch(0.666 0.179 58.318)` | Slow, degraded, partial |
+| `--danger` / `--danger-text` | `oklch(0.577 0.245 27.325)` | Failure, refusal, destructive |
+| `--logo-mark` | `#0A8654` | Brand mark only (dark: `#3DDC91`) |
 
 ### State Semantics
 
@@ -111,20 +196,23 @@ explicit refusals, and destructive commands. HTTP success only describes the
 request transport; it does not make a cleanup operation complete when items
 were skipped or failed.
 
-Compatibility names such as `--brand` remain because existing components use
-them. New code may prefer role names (`--hit`, `--btn`, `--surface`, `--line`),
-but must not introduce hard-coded parallel palettes.
+New code should read the shadcn roles directly (`bg-card`,
+`text-muted-foreground`, `border-border`) rather than the compatibility aliases,
+and must not introduce a hard-coded parallel palette.
 
 ### Radius And Spacing
 
-| Token | Value |
-| --- | --- |
-| `--spacing-1/2/3/4/6/8/12` | `4/8/12/16/24/32/48px` |
-| `--radius-pill` | `4px` |
-| `--radius-tag` | `6px` |
-| `--radius-card` | `10px` |
-| `--radius-shell` | `14px` |
+shadcn's scale is `--radius: 0.625rem` with `sm/md/lg/xl` at 6/8/10/14px.
 
+| Token | Value | Use |
+| --- | --- | --- |
+| `--radius-sm` / `--r-sm` | `6px` | Tags, chips, inner segments |
+| `--radius-md` / `--r-md` | `8px` | Buttons, inputs, selects, tabs |
+| `--radius-lg` / `--r-lg` | `10px` | Grouped containers |
+| `--radius-xl` / `--r-card` | `14px` | Cards, dialogs, sheets, panels |
+
+Spacing stays on the 4px grid, pinned in px by the `--spacing-*` steps in
+`@theme` (see [Deviations From Upstream](#deviations-from-upstream) for why).
 Use the established token unless a fixed-format control has an explicit local
 dimension. Avoid decorative nested cards and page sections styled as floating
 cards.
@@ -138,6 +226,13 @@ cards.
 - Icons: tree-shakeable Lucide SVGs, wrapped by `components/Icon.tsx`. The
   wrapper preserves the existing Material-style string names at call sites.
 
+The type stack is a deliberate carry-over from the previous world. shadcn's
+own default is Geist, which has no CJK coverage; this product ships Chinese and
+English from the same component tree, and Inter plus a native CJK fallback is
+the closest obtainable match (`typography.fonts` may be revisited as one
+change: swap `@fontsource-variable/inter*` for `@fontsource-variable/geist*`
+and update the two `@font-face`/`--font-*` declarations).
+
 Do not import a second general icon family or inline an SVG for a symbol already
 present in `components/Icon.tsx`.
 Metric values, versions, bytes, latency, and other changing numbers should use
@@ -145,7 +240,8 @@ the mono/tabular treatment to avoid layout movement.
 
 ## Shared Components
 
-Reusable primitives live in `web/src/components/`:
+Reusable primitives live in `web/src/components/`, built on the vendored
+shadcn/ui layer in `web/src/components/ui/`:
 
 - `Button`, `Input`, `Select`, `Segmented`, `Tabs`
 - `Badge`, `StatusDot`, `Metric`, `SectionHeader`
@@ -162,7 +258,7 @@ Use these before adding a new primitive. Admin-specific composition belongs in
 The Portal header uses one 40px control geometry without pretending every
 item has the same role. The copyable endpoint and service health share a quiet
 information rail; language and appearance share a segmented preference rail;
-Admin is the sole brand-tinted navigation action. At narrow widths labels
+Admin is the sole filled `--primary` navigation action. At narrow widths labels
 collapse before essential controls disappear, and the document never scrolls
 horizontally.
 
@@ -269,11 +365,11 @@ project pages.
 URL remains reachable so bookmarks and direct links do not break, as do all
 other established Admin URLs.
 
-The light Admin canvas remains pure white, while its persistent workspace rail
-uses a dedicated mint porcelain surface (`#F3F8F5`) and hover
-(`#EAF3EE`). This near-white, brand-adjacent tint separates navigation from the
-canvas without reusing the darker global inset surface. Dark mode retains its
-existing rail and hover appearance. The current workspace receives a filled
+The Admin canvas and its persistent workspace rail both come from the shared
+neutral theme: the rail is `--muted` (`oklch(0.985 0 0)` light,
+`oklch(0.205 0 0)` dark) against the page canvas. There is no Admin-only
+palette any more — the scoped porcelain/charcoal override is gone, so Admin,
+Portal, and Setup share one surface set. The current workspace receives a filled
 selection on every route within it; the page-local tabs identify the current
 destination. Language
 and appearance remain adjacent in the utility bar, but each is a flat button

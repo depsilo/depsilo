@@ -1,6 +1,6 @@
-import { Dialog } from '@base-ui/react/dialog'
 import { type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import IconButton from './IconButton'
 
 interface DrawerV2Props {
@@ -16,25 +16,20 @@ export default function DrawerV2({ open, onOpenChange, title, children, initialF
   const closeLabel = i18n.language.startsWith('zh') ? '\u5173\u95ed' : 'Close'
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange} modal>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="app-dialog-backdrop app-drawer-backdrop" />
-        <Dialog.Viewport className="app-drawer-viewport">
-          <Dialog.Popup className="app-drawer-popup" initialFocus={initialFocus} finalFocus>
-            <Dialog.Title className="sr-only">{title}</Dialog.Title>
-            {children}
-            <Dialog.Close
-              render={
-                <IconButton
-                  icon="close"
-                  label={closeLabel}
-                  className="app-drawer-close active:scale-[0.96]"
-                />
-              }
-            />
-          </Dialog.Popup>
-        </Dialog.Viewport>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Sheet open={open} onOpenChange={onOpenChange} modal>
+      <SheetContent
+        side="left"
+        showCloseButton={false}
+        initialFocus={initialFocus}
+        finalFocus
+      >
+        <SheetTitle className="sr-only">{title}</SheetTitle>
+        {children}
+        <SheetClose
+          className="absolute top-2 right-2 active:scale-[0.96]"
+          render={<IconButton icon="close" label={closeLabel} />}
+        />
+      </SheetContent>
+    </Sheet>
   )
 }

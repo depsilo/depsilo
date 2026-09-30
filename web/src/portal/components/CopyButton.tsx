@@ -27,7 +27,7 @@ export default function CopyButton({ text }: Props) {
         // Visible padding stays compact; ::before in the active rule below
         // expands the hit area without bloating the chrome.
         padding: '4px 10px',
-        border: '0.5px solid var(--border)',
+        border: '1px solid var(--border)',
         borderRadius: 4,
         cursor: 'pointer',
         flexShrink: 0,

@@ -18,7 +18,7 @@ export default function EcosystemLogoWall({ selected, onSelect }: Props) {
         gap: 20,
         paddingTop: 20,
         marginTop: 20,
-        borderTop: '0.5px solid var(--border)',
+        borderTop: '1px solid var(--border)',
       }}
     >
       {LANGUAGES.map(lang => {

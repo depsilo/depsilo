@@ -244,14 +244,14 @@ for (const exportCase of [
 
     const exportButton = page.getByRole('button', { name: exportCase.button })
     await exportButton.click()
-    await expect(page.locator('[data-toast-tone="danger"]')).toContainText(exportCase.failure)
+    await expect(page.locator('[data-sonner-toast][data-type="error"]')).toContainText(exportCase.failure)
     await expect(exportButton).toBeEnabled()
 
     const downloadPromise = page.waitForEvent('download')
     await exportButton.click()
     const download = await downloadPromise
     expect(download.suggestedFilename()).toMatch(exportCase.filename)
-    await expect(page.locator('[data-toast-tone="success"]')).toContainText(exportCase.success)
+    await expect(page.locator('[data-sonner-toast][data-type="success"]')).toContainText(exportCase.success)
     expect(calls).toBe(2)
   })
 }

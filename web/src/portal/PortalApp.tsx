@@ -144,7 +144,7 @@ function NavTab({ to, label, compactLabel }: NavTabProps) {
                 right: 10,
                 bottom: '-15px',
                 height: '1.5px',
-                background: 'var(--grad-brand)',
+                background: 'var(--foreground)',
                 borderRadius: 1,
               }}
             />
@@ -241,7 +241,7 @@ export default function PortalAppV2() {
           background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
           backdropFilter: 'saturate(180%) blur(8px)',
           WebkitBackdropFilter: 'saturate(180%) blur(8px)',
-          borderBottom: '0.5px solid var(--border)',
+          borderBottom: '1px solid var(--border)',
         }}
       >
         <div
@@ -285,7 +285,7 @@ export default function PortalAppV2() {
                 fontSize: 10,
                 color: 'var(--text-subtle)',
                 padding: '1px 5px',
-                border: '0.5px solid var(--border)',
+                border: '1px solid var(--border)',
                 borderRadius: 4,
                 marginLeft: 2,
               }}

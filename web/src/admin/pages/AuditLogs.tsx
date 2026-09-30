@@ -208,7 +208,7 @@ export default function AuditLogsV2() {
         className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"
         onSubmit={(event) => { event.preventDefault(); handleSearch() }}
       >
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             aria-label={t('audit.searchLabel')}
@@ -264,7 +264,7 @@ export default function AuditLogsV2() {
                 else next.set('range', r)
               })}
               aria-pressed={timeRange === r}
-              className="px-2.5 py-1 text-[11px] rounded-[4px] transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
+              className="px-2.5 py-1 text-[11px] rounded-sm transition-[background,color,border-color,transform] duration-150 cursor-pointer active:scale-[0.96]"
               style={{
                 background: timeRange === r ? 'var(--btn)' : 'transparent',
                 color: timeRange === r ? 'var(--btn-fg)' : 'var(--text-soft)',

@@ -181,7 +181,11 @@ test('access log details keep the selected request explainable', async ({ page }
   })
   await page.goto('/admin/logs')
   await page.getByRole('button', { name: /查看请求详情|View request details/ }).click()
-  await expect(page.getByRole('heading', { name: /requests|请求详情/ })).toBeVisible()
+  // The drawer carries a screen-reader title ("请求详情") alongside the visible
+  // package heading, so scope the assertion to the loaded detail.
+  const detailDrawer = page.getByRole('dialog', { name: /请求详情|Request details/ })
+  await expect(detailDrawer).toBeVisible()
+  await expect(detailDrawer.getByRole('heading', { name: 'requests', exact: true })).toBeVisible()
   await expect(page.getByText('req-detail-1', { exact: true })).toBeVisible()
   await expect(page.getByText(/未记录|Not recorded/, { exact: true }).first()).toBeVisible()
   await page.goBack()

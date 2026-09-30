@@ -7,17 +7,17 @@ export default function CompileCacheIntro() {
   return (
     <article
       aria-labelledby="portal-compile-cache-title"
-      className="flex min-h-full flex-col rounded-[var(--r-card)] p-5 sm:p-6"
+      className="flex min-h-full flex-col rounded-xl p-5 sm:p-6"
       style={{
         background: 'var(--bg-card)',
-        border: '0.5px solid var(--border-strong)',
+        border: '1px solid var(--border-strong)',
         boxShadow: 'var(--shadow-card)',
       }}
     >
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
-          className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand-text)]"
+          className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-text)]"
         >
           <Icon name="memory" />
         </span>
@@ -37,7 +37,7 @@ export default function CompileCacheIntro() {
       <div className="mt-auto pt-5">
         <a
           href="/admin/compile-cache"
-          className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] font-[620] no-underline hover:bg-[var(--bg-hover)] active:scale-[0.97]"
+          className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-[13px] font-[620] no-underline hover:bg-[var(--bg-hover)] active:scale-[0.97]"
           style={{
             color: 'var(--brand-text)',
             background: 'transparent',
@@ -51,7 +51,7 @@ export default function CompileCacheIntro() {
         </a>
 
         <details className="mt-3 border-t border-[var(--border)] pt-2">
-          <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1 text-[13px] font-[560] text-[var(--text-muted)] hover:text-[var(--text)]">
+          <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1 text-[13px] font-[560] text-[var(--text-muted)] hover:text-[var(--text)]">
             {t('quickstart.compileCacheDetails')}
             <Icon name="expand_more" size="sm" />
           </summary>

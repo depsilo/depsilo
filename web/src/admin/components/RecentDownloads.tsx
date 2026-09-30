@@ -110,7 +110,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
       data-query-key="dashboard-recent-downloads"
       aria-labelledby="recent-downloads-title"
       aria-busy={query.isPending || undefined}
-      className="admin-secondary-panel min-w-0 overflow-hidden rounded-[var(--r-card)]"
+      className="admin-secondary-panel min-w-0 overflow-hidden rounded-xl"
     >
       <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -128,7 +128,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
         </div>
         <Link
           to={getAdminRouteHref('auditLogs')}
-          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-[5px] px-2 whitespace-nowrap text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-card)]"
+          className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1 rounded-sm px-2 whitespace-nowrap text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-card)]"
         >
           {t('recentDownloads.viewAudit')}
           <span aria-hidden>→</span>
@@ -143,7 +143,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
             <div
               key={index}
               className={`${isRail ? '' : 'live-download-item'} space-y-2 px-4 py-3`}
-              style={isRail && index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
+              style={isRail && index > 0 ? { borderTop: '1px solid var(--border)' } : undefined}
             >
               <div className="h-3 w-3/4 animate-pulse rounded bg-[var(--bg-soft)]" />
               <div className="h-2.5 w-1/2 animate-pulse rounded bg-[var(--bg-soft)]" />
@@ -169,7 +169,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
       ) : (
         <>
           {hasStaleData && (
-            <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b-[0.5px] border-[var(--warn-border)] bg-[var(--warn-fill)] px-3 py-1.5 text-[11px] text-[var(--warn-text)]">
+            <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--warn-border)] bg-[var(--warn-fill)] px-3 py-1.5 text-[11px] text-[var(--warn-text)]">
               <span>{t('recentDownloads.stale')}</span>
               <button type="button" className="stripe-focus-ring min-h-7 rounded px-2 font-[600]" onClick={() => { void query.refetch() }}>
                 {t('recentDownloads.retry')}
@@ -189,7 +189,7 @@ export default function RecentDownloads({ limit = 3, variant = 'grid' }: RecentD
                   key={item.id}
                   data-download-id={item.id}
                   className={`${isRail ? '' : 'live-download-item'} live-download-row min-w-0 px-4 py-3`}
-                  style={isRail && index > 0 ? { borderTop: '0.5px solid var(--border)' } : undefined}
+                  style={isRail && index > 0 ? { borderTop: '1px solid var(--border)' } : undefined}
                   aria-label={t('recentDownloads.itemLabel', {
                     ecosystem,
                     package: fullPackageName,

@@ -137,7 +137,7 @@ function ChartTooltip({ active, payload, label, dataRange }: ChartTooltipProps) 
   const formattedLabel = typeof label === 'number' ? fmtTooltipTime(label, dataRange) : label
   return (
     <div
-      className="rounded-[6px] px-3 py-2 text-[12px]"
+      className="rounded-md px-3 py-2 text-[12px]"
       style={{ background: 'var(--bg-card)', boxShadow: 'var(--shadow-pop)' }}
     >
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{formattedLabel}</p>
@@ -221,7 +221,7 @@ export default function TrendsCard({
                       type="button"
                       onClick={() => setTab(tb.value)}
                       aria-pressed={active}
-                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-[3px] px-2 text-[11px] transition-[color,border-color] duration-150 sm:px-2.5"
+                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-sm px-2 text-[11px] transition-[color,border-color] duration-150 sm:px-2.5"
                       style={{
                         background: 'transparent',
                         color: active ? 'var(--text)' : 'var(--text-soft)',
@@ -238,7 +238,7 @@ export default function TrendsCard({
               </div>
               <div
                 data-trend-range-control
-                className="grid grid-cols-4 overflow-hidden rounded-[7px] border-[0.5px] border-[var(--border)] bg-[var(--bg-soft)] sm:flex"
+                className="grid grid-cols-4 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-soft)] sm:flex"
                 role="group"
                 aria-label={t('dashboard.hitMissTrend')}
               >
@@ -250,7 +250,7 @@ export default function TrendsCard({
                       type="button"
                       onClick={() => onRangeChange(r.value)}
                       aria-pressed={active}
-                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-[5px] px-2 text-[11px] font-[500] transition-[background,color,border-color] duration-150 sm:px-2.5"
+                      className="stripe-focus-ring min-h-[40px] min-w-0 cursor-pointer whitespace-nowrap rounded-sm px-2 text-[11px] font-[500] transition-[background,color,border-color] duration-150 sm:px-2.5"
                       style={{
                         background: active ? 'var(--bg-card)' : 'transparent',
                         color: active ? 'var(--text)' : 'var(--text-soft)',
@@ -268,7 +268,7 @@ export default function TrendsCard({
       </div>
 
       {isStale && (
-        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[6px] bg-[var(--warn-fill)] px-3 py-2 text-[11px] text-[var(--warn-text)]" role="status">
+        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--warn-fill)] px-3 py-2 text-[11px] text-[var(--warn-text)]" role="status">
           <span>{t('now.staleData')}</span>
           {onRetry && (
             <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRetry}>
@@ -282,7 +282,7 @@ export default function TrendsCard({
         <div className="flex min-h-24 items-center justify-center gap-3 px-4 pb-4 text-left">
           <span
             aria-hidden
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--bg-soft)] text-[var(--text-subtle)]"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--bg-soft)] text-[var(--text-subtle)]"
           >
             <Icon name="show_chart" size="sm" />
           </span>

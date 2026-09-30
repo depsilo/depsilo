@@ -1,4 +1,6 @@
 import { useId, type SelectHTMLAttributes } from 'react'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/native-select'
 import { mergeDescriptionIds } from './fieldFeedback'
 
 interface FeedbackProps {
@@ -26,21 +28,16 @@ export default function SelectV2({
   const composedDescriptionIds = mergeDescriptionIds(ariaDescribedBy, descriptionId)
 
   const select = (
-    <select
+    <NativeSelect
       {...rest}
       id={controlId}
       aria-invalid={error ? true : ariaInvalid}
       aria-describedby={composedDescriptionIds}
-      className={`w-full cursor-pointer rounded-[4px] px-3 py-2 text-[16px] md:text-[13px] transition-colors duration-150 stripe-focus-ring ${className}`}
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        color: 'var(--text)',
-        ...style,
-      }}
+      className={className}
+      style={style}
     >
       {children}
-    </select>
+    </NativeSelect>
   )
 
   if (!label && !descriptionId) return select
@@ -48,9 +45,9 @@ export default function SelectV2({
   return (
     <div>
       {label && (
-        <label htmlFor={controlId} className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">
+        <Label htmlFor={controlId} className="mb-1 block">
           {label}
-        </label>
+        </Label>
       )}
       {select}
       {(error || hint) && (

@@ -187,7 +187,7 @@ export default function DashboardV2() {
       actions={(
         <Link
           to={getAdminRouteHref('connect')}
-          className="app-button inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[13px] font-[500] no-underline stripe-focus-ring"
+          className="app-button inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-[13px] font-[500] no-underline stripe-focus-ring"
           style={{ color: 'var(--btn-fg)', background: 'var(--btn)' }}
         >
           <Icon name="link" size="sm" />
@@ -279,7 +279,7 @@ export default function DashboardV2() {
                 aria-busy="true"
                 className="admin-primary-panel p-4"
               >
-                <div aria-hidden="true" className="h-56 animate-pulse rounded-[6px] bg-[var(--bg-soft)]" />
+                <div aria-hidden="true" className="h-56 animate-pulse rounded-md bg-[var(--bg-soft)]" />
               </div>
             ) : trendsQuery.isError && !hasTrendData ? (
               <div className="admin-primary-panel p-4">

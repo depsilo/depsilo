@@ -480,7 +480,7 @@ for (const mutation of mutationCases) {
     await mutation.submit(page)
     await expect(page.getByRole('alert').filter({ hasText: message })).toBeVisible()
     await expect(mutation.retained(page)).toBeVisible()
-    await expect(page.locator('[data-toast-tone="success"]')).toHaveCount(0)
+    await expect(page.locator('[data-sonner-toast][data-type="success"]')).toHaveCount(0)
   })
 }
 
@@ -507,7 +507,7 @@ test('Cache cleanup stays busy until success then closes and toasts the service 
   await expect(cleaning).toBeDisabled()
   cleanup.resolve()
   await expect(page.getByRole('dialog', { name: /清理缓存|Clean Cache/ })).toHaveCount(0)
-  await expect(page.locator('[data-toast-tone="success"]')).toContainText('fixture cleanup completed')
+  await expect(page.locator('[data-sonner-toast][data-type="success"]')).toContainText('fixture cleanup completed')
 })
 
 test('Cache cleanup keeps a partial result visible instead of claiming success', async ({ page }) => {
@@ -533,7 +533,7 @@ test('Cache cleanup keeps a partial result visible instead of claiming success',
   await expect(dialog).toContainText(/partially completed|部分完成/)
   await expect(dialog).toContainText(/deleted 1|已删除 1/)
   await expect(dialog.getByRole('button', { name: /确认清理|Confirm/ })).toBeDisabled()
-  await expect(page.locator('[data-toast-tone="success"]')).toHaveCount(0)
+  await expect(page.locator('[data-sonner-toast][data-type="success"]')).toHaveCount(0)
 })
 
 test('Cache delete clears an old failure before the confirmation dialog is reopened', async ({ page }) => {

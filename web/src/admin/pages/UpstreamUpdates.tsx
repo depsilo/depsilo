@@ -310,7 +310,7 @@ export default function UpstreamUpdates() {
           }}
         >
           <div
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-[var(--border)] px-3 lg:max-w-[420px]"
+            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-md border border-[var(--border)] px-3 lg:max-w-[420px]"
             style={{ background: 'var(--bg-card)' }}
           >
             <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
@@ -412,7 +412,7 @@ export default function UpstreamUpdates() {
               <div
                 key={index}
                 aria-hidden="true"
-                className="h-14 animate-pulse rounded-[6px]"
+                className="h-14 animate-pulse rounded-md"
                 style={{ background: 'var(--bg-soft)' }}
               />
             ))}

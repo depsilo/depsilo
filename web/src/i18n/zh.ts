@@ -164,6 +164,7 @@ const zh = {
       retry: '重试',
       permissionDenied: '权限不足',
       close: '关闭',
+      notifications: '通知',
     },
     routeError: {
       title: '页面无法加载',

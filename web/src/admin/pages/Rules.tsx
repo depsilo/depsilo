@@ -115,7 +115,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
   return (
     <div className="space-y-3" data-rule-test-result role="status" aria-live="polite">
       <div
-        className="rounded-[4px] p-4"
+        className="rounded-sm p-4"
         data-rule-test-decision={result.allowed ? 'allow' : 'deny'}
         style={{
           background: result.allowed ? 'var(--ok-fill)' : 'var(--danger-fill)',
@@ -354,7 +354,7 @@ export default function RulesV2() {
                 type="button"
                 aria-pressed={form.action === 'allow'}
                 onClick={() => setForm({ ...form, action: 'allow' })}
-                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
+                className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors"
                 style={{ background: form.action === 'allow' ? 'var(--ok-fill)' : 'var(--bg-soft)', color: form.action === 'allow' ? 'var(--ok-text)' : 'var(--text-soft)', border: form.action === 'allow' ? '1px solid var(--ok-border)' : '1px solid var(--border)' }}
               >
                 {t('rules.allow')}
@@ -363,7 +363,7 @@ export default function RulesV2() {
                 type="button"
                 aria-pressed={form.action === 'deny'}
                 onClick={() => setForm({ ...form, action: 'deny' })}
-                className="stripe-focus-ring flex-1 cursor-pointer rounded-[4px] py-2 text-[14px] font-[400] transition-colors"
+                className="stripe-focus-ring flex-1 cursor-pointer rounded-sm py-2 text-[14px] font-[400] transition-colors"
                 style={{ background: form.action === 'deny' ? 'var(--danger-fill)' : 'var(--bg-soft)', color: form.action === 'deny' ? 'var(--danger)' : 'var(--text-soft)', border: form.action === 'deny' ? '1px solid var(--danger)' : '1px solid var(--border)' }}
               >
                 {t('rules.deny')}
@@ -403,7 +403,7 @@ export default function RulesV2() {
           <InputV2 label={t('rules.version')} mono value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
           <ButtonV2 type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
           {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
-          {testResult && 'error' in testResult && <div role="alert" className="rounded-[4px] p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
+          {testResult && 'error' in testResult && <div role="alert" className="rounded-sm p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
         </div>
       </ModalV2>
     </div>

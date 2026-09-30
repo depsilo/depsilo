@@ -1,4 +1,6 @@
 import { useId, type TextareaHTMLAttributes } from 'react'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { mergeDescriptionIds } from './fieldFeedback'
 
 interface FeedbackProps {
@@ -27,27 +29,15 @@ export default function TextareaV2({
   const composedDescriptionIds = mergeDescriptionIds(ariaDescribedBy, descriptionId)
 
   const textarea = (
-    <textarea
+    <Textarea
       {...rest}
       id={controlId}
       aria-invalid={error ? true : ariaInvalid}
       aria-describedby={composedDescriptionIds}
-      className={`w-full rounded-[4px] px-3 py-2 text-[16px] md:text-[13px] transition-colors duration-150 stripe-focus-ring ${className}`}
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        color: 'var(--text)',
-        outline: 'none',
-        ...style,
-      }}
-      onFocus={(event) => {
-        event.currentTarget.style.borderColor = 'var(--brand)'
-        onFocus?.(event)
-      }}
-      onBlur={(event) => {
-        event.currentTarget.style.borderColor = 'var(--border)'
-        onBlur?.(event)
-      }}
+      className={className}
+      style={style}
+      onFocus={onFocus}
+      onBlur={onBlur}
     />
   )
 
@@ -56,9 +46,9 @@ export default function TextareaV2({
   return (
     <div>
       {label && (
-        <label htmlFor={controlId} className="mb-1 block text-[14px] font-[400] text-[var(--text-muted)]">
+        <Label htmlFor={controlId} className="mb-1 block">
           {label}
-        </label>
+        </Label>
       )}
       {textarea}
       {(error || hint) && (

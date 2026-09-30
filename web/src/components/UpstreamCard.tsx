@@ -127,7 +127,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   return (
     <div
       data-upstream-heartbeat
-      className="stripe-focus-ring relative w-full min-w-0 rounded-[5px]"
+      className="stripe-focus-ring relative w-full min-w-0 rounded-sm"
       style={{ height: 40, maxWidth: HEARTBEAT_WIDTH }}
       tabIndex={0}
       aria-label={t('monitor.latencyHistoryNamed', { name: upstream.name })}
@@ -208,7 +208,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-[3px] text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
+          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-sm text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
           style={{ background: 'var(--inverse)', color: 'var(--on-inverse)', left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
@@ -388,7 +388,7 @@ export function UpstreamGroupedPanel({
         <div
           data-upstream-history-error
           role="status"
-          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-[6px] border px-3 py-2 text-[12px]"
+          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-md border px-3 py-2 text-[12px]"
           style={{ borderColor: 'var(--warn-border)', color: 'var(--warn-text)', background: 'var(--warn-fill)' }}
         >
           <span>{t('monitor.historyUnavailable')}</span>

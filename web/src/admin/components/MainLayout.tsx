@@ -63,14 +63,14 @@ function SidebarContent({
 
   return (
     <>
-      <div data-admin-sidebar-header className={`flex shrink-0 items-center gap-2.5 py-5 pl-5 ${reserveCloseSpace ? 'pr-16' : 'pr-5'}`}>
+      <div data-admin-sidebar-header className={`flex shrink-0 items-center gap-2.5 py-5 pl-5 ${reserveCloseSpace ? 'pr-[72px]' : 'pr-5'}`}>
         <Link
           data-admin-brand-link
           to="/"
           onClick={onNavigate}
           aria-label={t('portal.backLink')}
           title={t('portal.backLink')}
-          className="stripe-focus-ring flex min-w-0 items-center gap-2.5 rounded-[6px] no-underline transition-opacity duration-150 hover:opacity-75"
+          className="stripe-focus-ring flex min-w-0 items-center gap-2.5 rounded-md no-underline transition-opacity duration-150 hover:opacity-75"
         >
           <Logo size={26} />
           <span
@@ -81,7 +81,7 @@ function SidebarContent({
           </span>
         </Link>
         <span
-          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate whitespace-nowrap rounded-[4px] border px-1.5 py-0.5 font-mono text-[11px] tabular-nums"
+          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate whitespace-nowrap rounded-sm border px-1.5 py-0.5 font-mono text-[11px] tabular-nums"
           title={version}
           style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
         >
@@ -105,7 +105,7 @@ function SidebarContent({
               <div
                 data-admin-workspace-row
                 data-admin-workspace-current={section.active ? 'true' : undefined}
-                className="flex min-w-0 items-center rounded-[7px] transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
+                className="flex min-w-0 items-center rounded-md transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]"
                 style={{
                   background: section.active ? 'var(--brand-soft)' : undefined,
                 }}
@@ -115,14 +115,14 @@ function SidebarContent({
                   to={section.href}
                   onClick={onNavigate}
                   aria-current={section.active ? (section.current ? 'page' : 'location') : undefined}
-                  className="stripe-focus-ring flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-[13px] no-underline"
+                  className="stripe-focus-ring flex min-h-[40px] min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] no-underline"
                   style={{
                     color: section.active ? 'var(--brand-text)' : 'var(--text-soft)',
                     fontWeight: section.active ? 650 : 550,
                   }}
                 >
                   <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px]"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
                     style={{
                       background: section.active ? 'var(--bg-card)' : 'transparent',
                       color: section.active ? 'var(--brand-text)' : 'var(--text-subtle)',
@@ -138,20 +138,20 @@ function SidebarContent({
         </div>
       </nav>
 
-      <div data-admin-sidebar-footer className="shrink-0 px-3 py-3" style={{ borderTop: '0.5px solid var(--border)' }}>
+      <div data-admin-sidebar-footer className="shrink-0 px-3 py-3" style={{ borderTop: '1px solid var(--border)' }}>
         <Link
           to="/admin/users"
           onClick={onNavigate}
           aria-label={t('nav.instanceManagement')}
-          className="stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-[6px] px-2 py-2 text-[13px] font-[550] no-underline transition-colors hover:bg-[var(--admin-rail-hover)]"
+          className="stripe-focus-ring mb-2 flex min-h-10 items-center gap-2.5 rounded-md px-2 py-2 text-[13px] font-[550] no-underline transition-colors hover:bg-[var(--admin-rail-hover)]"
           style={{ color: 'var(--text-soft)' }}
         >
           <Icon name="settings" size="sm" />
           <span>{t('nav.instanceManagement')}</span>
         </Link>
-        <div className="group flex cursor-default items-center gap-2.5 rounded-[6px] px-2 py-2 transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]">
+        <div className="group flex cursor-default items-center gap-2.5 rounded-md px-2 py-2 transition-colors duration-150 hover:bg-[var(--admin-rail-hover)]">
           <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] text-[13px] font-[600]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[13px] font-[600]"
             style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}
           >
             {username?.[0]?.toUpperCase() || 'A'}
@@ -165,7 +165,7 @@ function SidebarContent({
           <button
             type="button"
             onClick={onLogout}
-            className="stripe-focus-ring inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-[4px] bg-transparent p-1.5 text-[var(--text-soft)] opacity-100 transition-[opacity,color,transform] duration-150 hover:text-[var(--text)] focus-visible:opacity-100 active:scale-[0.96] lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+            className="stripe-focus-ring inline-flex min-h-10 min-w-10 cursor-pointer items-center justify-center rounded-sm bg-transparent p-1.5 text-[var(--text-soft)] opacity-100 transition-[opacity,color,transform] duration-150 hover:text-[var(--text)] focus-visible:opacity-100 active:scale-[0.96] lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
             aria-label={t('nav.logout')}
           >
             <Icon name="logout" size="sm" />
@@ -349,7 +349,7 @@ export default function MainLayoutV2() {
         >
           <button
             type="button"
-            className="inline-flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[6px] bg-transparent text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.96] lg:hidden"
+            className="inline-flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-md bg-transparent text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.96] lg:hidden"
             onClick={() => setMobileNavOpen(true)}
             aria-label={t('nav.openNavigation')}
             aria-expanded={mobileNavOpen}

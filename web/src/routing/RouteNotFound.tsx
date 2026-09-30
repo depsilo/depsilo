@@ -36,7 +36,7 @@ export default function RouteNotFound({ area }: { area: RouteArea }) {
         </p>
         <Link
           to={destination}
-          className="stripe-focus-ring mt-5 inline-flex min-h-[40px] items-center justify-center rounded-[5px] px-3 py-1.5 text-[13px] font-[500] no-underline transition-[background,transform] duration-150 active:scale-[0.96]"
+          className="stripe-focus-ring mt-5 inline-flex min-h-[40px] items-center justify-center rounded-sm px-3 py-1.5 text-[13px] font-[500] no-underline transition-[background,transform] duration-150 active:scale-[0.96]"
           style={{
             color: 'var(--btn-fg)',
             background: 'var(--btn)',

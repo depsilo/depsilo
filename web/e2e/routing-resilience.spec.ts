@@ -192,7 +192,9 @@ test('authenticated Admin unknown paths render 404 inside the shell without dash
 test('Admin title derivation follows case-insensitive route matching', async ({ page }) => {
   await page.goto('/ADMIN/CACHE')
 
-  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('缓存管理')
+  // The Cache workspace page label is "制品缓存" (nav.cacheManage); the
+  // breadcrumb should resolve the mixed-case route to that destination.
+  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('制品缓存')
   await expect(page.locator('[data-route-state="not-found"]')).toHaveCount(0)
 })
 

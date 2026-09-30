@@ -84,7 +84,7 @@ export default function Login() {
             to="/"
             aria-label="Depsilo"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-[6px] text-[var(--text)] no-underline transition-opacity duration-150 hover:opacity-75"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-2 rounded-md text-[var(--text)] no-underline transition-opacity duration-150 hover:opacity-75"
           >
             <Logo size={28} />
             <span className="font-display text-[16px] font-[700]">Depsilo</span>
@@ -92,7 +92,7 @@ export default function Login() {
           <Link
             to="/"
             onClick={cancelLoginForPortalNavigation}
-            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-[6px] px-2 text-[12px] font-[550] text-[var(--text-muted)] no-underline transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            className="stripe-focus-ring inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-2 text-[12px] font-[550] text-[var(--text-muted)] no-underline transition-colors duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
           >
             <Icon name="arrow_back" size="sm" />
             {t('login.backToPortal')}
@@ -131,7 +131,7 @@ export default function Login() {
           {error && (
             <p
               role="alert"
-              className="rounded-[6px] border border-[var(--danger-border)] bg-[var(--danger-fill)] px-3 py-2.5 text-[13px] leading-5 text-[var(--danger-text)]"
+              className="rounded-md border border-[var(--danger-border)] bg-[var(--danger-fill)] px-3 py-2.5 text-[13px] leading-5 text-[var(--danger-text)]"
             >
               {error}
             </p>

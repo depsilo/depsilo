@@ -323,7 +323,7 @@ function EventsTab(props: {
         </ul>
         <div className="hidden sm:block">
         <TableViewport label={t('quarantine.events.table')} minWidth={920}>
-          <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
+          <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
             <table className="w-full" style={{ borderCollapse: 'collapse' }}>
             <thead style={{ background: 'var(--bg-soft)' }}>
               <tr>
@@ -337,7 +337,7 @@ function EventsTab(props: {
             </thead>
             <tbody>
               {items.map((ev) => (
-                <tr key={ev.id} style={{ borderTop: '0.5px solid var(--border)' }}>
+                <tr key={ev.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <Td>
                     <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>
                       {formatTime(ev.created_at)}
@@ -434,7 +434,7 @@ function ApprovalsTab(props: {
     </ul>
     <div className="hidden sm:block">
     <TableViewport label={t('quarantine.approvals.table')} minWidth={820}>
-      <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
+      <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
         <table className="w-full" style={{ borderCollapse: 'collapse' }}>
         <thead style={{ background: 'var(--bg-soft)' }}>
           <tr>
@@ -448,7 +448,7 @@ function ApprovalsTab(props: {
         </thead>
         <tbody>
           {items.map((row) => (
-            <tr key={row.id} style={{ borderTop: '0.5px solid var(--border)' }}>
+            <tr key={row.id} style={{ borderTop: '1px solid var(--border)' }}>
               <Td>
                 <span className="text-[12px] font-mono whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>
                   {formatTime(row.created_at)}
@@ -569,7 +569,7 @@ function BlocklistTab() {
       {st.mode === 'warn' && (
         <InlineNotice tone="warning">{t('quarantine.blocklist.observe_warning')}</InlineNotice>
       )}
-      <div className="rounded-[8px] border p-4 flex flex-wrap items-center gap-x-8 gap-y-3"
+      <div className="rounded-md border p-4 flex flex-wrap items-center gap-x-8 gap-y-3"
            style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}>
         <StatusItem label={t('quarantine.blocklist.mode')}>
           <BadgeV2 variant={st.mode === 'warn' ? 'warning' : 'success'}>
@@ -688,7 +688,7 @@ function BlocklistTab() {
           </ul>
           <div className="hidden sm:block">
           <TableViewport label={t('quarantine.blocklist.overrides_table')} minWidth={760}>
-            <div className="rounded-[8px] border" style={{ borderColor: 'var(--border)' }}>
+            <div className="rounded-md border" style={{ borderColor: 'var(--border)' }}>
               <table className="w-full" style={{ borderCollapse: 'collapse' }}>
               <thead style={{ background: 'var(--bg-soft)' }}>
                 <tr>
@@ -705,7 +705,7 @@ function BlocklistTab() {
                   const msLeft = new Date(row.expires_at).getTime() - now
                   const expired = msLeft <= 0
                   return (
-                    <tr key={row.id} style={{ borderTop: '0.5px solid var(--border)', opacity: expired ? 0.55 : 1 }}>
+                    <tr key={row.id} style={{ borderTop: '1px solid var(--border)', opacity: expired ? 0.55 : 1 }}>
                       <Td>
                         <div className="flex items-center gap-1.5">
                           {isAdminEcosystem(row.ecosystem) && <EcosystemIcon type={row.ecosystem} size={14} />}
@@ -933,11 +933,11 @@ function FilterSelect(props: {
       value={props.value}
       onChange={(e) => props.onChange(e.target.value)}
       disabled={props.disabled}
-      className="min-h-[40px] w-full cursor-pointer rounded-[6px] px-3 text-[16px] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-[12px]"
+      className="min-h-[40px] w-full cursor-pointer rounded-md px-3 text-[16px] disabled:cursor-not-allowed disabled:opacity-50 sm:h-9 sm:min-h-9 sm:w-auto sm:text-[12px]"
       style={{
         background: 'var(--bg-soft)',
         color: 'var(--text)',
-        border: '0.5px solid var(--border)',
+        border: '1px solid var(--border)',
       }}
     >
       {props.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

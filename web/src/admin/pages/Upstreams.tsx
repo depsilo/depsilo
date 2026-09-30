@@ -503,7 +503,7 @@ export default function UpstreamsV2() {
               {[...Array(4)].map((_, index) => (
                 <div
                   key={index}
-                  className="h-32 animate-pulse rounded-[6px]"
+                  className="h-32 animate-pulse rounded-md"
                   style={{ background: 'var(--bg-soft)' }}
                 />
               ))}
@@ -525,7 +525,7 @@ export default function UpstreamsV2() {
                 <div
                   role="group"
                   aria-label={t('upstreams.statusFilterLabel')}
-                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-[8px] border border-[var(--border)] bg-[var(--bg-soft)] p-[3px] sm:inline-grid sm:grid-cols-4"
+                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-md border border-[var(--border)] bg-[var(--bg-soft)] p-[3px] sm:inline-grid sm:grid-cols-4"
                 >
                   {statusOptions.map((option) => {
                     const active = statusFilter === option.value
@@ -534,7 +534,7 @@ export default function UpstreamsV2() {
                         key={option.value}
                         type="button"
                         aria-pressed={active}
-                        className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[5px] border px-2.5 text-[12px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
+                        className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-2.5 text-[12px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
                         style={{
                           background: active ? 'var(--bg-card)' : 'transparent',
                           borderColor: active ? 'var(--border-strong)' : 'transparent',
@@ -554,7 +554,7 @@ export default function UpstreamsV2() {
 
                 <div
                   role="search"
-                  className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-[6px] border border-[var(--border)] px-3 lg:max-w-[360px]"
+                  className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-md border border-[var(--border)] px-3 lg:max-w-[360px]"
                   style={{ background: 'var(--bg-card)' }}
                 >
                   <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
@@ -587,7 +587,7 @@ export default function UpstreamsV2() {
                   ) : (
                     <kbd
                       aria-hidden="true"
-                      className="hidden rounded-[4px] border border-[var(--border)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-subtle)] sm:inline"
+                      className="hidden rounded-sm border border-[var(--border)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-subtle)] sm:inline"
                     >
                       /
                     </kbd>

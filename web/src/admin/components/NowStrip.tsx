@@ -351,7 +351,7 @@ export default function NowStrip({
               action={data ? (
                 <Link
                   to={getAdminRouteHref('upstreams')}
-                  className="stripe-focus-ring inline-flex min-h-10 items-center rounded-[5px] px-2 font-mono text-[22px] font-[620] leading-none tabular-nums no-underline hover:bg-[var(--bg-hover)] md:text-[27px]"
+                  className="stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 font-mono text-[22px] font-[620] leading-none tabular-nums no-underline hover:bg-[var(--bg-hover)] md:text-[27px]"
                   style={{ color: upstreamTone === 'warning' ? 'var(--warn-text)' : 'var(--ok-text)' }}
                   aria-label={t('now.viewUpstreams', {
                     healthy: data.upstreams.healthy,

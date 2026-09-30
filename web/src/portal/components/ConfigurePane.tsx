@@ -104,7 +104,7 @@ function ManagerPicker({
         </span>
       </div>
       <div
-        className="manager-picker-viewport overflow-x-auto rounded-[8px] p-1"
+        className="manager-picker-viewport overflow-x-auto rounded-md p-1"
         style={{ background: 'var(--bg-soft)' }}
       >
         <div
@@ -173,13 +173,13 @@ function PathsCollapsible({ paths }: { paths: { os: string; path: string }[] }) 
 
   return (
     <details
-      className="config-disclosure overflow-hidden rounded-[7px]"
+      className="config-disclosure overflow-hidden rounded-md"
       style={{
         border: '1px solid var(--border)',
         background: 'var(--bg-card)',
       }}
     >
-      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-[6px] px-3 text-[13px] font-[540] text-[var(--text-muted)]">
+      <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-[13px] font-[540] text-[var(--text-muted)]">
         {t('quickstart.whereReadsFrom')}
         <span className="disclosure-chevron inline-flex">
           <Icon name="expand_more" size="sm" />
@@ -287,7 +287,7 @@ export default function ConfigurePane({
           </h3>
         </div>
         <div
-          className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-[6px] px-2.5 py-1.5 min-[640px]:flex"
+          className="ml-auto hidden min-w-0 max-w-[48%] items-center gap-2 rounded-md px-2.5 py-1.5 min-[640px]:flex"
           style={{ background: 'var(--bg-soft)' }}
           title={resolvedEndpoint}
         >
@@ -330,7 +330,7 @@ export default function ConfigurePane({
 
           {manager.methods && manager.methods.length > 0 && (
             <details className="config-disclosure border-y border-[var(--border)] py-2">
-              <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-[6px] px-1">
+              <summary className="stripe-focus-ring flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1">
                 <span className="flex items-start gap-3">
                   <span
                     aria-hidden="true"

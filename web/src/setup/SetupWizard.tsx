@@ -385,7 +385,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
           aria-busy={phase === 'restarting'}
           className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center"
         >
-          <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-[var(--brand-soft)] text-[var(--brand-text)]">
+          <span className="mb-5 grid h-11 w-11 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-text)]">
             <Icon name={phase === 'ready' ? 'check_circle' : 'sync'} className={phase === 'ready' ? '' : 'animate-spin'} />
           </span>
           <h1 className="text-[24px] font-[650] text-[var(--text)]">
@@ -400,7 +400,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
 
     return (
       <section className="flex min-h-[300px] flex-col items-center justify-center px-5 py-12 text-center">
-        <span className="mb-5 grid h-11 w-11 place-items-center rounded-[10px] bg-[var(--danger-fill)] text-[var(--danger-text)]">
+        <span className="mb-5 grid h-11 w-11 place-items-center rounded-lg bg-[var(--danger-fill)] text-[var(--danger-text)]">
           <Icon name="warning" />
         </span>
         <h1 className="text-[24px] font-[650] text-[var(--text)]">
@@ -429,8 +429,8 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
         className="border-t border-[var(--border)]"
       >
-        <summary className="stripe-focus-ring flex min-h-[52px] cursor-pointer list-none items-center gap-3 rounded-[6px] px-1 text-left [&::-webkit-details-marker]:hidden">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-[var(--bg-soft)] text-[var(--text-muted)]">
+        <summary className="stripe-focus-ring flex min-h-[52px] cursor-pointer list-none items-center gap-3 rounded-md px-1 text-left [&::-webkit-details-marker]:hidden">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--bg-soft)] text-[var(--text-muted)]">
             <Icon name="tune" size="sm" />
           </span>
           <span className="min-w-0 flex-1">
@@ -498,7 +498,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                     type="button"
                     aria-pressed={selected}
                     disabled={submitting}
-                    className="stripe-focus-ring flex min-h-[48px] items-center gap-2 rounded-[6px] border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
+                    className="stripe-focus-ring flex min-h-[48px] items-center gap-2 rounded-md border px-2.5 text-left transition-[background,border-color,color,transform] duration-150 active:scale-[0.98]"
                     style={{
                       borderColor: selected ? 'var(--brand)' : 'var(--border)',
                       background: selected ? 'var(--brand-soft)' : 'var(--bg-card)',
@@ -533,7 +533,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 const ecosystemUpstreams = upstreams[ecosystem.key] || []
                 const panelId = `setup-${ecosystem.key}-upstreams`
                 return (
-                  <div key={ecosystem.key} className="overflow-hidden rounded-[6px] border border-[var(--border)]">
+                  <div key={ecosystem.key} className="overflow-hidden rounded-md border border-[var(--border)]">
                     <button
                       type="button"
                       aria-expanded={expanded}
@@ -632,7 +632,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
 
         <div
           data-setup-surface="single-page"
-          className="overflow-hidden rounded-[var(--r-card)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-card)]"
+          className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-card)]"
         >
           {reconnecting || reconnectFailure ? renderReconnectState() : (
             <form ref={formRef} noValidate onSubmit={handleSubmit}>
@@ -700,7 +700,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                 {renderAdvancedSettings()}
 
                 {submitError && !reconnectURL && (
-                  <p role="alert" className="mt-5 rounded-[6px] bg-[var(--danger-fill)] px-3 py-2.5 text-[12px] leading-5 text-[var(--danger-text)]">
+                  <p role="alert" className="mt-5 rounded-md bg-[var(--danger-fill)] px-3 py-2.5 text-[12px] leading-5 text-[var(--danger-text)]">
                     {submitError}
                   </p>
                 )}

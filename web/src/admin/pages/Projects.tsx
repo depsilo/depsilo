@@ -255,7 +255,7 @@ export default function ProjectsV2() {
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   data-project-proxy-value
-                  className="min-w-0 flex-1 break-all rounded-[4px] px-2 py-1 font-mono text-[12px] leading-5"
+                  className="min-w-0 flex-1 break-all rounded-sm px-2 py-1 font-mono text-[12px] leading-5"
                   style={{ background: 'var(--bg-soft)', color: 'var(--text)' }}
                 >
                   {proxyUrl}
@@ -274,7 +274,7 @@ export default function ProjectsV2() {
                 <span className="text-[13px] w-32 shrink-0 pt-1" style={{ color: 'var(--text-soft)' }}>{t('projects.ecosystemBreakdown')}</span>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(ecosystems).map(([eco, count]) => (
-                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-[4px]" style={{ background: 'var(--bg-soft)' }}>
+                    <div key={eco} className="flex items-center gap-1.5 px-2 py-1 rounded-sm" style={{ background: 'var(--bg-soft)' }}>
                       {isAdminEcosystem(eco) && <EcosystemIcon type={eco} size={12} />}
                       <span className="text-[12px]" style={{ color: 'var(--text)' }}>{eco.toUpperCase()}</span>
                       <span className="text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-soft)' }}>{count}</span>
@@ -440,7 +440,7 @@ export default function ProjectsV2() {
       <ModalV2 open={tokenData !== null} onClose={() => setTokenData(null)} title={t('projects.token')}>
         {tokenData && (
           <div className="space-y-4">
-            <div className="rounded-[6px] p-3" style={{ background: 'var(--warn-fill)', border: '0.5px solid var(--warn-border)' }}>
+            <div className="rounded-md p-3" style={{ background: 'var(--warn-fill)', border: '1px solid var(--warn-border)' }}>
               <div className="flex items-center gap-2 mb-1">
                 <Icon name="warning" size="sm" style={{ color: 'var(--warn-text)' }} />
                 <span className="text-[13px] font-[500]" style={{ color: 'var(--warn-text)' }}>{t('projects.tokenWarning')}</span>
@@ -449,7 +449,7 @@ export default function ProjectsV2() {
             <div>
               <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.token')}</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.token}
                 </code>
                 <CopyButton text={tokenData.token} label={t('projects.copyToken')} />
@@ -458,7 +458,7 @@ export default function ProjectsV2() {
             <div>
               <label className="block text-[13px] font-[500] mb-1" style={{ color: 'var(--text-muted)' }}>{t('projects.proxyUrl')}</label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-[4px] break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
+                <code className="flex-1 text-[12px] font-mono px-3 py-2 rounded-sm break-all" style={{ background: 'var(--bg-soft)', color: 'var(--text)', border: '1px solid var(--border)' }}>
                   {tokenData.proxy_url}
                 </code>
                 <CopyButton text={tokenData.proxy_url} label={t('projects.copyProxyUrl')} />

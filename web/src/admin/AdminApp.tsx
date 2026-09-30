@@ -70,7 +70,7 @@ function AdminAuthPending() {
         aria-atomic="true"
         className="flex min-h-12 items-center gap-3 text-[var(--text)]"
       >
-        <span className="grid size-10 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand-text)]">
+        <span className="grid size-10 shrink-0 place-items-center rounded-md bg-[var(--brand-soft)] text-[var(--brand-text)]">
           <Logo size={26} />
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">

@@ -154,7 +154,7 @@ test('distinguishes an absolute empty history from an empty filtered result', as
   })
 
   await page.goto('/admin/upstream-updates')
-  const absoluteEmpty = page.getByText(/No (?:upstream )?update (?:probe )?records yet/i)
+  const absoluteEmpty = page.getByText(/No metadata refresh records yet/i)
   await expect(absoluteEmpty).toBeVisible()
 
   await page.locator('[data-upstream-updates-toolbar]')
@@ -184,7 +184,7 @@ test('makes 403 explicit and lets an initial 500 retry into the successful empty
 
   await page.goto('/admin/upstream-updates')
   await expect(page.getByRole('alert')).toContainText(/permission/i)
-  await expect(page.getByText(/No (?:upstream )?update (?:probe )?records yet/i)).toHaveCount(0)
+  await expect(page.getByText(/No metadata refresh records yet/i)).toHaveCount(0)
 
   let retryCalls = 0
   await mockAdminApi(page, {
@@ -203,7 +203,7 @@ test('makes 403 explicit and lets an initial 500 retry into the successful empty
   await failure.getByRole('button', { name: 'Retry' }).click()
   await expect.poll(() => retryCalls).toBe(2)
   await expect(failure).toHaveCount(0)
-  await expect(page.getByText(/No (?:upstream )?update (?:probe )?records yet/i)).toBeVisible()
+  await expect(page.getByText(/No metadata refresh records yet/i)).toBeVisible()
 })
 
 test('renders a populated mobile record list without overflow and passes axe in light English', async ({ page }) => {

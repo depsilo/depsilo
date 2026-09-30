@@ -154,7 +154,7 @@ function SearchPill({
         minHeight: 40,
         padding: '0 0 0 10px',
         background: 'var(--bg-soft)',
-        border: `0.5px solid ${focused ? 'var(--brand-border)' : 'var(--border)'}`,
+        border: `1px solid ${focused ? 'var(--brand-border)' : 'var(--border)'}`,
         borderRadius: 8,
         transition: 'border-color 120ms ease, background 120ms ease',
       }}
@@ -229,7 +229,7 @@ function SearchPill({
             color: 'var(--text-subtle)',
             padding: '0 5px',
             lineHeight: '15px',
-            border: '0.5px solid var(--border)',
+            border: '1px solid var(--border)',
             borderRadius: 4,
             opacity: focused ? 0 : 1,
             transition: 'opacity 120ms ease',
@@ -408,7 +408,7 @@ export default function MonitorPage() {
               {[...Array(4)].map((_, index) => (
                 <div
                   key={index}
-                  className="h-32 animate-pulse rounded-[10px]"
+                  className="h-32 animate-pulse rounded-lg"
                   style={{ background: 'var(--bg-soft)' }}
                 />
               ))}
@@ -449,9 +449,9 @@ export default function MonitorPage() {
                 action={(
                   <Link
                     to="/admin/upstreams"
-                    className="app-button stripe-focus-ring inline-flex min-h-10 items-center justify-center rounded-[5px] px-3 text-[13px] font-[500] no-underline"
+                    className="app-button stripe-focus-ring inline-flex min-h-10 items-center justify-center rounded-sm px-3 text-[13px] font-[500] no-underline"
                     style={{
-                      border: '0.5px solid var(--border-strong)',
+                      border: '1px solid var(--border-strong)',
                       color: 'var(--text)',
                       background: 'var(--bg-card)',
                     }}

@@ -90,11 +90,11 @@ function CapabilityOverview() {
       {facts.length > 0 && (
         <div className="space-y-3">
           {[...grouped.entries()].map(([name, rows]) => (
-            <details key={name} className="rounded-[6px] border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
+            <details key={name} className="rounded-md border border-[var(--border)] bg-[var(--bg-soft)] px-3 py-2">
               <summary className="cursor-pointer stripe-focus-ring text-[13px] font-[600]">{label(name)}</summary>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {rows.map((fact) => (
-                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-[4px] bg-[var(--bg-page)] p-2 text-[12px]">
+                  <div key={`${fact.ecosystem ?? 'all'}-${fact.name}`} className="min-w-0 rounded-sm bg-[var(--bg-page)] p-2 text-[12px]">
                     <div className="mb-1 font-[600]">{fact.ecosystem?.toUpperCase() ?? t('security.capabilityOverall')}</div>
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
@@ -444,7 +444,7 @@ function SuggestionsTab() {
           <span>{t('security.manualRuleRequired')}</span>
           <Link
             to={getAdminRouteHref('rules')}
-            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-[5px] px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
+            className="stripe-focus-ring inline-flex min-h-10 shrink-0 items-center rounded-sm px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]"
           >
             {t('security.openPackageRules')}
           </Link>
@@ -962,7 +962,7 @@ function PoliciesTab() {
         <SectionHeader title={t('security.offlineImport')} hint={t('security.offlineImportDesc')} />
         {canWrite && <div
           data-security-import-dropzone
-          className="rounded-[4px] p-6 text-center transition-colors duration-150"
+          className="rounded-sm p-6 text-center transition-colors duration-150"
           style={{
             border: '2px dashed var(--border)',
             background: 'var(--bg-soft)',
@@ -978,7 +978,7 @@ function PoliciesTab() {
         >
           <button
             type="button"
-            className="inline-flex min-h-10 flex-col items-center justify-center rounded-[4px] bg-transparent px-4 py-2 text-[var(--text-soft)] stripe-focus-ring"
+            className="inline-flex min-h-10 flex-col items-center justify-center rounded-sm bg-transparent px-4 py-2 text-[var(--text-soft)] stripe-focus-ring"
             onClick={() => fileInputRef.current?.click()}
             disabled={importMutation.isPending}
           >

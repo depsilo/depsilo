@@ -164,6 +164,7 @@ const en = {
       retry: 'Retry',
       permissionDenied: 'Permission denied',
       close: 'Close',
+      notifications: 'Notifications',
     },
     routeError: {
       title: 'Could not load this page',

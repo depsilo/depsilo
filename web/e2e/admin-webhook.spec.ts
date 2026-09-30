@@ -30,8 +30,7 @@ test('failed webhook test renders a danger toast', async ({ page }) => {
   await page.goto('/admin/settings')
   await page.getByRole('tab', { name: /Webhook/ }).click()
   await page.getByRole('button', { name: /测试/ }).click()
-  await expect(page.getByRole('alert')).toContainText('delivery failed')
-  await expect(page.locator('[data-toast-tone="danger"]')).toContainText('delivery failed')
+  await expect(page.locator('[data-sonner-toast][data-type="error"]')).toContainText('delivery failed')
 })
 
 test('renders loading before an empty successful Webhook response', async ({ page }) => {
@@ -84,7 +83,7 @@ test('keeps Test stable while pending and announces queued delivery', async ({ p
   await expect(button).toHaveAttribute('aria-busy', 'true')
   expect(await button.boundingBox()).toEqual(before)
   release({ status: 'test queued' })
-  await expect(page.locator('[data-toast-tone="success"]')).toContainText(/测试通知已加入发送队列/)
+  await expect(page.locator('[data-sonner-toast][data-type="success"]')).toContainText(/测试通知已加入发送队列/)
 })
 
 test('refreshes last sent state after a successful Test', async ({ page }) => {
@@ -134,8 +133,8 @@ test('shows the service error and no success Toast when Test fails', async ({ pa
   })
   await openWebhookTab(page)
   await page.getByRole('button', { name: /测试 ops/ }).click()
-  await expect(page.getByRole('alert')).toContainText('fixture webhook failure')
-  await expect(page.locator('[data-toast-tone="success"]')).toHaveCount(0)
+  await expect(page.locator('[data-sonner-toast][data-type="error"]')).toContainText('fixture webhook failure')
+  await expect(page.locator('[data-sonner-toast][data-type="success"]')).toHaveCount(0)
 })
 
 test('hides mutation controls when the principal cannot write', async ({ page }) => {

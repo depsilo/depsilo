@@ -58,17 +58,17 @@ export default function HeroAICTA() {
     <>
       <article
         aria-labelledby="quickstart-optional-ai-title"
-        className="flex min-h-full flex-col rounded-[var(--r-card)] p-5 sm:p-6"
+        className="flex min-h-full flex-col rounded-xl p-5 sm:p-6"
         style={{
           background: 'var(--bg-card)',
-          border: '0.5px solid var(--border-strong)',
+          border: '1px solid var(--border-strong)',
           boxShadow: 'var(--shadow-card)',
         }}
       >
         <div className="flex items-start gap-3">
           <span
             aria-hidden="true"
-            className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand-text)]"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand-text)]"
           >
             <Icon name="lightbulb" />
           </span>
@@ -90,7 +90,7 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleCopy()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-[7px] px-3 text-[13px] font-[620] active:scale-[0.97]"
+            className="stripe-focus-ring inline-flex min-h-10 min-w-[168px] items-center justify-center gap-2 rounded-md px-3 text-[13px] font-[620] active:scale-[0.97]"
             style={{
               color: copied ? 'var(--ok-text)' : 'var(--btn-fg)',
               background: copied ? 'var(--ok-fill)' : 'var(--btn)',
@@ -116,7 +116,7 @@ export default function HeroAICTA() {
             type="button"
             onClick={() => void handleReview()}
             disabled={isFetching}
-            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-[7px] px-3 text-[13px] font-[600] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.97]"
+            className="stripe-focus-ring inline-flex min-h-10 items-center gap-2 rounded-md px-3 text-[13px] font-[600] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.97]"
             style={{
               background: 'transparent',
               border: '1px solid var(--border)',
@@ -154,10 +154,10 @@ export default function HeroAICTA() {
             {t('quickstart.aiIntegrationDesc')}
           </p>
           <div
-            className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] px-3 py-2"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-md px-3 py-2"
             style={{
               background: 'var(--bg-soft)',
-              border: '0.5px solid var(--border)',
+              border: '1px solid var(--border)',
             }}
           >
             <span className="min-w-0 flex-1 text-[12px] leading-[1.5] text-[var(--text-muted)]">
@@ -167,10 +167,10 @@ export default function HeroAICTA() {
           </div>
           <pre
             tabIndex={0}
-            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-[6px] p-4 font-[var(--font-mono)] text-[12px] leading-[1.55] text-[var(--text)]"
+            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-md p-4 font-[var(--font-mono)] text-[12px] leading-[1.55] text-[var(--text)]"
             style={{
               background: 'var(--bg-soft)',
-              border: '0.5px solid var(--border)',
+              border: '1px solid var(--border)',
             }}
           >
             {prompt && <code>{prompt}</code>}

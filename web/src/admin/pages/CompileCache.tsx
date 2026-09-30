@@ -514,10 +514,10 @@ export default function CompileCache() {
               ] as const).map(item => {
                 const target = `${item.client}-config` as CopiedValue
                 return (
-                  <section key={item.client} className="flex min-w-0 flex-col rounded-[7px] border border-[var(--border)] p-4">
+                  <section key={item.client} className="flex min-w-0 flex-col rounded-md border border-[var(--border)] p-4">
                     <h3 className="font-mono text-[14px] font-[650] text-[var(--text)]">{item.client}</h3>
                     <p className="mt-1 text-[11px] text-[var(--text-muted)]">{item.label}</p>
-                    <div className="mt-3 flex-1 rounded-[5px] bg-[var(--bg-soft)] p-3">
+                    <div className="mt-3 flex-1 rounded-sm bg-[var(--bg-soft)] p-3">
                       <code className="block whitespace-pre-wrap break-all font-mono text-[12px] leading-5 text-[var(--text)]">
                         {item.value}
                       </code>

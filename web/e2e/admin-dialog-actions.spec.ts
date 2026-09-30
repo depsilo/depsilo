@@ -17,8 +17,8 @@ test('dialog traps focus and restores its trigger', async ({ page }) => {
   await closeButton.focus()
   const tooltip = page.getByRole('tooltip')
   await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'rgb(233, 236, 238)')
-  await expect(tooltip).toHaveCSS('color', 'rgb(11, 13, 15)')
+  await expect(tooltip).toHaveCSS('background-color', 'oklch(0.985 0 0)')
+  await expect(tooltip).toHaveCSS('color', 'oklch(0.145 0 0)')
 
   await page.keyboard.press('Escape')
   await expect(trigger).toBeFocused()
@@ -32,9 +32,9 @@ test('every visible icon action is named and at least 40px', async ({ page }) =>
   await expect(button).toHaveCount(1)
   await expect(button).toHaveAttribute('aria-label', /关闭/)
 
-  const box = await button.boundingBox()
-  expect(box?.width).toBeGreaterThanOrEqual(40)
-  expect(box?.height).toBeGreaterThanOrEqual(40)
+  // The dialog zooms in on open, so measure once the entrance has settled.
+  await expect.poll(async () => (await button.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(40)
+  await expect.poll(async () => (await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40)
 
   await button.hover()
   await expect(page.getByRole('tooltip')).toContainText(/关闭/)
@@ -51,8 +51,8 @@ test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
   await expect(button).toBeFocused()
   const tooltip = page.getByRole('tooltip')
   await expect(tooltip).toContainText(/关闭/)
-  await expect(tooltip).toHaveCSS('background-color', 'rgb(20, 24, 26)')
-  await expect(tooltip).toHaveCSS('color', 'rgb(255, 255, 255)')
+  await expect(tooltip).toHaveCSS('background-color', 'oklch(0.145 0 0)')
+  await expect(tooltip).toHaveCSS('color', 'oklch(1 0 0)')
 })
 
 test('user credential dialog explains the enforced password policy', async ({ page }) => {

@@ -48,7 +48,7 @@ function formatTimeSaved(ms: number, t: (key: string) => string): string {
 function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+    <div className="rounded-sm px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -62,7 +62,7 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps<TooltipVal
 function LatencyTooltip({ active, payload, label }: TooltipContentProps<TooltipValueType, string | number>) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-[4px] px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+    <div className="rounded-sm px-3 py-2 text-[12px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
       <p className="font-[400] mb-1" style={{ color: 'var(--text)' }}>{label}</p>
       {payload.map((entry) => (
         <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -164,7 +164,7 @@ export default function BandwidthReport() {
             <button
               key={r.value}
               onClick={() => setRange(r.value)}
-              className="whitespace-nowrap rounded-[4px] px-3 py-1 text-[12px] font-[500] transition-colors duration-150 cursor-pointer"
+              className="whitespace-nowrap rounded-sm px-3 py-1 text-[12px] font-[500] transition-colors duration-150 cursor-pointer"
               style={{
                 background: active ? 'var(--btn)' : 'transparent',
                 color: active ? 'var(--btn-fg)' : 'var(--text-soft)',

@@ -152,26 +152,22 @@ test('30d trend tooltips distinguish same-day two-hour buckets in local time', a
   await expect(await hoverTrendEndpoint(chart, 'last')).toHaveText(lastExpected)
 })
 
-test('primary command uses the semantic pressed color without a filter', async ({ page }) => {
+test('primary command uses the semantic primary color without a filter', async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
   await page.goto('/admin/upstreams')
   const button = page.getByRole('button', { name: /添加上游源/i })
-  const tokenColors = await page.evaluate(() => {
+  const tokenColor = await page.evaluate(() => {
     const probe = document.createElement('span')
     document.body.appendChild(probe)
     probe.style.backgroundColor = 'var(--btn)'
-    const resting = getComputedStyle(probe).backgroundColor
-    probe.style.backgroundColor = 'var(--btn-press)'
-    const pressed = getComputedStyle(probe).backgroundColor
+    const value = getComputedStyle(probe).backgroundColor
     probe.remove()
-    return { resting, pressed }
+    return value
   })
   const restingBackground = await button.evaluate(el => getComputedStyle(el).backgroundColor)
-  expect(restingBackground).toBe(tokenColors.resting)
+  expect(restingBackground).toBe(tokenColor)
   await button.hover()
-  await expect.poll(() => button.evaluate(el => getComputedStyle(el).backgroundColor)).toBe(tokenColors.pressed)
   const hoveredBackground = await button.evaluate(el => getComputedStyle(el).backgroundColor)
   expect(hoveredBackground).not.toBe(restingBackground)
-  expect(hoveredBackground).toBe(tokenColors.pressed)
   expect(await button.evaluate(el => getComputedStyle(el).filter)).toBe('none')
 })

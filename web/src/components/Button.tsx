@@ -1,20 +1,28 @@
 import { type ButtonHTMLAttributes } from 'react'
+import { Button } from '@/components/ui/button'
+
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 interface ButtonV2Props extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  variant?: ButtonVariant
   size?: 'sm' | 'md'
 }
 
 // Compact admin-grade button.
-// - primary: filled brand
+// - primary: filled command green
 // - secondary: bordered (paired with brand text on default, or any tone via parent style override)
 // - ghost: bare, hover lift
 // - danger: outlined danger
 //
-// Active state uses scale(0.96) — the canonical "feels right" press value.
-// Transitions list the exact properties we touch (background / color /
-// border-color / transform) rather than `transition-all` which silently
-// animates any future property change too.
+// Thin app-facing name for the shadcn Button variant set. Call sites keep the
+// Instrument vocabulary; the shadcn component owns the class composition.
+const VARIANT_MAP: Record<ButtonVariant, 'default' | 'outline' | 'ghost' | 'destructive'> = {
+  primary: 'default',
+  secondary: 'outline',
+  ghost: 'ghost',
+  danger: 'destructive',
+}
+
 export default function ButtonV2({
   variant = 'primary',
   size = 'md',
@@ -23,53 +31,15 @@ export default function ButtonV2({
   disabled,
   ...rest
 }: ButtonV2Props) {
-  const base =
-    'app-button inline-flex items-center justify-center gap-1.5 font-[500] cursor-pointer transition-[background,color,border-color,transform] duration-150 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.96] stripe-focus-ring'
-
-  const sizes = {
-    sm: 'min-h-8 text-[12px] px-2.5 py-1 rounded-[5px]',
-    md: 'min-h-9 text-[13px] px-3 py-1.5 rounded-[5px]',
-  }
-
-  const variants: Record<string, string> = {
-    primary: 'text-[var(--btn-fg)] bg-[var(--btn)] hover:bg-[var(--btn-press)]',
-    secondary: 'hover:bg-[var(--bg-hover)] hover:text-[var(--text)]',
-    ghost: 'bg-transparent hover:bg-[var(--bg-hover)]',
-    danger: 'hover:bg-[var(--danger-fill)]',
-  }
-
-  const isPrimary = variant === 'primary'
-  const isSecondary = variant === 'secondary'
-  const isDanger = variant === 'danger'
-
-  // Primary = Instrument's deep green command button. Semantic tokens
-  // keep its resting and pressed colors stable across both themes.
-  const primaryStyle: React.CSSProperties = isPrimary
-    ? {
-        boxShadow:
-          'inset 0 1px 0 color-mix(in oklab, white 16%, transparent), 0 1px 2px rgba(0, 0, 0, 0.18)',
-      }
-    : {}
-
   return (
-    <button
-      className={`${base} ${sizes[size]} ${variants[variant]} ${className}`}
+    <Button
+      variant={VARIANT_MAP[variant]}
+      size={size === 'sm' ? 'sm' : 'default'}
+      className={className}
       disabled={disabled}
-      style={{
-        ...primaryStyle,
-        ...(isSecondary
-          ? { border: '0.5px solid var(--border-strong)', color: 'var(--text-soft)', background: 'var(--bg-card)' }
-          : {}),
-        ...(isDanger
-          ? { border: '0.5px solid var(--danger-border)', color: 'var(--danger-text)', background: 'transparent' }
-          : {}),
-        ...(!isPrimary && !isSecondary && !isDanger
-          ? { color: 'var(--text-soft)' }
-          : {}),
-      }}
       {...rest}
     >
       {children}
-    </button>
+    </Button>
   )
 }

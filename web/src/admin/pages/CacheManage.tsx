@@ -244,7 +244,7 @@ export default function CacheManageV2() {
               <ResponsiveContainer width="100%" height={200}>
                 <Treemap
                   data={distribution.top_packages.map((p) => ({ name: p.name, size: p.size, type: p.type, hits: p.hit_count }))}
-                  dataKey="size" aspectRatio={4 / 3} stroke="var(--bg)" isAnimationActive={false}
+                  dataKey="size" aspectRatio={4 / 3} stroke="var(--background)" isAnimationActive={false}
                   content={(node: TreemapNode) => {
                     const { x, y, width, height, name } = node
                     const size = typeof node.size === 'number' ? node.size : node.value
@@ -257,12 +257,12 @@ export default function CacheManageV2() {
                         <rect x={x} y={y} width={width} height={height}
                           fill={fill}
                           fillOpacity={0.25 + Math.min(0.5, ((size || 0) / (distribution.top_packages[0]?.size || 1)) * 0.5)}
-                          stroke="var(--bg)" strokeWidth={1.5} rx={3}
+                          stroke="var(--background)" strokeWidth={1.5} rx={3}
                         />
                         {showLabel && (
                           <foreignObject x={x} y={y} width={width} height={height}>
                             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 3, boxSizing: 'border-box', overflow: 'hidden' }}>
-                              <div style={{ maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 4px', borderRadius: 3, background: 'var(--surface)', overflow: 'hidden' }}>
+                              <div style={{ maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '2px 4px', borderRadius: 3, background: 'var(--card)', overflow: 'hidden' }}>
                                 <span style={{ color: 'var(--text)', fontSize: 11, fontWeight: 500, lineHeight: 1.2, textAlign: 'center', wordBreak: 'break-all' }}>{name}</span>
                                 <span style={{ color: 'var(--text-soft)', fontSize: 10, fontFamily: 'ui-monospace, monospace' }}>{formatBytes(size)}</span>
                               </div>
@@ -278,7 +278,7 @@ export default function CacheManageV2() {
                     const item: unknown = payload[0]?.payload
                     if (!isCacheTreemapItem(item)) return null
                     return (
-                      <div className="rounded-[4px] p-2 text-[11px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                      <div className="rounded-sm p-2 text-[11px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                         <p className="font-[500]" style={{ color: 'var(--text)' }}>{item.name}</p>
                         <p style={{ color: 'var(--text-soft)' }}>{item.type?.toUpperCase()} · {formatBytes(item.size)} · {item.hits} hits</p>
                       </div>
@@ -296,7 +296,7 @@ export default function CacheManageV2() {
       )}
 
       <div data-admin-filters className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-[4px] px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
+        <div className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-sm px-3 py-1.5" style={{ border: '1px solid var(--border)' }}>
           <Icon name="search" size="sm" style={{ color: 'var(--text-soft)', flexShrink: 0 }} />
           <input
             aria-label={t('cache.searchLabel')}
@@ -484,7 +484,7 @@ export default function CacheManageV2() {
           {cancelWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
           {retryWarmupMutation.isError && <InlineNotice tone="danger">{t('cache.warmupActionFailed')}</InlineNotice>}
           {warmupJobId && warmupJobQuery.data?.data && (
-            <div className="space-y-3 rounded-[6px] border border-[var(--border)] p-3" data-testid="warmup-job-status">
+            <div className="space-y-3 rounded-md border border-[var(--border)] p-3" data-testid="warmup-job-status">
               <div className="flex justify-between gap-3 text-[12px]">
                 <span>{t('cache.warmupJobStatus', { status: t(WARMUP_STATUS_KEYS[warmupJobQuery.data.data.status] || 'cache.warmupStatus.unknown') })}</span>
                 <span className="font-mono text-[var(--text-soft)]">{warmupJobId}</span>

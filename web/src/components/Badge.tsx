@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react'
+import { Badge } from '@/components/ui/badge'
 
 type BadgeV2Variant = 'default' | 'neutral' | 'success' | 'error' | 'warning' | 'pro' | 'ecosystem'
 
@@ -9,14 +10,14 @@ interface BadgeV2Props {
 }
 
 // Tinted chip. Pro adds a subtle brand border to distinguish entitlement.
-const variantStyles: Record<BadgeV2Variant, { bg: string; color: string; border?: string }> = {
-  default:   { bg: 'var(--brand-soft)',  color: 'var(--brand-text)' },
-  neutral:   { bg: 'var(--bg-soft)', color: 'var(--text-muted)', border: 'var(--border)' },
-  success:   { bg: 'var(--ok-fill)',     color: 'var(--ok-text)' },
-  error:     { bg: 'var(--danger-fill)', color: 'var(--danger-text)' },
-  warning:   { bg: 'var(--warn-fill)',   color: 'var(--warn-text)' },
-  pro:       { bg: 'var(--brand-soft)', color: 'var(--brand-text)', border: 'var(--brand-border)' },
-  ecosystem: { bg: 'var(--brand-soft)',  color: 'var(--brand-text)' },
+const VARIANT_MAP: Record<BadgeV2Variant, 'default' | 'neutral' | 'success' | 'warning' | 'destructive' | 'pro'> = {
+  default: 'default',
+  neutral: 'neutral',
+  success: 'success',
+  error: 'destructive',
+  warning: 'warning',
+  pro: 'pro',
+  ecosystem: 'default',
 }
 
 export default function BadgeV2({
@@ -24,22 +25,9 @@ export default function BadgeV2({
   children,
   className = '',
 }: BadgeV2Props) {
-  const s = variantStyles[variant]
-
   return (
-    <span
-      className={`inline-flex items-center px-[7px] py-[2px] ${className}`}
-      style={{
-        background: s.bg,
-        color: s.color,
-        border: s.border ? `0.5px solid ${s.border}` : undefined,
-        borderRadius: 'var(--r-tag)',
-        fontSize: '11px',
-        fontWeight: 600,
-        lineHeight: '1.4',
-      }}
-    >
+    <Badge variant={VARIANT_MAP[variant]} className={className}>
       {children}
-    </span>
+    </Badge>
   )
 }
