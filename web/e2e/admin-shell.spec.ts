@@ -265,7 +265,11 @@ test('desktop Admin chrome uses the shadcn canvas, brand portal link, and labele
   await expect(brandLink).toHaveAttribute('href', '/')
   await expect(topbar.getByRole('link', { name: '返回门户' })).toHaveCount(0)
 
-  const themeToggle = topbar.locator('[data-theme-toggle="labeled"]')
+  const preferences = sidebar.locator('[data-admin-sidebar-footer] [data-admin-preferences]')
+  await expect(preferences.locator('[data-language-toggle="admin"]')).toBeVisible()
+  await expect(topbar.locator('[data-admin-preferences]')).toHaveCount(0)
+
+  const themeToggle = preferences.locator('[data-theme-toggle="labeled"]')
   await expect(themeToggle).toContainText('外观：浅色')
   await themeToggle.click()
   await expect(themeToggle).toContainText('外观：深色')
@@ -290,23 +294,28 @@ test('desktop Admin chrome uses the shadcn canvas, brand portal link, and labele
   expect(await page.evaluate(() => localStorage.getItem('depsilo-theme'))).toBe('light')
 })
 
-test('mobile Admin keeps the theme mode readable and exposes Portal through the drawer brand', async ({ page }) => {
+test('mobile Admin keeps the theme mode readable in the drawer and exposes Portal through the drawer brand', async ({ page }) => {
   await mockAdminApi(page)
   await setUiPreferences(page, 'light', 'en')
   await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/admin/settings')
 
-  const themeToggle = page.locator('[data-admin-topbar] [data-theme-toggle="labeled"]')
+  await expect(page.locator('[data-admin-topbar] [data-admin-preferences]')).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  const drawer = page.getByRole('dialog', { name: 'Admin navigation' })
+  const preferences = drawer.locator('[data-admin-sidebar-footer] [data-admin-preferences]')
+  await expect(preferences.locator('[data-language-toggle="admin"]')).toBeVisible()
+
+  const themeToggle = preferences.locator('[data-theme-toggle="labeled"]')
   await expect(themeToggle).toBeVisible()
   await expect(themeToggle).toHaveAttribute('aria-label', 'Appearance: Light')
   expect((await themeToggle.innerText()).trim()).toBe('Light')
   const themeToggleBox = await themeToggle.boundingBox()
   expect(themeToggleBox?.width).toBeGreaterThanOrEqual(40)
   expect(themeToggleBox?.height).toBeGreaterThanOrEqual(40)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
-  await page.getByRole('button', { name: 'Open navigation' }).click()
-  const drawer = page.getByRole('dialog', { name: 'Admin navigation' })
   const brandLink = drawer.getByRole('link', { name: 'Back to Portal' })
   await expect(brandLink).toHaveAttribute('href', '/')
   await brandLink.click()

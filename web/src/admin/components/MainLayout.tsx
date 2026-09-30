@@ -139,6 +139,10 @@ function SidebarContent({
       </nav>
 
       <div data-admin-sidebar-footer className="shrink-0 px-3 py-3" style={{ borderTop: '1px solid var(--border)' }}>
+        <div data-admin-preferences className="mb-1 flex items-center gap-1 px-1">
+          <LangToggle variant="admin" />
+          <ThemeToggle labeled variant="admin" />
+        </div>
         <Link
           to="/admin/users"
           onClick={onNavigate}
@@ -380,13 +384,6 @@ export default function MainLayoutV2() {
                 </>
               )}
             </div>
-          </div>
-          <div
-            data-admin-preferences
-            className="flex shrink-0 items-center gap-1"
-          >
-            <LangToggle variant="admin" />
-            <ThemeToggle labeled variant="admin" />
           </div>
         </header>
 

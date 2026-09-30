@@ -371,14 +371,14 @@ neutral theme: the rail is `--muted` (`oklch(0.985 0 0)` light,
 palette any more — the scoped porcelain/charcoal override is gone, so Admin,
 Portal, and Setup share one surface set. The current workspace receives a filled
 selection on every route within it; the page-local tabs identify the current
-destination. Language
-and appearance remain adjacent in the utility bar, but each is a flat button
-separated by quiet spacing; do not wrap them in a tinted, bordered preference
-card.
+destination. Language and appearance sit at the bottom of the rail, directly
+below the navigation and above the **Instance management** link: adjacent flat
+buttons separated by quiet spacing; do not wrap them in a tinted, bordered
+preference card.
 
 The top bar is a quiet utility layer: it contains the workspace/page
-breadcrumb, language, and appearance controls, plus the navigation trigger on
-narrow screens. It never repeats service status or renders the page `h1`.
+breadcrumb plus the navigation trigger on narrow screens. It never repeats
+service status, renders the page `h1`, or carries preferences.
 On desktop, Overview omits its redundant single-level breadcrumb because the
 page heading already names the destination; nested pages retain the workspace
 and page breadcrumb.
