@@ -107,14 +107,17 @@ be defined.
 - Product behavior and integration guidance must be transparent, reviewable,
   and honest about what is changed, blocked, cached, or not yet implemented.
 - Depsilo does not phone home or collect anonymous telemetry.
-- The canonical brand mark is **Dependency Shelf**: three long-to-short,
-  staggered dependency layers feed a continuous curved repository spine. It
-  expresses direct and transitive dependencies converging on one indexed,
-  cached artifact store. The masters under `docs/brand/` are authoritative for
-  every product surface.
-- Use the formal wordmark **Depsilo**. The mark is flat `#0A8654` on light
-  backgrounds and `#3DDC91` on dark backgrounds; the wordmark uses the matching
-  neutral foreground. The mark has no lightning, gradient, or attached tagline.
+- The canonical brand mark is the **open repository boundary**: two blue shell
+  halves around a green cached dependency module. It expresses a cached
+  dependency inside an open repository boundary rather than a closed container.
+  The masters under `docs/brand/` are authoritative for every product surface.
+- Use the formal wordmark **Depsilo** with the descriptor **Repository Cache
+  Control**. Brand colours: Electric Blue `#3B82F6`, Deep Blue `#2563EB`, Cache
+  Green `#22C55E`, Deep Green `#16A34A`, Ink `#0F172A`, Slate `#64748B`. The
+  chromatic mark is used on both light and dark backgrounds; monochrome
+  variants remain available for single-colour contexts. Brand copy may use the
+  tagline "Dependencies closer. Builds faster."; the mark itself carries no
+  attached tagline.
 - Avoid claims that imply enterprise scale, certification, customer adoption,
   or capabilities that the project cannot currently demonstrate.
 

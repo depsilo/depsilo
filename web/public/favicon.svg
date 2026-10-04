@@ -1,13 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
   <title>Depsilo</title>
   <style>
-    .mark { fill: #0A8654; }
-    @media (prefers-color-scheme: dark) { .mark { fill: #3DDC91; } }
+    .shell { fill: #2563EB; }
+    .shell-b { fill: #3B82F6; }
+    .mod { fill: #22C55E; }
+    .mod-b { fill: #16A34A; }
+    @media (prefers-color-scheme: dark) { .shell { fill: #3B82F6; } .shell-b { fill: #60A5FA; } }
   </style>
-  <g class="mark" transform="scale(.375)">
-    <path d="M26 16H88V40H26A12 12 0 0 1 26 16Z"/>
-    <path d="M42 52H88V76H42A12 12 0 0 1 42 52Z"/>
-    <path d="M58 88H88V112H58A12 12 0 0 1 58 88Z"/>
-    <path d="M80 16H90C103.3 16 114 26.7 114 40V88C114 101.3 103.3 112 90 112H80Z"/>
-  </g>
+  <path class="shell" d="M28 76 L108 30 L108 62 L60 90 L60 166 L108 194 L108 226 L28 180 Z"/>
+  <path class="shell-b" d="M124 20 L228 80 L228 176 L124 236 L124 204 L196 162 L196 98 L124 56 Z"/>
+  <path class="mod" d="M128 88 L170 112 L128 136 L86 112 Z"/>
+  <path class="mod-b" d="M86 122 L128 146 L170 122 L170 160 L128 184 L86 160 Z"/>
+  <path class="mod" d="M86 122 L128 146 L170 122 L128 150 Z"/>
 </svg>

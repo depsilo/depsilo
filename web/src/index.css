@@ -124,9 +124,12 @@
   --font-sans: 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-display: 'Inter Tight Variable', 'Inter Variable', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* The brand mark keeps its deep green: it is a confirmed brand asset
-     (docs/brand) and the one place colour is identity rather than role. */
-  --logo-mark: #0A8654;
+  /* Brand mark (docs/brand): an open blue repository boundary around a green
+     cached module. Colour here is identity, not a semantic role. */
+  --logo-mark: #2563eb;
+  --logo-mark-light: #3b82f6;
+  --logo-mark-accent: #22c55e;
+  --logo-mark-accent-deep: #16a34a;
 
   /* ── shadcn/ui semantic roles: the source of truth ──
      shadcn's default neutral (zero-chroma) light theme. Everything a vendored
@@ -275,7 +278,10 @@
 html.dark,
 [data-theme="dark"] {
   color-scheme: dark;
-  --logo-mark: #3DDC91;
+  --logo-mark: #3b82f6;
+  --logo-mark-light: #60a5fa;
+  --logo-mark-accent: #22c55e;
+  --logo-mark-accent-deep: #16a34a;
   /* shadcn/ui semantic roles — neutral dark theme. */
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -383,7 +389,10 @@ html.dark,
 @media (prefers-color-scheme: dark) {
   html:not(.light):not([data-theme="light"]) {
     color-scheme: dark;
-    --logo-mark: #3DDC91;
+    --logo-mark: #3b82f6;
+    --logo-mark-light: #60a5fa;
+    --logo-mark-accent: #22c55e;
+    --logo-mark-accent-deep: #16a34a;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
