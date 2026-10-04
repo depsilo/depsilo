@@ -176,8 +176,12 @@ export default function MetricTile({
           )}
         </div>
 
-        {value !== undefined && (
-          <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-3 gap-y-1">
+        {/* Fixed vertical rhythm so every tile lines up: a value block with a
+            stable minimum height, then the sparkline row, then the progress
+            row. A tile without a series or a denominator keeps an empty slot
+            instead of shifting its neighbours. */}
+        <div className="flex min-h-[52px] min-w-0 flex-col justify-start gap-1.5">
+          {value !== undefined && (
             <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
               {loading ? (
                 <span aria-hidden="true" className="block h-9 w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
@@ -196,34 +200,31 @@ export default function MetricTile({
                 </>
               )}
             </div>
-            {series && series.length >= 2 && <Sparkline series={series} tone={sparkTone} />}
-          </div>
-        )}
+          )}
 
-        {value === undefined && series && series.length >= 2 && (
-          <div className="flex min-w-0 justify-end">
-            <Sparkline series={series} tone={sparkTone} />
-          </div>
-        )}
+          {rows && rows.length > 0 && (
+            <dl className="flex flex-col gap-1.5">
+              {rows.map(row => (
+                <div key={row.label} className="flex min-h-5 min-w-0 items-center justify-between gap-3 leading-none">
+                  <dt className="flex min-w-0 items-center gap-1.5 text-[14px] leading-none" style={{ color: 'var(--dash-muted)' }}>
+                    <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: TONE[row.tone].strong }} />
+                    <span className="truncate">{row.label}</span>
+                  </dt>
+                  <dd className="shrink-0 font-mono text-[18px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
+                    {row.value}
+                    {row.unit && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
 
-        {rows && rows.length > 0 && (
-          <dl className="flex flex-col gap-1.5">
-            {rows.map(row => (
-              <div key={row.label} className="flex min-w-0 items-baseline justify-between gap-3">
-                <dt className="flex min-w-0 items-center gap-1.5 text-[14px]" style={{ color: 'var(--dash-muted)' }}>
-                  <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: TONE[row.tone].strong }} />
-                  <span className="truncate">{row.label}</span>
-                </dt>
-                <dd className="shrink-0 font-mono text-[18px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>
-                  {row.value}
-                  {row.unit && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
+        <div className="flex h-[30px] min-w-0 items-center justify-end">
+          {series && series.length >= 2 && <Sparkline series={series} tone={sparkTone} />}
+        </div>
 
-        {ratio !== null && (
+        {ratio !== null ? (
           <div
             className="h-1.5 w-full overflow-hidden rounded-full"
             style={{ background: TONE[progressTone].soft }}
@@ -235,6 +236,8 @@ export default function MetricTile({
               style={{ width: `${ratio * 100}%`, background: TONE[progressTone].strong }}
             />
           </div>
+        ) : (
+          <div aria-hidden="true" className="h-1.5" />
         )}
 
         {detail && (
