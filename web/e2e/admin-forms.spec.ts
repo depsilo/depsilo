@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
+import type { Request } from '@playwright/test'
 
-import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
+import { adminApiDefaults, test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 
 async function expectNoDialogAxeViolations(page: import('@playwright/test').Page) {
   const dialog = page.getByRole('dialog')
@@ -200,32 +201,26 @@ test('dynamic rule and cache forms expose named controls and pass axe', async ({
   await expectNoDialogAxeViolations(page)
 })
 
-test('custom bandwidth dates are labelled and invalid ranges do not load', async ({ page }) => {
-  let reportRequests = 0
+test('Dashboard range control drives overview and trends and persists the choice', async ({ page }) => {
+  const calls: Record<string, number> = {}
   await mockAdminApi(page, {
-    'GET /api/v1/admin/bandwidth': () => {
-      reportRequests += 1
-      return { summary: {}, daily: [], by_ecosystem: [], top_packages: [], by_upstream: [] }
+    'GET /api/v1/admin/dashboard': (request: Request) => {
+      const range = new URL(request.url()).searchParams.get('range') ?? ''
+      calls[`overview-${range}`] = (calls[`overview-${range}`] ?? 0) + 1
+      return adminApiDefaults['GET /api/v1/admin/dashboard']
+    },
+    'GET /api/v1/admin/dashboard/trends': (request: Request) => {
+      const range = new URL(request.url()).searchParams.get('range') ?? ''
+      calls[`trends-${range}`] = (calls[`trends-${range}`] ?? 0) + 1
+      return { points: [] }
     },
   })
-  await page.goto('/admin/bandwidth')
-  await expect.poll(() => reportRequests).toBe(1)
+  await page.goto('/admin')
+  await expect.poll(() => calls['overview-30d'] ?? 0).toBe(1)
+  await expect.poll(() => calls['trends-30d'] ?? 0).toBe(1)
 
-  await page.getByRole('button', { name: /自定义|Custom/ }).click()
-  const start = page.getByLabel(/开始日期|Start date/)
-  const end = page.getByLabel(/结束日期|End date/)
-  await start.fill('2026-08-05')
-  await end.fill('2026-08-01')
-
-  await expect(end).toHaveAttribute('aria-invalid', 'true')
-  await expect(page.getByRole('alert')).toContainText(/结束日期不能早于开始日期|End date cannot be before start date/)
-  expect((await new AxeBuilder({ page })
-    .include('[data-bandwidth-custom-range]')
-    .withTags(['wcag2a', 'wcag2aa'])
-    .analyze()).violations).toEqual([])
-  expect(reportRequests).toBe(1)
-
-  await end.fill('2026-08-07')
-  await expect(end).not.toHaveAttribute('aria-invalid', 'true')
-  await expect.poll(() => reportRequests).toBe(2)
+  await page.getByRole('group', { name: '统计周期' }).getByRole('button', { name: '7 天' }).click()
+  await expect.poll(() => calls['overview-7d'] ?? 0).toBe(1)
+  await expect.poll(() => calls['trends-7d'] ?? 0).toBe(1)
+  expect(await page.evaluate(() => localStorage.getItem('depsilo-dashboard-range'))).toBe('7d')
 })

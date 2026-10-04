@@ -124,7 +124,7 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 // CurrentSchemaVersion is the newest database schema understood by this
 // binary. Every schema-changing release must add a numbered migration rather
 // than relying on GORM to infer an upgrade from the latest model definitions.
-const CurrentSchemaVersion = 4
+const CurrentSchemaVersion = 5
 
 type schemaMigrationRecord struct {
 	Version   int       `gorm:"primaryKey;autoIncrement:false"`
@@ -145,6 +145,7 @@ var schemaMigrations = []schemaMigration{
 	{version: 2, name: "user credential version", apply: migrateUserCredentialVersion},
 	{version: 3, name: "package policy and identity dialects", apply: migratePackageRuleDialects},
 	{version: 4, name: "request diagnostics", apply: migrateRequestDiagnostics},
+	{version: 5, name: "measured origin traffic", apply: migrateOriginTraffic},
 }
 
 // AutoMigrate applies each numbered schema migration exactly once. Databases
@@ -220,5 +221,8 @@ func ensureCurrentSchemaInvariants(database *gorm.DB) error {
 	if err := ensureSchemaV3Invariants(database); err != nil {
 		return err
 	}
-	return ensureSchemaV4Invariants(database)
+	if err := ensureSchemaV4Invariants(database); err != nil {
+		return err
+	}
+	return ensureSchemaV5Invariants(database)
 }

@@ -15,24 +15,30 @@ import "time"
 // observed; all rollup key derivation goes through e.At.UTC() so callers
 // don't have to remember to normalize.
 type Event struct {
-	RequestID      string
-	AdapterType    string
-	Method         string
-	CacheKey       string
-	PackageName    string
-	Upstream       string
-	ClientIP       string
-	Hit            bool
-	LatencyMs      int64
-	StatusCode     int
-	BytesSent      int64
-	CacheResult    string
-	CacheReason    string
-	PolicyDecision string
-	PolicyReason   string
-	DeliveryResult string
-	DeliveryReason string
-	At             time.Time
+	RequestID   string
+	AdapterType string
+	Method      string
+	CacheKey    string
+	PackageName string
+	Upstream    string
+	ClientIP    string
+	Hit         bool
+	LatencyMs   int64
+	StatusCode  int
+	BytesSent   int64
+	// UpstreamRequests/UpstreamBytes are real Depsilo→upstream exchanges and
+	// bytes read for this client request. They stay zero on rows recorded
+	// before origin metering existed (coverage is tracked separately), and they
+	// are never derived from client-side bytes.
+	UpstreamRequests int64
+	UpstreamBytes    int64
+	CacheResult      string
+	CacheReason      string
+	PolicyDecision   string
+	PolicyReason     string
+	DeliveryResult   string
+	DeliveryReason   string
+	At               time.Time
 }
 
 type fiveMinuteKey struct {
@@ -101,15 +107,19 @@ func (e Event) PackageDailyKey() (pkgDailyKey, bool) {
 // counters is the per-bucket accumulator the recorder maintains in memory
 // between flushes. Cheaper than touching the DB on every event.
 type counters struct {
-	RequestCount int64
-	TotalBytes   int64
-	SumLatencyMs int64
-	ErrorCount   int64
+	RequestCount     int64
+	TotalBytes       int64
+	UpstreamRequests int64
+	UpstreamBytes    int64
+	SumLatencyMs     int64
+	ErrorCount       int64
 }
 
 func (c *counters) add(e Event) {
 	c.RequestCount++
 	c.TotalBytes += e.BytesSent
+	c.UpstreamRequests += e.UpstreamRequests
+	c.UpstreamBytes += e.UpstreamBytes
 	c.SumLatencyMs += e.LatencyMs
 	if e.StatusCode >= 500 {
 		c.ErrorCount++

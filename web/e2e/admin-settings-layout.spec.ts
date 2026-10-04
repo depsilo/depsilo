@@ -26,7 +26,7 @@ async function expectSettingsPageChrome(page: Page) {
   )
   await expect(page.locator('h1:visible')).toHaveCount(1)
   await expect(adminPage.locator('[data-admin-page-title]')).toHaveText('系统设置')
-  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
 }
 
 test('keeps stable Admin page chrome while settings load and after success', async ({ page }) => {

@@ -11,7 +11,6 @@ const expectedRoutes = {
   dashboard: '/admin',
   connect: '/admin/connect',
   attention: '/admin/attention',
-  bandwidth: '/admin/bandwidth',
   accessLogs: '/admin/logs',
   auditLogs: '/admin/audit',
   quarantine: '/admin/quarantine',
@@ -29,7 +28,7 @@ const expectedRoutes = {
 } as const
 
 const expectedGroups = [
-  { id: 'overview', routes: ['dashboard', 'bandwidth'] },
+  { id: 'overview', routes: ['dashboard'] },
   { id: 'upstreams', routes: ['upstreams'] },
   { id: 'cache', routes: ['cache', 'cacheIndexes', 'compileCache'] },
   { id: 'logs', routes: ['accessLogs', 'upstreamUpdates', 'auditLogs'] },
@@ -74,7 +73,6 @@ describe('Admin route manifest', () => {
 
   it('normalizes case and trailing slashes without masking unknown paths', () => {
     expect(getAdminRouteHref('dashboard')).toBe('/admin')
-    expect(getAdminRouteHref('bandwidth')).toBe('/admin/bandwidth')
     expect(resolveAdminRoute('/ADMIN/SECURITY/')?.id).toBe('security')
     expect(resolveAdminRoute('/admin')?.id).toBe('dashboard')
     expect(resolveAdminRoute('/admin/projects/42')).toBeUndefined()

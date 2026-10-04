@@ -13,6 +13,7 @@ import (
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
 	"depsilo/internal/requestid"
+	"depsilo/internal/traffic"
 )
 
 // AuditLogger is the audit half of the access hook snapshot.
@@ -103,6 +104,7 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	requestID := requestid.FromContext(ctx)
 	cacheResult, cacheReason := accessCacheOutcome(hit, statusCode)
 	deliveryResult, deliveryReason := "unknown", "response_completion_not_recorded"
+	originRequests, originBytes := traffic.AttributionFromContext(ctx).OriginTotals()
 	hooks := accessHooks.Load()
 	var observer RequestObserver
 	if scope, ok := requestScopeFromContext(ctx); ok {
@@ -124,48 +126,52 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 
 	if hooks != nil && hooks.recorder != nil {
 		hooks.recorder.Record(accesslog.Event{
-			RequestID:      requestID,
-			AdapterType:    adapterType,
-			Method:         method,
-			CacheKey:       cacheKey,
-			PackageName:    pkgName,
-			Upstream:       upstreamName,
-			ClientIP:       clientIP,
-			Hit:            hit,
-			LatencyMs:      latency.Milliseconds(),
-			StatusCode:     statusCode,
-			BytesSent:      bytesSent,
-			CacheResult:    cacheResult,
-			CacheReason:    cacheReason,
-			PolicyDecision: "unknown",
-			PolicyReason:   "not_recorded",
-			DeliveryResult: deliveryResult,
-			DeliveryReason: deliveryReason,
-			At:             now,
+			RequestID:        requestID,
+			AdapterType:      adapterType,
+			Method:           method,
+			CacheKey:         cacheKey,
+			PackageName:      pkgName,
+			Upstream:         upstreamName,
+			ClientIP:         clientIP,
+			Hit:              hit,
+			LatencyMs:        latency.Milliseconds(),
+			StatusCode:       statusCode,
+			BytesSent:        bytesSent,
+			UpstreamRequests: originRequests,
+			UpstreamBytes:    originBytes,
+			CacheResult:      cacheResult,
+			CacheReason:      cacheReason,
+			PolicyDecision:   "unknown",
+			PolicyReason:     "not_recorded",
+			DeliveryResult:   deliveryResult,
+			DeliveryReason:   deliveryReason,
+			At:               now,
 		})
 	} else {
 		// Fallback: recorder not initialized yet (e.g. isolated adapter tests).
 		// Keep this synchronous: spawning an unowned database goroutine here can
 		// outlive the test/server resource that supplied database.
 		entry := db.AccessLog{
-			RequestID:      requestID,
-			AdapterType:    adapterType,
-			Method:         method,
-			CacheKey:       cacheKey,
-			PackageName:    pkgName,
-			Hit:            hit,
-			Upstream:       upstreamName,
-			LatencyMs:      latency.Milliseconds(),
-			StatusCode:     statusCode,
-			ClientIP:       clientIP,
-			BytesSent:      bytesSent,
-			CacheResult:    cacheResult,
-			CacheReason:    cacheReason,
-			PolicyDecision: "unknown",
-			PolicyReason:   "not_recorded",
-			DeliveryResult: deliveryResult,
-			DeliveryReason: deliveryReason,
-			CreatedAt:      now,
+			RequestID:        requestID,
+			AdapterType:      adapterType,
+			Method:           method,
+			CacheKey:         cacheKey,
+			PackageName:      pkgName,
+			Hit:              hit,
+			Upstream:         upstreamName,
+			LatencyMs:        latency.Milliseconds(),
+			StatusCode:       statusCode,
+			ClientIP:         clientIP,
+			BytesSent:        bytesSent,
+			UpstreamRequests: originRequests,
+			UpstreamBytes:    originBytes,
+			CacheResult:      cacheResult,
+			CacheReason:      cacheReason,
+			PolicyDecision:   "unknown",
+			PolicyReason:     "not_recorded",
+			DeliveryResult:   deliveryResult,
+			DeliveryReason:   deliveryReason,
+			CreatedAt:        now,
 		}
 		if err := database.Create(&entry).Error; err != nil {
 			zap.L().Warn("failed to write access log", zap.Error(err))

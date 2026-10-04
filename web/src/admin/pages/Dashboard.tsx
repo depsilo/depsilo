@@ -1,87 +1,67 @@
 import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
-import DashboardAttention from '@/admin/components/DashboardAttention'
-import NowStrip from '@/admin/components/NowStrip'
-import RecentDownloads from '@/admin/components/RecentDownloads'
-import TrendsCard, { type RawTrendPoint, type TrendsRange } from '@/admin/components/TrendsCard'
-import Metric, { type MetricChangeIntent } from '@/components/Metric'
+import ActivityTrends from '@/admin/components/dashboard/ActivityTrends'
+import CacheBenefits, { type BenefitInfoKind } from '@/admin/components/dashboard/CacheBenefits'
+import DashboardInfoDialog from '@/admin/components/dashboard/DashboardInfoDialog'
+import DashboardStatusStrip from '@/admin/components/dashboard/DashboardStatusStrip'
+import RecentRequests from '@/admin/components/dashboard/RecentRequests'
+import RequestDetailsDialog from '@/admin/components/dashboard/RequestDetailsDialog'
+import RuntimeResources, { type ResourceInfoKind } from '@/admin/components/dashboard/RuntimeResources'
+import TrafficOverview, { type TrafficInfoKind } from '@/admin/components/dashboard/TrafficOverview'
 import Icon from '@/components/Icon'
 import QueryErrorState from '@/components/QueryErrorState'
-import SectionHeader from '@/components/SectionHeader'
+import { getAdminRouteHref } from '@/admin/routes'
+import { usePolicyStatus } from '@/admin/usePolicyStatus'
+import type { DashboardRange, DashboardTrendPoint, NowResponse, RuntimeResponse } from '@/lib/adminApi.types'
 import { adminApi, statsApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
-import type { NowResponse } from '@/lib/adminApi.types'
-import { getAdminRouteHref } from '@/admin/routes'
-import { upstreamStatus } from '@/lib/upstreamStatus'
+import {
+  DASHBOARD_RANGES,
+  deriveServiceStatus,
+  readDashboardRange,
+  type ServiceProblem,
+  type ServiceProblemCode,
+  type ServiceStatusModel,
+  writeDashboardRange,
+} from '@/lib/dashboardOverview'
+import { formatTime } from '@/lib/utils'
 
-const TREND_REFRESH_INTERVAL: Record<TrendsRange, number> = {
+const TREND_REFRESH_INTERVAL: Record<DashboardRange, number> = {
   '1h': 5_000,
   '24h': 15_000,
   '7d': 30_000,
   '30d': 60_000,
 }
 
+const RANGE_KEY: Record<DashboardRange, string> = {
+  '1h': 'dashboard.range1h',
+  '24h': 'dashboard.range24h',
+  '7d': 'dashboard.range7d',
+  '30d': 'dashboard.range30d',
+}
+
 interface TrendQueryData {
   response: Awaited<ReturnType<typeof adminApi.getDashboardTrends>>
-  range: TrendsRange
+  range: DashboardRange
 }
 
-function DashboardKpiSkeleton() {
-  return (
-    <div aria-hidden="true" className="admin-kpi-grid grid grid-cols-2 lg:grid-cols-4">
-      {Array.from({ length: 4 }, (_, index) => (
-        <div key={index} className="flex flex-col items-start gap-2">
-          <div className="h-3 w-20 animate-pulse rounded bg-[var(--bg-soft)]" />
-          <div className="h-8 w-28 animate-pulse rounded bg-[var(--bg-soft)]" />
-          <div className="h-3 w-16 animate-pulse rounded bg-[var(--bg-soft)]" />
-        </div>
-      ))}
-    </div>
-  )
-}
+type InfoTarget =
+  | { kind: 'problems' }
+  | { kind: 'resource'; value: ResourceInfoKind }
+  | { kind: 'traffic'; value: TrafficInfoKind }
+  | { kind: 'benefit'; value: BenefitInfoKind }
 
-function StatusMetric({
-  label,
-  value,
-  detail,
-  tone = 'default',
-}: {
-  label: string
-  value: string
-  detail: string
-  tone?: 'default' | 'ok' | 'warning' | 'danger'
-}) {
-  const color = tone === 'ok'
-    ? 'var(--ok-text)'
-    : tone === 'warning'
-      ? 'var(--warn-text)'
-      : tone === 'danger'
-        ? 'var(--danger-text)'
-        : 'var(--text)'
-
-  return (
-    <div className="flex min-w-0 flex-col items-start text-left" data-dashboard-status-metric>
-      <span className="text-[11px] font-[600]" style={{ color: 'var(--text-subtle)' }}>{label}</span>
-      <span
-        data-metric-value
-        className="mt-2 min-w-0 font-[650] leading-[1.15]"
-        style={{ color, fontFamily: 'var(--font-display)', fontSize: 'clamp(20px, 3vw, 28px)' }}
-      >
-        {value}
-      </span>
-      <span className="mt-1.5 text-[11px] leading-[1.45]" style={{ color: 'var(--text-soft)' }}>{detail}</span>
-    </div>
-  )
-}
-
-export default function DashboardV2() {
+export default function Dashboard() {
   const { t } = useTranslation()
-  const [range, setRange] = useState<TrendsRange>('1h')
-  const [retainedTrendData, setRetainedTrendData] = useState<TrendQueryData>()
+  const [range, setRange] = useState<DashboardRange>(() => readDashboardRange())
+  const [info, setInfo] = useState<InfoTarget | null>(null)
+  const [detailsLogId, setDetailsLogId] = useState<number | null>(null)
+  const policy = usePolicyStatus()
 
   const nowQuery = useQuery<NowResponse>({
     queryKey: ['admin', 'now'],
@@ -93,218 +73,372 @@ export default function DashboardV2() {
     retry: false,
   })
 
-  const dashboardQuery = useQuery({
-    queryKey: ['admin', 'dashboard'],
-    queryFn: ({ signal }) => adminApi.getDashboard({ signal }),
+  const overviewQuery = useQuery({
+    queryKey: ['admin', 'overview', range],
+    queryFn: ({ signal }) => adminApi.getOverview(range, { signal }),
+    placeholderData: keepPreviousData,
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    retry: false,
+  })
+
+  const runtimeQuery = useQuery<RuntimeResponse>({
+    queryKey: ['admin', 'runtime'],
+    queryFn: async ({ signal }) => (await adminApi.getRuntime({ signal })).data,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+    staleTime: 4_000,
     retry: false,
   })
 
   const trendsQuery = useQuery({
-    queryKey: ['admin', 'dashboard', 'trends', range],
+    queryKey: ['admin', 'trends', range],
     queryFn: async ({ signal }): Promise<TrendQueryData> => ({
       response: await adminApi.getDashboardTrends(range, { signal }),
       range,
     }),
     placeholderData: keepPreviousData,
     refetchInterval: TREND_REFRESH_INTERVAL[range],
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: 'always',
     retry: false,
   })
 
-  const dashboard = dashboardQuery.data?.data
-  const last24h = dashboard?.last_24h
-  const prev24h = dashboard?.prev_24h
-  const upstreams = dashboard?.upstreams ?? []
-  const upstreamsNeedingAttention = upstreams.filter(item => upstreamStatus(item) !== 'healthy')
-  const activeTrendData = trendsQuery.data ?? retainedTrendData
-  const rawTrendPoints: RawTrendPoint[] = activeTrendData?.response.data.points ?? []
-  const dataRange = activeTrendData?.range ?? range
-  const hasTrendData = activeTrendData !== undefined
-  const dashboardInitialError = dashboardQuery.isError && !dashboardQuery.data
-  const dashboardError = dashboardInitialError ? getApiError(dashboardQuery.error) : undefined
-  const nowData = nowQuery.data
-  const nowInitialError = nowQuery.isError && !nowData
-  const nowStale = nowQuery.isRefetchError && Boolean(nowData)
-  const nowStatus = nowInitialError
-    ? t('now.statusUnavailable')
-    : nowQuery.isPending && !nowData
-      ? t('loading')
-      : nowStale
-        ? t('now.staleData')
-        : nowData?.status === 'healthy'
-          ? t(nowData.last_activity || nowData.rate.requests_per_min > 0 ? 'now.statusHealthy' : 'now.statusReady')
-          : nowData?.status === 'degraded'
-            ? t('now.statusDegraded')
-            : t('now.statusDown')
-  const nowTone = nowInitialError || nowStale
-    ? 'warning'
-    : nowData?.status === 'healthy'
-      ? 'ok'
-      : nowData?.status === 'degraded'
-        ? 'warning'
-        : nowData
-          ? 'danger'
-          : 'default'
-  const requestCount = last24h?.total_requests
-  const hitRate = last24h && last24h.total_requests > 0 ? last24h.hit_rate : null
-  const upstreamValue = nowData ? `${nowData.upstreams.healthy} / ${nowData.upstreams.total}` : '—'
-  const upstreamTone = nowData && nowData.upstreams.total > 0
-    ? nowData.upstreams.healthy < nowData.upstreams.total ? 'warning' : 'ok'
-    : 'default'
+  const overview = overviewQuery.data?.data
+  const overviewRange = overview?.range?.key ?? range
+  const swapped = overviewRange !== range
+  const upstreams = overview?.upstreams ?? []
+  const now = nowQuery.data
 
-  function handleTrendRangeChange(nextRange: TrendsRange) {
-    if (trendsQuery.data) setRetainedTrendData(trendsQuery.data)
-    setRange(nextRange)
+  const nowInitialError = nowQuery.isError && !now
+  const nowStale = nowQuery.isRefetchError && Boolean(now)
+  const nowPending = nowQuery.isPending && !now
+  const runtimePending = runtimeQuery.isPending && !runtimeQuery.data
+
+  const trendData = trendsQuery.data
+  const trendPoints: DashboardTrendPoint[] = trendData?.response.data.points ?? []
+  const trendRange = trendData?.range ?? range
+  const trendsLoading = trendsQuery.isPending && !trendData
+  const trendsInitialError = trendsQuery.isError && !trendData
+  const trendsStale = Boolean(trendData && trendsQuery.isError)
+
+  const overviewInitialError = overviewQuery.isError && !overview
+  const overviewError = overviewInitialError ? getApiError(overviewQuery.error) : undefined
+  const overviewStale = Boolean(overview && overviewQuery.isError)
+
+  const status = deriveServiceStatus({
+    nowAvailable: Boolean(now) && !nowInitialError,
+    nowStatus: now?.status,
+    upstreams,
+    policyNeedsAttention: policy.needsAttention === true,
+    cacheUsagePercent: overview?.cache_usage_percent,
+  })
+
+  const lastUpdated = Math.max(
+    overviewQuery.dataUpdatedAt,
+    nowQuery.dataUpdatedAt,
+    runtimeQuery.dataUpdatedAt,
+  )
+
+  function handleRangeChange(next: DashboardRange) {
+    writeDashboardRange(next)
+    setRange(next)
   }
 
-  const metrics: Array<{
-    label: string
-    value: string
-    change: number | null
-    changeIntent: MetricChangeIntent
-  }> = [
-    {
-      label: t('dashboard.hitRate'),
-      value: hitRate === null ? '—' : `${(hitRate * 100).toFixed(1)}%`,
-      change: hitRate !== null && prev24h?.hit_rate
-        ? ((hitRate - prev24h.hit_rate) / prev24h.hit_rate * 100)
-        : null,
-      changeIntent: 'higher-is-better',
-    },
-    {
-      label: t('dashboard.last24hRequests'),
-      value: requestCount === undefined ? '—' : requestCount.toLocaleString(),
-      change: requestCount !== undefined && prev24h?.total_requests
-        ? ((requestCount - prev24h.total_requests) / prev24h.total_requests * 100)
-        : null,
-      changeIntent: 'neutral',
-    },
-  ]
+  function refreshAll() {
+    void overviewQuery.refetch()
+    void nowQuery.refetch()
+    void runtimeQuery.refetch()
+    void trendsQuery.refetch()
+  }
+
+  const lastUpdatedLabel = lastUpdated > 0 ? formatTime(new Date(lastUpdated).toISOString(), 'time') : '—'
 
   return (
     <AdminPage
+      description={t('overview.subtitle')}
       actions={(
-        <Link
-          to={getAdminRouteHref('connect')}
-          className="app-button inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-[13px] font-[500] no-underline stripe-focus-ring"
-          style={{ color: 'var(--btn-fg)', background: 'var(--btn)' }}
-        >
-          <Icon name="link" size="sm" />
-          {t('dashboard.connectClient')}
-        </Link>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--text-soft)' }}>
+            <Icon name="history" size="sm" />
+            {t('overview.updatedAt', { time: lastUpdatedLabel })}
+          </span>
+          <button
+            type="button"
+            onClick={refreshAll}
+            aria-busy={overviewQuery.isFetching || nowQuery.isFetching || undefined}
+            className="stripe-focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-md border px-3 text-[14px] font-medium transition-colors duration-150 hover:bg-[var(--bg-hover)]"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+          >
+            <Icon name="refresh" size="sm" />
+            {t('overview.refresh')}
+          </button>
+          <div
+            role="group"
+            aria-label={t('overview.rangeGroup')}
+            className="flex items-center overflow-hidden rounded-md border"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            {DASHBOARD_RANGES.map(value => {
+              const active = range === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleRangeChange(value)}
+                  aria-pressed={active}
+                  className="stripe-focus-ring min-h-10 px-3 text-[13px] font-medium transition-colors duration-150"
+                  style={{
+                    background: active ? 'var(--btn)' : 'transparent',
+                    color: active ? 'var(--btn-fg)' : 'var(--text-soft)',
+                  }}
+                >
+                  {t(RANGE_KEY[value])}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       )}
     >
-      <div className="w-full space-y-7 lg:space-y-8">
-        <section
-          data-query-key="dashboard-snapshot"
-          data-dashboard-health
-          aria-busy={dashboardQuery.isPending || nowQuery.isPending || undefined}
-          aria-label={`${t('dashboard.healthOverview')}. ${t('dashboard.snapshotRange')}`}
-          className="admin-kpi-section"
-        >
-          <SectionHeader
-            title={t('dashboard.healthOverview')}
-            divider={false}
-            action={(
-              <span className="text-[11px] text-[var(--text-subtle)]">
-                {t('dashboard.snapshotRange')}
-              </span>
-            )}
+      <div
+        data-dashboard-root
+        data-query-key="dashboard-snapshot"
+        data-dashboard-health
+        className="dashboard-surface flex min-w-0 flex-col gap-5"
+      >
+          <DashboardStatusStrip
+            now={now}
+            nowPending={nowPending}
+            nowStale={nowStale}
+            nowError={nowInitialError}
+            status={status}
+            onOpenProblems={() => setInfo({ kind: 'problems' })}
+            onRefresh={refreshAll}
           />
-          {(dashboardQuery.isPending || nowQuery.isPending) && !dashboard && !nowData ? (
-            <DashboardKpiSkeleton />
-          ) : (
-            <div data-dashboard-kpis className="admin-kpi-grid grid grid-cols-2 lg:grid-cols-4">
-              <StatusMetric
-                label={t('dashboard.serviceStatus')}
-                value={nowStatus}
-                tone={nowTone}
-                detail={nowInitialError ? t('dashboard.statusUnavailableHint') : nowStale ? t('now.staleData') : t('dashboard.liveRefresh')}
-              />
-              <Metric
-                label={metrics[0].label}
-                value={metrics[0].value}
-                change={metrics[0].change}
-                changeIntent={metrics[0].changeIntent}
-                align="start"
-                size="clamp(28px, 4vw, 32px)"
-              />
-              <StatusMetric
-                label={t('dashboard.currentHealthyUpstreams')}
-                value={upstreamValue}
-                tone={upstreamTone}
-                detail={nowData
-                  ? nowData.upstreams.total > 0 ? t('dashboard.healthyUpstreams') : t('dashboard.noUpstreams')
-                  : t('dashboard.statusUnavailableHint')}
-              />
-              <Metric
-                label={metrics[1].label}
-                value={metrics[1].value}
-                change={metrics[1].change}
-                changeIntent={metrics[1].changeIntent}
-                align="start"
-                size="clamp(28px, 4vw, 32px)"
+
+          {overviewStale && (
+            <p role="status" className="rounded-md px-3 py-2 text-[13px]" style={{ background: 'var(--dash-warn-soft)', color: 'var(--dash-warn)' }}>
+              {t('overview.overviewStale', { range: t(RANGE_KEY[overviewRange]) })}
+            </p>
+          )}
+
+          {/* Runtime resources come from /admin/runtime and stay mounted even
+              when the period aggregate fails. */}
+          <RuntimeResources
+            runtime={runtimeQuery.data}
+            runtimePending={runtimePending}
+            now={now}
+            nowPending={nowPending}
+            onInfo={value => setInfo({ kind: 'resource', value })}
+          />
+
+          {overviewInitialError ? (
+            <div className="dash-card p-5">
+              <QueryErrorState
+                message={overviewError?.status === 403 ? t('common.permissionDenied') : (overviewError?.message ?? t('common.loadFailed'))}
+                onRetry={() => { void overviewQuery.refetch() }}
               />
             </div>
-          )}
-        </section>
-
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(320px,1fr)_minmax(0,2fr)] 2xl:grid-cols-[380px_minmax(0,1fr)]">
-          <DashboardAttention
-            isPending={dashboardQuery.isPending}
-            isFetching={dashboardQuery.isFetching}
-            initialErrorMessage={dashboardError?.status === 403
-              ? t('common.permissionDenied')
-              : dashboardError?.message}
-            isStale={Boolean(dashboardQuery.data && dashboardQuery.isRefetchError)}
-            upstreams={upstreamsNeedingAttention}
-            cacheUsagePercent={dashboard?.cache_usage_percent}
-            onRetry={() => { void dashboardQuery.refetch() }}
-          />
-          <NowStrip
-            cacheHitRate={last24h?.hit_rate}
-            cacheDataPending={dashboardQuery.isPending}
-          />
-        </div>
-
-        <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] 2xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div
-            data-query-key="dashboard-trends"
-            aria-busy={trendsQuery.isFetching || undefined}
-            className="min-w-0"
-          >
-            {trendsQuery.isPending && !hasTrendData ? (
-              <div
-                aria-busy="true"
-                className="admin-primary-panel p-4"
-              >
-                <div aria-hidden="true" className="h-56 animate-pulse rounded-md bg-[var(--bg-soft)]" />
+          ) : (
+            <>
+              <TrafficOverview
+                now={now}
+                nowPending={nowPending}
+                period={overview?.window}
+                range={overviewRange}
+                rangeStart={overview?.range?.start}
+                coverage={overview?.origin_coverage}
+                onInfo={value => setInfo({ kind: 'traffic', value })}
+              />
+              <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+                <CacheBenefits
+                  period={overview?.window}
+                  prev={overview?.prev}
+                  range={overviewRange}
+                  rangeStart={overview?.range?.start}
+                  coverage={overview?.origin_coverage}
+                  onInfo={value => setInfo({ kind: 'benefit', value })}
+                />
+                <DashboardAttentionPanel
+                  problems={status.problems}
+                  onOpenProblems={() => setInfo({ kind: 'problems' })}
+                />
               </div>
-            ) : trendsQuery.isError && !hasTrendData ? (
-              <div className="admin-primary-panel p-4">
+            </>
+          )}
+
+          {/* Trends and the recent-request tail are independent queries, so a
+              period-aggregate failure never blanks them. */}
+          <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+            {trendsLoading ? (
+              <div className="dash-card p-5">
+                <div aria-hidden className="h-[272px] animate-pulse rounded-md" style={{ background: 'var(--dash-soft)' }} />
+              </div>
+            ) : trendsInitialError ? (
+              <div className="dash-card p-5">
                 <QueryErrorState
-                  message={getApiError(trendsQuery.error).status === 403
-                    ? t('common.permissionDenied')
-                    : getApiError(trendsQuery.error).message}
+                  message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(trendsQuery.error).message}
                   onRetry={() => { void trendsQuery.refetch() }}
                 />
               </div>
             ) : (
-              <TrendsCard
-                raw={rawTrendPoints}
+              <ActivityTrends
+                raw={trendPoints}
                 range={range}
-                dataRange={dataRange}
-                isStale={Boolean(hasTrendData && trendsQuery.isError)}
+                dataRange={trendRange}
+                isStale={trendsStale}
                 onRetry={() => { void trendsQuery.refetch() }}
-                onRangeChange={handleTrendRangeChange}
               />
             )}
+            <RecentRequests limit={5} onOpenDetails={setDetailsLogId} />
           </div>
-
-          <RecentDownloads limit={3} variant="rail" />
-        </div>
+          {swapped && (
+            <p role="status" className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.switchingRange')}</p>
+          )}
       </div>
+
+      <InfoDialogs target={info} onClose={() => setInfo(null)} status={status} />
+      <RequestDetailsDialog logId={detailsLogId} onClose={() => setDetailsLogId(null)} />
     </AdminPage>
+  )
+}
+
+/** Category text for one issue, shared by the queue row and the dialog. */
+function problemTitle(problem: ServiceProblem, t: TFunction): string {
+  switch (problem.code) {
+    case 'upstreams': return t('overview.problemUpstreams', { count: problem.count ?? 0, names: problem.names ?? '' })
+    case 'policy': return t('overview.problemPolicy')
+    case 'cache': return t('overview.problemCache', { percent: (problem.percent ?? 0).toFixed(1) })
+    case 'status-unavailable': return t('overview.problemUnavailable')
+    default: return t('overview.problemDegraded')
+  }
+}
+
+/** Existing page that owns each issue category. */
+function problemEntry(code: ServiceProblemCode): { href: string; labelKey: string } | null {
+  switch (code) {
+    case 'upstreams': return { href: getAdminRouteHref('upstreams'), labelKey: 'dashboard.viewUpstreams' }
+    case 'cache': return { href: getAdminRouteHref('cache'), labelKey: 'dashboard.manageCache' }
+    case 'policy': return { href: getAdminRouteHref('rules'), labelKey: 'policy.reviewRules' }
+    default: return null
+  }
+}
+
+/** Attention queue: real issues only, each opening the centered problem dialog. */
+function DashboardAttentionPanel({ problems, onOpenProblems }: {
+  problems: ServiceProblem[]
+  onOpenProblems: () => void
+}) {
+  const { t } = useTranslation()
+  const visible = problems.slice(0, 3)
+
+  return (
+    <section
+      data-dashboard-attention
+      aria-labelledby="overview-attention-title"
+      className="dash-card flex min-w-0 flex-col"
+    >
+      <header className="flex items-center justify-between gap-2 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
+        <h2 id="overview-attention-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+          {t('dashboard.needsAttention')}
+        </h2>
+        <span
+          className="font-mono text-[15px] font-semibold tabular-nums"
+          style={{ color: problems.length > 0 ? 'var(--dash-warn)' : 'var(--dash-ok)' }}
+          aria-label={t('dashboard.attentionCount', { count: problems.length })}
+        >
+          {problems.length}
+        </span>
+      </header>
+      {visible.length === 0 ? (
+        <div className="flex items-center gap-3 px-5 py-4">
+          <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full" style={{ background: 'var(--dash-ok-soft)', color: 'var(--dash-ok)' }}>
+            <Icon name="check_circle" size="md" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{t('dashboard.noActiveIssues')}</p>
+            <p className="mt-0.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('dashboard.noActiveIssuesHint')}</p>
+          </div>
+        </div>
+      ) : (
+        <ul className="flex flex-col">
+          {visible.map(problem => (
+            <li key={problem.code} className="border-t first:border-t-0" style={{ borderColor: 'var(--dash-border)' }}>
+              <button
+                type="button"
+                onClick={onOpenProblems}
+                className="dash-focus flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+              >
+                <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full" style={{ background: 'var(--dash-warn-soft)', color: 'var(--dash-warn)' }}>
+                  <Icon name="warning" size="md" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{problemTitle(problem, t)}</p>
+                  <p className="mt-0.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.problemSuggestion')}</p>
+                </div>
+                <Icon name="chevron_right" size="sm" className="shrink-0" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function InfoDialogs({
+  target,
+  onClose,
+  status,
+}: {
+  target: InfoTarget | null
+  onClose: () => void
+  status: ServiceStatusModel
+}) {
+  const { t } = useTranslation()
+  if (!target) return null
+
+  if (target.kind === 'problems') {
+    return (
+      <DashboardInfoDialog
+        open
+        onClose={onClose}
+        title={t('overview.problemsTitle')}
+        description={t('overview.problemsDescription')}
+      >
+        <ul className="flex flex-col gap-3">
+          {status.problems.map(problem => (
+            <li key={problem.code} className="rounded-md border px-3 py-2" style={{ borderColor: 'var(--border)' }}>
+              <p className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>
+                {problemTitle(problem, t)}
+              </p>
+              <p className="mt-1 text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('overview.problemSuggestion')}</p>
+              {problemEntry(problem.code) && (
+                <Link
+                  to={problemEntry(problem.code)!.href}
+                  onClick={onClose}
+                  className="dash-focus mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] no-underline"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                >
+                  {t(problemEntry(problem.code)!.labelKey)}
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      </DashboardInfoDialog>
+    )
+  }
+
+  // i18n keys stay identifier-safe; hyphenated metric ids map to underscores.
+  const infoKey = `overview.info.${target.kind}.${target.value.replace(/-/g, '_')}`
+  return (
+    <DashboardInfoDialog
+      open
+      onClose={onClose}
+      title={t(`${infoKey}.title`)}
+      description={t(`${infoKey}.body`)}
+    />
   )
 }

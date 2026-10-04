@@ -6,7 +6,7 @@ test('AdminPage renders the route title once and wraps its actions on mobile', a
 
   await expect(page.locator('[data-admin-page-title]')).toHaveText('包规则')
   await expect(page.getByRole('heading', { level: 1, name: '包规则', exact: true })).toHaveCount(1)
-  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
   const actions = page.locator('[data-admin-page-actions]')
   await expect(actions.getByRole('button', { name: /测试规则/ })).toBeVisible()
   await expect(actions.getByRole('button', { name: /添加规则/ })).toBeVisible()

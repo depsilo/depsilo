@@ -41,6 +41,7 @@ import type {
   CreateUserRequest,
   DeleteProjectResponse,
   DeleteUpstreamResponse,
+  DashboardRange,
   DashboardResponse,
   DashboardTrendsResponse,
   DismissSuggestionResponse,
@@ -60,6 +61,7 @@ import type {
   QuarantineQuery,
   RefreshResponse,
   RegenerateProjectTokenResponse,
+  RuntimeResponse,
   RecentDownloadsResponse,
   RuleListResponse,
   RuleRecord,
@@ -156,6 +158,9 @@ export const authApi = {
 
 export const adminApi = {
   getDashboard: (options: ApiGetOptions = {}) => api.get<DashboardResponse>('/admin/dashboard', options),
+  getOverview: (range: DashboardRange, options: ApiGetOptions = {}) =>
+    api.get<DashboardResponse>('/admin/dashboard', { ...options, params: { range } }),
+  getRuntime: (options: ApiGetOptions = {}) => api.get<RuntimeResponse>('/admin/runtime', options),
   // Operational status (read-only; safe to poll from the Admin shell).
   getPolicyStatus: (options: ApiGetOptions = {}) => api.get<PolicyStatus>('/admin/policy/status', options),
   getOnboardingStatus: (params: OnboardingStatusQuery = {}, options: ApiGetOptions = {}) =>

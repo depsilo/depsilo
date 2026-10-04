@@ -3,7 +3,6 @@ import { adminApiDefaults, test, expect, mockAdminApi, setUiPreferences } from '
 const legacyAdminHrefs = [
   '/admin',
   '/admin/attention',
-  '/admin/bandwidth',
   '/admin/logs',
   '/admin/audit',
   '/admin/cache',
@@ -21,7 +20,7 @@ const legacyAdminHrefs = [
 ] as const
 
 const workspaceNavigation = [
-  { id: 'overview', label: 'Overview', href: '/admin', routes: ['/admin', '/admin/bandwidth'] },
+  { id: 'overview', label: 'Overview', href: '/admin', routes: ['/admin'] },
   { id: 'upstreams', label: 'Upstreams', href: '/admin/upstreams', routes: ['/admin/upstreams'] },
   { id: 'cache', label: 'Cache', href: '/admin/cache', routes: ['/admin/cache', '/admin/indexes', '/admin/compile-cache'] },
   { id: 'logs', label: 'Logs', href: '/admin/logs', routes: ['/admin/logs', '/admin/upstream-updates', '/admin/audit'] },
@@ -204,7 +203,7 @@ test('mobile drawer selects a workspace and page tabs select its destination', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
 
-test('desktop shell uses a 232px rail and separates breadcrumb from the page heading', async ({ page }) => {
+test('desktop shell uses a 232px rail and starts content without a utility bar', async ({ page }) => {
   await mockAdminApi(page)
   await setUiPreferences(page, 'light', 'en')
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -212,28 +211,22 @@ test('desktop shell uses a 232px rail and separates breadcrumb from the page hea
 
   const sidebar = page.locator('aside')
   const mainColumn = page.locator('[data-admin-main]')
-  const topbar = page.locator('[data-admin-topbar]')
-  const breadcrumb = topbar.locator('[data-admin-breadcrumb]')
 
   await expect(sidebar).toHaveCSS('width', '232px')
   await expect(mainColumn).toHaveCSS('margin-left', '232px')
-  await expect(topbar).toHaveCSS('left', '232px')
-  await expect(topbar.getByRole('heading')).toHaveCount(0)
-  await expect(breadcrumb).toContainText('Logs')
-  await expect(breadcrumb).toContainText('Metadata Refreshes')
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
+  await expect(page.locator('[data-admin-nav-trigger]')).toBeHidden()
   await expect(page.locator('main').getByRole('heading', { level: 1, name: 'Metadata Refreshes' })).toHaveCount(1)
 })
 
-test('full live status stays on Dashboard and is removed from the topbar', async ({ page }) => {
+test('full live status lives on Dashboard and no shell bar repeats it', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 390, height: 844 })
 
   await page.goto('/admin')
   await expect(page.locator('main [data-query-key="now"]')).toBeVisible()
-  const topbar = page.locator('[data-admin-topbar]')
-  await expect(topbar).toHaveCSS('height', '48px')
-  await expect(topbar.locator('[data-admin-service-status]')).toHaveCount(0)
-  await expect(topbar).not.toContainText(/部分降级|性能下降|degraded|请求\/分钟|req\/min|出口|egress/i)
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
+  await expect(page.locator('[data-admin-service-status]')).toHaveCount(0)
 
   await page.goto('/admin/security')
   await expect(page.locator('main [data-query-key="now"]')).toHaveCount(0)
@@ -248,7 +241,6 @@ test('desktop Admin chrome uses the shadcn canvas, brand portal link, and labele
 
   const shell = page.locator('[data-admin-shell]')
   const main = page.locator('[data-admin-main] > main')
-  const topbar = page.locator('[data-admin-topbar]')
   const sidebar = page.locator('aside')
   await expect(shell.locator(':scope > .page-wash')).toHaveCount(0)
   await expect(page.locator('.page-wash')).toHaveCount(0)
@@ -256,18 +248,17 @@ test('desktop Admin chrome uses the shadcn canvas, brand portal link, and labele
   await expect(shell).toHaveCSS('z-index', '1')
   await expect(shell).toHaveCSS('background-color', 'oklch(1 0 0)')
   await expect(main).toHaveCSS('background-color', 'oklch(1 0 0)')
-  await expect(topbar).toHaveCSS('background-color', 'oklch(1 0 0)')
   await expect(sidebar).toHaveCSS('background-color', 'oklch(0.985 0 0)')
 
   const brandLink = page.locator('[data-admin-nav-surface="sidebar"]')
     .locator('..')
     .getByRole('link', { name: '返回门户' })
   await expect(brandLink).toHaveAttribute('href', '/')
-  await expect(topbar.getByRole('link', { name: '返回门户' })).toHaveCount(0)
+  await expect(page.locator('[data-admin-main]').getByRole('link', { name: '返回门户' })).toHaveCount(0)
 
   const preferences = sidebar.locator('[data-admin-sidebar-footer] [data-admin-preferences]')
   await expect(preferences.locator('[data-language-toggle="admin"]')).toBeVisible()
-  await expect(topbar.locator('[data-admin-preferences]')).toHaveCount(0)
+  await expect(page.locator('[data-admin-main] [data-admin-preferences]')).toHaveCount(0)
 
   const themeToggle = preferences.locator('[data-theme-toggle="labeled"]')
   await expect(themeToggle).toContainText('外观：浅色')
@@ -276,7 +267,6 @@ test('desktop Admin chrome uses the shadcn canvas, brand portal link, and labele
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(shell).toHaveCSS('background-color', 'oklch(0.145 0 0)')
   await expect(main).toHaveCSS('background-color', 'oklch(0.145 0 0)')
-  await expect(topbar).toHaveCSS('background-color', 'oklch(0.145 0 0)')
   await expect(sidebar).toHaveCSS('background-color', 'oklch(0.205 0 0)')
   expect(await page.evaluate(() => localStorage.getItem('depsilo-theme'))).toBe('dark')
 
@@ -300,7 +290,7 @@ test('mobile Admin keeps the theme mode readable in the drawer and exposes Porta
   await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/admin/settings')
 
-  await expect(page.locator('[data-admin-topbar] [data-admin-preferences]')).toHaveCount(0)
+  await expect(page.locator('[data-admin-main] [data-admin-preferences]')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
   await page.getByRole('button', { name: 'Open navigation' }).click()
@@ -329,8 +319,8 @@ test('failed now request never displays healthy', async ({ page }) => {
   })
   await page.goto('/admin')
   const fullStatus = page.locator('main [data-query-key="now"]')
-  await expect(fullStatus.getByText(/状态不可用/)).toBeVisible()
-  await expect(fullStatus.getByText(/健康|已就绪/)).toHaveCount(0)
+  await expect(fullStatus.getByText(/状态未知|状态不可用/)).toBeVisible()
+  await expect(fullStatus.getByText(/服务正常|已就绪/)).toHaveCount(0)
 })
 
 test('stale cached status keeps its refresh action visible', async ({ page }) => {

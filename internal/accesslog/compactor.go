@@ -51,19 +51,23 @@ func compactDate(ctx context.Context, gdb *gorm.DB, date string) error {
 	sql := `
 INSERT INTO access_log_daily
     (date, adapter_type, hit, upstream,
-     request_count, total_bytes, sum_latency_ms, error_count, updated_at)
+     request_count, total_bytes, upstream_requests, upstream_bytes,
+     sum_latency_ms, error_count, updated_at)
 SELECT date, adapter_type, hit, COALESCE(upstream, '') AS upstream,
        SUM(request_count), SUM(total_bytes),
+       SUM(upstream_requests), SUM(upstream_bytes),
        SUM(sum_latency_ms), SUM(error_count), ?
 FROM access_log_hourly
 WHERE date = ?
 GROUP BY date, adapter_type, hit, upstream
 ON CONFLICT(date, adapter_type, hit, upstream) DO UPDATE SET
-    request_count  = excluded.request_count,
-    total_bytes    = excluded.total_bytes,
-    sum_latency_ms = excluded.sum_latency_ms,
-    error_count    = excluded.error_count,
-    updated_at     = excluded.updated_at
+    request_count     = excluded.request_count,
+    total_bytes       = excluded.total_bytes,
+    upstream_requests = excluded.upstream_requests,
+    upstream_bytes    = excluded.upstream_bytes,
+    sum_latency_ms    = excluded.sum_latency_ms,
+    error_count       = excluded.error_count,
+    updated_at        = excluded.updated_at
 `
 	return gdb.WithContext(ctx).Exec(sql, time.Now().UTC(), date).Error
 }

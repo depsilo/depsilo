@@ -32,7 +32,7 @@ test('Admin shows when policy decisions use a stale snapshot and can refresh it'
   await expect(banner).toBeVisible()
   await expect(banner).toContainText('Policy rules are using a stale snapshot.')
   await expect(banner).toContainText('Last successful refresh: 12 minutes ago')
-  await expect(page.locator('[data-admin-topbar]')).toHaveCSS('height', '48px')
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
   await banner.getByRole('button', { name: 'Refresh policy status' }).click()
@@ -88,7 +88,16 @@ test('policy status belongs to Overview and Governance, including client-side na
 
   const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
   await navigation.locator('a[href="/admin"]').click()
-  await expect(banner).toContainText('Policy rules are using a stale snapshot.')
+  // Overview owns policy status as a "needs attention" queue item, so it never
+  // occupies the top of the page ahead of the Dashboard's own content.
+  const attention = page.locator('[data-dashboard-attention]')
+  await expect(attention).toContainText('package-rule snapshot is stale')
+  await attention.getByRole('button').first().click()
+  const problemDialog = page.locator('[data-slot="dialog-content"]')
+  await expect(problemDialog.getByRole('link', { name: 'Review rules' })).toHaveAttribute('href', '/admin/rules')
+  await page.keyboard.press('Escape')
+  await expect(problemDialog).toHaveCount(0)
+  await expect(banner).toHaveCount(0)
 
   await page.locator('aside [data-admin-sidebar-footer] a[href="/admin/users"]').click()
   await expect(page).toHaveURL(/\/admin\/users$/)

@@ -18,15 +18,17 @@ func upsertFiveMinutely(ctx context.Context, gdb *gorm.DB, m map[fiveMinuteKey]*
 	now := time.Now().UTC()
 	for key, count := range m {
 		rows = append(rows, db.AccessLogFiveMinutely{
-			BucketStart:  key.BucketStart,
-			AdapterType:  key.AdapterType,
-			Hit:          key.Hit,
-			Upstream:     key.Upstream,
-			RequestCount: count.RequestCount,
-			TotalBytes:   count.TotalBytes,
-			SumLatencyMs: count.SumLatencyMs,
-			ErrorCount:   count.ErrorCount,
-			UpdatedAt:    now,
+			BucketStart:      key.BucketStart,
+			AdapterType:      key.AdapterType,
+			Hit:              key.Hit,
+			Upstream:         key.Upstream,
+			RequestCount:     count.RequestCount,
+			TotalBytes:       count.TotalBytes,
+			UpstreamRequests: count.UpstreamRequests,
+			UpstreamBytes:    count.UpstreamBytes,
+			SumLatencyMs:     count.SumLatencyMs,
+			ErrorCount:       count.ErrorCount,
+			UpdatedAt:        now,
 		})
 	}
 	return gdb.WithContext(ctx).Clauses(clause.OnConflict{
@@ -35,11 +37,13 @@ func upsertFiveMinutely(ctx context.Context, gdb *gorm.DB, m map[fiveMinuteKey]*
 			{Name: "hit"}, {Name: "upstream"},
 		},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"request_count":  gorm.Expr("access_log_five_minutely.request_count + excluded.request_count"),
-			"total_bytes":    gorm.Expr("access_log_five_minutely.total_bytes + excluded.total_bytes"),
-			"sum_latency_ms": gorm.Expr("access_log_five_minutely.sum_latency_ms + excluded.sum_latency_ms"),
-			"error_count":    gorm.Expr("access_log_five_minutely.error_count + excluded.error_count"),
-			"updated_at":     now,
+			"request_count":     gorm.Expr("access_log_five_minutely.request_count + excluded.request_count"),
+			"total_bytes":       gorm.Expr("access_log_five_minutely.total_bytes + excluded.total_bytes"),
+			"upstream_requests": gorm.Expr("access_log_five_minutely.upstream_requests + excluded.upstream_requests"),
+			"upstream_bytes":    gorm.Expr("access_log_five_minutely.upstream_bytes + excluded.upstream_bytes"),
+			"sum_latency_ms":    gorm.Expr("access_log_five_minutely.sum_latency_ms + excluded.sum_latency_ms"),
+			"error_count":       gorm.Expr("access_log_five_minutely.error_count + excluded.error_count"),
+			"updated_at":        now,
 		}),
 	}).CreateInBatches(rows, 200).Error
 }
@@ -61,16 +65,18 @@ func upsertHourly(ctx context.Context, gdb *gorm.DB, m map[hourlyKey]*counters) 
 	now := time.Now().UTC()
 	for k, c := range m {
 		rows = append(rows, db.AccessLogHourly{
-			Date:         k.Date,
-			Hour:         k.Hour,
-			AdapterType:  k.AdapterType,
-			Hit:          k.Hit,
-			Upstream:     k.Upstream,
-			RequestCount: c.RequestCount,
-			TotalBytes:   c.TotalBytes,
-			SumLatencyMs: c.SumLatencyMs,
-			ErrorCount:   c.ErrorCount,
-			UpdatedAt:    now,
+			Date:             k.Date,
+			Hour:             k.Hour,
+			AdapterType:      k.AdapterType,
+			Hit:              k.Hit,
+			Upstream:         k.Upstream,
+			RequestCount:     c.RequestCount,
+			TotalBytes:       c.TotalBytes,
+			UpstreamRequests: c.UpstreamRequests,
+			UpstreamBytes:    c.UpstreamBytes,
+			SumLatencyMs:     c.SumLatencyMs,
+			ErrorCount:       c.ErrorCount,
+			UpdatedAt:        now,
 		})
 	}
 	return gdb.WithContext(ctx).Clauses(clause.OnConflict{
@@ -79,11 +85,13 @@ func upsertHourly(ctx context.Context, gdb *gorm.DB, m map[hourlyKey]*counters) 
 			{Name: "hit"}, {Name: "upstream"},
 		},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"request_count":  gorm.Expr("access_log_hourly.request_count + excluded.request_count"),
-			"total_bytes":    gorm.Expr("access_log_hourly.total_bytes + excluded.total_bytes"),
-			"sum_latency_ms": gorm.Expr("access_log_hourly.sum_latency_ms + excluded.sum_latency_ms"),
-			"error_count":    gorm.Expr("access_log_hourly.error_count + excluded.error_count"),
-			"updated_at":     now,
+			"request_count":     gorm.Expr("access_log_hourly.request_count + excluded.request_count"),
+			"total_bytes":       gorm.Expr("access_log_hourly.total_bytes + excluded.total_bytes"),
+			"upstream_requests": gorm.Expr("access_log_hourly.upstream_requests + excluded.upstream_requests"),
+			"upstream_bytes":    gorm.Expr("access_log_hourly.upstream_bytes + excluded.upstream_bytes"),
+			"sum_latency_ms":    gorm.Expr("access_log_hourly.sum_latency_ms + excluded.sum_latency_ms"),
+			"error_count":       gorm.Expr("access_log_hourly.error_count + excluded.error_count"),
+			"updated_at":        now,
 		}),
 	}).CreateInBatches(rows, 200).Error
 }

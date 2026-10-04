@@ -48,6 +48,15 @@ export interface NowResponse {
     egress_bps: number
     ingress_bps: number
     has_data: boolean
+    /** True when the process meter supplied the byte rates (idle vs not-collected). */
+    measured: boolean
+    window_seconds: number
+    /** Client→Depsilo. */
+    service_requests_per_sec: number
+    service_bytes_per_sec: number
+    /** Depsilo→upstream, measured from upstream body reads. */
+    origin_requests_per_sec: number
+    origin_bytes_per_sec: number
   }
   upstreams: {
     total: number
@@ -171,6 +180,7 @@ export interface AccessLog {
   method: string
   cache_key: string
   package_name: string
+  version?: string
   hit: boolean
   cache_result?: 'hit' | 'miss' | 'unknown' | string
   upstream: string
@@ -178,6 +188,8 @@ export interface AccessLog {
   status_code: number
   client_ip: string
   bytes_sent: number
+  upstream_requests?: number
+  upstream_bytes?: number
   created_at: string
 }
 
@@ -497,6 +509,38 @@ export interface DashboardWindow {
   bytes_served: number
   avg_latency_ms: number
 }
+
+export type DashboardRange = '1h' | '24h' | '7d' | '30d'
+
+/**
+ * One Overview period. The API reports hit_rate 0 when there is no sample;
+ * callers must treat `total_requests === 0` as "—" rather than 0%.
+ */
+export interface DashboardPeriod {
+  total_requests: number
+  hit_count: number
+  miss_count: number
+  hit_requests: number
+  miss_requests: number
+  hit_rate: number
+  bytes_served: number
+  hit_bytes: number
+  miss_bytes: number
+  avg_latency_ms: number
+  avg_hit_latency_ms: number
+  avg_miss_latency_ms: number
+  /** Measured Depsilo→upstream exchanges and bytes read in the period. */
+  upstream_requests: number
+  upstream_bytes: number
+  errors: number
+}
+
+export interface OriginCoverage {
+  measured: boolean
+  since: string | null
+  window_complete: boolean
+}
+
 export interface DashboardTopPackage { name: string; hit_count: number }
 export interface DashboardUpstream { id: number; name: string; adapter: string; healthy: boolean; avg_latency_ms: number; success_rate: number }
 export interface DashboardResponse {
@@ -506,8 +550,67 @@ export interface DashboardResponse {
   upstreams: DashboardUpstream[]
   top_packages: Partial<Record<AdminEcosystem, DashboardTopPackage[]>>
   cache_usage_percent?: number
+  /** Selected Overview range. Absent on older fixture payloads. */
+  range?: { key: DashboardRange; start: string; end: string }
+  window?: DashboardPeriod
+  prev?: DashboardPeriod
+  origin_coverage?: OriginCoverage
 }
-export interface DashboardTrendsResponse { points: Array<{ bucket: number; date: string; requests: number; hits: number; misses: number; hit_rate: number; bytes_served: number; bytes_hit: number; bytes_miss: number; sum_latency_ms: number; avg_latency_ms: number; errors: number }> }
+export interface DashboardTrendPoint {
+  bucket: number
+  date: string
+  requests: number
+  hits: number
+  misses: number
+  hit_rate: number
+  bytes_served: number
+  bytes_hit: number
+  bytes_miss: number
+  upstream_requests: number
+  upstream_bytes: number
+  sum_latency_ms: number
+  avg_latency_ms: number
+  errors: number
+}
+export interface DashboardTrendsResponse { points: DashboardTrendPoint[] }
+
+export interface RuntimeCapability { supported: boolean; reason?: string }
+export interface RuntimeProcess {
+  cpu: RuntimeCapability
+  /** Single-core basis: 100% is one full core. */
+  cpu_percent?: number
+  cpu_cores?: number
+  memory: RuntimeCapability
+  rss_bytes?: number
+  rss_basis?: 'process' | 'peak'
+  memory_basis?: string
+  memory_used_bytes?: number
+  memory_limit_bytes?: number
+}
+export interface RuntimeDisk extends RuntimeCapability {
+  path?: string
+  total_bytes?: number
+  free_bytes?: number
+}
+export interface RuntimeCacheStorage {
+  storage_type: string
+  storage_path: string
+  /** SUM(cache_entries.size): the metadata view of cached bytes. */
+  logical_bytes: number
+  quota_bytes: number | null
+  /** Reserved for a real on-disk occupancy figure; currently not collected. */
+  physical_bytes: number | null
+  physical_known: boolean
+}
+export interface RuntimeResponse {
+  sampled_at: string
+  interval_seconds: number
+  process: RuntimeProcess
+  go_runtime: { heap_alloc_bytes: number; sys_bytes: number }
+  cache: RuntimeCacheStorage
+  disk: RuntimeDisk
+  host: { hostname: string }
+}
 
 export interface BandwidthSummary {
   total_bytes: number

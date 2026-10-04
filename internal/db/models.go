@@ -89,18 +89,28 @@ type AccessLog struct {
 	PolicyReason   string    `gorm:"size:512" json:"policy_reason"`
 	DeliveryResult string    `gorm:"size:16" json:"delivery_result"`
 	DeliveryReason string    `gorm:"size:256" json:"delivery_reason"`
+	// UpstreamRequests and UpstreamBytes are measured Depsilo→upstream traffic
+	// attributed to this client request. They are the last-defined columns so a
+	// schema migration appends them in the same order an AutoMigrate from the
+	// domain model would. Zero can mean either "cache hit with no origin
+	// exchange" or "recorded before origin metering existed"; range responses
+	// carry a coverage marker so the two are never conflated.
+	UpstreamRequests int64 `gorm:"default:0" json:"upstream_requests"`
+	UpstreamBytes    int64 `gorm:"default:0" json:"upstream_bytes"`
 }
 
 type AccessLogFiveMinutely struct {
-	BucketStart  int64     `gorm:"primaryKey" json:"bucket_start"`
-	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
-	Hit          bool      `gorm:"primaryKey" json:"hit"`
-	Upstream     string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
-	RequestCount int64     `json:"request_count"`
-	TotalBytes   int64     `json:"total_bytes"`
-	SumLatencyMs int64     `json:"sum_latency_ms"`
-	ErrorCount   int64     `json:"error_count"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	BucketStart      int64     `gorm:"primaryKey" json:"bucket_start"`
+	AdapterType      string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	Hit              bool      `gorm:"primaryKey" json:"hit"`
+	Upstream         string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
+	RequestCount     int64     `json:"request_count"`
+	TotalBytes       int64     `json:"total_bytes"`
+	SumLatencyMs     int64     `json:"sum_latency_ms"`
+	ErrorCount       int64     `json:"error_count"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	UpstreamRequests int64     `gorm:"default:0" json:"upstream_requests"`
+	UpstreamBytes    int64     `gorm:"default:0" json:"upstream_bytes"`
 }
 
 // AccessLogHourly is the hourly rollup that powers today/recent dashboards.
@@ -110,31 +120,35 @@ type AccessLogFiveMinutely struct {
 // magnitude. Package grain lives in AccessLogPackageDaily.
 // All times are UTC, matching db.Open's NowFunc.
 type AccessLogHourly struct {
-	Date         string    `gorm:"size:10;primaryKey" json:"date"`
-	Hour         int       `gorm:"primaryKey" json:"hour"`
-	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
-	Hit          bool      `gorm:"primaryKey" json:"hit"`
-	Upstream     string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
-	RequestCount int64     `json:"request_count"`
-	TotalBytes   int64     `json:"total_bytes"`
-	SumLatencyMs int64     `json:"sum_latency_ms"`
-	ErrorCount   int64     `json:"error_count"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Date             string    `gorm:"size:10;primaryKey" json:"date"`
+	Hour             int       `gorm:"primaryKey" json:"hour"`
+	AdapterType      string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	Hit              bool      `gorm:"primaryKey" json:"hit"`
+	Upstream         string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
+	RequestCount     int64     `json:"request_count"`
+	TotalBytes       int64     `json:"total_bytes"`
+	SumLatencyMs     int64     `json:"sum_latency_ms"`
+	ErrorCount       int64     `json:"error_count"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	UpstreamRequests int64     `gorm:"default:0" json:"upstream_requests"`
+	UpstreamBytes    int64     `gorm:"default:0" json:"upstream_bytes"`
 }
 
 // AccessLogDaily is rolled up by the nightly compactor from
 // AccessLogHourly. It powers 7d/30d/90d dashboards without scanning the
 // hourly table's 24x rows per day.
 type AccessLogDaily struct {
-	Date         string    `gorm:"size:10;primaryKey" json:"date"`
-	AdapterType  string    `gorm:"size:16;primaryKey" json:"adapter_type"`
-	Hit          bool      `gorm:"primaryKey" json:"hit"`
-	Upstream     string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
-	RequestCount int64     `json:"request_count"`
-	TotalBytes   int64     `json:"total_bytes"`
-	SumLatencyMs int64     `json:"sum_latency_ms"`
-	ErrorCount   int64     `json:"error_count"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Date             string    `gorm:"size:10;primaryKey" json:"date"`
+	AdapterType      string    `gorm:"size:16;primaryKey" json:"adapter_type"`
+	Hit              bool      `gorm:"primaryKey" json:"hit"`
+	Upstream         string    `gorm:"size:128;primaryKey;default:''" json:"upstream"`
+	RequestCount     int64     `json:"request_count"`
+	TotalBytes       int64     `json:"total_bytes"`
+	SumLatencyMs     int64     `json:"sum_latency_ms"`
+	ErrorCount       int64     `json:"error_count"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	UpstreamRequests int64     `gorm:"default:0" json:"upstream_requests"`
+	UpstreamBytes    int64     `gorm:"default:0" json:"upstream_bytes"`
 }
 
 // AccessLogPackageDaily is the package-grain daily rollup, kept separate

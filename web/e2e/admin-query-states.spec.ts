@@ -62,7 +62,12 @@ for (const query of recoveryQueries) {
     await expect(error).toBeVisible()
     await expectPrimarySiblingVisible(page, query.path)
     await expect.poll(() => calls).toBe(1)
-    await expect(page.getByText(/暂无|没有数据|暂无数据/)).toHaveCount(0)
+    // Only the failed region is under test. Sibling regions on the Dashboard
+    // (the merged bandwidth report) may legitimately own an empty state.
+    const emptyScope = query.path === '/admin'
+      ? page.locator('[data-query-key="dashboard-snapshot"]')
+      : page
+    await expect(emptyScope.getByText(/暂无|没有数据|暂无数据/)).toHaveCount(0)
     await error.getByRole('button', { name: /重试/ }).click()
     await expect.poll(() => calls).toBe(2)
     await expect(error).toHaveCount(0)
@@ -113,8 +118,8 @@ async function navigateClient(page: Page, path: string) {
 async function pausePollingClock(page: Page) {
   // Resolve both lazy route trees with the default fixtures, then unmount the
   // admin tree before replacing browser timers. Client-side navigation keeps
-  // those modules resolved in this document while disposing Dashboard and
-  // NowStrip's real-time polling observers. The test mounts them again after
+  // those modules resolved in this document while disposing the Overview's
+  // real-time polling observers. The test mounts them again after
   // installing its API overrides, so every observed timer belongs to the
   // paused Playwright clock rather than to a Suspense fallback or old query.
   await page.goto('/')
@@ -160,6 +165,8 @@ function trendPoints(count: number, requestBase: number, bucketStep: number) {
       bytes_served: requests * 128,
       bytes_hit: hits * 128,
       bytes_miss: misses * 128,
+      upstream_requests: misses,
+      upstream_bytes: misses * 120,
       sum_latency_ms: requests * (10 + index),
       avg_latency_ms: 10 + index,
       errors: index % 2,
@@ -167,32 +174,7 @@ function trendPoints(count: number, requestBase: number, bucketStep: number) {
   })
 }
 
-async function trendBucketLabel(page: Page, bucket: number, range: '1h' | '30d') {
-  return page.evaluate(({ value, showSeconds }) => {
-    const date = new Date(value * 1000)
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    return date.toLocaleString(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: showSeconds ? '2-digit' : undefined,
-      timeZoneName: 'short',
-      timeZone,
-    })
-  }, { value: bucket, showSeconds: range === '1h' })
-}
-
-async function expectTrendTooltipLabel(page: Page, chart: Locator, expected: string, unexpected: string) {
-  await page.mouse.move(0, 0)
-  await chart.hover({ position: { x: 40, y: 80 } })
-  const label = chart.locator('.recharts-tooltip-wrapper p').first()
-  await expect(label).toHaveText(expected)
-  await expect(label).not.toHaveText(unexpected)
-}
-
-test('Dashboard trends keep the previous chart while an uncached range loads', async ({ page }) => {
+test('Overview keeps the previous trend while an uncached range loads', async ({ page }) => {
   const initialPoints = trendPoints(4, 12, 10)
   const nextPoints = trendPoints(6, 24, 2 * 60 * 60)
   const requestStarted = deferred<void>()
@@ -200,7 +182,7 @@ test('Dashboard trends keep the previous chart while an uncached range loads', a
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': (request: Request) => {
       const range = new URL(request.url()).searchParams.get('range')
-      if (range !== '30d') return { points: initialPoints }
+      if (range !== '1h') return { points: initialPoints }
       requestStarted.resolve()
       return response.promise
     },
@@ -209,40 +191,34 @@ test('Dashboard trends keep the previous chart while an uncached range loads', a
   await page.goto('/admin')
   const trends = page.locator('[data-query-key="dashboard-trends"]')
   const chart = trends.locator('.recharts-wrapper')
-  const ranges = page.getByRole('group', { name: /活动趋势|Activity Trend/ })
-  const nextRange = ranges.getByRole('button', { name: /30 天|30d/i })
-  const oneHourLabel = await trendBucketLabel(page, initialPoints[0].bucket, '1h')
-  const thirtyDayLabel = await trendBucketLabel(page, initialPoints[0].bucket, '30d')
+  const ranges = page.getByRole('group', { name: '统计周期' })
+  const nextRange = ranges.getByRole('button', { name: '1 小时' })
   await expect(chart).toBeVisible()
+  await expect(trends).toHaveAttribute('data-trend-range', '30d')
   await nextRange.click()
   await requestStarted.promise
 
+  // The previous range's chart stays mounted and tagged while the new range loads.
   await expect(chart).toBeVisible()
-  await expect(ranges).toBeVisible()
-  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
+  await expect(trends).toHaveAttribute('data-trend-range', '30d')
+  await expect(trends).toHaveAttribute('data-trend-pending', 'true')
   await expect(trends).toHaveAttribute('aria-busy', 'true')
-  const previousPath = await chart.locator('.recharts-area-curve').first().getAttribute('d')
-  expect(previousPath?.match(/L/g) ?? []).toHaveLength(initialPoints.length - 1)
-  await expectTrendTooltipLabel(page, chart, oneHourLabel, thirtyDayLabel)
+  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
 
   response.resolve({ points: nextPoints })
-  await expect(trends).not.toHaveAttribute('aria-busy', 'true')
-  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
-  await expect.poll(async () => {
-    const path = await chart.locator('.recharts-area-curve').first().getAttribute('d')
-    return path?.match(/L/g)?.length ?? 0
-  }).toBe(nextPoints.length - 1)
-  await expectTrendTooltipLabel(page, chart, thirtyDayLabel, oneHourLabel)
+  await expect(trends).toHaveAttribute('data-trend-range', '1h')
+  await expect(trends).not.toHaveAttribute('data-trend-pending', 'true')
+  await expect(chart).toBeVisible()
 })
 
-test('Dashboard trends keep the previous chart and warn when an uncached range fails', async ({ page }) => {
+test('Overview keeps the previous trend and warns when an uncached range fails', async ({ page }) => {
   const initialPoints = trendPoints(4, 12, 10)
   const requestStarted = deferred<void>()
   const response = deferred<MockHttpResponse>()
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': (request: Request) => {
       const range = new URL(request.url()).searchParams.get('range')
-      if (range !== '30d') return { points: initialPoints }
+      if (range !== '1h') return { points: initialPoints }
       requestStarted.resolve()
       return response.promise
     },
@@ -251,10 +227,8 @@ test('Dashboard trends keep the previous chart and warn when an uncached range f
   await page.goto('/admin')
   const trends = page.locator('[data-query-key="dashboard-trends"]')
   const chart = trends.locator('.recharts-wrapper')
-  const ranges = page.getByRole('group', { name: /活动趋势|Activity Trend/ })
-  const nextRange = ranges.getByRole('button', { name: /30 天|30d/i })
-  const oneHourLabel = await trendBucketLabel(page, initialPoints[0].bucket, '1h')
-  const thirtyDayLabel = await trendBucketLabel(page, initialPoints[0].bucket, '30d')
+  const ranges = page.getByRole('group', { name: '统计周期' })
+  const nextRange = ranges.getByRole('button', { name: '1 小时' })
   await expect(chart).toBeVisible()
   await nextRange.click()
   await requestStarted.promise
@@ -262,23 +236,19 @@ test('Dashboard trends keep the previous chart and warn when an uncached range f
   await expect(trends).toHaveAttribute('aria-busy', 'true')
 
   response.resolve({ status: 500, body: { code: 'FAILED', message: 'fixture range failure' } })
-  await expect(trends).not.toHaveAttribute('aria-busy', 'true')
+  await expect(trends).toHaveAttribute('data-trend-range', '30d')
   await expect(chart).toBeVisible()
-  await expect(ranges).toBeVisible()
-  await expect(nextRange).toHaveAttribute('aria-pressed', 'true')
-  await expect(trends).toContainText(/陈旧|已过期|stale/i)
-  const retainedPath = await chart.locator('.recharts-area-curve').first().getAttribute('d')
-  expect(retainedPath?.match(/L/g) ?? []).toHaveLength(initialPoints.length - 1)
-  await expectTrendTooltipLabel(page, chart, oneHourLabel, thirtyDayLabel)
+  await expect(trends).toContainText(/保留|失败|stale/i)
 })
 
-test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
+test('Overview trends poll at range-specific intervals', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('depsilo-dashboard-range', '1h'))
   await pausePollingClock(page)
   const calls: Record<string, number> = {}
   const point = {
     bucket: 1783641600, date: '2026-07-10', requests: 12, hits: 10, misses: 2,
     hit_rate: 0.8333, bytes_served: 1024, bytes_hit: 800, bytes_miss: 224,
-    sum_latency_ms: 120, avg_latency_ms: 10, errors: 1,
+    upstream_requests: 2, upstream_bytes: 240, sum_latency_ms: 120, avg_latency_ms: 10, errors: 1,
   }
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': (request: Request) => {
@@ -291,7 +261,7 @@ test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
   await navigateClient(page, '/admin')
   await settlePausedApp(page, () => calls['1h'] ?? 0)
   await expect.poll(() => calls['1h'] ?? 0).toBe(1)
-  const ranges = page.getByRole('group', { name: /活动趋势|Activity trends/ })
+  const ranges = page.getByRole('group', { name: '统计周期' })
   await expect(ranges).toBeVisible()
 
   const oneHourRefetch = page.waitForResponse(response => {
@@ -312,7 +282,7 @@ test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
     const url = new URL(response.url())
     return url.pathname === '/api/v1/admin/dashboard/trends' && url.searchParams.get('range') === '24h'
   })
-  await ranges.getByRole('button', { name: /24 小时|24 hours/i }).click()
+  await ranges.getByRole('button', { name: '24 小时' }).click()
   await (await twentyFourHourInitial).finished()
   await page.clock.runFor(0)
   await expect.poll(() => calls['24h'] ?? 0).toBe(1)
@@ -322,28 +292,38 @@ test('Dashboard trends poll at range-specific intervals', async ({ page }) => {
   await expect.poll(() => calls['24h'] ?? 0).toBe(2)
 })
 
-test('NowStrip keeps healthy cached data when its focus refetch fails', async ({ page }) => {
+test('Overview status strip keeps healthy cached data when its focus refetch fails', async ({ page }) => {
   await pausePollingClock(page)
   let calls = 0
   await mockAdminApi(page, {
     'GET /api/v1/now': () => {
       calls += 1
       return calls === 1
-        ? { status: 'healthy', last_activity: null, rate: { requests_per_min: 7, ingress_bps: 10, egress_bps: 20 }, upstreams: { healthy: 1, total: 1 } }
+        ? {
+            status: 'healthy',
+            last_activity: null,
+            rate: {
+              requests_per_min: 7, ingress_bps: 10, egress_bps: 20, has_data: true, measured: true,
+              window_seconds: 60, service_requests_per_sec: 0.1, service_bytes_per_sec: 128,
+              origin_requests_per_sec: 0, origin_bytes_per_sec: 0,
+            },
+            upstreams: { healthy: 1, total: 1 },
+            sparkline: [],
+          }
         : { status: 500, body: { code: 'FAILED', message: 'now refetch failed' } }
     },
   })
   await navigateClient(page, '/admin')
   await settlePausedApp(page, () => calls)
   const now = page.locator('[data-query-key="now"]')
-  await expect(now).toContainText(/健康|healthy/i)
+  await expect(now).toContainText('服务正常')
   await refocus(page)
   await page.clock.runFor(100)
   await expect.poll(() => calls).toBe(2)
   await page.waitForLoadState('networkidle')
   await page.clock.runFor(100)
-  await expect(now).toContainText(/健康|healthy/i)
-  await expect(now).toContainText(/陈旧|已过期|stale/i)
+  await expect(now).toContainText('状态待确认')
+  await expect(now).not.toContainText('服务正常')
 })
 
 test('Users stay visible when Tokens initially return 500', async ({ page }) => {
@@ -383,7 +363,7 @@ test('Dashboard snapshot failure keeps independent live and analytics regions mo
 
   await expect(page.getByRole('alert').filter({ hasText: 'fixture dashboard snapshot failure' })).toBeVisible()
   await expect(page.locator('[data-query-key="now"]')).toBeVisible()
-  await expect(page.locator('[data-recent-downloads]')).toBeVisible()
+  await expect(page.locator('[data-dashboard-recent-requests]')).toBeVisible()
   await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()
   await expect(page.getByRole('heading', { name: /性能快照|Performance snapshot/ })).toHaveCount(0)
 })

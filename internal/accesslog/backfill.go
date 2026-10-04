@@ -78,14 +78,17 @@ func BackfillFiveMinutely(ctx context.Context, gdb *gorm.DB, now time.Time) erro
 
 		const sql = `
 INSERT INTO access_log_five_minutely
-  (bucket_start, adapter_type, hit, upstream, request_count, total_bytes, sum_latency_ms, error_count, updated_at)
+  (bucket_start, adapter_type, hit, upstream, request_count, total_bytes,
+   upstream_requests, upstream_bytes, sum_latency_ms, error_count, updated_at)
 SELECT
   (CAST(strftime('%s', created_at) AS INTEGER) / 300) * 300,
   adapter_type, hit, COALESCE(upstream, ''), COUNT(*),
-  COALESCE(SUM(bytes_sent), 0), COALESCE(SUM(latency_ms), 0),
+  COALESCE(SUM(bytes_sent), 0),
+  COALESCE(SUM(upstream_requests), 0), COALESCE(SUM(upstream_bytes), 0),
+  COALESCE(SUM(latency_ms), 0),
   COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0), datetime('now')
 FROM access_logs
-WHERE created_at >= ?
+WHERE created_at >= ? AND COALESCE(cache_result, '') IN ('', 'hit', 'miss')
 GROUP BY 1, adapter_type, hit, COALESCE(upstream, '')`
 		if err := tx.Exec(sql, cutoff).Error; err != nil {
 			return err
@@ -102,7 +105,8 @@ func backfillHourly(ctx context.Context, gdb *gorm.DB) error {
 	sql := `
 INSERT INTO access_log_hourly
     (date, hour, adapter_type, hit, upstream,
-     request_count, total_bytes, sum_latency_ms, error_count, updated_at)
+     request_count, total_bytes, upstream_requests, upstream_bytes,
+     sum_latency_ms, error_count, updated_at)
 SELECT
     strftime('%Y-%m-%d', created_at) AS date,
     CAST(strftime('%H', created_at) AS INTEGER) AS hour,
@@ -111,17 +115,22 @@ SELECT
     COALESCE(upstream, '') AS upstream,
     COUNT(*),
     COALESCE(SUM(bytes_sent), 0),
+    COALESCE(SUM(upstream_requests), 0),
+    COALESCE(SUM(upstream_bytes), 0),
     COALESCE(SUM(latency_ms), 0),
     SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END),
     datetime('now')
 FROM access_logs
+WHERE COALESCE(cache_result, '') IN ('', 'hit', 'miss')
 GROUP BY date, hour, adapter_type, hit, upstream
 ON CONFLICT(date, hour, adapter_type, hit, upstream) DO UPDATE SET
-    request_count  = excluded.request_count,
-    total_bytes    = excluded.total_bytes,
-    sum_latency_ms = excluded.sum_latency_ms,
-    error_count    = excluded.error_count,
-    updated_at     = excluded.updated_at
+    request_count     = excluded.request_count,
+    total_bytes       = excluded.total_bytes,
+    upstream_requests = excluded.upstream_requests,
+    upstream_bytes    = excluded.upstream_bytes,
+    sum_latency_ms    = excluded.sum_latency_ms,
+    error_count       = excluded.error_count,
+    updated_at        = excluded.updated_at
 `
 	return gdb.WithContext(ctx).Exec(sql).Error
 }
@@ -130,7 +139,8 @@ func backfillDaily(ctx context.Context, gdb *gorm.DB) error {
 	sql := `
 INSERT INTO access_log_daily
     (date, adapter_type, hit, upstream,
-     request_count, total_bytes, sum_latency_ms, error_count, updated_at)
+     request_count, total_bytes, upstream_requests, upstream_bytes,
+     sum_latency_ms, error_count, updated_at)
 SELECT
     strftime('%Y-%m-%d', created_at) AS date,
     adapter_type,
@@ -138,17 +148,22 @@ SELECT
     COALESCE(upstream, '') AS upstream,
     COUNT(*),
     COALESCE(SUM(bytes_sent), 0),
+    COALESCE(SUM(upstream_requests), 0),
+    COALESCE(SUM(upstream_bytes), 0),
     COALESCE(SUM(latency_ms), 0),
     SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END),
     datetime('now')
 FROM access_logs
+WHERE COALESCE(cache_result, '') IN ('', 'hit', 'miss')
 GROUP BY date, adapter_type, hit, upstream
 ON CONFLICT(date, adapter_type, hit, upstream) DO UPDATE SET
-    request_count  = excluded.request_count,
-    total_bytes    = excluded.total_bytes,
-    sum_latency_ms = excluded.sum_latency_ms,
-    error_count    = excluded.error_count,
-    updated_at     = excluded.updated_at
+    request_count     = excluded.request_count,
+    total_bytes       = excluded.total_bytes,
+    upstream_requests = excluded.upstream_requests,
+    upstream_bytes    = excluded.upstream_bytes,
+    sum_latency_ms    = excluded.sum_latency_ms,
+    error_count       = excluded.error_count,
+    updated_at        = excluded.updated_at
 `
 	return gdb.WithContext(ctx).Exec(sql).Error
 }

@@ -326,6 +326,14 @@ func (r *batchedRecorder) ingest(e Event) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.rawBuf = append(r.rawBuf, toAccessLog(e))
+	// Rollups mirror the raw hit-rate denominator: hit, miss, and legacy
+	// pre-diagnostics rows (empty cache_result). Blocked/incomplete outcomes are
+	// recorded as "unknown" and must not inflate the miss count or the
+	// denominator at coarser grains, otherwise a 7d view would disagree with
+	// the equivalent 24h raw view.
+	if e.CacheResult == "unknown" {
+		return
+	}
 	key := e.FiveMinuteKey()
 	if r.aggFiveMinutely[key] == nil {
 		r.aggFiveMinutely[key] = &counters{}
@@ -450,23 +458,25 @@ func (r *batchedRecorder) Close(ctx context.Context) error {
 
 func toAccessLog(e Event) db.AccessLog {
 	return db.AccessLog{
-		RequestID:      e.RequestID,
-		AdapterType:    e.AdapterType,
-		Method:         e.Method,
-		CacheKey:       e.CacheKey,
-		PackageName:    e.PackageName,
-		Hit:            e.Hit,
-		Upstream:       e.Upstream,
-		LatencyMs:      e.LatencyMs,
-		StatusCode:     e.StatusCode,
-		ClientIP:       e.ClientIP,
-		BytesSent:      e.BytesSent,
-		CacheResult:    e.CacheResult,
-		CacheReason:    e.CacheReason,
-		PolicyDecision: e.PolicyDecision,
-		PolicyReason:   e.PolicyReason,
-		DeliveryResult: e.DeliveryResult,
-		DeliveryReason: e.DeliveryReason,
-		CreatedAt:      e.At.UTC(),
+		RequestID:        e.RequestID,
+		AdapterType:      e.AdapterType,
+		Method:           e.Method,
+		CacheKey:         e.CacheKey,
+		PackageName:      e.PackageName,
+		Hit:              e.Hit,
+		Upstream:         e.Upstream,
+		LatencyMs:        e.LatencyMs,
+		StatusCode:       e.StatusCode,
+		ClientIP:         e.ClientIP,
+		BytesSent:        e.BytesSent,
+		UpstreamRequests: e.UpstreamRequests,
+		UpstreamBytes:    e.UpstreamBytes,
+		CacheResult:      e.CacheResult,
+		CacheReason:      e.CacheReason,
+		PolicyDecision:   e.PolicyDecision,
+		PolicyReason:     e.PolicyReason,
+		DeliveryResult:   e.DeliveryResult,
+		DeliveryReason:   e.DeliveryReason,
+		CreatedAt:        e.At.UTC(),
 	}
 }

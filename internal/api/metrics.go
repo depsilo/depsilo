@@ -3,10 +3,12 @@ package api
 import (
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"depsilo/internal/adapter"
 	"depsilo/internal/rules"
+	"depsilo/internal/traffic"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -40,6 +42,20 @@ type Metrics struct {
 	policyStatus       rules.PolicyStatus
 	policyCounterValue uint64
 	policyCollector    *policyMetricsCollector
+
+	// trafficMeter, when bound, receives the measured client→Depsilo side of
+	// the Overview's two request paths. It is bound by the server composition
+	// root alongside the upstream origin meter.
+	trafficMeter atomic.Pointer[traffic.Meter]
+}
+
+// BindTrafficMeter attaches the process meter that records client→Depsilo
+// service requests. Passing nil detaches it.
+func (m *Metrics) BindTrafficMeter(meter *traffic.Meter) {
+	if m == nil {
+		return
+	}
+	m.trafficMeter.Store(meter)
 }
 
 var _ rules.PolicyTelemetry = (*Metrics)(nil)
@@ -54,6 +70,9 @@ func (m *Metrics) ObserveAccess(observation adapter.AccessObservation) {
 	}
 	m.RequestsTotal.WithLabelValues(observation.AdapterType, strconv.FormatBool(observation.Hit)).Inc()
 	m.RequestDuration.WithLabelValues(observation.AdapterType).Observe(observation.Latency.Seconds())
+	if meter := m.trafficMeter.Load(); meter != nil {
+		meter.ObserveServiceRequest(observation.BytesSent)
+	}
 	if !observation.Hit && observation.Upstream != "" {
 		m.UpstreamRequestsTotal.WithLabelValues(
 			observation.Upstream,

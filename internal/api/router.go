@@ -22,6 +22,8 @@ import (
 	"depsilo/internal/quarantine"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
+	"depsilo/internal/sysmetrics"
+	"depsilo/internal/traffic"
 	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
 	"depsilo/internal/upstreamupdates"
@@ -76,6 +78,12 @@ type Deps struct {
 	BlocklistSyncer *blocklist.Syncer
 	BlocklistMode   string
 	Tasks           asyncruntime.Submitter
+
+	// TrafficMeter is the process-wide client/origin byte-rate meter. Nil in
+	// isolated tests; the /now response falls back to legacy client-side values.
+	TrafficMeter *traffic.Meter
+	// Runtime is the shared process/storage sampler owned by the server.
+	Runtime *sysmetrics.Sampler
 }
 
 // CompileCacheRouteDependencies is the coherent handler-facing view of the
@@ -144,7 +152,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// It includes the most recent request identity, so it must not share the
 	// anonymous Portal status boundary. Reuses StatsHandler's startTime so
 	// uptime values agree across endpoints.
-	nowHandler := public.NewNowHandler(deps.DB, deps.Pools, statsHandler.StartTime())
+	nowHandler := public.NewNowHandler(deps.DB, deps.Pools, statsHandler.StartTime(), deps.TrafficMeter)
 
 	// Package inventory and request history belong to authenticated Operators.
 	// Keep this group separate from the anonymous Portal status surface.
@@ -194,6 +202,16 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminRead.GET("/dashboard", dashHandler.GetDashboard)
 	adminRead.GET("/dashboard/recent-downloads", dashHandler.GetRecentDownloads)
 	adminRead.GET("/dashboard/trends", dashHandler.GetTrends)
+
+	// Runtime resources (CPU / memory / cache storage / disk) for the Overview.
+	runtimeHandler := admin.NewRuntimeHandler(
+		deps.DB,
+		deps.Runtime,
+		deps.Config.Storage.Type,
+		deps.Config.Storage.Path,
+		deps.Config.Cache.MaxSizeGB,
+	)
+	adminRead.GET("/runtime", runtimeHandler.Get)
 
 	// Policy freshness is an authenticated operational status surface. The
 	// package-policy middleware remains on the request path; this endpoint only

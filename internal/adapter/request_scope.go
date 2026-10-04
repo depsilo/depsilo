@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"depsilo/internal/accesslog"
+	"depsilo/internal/traffic"
 )
 
 // requestScopeContextKey is deliberately private: only this package may attach
@@ -53,6 +54,10 @@ func (scope *RequestScope) Wrap(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		ctx := context.WithValue(request.Context(), requestScopeContextKey{}, frozen)
+		// One accumulator per request. The upstream read path records real
+		// origin exchanges and bytes into it; LogAccess snapshots it into the
+		// row so historical ranges can report measured origin traffic.
+		ctx = traffic.WithAttribution(ctx, traffic.NewAttribution())
 		next.ServeHTTP(writer, request.WithContext(ctx))
 	})
 }

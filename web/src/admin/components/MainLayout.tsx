@@ -2,27 +2,24 @@
  * THESIS: Dependency Flowline organizes Admin around operational workspaces, not a flat inventory of pages.
  * OWN-WORLD: Instrument neutrals, precise keylines, signal green, compact task links, and one calm white or matte-dark canvas.
  * STORY: Operators confirm service health, investigate history, configure sources, govern risk, and maintain the administration.
- * FIRST VIEWPORT: A 232px workspace rail frames a quiet utility bar and focused content; five workspace links lead to page-local tabs.
+ * FIRST VIEWPORT: A 232px workspace rail frames focused content; six workspace links lead to page-local tabs.
  * FORM: Structure candidate 4, flowline plus attention staging, seed 543e896c.
- * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+ * FINISH: unreviewed is unfinished; this build ends with the finish review and the verdict.
  */
 import { type RefObject, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/Button'
 import DrawerV2 from '@/components/Drawer'
 import Icon, { type IconName } from '@/components/Icon'
-import InlineNotice from '@/components/InlineNotice'
 import LangToggle from '@/components/LangToggle'
 import Logo from '@/components/Logo'
 import ThemeToggle from '@/components/ThemeToggle'
 import { usePrincipal } from '@/hooks/usePrincipal'
-import { adminApi, authApi, statsApi } from '@/lib/api'
-import type { PolicyStatus } from '@/lib/adminApi.types'
+import { authApi, statsApi } from '@/lib/api'
 import { removeLocalStorage } from '@/lib/storage'
-import { formatTime, formatVersion } from '@/lib/utils'
+import { formatVersion } from '@/lib/utils'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
 import '../admin-shell.css'
 
@@ -180,86 +177,6 @@ function SidebarContent({
   )
 }
 
-function formatPolicySnapshotAge(seconds: number, language: string): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return ''
-
-  const age = Math.round(seconds)
-  const locale = language.startsWith('zh') ? 'zh-CN' : 'en-US'
-  const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'always' })
-  if (age < 60) return relative.format(-age, 'second')
-  const minutes = Math.round(age / 60)
-  if (minutes < 60) return relative.format(-minutes, 'minute')
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return relative.format(-hours, 'hour')
-  return relative.format(-Math.round(hours / 24), 'day')
-}
-
-interface PolicyStatusBannerProps {
-  status?: PolicyStatus
-  unavailable: boolean
-  refreshing: boolean
-  onRefresh: () => unknown
-}
-
-function PolicyStatusBanner({ status, unavailable, refreshing, onRefresh }: PolicyStatusBannerProps) {
-  const { t, i18n } = useTranslation()
-  // `degraded` also describes the no-last-known-good case. Only call the
-  // snapshot message when the engine explicitly says that an old snapshot is
-  // being used; otherwise operators must not be told that a snapshot exists
-  // when the first policy load has never succeeded.
-  const statusDegraded = status?.using_stale_snapshot === true
-  const statusUnavailable = unavailable || (
-    status !== undefined
-    && status.status !== 'healthy'
-    && status.status !== 'ready'
-    && !statusDegraded
-  )
-  if (!statusUnavailable && !statusDegraded) return null
-
-  const snapshotLoadedAt = status?.snapshot_loaded_at ?? status?.last_successful_refresh
-  const refreshTime = snapshotLoadedAt
-    ? (formatPolicySnapshotAge(status?.snapshot_age_seconds ?? Number.NaN, i18n.language)
-      || formatTime(snapshotLoadedAt, 'relative', i18n.language))
-    : null
-
-  return (
-    <div
-      data-admin-policy-status-banner
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      className="mb-4"
-    >
-      <InlineNotice tone="warning">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-[600]">
-              {statusUnavailable ? t('policy.statusUnavailable') : t('policy.staleSnapshot')}
-            </p>
-            {!statusUnavailable && (
-              <p className="mt-0.5 text-[12px]" style={{ color: 'var(--text-soft)' }}>
-                {refreshTime
-                  ? t('policy.lastSuccessfulRefresh', { time: refreshTime })
-                  : t('policy.neverRefreshed')}
-              </p>
-            )}
-          </div>
-          <ButtonV2
-            type="button"
-            variant="secondary"
-            size="sm"
-            aria-busy={refreshing || undefined}
-            disabled={refreshing}
-            onClick={() => { void onRefresh() }}
-          >
-            {refreshing ? t('policy.refreshing') : t('policy.refresh')}
-          </ButtonV2>
-        </div>
-      </InlineNotice>
-    </div>
-  )
-}
-
 export default function MainLayoutV2() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -269,23 +186,12 @@ export default function MainLayoutV2() {
   const firstMobileNavigationRef = useRef<HTMLAnchorElement>(null)
   const { principal, canWrite } = usePrincipal()
   const activeRoute = resolveAdminRoute(location.pathname)
-  const policySurface = activeRoute?.navGroup === 'overview' || activeRoute?.navGroup === 'security'
 
   const { data: stats } = useQuery<{ service: { version: string; status: string } }>({
     queryKey: ['stats-status'],
     queryFn: async ({ signal }) => (await statsApi.getStats({ signal })).data,
     refetchInterval: 30000,
     staleTime: 30000,
-  })
-
-  const policyStatusQuery = useQuery<PolicyStatus>({
-    queryKey: ['admin', 'policy', 'status'],
-    queryFn: async ({ signal }) => (await adminApi.getPolicyStatus({ signal })).data,
-    enabled: policySurface,
-    refetchInterval: 30000,
-    staleTime: 30000,
-    refetchOnWindowFocus: true,
-    retry: false,
   })
 
   const sections: NavSection[] = adminNavigationGroups.filter(group => !group.hiddenFromSidebar).map(group => ({
@@ -296,9 +202,6 @@ export default function MainLayoutV2() {
     active: activeRoute?.navGroup === group.id,
     current: activeRoute?.href === group.href,
   }))
-  const pageTitle = activeRoute ? t(activeRoute.titleKey) : t('notFound.title')
-  const activeSection = sections.find(section => section.active)
-  const showPageBreadcrumb = !activeSection || activeSection.label !== pageTitle
   const sidebarProps = {
     sections,
     username: principal?.username,
@@ -346,57 +249,22 @@ export default function MainLayoutV2() {
       </DrawerV2>
 
       <div data-admin-main className="min-w-0 flex-1 lg:ml-[232px]" style={{ background: 'var(--admin-canvas)' }}>
-        <header
-          data-admin-topbar
-          className="fixed top-0 right-0 left-0 z-20 flex h-12 items-center gap-x-2.5 border-b border-[var(--border)] px-4 sm:px-6 lg:left-[232px] lg:px-8"
-          style={{ background: 'var(--admin-canvas)' }}
-        >
-          <button
-            type="button"
-            className="inline-flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-md bg-transparent text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.96] lg:hidden"
-            onClick={() => setMobileNavOpen(true)}
-            aria-label={t('nav.openNavigation')}
-            aria-expanded={mobileNavOpen}
-            aria-controls="admin-mobile-navigation"
-          >
-            <Icon name="menu" size="sm" />
-          </button>
-          <div
-            data-admin-breadcrumb
-            className="min-w-0 flex-1"
-          >
-            <div
-              className={`min-w-0 items-center gap-1.5 text-[12px] font-[550] ${showPageBreadcrumb ? 'flex' : 'flex lg:hidden'}`}
-            >
-              {activeSection && (
-                <span className="truncate" style={{ color: showPageBreadcrumb ? 'var(--text-subtle)' : 'var(--text)' }}>
-                  {activeSection.label}
-                </span>
-              )}
-              {showPageBreadcrumb && (
-                <>
-                  {activeSection && (
-                    <span aria-hidden="true" className="text-[var(--text-subtle)]">
-                      <Icon name="chevron_right" size="sm" />
-                    </span>
-                  )}
-                  <span className="truncate" style={{ color: 'var(--text)' }}>{pageTitle}</span>
-                </>
-              )}
-            </div>
-          </div>
-        </header>
-
-        <main className="min-h-screen pt-16 pb-6" style={{ background: 'var(--admin-canvas)' }}>
+        <main className="min-h-screen pb-8 pt-4 lg:pt-6" style={{ background: 'var(--admin-canvas)' }}>
           <div data-admin-outlet className="mx-auto w-full max-w-[1840px] px-4 sm:px-6 lg:px-8">
-            {policySurface && (
-              <PolicyStatusBanner
-                status={policyStatusQuery.data}
-                unavailable={policyStatusQuery.isError}
-                refreshing={policyStatusQuery.isFetching}
-                onRefresh={() => policyStatusQuery.refetch()}
-              />
-            )}
+            {/* The Admin shell has no utility bar. On narrow screens the
+                workspace rail is off-canvas, so the drawer trigger sits at the
+                top of the content instead of occupying a header row. */}
+            <button
+              type="button"
+              data-admin-nav-trigger
+              className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-md bg-transparent text-[var(--text-soft)] transition-[background,color,transform] duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text)] active:scale-[0.96] lg:hidden"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label={t('nav.openNavigation')}
+              aria-expanded={mobileNavOpen}
+              aria-controls="admin-mobile-navigation"
+            >
+              <Icon name="menu" size="sm" />
+            </button>
             <Outlet />
           </div>
         </main>

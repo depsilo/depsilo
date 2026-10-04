@@ -53,8 +53,9 @@ func TestAccessLogListAndExportShareFilters(t *testing.T) {
 		t.Fatalf("items = %d, want 1", len(items))
 	}
 	assertExactKeys(t, items[0],
-		"id", "adapter_type", "method", "cache_key", "package_name", "hit",
-		"cache_result", "upstream", "latency_ms", "status_code", "client_ip", "bytes_sent", "created_at",
+		"id", "adapter_type", "method", "cache_key", "package_name", "version", "hit",
+		"cache_result", "upstream", "latency_ms", "status_code", "client_ip", "bytes_sent",
+		"upstream_requests", "upstream_bytes", "created_at",
 	)
 	var total int64
 	var page, pageSize int

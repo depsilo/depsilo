@@ -1149,3 +1149,59 @@ button.portal-header-control {
   background: var(--brand-soft);
   border-color: var(--brand-border);
 }
+
+/* ── Overview (Dashboard) local palette ─────────────────────────────
+   Scoped semantic variables for the Overview cards and its blue interaction
+   accent. The wrapper is intentionally NOT a card: no background, radius,
+   shadow, or extra padding, so the Overview keeps a single card level on the
+   normal Admin canvas. Nothing here overrides a global token. */
+.dashboard-surface {
+  --dash-card: #ffffff;
+  --dash-ink: #182238;
+  --dash-muted: #5f6f85;
+  --dash-border: #e3e9f1;
+  --dash-accent: #2563eb;
+  --dash-accent-soft: #eaf1fe;
+  --dash-ok: #128a5b;
+  --dash-ok-soft: #e7f6ef;
+  --dash-warn: #b45309;
+  --dash-warn-soft: #fdf3e3;
+  --dash-danger: #dc2626;
+  --dash-danger-soft: #fdeceb;
+  --dash-soft: #eef3f9;
+  --dash-shadow: 0 1px 2px rgb(16 32 64 / 0.04), 0 1px 3px rgb(16 32 64 / 0.04);
+  color: var(--dash-ink);
+}
+[data-theme="dark"] .dashboard-surface,
+html.dark .dashboard-surface {
+  --dash-card: var(--bg-card);
+  --dash-ink: var(--text);
+  --dash-muted: var(--text-soft);
+  --dash-border: var(--border);
+  --dash-accent: #60a5fa;
+  --dash-accent-soft: color-mix(in oklab, #60a5fa 18%, transparent);
+  --dash-ok: var(--ok-text);
+  --dash-ok-soft: var(--ok-fill);
+  --dash-warn: var(--warn-text);
+  --dash-warn-soft: var(--warn-fill);
+  --dash-danger: var(--danger-text);
+  --dash-danger-soft: var(--danger-fill);
+  --dash-soft: var(--bg-soft);
+  --dash-shadow: var(--shadow-card);
+}
+.dash-card {
+  background: var(--dash-card);
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  box-shadow: var(--dash-shadow);
+}
+.dash-focus:focus-visible {
+  outline: 2px solid var(--dash-accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-surface * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

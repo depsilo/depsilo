@@ -34,7 +34,7 @@ test('Security uses stable Operator page chrome with one page heading across vie
   )
   await expect(page.locator('h1:visible')).toHaveCount(1)
   await expect(adminPage.locator('[data-admin-page-title]')).toHaveText(/漏洞情报|Vulnerability Intelligence/)
-  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
 
   for (const view of ['vulnerabilities', 'suggestions', 'policies']) {
     await page.getByRole('combobox', { name: /情报视图|Intelligence view/ }).selectOption(view)

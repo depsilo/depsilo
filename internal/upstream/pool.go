@@ -364,7 +364,7 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 	}
 
 	return &FetchResult{
-		Body:         resp.Body,
+		Body:         wrapOriginBody(ctx, resp.Body),
 		ContentType:  resp.Header.Get("Content-Type"),
 		Size:         resp.ContentLength,
 		StatusCode:   resp.StatusCode,
@@ -423,7 +423,7 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 	}
 
 	return &FetchResult{
-		Body:         resp.Body,
+		Body:         wrapOriginBody(ctx, resp.Body),
 		ContentType:  resp.Header.Get("Content-Type"),
 		Size:         resp.ContentLength,
 		StatusCode:   resp.StatusCode,

@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
+	"depsilo/internal/traffic"
 	"depsilo/internal/upstream"
 	"depsilo/internal/version"
 )
@@ -26,10 +27,11 @@ type NowHandler struct {
 	db        *gorm.DB
 	pools     map[string]*upstream.Pool
 	startTime time.Time
+	meter     *traffic.Meter
 }
 
-func NewNowHandler(database *gorm.DB, pools map[string]*upstream.Pool, startTime time.Time) *NowHandler {
-	return &NowHandler{db: database, pools: pools, startTime: startTime}
+func NewNowHandler(database *gorm.DB, pools map[string]*upstream.Pool, startTime time.Time, meter *traffic.Meter) *NowHandler {
+	return &NowHandler{db: database, pools: pools, startTime: startTime, meter: meter}
 }
 
 // nowResponse is the JSON shape consumed by web/src/admin/components/NowStrip.tsx.
@@ -53,18 +55,29 @@ type lastActivity struct {
 }
 
 type rateBlock struct {
-	// All rates derived from the same rolling 60-second window so the
-	// strip never shows internally inconsistent numbers (e.g. "X req/min
-	// but 0 bytes/s"). Egress is bytes_sent to clients (hit + miss).
-	// Ingress is bytes_sent on the miss path only — we stream upstream
-	// through to the client so bytes-from-upstream ≈ bytes-to-client for
-	// misses. Clients gauge "cache savings" as egress / (egress + ingress).
-	RequestsPerMin int64   `json:"requests_per_min"`
-	EgressBps      float64 `json:"egress_bps"`
-	IngressBps     float64 `json:"ingress_bps"`
-	// HasData is false when the window observed zero requests; the
-	// frontend uses it to render "—" instead of misleading "0"s.
+	// RequestsPerMin is the rolling 60-second client request count.
+	RequestsPerMin int64 `json:"requests_per_min"`
+	// EgressBps/IngressBps are legacy aliases. Egress is delivered-to-client
+	// bytes per second; Ingress is measured upstream-read bytes per second.
+	// They were previously a miss-path proxy for origin traffic; both now come
+	// from the shared meter when it is available.
+	EgressBps  float64 `json:"egress_bps"`
+	IngressBps float64 `json:"ingress_bps"`
+	// HasData is false when the window observed zero requests; the frontend
+	// renders "—" instead of a misleading "0".
 	HasData bool `json:"has_data"`
+	// Measured is true when the process meter supplied the byte rates, letting
+	// the client distinguish "idle" from "not collected".
+	Measured bool `json:"measured"`
+
+	WindowSeconds int `json:"window_seconds"`
+
+	// Explicit measured rates. Service* is client→Depsilo, Origin* is
+	// Depsilo→upstream. They are separate request paths and are never summed.
+	ServiceRequestsPerSec float64 `json:"service_requests_per_sec"`
+	ServiceBytesPerSec    float64 `json:"service_bytes_per_sec"`
+	OriginRequestsPerSec  float64 `json:"origin_requests_per_sec"`
+	OriginBytesPerSec     float64 `json:"origin_bytes_per_sec"`
 }
 
 type upstreamRollup struct {
@@ -143,10 +156,10 @@ func (h *NowHandler) lastActivity(now time.Time) *lastActivity {
 	}
 }
 
-// rate computes req/min + egress + ingress over the last 60s. One scan over
-// raw access_logs (bounded — 60s of traffic even on a busy server caps at
-// thousands of rows). bytes_sent on miss rows doubles as a proxy for
-// upstream-ingress because the cache streams upstream → client.
+// rate computes the rolling 60-second rates. The request count comes from a
+// bounded scan of raw access_logs; the byte rates come from the shared meter,
+// which counts delivered-to-client bytes and measured upstream-read bytes
+// independently. Without a meter (isolated tests) the legacy DB proxy is kept.
 func (h *NowHandler) rate(now time.Time) rateBlock {
 	since := now.Add(-60 * time.Second)
 	var agg struct {
@@ -161,12 +174,27 @@ func (h *NowHandler) rate(now time.Time) rateBlock {
 		Where("created_at >= ?", since).
 		Scan(&agg)
 
-	return rateBlock{
+	out := rateBlock{
 		RequestsPerMin: agg.Requests,
-		EgressBps:      float64(agg.Egress) / 60.0,
-		IngressBps:     float64(agg.Ingress) / 60.0,
 		HasData:        agg.Requests > 0,
+		WindowSeconds:  60,
 	}
+	if h.meter != nil {
+		measured := h.meter.Snapshot(60, now)
+		out.Measured = true
+		out.ServiceRequestsPerSec = measured.ServiceRequestsPerSec()
+		out.ServiceBytesPerSec = measured.ServiceBytesPerSec()
+		out.OriginRequestsPerSec = measured.OriginRequestsPerSec()
+		out.OriginBytesPerSec = measured.OriginBytesPerSec()
+		out.EgressBps = out.ServiceBytesPerSec
+		out.IngressBps = out.OriginBytesPerSec
+		return out
+	}
+	// Compatibility fallback for callers constructing the handler without a
+	// meter. These are client-side totals, not measured origin traffic.
+	out.EgressBps = float64(agg.Egress) / 60.0
+	out.IngressBps = float64(agg.Ingress) / 60.0
+	return out
 }
 
 // sparkline returns 30 one-minute buckets ending at the current minute.

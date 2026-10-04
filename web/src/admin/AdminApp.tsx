@@ -18,7 +18,6 @@ const AdminShell = lazyRoute(() => import('./AdminShell'), { surface: 'page' })
 const DashboardV2 = lazyRoute(() => import('./pages/Dashboard'))
 const ConnectProject = lazyRoute(() => import('./pages/ConnectProject'))
 const Attention = lazyRoute(() => import('./pages/Attention'))
-const BandwidthReportV2 = lazyRoute(() => import('./pages/BandwidthReport'))
 const CacheManageV2 = lazyRoute(() => import('./pages/CacheManage'))
 const CacheIndexes = lazyRoute(() => import('./pages/CacheIndexes'))
 const CompileCache = lazyRoute(() => import('./pages/CompileCache'))
@@ -38,7 +37,6 @@ const routeElements = {
   dashboard: <DashboardV2 />,
   connect: <ConnectProject />,
   attention: <Attention />,
-  bandwidth: <BandwidthReportV2 />,
   cache: <CacheManageV2 />,
   cacheIndexes: <CacheIndexes />,
   compileCache: <CompileCache />,
@@ -142,6 +140,8 @@ export default function AdminAppV2() {
         {adminRouteManifest.map(route => route.index
           ? <Route key={route.id} index element={routeElements[route.id]} />
           : <Route key={route.id} path={route.path} element={routeElements[route.id]} />)}
+        {/* Bandwidth reporting merged into the Dashboard; keep the legacy URL working. */}
+        <Route path="bandwidth" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<RouteNotFound area="admin" />} />
       </Route>
     </Routes>

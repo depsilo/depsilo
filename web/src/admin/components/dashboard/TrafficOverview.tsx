@@ -1,0 +1,84 @@
+import { useTranslation } from 'react-i18next'
+
+import type { DashboardPeriod, DashboardRange, NowResponse, OriginCoverage } from '@/lib/adminApi.types'
+import { coverageDetail, rangeLabelKey } from '@/lib/dashboardOverview'
+import { formatBytes, formatBps } from '@/lib/utils'
+
+import MetricTile from './MetricTile'
+
+export type TrafficInfoKind = 'service-flow' | 'origin-flow' | 'served-total' | 'origin-total'
+
+interface TrafficOverviewProps {
+  now?: NowResponse
+  nowPending: boolean
+  period?: DashboardPeriod
+  range: DashboardRange
+  rangeStart?: string
+  coverage?: OriginCoverage
+  onInfo: (kind: TrafficInfoKind) => void
+}
+
+export default function TrafficOverview({
+  now,
+  nowPending,
+  period,
+  range,
+  rangeStart,
+  coverage,
+  onInfo,
+}: TrafficOverviewProps) {
+  const { t } = useTranslation()
+  const measured = now?.rate.measured === true
+  const periodLabel = t(rangeLabelKey(range))
+  const coverageNote = coverageDetail(coverage, rangeStart, t)
+  const realtimeNote = measured ? t('overview.realTimeWindow') : t('overview.notCollected')
+
+  return (
+    <section data-dashboard-traffic aria-labelledby="overview-traffic-title" className="flex min-w-0 flex-col gap-3">
+      <h2 id="overview-traffic-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+        {t('overview.trafficTitle')}
+      </h2>
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricTile
+          testId="traffic-service-flow"
+          label={t('overview.serviceFlow')}
+          value={measured ? formatBps(now?.rate.service_bytes_per_sec ?? 0) : '—'}
+          detail={`${t('overview.clientToDepsilo')} · ${realtimeNote}`}
+          tone="accent"
+          loading={nowPending && !now}
+          onInfo={() => onInfo('service-flow')}
+          infoLabel={t('overview.serviceFlowInfoLabel')}
+        />
+        <MetricTile
+          testId="traffic-origin-flow"
+          label={t('overview.originFlow')}
+          value={measured ? formatBps(now?.rate.origin_bytes_per_sec ?? 0) : '—'}
+          detail={`${t('overview.depsiloToUpstream')} · ${realtimeNote}`}
+          tone="ok"
+          loading={nowPending && !now}
+          onInfo={() => onInfo('origin-flow')}
+          infoLabel={t('overview.originFlowInfoLabel')}
+        />
+        <MetricTile
+          testId="traffic-served-total"
+          label={t('overview.servedTotal')}
+          value={period ? formatBytes(period.bytes_served) : '—'}
+          detail={`${periodLabel} · ${t('overview.deliveredToClients')}`}
+          onInfo={() => onInfo('served-total')}
+          infoLabel={t('overview.servedTotalInfoLabel')}
+        />
+        <MetricTile
+          testId="traffic-origin-total"
+          label={t('overview.originTotal')}
+          value={period ? formatBytes(period.upstream_bytes) : '—'}
+          detail={coverageNote
+            ? `${periodLabel} · ${coverageNote}`
+            : `${periodLabel} · ${t('overview.readFromUpstream')}`}
+          tone={coverageNote ? 'warn' : 'ok'}
+          onInfo={() => onInfo('origin-total')}
+          infoLabel={t('overview.originTotalInfoLabel')}
+        />
+      </div>
+    </section>
+  )
+}

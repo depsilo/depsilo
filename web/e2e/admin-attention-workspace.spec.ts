@@ -55,7 +55,7 @@ test('attention workspace brings operational risks into one direct queue', async
   await page.goto('/admin/attention')
 
   await expect(page.locator('[data-admin-page-title]')).toHaveText(/待处理|Needs Attention/)
-  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
   await expect(page.getByText(/上游源需要关注|Upstreams need attention/)).toBeVisible()
   await expect(page.getByText(/有待决安全建议|Security suggestions are waiting/)).toBeVisible()
   await expect(page.getByText(/缓存容量偏高|Cache capacity is running high/)).toBeVisible()

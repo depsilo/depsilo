@@ -4,6 +4,7 @@ import { useLocation } from 'react-router'
 
 import { resolveAdminRoute } from '../routes'
 import AdminLocalNav from './AdminLocalNav'
+import PolicyStatusNotice from './PolicyStatusNotice'
 
 export type AdminPageWidth = 'fluid' | 'readable'
 
@@ -81,6 +82,10 @@ export default function AdminPage({
       )}
       <AdminLocalNav />
       <div data-admin-page-content className="min-w-0">
+        {/* Policy runtime status belongs to the page that owns policy, not to a
+            shell banner above every page. Overview surfaces it in the
+            attention queue instead. */}
+        {activeRoute?.navGroup === 'security' && <PolicyStatusNotice />}
         {children}
       </div>
     </div>

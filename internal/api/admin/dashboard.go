@@ -43,6 +43,21 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	last24h := h.aggWindow(now.Add(-24*time.Hour), now)
 	prev24h := h.aggWindow(now.Add(-48*time.Hour), now.Add(-24*time.Hour))
 
+	// Selected Overview range. 1h/24h read raw rows for exact boundaries;
+	// 7d/30d read the hourly rollup so polling stays bounded. Both cover the
+	// same request set: hit, miss, and legacy pre-diagnostics rows.
+	windowSpec := normalizeWindowRange(c.Query("range"))
+	windowFrom := now.Add(-windowSpec.duration)
+	var windowAgg, prevWindowAgg aggSnapshot
+	if windowSpec.rollup && h.useRollup {
+		windowAgg = h.aggWindowHourly(windowFrom, now)
+		prevWindowAgg = h.aggWindowHourly(windowFrom.Add(-windowSpec.duration), windowFrom)
+	} else {
+		windowAgg = h.aggWindow(windowFrom, now)
+		prevWindowAgg = h.aggWindow(windowFrom.Add(-windowSpec.duration), windowFrom)
+	}
+	coverageStart, coverageMeasured := h.originCoverageStart()
+
 	totalRequests := last24h.Total
 	hitCount := last24h.Hits
 	bytesSent := last24h.Bytes
@@ -142,6 +157,23 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 
 	response := gin.H{
+		"range": gin.H{
+			"key":   windowSpec.key,
+			"start": windowFrom.UTC().Format(time.RFC3339),
+			"end":   now.Format(time.RFC3339),
+		},
+		"window": windowPayload(windowAgg),
+		"prev":   windowPayload(prevWindowAgg),
+		"origin_coverage": gin.H{
+			"measured": coverageMeasured,
+			"since": func() any {
+				if !coverageMeasured {
+					return nil
+				}
+				return coverageStart.Format(time.RFC3339)
+			}(),
+			"window_complete": coverageMeasured && !windowFrom.Before(coverageStart),
+		},
 		"last_24h": gin.H{
 			"total_requests": totalRequests,
 			"hit_count":      hitCount,
@@ -179,10 +211,39 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 // query inside GetDashboard wants. Defined as a struct (not gin.H) so the
 // SQL Scan can land in fixed fields without reflection.
 type aggSnapshot struct {
-	Total      int64
-	Hits       int64
-	Bytes      int64
-	SumLatency int64
+	Total            int64
+	Hits             int64
+	Bytes            int64
+	UpstreamRequests int64
+	UpstreamBytes    int64
+	SumLatency       int64
+	SumHitLatency    int64
+	SumMissLatency   int64
+	HitBytes         int64
+	MissBytes        int64
+	Errors           int64
+}
+
+func (s aggSnapshot) hitRate() float64 {
+	if s.Total <= 0 {
+		return 0
+	}
+	return float64(s.Hits) / float64(s.Total)
+}
+
+func (s aggSnapshot) avgHitLatency() float64 {
+	if s.Hits <= 0 {
+		return 0
+	}
+	return float64(s.SumHitLatency) / float64(s.Hits)
+}
+
+func (s aggSnapshot) avgMissLatency() float64 {
+	misses := s.Total - s.Hits
+	if misses <= 0 {
+		return 0
+	}
+	return float64(s.SumMissLatency) / float64(misses)
 }
 
 // aggWindow runs one SUM over access_logs for [from, to). Raw rather than
@@ -196,13 +257,112 @@ func (h *DashboardHandler) aggWindow(from, to time.Time) aggSnapshot {
 		Select(`COUNT(*) AS total,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
 			COALESCE(SUM(bytes_sent), 0) AS bytes,
-			COALESCE(SUM(latency_ms), 0) AS sum_latency`).
+			COALESCE(SUM(upstream_requests), 0) AS upstream_requests,
+			COALESCE(SUM(upstream_bytes), 0) AS upstream_bytes,
+			COALESCE(SUM(latency_ms), 0) AS sum_latency,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN latency_ms ELSE 0 END), 0) AS sum_hit_latency,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN latency_ms ELSE 0 END), 0) AS sum_miss_latency,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END), 0) AS hit_bytes,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS miss_bytes,
+			COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`).
 		// Empty cache_result is retained for pre-diagnostics rows. New
 		// diagnostic rows use "unknown" for blocked/incomplete outcomes;
 		// those must not inflate the hit-rate denominator or served bytes.
 		Where("created_at >= ? AND created_at < ? AND (cache_result IN (?, ?) OR cache_result = '')", from, to, "hit", "miss").
 		Scan(&out)
 	return out
+}
+
+// aggWindowHourly is the coarse-range equivalent of aggWindow. It reads the
+// hourly rollup (retained for a year by default) instead of scanning raw rows,
+// so a 30d Overview refresh never walks the access log. The recorder folds only
+// hit/miss/legacy rows into rollups, matching the raw filter above.
+func (h *DashboardHandler) aggWindowHourly(from, to time.Time) aggSnapshot {
+	var out aggSnapshot
+	from, to = from.UTC(), to.UTC()
+	h.db.Table("access_log_hourly").
+		Select(`COALESCE(SUM(request_count), 0) AS total,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
+			COALESCE(SUM(total_bytes), 0) AS bytes,
+			COALESCE(SUM(upstream_requests), 0) AS upstream_requests,
+			COALESCE(SUM(upstream_bytes), 0) AS upstream_bytes,
+			COALESCE(SUM(sum_latency_ms), 0) AS sum_latency,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN sum_latency_ms ELSE 0 END), 0) AS sum_hit_latency,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN sum_latency_ms ELSE 0 END), 0) AS sum_miss_latency,
+			COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS hit_bytes,
+			COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS miss_bytes,
+			COALESCE(SUM(error_count), 0) AS errors`).
+		Where(`(date > ? OR (date = ? AND hour >= ?))
+			AND (date < ? OR (date = ? AND hour <= ?))`,
+			from.Format("2006-01-02"), from.Format("2006-01-02"), from.Hour(),
+			to.Format("2006-01-02"), to.Format("2006-01-02"), to.Hour()).
+		Scan(&out)
+	return out
+}
+
+// windowRange describes one Overview period. Ranges beyond a day use the
+// hourly rollup to keep polling bounded; hour-aligned boundaries are the
+// documented granularity for those ranges.
+type windowRange struct {
+	key      string
+	duration time.Duration
+	rollup   bool
+}
+
+var windowRanges = map[string]windowRange{
+	"1h":  {key: "1h", duration: time.Hour},
+	"24h": {key: "24h", duration: 24 * time.Hour},
+	"7d":  {key: "7d", duration: 7 * 24 * time.Hour, rollup: true},
+	"30d": {key: "30d", duration: 30 * 24 * time.Hour, rollup: true},
+}
+
+func normalizeWindowRange(raw string) windowRange {
+	if spec, ok := windowRanges[raw]; ok {
+		return spec
+	}
+	return windowRanges["24h"]
+}
+
+// windowPayload is the single shape every Overview period block uses, so the
+// client never has to guess which fields a given range carries.
+func windowPayload(s aggSnapshot) gin.H {
+	misses := s.Total - s.Hits
+	avgLatency := 0.0
+	if s.Total > 0 {
+		avgLatency = float64(s.SumLatency) / float64(s.Total)
+	}
+	return gin.H{
+		"total_requests":      s.Total,
+		"hit_count":           s.Hits,
+		"miss_count":          misses,
+		"hit_requests":        s.Hits,
+		"miss_requests":       misses,
+		"hit_rate":            s.hitRate(),
+		"bytes_served":        s.Bytes,
+		"hit_bytes":           s.HitBytes,
+		"miss_bytes":          s.MissBytes,
+		"avg_latency_ms":      avgLatency,
+		"avg_hit_latency_ms":  s.avgHitLatency(),
+		"avg_miss_latency_ms": s.avgMissLatency(),
+		"upstream_requests":   s.UpstreamRequests,
+		"upstream_bytes":      s.UpstreamBytes,
+		"errors":              s.Errors,
+	}
+}
+
+// originCoverageStart reports when measured origin traffic began. A window that
+// starts before this instant cannot present origin totals as complete measured
+// data.
+func (h *DashboardHandler) originCoverageStart() (time.Time, bool) {
+	var state db.ControlPlaneState
+	if err := h.db.Where("key = ?", db.OriginTrafficCoverageKey).First(&state).Error; err != nil {
+		return time.Time{}, false
+	}
+	parsed, err := time.Parse(time.RFC3339, state.Value)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed.UTC(), true
 }
 
 type trendSpec struct {
@@ -267,30 +427,37 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 // switch is a pure render — no refetch. Bucket is unix seconds at the
 // bucket's UTC start; the frontend formats it in the browser's timezone.
 type trendPoint struct {
-	Bucket       int64   `json:"bucket"`
-	Date         string  `json:"date"` // legacy display label (UTC); prefer formatting Bucket client-side
-	Requests     int64   `json:"requests"`
-	Hits         int64   `json:"hits"`
-	Misses       int64   `json:"misses"`
-	HitRate      float64 `json:"hit_rate"`
-	BytesServed  int64   `json:"bytes_served"`
-	BytesHit     int64   `json:"bytes_hit"`
-	BytesMiss    int64   `json:"bytes_miss"`
-	SumLatencyMs int64   `json:"sum_latency_ms"`
-	AvgLatencyMs float64 `json:"avg_latency_ms"`
-	Errors       int64   `json:"errors"`
+	Bucket      int64   `json:"bucket"`
+	Date        string  `json:"date"` // legacy display label (UTC); prefer formatting Bucket client-side
+	Requests    int64   `json:"requests"`
+	Hits        int64   `json:"hits"`
+	Misses      int64   `json:"misses"`
+	HitRate     float64 `json:"hit_rate"`
+	BytesServed int64   `json:"bytes_served"`
+	BytesHit    int64   `json:"bytes_hit"`
+	BytesMiss   int64   `json:"bytes_miss"`
+	// UpstreamRequests/UpstreamBytes are the measured Depsilo→upstream side of
+	// the same bucket. They are independent of the client-facing byte series
+	// and are never derived from it.
+	UpstreamRequests int64   `json:"upstream_requests"`
+	UpstreamBytes    int64   `json:"upstream_bytes"`
+	SumLatencyMs     int64   `json:"sum_latency_ms"`
+	AvgLatencyMs     float64 `json:"avg_latency_ms"`
+	Errors           int64   `json:"errors"`
 }
 
 // trendHourBucket is the common aggregate row all three sources produce.
 type trendHourBucket struct {
-	Bucket       int64
-	Requests     int64
-	Hits         int64
-	Misses       int64
-	BytesHit     int64
-	BytesMiss    int64
-	SumLatencyMs int64
-	Errors       int64
+	Bucket           int64
+	Requests         int64
+	Hits             int64
+	Misses           int64
+	BytesHit         int64
+	BytesMiss        int64
+	UpstreamRequests int64
+	UpstreamBytes    int64
+	SumLatencyMs     int64
+	Errors           int64
 }
 
 func (b *trendHourBucket) add(other trendHourBucket) {
@@ -299,22 +466,26 @@ func (b *trendHourBucket) add(other trendHourBucket) {
 	b.Misses += other.Misses
 	b.BytesHit += other.BytesHit
 	b.BytesMiss += other.BytesMiss
+	b.UpstreamRequests += other.UpstreamRequests
+	b.UpstreamBytes += other.UpstreamBytes
 	b.SumLatencyMs += other.SumLatencyMs
 	b.Errors += other.Errors
 }
 
 func (b trendHourBucket) toPoint(bucketStart time.Time) trendPoint {
 	p := trendPoint{
-		Bucket:       bucketStart.Unix(),
-		Date:         bucketStart.Format("2006-01-02 15:04"),
-		Requests:     b.Requests,
-		Hits:         b.Hits,
-		Misses:       b.Misses,
-		BytesHit:     b.BytesHit,
-		BytesMiss:    b.BytesMiss,
-		BytesServed:  b.BytesHit + b.BytesMiss,
-		SumLatencyMs: b.SumLatencyMs,
-		Errors:       b.Errors,
+		Bucket:           bucketStart.Unix(),
+		Date:             bucketStart.Format("2006-01-02 15:04"),
+		Requests:         b.Requests,
+		Hits:             b.Hits,
+		Misses:           b.Misses,
+		BytesHit:         b.BytesHit,
+		BytesMiss:        b.BytesMiss,
+		BytesServed:      b.BytesHit + b.BytesMiss,
+		UpstreamRequests: b.UpstreamRequests,
+		UpstreamBytes:    b.UpstreamBytes,
+		SumLatencyMs:     b.SumLatencyMs,
+		Errors:           b.Errors,
 	}
 	if b.Requests > 0 {
 		p.HitRate = float64(b.Hits) / float64(b.Requests)
@@ -376,6 +547,8 @@ func (h *DashboardHandler) trendsRawWindow(ctx context.Context, window trendWind
 			COALESCE(SUM(CASE WHEN hit = 0 THEN 1 ELSE 0 END), 0) AS misses,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN bytes_sent ELSE 0 END), 0) AS bytes_hit,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS bytes_miss,
+			COALESCE(SUM(upstream_requests), 0) AS upstream_requests,
+			COALESCE(SUM(upstream_bytes), 0) AS upstream_bytes,
 			COALESCE(SUM(latency_ms), 0) AS sum_latency_ms,
 			COALESCE(SUM(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS errors`,
 			intervalSec, intervalSec).
@@ -409,6 +582,8 @@ func (h *DashboardHandler) trendsFiveMinutelyWindow(ctx context.Context, window 
 			COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
+			COALESCE(SUM(upstream_requests), 0) AS upstream_requests,
+			COALESCE(SUM(upstream_bytes), 0) AS upstream_bytes,
 			COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
 			COALESCE(SUM(error_count), 0) AS errors`,
 			intervalSec, intervalSec).
@@ -451,15 +626,17 @@ func (h *DashboardHandler) trendsHourlyGrouped(ctx context.Context, spec trendSp
 
 func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window trendWindow) ([]trendPoint, error) {
 	type hourlyRow struct {
-		Date         string
-		Hour         int
-		Requests     int64
-		Hits         int64
-		Misses       int64
-		BytesHit     int64
-		BytesMiss    int64
-		SumLatencyMs int64
-		Errors       int64
+		Date             string
+		Hour             int
+		Requests         int64
+		Hits             int64
+		Misses           int64
+		BytesHit         int64
+		BytesMiss        int64
+		UpstreamRequests int64
+		UpstreamBytes    int64
+		SumLatencyMs     int64
+		Errors           int64
 	}
 
 	var rows []hourlyRow
@@ -470,6 +647,8 @@ func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window
 			COALESCE(SUM(CASE WHEN hit = 0 THEN request_count ELSE 0 END), 0) AS misses,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN total_bytes ELSE 0 END), 0) AS bytes_hit,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN total_bytes ELSE 0 END), 0) AS bytes_miss,
+			COALESCE(SUM(upstream_requests), 0) AS upstream_requests,
+			COALESCE(SUM(upstream_bytes), 0) AS upstream_bytes,
 			COALESCE(SUM(sum_latency_ms), 0) AS sum_latency_ms,
 			COALESCE(SUM(error_count), 0) AS errors`).
 		Where(`(date > ? OR (date = ? AND hour >= ?))
@@ -493,13 +672,15 @@ func (h *DashboardHandler) trendsHourlyGroupedWindow(ctx context.Context, window
 		aggregate := grouped[bucket]
 		aggregate.Bucket = bucket
 		aggregate.add(trendHourBucket{
-			Requests:     row.Requests,
-			Hits:         row.Hits,
-			Misses:       row.Misses,
-			BytesHit:     row.BytesHit,
-			BytesMiss:    row.BytesMiss,
-			SumLatencyMs: row.SumLatencyMs,
-			Errors:       row.Errors,
+			Requests:         row.Requests,
+			Hits:             row.Hits,
+			Misses:           row.Misses,
+			BytesHit:         row.BytesHit,
+			BytesMiss:        row.BytesMiss,
+			UpstreamRequests: row.UpstreamRequests,
+			UpstreamBytes:    row.UpstreamBytes,
+			SumLatencyMs:     row.SumLatencyMs,
+			Errors:           row.Errors,
 		})
 		grouped[bucket] = aggregate
 	}

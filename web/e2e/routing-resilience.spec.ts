@@ -175,7 +175,7 @@ test('authenticated Admin unknown paths render 404 inside the shell without dash
   await page.goto('/admin/does-not-exist?source=404#missing')
 
   await expect(page.locator('[data-admin-shell]')).toBeVisible()
-  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('页面不存在')
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
   const notFound = page.locator('[data-route-state="not-found"]')
   await expect(notFound.getByRole('heading', { name: '页面不存在' })).toBeVisible()
   await expect(notFound).toBeFocused()
@@ -193,8 +193,8 @@ test('Admin title derivation follows case-insensitive route matching', async ({ 
   await page.goto('/ADMIN/CACHE')
 
   // The Cache workspace page label is "制品缓存" (nav.cacheManage); the
-  // breadcrumb should resolve the mixed-case route to that destination.
-  await expect(page.locator('[data-admin-breadcrumb]')).toContainText('制品缓存')
+  // page heading should resolve the mixed-case route to that destination.
+  await expect(page.locator('[data-admin-page-title]')).toHaveText('制品缓存')
   await expect(page.locator('[data-route-state="not-found"]')).toHaveCount(0)
 })
 

@@ -31,31 +31,30 @@ test('light theme admin chrome has no color-contrast violations', async ({ page 
 
 test('trend range exposes its selected state', async ({ page }) => {
   await page.goto('/admin')
-  const group = page.getByRole('group', { name: '活动趋势' })
+  const group = page.getByRole('group', { name: '统计周期' })
   const selectedRange = group.getByRole('button', { name: '24 小时' })
   await selectedRange.click()
   await expect(selectedRange).toHaveAttribute('aria-pressed', 'true')
   await expect(group.getByRole('button', { name: '1 小时' })).toHaveAttribute('aria-pressed', 'false')
 })
 
-test('trend metric selector exposes button and pressed semantics', async ({ page }) => {
+test('trend metric selector exposes tab and selected semantics', async ({ page }) => {
   await setUiPreferences(page, 'light', 'en')
   await page.goto('/admin')
-  const group = page.getByRole('group', { name: 'Trend metric' })
+  const tablist = page.getByRole('tablist', { name: 'Activity trend' })
   const metrics = ['Requests', 'Bandwidth', 'Latency', 'Errors'].map(name => (
-    group.getByRole('button', { name, exact: true })
+    tablist.getByRole('tab', { name, exact: true })
   ))
-  await expect(group).toBeVisible()
-  for (const metric of metrics) await expect(metric).toHaveAttribute('type', 'button')
-
-  await expect(metrics[0]).toHaveAttribute('aria-pressed', 'true')
-  await expect(metrics[2]).toHaveAttribute('aria-pressed', 'false')
+  await expect(tablist).toBeVisible()
+  await expect(metrics[0]).toHaveAttribute('aria-selected', 'true')
+  await expect(metrics[2]).toHaveAttribute('aria-selected', 'false')
   await metrics[2].click()
-  await expect(metrics[0]).toHaveAttribute('aria-pressed', 'false')
-  await expect(metrics[2]).toHaveAttribute('aria-pressed', 'true')
+  await expect(metrics[0]).toHaveAttribute('aria-selected', 'false')
+  await expect(metrics[2]).toHaveAttribute('aria-selected', 'true')
 })
 
 test('trend chart exposes the selected metric and range to assistive technology', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('depsilo-dashboard-range', '1h'))
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints },
@@ -65,19 +64,20 @@ test('trend chart exposes the selected metric and range to assistive technology'
   const chartDescription = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper > svg.recharts-surface > desc')
   await expect(chartDescription).toHaveText('Requests trend for 1h. Use the left and right arrow keys to inspect time points.')
 
-  await page.getByRole('group', { name: 'Trend metric' }).getByRole('button', { name: 'Latency' }).click()
-  await page.getByRole('group', { name: 'Activity Trend' }).getByRole('button', { name: '24h' }).click()
+  await page.getByRole('tablist', { name: 'Activity trend' }).getByRole('tab', { name: 'Latency' }).click()
+  await page.getByRole('group', { name: 'Statistics range' }).getByRole('button', { name: '24h' }).click()
   await expect(chartDescription).toHaveText('Latency trend for 24h. Use the left and right arrow keys to inspect time points.')
 })
 
 test('trend series use linear paths', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('depsilo-dashboard-range', '1h'))
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints },
   })
   await page.goto('/admin')
 
-  const paths = page.locator('[data-query-key="dashboard-trends"] .recharts-area-curve, [data-query-key="dashboard-trends"] .recharts-line-curve')
-  await expect(paths).toHaveCount(3)
+  const paths = page.locator('[data-query-key="dashboard-trends"] .recharts-line-curve')
+  await expect(paths).toHaveCount(2)
   for (let i = 0; i < await paths.count(); i += 1) {
     await expect(paths.nth(i)).not.toHaveAttribute('d', /C/)
   }
@@ -114,6 +114,7 @@ test('1h trend tooltips distinguish adjacent ten-second buckets in local time', 
     ...point,
     bucket: populatedTrendPoints[0].bucket + index * 10,
   }))
+  await page.addInitScript(() => localStorage.setItem('depsilo-dashboard-range', '1h'))
   await mockAdminApi(page, {
     'GET /api/v1/admin/dashboard/trends': { points },
   })
@@ -138,9 +139,6 @@ test('30d trend tooltips distinguish same-day two-hour buckets in local time', a
     'GET /api/v1/admin/dashboard/trends': { points },
   })
   await page.goto('/admin')
-  await page.getByRole('group', { name: /活动趋势|Activity trends/ })
-    .getByRole('button', { name: /30 天|30d/i })
-    .click()
 
   const chart = page.locator('[data-query-key="dashboard-trends"] .recharts-wrapper')
   await expect(chart).toBeVisible()

@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
 )
 
@@ -35,19 +36,23 @@ type accessLogFilter struct {
 }
 
 type accessLogResponse struct {
-	ID          uint      `json:"id"`
-	AdapterType string    `json:"adapter_type"`
-	Method      string    `json:"method"`
-	CacheKey    string    `json:"cache_key"`
-	PackageName string    `json:"package_name"`
-	Hit         bool      `json:"hit"`
-	CacheResult string    `json:"cache_result"`
-	Upstream    string    `json:"upstream"`
-	LatencyMs   int64     `json:"latency_ms"`
-	StatusCode  int       `json:"status_code"`
-	ClientIP    string    `json:"client_ip"`
-	BytesSent   int64     `json:"bytes_sent"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint   `json:"id"`
+	AdapterType string `json:"adapter_type"`
+	Method      string `json:"method"`
+	CacheKey    string `json:"cache_key"`
+	PackageName string `json:"package_name"`
+	Version     string `json:"version"`
+	Hit         bool   `json:"hit"`
+	CacheResult string `json:"cache_result"`
+	Upstream    string `json:"upstream"`
+	LatencyMs   int64  `json:"latency_ms"`
+	StatusCode  int    `json:"status_code"`
+	ClientIP    string `json:"client_ip"`
+	BytesSent   int64  `json:"bytes_sent"`
+	// Measured Depsilo→upstream traffic attributed to this client request.
+	UpstreamRequests int64     `json:"upstream_requests"`
+	UpstreamBytes    int64     `json:"upstream_bytes"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 type accessLogListResponse struct {
@@ -138,19 +143,22 @@ func toAccessLogResponses(items []db.AccessLog) []accessLogResponse {
 	responses := make([]accessLogResponse, len(items))
 	for i, item := range items {
 		responses[i] = accessLogResponse{
-			ID:          item.ID,
-			AdapterType: item.AdapterType,
-			Method:      item.Method,
-			CacheKey:    item.CacheKey,
-			PackageName: item.PackageName,
-			Hit:         item.Hit,
-			CacheResult: normalizedAccessCacheResult(item.CacheResult, item.Hit),
-			Upstream:    item.Upstream,
-			LatencyMs:   item.LatencyMs,
-			StatusCode:  item.StatusCode,
-			ClientIP:    item.ClientIP,
-			BytesSent:   item.BytesSent,
-			CreatedAt:   item.CreatedAt,
+			ID:               item.ID,
+			AdapterType:      item.AdapterType,
+			Method:           item.Method,
+			CacheKey:         item.CacheKey,
+			PackageName:      item.PackageName,
+			Version:          packagekey.ExtractVersion(item.AdapterType, item.CacheKey),
+			Hit:              item.Hit,
+			CacheResult:      normalizedAccessCacheResult(item.CacheResult, item.Hit),
+			Upstream:         item.Upstream,
+			LatencyMs:        item.LatencyMs,
+			StatusCode:       item.StatusCode,
+			ClientIP:         item.ClientIP,
+			BytesSent:        item.BytesSent,
+			UpstreamRequests: item.UpstreamRequests,
+			UpstreamBytes:    item.UpstreamBytes,
+			CreatedAt:        item.CreatedAt,
 		}
 	}
 	return responses

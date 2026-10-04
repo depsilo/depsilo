@@ -33,7 +33,9 @@ import (
 	"depsilo/internal/quarantine/resolvers"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
+	"depsilo/internal/sysmetrics"
 	"depsilo/internal/tamper"
+	"depsilo/internal/traffic"
 	"depsilo/internal/trial"
 	"depsilo/internal/upstream"
 	"depsilo/internal/upstreamupdates"
@@ -533,6 +535,21 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	// Setup Gin
+	// Process-wide traffic meter: client→Depsilo service requests, and
+	// Depsilo→upstream origin exchanges/bytes read. Bound to both the request
+	// observer and the upstream read path so Overview can show the two
+	// directions without deriving one from the other.
+	trafficMeter := traffic.NewMeter()
+	upstream.SetTrafficMeter(trafficMeter)
+	api.M.BindTrafficMeter(trafficMeter)
+
+	// Shared, bounded resource sampler. Disk capacity is only meaningful for a
+	// local storage path; S3-backed deployments report it as unsupported.
+	resourceSampler := sysmetrics.NewSampler(cfg.Storage.Path, cfg.Storage.Type == "local")
+	if err := submitBackground("resource sampler", resourceSampler.Start); err != nil {
+		return nil, err
+	}
+
 	extraPackageRuleRoutes := make([]rules.PyPIRouteDescriptor, 0, len(cfg.ExtraIndexes))
 	for index := range cfg.ExtraIndexes {
 		descriptor, err := rules.NewPyPIRouteDescriptor(
@@ -590,6 +607,8 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		BlocklistSyncer:            blocklistSyncer,
 		BlocklistMode:              string(blocklistMode),
 		Tasks:                      background,
+		TrafficMeter:               trafficMeter,
+		Runtime:                    resourceSampler,
 	})
 
 	// Project-scoped proxy routes (/p/:slug/...) share Registry-owned Pools

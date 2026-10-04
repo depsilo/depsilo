@@ -77,7 +77,7 @@ async function expectStableProjectsPage(page: Page) {
   await expect(adminPage.locator('[data-admin-page-description]')).toContainText('按项目归集依赖活动')
   await expect(page.locator('h1:visible')).toHaveCount(1)
   await expect(adminPage.locator('[data-admin-page-title]')).toHaveText('项目管理')
-  await expect(page.locator('[data-admin-topbar]').getByRole('heading')).toHaveCount(0)
+  await expect(page.locator('[data-admin-topbar]')).toHaveCount(0)
 }
 
 async function expectInViewport(page: Page, locator: Locator) {
