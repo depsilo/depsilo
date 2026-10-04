@@ -535,11 +535,11 @@ test('Portal carries the brand accent and leaves Admin on the neutral roles', as
 
   await expect(page.locator('.portal-admin-link')).toHaveCSS(
     'background-color',
-    'rgb(37, 99, 235)',
+    'rgb(43, 95, 218)',
   )
   expect(await page.evaluate(() => (
     getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()
-  ))).toBe('#2563eb')
+  ))).toBe('#2b5fda')
 
   // The brand surface is scoped to the Portal: Admin keeps shadcn's neutral
   // accent, and the marker must be gone as soon as the surface unmounts.
@@ -549,7 +549,7 @@ test('Portal carries the brand accent and leaves Admin on the neutral roles', as
   ))).toBeNull()
   expect(await page.evaluate(() => (
     getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()
-  ))).not.toBe('#2563eb')
+  ))).not.toBe('#2b5fda')
 })
 
 test('Portal prompt dialog keeps its title in view and never scrolls sideways', async ({ page }) => {

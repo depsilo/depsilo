@@ -783,40 +783,48 @@ a:focus:not(:focus-visible) {
    their product meaning and are deliberately not re-tinted here. Admin and the
    Dashboard do not carry this attribute and are untouched. */
 :root[data-surface='portal'] {
-  --brand: #2563eb;
-  --brand-strong: #1d4ed8;
-  --brand-text: #2563eb;
-  --brand-soft: #eff6ff;
-  --brand-border: #bfdbfe;
-  --primary: #2563eb;
+  /* Same brand hue as the mark, one step deeper and noticeably calmer than
+     Tailwind's blue-600: the old #2563EB sat at 83% saturation, which read as
+     electric up close on a white canvas. At ~70% it still reads unmistakably
+     Depsilo blue, matches the logo wall (#2563EB) without fighting it, and
+     lifts link text from 5.17:1 to 5.6:1 on white. The tints follow: a cooler
+     blue-grey rather than the pastel #EFF6FF wash. */
+  --brand: #2b5fda;
+  --brand-strong: #1e47b8;
+  --brand-text: #2b5fda;
+  --brand-soft: #ecf2fd;
+  --brand-border: #b9cbf4;
+  --primary: #2b5fda;
   --primary-foreground: #ffffff;
-  --accent: #dbeafe;
-  --accent-foreground: #1e3a8a;
-  --ring: #2563eb;
-  --focus-ring: #2563eb;
-  --btn-primary-press: #1d4ed8;
-  --code-accent: #60a5fa;
+  /* Hover surface. Brand text on it measures 4.67:1 — the old #DBEAFE pairing
+     missed AA at 4.23:1. */
+  --accent: #e2ebfd;
+  --accent-foreground: #1a3fa6;
+  --ring: #2b5fda;
+  --focus-ring: #2b5fda;
+  --btn-primary-press: #183ba5;
+  --code-accent: #7ba7f5;
 }
 
 :root[data-surface='portal'][data-theme='dark'],
 html.dark[data-surface='portal'] {
-  --brand: #3b82f6;
-  --brand-strong: #2563eb;
-  /* Blue 300 is the lightest step that still clears AA on the near-black
-     canvas and on the rail surface. */
-  --brand-text: #93c5fd;
-  --brand-soft: #172554;
-  --brand-border: #1e40af;
+  --brand: #6b93f7;
+  --brand-strong: #2b5fda;
+  /* Lightest step that still clears AA on the near-black canvas (10.9:1) and
+     on the tinted rail surface (8.6:1) without going pastel grey. */
+  --brand-text: #a8c3fb;
+  --brand-soft: #16234a;
+  --brand-border: #2b4090;
   /* The filled action keeps white text on Deep Blue in both themes: it is the
      one pairing that is legible either way. */
-  --primary: #2563eb;
+  --primary: #2b5fda;
   --primary-foreground: #ffffff;
-  --accent: #1e293b;
-  --accent-foreground: #dbeafe;
-  --ring: #3b82f6;
-  --focus-ring: #3b82f6;
-  --btn-primary-press: #1d4ed8;
-  --code-accent: #60a5fa;
+  --accent: #1b2440;
+  --accent-foreground: #a8c3fb;
+  --ring: #6b93f7;
+  --focus-ring: #6b93f7;
+  --btn-primary-press: #1e47b8;
+  --code-accent: #7ba7f5;
 }
 
 .portal-header-actions {
