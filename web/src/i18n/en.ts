@@ -413,6 +413,19 @@ const en = {
       fieldUpstreamRequests: 'Origin requests',
       fieldUpstreamBytes: 'Origin bytes',
 
+      // One-line measurement-basis hints for the metric info affordance.
+      hintCpu: 'Process CPU on a single-core basis; 100% = one core',
+      hintMemory: 'Process memory; labelled “Peak” when only a peak reading exists',
+      hintCache: 'Logical cache size from metadata; quota comes from cache.max_size_gb',
+      hintNetwork: 'Service requests: client → Depsilo; origin requests: Depsilo → upstream',
+      hintServiceFlow: 'Bytes/sec actually delivered to clients over the last 60s',
+      hintOriginFlow: 'Bytes/sec actually read from upstreams over the last 60s',
+      hintServedTotal: 'Bytes actually delivered to clients in the selected period',
+      hintOriginTotal: 'Bytes actually read from upstreams in the selected period',
+      hintHitRate: 'Hits ÷ (hits + misses); no sample shows —',
+      hintSavedBytes: 'Estimated from cache-hit response bytes, not a measured bill',
+      hintLatency: 'Weighted average hit vs origin time; no reduction below the sample threshold',
+
       info: {
         resource: {
           cpu: {

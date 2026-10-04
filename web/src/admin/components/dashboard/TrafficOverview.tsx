@@ -6,8 +6,6 @@ import { formatBytes, formatBps } from '@/lib/utils'
 
 import MetricTile from './MetricTile'
 
-export type TrafficInfoKind = 'service-flow' | 'origin-flow' | 'served-total' | 'origin-total'
-
 interface TrafficOverviewProps {
   now?: NowResponse
   nowPending: boolean
@@ -15,7 +13,6 @@ interface TrafficOverviewProps {
   range: DashboardRange
   rangeStart?: string
   coverage?: OriginCoverage
-  onInfo: (kind: TrafficInfoKind) => void
 }
 
 export default function TrafficOverview({
@@ -25,7 +22,6 @@ export default function TrafficOverview({
   range,
   rangeStart,
   coverage,
-  onInfo,
 }: TrafficOverviewProps) {
   const { t } = useTranslation()
   const measured = now?.rate.measured === true
@@ -48,7 +44,7 @@ export default function TrafficOverview({
           value={measured ? formatBps(now?.rate.service_bytes_per_sec ?? 0) : '—'}
           detail={measured ? undefined : t('overview.notCollected')}
           loading={nowPending && !now}
-          onInfo={() => onInfo('service-flow')}
+          info={t('overview.hintServiceFlow')}
           infoLabel={t('overview.serviceFlowInfoLabel')}
         />
         <MetricTile
@@ -60,7 +56,7 @@ export default function TrafficOverview({
           value={measured ? formatBps(now?.rate.origin_bytes_per_sec ?? 0) : '—'}
           detail={measured ? undefined : t('overview.notCollected')}
           loading={nowPending && !now}
-          onInfo={() => onInfo('origin-flow')}
+          info={t('overview.hintOriginFlow')}
           infoLabel={t('overview.originFlowInfoLabel')}
         />
         <MetricTile
@@ -70,7 +66,7 @@ export default function TrafficOverview({
           tone="download"
           badge={periodLabel}
           value={period ? formatBytes(period.bytes_served) : '—'}
-          onInfo={() => onInfo('served-total')}
+          info={t('overview.hintServedTotal')}
           infoLabel={t('overview.servedTotalInfoLabel')}
         />
         <MetricTile
@@ -81,7 +77,7 @@ export default function TrafficOverview({
           badge={periodLabel}
           value={period ? formatBytes(period.upstream_bytes) : '—'}
           detail={coverageFlag}
-          onInfo={() => onInfo('origin-total')}
+          info={t('overview.hintOriginTotal')}
           infoLabel={t('overview.originTotalInfoLabel')}
         />
       </div>

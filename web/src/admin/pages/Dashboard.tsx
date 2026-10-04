@@ -6,13 +6,13 @@ import { Link } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
 import ActivityTrends from '@/admin/components/dashboard/ActivityTrends'
-import CacheBenefits, { type BenefitInfoKind } from '@/admin/components/dashboard/CacheBenefits'
+import CacheBenefits from '@/admin/components/dashboard/CacheBenefits'
 import DashboardInfoDialog from '@/admin/components/dashboard/DashboardInfoDialog'
 import DashboardStatusStrip from '@/admin/components/dashboard/DashboardStatusStrip'
 import RecentRequests from '@/admin/components/dashboard/RecentRequests'
 import RequestDetailsDialog from '@/admin/components/dashboard/RequestDetailsDialog'
-import RuntimeResources, { type ResourceInfoKind } from '@/admin/components/dashboard/RuntimeResources'
-import TrafficOverview, { type TrafficInfoKind } from '@/admin/components/dashboard/TrafficOverview'
+import RuntimeResources from '@/admin/components/dashboard/RuntimeResources'
+import TrafficOverview from '@/admin/components/dashboard/TrafficOverview'
 import Icon from '@/components/Icon'
 import QueryErrorState from '@/components/QueryErrorState'
 import { getAdminRouteHref } from '@/admin/routes'
@@ -50,16 +50,10 @@ interface TrendQueryData {
   range: DashboardRange
 }
 
-type InfoTarget =
-  | { kind: 'problems' }
-  | { kind: 'resource'; value: ResourceInfoKind }
-  | { kind: 'traffic'; value: TrafficInfoKind }
-  | { kind: 'benefit'; value: BenefitInfoKind }
-
 export default function Dashboard() {
   const { t } = useTranslation()
   const [range, setRange] = useState<DashboardRange>(() => readDashboardRange())
-  const [info, setInfo] = useState<InfoTarget | null>(null)
+  const [showProblems, setShowProblems] = useState(false)
   const [detailsLogId, setDetailsLogId] = useState<number | null>(null)
   const policy = usePolicyStatus()
 
@@ -226,7 +220,7 @@ export default function Dashboard() {
             nowStale={nowStale}
             nowError={nowInitialError}
             status={status}
-            onOpenProblems={() => setInfo({ kind: 'problems' })}
+            onOpenProblems={() => setShowProblems(true)}
             onRefresh={refreshAll}
           />
 
@@ -243,7 +237,6 @@ export default function Dashboard() {
             runtimePending={runtimePending}
             now={now}
             nowPending={nowPending}
-            onInfo={value => setInfo({ kind: 'resource', value })}
           />
 
           {overviewInitialError ? (
@@ -262,7 +255,6 @@ export default function Dashboard() {
                 range={overviewRange}
                 rangeStart={overview?.range?.start}
                 coverage={overview?.origin_coverage}
-                onInfo={value => setInfo({ kind: 'traffic', value })}
               />
               <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
                 <CacheBenefits
@@ -271,11 +263,10 @@ export default function Dashboard() {
                   range={overviewRange}
                   rangeStart={overview?.range?.start}
                   coverage={overview?.origin_coverage}
-                  onInfo={value => setInfo({ kind: 'benefit', value })}
                 />
                 <DashboardAttentionPanel
                   problems={status.problems}
-                  onOpenProblems={() => setInfo({ kind: 'problems' })}
+                  onOpenProblems={() => setShowProblems(true)}
                 />
               </div>
             </>
@@ -318,7 +309,7 @@ export default function Dashboard() {
           )}
       </div>
 
-      <InfoDialogs target={info} onClose={() => setInfo(null)} status={status} />
+      <ProblemsDialog open={showProblems} onClose={() => setShowProblems(false)} status={status} />
       <RequestDetailsDialog logId={detailsLogId} onClose={() => setDetailsLogId(null)} />
     </AdminPage>
   )
@@ -407,58 +398,44 @@ function DashboardAttentionPanel({ problems, onOpenProblems }: {
   )
 }
 
-function InfoDialogs({
-  target,
+/** Centered detail for the attention queue; metric tiles use hover tooltips. */
+function ProblemsDialog({
+  open,
   onClose,
   status,
 }: {
-  target: InfoTarget | null
+  open: boolean
   onClose: () => void
   status: ServiceStatusModel
 }) {
   const { t } = useTranslation()
-  if (!target) return null
-
-  if (target.kind === 'problems') {
-    return (
-      <DashboardInfoDialog
-        open
-        onClose={onClose}
-        title={t('overview.problemsTitle')}
-        description={t('overview.problemsDescription')}
-      >
-        <ul className="flex flex-col gap-3">
-          {status.problems.map(problem => (
-            <li key={problem.code} className="rounded-md border px-3 py-2" style={{ borderColor: 'var(--border)' }}>
-              <p className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>
-                {problemTitle(problem, t)}
-              </p>
-              <p className="mt-1 text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('overview.problemSuggestion')}</p>
-              {problemEntry(problem.code) && (
-                <Link
-                  to={problemEntry(problem.code)!.href}
-                  onClick={onClose}
-                  className="dash-focus mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] no-underline"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-                >
-                  {t(problemEntry(problem.code)!.labelKey)}
-                </Link>
-              )}
-            </li>
-          ))}
-        </ul>
-      </DashboardInfoDialog>
-    )
-  }
-
-  // i18n keys stay identifier-safe; hyphenated metric ids map to underscores.
-  const infoKey = `overview.info.${target.kind}.${target.value.replace(/-/g, '_')}`
   return (
     <DashboardInfoDialog
-      open
+      open={open}
       onClose={onClose}
-      title={t(`${infoKey}.title`)}
-      description={t(`${infoKey}.body`)}
-    />
+      title={t('overview.problemsTitle')}
+      description={t('overview.problemsDescription')}
+    >
+      <ul className="flex flex-col gap-3">
+        {status.problems.map(problem => (
+          <li key={problem.code} className="rounded-md border px-3 py-2" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>
+              {problemTitle(problem, t)}
+            </p>
+            <p className="mt-1 text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('overview.problemSuggestion')}</p>
+            {problemEntry(problem.code) && (
+              <Link
+                to={problemEntry(problem.code)!.href}
+                onClick={onClose}
+                className="dash-focus mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] no-underline"
+                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              >
+                {t(problemEntry(problem.code)!.labelKey)}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </DashboardInfoDialog>
   )
 }

@@ -420,6 +420,19 @@ const zh = {
       fieldUpstreamRequests: '回源请求数',
       fieldUpstreamBytes: '回源字节',
 
+      // 指标口径的悬浮提示（一句话；完整说明见 ⓘ 之外的相应页面）
+      hintCpu: '进程 CPU；单核基准，100% = 1 核',
+      hintMemory: '进程内存；只能读到峰值时标注「峰值」',
+      hintCache: '缓存元数据逻辑大小；配额来自 cache.max_size_gb',
+      hintNetwork: '服务请求：客户端 → Depsilo；回源请求：Depsilo → 上游',
+      hintServiceFlow: '最近 60 秒实际发送给客户端的字节速率',
+      hintOriginFlow: '最近 60 秒实际从上游读取的字节速率',
+      hintServedTotal: '所选周期内实际发送给客户端的累计字节',
+      hintOriginTotal: '所选周期内实际从上游读取的累计字节',
+      hintHitRate: '命中 ÷（命中 + 未命中）；无样本显示 —',
+      hintSavedBytes: '按缓存命中响应字节估算，非实测账单',
+      hintLatency: '命中与回源的加权平均耗时；样本不足不给缩减比例',
+
       info: {
         resource: {
           cpu: {

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import Icon from '@/components/Icon'
+import TooltipV2 from '@/components/Tooltip'
 import type { DashboardPeriod, DashboardRange, OriginCoverage } from '@/lib/adminApi.types'
 import {
   coverageDetail,
@@ -16,8 +17,6 @@ import { formatBytes } from '@/lib/utils'
 
 import type { MetricTone } from './MetricTile'
 
-export type BenefitInfoKind = 'hit-rate' | 'saved-bytes' | 'latency'
-
 function BenefitBlock({
   label,
   value,
@@ -27,7 +26,7 @@ function BenefitBlock({
   changeIntent,
   icon,
   iconTone,
-  onInfo,
+  info,
   infoLabel,
   children,
 }: {
@@ -39,7 +38,7 @@ function BenefitBlock({
   changeIntent?: 'higher-is-better' | 'neutral'
   icon: 'donut_large' | 'bolt' | 'speed'
   iconTone: MetricTone
-  onInfo: () => void
+  info: string
   infoLabel: string
   children?: ReactNode
 }) {
@@ -59,15 +58,16 @@ function BenefitBlock({
           </span>
           <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</p>
         </div>
-        <button
-          type="button"
-          onClick={onInfo}
-          aria-label={infoLabel}
-          className="dash-focus grid size-7 shrink-0 place-items-center rounded-full hover:bg-[var(--dash-soft)]"
-          style={{ color: 'var(--dash-muted)' }}
-        >
-          <Icon name="info" size="sm" />
-        </button>
+        <TooltipV2 content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
+          <button
+            type="button"
+            aria-label={infoLabel}
+            className="dash-focus grid size-7 shrink-0 place-items-center rounded-full hover:bg-[var(--dash-soft)]"
+            style={{ color: 'var(--dash-muted)' }}
+          >
+            <Icon name="info" size="sm" />
+          </button>
+        </TooltipV2>
       </div>
       <div className="flex min-w-0 flex-wrap items-baseline gap-1.5">
         <span className="font-mono text-[30px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>
@@ -90,7 +90,6 @@ interface CacheBenefitsProps {
   range: DashboardRange
   rangeStart?: string
   coverage?: OriginCoverage
-  onInfo: (kind: BenefitInfoKind) => void
 }
 
 export default function CacheBenefits({
@@ -99,7 +98,6 @@ export default function CacheBenefits({
   range,
   rangeStart,
   coverage,
-  onInfo,
 }: CacheBenefitsProps) {
   const { t } = useTranslation()
   const periodLabel = t(rangeLabelKey(range))
@@ -143,7 +141,7 @@ export default function CacheBenefits({
           detail={hitDetail}
           change={hitRateChange}
           changeIntent="higher-is-better"
-          onInfo={() => onInfo('hit-rate')}
+          info={t('overview.hintHitRate')}
           infoLabel={t('overview.hitRateInfoLabel')}
         />
         <BenefitBlock
@@ -152,7 +150,7 @@ export default function CacheBenefits({
           iconTone="origin"
           value={formatBytes(saved)}
           detail={`${t('overview.estimatedFromHits')}${coverageNote ? ` · ${coverageNote}` : ''}`}
-          onInfo={() => onInfo('saved-bytes')}
+          info={t('overview.hintSavedBytes')}
           infoLabel={t('overview.savedBytesInfoLabel')}
         />
         <BenefitBlock
@@ -161,7 +159,7 @@ export default function CacheBenefits({
           iconTone="memory"
           value={latencyValue}
           detail={latencyDetail}
-          onInfo={() => onInfo('latency')}
+          info={t('overview.hintLatency')}
           infoLabel={t('overview.latencyInfoLabel')}
         >
           <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">

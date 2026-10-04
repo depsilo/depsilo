@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import Icon, { type IconName } from '@/components/Icon'
+import TooltipV2 from '@/components/Tooltip'
 
 /**
  * Category tones. They express identity — which resource or request path a
@@ -72,7 +73,8 @@ interface MetricTileProps {
    */
   reserveSlots?: boolean
   loading?: boolean
-  onInfo?: () => void
+  /** Short measurement-basis hint shown on hover/focus of the info affordance. */
+  info?: string
   infoLabel?: string
   testId?: string
 }
@@ -132,7 +134,7 @@ export default function MetricTile({
   rows,
   reserveSlots = false,
   loading = false,
-  onInfo,
+  info,
   infoLabel,
   testId,
 }: MetricTileProps) {
@@ -170,16 +172,17 @@ export default function MetricTile({
               {badge}
             </span>
           )}
-          {onInfo && (
-            <button
-              type="button"
-              onClick={onInfo}
-              aria-label={infoLabel}
-              className="dash-focus ml-auto grid size-7 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-              style={{ color: 'var(--dash-muted)' }}
-            >
-              <Icon name="info" size="sm" />
-            </button>
+          {info && (
+            <TooltipV2 content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
+              <button
+                type="button"
+                aria-label={infoLabel}
+                className="dash-focus ml-auto grid size-7 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+                style={{ color: 'var(--dash-muted)' }}
+              >
+                <Icon name="info" size="sm" />
+              </button>
+            </TooltipV2>
           )}
         </div>
 

@@ -6,14 +6,11 @@ import { formatBytes } from '@/lib/utils'
 
 import MetricTile from './MetricTile'
 
-export type ResourceInfoKind = 'cpu' | 'memory' | 'cache' | 'network'
-
 interface RuntimeResourcesProps {
   runtime?: RuntimeResponse
   runtimePending: boolean
   now?: NowResponse
   nowPending: boolean
-  onInfo: (kind: ResourceInfoKind) => void
 }
 
 function capabilityText(
@@ -29,7 +26,6 @@ export default function RuntimeResources({
   runtimePending,
   now,
   nowPending,
-  onInfo,
 }: RuntimeResourcesProps) {
   const { t } = useTranslation()
   const process = runtime?.process
@@ -103,7 +99,7 @@ export default function RuntimeResources({
           progress={cpuProgress}
           series={cpuSeries}
           loading={runtimePending && cpuPercent === undefined}
-          onInfo={() => onInfo('cpu')}
+          info={t('overview.hintCpu')}
           infoLabel={t('overview.cpuInfoLabel')}
         />
         <MetricTile
@@ -117,7 +113,7 @@ export default function RuntimeResources({
           progress={memoryProgress}
           series={memorySupported ? rssSeries : undefined}
           loading={runtimePending && !runtime}
-          onInfo={() => onInfo('memory')}
+          info={t('overview.hintMemory')}
           infoLabel={t('overview.memoryInfoLabel')}
         />
         <MetricTile
@@ -131,7 +127,7 @@ export default function RuntimeResources({
           progress={cacheRatio !== null ? { ratio: cacheRatio, tone: 'cache' } : null}
           series={cache ? cacheSeries : undefined}
           loading={runtimePending && !runtime}
-          onInfo={() => onInfo('cache')}
+          info={t('overview.hintCache')}
           infoLabel={t('overview.cacheInfoLabel')}
         />
         <MetricTile
@@ -159,7 +155,7 @@ export default function RuntimeResources({
           seriesTone="memory"
           detail={measured ? undefined : t('overview.notCollected')}
           loading={nowPending && !now}
-          onInfo={() => onInfo('network')}
+          info={t('overview.hintNetwork')}
           infoLabel={t('overview.networkInfoLabel')}
         />
       </div>
