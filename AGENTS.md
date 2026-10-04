@@ -37,7 +37,8 @@ Use the narrowest current authority for the fact in question:
 - Product intent and claims: [PRODUCT.md](PRODUCT.md).
 - Domain language: [CONTEXT.md](CONTEXT.md).
 - Accepted architectural decisions: relevant files under [docs/adr](docs/adr).
-- UI contracts: [DESIGN.md](DESIGN.md) and the current frontend implementation.
+- UI contracts: the current Portal, Setup, and Admin implementation under
+  `web/src/` plus the tokens in `web/src/index.css`.
 - Admin runtime authority: [docs/admin-control-plane.md](docs/admin-control-plane.md).
 - Historical specs and research: `docs/specs/` and `docs/research/`; these are
   evidence, not current implementation instructions.

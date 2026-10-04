@@ -119,8 +119,8 @@ func (h *StatsHandler) kpiSeries(since time.Time) []gin.H {
 const latencyBuckets = 90
 const latencyIntervalMin = 16
 
-// Keep aligned with the shared Portal rule in web/src/lib/upstreamStatus.ts
-// and DESIGN.md: an available upstream becomes degraded at 150 ms.
+// Keep aligned with the shared Portal rule in web/src/lib/upstreamStatus.ts:
+// an available upstream becomes degraded at 150 ms.
 const publicUpstreamDegradedLatency = 150 * time.Millisecond
 
 // allUpstreamLatencySeries runs a single query for ALL upstreams and returns

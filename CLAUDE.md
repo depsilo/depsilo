@@ -8,7 +8,6 @@ define a second set of project rules.
 
 - Product intent: [PRODUCT.md](PRODUCT.md)
 - Domain language: [CONTEXT.md](CONTEXT.md)
-- UI contract: [DESIGN.md](DESIGN.md)
 - Development guides: [docs/development](docs/development)
 - Documentation index: [docs/README.md](docs/README.md)
 

@@ -21,7 +21,6 @@ contains the stable repository rules and links into these guides.
 - [PRODUCT.md](../PRODUCT.md): current users, product intent, constraints, and
   honest capability boundaries.
 - [CONTEXT.md](../CONTEXT.md): domain vocabulary.
-- [DESIGN.md](../DESIGN.md): current Portal and Admin design contract.
 - [Deployment defaults](deployment.md): zero-config state paths, persistence,
   and advanced overrides.
 - [Admin control plane](admin-control-plane.md): configuration/database

@@ -21,6 +21,5 @@ The main surfaces are:
 - `unit/`: fast Vitest logic and contract tests;
 - `e2e/`: Playwright user-flow and visual checks.
 
-Read [AGENTS.md](AGENTS.md) before changing this subtree. UI behavior and
-tokens should remain consistent with [../DESIGN.md](../DESIGN.md). Browser
-tests use mocked Admin APIs unless a test explicitly starts the Go service.
+Read [AGENTS.md](AGENTS.md) before changing this subtree. Browser tests use
+mocked Admin APIs unless a test explicitly starts the Go service.

@@ -11,9 +11,8 @@ These instructions apply under `web/`. Read the root `AGENTS.md` first.
 - `src/components`: shared primitives; prefer these over page-local variants.
 - `src/lib`: typed transport contracts and pure domain helpers.
 
-`DESIGN.md` records the current UI contract. `PRODUCT.md` governs claims and
-personas. The implementation and tokens in `src/index.css` are final truth when
-a screenshot or old spec disagrees.
+`PRODUCT.md` governs claims and personas. The implementation and the tokens in
+`src/index.css` are the final UI truth when a screenshot or old spec disagrees.
 
 ## Frontend invariants
 
