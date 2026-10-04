@@ -157,3 +157,96 @@ test('Monitor exposes unified healthy, degraded, and failed status text and a se
   await page.getByRole('button', { name: 'Clear upstream search' }).click()
   await expect(page.locator('[data-upstream-row]')).toHaveCount(3)
 })
+
+function probeSeries(values: Array<number | false>) {
+  return values.map((value, index) => ({
+    time: new Date(Date.UTC(2026, 6, 28, 8, index * 30)).toISOString(),
+    latency_ms: value === false ? 0 : value,
+    healthy: value !== false,
+    requests: 1,
+  }))
+}
+
+test('Monitor encodes latency as column height and a failed probe as the tallest column', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': {
+      service: { status: 'degraded' },
+      week: {},
+      upstreams: [
+        {
+          id: 101,
+          name: 'flapping mirror',
+          adapter: 'pypi',
+          url: 'https://flap.example',
+          healthy: true,
+          avg_latency_ms: 180,
+          success_rate: 0.7,
+        },
+      ],
+    },
+    'GET /api/v1/latency-series': {
+      '101': probeSeries([80, 90, false, 140, 900, false, 160, 120]),
+    },
+  })
+
+  await page.goto('/monitor')
+  await expect(page.locator('[data-upstream-row]')).toContainText('flapping mirror')
+
+  const columns = await page
+    .locator('[data-upstream-heartbeat] [data-heartbeat-beat]')
+    .evaluateAll(beats => beats.map(beat => ({
+      state: beat.getAttribute('data-heartbeat-state'),
+      height: Number(beat.getAttribute('data-heartbeat-height')),
+    })))
+
+  const answered = columns.filter(column => column.state === 'ok' || column.state === 'slow')
+  const failed = columns.filter(column => column.state === 'down')
+  const unmeasured = columns.filter(column => column.state === 'none')
+
+  expect(answered.length).toBe(6)
+  expect(failed.length).toBe(2)
+  // "Down" is a shape, not only a colour: every failed probe is taller than
+  // every answered one, and a faster probe never draws a taller column.
+  expect(Math.max(...answered.map(column => column.height)))
+    .toBeLessThan(Math.min(...failed.map(column => column.height)))
+  expect(answered[0].height).toBeLessThan(answered[answered.length - 1].height)
+  // A slot with no sample stays empty so it can never read as a fast answer.
+  expect(unmeasured.every(column => column.height === 0)).toBe(true)
+})
+
+test('Monitor can reduce the directory to the upstreams that need attention', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': {
+      service: { status: 'degraded' },
+      week: {},
+      upstreams: [
+        { name: 'fast mirror', adapter: 'pypi', url: 'https://fast.example', healthy: true, avg_latency_ms: 42, success_rate: 1 },
+        { name: 'slow mirror', adapter: 'npm', url: 'https://slow.example', healthy: true, avg_latency_ms: 400, success_rate: 0.98 },
+        { name: 'down mirror', adapter: 'npm', url: 'https://down.example', healthy: false, avg_latency_ms: 20, success_rate: 0 },
+      ],
+    },
+    'GET /api/v1/latency-series': {},
+  })
+
+  await page.goto('/monitor')
+  await expect(page.locator('[data-upstream-row]')).toHaveCount(3)
+
+  const filter = page.getByRole('button', { name: 'Only issues' })
+  await expect(filter).toHaveAttribute('aria-pressed', 'false')
+  await expect(filter).toHaveAccessibleName('Only issues')
+
+  await filter.click()
+  await expect(filter).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-upstream-row]')).toHaveCount(2)
+  await expect(
+    page.locator('[data-upstream-row]').filter({ hasText: 'fast mirror' }),
+  ).toHaveCount(0)
+  await expect(
+    page.locator('p[role="status"][aria-live="polite"]'),
+  ).toHaveText('Showing the 2 upstreams that need attention')
+
+  await filter.click()
+  await expect(page.locator('[data-upstream-row]')).toHaveCount(3)
+})

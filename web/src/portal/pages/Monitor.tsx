@@ -16,6 +16,7 @@ import { Link } from 'react-router'
 import { statsApi } from '@/lib/api'
 import ButtonV2 from '@/components/Button'
 import EmptyState from '@/components/EmptyState'
+import Icon from '@/components/Icon'
 import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
 import StatusDot from '@/components/StatusDot'
@@ -246,6 +247,7 @@ export default function MonitorPage() {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
   const [query, setQuery] = useState('')
+  const [problemsOnly, setProblemsOnly] = useState(false)
   const statsQuery = useQuery<StatsData>({
     queryKey: ['stats-status'],
     queryFn: async ({ signal }) => {
@@ -286,10 +288,18 @@ export default function MonitorPage() {
   )
   const upstreamItems = upstreams.map(u => toUpstreamItem(u, locale))
 
-  // Client-side quick filter. Header counts stay GLOBAL — they describe
-  // the service, not the current search.
+  const problemCount = (healthyCounts.degraded ?? 0) + (healthyCounts.failed ?? 0)
+  // The count can drop to zero between polls; when it does the filter is
+  // inert rather than leaving the page showing an empty list.
+  const filteringProblems = problemsOnly && problemCount > 0
+
+  // Client-side quick filters. Header counts stay GLOBAL — they describe
+  // the service, not the current search or filter.
   const q = query.trim().toLowerCase()
-  const visibleItems = q ? upstreamItems.filter(u => matchesQuery(u, q)) : upstreamItems
+  const matchedItems = q ? upstreamItems.filter(u => matchesQuery(u, q)) : upstreamItems
+  const visibleItems = filteringProblems
+    ? matchedItems.filter(u => upstreamStatus(u) !== 'healthy')
+    : matchedItems
   const summarizedQuery = summarizeQuery(query.trim())
 
   const savedFmt = formatBytes(week?.bytes_saved ?? 0)
@@ -323,12 +333,56 @@ export default function MonitorPage() {
             >
               {t('monitor.title')}
             </h1>
-            <SearchPill
-              value={query}
-              onChange={setQuery}
-              placeholder={t('monitor.searchPlaceholder')}
-              clearLabel={t('monitor.clearSearch')}
-            />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 8,
+                flex: '1 1 auto',
+                minWidth: 0,
+                flexWrap: 'wrap',
+              }}
+            >
+              <SearchPill
+                value={query}
+                onChange={setQuery}
+                placeholder={t('monitor.searchPlaceholder')}
+                clearLabel={t('monitor.clearSearch')}
+              />
+              {/* A wall of upstream cards hides the few that need action, so
+                  the page offers the reduction instead of re-sorting a
+                  directory operators already learned the order of. */}
+              {problemCount > 0 && (
+                <button
+                  type="button"
+                  aria-pressed={problemsOnly}
+                  data-active={problemsOnly ? 'true' : undefined}
+                  title={t('monitor.onlyProblemsHint')}
+                  onClick={() => setProblemsOnly(current => !current)}
+                  className="portal-monitor-filter stripe-focus-ring"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    minHeight: 40,
+                    padding: '0 12px',
+                    background: problemsOnly ? 'var(--accent)' : 'var(--bg-soft)',
+                    border: `1px solid ${problemsOnly ? 'var(--text-muted)' : 'var(--border)'}`,
+                    borderRadius: 8,
+                    color: problemsOnly ? 'var(--text)' : 'var(--text-muted)',
+                    fontSize: 12.5,
+                    fontWeight: problemsOnly ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'background 120ms ease, border-color 120ms ease, color 120ms ease',
+                  }}
+                >
+                  <Icon name="tune" size="sm" />
+                  {t('monitor.onlyProblems')}
+                  <span className="num" aria-hidden="true">{problemCount}</span>
+                </button>
+              )}
+            </div>
           </div>
           {statsQuery.data && (
             <p
@@ -391,7 +445,9 @@ export default function MonitorPage() {
           ? visibleItems.length === 0
             ? t('monitor.noMatch', { q: summarizedQuery })
             : t('monitor.searchResults', { count: visibleItems.length })
-          : ''}
+          : filteringProblems
+            ? t('monitor.onlyProblemsShown', { count: visibleItems.length })
+            : ''}
       </p>
 
       {/* Upstream health — the page's main content */}

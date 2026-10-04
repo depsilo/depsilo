@@ -32,22 +32,45 @@ export interface UpstreamItem {
 }
 
 // ── Heartbeat bar ──────────────────────────────────────────────────
-
-const HEARTBEAT_LIMIT = 44
-const BEAT_WIDTH = 6
-const BEAT_GAP = 2
-const HEARTBEAT_WIDTH = HEARTBEAT_LIMIT * BEAT_WIDTH + (HEARTBEAT_LIMIT - 1) * BEAT_GAP
-
+//
+// Height carries latency, colour carries the latency tier, and the two
+// channels are kept independent so a failed probe can never read as a fast
+// one. A probe that failed to answer has no latency to draw, so it is the one
+// column allowed to reach the top of the 24px slot (healthy probes are capped
+// at 18px); "down" is therefore a difference in shape as well as in colour.
+// A slot with no sample paints nothing at all, so "never measured" can never
+// read as "measured fast"; the baseline keeps the empty window legible.
+//
 // Red is reserved for DOWN (-1): a slow-but-alive upstream must never
 // paint the panel in danger color — a wall of red on a page whose
 // header says "0 failed" reads as a contradiction. Slow is a single
 // amber tier, and the shared 150ms threshold keeps ticks and status
 // labels aligned across Portal and Admin.
-function beatColor(latency: number | null): string {
-  if (latency === null) return 'color-mix(in oklab, var(--border-strong) 58%, var(--bg-card))'
+const HEARTBEAT_LIMIT = 44
+const BEAT_WIDTH = 6
+const BEAT_GAP = 2
+const HEARTBEAT_WIDTH = HEARTBEAT_LIMIT * BEAT_WIDTH + (HEARTBEAT_LIMIT - 1) * BEAT_GAP
+const BEAT_AREA = 24
+const BEAT_MIN = 4
+const BEAT_MAX = 18
+const BEAT_FLOOR_MS = 150
+
+function beatHeight(latency: number, scale: number): number {
+  if (latency < 0) return BEAT_AREA
+  return BEAT_MIN + Math.round((Math.min(latency, scale) / scale) * (BEAT_MAX - BEAT_MIN))
+}
+
+function beatColor(latency: number): string {
   if (latency < 0) return 'color-mix(in oklab, var(--danger) 78%, var(--bg-card))'
-  if (latency < 150) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
+  if (latency < BEAT_FLOOR_MS) return 'color-mix(in oklab, var(--ok) 82%, var(--bg-card))'
   return 'color-mix(in oklab, var(--warn) 76%, var(--bg-card))'
+}
+
+/** Exposed on each beat so the encoding can be asserted without reading styles. */
+function beatState(latency: number | null): 'none' | 'ok' | 'slow' | 'down' {
+  if (latency === null) return 'none'
+  if (latency < 0) return 'down'
+  return latency < BEAT_FLOOR_MS ? 'ok' : 'slow'
 }
 
 function beatLabel(latency: number | null, noDataLabel: string, failedLabel: string): string {
@@ -100,6 +123,15 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   )
   const beats = normalized.beats
   const resolvedLabels = normalized.labels
+  // One scale per row: the strip answers "how has this upstream behaved",
+  // while the average printed beside it answers "how does it compare".
+  // Anchoring the denominator at the 150ms tier boundary keeps an all-fast
+  // row from being stretched into a dramatic-looking chart.
+  const scale = useMemo(() => {
+    const measured = (upstream.beats ?? [])
+      .filter((beat): beat is number => beat !== null && beat >= 0)
+    return Math.max(BEAT_FLOOR_MS, ...measured)
+  }, [upstream.beats])
   const emptySlots = Math.max(0, HEARTBEAT_LIMIT - beats.length)
   const displayBeats = [...Array(emptySlots).fill(null), ...beats]
   const displayLabels = [...Array(emptySlots).fill(''), ...resolvedLabels]
@@ -173,33 +205,43 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
         {t('monitor.latencyHistoryInstructions')}
       </span>
       <div
-        className="absolute inset-x-0 bottom-1 grid items-stretch"
+        className="absolute inset-x-0 bottom-1 grid items-end"
         style={{
           gridTemplateColumns: `repeat(${HEARTBEAT_LIMIT}, minmax(0, ${BEAT_WIDTH}px))`,
           columnGap: BEAT_GAP,
-          height: 24,
+          height: BEAT_AREA,
+          // Baseline: short bars still read as columns rather than as dots.
+          borderBottom: '1px solid var(--border)',
         }}
         onMouseLeave={() => setHoveredIdx(null)}
       >
-        {displayBeats.map((lat, i) => (
-          <div
-            key={i}
-            data-heartbeat-beat
-            data-heartbeat-index={i}
-            aria-hidden="true"
-            style={{
-              minWidth: 0,
-              borderRadius: 4,
-              background: beatColor(lat),
-              opacity: beats.length === 0 || lat === null ? 0.14 : (activeIdx !== null && activeIdx !== i ? 0.42 : 1),
-              boxShadow: activeIdx === i
-                ? '0 0 0 1px color-mix(in oklab, var(--text) 22%, transparent) inset'
-                : 'none',
-              transition: 'opacity 90ms ease, box-shadow 90ms ease',
-            }}
-            onMouseEnter={() => setHoveredIdx(i)}
-          />
-        ))}
+        {displayBeats.map((lat, i) => {
+          // Every column keeps the full slot height so each probe stays
+          // hoverable; the painted bar inside it is what carries the latency.
+          const barHeight = lat === null ? 0 : beatHeight(lat, scale)
+          const barColor = lat === null ? 'transparent' : beatColor(lat)
+          return (
+            <div
+              key={i}
+              data-heartbeat-beat
+              data-heartbeat-index={i}
+              data-heartbeat-state={beatState(lat)}
+              data-heartbeat-height={barHeight}
+              aria-hidden="true"
+              style={{
+                minWidth: 0,
+                height: BEAT_AREA,
+                background: `linear-gradient(to top, ${barColor} 0, ${barColor} ${barHeight}px, transparent ${barHeight}px)`,
+                opacity: beats.length === 0 ? 0.4 : (activeIdx !== null && activeIdx !== i ? 0.42 : 1),
+                boxShadow: activeIdx === i
+                  ? '0 0 0 1px color-mix(in oklab, var(--text) 22%, transparent) inset'
+                  : 'none',
+                transition: 'opacity 90ms ease, box-shadow 90ms ease',
+              }}
+              onMouseEnter={() => setHoveredIdx(i)}
+            />
+          )
+        })}
       </div>
       {activeIdx !== null && (
         <div
