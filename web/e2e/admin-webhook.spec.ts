@@ -17,7 +17,14 @@ test('webhook rows and actions fit 390px', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/admin/settings')
+
+  // The directory rail is wider than a phone. It has to scroll itself — the
+  // document must not, and the last tab must stay reachable.
+  const rail = page.getByRole('tablist')
+  expect(await rail.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true)
+
   await page.getByRole('tab', { name: /Webhook/ }).click()
+  expect(await rail.evaluate(el => el.scrollLeft)).toBeGreaterThan(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
   await expect(page.getByRole('button', { name: /添加 Webhook/ })).toBeVisible()
 })
