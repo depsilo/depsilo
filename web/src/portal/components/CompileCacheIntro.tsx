@@ -35,22 +35,7 @@ export default function CompileCacheIntro() {
       </div>
 
       <div className="mt-auto pt-5">
-        <a
-          href="/admin/compile-cache"
-          className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-[13px] font-[620] no-underline hover:bg-[var(--bg-hover)] active:scale-[0.97]"
-          style={{
-            color: 'var(--brand-text)',
-            background: 'transparent',
-            border: '1px solid var(--brand-border)',
-            transition:
-              'background 150ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
-          }}
-        >
-          {t('quickstart.compileCacheAction')}
-          <Icon name="arrow_forward" size="sm" />
-        </a>
-
-        <details className="mt-3 border-t border-[var(--border)] pt-2">
+        <details className="border-t border-[var(--border)] pt-1">
           <summary className="stripe-focus-ring flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1 text-[13px] font-[560] text-[var(--text-muted)] hover:text-[var(--text)]">
             {t('quickstart.compileCacheDetails')}
             <Icon name="expand_more" size="sm" />
@@ -82,6 +67,25 @@ export default function CompileCacheIntro() {
             </li>
           </ul>
         </details>
+
+        {/* Same weight and same position as the sibling card's action, so the
+            two primaries sit on one baseline at the foot of the row. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <a
+            href="/admin/compile-cache"
+            className="stripe-focus-ring inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 text-[13px] font-[620] no-underline active:scale-[0.97]"
+            style={{
+              color: 'var(--btn-fg)',
+              background: 'var(--btn)',
+              border: 0,
+              transition:
+                'background 150ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
+            }}
+          >
+            {t('quickstart.compileCacheAction')}
+            <Icon name="arrow_forward" size="sm" />
+          </a>
+        </div>
       </div>
     </article>
   )

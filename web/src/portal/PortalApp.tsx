@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Routes, Route, Link, NavLink } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -166,6 +167,15 @@ function NavTab({ to, label, compactLabel }: NavTabProps) {
 
 export default function PortalAppV2() {
   const { t } = useTranslation()
+
+  // Marks the document as the brand surface for index.css. Base UI dialogs and
+  // tooltips render into <body>, so a wrapper class on this subtree would leave
+  // them on the neutral palette.
+  useEffect(() => {
+    const root = document.documentElement
+    root.setAttribute('data-surface', 'portal')
+    return () => root.removeAttribute('data-surface')
+  }, [])
 
   const { data, isPending, isError, refetch } = useQuery<PortalStats>({
     queryKey: ['stats-status'],

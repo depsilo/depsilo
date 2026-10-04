@@ -756,6 +756,54 @@ a:focus:not(:focus-visible) {
 /* Portal topbar — equal geometry, distinct semantics. Service information and
    display preferences share quiet segmented rails; Admin is the sole accented
    navigation action. Every interactive segment keeps a 40px target. */
+/* ── Portal brand surface (docs/brand) ─────────────────────
+   The anonymous Portal is the product's public face, so it carries the brand
+   palette instead of shadcn's neutral accent: Deep Blue for structure and
+   interaction, Electric Blue for focus, Ink for nothing that used to be a
+   neutral surface. Scoped by an attribute on <html> rather than a wrapper
+   class because Base UI dialogs, selects, and tooltips portal into <body> and
+   would otherwise fall back to the neutral roles.
+
+   Status stays semantic: --ok / --warn / --danger and the hit colours keep
+   their product meaning and are deliberately not re-tinted here. Admin and the
+   Dashboard do not carry this attribute and are untouched. */
+:root[data-surface='portal'] {
+  --brand: #2563eb;
+  --brand-strong: #1d4ed8;
+  --brand-text: #2563eb;
+  --brand-soft: #eff6ff;
+  --brand-border: #bfdbfe;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --accent: #dbeafe;
+  --accent-foreground: #1e3a8a;
+  --ring: #2563eb;
+  --focus-ring: #2563eb;
+  --btn-primary-press: #1d4ed8;
+  --code-accent: #60a5fa;
+}
+
+:root[data-surface='portal'][data-theme='dark'],
+html.dark[data-surface='portal'] {
+  --brand: #3b82f6;
+  --brand-strong: #2563eb;
+  /* Blue 300 is the lightest step that still clears AA on the near-black
+     canvas and on the rail surface. */
+  --brand-text: #93c5fd;
+  --brand-soft: #172554;
+  --brand-border: #1e40af;
+  /* The filled action keeps white text on Deep Blue in both themes: it is the
+     one pairing that is legible either way. */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --accent: #1e293b;
+  --accent-foreground: #dbeafe;
+  --ring: #3b82f6;
+  --focus-ring: #3b82f6;
+  --btn-primary-press: #1d4ed8;
+  --code-accent: #60a5fa;
+}
+
 .portal-header-actions {
   display: flex;
   min-width: 0;
@@ -1023,6 +1071,41 @@ button.portal-header-control {
 }
 .eco-rail::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Code lines that overflow sideways.
+
+   A styled scrollbar is not enough on macOS: Chromium and Safari keep drawing
+   an overlay bar that stays invisible until the reader has already scrolled,
+   so a clipped line just looks like a rendering bug. The scroll-attached
+   shadow fades the edge that still has content behind it, and the
+   locally-attached cover hides it again once the end is reached. */
+.code-scroll {
+  background-color: var(--bg-soft);
+  background-image:
+    linear-gradient(to right, var(--bg-soft) 30%, transparent),
+    linear-gradient(to left, var(--bg-soft) 30%, transparent),
+    linear-gradient(to right, color-mix(in oklab, var(--text) 16%, transparent), transparent),
+    linear-gradient(to left, color-mix(in oklab, var(--text) 16%, transparent), transparent);
+  background-position: 0 0, 100% 0, 0 0, 100% 0;
+  background-size: 32px 100%, 32px 100%, 14px 100%, 14px 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--text) 30%, transparent) transparent;
+}
+.code-block[data-code-tone='ink'] .code-scroll {
+  background-color: var(--code-bg);
+  background-image:
+    linear-gradient(to right, var(--code-bg) 30%, transparent),
+    linear-gradient(to left, var(--code-bg) 30%, transparent),
+    linear-gradient(to right, color-mix(in oklab, var(--code-fg) 20%, transparent), transparent),
+    linear-gradient(to left, color-mix(in oklab, var(--code-fg) 20%, transparent), transparent);
+  background-position: 0 0, 100% 0, 0 0, 100% 0;
+  background-size: 32px 100%, 32px 100%, 14px 100%, 14px 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+  scrollbar-color: color-mix(in oklab, var(--code-fg) 30%, transparent) transparent;
 }
 @media (hover: hover) {
   .manager-choice:hover:not([data-active='true']) {

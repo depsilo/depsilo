@@ -149,7 +149,11 @@ export default function HeroAICTA() {
         title={t('quickstart.aiIntegrationTitle')}
         width={720}
       >
-        <div className="flex flex-col gap-3">
+        {/* min-w-0 lets the dialog's grid column shrink: the prompt is one very
+            long pre line, and a grid item that keeps its automatic minimum
+            width widened the modal to 1474px, pushed the title out of view, and
+            scrolled the dialog sideways to reach the copy button. */}
+        <div className="flex min-w-0 flex-col gap-3">
           <p className="m-0 text-[13px] leading-[1.55] text-[var(--text-muted)]">
             {t('quickstart.aiIntegrationDesc')}
           </p>
@@ -167,9 +171,9 @@ export default function HeroAICTA() {
           </div>
           <pre
             tabIndex={0}
-            className="m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-md p-4 font-[var(--font-mono)] text-[12px] leading-[1.55] text-[var(--text)]"
+            className="code-scroll m-0 min-h-[120px] max-h-[60vh] overflow-auto whitespace-pre rounded-md p-4 font-[var(--font-mono)] text-[12px] leading-[1.55] text-[var(--text)]"
             style={{
-              background: 'var(--bg-soft)',
+              backgroundColor: 'var(--bg-soft)',
               border: '1px solid var(--border)',
             }}
           >

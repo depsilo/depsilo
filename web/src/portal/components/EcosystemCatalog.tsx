@@ -22,9 +22,7 @@ interface EcosystemButtonProps {
   chip?: boolean
   /**
    * Phone rail: intrinsic width so a whole list can scroll sideways in one
-   * row. The rail sits on a tinted surface, so its hover and selected states
-   * use the card colour instead of the page accent, which would be invisible
-   * against a tint of the same value.
+   * row.
    */
   rail?: boolean
 }
@@ -49,9 +47,6 @@ function EcosystemButton({
   rail = false,
 }: EcosystemButtonProps) {
   const active = language.id === selected
-  // On the tinted phone rail the raised state has to be the card colour;
-  // `--accent` is a tint of the same value and would disappear into it.
-  const raisedSurface = rail ? 'var(--bg-card)' : 'var(--accent)'
 
   return (
     <button
@@ -69,9 +64,11 @@ function EcosystemButton({
         flexShrink: rail ? 0 : undefined,
         minHeight: chip || rail ? 40 : compact ? 40 : 52,
         padding: rail ? '6px 12px 6px 7px' : chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
-        // shadcn selection: the accent surface carries state, not a keyline.
-        background: active ? raisedSurface : 'transparent',
-        border: `1px solid ${active ? 'var(--border)' : 'transparent'}`,
+        // The selected row takes the brand tint, keyline, and label together:
+        // the accent surface is reserved for hover, because brand text on it
+        // lands at 4.23:1 and misses AA.
+        background: active ? 'var(--brand-soft)' : 'transparent',
+        border: `1px solid ${active ? 'var(--brand-border)' : 'transparent'}`,
         borderRadius: rail ? 8 : chip || compact ? 6 : 8,
         textAlign: 'left',
         cursor: 'pointer',
@@ -79,7 +76,7 @@ function EcosystemButton({
           'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
       }}
       onMouseEnter={event => {
-        if (!active) event.currentTarget.style.background = raisedSurface
+        if (!active) event.currentTarget.style.background = 'var(--accent)'
       }}
       onMouseLeave={event => {
         if (!active) event.currentTarget.style.background = 'transparent'
@@ -95,9 +92,12 @@ function EcosystemButton({
             width: rail ? 22 : compact ? 24 : 32,
             height: rail ? 22 : compact ? 24 : 32,
             borderRadius: rail ? 5 : 6,
-            background: rail
-              ? active ? 'var(--accent)' : 'var(--bg-card)'
-              : active
+            // The glyph tile keeps the card colour wherever the row itself is
+            // raised or tinted; only the flat desktop row falls back to the
+            // soft page surface.
+            background: active
+              ? 'var(--accent)'
+              : rail
                 ? 'var(--bg-card)'
                 : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
             flexShrink: 0,

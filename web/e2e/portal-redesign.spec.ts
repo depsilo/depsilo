@@ -528,3 +528,46 @@ test('Portal header and page content share a left edge on wide displays', async 
     }
   }
 })
+
+test('Portal carries the brand accent and leaves Admin on the neutral roles', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+
+  await expect(page.locator('.portal-admin-link')).toHaveCSS(
+    'background-color',
+    'rgb(37, 99, 235)',
+  )
+  expect(await page.evaluate(() => (
+    getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()
+  ))).toBe('#2563eb')
+
+  // The brand surface is scoped to the Portal: Admin keeps shadcn's neutral
+  // accent, and the marker must be gone as soon as the surface unmounts.
+  await page.goto('/admin/upstreams')
+  await expect.poll(() => page.evaluate(() => (
+    document.documentElement.getAttribute('data-surface')
+  ))).toBeNull()
+  expect(await page.evaluate(() => (
+    getComputedStyle(document.documentElement).getPropertyValue('--brand').trim()
+  ))).not.toBe('#2563eb')
+})
+
+test('Portal prompt dialog keeps its title in view and never scrolls sideways', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+
+  await page.getByRole('button', { name: 'Read it first' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole('heading', { name: 'Wire this project to the mirror via your AI agent' })).toBeVisible()
+
+  // The prompt holds 1000+ character lines; without a shrinkable grid item the
+  // dialog widened to the longest line and scrolled away from its own title.
+  const metrics = await dialog.evaluate(element => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+    scrollLeft: element.scrollLeft,
+  }))
+  expect(metrics.scrollWidth).toBe(metrics.clientWidth)
+  expect(Math.abs(metrics.scrollLeft)).toBeLessThanOrEqual(1)
+})

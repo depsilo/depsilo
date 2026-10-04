@@ -209,6 +209,7 @@ export default function CodeBlock({
         </span>
       </div>
       <pre
+        className="code-scroll"
         tabIndex={0}
         style={{
           margin: 0,
@@ -218,7 +219,8 @@ export default function CodeBlock({
           lineHeight: ink ? 1.68 : 1.6,
           color: ink ? 'var(--code-fg)' : 'var(--text)',
           overflowX: 'auto',
-          background: 'transparent',
+          // No background here: .code-scroll paints its own, which the edge
+          // fade needs to hide the shadow at each end of the scroll.
         }}
       >
         <code>{highlight(code, ink)}</code>
