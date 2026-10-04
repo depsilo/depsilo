@@ -1463,6 +1463,7 @@ const zh = {
       searchResultCount: '{{count}} 个匹配生态',
       recentEcosystems: '最近使用',
       allEcosystems: '全部生态',
+      viewUpstreamHealth: '查看上游健康与延迟',
       managerPickerLabel: '包管理器',
       endpointLabel: '服务地址',
       managerHints: {

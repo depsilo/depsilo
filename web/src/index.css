@@ -1004,6 +1004,26 @@ button.portal-header-control {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
+
+/* Phone ecosystem rail: one sideways-scrolling row keeps the picker to a
+   couple of lines so the configuration pane stays within reach. Padding is
+   inside the scroll box so keyboard focus rings are not clipped. */
+.eco-rail {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.eco-rail::-webkit-scrollbar {
+  height: 6px;
+}
+.eco-rail::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.eco-rail::-webkit-scrollbar-track {
+  background: transparent;
+}
 @media (hover: hover) {
   .manager-choice:hover:not([data-active='true']) {
     background: var(--bg-hover) !important;

@@ -17,6 +17,15 @@ import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
 const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
 const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
 
+// The sticky header rail and the page content share one width and one gutter.
+// They used to disagree above ~1635px (the rail grew to 92vw while Quick Start
+// capped itself at 1440px), which left the brand mark and the first heading on
+// visibly different left edges. The 1504px cap is 1440px of content plus the
+// widest gutter on both sides, so Quick Start keeps the width it was designed
+// around and Monitor's card grid stays on the same rhythm.
+const PORTAL_GUTTER = 'clamp(12px, 2vw, 32px)'
+const PORTAL_WIDTH = 'clamp(1280px, 92vw, 1504px)'
+
 interface PortalStats {
   service: { status: string; version: string }
   extra_indexes?: Array<{ kind?: string; path: string }>
@@ -248,11 +257,9 @@ export default function PortalAppV2() {
           className="portal-header-inner"
           style={{
             height: 52,
-            // Tracks the main content width below so header content and
-            // page content share edges on wide (2560px+) displays.
-            maxWidth: 'clamp(1280px, 92vw, 1840px)',
+            maxWidth: PORTAL_WIDTH,
             margin: '0 auto',
-            padding: '0 clamp(12px, 2vw, 28px)',
+            padding: `0 ${PORTAL_GUTTER}`,
             display: 'flex',
             alignItems: 'center',
             gap: 16,
@@ -372,7 +379,7 @@ export default function PortalAppV2() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 'clamp(1280px, 92vw, 1840px)', margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) clamp(16px, 2.1vw, 32px) 48px' }}>
+      <main style={{ maxWidth: PORTAL_WIDTH, margin: '0 auto', padding: `clamp(22px, 2.4vw, 40px) ${PORTAL_GUTTER} 48px` }}>
         <Routes>
           <Route index element={<QuickStart pytorchIndexPath={pytorchIndexPath} />} />
           <Route path="monitor" element={<MonitorV2 />} />

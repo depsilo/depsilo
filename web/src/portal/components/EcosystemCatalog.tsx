@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import Input from '@/components/Input'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { LANGUAGES, type Language, type LanguageGroup } from '@/lib/ecosystemData'
 
 interface Props {
@@ -18,6 +20,13 @@ interface EcosystemButtonProps {
   onSelect: (id: string) => void
   compact?: boolean
   chip?: boolean
+  /**
+   * Phone rail: intrinsic width so a whole list can scroll sideways in one
+   * row. The rail sits on a tinted surface, so its hover and selected states
+   * use the card colour instead of the page accent, which would be invisible
+   * against a tint of the same value.
+   */
+  rail?: boolean
 }
 
 const GROUP_ORDER: LanguageGroup[] = ['os', 'lang', 'data', 'infra']
@@ -37,8 +46,12 @@ function EcosystemButton({
   onSelect,
   compact = false,
   chip = false,
+  rail = false,
 }: EcosystemButtonProps) {
   const active = language.id === selected
+  // On the tinted phone rail the raised state has to be the card colour;
+  // `--accent` is a tint of the same value and would disappear into it.
+  const raisedSurface = rail ? 'var(--bg-card)' : 'var(--accent)'
 
   return (
     <button
@@ -51,52 +64,55 @@ function EcosystemButton({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: compact ? 6 : 11,
-        width: '100%',
-        minHeight: chip ? 40 : compact ? 40 : 52,
-        padding: chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
+        gap: rail ? 7 : compact ? 6 : 11,
+        width: rail ? 'auto' : '100%',
+        flexShrink: rail ? 0 : undefined,
+        minHeight: chip || rail ? 40 : compact ? 40 : 52,
+        padding: rail ? '6px 12px 6px 7px' : chip ? '6px 10px' : compact ? '5px 4px' : '8px 10px',
         // shadcn selection: the accent surface carries state, not a keyline.
-        background: active ? 'var(--accent)' : 'transparent',
+        background: active ? raisedSurface : 'transparent',
         border: `1px solid ${active ? 'var(--border)' : 'transparent'}`,
-        borderRadius: chip || compact ? 6 : 8,
+        borderRadius: rail ? 8 : chip || compact ? 6 : 8,
         textAlign: 'left',
         cursor: 'pointer',
         transition:
           'background 120ms ease, border-color 120ms ease, transform 120ms cubic-bezier(0.2, 0, 0, 1)',
       }}
       onMouseEnter={event => {
-        if (!active) event.currentTarget.style.background = 'var(--accent)'
+        if (!active) event.currentTarget.style.background = raisedSurface
       }}
       onMouseLeave={event => {
         if (!active) event.currentTarget.style.background = 'transparent'
       }}
     >
-      {!chip && (
+      {(rail || !chip) && (
         <span
           aria-hidden="true"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: compact ? 24 : 32,
-            height: compact ? 24 : 32,
-            borderRadius: 6,
-            background: active
-              ? 'var(--bg-card)'
-              : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
+            width: rail ? 22 : compact ? 24 : 32,
+            height: rail ? 22 : compact ? 24 : 32,
+            borderRadius: rail ? 5 : 6,
+            background: rail
+              ? active ? 'var(--accent)' : 'var(--bg-card)'
+              : active
+                ? 'var(--bg-card)'
+                : 'color-mix(in oklab, var(--bg-soft) 78%, transparent)',
             flexShrink: 0,
           }}
         >
-          <EcosystemIcon type={language.iconAdapter} size={compact ? 14 : 18} useColor />
+          <EcosystemIcon type={language.iconAdapter} size={rail ? 13 : compact ? 14 : 18} useColor />
         </span>
       )}
-      <span style={{ minWidth: 0, flex: 1 }}>
+      <span style={{ minWidth: 0, flex: rail ? '0 0 auto' : 1 }}>
         <span
           style={{
             display: 'block',
             overflow: 'hidden',
             color: active ? 'var(--brand-text)' : 'var(--text)',
-            fontSize: chip ? 12 : compact ? 12.5 : 14,
+            fontSize: rail ? 13 : chip ? 12 : compact ? 12.5 : 14,
             fontWeight: active ? 640 : 540,
             letterSpacing: compact ? '-0.01em' : undefined,
             lineHeight: 1.25,
@@ -106,7 +122,9 @@ function EcosystemButton({
         >
           {language.name}
         </span>
-        {!compact && !chip && (
+        {/* The phone rail is icon + name only: a second line per chip costs
+            more height than the extra words are worth there. */}
+        {!rail && !compact && !chip && (
           <span
             style={{
               display: 'block',
@@ -130,6 +148,10 @@ function EcosystemButton({
 export default function EcosystemCatalog({ selected, recent, onSelect }: Props) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
+  // Phones get one scrollable row instead of the full grouped directory:
+  // stacked, the 14 ecosystems pushed the actual configuration more than a
+  // screen down the page.
+  const railLayout = useMediaQuery('(max-width: 899px)')
 
   const languagesById = useMemo(
     () => new Map(LANGUAGES.map(language => [language.id, language])),
@@ -198,14 +220,36 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
     })
   }
 
+  function renderRail(languages: Language[]) {
+    return (
+      <div
+        data-eco-rail
+        className="eco-rail -mx-1.5 flex gap-1.5 overflow-x-auto px-1.5 py-1"
+      >
+        {languages.map(language => (
+          <EcosystemButton
+            key={language.id}
+            language={language}
+            selected={selected}
+            subtitle={t(ecoLabelKey(language.subtitleKey))}
+            onSelect={onSelect}
+            rail
+          />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <nav
       aria-label={t('quickstart.pickEcosystem')}
-      className="eco-catalog border-b border-[var(--border)] min-[900px]:border-r min-[900px]:border-b-0"
+      className="eco-catalog flex flex-col border-b border-[var(--border)] min-[900px]:border-r min-[900px]:border-b-0"
       style={{
         minWidth: 0,
         padding: '18px 14px 20px',
-        background: 'var(--bg-card)',
+        // A rail, not a card: the tint keeps the column reading as a
+        // directory when the configuration pane next to it is taller.
+        background: 'var(--bg-soft)',
       }}
     >
       <h3 className="m-0 text-[16px] font-[650] leading-[1.3] text-[var(--text)]">
@@ -232,7 +276,7 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
           placeholder={t('quickstart.searchEcosystemPlaceholder')}
           autoComplete="off"
           className="pl-9"
-          style={{ background: 'var(--bg-soft)' }}
+          style={{ background: 'var(--bg-card)' }}
         />
       </div>
 
@@ -261,19 +305,23 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
               >
                 {t('quickstart.recentEcosystems')}
               </h4>
-              <div className="grid grid-cols-3 gap-1">
-                {recentLanguages.map(language => (
-                  <EcosystemButton
-                    key={language.id}
-                    language={language}
-                    selected={selected}
-                    subtitle={t(ecoLabelKey(language.subtitleKey))}
-                    onSelect={onSelect}
-                    compact
-                    chip
-                  />
-                ))}
-              </div>
+              {railLayout
+                ? renderRail(recentLanguages)
+                : (
+                  <div className="grid grid-cols-3 gap-1">
+                    {recentLanguages.map(language => (
+                      <EcosystemButton
+                        key={language.id}
+                        language={language}
+                        selected={selected}
+                        subtitle={t(ecoLabelKey(language.subtitleKey))}
+                        onSelect={onSelect}
+                        compact
+                        chip
+                      />
+                    ))}
+                  </div>
+                )}
             </section>
           )}
 
@@ -287,11 +335,28 @@ export default function EcosystemCatalog({ selected, recent, onSelect }: Props) 
             >
               {t('quickstart.allEcosystems')}
             </h4>
-            <div className="flex flex-col gap-3">
-              {renderGroupedLanguages(LANGUAGES)}
-            </div>
+            {railLayout
+              ? renderRail(LANGUAGES)
+              : (
+                <div className="flex flex-col gap-3">
+                  {renderGroupedLanguages(LANGUAGES)}
+                </div>
+              )}
           </section>
         </>
+      )}
+
+      {!railLayout && (
+        <div className="mt-auto pt-6">
+          <Link
+            to="/monitor"
+            className="stripe-focus-ring -ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 text-[13px] font-[550] no-underline hover:bg-[var(--bg-card)]"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {t('quickstart.viewUpstreamHealth')}
+            <Icon name="arrow_forward" size="sm" />
+          </Link>
+        </div>
       )}
     </nav>
   )

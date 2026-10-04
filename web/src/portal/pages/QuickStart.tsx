@@ -61,7 +61,10 @@ export default function QuickStart({ pytorchIndexPath }: Props) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-7">
+    // No page-local max-width: the Portal shell already caps the content
+    // width, and a second cap here is what pulled this page's left edge out
+    // of line with the sticky header on wide displays.
+    <div className="flex w-full flex-col gap-7">
       <header className="fade-up max-w-[760px]">
         <h1
           id="quickstart-title"

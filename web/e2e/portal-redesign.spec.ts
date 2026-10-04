@@ -466,3 +466,65 @@ test('Portal routes avoid document overflow at the narrowest supported width', a
     await expectNoDocumentOverflow(page)
   }
 })
+
+test('Quick Start keeps the ecosystem directory to one rail on phones', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await setUiPreferences(page, 'light', 'en')
+  await page.goto('/')
+
+  const primary = page.locator('[data-quickstart-primary]')
+  const rail = primary
+    .getByRole('region', { name: 'All ecosystems' })
+    .locator('[data-eco-rail]')
+
+  await expect(rail).toBeVisible()
+  await expect(rail.getByRole('button')).toHaveCount(14)
+  // Stacked, the directory used to run ~560px and pushed the configuration
+  // past the first screen. As a rail it overflows sideways instead.
+  expect(await rail.evaluate(rail => rail.scrollWidth > rail.clientWidth)).toBe(true)
+
+  const offsets = await primary.evaluate(primary => {
+    const catalog = primary.querySelector('.eco-catalog')
+    const pane = primary.querySelector('[data-quickstart-shell] > *:nth-child(2)')
+    if (!catalog || !pane) return null
+    return {
+      catalogHeight: catalog.getBoundingClientRect().height,
+      paneOffset: pane.getBoundingClientRect().top - catalog.getBoundingClientRect().top,
+    }
+  })
+  expect(offsets).not.toBeNull()
+  expect(offsets?.catalogHeight).toBeLessThan(260)
+  expect(offsets?.paneOffset).toBeLessThan(300)
+
+  await expectNoDocumentOverflow(page)
+})
+
+test('Portal header and page content share a left edge on wide displays', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': populatedStats,
+    'GET /api/v1/latency-series': latencySeries,
+  })
+
+  // Quick Start used to cap itself at 1440px inside a shell that kept growing
+  // with 92vw, so above ~1635px its heading sat ~131px right of the brand.
+  for (const route of ['/', '/monitor']) {
+    for (const width of [1440, 1920, 2560]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto(route)
+      await expect(page.locator('h1')).toBeVisible()
+
+      const edges = await page.evaluate(() => {
+        const brand = document.querySelector('.portal-header-brand')
+        const title = document.querySelector('h1')
+        if (!brand || !title) return null
+        return {
+          brand: brand.getBoundingClientRect().left,
+          title: title.getBoundingClientRect().left,
+        }
+      })
+      expect(edges).not.toBeNull()
+      expect(Math.abs((edges?.brand ?? 0) - (edges?.title ?? 0))).toBeLessThanOrEqual(1)
+    }
+  }
+})

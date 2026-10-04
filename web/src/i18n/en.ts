@@ -1456,6 +1456,7 @@ const en = {
       searchResultCount: '{{count}} matching ecosystems',
       recentEcosystems: 'Recently used',
       allEcosystems: 'All ecosystems',
+      viewUpstreamHealth: 'View upstream health and latency',
       managerPickerLabel: 'Package manager',
       endpointLabel: 'Service endpoint',
       managerHints: {
