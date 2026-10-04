@@ -62,10 +62,11 @@ for (const query of recoveryQueries) {
     await expect(error).toBeVisible()
     await expectPrimarySiblingVisible(page, query.path)
     await expect.poll(() => calls).toBe(1)
-    // Only the failed region is under test. Sibling regions on the Dashboard
-    // (the merged bandwidth report) may legitimately own an empty state.
+    // Only the failed region is under test. Independent Dashboard regions
+    // (trends, recent requests) may legitimately show their own empty state,
+    // and the status strip legitimately says "no recent activity".
     const emptyScope = query.path === '/admin'
-      ? page.locator('[data-query-key="dashboard-snapshot"]')
+      ? page.locator('[data-query-key="dashboard-trends"], [data-dashboard-recent-requests]')
       : page
     await expect(emptyScope.getByText(/暂无|没有数据|暂无数据/)).toHaveCount(0)
     await error.getByRole('button', { name: /重试/ }).click()

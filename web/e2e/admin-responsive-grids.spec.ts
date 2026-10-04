@@ -48,16 +48,23 @@ function populatedDashboard(overrides: Record<string, unknown> = {}) {
   }
 }
 
-test('Overview keeps its resource metrics in a compact 2 by 2 grid on mobile', async ({ page }) => {
+test('Overview resource metrics stay readable and never overflow on mobile', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/admin')
 
   const grid = page.locator('[data-dashboard-kpis]')
   await expect(grid.locator(':scope > *')).toHaveCount(4)
-  expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(2)
+  // Very narrow screens stack to one column instead of squeezing 32px values.
+  expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(1)
   await expect(page.locator('[data-query-key="now"]')).not.toContainText(/NaN|undefined/)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+
+  await page.setViewportSize({ width: 800, height: 900 })
+  expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(2)
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(4)
 })
 
 test('Overview title is rendered once with a single range control', async ({ page }) => {
@@ -98,7 +105,7 @@ test('Overview surfaces a degraded upstream as an actionable centered dialog', a
     'GET /api/v1/admin/dashboard': populatedDashboard({
       upstreams: [
         { id: 1, name: 'npmjs', adapter: 'npm', healthy: false, avg_latency_ms: 0, success_rate: 0.4 },
-        { id: 2, name: 'PyPI', adapter: 'pypi', healthy: true, avg_latency_ms: 240, success_rate: 1 },
+        { id: 2, name: 'PyPI', adapter: 'pypi', healthy: true, avg_latency_ms: 100, success_rate: 1 },
       ],
     }),
   })

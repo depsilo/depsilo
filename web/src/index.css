@@ -1162,7 +1162,9 @@ button.portal-header-control {
   --dash-border: #e3e9f1;
   --dash-accent: #2563eb;
   --dash-accent-soft: #eaf1fe;
-  --dash-ok: #128a5b;
+  /* Text-safe success green: 4.59:1 on white so the 13px delta label passes AA.
+     (The brand --ok token is used for fills; this one is used for small text.) */
+  --dash-ok: #118657;
   --dash-ok-soft: #e7f6ef;
   --dash-warn: #b45309;
   --dash-warn-soft: #fdf3e3;

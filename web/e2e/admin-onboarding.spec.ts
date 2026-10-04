@@ -115,7 +115,7 @@ test('an existing completed deployment goes straight to the Dashboard', async ({
 
   await page.goto('/admin')
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
 })
 
 test('setup recovery resumes the Dashboard instead of starting onboarding again', async ({ page }) => {
@@ -154,7 +154,7 @@ test('setup recovery resumes the Dashboard instead of starting onboarding again'
   await page.getByRole('button', { name: 'Complete setup' }).click()
   await page.clock.fastForward(2_000)
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
 })
 
 test('manual onboarding can be skipped and stays usable at mobile width', async ({ page }) => {
@@ -193,7 +193,7 @@ test('manual onboarding can be skipped and stays usable at mobile width', async 
   await page.getByLabel('Password').fill('Tr0ub4dor&Correct')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
 })
 
 test('an onboarding status outage never blocks Admin or the Dashboard escape', async ({ page }) => {
@@ -206,7 +206,7 @@ test('an onboarding status outage never blocks Admin or the Dashboard escape', a
   })
 
   await page.goto('/admin')
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
   await page.goto('/admin/connect')
   await expect(page.getByText('Unable to load first-run onboarding status.')).toBeVisible()
   await page.getByRole('button', { name: 'Go to Dashboard' }).click()
@@ -230,7 +230,7 @@ test('a stale not-started gate cannot trap the operator when the baseline reques
   await expect(page.getByText('Unable to load first-run onboarding status.')).toBeVisible()
   await page.getByRole('button', { name: 'Go to Dashboard' }).click()
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
 })
 
 test('a failed skip write never blocks Dashboard access', async ({ page }) => {
@@ -248,7 +248,7 @@ test('a failed skip write never blocks Dashboard access', async ({ page }) => {
   await page.goto('/admin/connect')
   await page.getByRole('button', { name: 'Continue to Dashboard' }).last().click()
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible()
 })
 
 test('onboarding remains usable without page overflow at every acceptance viewport', async ({ page }) => {

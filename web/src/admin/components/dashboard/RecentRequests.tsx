@@ -90,16 +90,16 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
           <p className="text-[14px]" style={{ color: 'var(--dash-muted)' }}>{t('recentDownloads.empty')}</p>
         </div>
       ) : (
-        <TableViewport label={t('overview.recentRequestsTitle')} minWidth={560}>
+        <TableViewport label={t('overview.recentRequestsTitle')} minWidth={600}>
           <table className="w-full border-collapse text-left">
             <thead>
               <tr style={{ color: 'var(--dash-muted)' }}>
-                <th className="px-5 py-2 text-[13px] font-medium">{t('overview.colPackage')}</th>
-                <th className="px-3 py-2 text-[13px] font-medium">{t('overview.colEcosystem')}</th>
-                <th className="px-3 py-2 text-[13px] font-medium">{t('overview.colOutcome')}</th>
-                <th className="px-3 py-2 text-right text-[13px] font-medium">{t('overview.colSize')}</th>
-                <th className="px-3 py-2 text-right text-[13px] font-medium">{t('overview.colLatency')}</th>
-                <th className="px-5 py-2 text-right text-[13px] font-medium">{t('overview.colTime')}</th>
+                <th className="px-5 py-2.5 text-[13px] font-medium">{t('overview.colPackage')}</th>
+                <th className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colEcosystem')}</th>
+                <th className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colOutcome')}</th>
+                <th className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colSize')}</th>
+                <th className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colLatency')}</th>
+                <th className="px-5 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colTime')}</th>
               </tr>
             </thead>
             <tbody>
@@ -115,7 +115,7 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
                     style={{ borderColor: 'var(--dash-border)' }}
                     onClick={() => onOpenDetails(item.id)}
                   >
-                    <td className="max-w-[240px] px-5 py-3">
+                    <td className="max-w-[240px] px-5 py-4">
                       <button
                         type="button"
                         onClick={event => { event.stopPropagation(); onOpenDetails(item.id) }}
@@ -127,22 +127,22 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
                         {item.version && <span style={{ color: 'var(--dash-muted)' }}>@{item.version}</span>}
                       </button>
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-4">
                       <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
                         {isAdminEcosystem(item.adapter_type) && <EcosystemIcon type={item.adapter_type} size={14} decorative />}
                         {item.adapter_type || '—'}
                       </span>
                     </td>
-                    <td className="px-3 py-3">
+                    <td className="px-3 py-4">
                       <BadgeV2 variant={meta.variant}>{t(meta.key)}</BadgeV2>
                     </td>
-                    <td className="px-3 py-3 text-right font-mono text-[13px] tabular-nums" style={{ color: 'var(--dash-ink)' }}>
+                    <td className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
                       {formatBytes(item.bytes_sent)}
                     </td>
-                    <td className="px-3 py-3 text-right font-mono text-[13px] tabular-nums" style={{ color: 'var(--dash-muted)' }}>
+                    <td className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
                       {item.latency_ms.toLocaleString()} ms
                     </td>
-                    <td className="px-5 py-3 text-right font-mono text-[13px] tabular-nums" style={{ color: 'var(--dash-muted)' }}>
+                    <td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
                       <time dateTime={item.created_at}>{formatTime(item.created_at, 'auto')}</time>
                     </td>
                   </tr>

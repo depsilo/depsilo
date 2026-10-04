@@ -142,8 +142,8 @@ export default function MetricTile({
         <div
           className="h-1.5 w-full overflow-hidden rounded-full"
           style={{ background: 'var(--dash-soft)' }}
-          role="img"
-          aria-label={progress?.label}
+          aria-hidden="true"
+          data-progress-label={progress?.label}
         >
           <div
             className="h-full rounded-full transition-[width] duration-300"

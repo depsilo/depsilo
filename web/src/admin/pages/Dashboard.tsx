@@ -17,7 +17,7 @@ import Icon from '@/components/Icon'
 import QueryErrorState from '@/components/QueryErrorState'
 import { getAdminRouteHref } from '@/admin/routes'
 import { usePolicyStatus } from '@/admin/usePolicyStatus'
-import type { DashboardRange, DashboardTrendPoint, NowResponse, RuntimeResponse } from '@/lib/adminApi.types'
+import type { DashboardRange, DashboardResponse, DashboardTrendPoint, NowResponse, RuntimeResponse } from '@/lib/adminApi.types'
 import { adminApi, statsApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import {
@@ -104,7 +104,16 @@ export default function Dashboard() {
     retry: false,
   })
 
-  const overview = overviewQuery.data?.data
+  // Retain the last successful overview/trends payload. React Query drops the
+  // placeholder once a refetch errors, but the Overview must keep showing the
+  // previous period (with its own range label) and mark it stale instead of
+  // blanking the region. Storing the previous value during render is React's
+  // documented "adjust state from previous render" pattern.
+  const [retainedOverview, setRetainedOverview] = useState<DashboardResponse | undefined>(undefined)
+  if (overviewQuery.data?.data && overviewQuery.data.data !== retainedOverview) {
+    setRetainedOverview(overviewQuery.data.data)
+  }
+  const overview = overviewQuery.data?.data ?? retainedOverview
   const overviewRange = overview?.range?.key ?? range
   const swapped = overviewRange !== range
   const upstreams = overview?.upstreams ?? []
@@ -115,7 +124,11 @@ export default function Dashboard() {
   const nowPending = nowQuery.isPending && !now
   const runtimePending = runtimeQuery.isPending && !runtimeQuery.data
 
-  const trendData = trendsQuery.data
+  const [retainedTrends, setRetainedTrends] = useState<TrendQueryData | undefined>(undefined)
+  if (trendsQuery.data && trendsQuery.data !== retainedTrends) {
+    setRetainedTrends(trendsQuery.data)
+  }
+  const trendData = trendsQuery.data ?? retainedTrends
   const trendPoints: DashboardTrendPoint[] = trendData?.response.data.points ?? []
   const trendRange = trendData?.range ?? range
   const trendsLoading = trendsQuery.isPending && !trendData
@@ -270,28 +283,35 @@ export default function Dashboard() {
 
           {/* Trends and the recent-request tail are independent queries, so a
               period-aggregate failure never blanks them. */}
-          <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-            {trendsLoading ? (
-              <div className="dash-card p-5">
-                <div aria-hidden className="h-[272px] animate-pulse rounded-md" style={{ background: 'var(--dash-soft)' }} />
-              </div>
-            ) : trendsInitialError ? (
-              <div className="dash-card p-5">
-                <QueryErrorState
-                  message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(trendsQuery.error).message}
+          {/* Chart and request table share a row only while the table can keep
+              its readable minimum width; otherwise the table wraps full-width
+              onto the next line instead of squeezing into an unreadable column. */}
+          <div className="flex min-w-0 flex-wrap items-start gap-5">
+            <div className="min-w-[min(420px,100%)] grow basis-[480px]">
+              {trendsLoading ? (
+                <div className="dash-card p-5">
+                  <div aria-hidden className="h-[272px] animate-pulse rounded-md" style={{ background: 'var(--dash-soft)' }} />
+                </div>
+              ) : trendsInitialError ? (
+                <div className="dash-card p-5">
+                  <QueryErrorState
+                    message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : getApiError(trendsQuery.error).message}
+                    onRetry={() => { void trendsQuery.refetch() }}
+                  />
+                </div>
+              ) : (
+                <ActivityTrends
+                  raw={trendPoints}
+                  range={range}
+                  dataRange={trendRange}
+                  isStale={trendsStale}
                   onRetry={() => { void trendsQuery.refetch() }}
                 />
-              </div>
-            ) : (
-              <ActivityTrends
-                raw={trendPoints}
-                range={range}
-                dataRange={trendRange}
-                isStale={trendsStale}
-                onRetry={() => { void trendsQuery.refetch() }}
-              />
-            )}
-            <RecentRequests limit={5} onOpenDetails={setDetailsLogId} />
+              )}
+            </div>
+            <div className="min-w-[min(600px,100%)] grow basis-[600px]">
+              <RecentRequests limit={5} onOpenDetails={setDetailsLogId} />
+            </div>
           </div>
           {swapped && (
             <p role="status" className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.switchingRange')}</p>
