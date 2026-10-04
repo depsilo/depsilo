@@ -15,7 +15,7 @@ import {
 } from '@/lib/dashboardOverview'
 import { formatBytes } from '@/lib/utils'
 
-import type { MetricTone } from './MetricTile'
+import { HINT_TOOLTIP_DELAY_MS, type MetricTone } from './MetricTile'
 
 function BenefitBlock({
   label,
@@ -58,7 +58,7 @@ function BenefitBlock({
           </span>
           <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</p>
         </div>
-        <TooltipV2 content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
+        <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
           <button
             type="button"
             aria-label={infoLabel}

@@ -3,6 +3,9 @@ import type { ReactNode } from 'react'
 import Icon, { type IconName } from '@/components/Icon'
 import TooltipV2 from '@/components/Tooltip'
 
+/** Dense Overview hints open fast; other surfaces keep the app-wide 350ms. */
+export const HINT_TOOLTIP_DELAY_MS = 120
+
 /**
  * Category tones. They express identity — which resource or request path a
  * metric belongs to — never health. Real warnings use the warn/danger tones.
@@ -173,7 +176,7 @@ export default function MetricTile({
             </span>
           )}
           {info && (
-            <TooltipV2 content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
+            <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
               <button
                 type="button"
                 aria-label={infoLabel}
