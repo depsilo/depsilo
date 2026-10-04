@@ -22,7 +22,7 @@ export default function CopyButton({ text }: Props) {
       onClick={copy}
       className="active:scale-[0.96]"
       style={{
-        fontSize: 11,
+        fontSize: 12,
         color: copied ? 'var(--ok-text)' : 'var(--text-muted)',
         // Visible padding stays compact; ::before in the active rule below
         // expands the hit area without bloating the chrome.

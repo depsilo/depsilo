@@ -299,7 +299,7 @@ export default function PortalAppV2() {
               title={data?.service?.version}
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 10,
+                fontSize: 11,
                 color: 'var(--text-subtle)',
                 padding: '1px 5px',
                 border: '1px solid var(--border)',

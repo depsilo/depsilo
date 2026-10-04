@@ -185,7 +185,7 @@ function SearchPill({
           background: 'transparent',
           border: 'none',
           outline: 'none',
-          fontSize: 12.5,
+          fontSize: 13,
           fontFamily: 'var(--font-mono)',
           color: 'var(--text)',
         }}
@@ -225,7 +225,7 @@ function SearchPill({
         <kbd
           aria-hidden
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontFamily: 'var(--font-mono)',
             color: 'var(--text-subtle)',
             padding: '0 5px',

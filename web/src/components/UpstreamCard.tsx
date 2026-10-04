@@ -250,7 +250,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-sm text-[11px] font-mono whitespace-nowrap pointer-events-none z-10"
+          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-sm text-[12px] font-mono whitespace-nowrap pointer-events-none z-10"
           style={{ background: 'var(--inverse)', color: 'var(--on-inverse)', left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
@@ -277,7 +277,7 @@ export function UpstreamRow({
   const latency = (upstream.avg_latency_ms || 0) <= 1 ? '--' : `${upstream.avg_latency_ms}ms`
   const statusIndicator = (
     <span
-      className="inline-flex shrink-0 items-center gap-1 text-[11px] font-[550]"
+      className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-[550]"
       style={{ color: 'var(--text-muted)' }}
     >
       <StatusDot status={status} />
@@ -286,7 +286,7 @@ export function UpstreamRow({
   )
   const latencyIndicator = (
     <span
-      className="shrink-0 font-mono text-[11px] tabular-nums"
+      className="shrink-0 font-mono text-[12.5px] tabular-nums"
       style={{ color: 'var(--text-muted)' }}
     >
       {latency}
@@ -299,7 +299,7 @@ export function UpstreamRow({
         <>
           <div className="flex min-w-0 items-center justify-between gap-2">
             <span
-              className="min-w-0 flex-1 truncate text-[12px] font-[400]"
+              className="min-w-0 flex-1 truncate text-[13px] font-[400]"
               title={upstream.name}
               style={{ color: 'var(--text)' }}
             >
@@ -316,7 +316,7 @@ export function UpstreamRow({
             {statusIndicator}
             {latencyIndicator}
             {metadata !== undefined && metadata !== null && metadata !== false && (
-              <div data-upstream-metadata className="min-w-0 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              <div data-upstream-metadata className="min-w-0 text-[12px]" style={{ color: 'var(--text-muted)' }}>
                 {metadata}
               </div>
             )}
@@ -326,7 +326,7 @@ export function UpstreamRow({
         <>
           <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
             <span
-              className="min-w-0 flex-1 truncate text-[12px] font-[400]"
+              className="min-w-0 flex-1 truncate text-[13px] font-[400]"
               title={upstream.name}
               style={{ color: 'var(--text)' }}
             >
@@ -340,7 +340,7 @@ export function UpstreamRow({
           {metadata !== undefined && metadata !== null && metadata !== false && (
             <div
               data-upstream-metadata
-              className="mb-1 min-w-0 text-[11px]"
+              className="mb-1 min-w-0 text-[12px]"
               style={{ color: 'var(--text-muted)' }}
             >
               {metadata}
@@ -430,7 +430,7 @@ export function UpstreamGroupedPanel({
         <div
           data-upstream-history-error
           role="status"
-          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-md border px-3 py-2 text-[12px]"
+          className="mb-3 flex min-h-10 items-center justify-between gap-3 rounded-md border px-3 py-2 text-[12.5px]"
           style={{ borderColor: 'var(--warn-border)', color: 'var(--warn-text)', background: 'var(--warn-fill)' }}
         >
           <span>{t('monitor.historyUnavailable')}</span>
@@ -479,13 +479,13 @@ export function UpstreamGroupedPanel({
                 >
                   <h2
                     id={headingId}
-                    className="flex min-w-0 items-center gap-2 text-[12px] font-mono font-[600] uppercase tracking-[0.1em]"
+                    className="flex min-w-0 items-center gap-2 text-[12.5px] font-mono font-[600] uppercase tracking-[0.1em]"
                     style={{ color: 'var(--text)' }}
                   >
                     {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor decorative />}
                     <span className="min-w-0 truncate">{adapter}</span>
                   </h2>
-                  <span className="ml-auto shrink-0 text-[12px] font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                  <span className="ml-auto shrink-0 text-[12.5px] font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
                     {t('monitor.historySummary', { count: checkCount })} · {t('monitor.healthySummary', { healthy: healthyCount, total: items.length })}
                   </span>
                 </div>

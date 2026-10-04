@@ -99,7 +99,7 @@ function ManagerPicker({
         >
           {t('quickstart.managerPickerLabel')}
         </span>
-        <span className="font-[var(--font-mono)] text-[11px] text-[var(--text-subtle)]">
+        <span className="font-[var(--font-mono)] text-[12px] text-[var(--text-subtle)]">
           {t('quickstart.managerCount', { count: managers.length })}
         </span>
       </div>
@@ -149,7 +149,7 @@ function StepHeading({
     <div className="mb-3 flex items-start gap-3">
       <span
         aria-hidden="true"
-        className="mt-0.5 font-[var(--font-mono)] text-[11px] font-[650] leading-[1.4] text-[var(--brand-text)]"
+        className="mt-0.5 font-[var(--font-mono)] text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
       >
         {String(number).padStart(2, '0')}
       </span>
@@ -293,7 +293,7 @@ export default function ConfigurePane({
         >
           <Icon name="link" size="sm" className="shrink-0 text-[var(--text-subtle)]" />
           <span className="sr-only">{t('quickstart.endpointLabel')}</span>
-          <span className="truncate font-[var(--font-mono)] text-[11px] text-[var(--text-muted)]">
+          <span className="truncate font-[var(--font-mono)] text-[12px] text-[var(--text-muted)]">
             {resolvedEndpoint}
           </span>
         </div>
@@ -334,7 +334,7 @@ export default function ConfigurePane({
                 <span className="flex items-start gap-3">
                   <span
                     aria-hidden="true"
-                    className="mt-0.5 font-[var(--font-mono)] text-[11px] font-[650] leading-[1.4] text-[var(--brand-text)]"
+                    className="mt-0.5 font-[var(--font-mono)] text-[12px] font-[650] leading-[1.4] text-[var(--brand-text)]"
                   >
                     02
                   </span>

@@ -61,7 +61,7 @@ function ChannelButton({
           </span>
         )}
       </span>
-      <code className="mt-0.5 font-[var(--font-mono)] text-[10px] leading-[1.3] text-[var(--text-subtle)]">
+      <code className="mt-0.5 font-[var(--font-mono)] text-[11.5px] leading-[1.3] text-[var(--text-subtle)]">
         {choice.channel}
       </code>
     </button>
@@ -203,10 +203,10 @@ export default function PyTorchIndexNotice({ endpoint, path, client }: Props) {
                 aria-atomic="true"
                 className="mb-3 mt-3 flex min-w-0 flex-col gap-1 rounded-md bg-[var(--bg-soft)] px-3 py-2"
               >
-                <span className="text-[11px] font-[620] text-[var(--text-subtle)]">
+                <span className="text-[12px] font-[620] text-[var(--text-subtle)]">
                   {t('quickstart.pytorchIndexEndpointLabel')}
                 </span>
-                <code className="break-all font-[var(--font-mono)] text-[11px] leading-[1.45] text-[var(--brand-text)]">
+                <code className="break-all font-[var(--font-mono)] text-[12px] leading-[1.45] text-[var(--brand-text)]">
                   {indexURL}
                 </code>
               </div>
