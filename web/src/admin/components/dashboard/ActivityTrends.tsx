@@ -162,7 +162,9 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
         <h2 id="overview-trends-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
           {t('overview.trendsTitle')}
         </h2>
-        <div role="tablist" aria-label={t('overview.trendsTitle')} className="flex items-center gap-1">
+        {/* Wraps rather than shrinking: four segments do not fit beside the
+            heading on a phone, and the rail had been overflowing the card. */}
+        <div role="tablist" aria-label={t('overview.trendsTitle')} className="flex flex-wrap items-center gap-1">
           {tabs.map(item => {
             const active = tab === item.value
             return (

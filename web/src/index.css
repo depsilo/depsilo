@@ -515,12 +515,20 @@ html, body {
   font-size: 13px;
   font-weight: 400;
   line-height: 1.5;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 body { margin: 0; }
-#root { overflow-x: hidden; }
+/* The horizontal guard lives on the viewport, never on body or #root:
+   `overflow-x: hidden` turns either of those into a scroll container, and
+   `position: sticky` inside one then resolves against a box that never
+   scrolls — the Portal header silently scrolled away for exactly this reason.
+   `clip` keeps the guard without creating a scrollport. It clips identically
+   to `hidden`; the only thing it stops is programmatic sideways scrolling,
+   which was papering over content that overflowed instead of scrolling. */
+html { overflow-x: hidden; }
+body { overflow-x: clip; }
+#root { overflow-x: clip; }
 * { box-sizing: border-box; }
 
 @layer base {

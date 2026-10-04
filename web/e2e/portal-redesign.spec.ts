@@ -571,3 +571,42 @@ test('Portal prompt dialog keeps its title in view and never scrolls sideways', 
   expect(metrics.scrollWidth).toBe(metrics.clientWidth)
   expect(Math.abs(metrics.scrollLeft)).toBeLessThanOrEqual(1)
 })
+
+test('Portal header stays pinned while the page scrolls', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await mockAdminApi(page, {
+    // Enough upstreams that Monitor scrolls at a short viewport.
+    'GET /api/v1/stats': {
+      ...populatedStats,
+      upstreams: ['pypi', 'npm', 'crates'].flatMap((adapter, group) => [
+        { id: group * 2 + 1, name: `${adapter}-one`, adapter, url: `https://${adapter}1.example`, healthy: true, avg_latency_ms: 40, success_rate: 1 },
+        { id: group * 2 + 2, name: `${adapter}-two`, adapter, url: `https://${adapter}2.example`, healthy: false, avg_latency_ms: 0, success_rate: 0 },
+      ]),
+    },
+    'GET /api/v1/latency-series': {},
+  })
+  await page.setViewportSize({ width: 1440, height: 380 })
+
+  for (const route of ['/', '/monitor']) {
+    await page.goto(route)
+    await expect(page.locator('h1')).toBeVisible()
+    await page.evaluate(() => window.scrollTo(0, 600))
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+
+    // A sticky header keeps its box at the top of the viewport. It silently
+    // stopped doing that once, because an `overflow-x: hidden` ancestor became
+    // the scrollport instead of the viewport.
+    await expect.poll(() => page.evaluate(() => (
+      Math.round(document.querySelector('header')?.getBoundingClientRect().top ?? -1)
+    ))).toBe(0)
+
+    // ...and it has to paint above the content it is covering.
+    expect(await page.evaluate(() => {
+      const header = document.querySelector('header')
+      if (!header) return false
+      const box = header.getBoundingClientRect()
+      const under = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      return under !== null && header.contains(under)
+    })).toBe(true)
+  }
+})

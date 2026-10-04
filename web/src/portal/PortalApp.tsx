@@ -245,14 +245,8 @@ export default function PortalAppV2() {
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
       <header
         style={{
-          // Fixed, not sticky: `overflow-x: hidden` on body/#root makes them
-          // scroll containers, and a sticky header inside them then resolves
-          // against a box that never scrolls — it simply scrolled away with
-          // the page. `main` reserves the matching top space below instead.
-          position: 'fixed',
+          position: 'sticky',
           top: 0,
-          left: 0,
-          right: 0,
           zIndex: 30,
           background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
           backdropFilter: 'saturate(180%) blur(8px)',
@@ -386,7 +380,7 @@ export default function PortalAppV2() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 'var(--portal-width)', margin: '0 auto', padding: 'calc(var(--portal-header-height) + clamp(22px, 2.4vw, 40px)) var(--portal-gutter) 48px' }}>
+      <main style={{ maxWidth: 'var(--portal-width)', margin: '0 auto', padding: 'clamp(22px, 2.4vw, 40px) var(--portal-gutter) 48px' }}>
         <Routes>
           <Route index element={<QuickStart pytorchIndexPath={pytorchIndexPath} />} />
           <Route path="monitor" element={<MonitorV2 />} />
