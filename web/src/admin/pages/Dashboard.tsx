@@ -163,7 +163,6 @@ export default function Dashboard() {
 
   return (
     <AdminPage
-      description={t('overview.subtitle')}
       actions={(
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--text-soft)' }}>

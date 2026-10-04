@@ -254,7 +254,6 @@ const en = {
     },
 
     overview: {
-      subtitle: 'Service health, program resources, service and origin traffic, cache savings, and activity in one place.',
       updatedAt: 'Updated {{time}}',
       refresh: 'Refresh',
       rangeGroup: 'Statistics range',

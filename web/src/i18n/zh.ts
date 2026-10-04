@@ -254,7 +254,6 @@ const zh = {
     },
 
     overview: {
-      subtitle: '一眼看清服务状态、程序资源、服务与回源流量、缓存收益和活动趋势。',
       updatedAt: '更新于 {{time}}',
       refresh: '刷新',
       rangeGroup: '统计周期',
