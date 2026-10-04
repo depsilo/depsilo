@@ -304,9 +304,109 @@ export default function MonitorPage() {
 
   const savedFmt = formatBytes(week?.bytes_saved ?? 0)
 
+  const hasSummary = Boolean(statsQuery.data)
+  const summaryRef = useRef<HTMLParagraphElement | null>(null)
+  const [summaryStuck, setSummaryStuck] = useState(false)
+
+  useEffect(() => {
+    const node = summaryRef.current
+    if (!node || typeof IntersectionObserver === 'undefined') return
+    // Shrink the observation box by the sticky header, so the pinned copy only
+    // appears once the inline counts are actually behind it rather than merely
+    // near the top of the viewport.
+    const observer = new IntersectionObserver(
+      entries => setSummaryStuck(!entries[0].isIntersecting),
+      { rootMargin: '-64px 0px 0px 0px' },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasSummary])
+
+  const summaryCounts = (
+    <>
+      <span>
+        <span className="num">{upstreams.length}</span> {t('monitor.upstreams')}
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <StatusDot status="healthy" />
+        <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <StatusDot status="degraded" />
+        <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
+      </span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <StatusDot status="failed" />
+        <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
+      </span>
+      {/* Value metrics — compact, 7-day rolling window. Hidden on fresh
+          installs (no traffic yet) so the row never shows a meaningless 0%. */}
+      {week && week.total_requests > 0 && (
+        <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 border-l border-[var(--border-strong)] pl-3">
+          <span>
+            {t('monitor.hitRate7d')}{' '}
+            <span className="num" style={{ color: 'var(--brand-text)', fontWeight: 600 }}>
+              {(week.hit_rate * 100).toFixed(1)}%
+            </span>
+          </span>
+          <span>
+            {t('monitor.saved7d')}{' '}
+            <span className="num" style={{ color: 'var(--text)', fontWeight: 600 }}>
+              {savedFmt.value} {savedFmt.unit}
+            </span>
+          </span>
+        </span>
+      )}
+    </>
+  )
+
   return (
     // Stagger: header first, the upstream panel ~70ms later.
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* The counts are the one thing worth keeping while scrolling; the header
+          rail already carries search and the problem filter. Hidden from
+          assistive technology because the inline row below is the semantic
+          copy and repeating the numbers would read them twice. */}
+      {hasSummary && (
+        <div
+          aria-hidden="true"
+          data-monitor-summary-bar
+          data-pinned={summaryStuck ? 'true' : undefined}
+          style={{
+            position: 'fixed',
+            top: 'var(--portal-header-height)',
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            pointerEvents: 'none',
+            opacity: summaryStuck ? 1 : 0,
+            transform: summaryStuck ? 'translateY(0)' : 'translateY(-4px)',
+            transition: 'opacity 150ms ease, transform 150ms ease',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 'var(--portal-width)',
+              margin: '0 auto',
+              padding: '7px var(--portal-gutter)',
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '6px 12px',
+              fontSize: 13,
+              lineHeight: 1.3,
+              color: 'var(--text-muted)',
+              background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
+              backdropFilter: 'saturate(180%) blur(8px)',
+              WebkitBackdropFilter: 'saturate(180%) blur(8px)',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            {summaryCounts}
+          </div>
+        </div>
+      )}
+
       {/* Page summary */}
       <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
@@ -384,8 +484,9 @@ export default function MonitorPage() {
               )}
             </div>
           </div>
-          {statsQuery.data && (
+          {hasSummary && (
             <p
+              ref={summaryRef}
               style={{
                 margin: '10px 0 0 0',
                 display: 'flex',
@@ -397,44 +498,7 @@ export default function MonitorPage() {
                 color: 'var(--text-muted)',
               }}
             >
-              <span>
-                <span className="num">{upstreams.length}</span> {t('monitor.upstreams')}
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <StatusDot status="healthy" />
-                <span className="num">{healthyCounts.healthy ?? 0}</span> {t('monitor.healthy')}
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <StatusDot status="degraded" />
-                <span className="num">{healthyCounts.degraded ?? 0}</span> {t('monitor.degraded')}
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <StatusDot status="failed" />
-                <span className="num">{healthyCounts.failed ?? 0}</span> {t('monitor.failed')}
-              </span>
-              {/* Value metrics — compact, 7-day rolling window. Hidden on
-                  fresh installs (no traffic yet) so the row never shows a
-                  meaningless 0%. */}
-              {week && week.total_requests > 0 && (
-                <>
-                  <span
-                    className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 border-l border-[var(--border-strong)] pl-3"
-                  >
-                    <span>
-                      {t('monitor.hitRate7d')}{' '}
-                      <span className="num" style={{ color: 'var(--brand-text)', fontWeight: 600 }}>
-                        {(week.hit_rate * 100).toFixed(1)}%
-                      </span>
-                    </span>
-                    <span>
-                      {t('monitor.saved7d')}{' '}
-                      <span className="num" style={{ color: 'var(--text)', fontWeight: 600 }}>
-                        {savedFmt.value} {savedFmt.unit}
-                      </span>
-                    </span>
-                  </span>
-                </>
-              )}
+              {summaryCounts}
             </p>
           )}
         </div>

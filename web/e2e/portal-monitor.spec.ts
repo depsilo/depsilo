@@ -250,3 +250,42 @@ test('Monitor can reduce the directory to the upstreams that need attention', as
   await filter.click()
   await expect(page.locator('[data-upstream-row]')).toHaveCount(3)
 })
+
+test('Monitor pins the upstream counts under the header once they scroll away', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  await page.setViewportSize({ width: 1440, height: 320 })
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': {
+      service: { status: 'degraded' },
+      week: { total_requests: 40, hit_count: 30, hit_rate: 0.75, bytes_saved: 2048 },
+      upstreams: ['pypi', 'npm', 'crates', 'maven', 'go', 'rubygems'].flatMap((adapter, group) => [
+        { name: `${adapter}-one`, adapter, url: `https://${adapter}1.example`, healthy: true, avg_latency_ms: 40 + group, success_rate: 1 },
+        { name: `${adapter}-two`, adapter, url: `https://${adapter}2.example`, healthy: group !== 1, avg_latency_ms: group === 1 ? 0 : 400 + group, success_rate: 1 },
+      ]),
+    },
+    'GET /api/v1/latency-series': {},
+  })
+
+  await page.goto('/monitor')
+
+  const bar = page.locator('[data-monitor-summary-bar]')
+  // A visual duplicate of the inline row: it stays out of the accessibility
+  // tree and off the pointer path so it cannot intercept a click or read the
+  // counts twice.
+  await expect(bar).toHaveAttribute('aria-hidden', 'true')
+  await expect(bar).not.toHaveAttribute('data-pinned', 'true')
+  await expect(bar).toHaveCSS('opacity', '0')
+  await expect(bar).toHaveCSS('pointer-events', 'none')
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await expect(bar).toHaveAttribute('data-pinned', 'true')
+  await expect(bar).toHaveCSS('opacity', '1')
+  await expect(bar).toContainText('Upstream mirrors')
+  await expect(bar).toContainText('degraded')
+  await expect(bar).toContainText('75.0%')
+  await expect(bar).toContainText('2 KB')
+
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await expect(bar).not.toHaveAttribute('data-pinned', 'true')
+  await expect(bar).toHaveCSS('opacity', '0')
+})

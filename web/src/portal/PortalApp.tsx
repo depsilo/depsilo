@@ -18,15 +18,6 @@ import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
 const QuickStart = lazyRoute(() => import('@/portal/pages/QuickStart'))
 const MonitorV2 = lazyRoute(() => import('@/portal/pages/Monitor'))
 
-// The sticky header rail and the page content share one width and one gutter.
-// They used to disagree above ~1635px (the rail grew to 92vw while Quick Start
-// capped itself at 1440px), which left the brand mark and the first heading on
-// visibly different left edges. The 1504px cap is 1440px of content plus the
-// widest gutter on both sides, so Quick Start keeps the width it was designed
-// around and Monitor's card grid stays on the same rhythm.
-const PORTAL_GUTTER = 'clamp(12px, 2vw, 32px)'
-const PORTAL_WIDTH = 'clamp(1280px, 92vw, 1504px)'
-
 interface PortalStats {
   service: { status: string; version: string }
   extra_indexes?: Array<{ kind?: string; path: string }>
@@ -254,8 +245,14 @@ export default function PortalAppV2() {
     <div className="min-h-screen" style={{ background: 'var(--bg-page)' }}>
       <header
         style={{
-          position: 'sticky',
+          // Fixed, not sticky: `overflow-x: hidden` on body/#root makes them
+          // scroll containers, and a sticky header inside them then resolves
+          // against a box that never scrolls — it simply scrolled away with
+          // the page. `main` reserves the matching top space below instead.
+          position: 'fixed',
           top: 0,
+          left: 0,
+          right: 0,
           zIndex: 30,
           background: 'color-mix(in oklab, var(--bg-page) 88%, transparent)',
           backdropFilter: 'saturate(180%) blur(8px)',
@@ -266,10 +263,10 @@ export default function PortalAppV2() {
         <div
           className="portal-header-inner"
           style={{
-            height: 52,
-            maxWidth: PORTAL_WIDTH,
+            height: 'var(--portal-header-height)',
+            maxWidth: 'var(--portal-width)',
             margin: '0 auto',
-            padding: `0 ${PORTAL_GUTTER}`,
+            padding: '0 var(--portal-gutter)',
             display: 'flex',
             alignItems: 'center',
             gap: 16,
@@ -389,7 +386,7 @@ export default function PortalAppV2() {
         </div>
       </header>
 
-      <main style={{ maxWidth: PORTAL_WIDTH, margin: '0 auto', padding: `clamp(22px, 2.4vw, 40px) ${PORTAL_GUTTER} 48px` }}>
+      <main style={{ maxWidth: 'var(--portal-width)', margin: '0 auto', padding: 'calc(var(--portal-header-height) + clamp(22px, 2.4vw, 40px)) var(--portal-gutter) 48px' }}>
         <Routes>
           <Route index element={<QuickStart pytorchIndexPath={pytorchIndexPath} />} />
           <Route path="monitor" element={<MonitorV2 />} />
