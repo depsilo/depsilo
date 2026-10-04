@@ -26,6 +26,9 @@ func TestSamplerReportsRealProcessMemory(t *testing.T) {
 	if snapshot.Process.RSSBytes == nil || *snapshot.Process.RSSBytes <= 0 {
 		t.Fatalf("rss bytes = %v, want a positive value", snapshot.Process.RSSBytes)
 	}
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	t.Logf("%s rss=%d bytes basis=%s (runtime sys=%d)", runtime.GOOS, *snapshot.Process.RSSBytes, snapshot.Process.RSSBasis, stats.Sys)
 	switch snapshot.Process.RSSBasis {
 	case "process", "peak":
 	default:
