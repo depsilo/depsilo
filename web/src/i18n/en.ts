@@ -331,6 +331,7 @@ const en = {
       readFromUpstream: 'Actually read from upstreams',
       originNotCollected: 'Origin metering is not enabled',
       originPartial: 'Origin traffic was not collected for part of this period',
+      originPartialShort: 'Partial collection',
       originPartialSince: 'Collected since {{time}}',
       serviceFlowInfoLabel: 'View service traffic measurement basis',
       originFlowInfoLabel: 'View origin traffic measurement basis',

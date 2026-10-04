@@ -96,6 +96,7 @@ export default function RuntimeResources({
           label={t('overview.cpuLabel')}
           icon="memory"
           tone="cpu"
+          reserveSlots
           value={cpuValue}
           unit="%"
           detail={cpuDetail}
@@ -110,6 +111,7 @@ export default function RuntimeResources({
           label={t('overview.memoryLabel')}
           icon="ram"
           tone="memory"
+          reserveSlots
           value={memoryValue}
           badge={memoryBadge}
           progress={memoryProgress}
@@ -123,6 +125,7 @@ export default function RuntimeResources({
           label={t('overview.cacheLabel')}
           icon="storage"
           tone="cache"
+          reserveSlots
           value={cache ? formatBytes(logical) : '—'}
           detail={cacheDetail}
           progress={cacheRatio !== null ? { ratio: cacheRatio, tone: 'cache' } : null}
@@ -136,6 +139,7 @@ export default function RuntimeResources({
           label={t('overview.networkLabel')}
           icon="hub"
           tone="memory"
+          reserveSlots
           badge={t('overview.liveBadge')}
           rows={[
             {

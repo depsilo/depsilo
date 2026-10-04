@@ -241,7 +241,11 @@ export function coverageDetail(
   if (!note.measured) return t('overview.originNotCollected')
   if (!note.partial) return ''
   return note.since
-    ? t('overview.originPartialSince', { time: new Date(note.since).toLocaleString(locale) })
+    ? t('overview.originPartialSince', {
+      time: new Date(note.since).toLocaleString(locale, {
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      }),
+    })
     : t('overview.originPartial')
 }
 

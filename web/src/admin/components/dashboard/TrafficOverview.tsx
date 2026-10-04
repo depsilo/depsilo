@@ -31,6 +31,7 @@ export default function TrafficOverview({
   const measured = now?.rate.measured === true
   const periodLabel = t(rangeLabelKey(range))
   const coverageNote = coverageDetail(coverage, rangeStart, t)
+  const coverageFlag = coverageNote ? t('overview.originPartialShort') : undefined
 
   return (
     <section data-dashboard-traffic aria-labelledby="overview-traffic-title" className="flex min-w-0 flex-col gap-3">
@@ -79,7 +80,7 @@ export default function TrafficOverview({
           tone="origin"
           badge={periodLabel}
           value={period ? formatBytes(period.upstream_bytes) : '—'}
-          detail={coverageNote || undefined}
+          detail={coverageFlag}
           onInfo={() => onInfo('origin-total')}
           infoLabel={t('overview.originTotalInfoLabel')}
         />

@@ -65,6 +65,12 @@ interface MetricTileProps {
   seriesTone?: MetricTone
   /** Independent value rows instead of one headline number. */
   rows?: MetricRow[]
+  /**
+   * Reserve the sparkline and progress rows even when this tile has neither, so
+   * every tile in a row keeps identical slot positions. Use for rows whose
+   * members mix those graphics; leave off for compact rows (traffic).
+   */
+  reserveSlots?: boolean
   loading?: boolean
   onInfo?: () => void
   infoLabel?: string
@@ -124,6 +130,7 @@ export default function MetricTile({
   series,
   seriesTone,
   rows,
+  reserveSlots = false,
   loading = false,
   onInfo,
   infoLabel,
@@ -176,11 +183,13 @@ export default function MetricTile({
           )}
         </div>
 
-        {/* Fixed vertical rhythm so every tile lines up: a value block with a
-            stable minimum height, then the sparkline row, then the progress
-            row. A tile without a series or a denominator keeps an empty slot
-            instead of shifting its neighbours. */}
-        <div className="flex min-h-[52px] min-w-0 flex-col justify-start gap-1.5">
+        {/* Fixed vertical rhythm so every tile in a row lines up. reserveSlots
+            keeps the sparkline/progress rows in place for rows that mix those
+            graphics; compact rows omit them entirely. */}
+        <div
+          className="flex min-w-0 flex-col justify-start gap-1.5"
+          style={reserveSlots ? { minHeight: 52 } : undefined}
+        >
           {value !== undefined && (
             <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
               {loading ? (
@@ -220,9 +229,11 @@ export default function MetricTile({
           )}
         </div>
 
-        <div className="flex h-[30px] min-w-0 items-center justify-end">
-          {series && series.length >= 2 && <Sparkline series={series} tone={sparkTone} />}
-        </div>
+        {(series && series.length >= 2) || reserveSlots ? (
+          <div className="flex h-[30px] min-w-0 items-center justify-end">
+            {series && series.length >= 2 && <Sparkline series={series} tone={sparkTone} />}
+          </div>
+        ) : null}
 
         {ratio !== null ? (
           <div
@@ -236,9 +247,9 @@ export default function MetricTile({
               style={{ width: `${ratio * 100}%`, background: TONE[progressTone].strong }}
             />
           </div>
-        ) : (
+        ) : reserveSlots ? (
           <div aria-hidden="true" className="h-1.5" />
-        )}
+        ) : null}
 
         {detail && (
           <p className="min-w-0 text-[14px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>

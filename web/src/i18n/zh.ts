@@ -334,6 +334,7 @@ const zh = {
       readFromUpstream: '实际从上游读取',
       originNotCollected: '回源计量尚未启用',
       originPartial: '周期内部分时段未采集回源流量',
+      originPartialShort: '部分时段未采集',
       originPartialSince: '自 {{time}} 起采集',
       serviceFlowInfoLabel: '查看服务流量口径',
       originFlowInfoLabel: '查看回源流量口径',
