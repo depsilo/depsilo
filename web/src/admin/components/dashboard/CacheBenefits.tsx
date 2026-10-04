@@ -121,7 +121,7 @@ function LatencyRow({
     <div className="flex min-w-0 items-center gap-2 text-[13px]">
       <dt className="w-10 shrink-0 whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>{label}</dt>
       <dd className="min-w-0 flex-1">
-        <Track>{ms !== null && <Fill ratio={ratio} color={color} />}</Track>
+        {ms !== null ? <Track><Fill ratio={ratio} color={color} /></Track> : <span className="block h-1.5" />}
       </dd>
       <dd className="w-16 shrink-0 text-right font-mono tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
         {ms !== null ? `${ms.toFixed(0)} ms` : '—'}
@@ -164,16 +164,12 @@ export default function CacheBenefits({
   const cachedShare = servedBytes > 0 ? savedBytes / servedBytes : null
   const coverageNote = coverageDetail(coverage, rangeStart, t)
   const savedFootnote = cachedShare === null
-    ? t('overview.hitRateNoSample')
+    ? undefined
     : `${t('overview.savedShareOfServed', { percent: (cachedShare * 100).toFixed(1) })} · ${t('overview.estimatedShort')}${coverageNote ? ` · ${coverageNote}` : ''}`
 
   // ── Response performance ────────────────────────────────────────────
   const latency = latencyComparison(period)
   const maxLatency = Math.max(latency.hitMs ?? 0, latency.missMs ?? 0)
-  // The rows already carry the millisecond values, so a sufficient sample only
-  // needs the headline; insufficient samples need the explicit caveat.
-  const latencyFootnote = latency.sufficient ? undefined : t('overview.insufficientSamples')
-
   const sampleLabel = (count: number) => t('overview.samplesShort', { count: count.toLocaleString() })
 
   return (
@@ -203,9 +199,9 @@ export default function CacheBenefits({
               hits: period.hit_requests.toLocaleString(),
               total: period.total_requests.toLocaleString(),
             })
-            : t('overview.hitRateNoSample')}
+            : undefined}
         >
-          <Track>{hitRate !== null && <Fill ratio={hitRate} color="var(--dash-cpu)" />}</Track>
+          {hitRate !== null && <Track><Fill ratio={hitRate} color="var(--dash-cpu)" /></Track>}
         </BenefitColumn>
 
         <BenefitColumn
@@ -217,7 +213,7 @@ export default function CacheBenefits({
           value={cachedShare === null ? '—' : formatBytes(savedBytes)}
           footnote={savedFootnote}
         >
-          <Track>{cachedShare !== null && <Fill ratio={cachedShare} color="var(--dash-cpu)" />}</Track>
+          {cachedShare !== null && <Track><Fill ratio={cachedShare} color="var(--dash-cpu)" /></Track>}
         </BenefitColumn>
 
         <BenefitColumn
@@ -230,7 +226,6 @@ export default function CacheBenefits({
           secondary={latency.sufficient && (
             <span className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.latencyVs')}</span>
           )}
-          footnote={latencyFootnote}
         >
           <dl className="flex flex-col gap-2">
             <LatencyRow

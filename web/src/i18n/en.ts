@@ -427,7 +427,7 @@ const en = {
       hintServedTotal: 'Bytes actually delivered to clients in the selected period',
       hintOriginTotal: 'Bytes actually read from upstreams in the selected period',
       hintHitRate: 'Hits ÷ (hits + misses); no sample shows —',
-      hintSavedBytes: 'Estimated from cache-hit response bytes, not a measured bill',
+      hintSavedBytes: 'Estimated from cache-hit response bytes, not a measured bill; no traffic sample shows —',
       hintLatency: 'Weighted average hit vs origin time; no reduction below the sample threshold',
 
       info: {

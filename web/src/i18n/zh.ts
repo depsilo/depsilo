@@ -434,7 +434,7 @@ const zh = {
       hintServedTotal: '所选周期内实际发送给客户端的累计字节',
       hintOriginTotal: '所选周期内实际从上游读取的累计字节',
       hintHitRate: '命中 ÷（命中 + 未命中）；无样本显示 —',
-      hintSavedBytes: '按缓存命中响应字节估算，非实测账单',
+      hintSavedBytes: '按缓存命中响应字节估算，非实测账单；无流量样本时显示 —',
       hintLatency: '命中与回源的加权平均耗时；样本不足不给缩减比例',
 
       info: {
