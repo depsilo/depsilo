@@ -302,6 +302,8 @@ const zh = {
       memoryWithLimit: '已用 {{used}} / 限额 {{limit}}',
       memoryPeak: '峰值 RSS',
       memoryProcess: '进程 RSS',
+      memoryPeakBadge: '峰值',
+      memoryRuntimeBadge: '运行时',
       memoryUnsupported: '无法获取进程内存',
       memoryInfoLabel: '查看内存口径',
       goRuntimeMemory: 'Go 运行时内存 {{value}}',
@@ -425,7 +427,7 @@ const zh = {
           },
           memory: {
             title: '内存使用率口径',
-            body: '优先显示进程 RSS；只有读取到可信的容器内存限额时才显示“已用 / 限额”和占用条。无法获取进程 RSS 时，改为展示明确标注的 Go 运行时内存，不把它当作整个程序内存。',
+            body: '优先显示进程 RSS；只能读到峰值时明确标注“峰值”，不把它当作当前占用。只有读取到可信的容器内存限额时才显示占用条。无法获取进程内存时，改为展示明确标注的 Go 运行时内存。',
           },
           cache: {
             title: '缓存空间口径',

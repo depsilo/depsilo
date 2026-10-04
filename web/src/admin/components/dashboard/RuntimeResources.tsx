@@ -57,12 +57,16 @@ export default function RuntimeResources({
   const memorySupported = process?.memory.supported === true && process.rss_bytes !== undefined
   const limit = process?.memory_limit_bytes
   const used = process?.memory_used_bytes
-  const memoryValue = memorySupported ? formatBytes(process.rss_bytes as number) : '—'
-  const memoryDetail = memorySupported
-    ? (limit !== undefined
-      ? undefined
-      : t(process?.rss_basis === 'peak' ? 'overview.memoryPeak' : 'overview.memoryProcess'))
-    : (process?.memory.reason || t('overview.memoryUnsupported'))
+  // Prefer real process memory. macOS only exposes peak RSS, so it is labelled
+  // as a peak instead of being presented as current usage; platforms with no
+  // process reading fall back to the labelled Go runtime figure. Never surface
+  // a platform reason sentence in the tile.
+  const memoryValue = memorySupported
+    ? formatBytes(process.rss_bytes as number)
+    : (runtime ? formatBytes(runtime.go_runtime.sys_bytes) : '—')
+  const memoryBadge = memorySupported
+    ? (process?.rss_basis === 'peak' ? t('overview.memoryPeakBadge') : undefined)
+    : (runtime ? t('overview.memoryRuntimeBadge') : undefined)
   const memoryProgress = limit !== undefined && used !== undefined && limit > 0
     ? { ratio: used / limit, tone: 'memory' as const }
     : null
@@ -107,7 +111,7 @@ export default function RuntimeResources({
           icon="ram"
           tone="memory"
           value={memoryValue}
-          detail={memoryDetail}
+          badge={memoryBadge}
           progress={memoryProgress}
           series={memorySupported ? rssSeries : undefined}
           loading={runtimePending && !runtime}

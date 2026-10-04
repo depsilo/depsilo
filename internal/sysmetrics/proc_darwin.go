@@ -4,13 +4,13 @@ package sysmetrics
 
 import "syscall"
 
-// platformReadRaw reports real process CPU time on darwin (via getrusage) but
-// deliberately does not report process memory: getrusage only exposes peak
-// RSS, and presenting a peak as current memory usage would be dishonest. The
-// Overview shows the Go runtime's own labeled memory figure instead.
+// platformReadRaw reports real process CPU time and peak RSS on darwin (via
+// getrusage). macOS exposes no portable current-RSS reading (kern.proc's
+// xrssize is unreliable, and task_info needs cgo), so the value is reported with
+// rss_basis="peak" and the UI labels it as a peak rather than current usage.
+// No container memory limit is available.
 func platformReadRaw() rawSample {
 	out := rawSample{
-		rssReason: "darwin exposes only peak RSS, not a current process RSS",
 		memReason: "darwin has no container memory limit",
 	}
 	var usage syscall.Rusage
@@ -21,5 +21,13 @@ func platformReadRaw() rawSample {
 	out.cpuSeconds = float64(usage.Utime.Sec) + float64(usage.Utime.Usec)/1e6 +
 		float64(usage.Stime.Sec) + float64(usage.Stime.Usec)/1e6
 	out.cpuOK = true
+	// ru_maxrss is in bytes on darwin.
+	if usage.Maxrss > 0 {
+		out.rssBytes = int64(usage.Maxrss)
+		out.rssBasis = "peak"
+		out.rssOK = true
+	} else {
+		out.rssReason = "peak RSS is unavailable from getrusage"
+	}
 	return out
 }

@@ -300,6 +300,8 @@ const en = {
       memoryWithLimit: '{{used}} used / {{limit}} limit',
       memoryPeak: 'Peak RSS',
       memoryProcess: 'Process RSS',
+      memoryPeakBadge: 'Peak',
+      memoryRuntimeBadge: 'Runtime',
       memoryUnsupported: 'Process memory is unavailable',
       memoryInfoLabel: 'View memory measurement basis',
       goRuntimeMemory: 'Go runtime memory {{value}}',
@@ -418,7 +420,7 @@ const en = {
           },
           memory: {
             title: 'Memory measurement basis',
-            body: 'Process RSS is preferred; used/limit and the progress bar appear only when a trustworthy container limit is available. When RSS cannot be read, the Go runtime memory is shown with an explicit label — it is never presented as the whole program footprint.',
+            body: 'Process RSS is preferred; when only a peak reading exists it is labelled “Peak” and never presented as current usage. The progress bar appears only with a trustworthy container limit. When no process reading is available, the labelled Go runtime figure is shown instead.',
           },
           cache: {
             title: 'Cache space measurement basis',
