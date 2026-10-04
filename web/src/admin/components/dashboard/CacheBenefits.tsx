@@ -14,6 +14,8 @@ import {
 } from '@/lib/dashboardOverview'
 import { formatBytes } from '@/lib/utils'
 
+import type { MetricTone } from './MetricTile'
+
 export type BenefitInfoKind = 'hit-rate' | 'saved-bytes' | 'latency'
 
 function BenefitBlock({
@@ -23,7 +25,8 @@ function BenefitBlock({
   detail,
   change,
   changeIntent,
-  tone = 'var(--dash-ink)',
+  icon,
+  iconTone,
   onInfo,
   infoLabel,
   children,
@@ -34,7 +37,8 @@ function BenefitBlock({
   detail: ReactNode
   change?: number | null
   changeIntent?: 'higher-is-better' | 'neutral'
-  tone?: string
+  icon: 'donut_large' | 'bolt' | 'speed'
+  iconTone: MetricTone
   onInfo: () => void
   infoLabel: string
   children?: ReactNode
@@ -45,7 +49,16 @@ function BenefitBlock({
   return (
     <div className="flex min-w-0 flex-col gap-2 px-5 py-4">
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <p className="text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className="grid size-8 shrink-0 place-items-center rounded-lg"
+            style={{ background: `var(--dash-${iconTone}-soft, var(--dash-soft))`, color: `var(--dash-${iconTone}, var(--dash-ink))` }}
+          >
+            <Icon name={icon} size="sm" />
+          </span>
+          <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</p>
+        </div>
         <button
           type="button"
           onClick={onInfo}
@@ -57,7 +70,7 @@ function BenefitBlock({
         </button>
       </div>
       <div className="flex min-w-0 flex-wrap items-baseline gap-1.5">
-        <span className="font-mono text-[30px] font-semibold leading-none tabular-nums" style={{ color: tone }}>{value}</span>
+        <span className="font-mono text-[30px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>
         {unit && <span className="text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{unit}</span>}
         {change !== null && change !== undefined && (
           <span className="ml-1 font-mono text-[13px] tabular-nums" style={{ color: changeTone }}>
@@ -124,6 +137,8 @@ export default function CacheBenefits({
       <div className="grid min-w-0 grid-cols-1 divide-y divide-[var(--dash-border)] lg:grid-cols-3 lg:divide-x lg:divide-y-0">
         <BenefitBlock
           label={t('overview.hitRateLabel')}
+          icon="donut_large"
+          iconTone="cpu"
           value={formatPercentRatio(hitRate)}
           detail={hitDetail}
           change={hitRateChange}
@@ -133,16 +148,18 @@ export default function CacheBenefits({
         />
         <BenefitBlock
           label={t('overview.savedBytesLabel')}
+          icon="bolt"
+          iconTone="origin"
           value={formatBytes(saved)}
-          tone="var(--dash-ok)"
           detail={`${t('overview.estimatedFromHits')}${coverageNote ? ` · ${coverageNote}` : ''}`}
           onInfo={() => onInfo('saved-bytes')}
           infoLabel={t('overview.savedBytesInfoLabel')}
         />
         <BenefitBlock
           label={t('overview.latencyLabel')}
+          icon="speed"
+          iconTone="memory"
           value={latencyValue}
-          tone={latency.reductionPct !== null ? 'var(--dash-ok)' : 'var(--dash-ink)'}
           detail={latencyDetail}
           onInfo={() => onInfo('latency')}
           infoLabel={t('overview.latencyInfoLabel')}

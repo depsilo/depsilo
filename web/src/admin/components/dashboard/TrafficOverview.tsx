@@ -42,9 +42,11 @@ export default function TrafficOverview({
         <MetricTile
           testId="traffic-service-flow"
           label={t('overview.serviceFlow')}
+          icon="hub"
+          iconSize={40}
+          tone="memory"
           value={measured ? formatBps(now?.rate.service_bytes_per_sec ?? 0) : '—'}
           detail={`${t('overview.clientToDepsilo')} · ${realtimeNote}`}
-          tone="accent"
           loading={nowPending && !now}
           onInfo={() => onInfo('service-flow')}
           infoLabel={t('overview.serviceFlowInfoLabel')}
@@ -52,9 +54,11 @@ export default function TrafficOverview({
         <MetricTile
           testId="traffic-origin-flow"
           label={t('overview.originFlow')}
+          icon="sync"
+          iconSize={40}
+          tone="origin"
           value={measured ? formatBps(now?.rate.origin_bytes_per_sec ?? 0) : '—'}
           detail={`${t('overview.depsiloToUpstream')} · ${realtimeNote}`}
-          tone="ok"
           loading={nowPending && !now}
           onInfo={() => onInfo('origin-flow')}
           infoLabel={t('overview.originFlowInfoLabel')}
@@ -62,6 +66,9 @@ export default function TrafficOverview({
         <MetricTile
           testId="traffic-served-total"
           label={t('overview.servedTotal')}
+          icon="download"
+          iconSize={40}
+          tone="download"
           value={period ? formatBytes(period.bytes_served) : '—'}
           detail={`${periodLabel} · ${t('overview.deliveredToClients')}`}
           onInfo={() => onInfo('served-total')}
@@ -70,11 +77,13 @@ export default function TrafficOverview({
         <MetricTile
           testId="traffic-origin-total"
           label={t('overview.originTotal')}
+          icon="cloud_sync"
+          iconSize={40}
+          tone="origin"
           value={period ? formatBytes(period.upstream_bytes) : '—'}
           detail={coverageNote
             ? `${periodLabel} · ${coverageNote}`
             : `${periodLabel} · ${t('overview.readFromUpstream')}`}
-          tone={coverageNote ? 'warn' : 'ok'}
           onInfo={() => onInfo('origin-total')}
           infoLabel={t('overview.originTotalInfoLabel')}
         />

@@ -43,6 +43,7 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
+  MemoryStick,
   Monitor,
   Moon,
   Network,
@@ -76,6 +77,7 @@ import {
   UserRoundX,
   Users,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -91,6 +93,7 @@ const ICONS = {
   arrow_forward: ArrowRight,
   bar_chart: BarChart3,
   block: Ban,
+  bolt: Zap,
   bug_report: Bug,
   cached: RefreshCcw,
   cancel: CircleX,
@@ -143,6 +146,7 @@ const ICONS = {
   policy: ShieldCheck,
   progress_activity: LoaderCircle,
   radar: Radar,
+  ram: MemoryStick,
   receipt_long: ReceiptText,
   refresh: RefreshCw,
   rule: ListChecks,

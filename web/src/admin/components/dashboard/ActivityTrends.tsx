@@ -24,7 +24,7 @@ export type TrendTab = 'requests' | 'bandwidth' | 'latency' | 'errors'
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const ACCENT = 'var(--dash-accent, var(--brand))'
-const OK = 'var(--dash-ok, var(--ok))'
+const ORIGIN = 'var(--dash-origin, var(--warn-text))'
 const WARN = 'var(--dash-warn, var(--warn-text))'
 const DANGER = 'var(--dash-danger, var(--danger))'
 
@@ -267,7 +267,7 @@ function renderLines(tab: TrendTab, t: Translator) {
       return (
         <>
           <Line yAxisId="value" type="linear" dataKey="serviceBytes" stroke={ACCENT} strokeWidth={2} dot={false} name={t('overview.serviceFlow')} isAnimationActive={false} />
-          <Line yAxisId="value" type="linear" dataKey="originBytes" stroke={OK} strokeWidth={2} dot={false} name={t('overview.originFlow')} isAnimationActive={false} />
+          <Line yAxisId="value" type="linear" dataKey="originBytes" stroke={ORIGIN} strokeWidth={2} dot={false} name={t('overview.originFlow')} isAnimationActive={false} />
         </>
       )
     case 'latency':
@@ -283,7 +283,7 @@ function renderLines(tab: TrendTab, t: Translator) {
       return (
         <>
           <Line yAxisId="value" type="linear" dataKey="serviceRequests" stroke={ACCENT} strokeWidth={2} dot={false} name={t('overview.serviceRequests')} isAnimationActive={false} />
-          <Line yAxisId="value" type="linear" dataKey="originRequests" stroke={OK} strokeWidth={2} dot={false} name={t('overview.originRequests')} isAnimationActive={false} />
+          <Line yAxisId="value" type="linear" dataKey="originRequests" stroke={ORIGIN} strokeWidth={2} dot={false} name={t('overview.originRequests')} isAnimationActive={false} />
         </>
       )
   }
@@ -295,7 +295,7 @@ function renderBars(tab: TrendTab, t: Translator) {
       return (
         <>
           <Bar yAxisId="value" dataKey="serviceBytes" fill={ACCENT} radius={[3, 3, 0, 0]} name={t('overview.serviceFlow')} isAnimationActive={false} />
-          <Bar yAxisId="value" dataKey="originBytes" fill={OK} radius={[3, 3, 0, 0]} name={t('overview.originFlow')} isAnimationActive={false} />
+          <Bar yAxisId="value" dataKey="originBytes" fill={ORIGIN} radius={[3, 3, 0, 0]} name={t('overview.originFlow')} isAnimationActive={false} />
         </>
       )
     case 'latency':
@@ -311,7 +311,7 @@ function renderBars(tab: TrendTab, t: Translator) {
       return (
         <>
           <Bar yAxisId="value" dataKey="serviceRequests" fill={ACCENT} radius={[3, 3, 0, 0]} name={t('overview.serviceRequests')} isAnimationActive={false} />
-          <Bar yAxisId="value" dataKey="originRequests" fill={OK} radius={[3, 3, 0, 0]} name={t('overview.originRequests')} isAnimationActive={false} />
+          <Bar yAxisId="value" dataKey="originRequests" fill={ORIGIN} radius={[3, 3, 0, 0]} name={t('overview.originRequests')} isAnimationActive={false} />
         </>
       )
   }

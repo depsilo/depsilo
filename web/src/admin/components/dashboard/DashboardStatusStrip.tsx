@@ -18,24 +18,25 @@ const HEALTH_TONE: Record<ServiceHealth, { color: string; soft: string; key: str
 }
 
 interface StatusCellProps {
-  icon: 'check_circle' | 'cached' | 'history' | 'speed'
+  icon: 'check_circle' | 'warning' | 'cached' | 'history' | 'speed' | 'monitoring'
   label: string
   title: string
   detail: string
   toneColor: string
   toneSoft: string
+  iconSize?: 'md' | 'lg'
   loading?: boolean
 }
 
-function StatusCell({ icon, label, title, detail, toneColor, toneSoft, loading = false }: StatusCellProps) {
+function StatusCell({ icon, label, title, detail, toneColor, toneSoft, iconSize = 'md', loading = false }: StatusCellProps) {
   return (
     <div className="flex min-w-0 items-center gap-3 px-5 py-4">
       <span
         aria-hidden="true"
-        className="grid size-10 shrink-0 place-items-center rounded-full"
+        className={`grid shrink-0 place-items-center rounded-full ${iconSize === 'lg' ? 'size-12' : 'size-9'}`}
         style={{ background: toneSoft, color: toneColor }}
       >
-        <Icon name={icon} size="md" />
+        <Icon name={icon} size={iconSize === 'lg' ? 'lg' : 'md'} />
       </span>
       <div className="min-w-0">
         <p className="text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</p>
@@ -107,7 +108,7 @@ export default function DashboardStatusStrip({
   const cells = (
     <>
       <StatusCell
-        icon="check_circle"
+        icon={status.health === 'healthy' ? 'check_circle' : 'warning'}
         label={t('overview.serviceStatusLabel')}
         title={statusTitle}
         detail={status.problems.length > 0
@@ -115,6 +116,7 @@ export default function DashboardStatusStrip({
           : t('overview.allNominal')}
         toneColor={tone.color}
         toneSoft={tone.soft}
+        iconSize="lg"
         loading={nowPending}
       />
       <StatusCell
@@ -122,8 +124,8 @@ export default function DashboardStatusStrip({
         label={t('overview.currentActivity')}
         title={activityTitle}
         detail={activityDetail}
-        toneColor={hasActivity ? 'var(--dash-accent)' : 'var(--dash-muted)'}
-        toneSoft={hasActivity ? 'var(--dash-accent-soft)' : 'var(--dash-soft)'}
+        toneColor="var(--dash-memory)"
+        toneSoft="var(--dash-memory-soft)"
         loading={nowPending}
       />
       <StatusCell
@@ -131,17 +133,17 @@ export default function DashboardStatusStrip({
         label={t('overview.recentActivity')}
         title={lastTitle}
         detail={lastDetail}
-        toneColor="var(--dash-muted)"
-        toneSoft="var(--dash-soft)"
+        toneColor="var(--dash-memory)"
+        toneSoft="var(--dash-memory-soft)"
         loading={nowPending}
       />
       <StatusCell
-        icon="cached"
+        icon="monitoring"
         label={t('overview.uptimeLabel')}
         title={uptimeTitle}
         detail={uptimeDetail}
-        toneColor="var(--dash-muted)"
-        toneSoft="var(--dash-soft)"
+        toneColor="var(--dash-memory)"
+        toneSoft="var(--dash-memory-soft)"
         loading={nowPending}
       />
     </>
