@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 
 import Icon, { type IconName } from '@/components/Icon'
 import TooltipV2 from '@/components/Tooltip'
+import { sparklineGeometry } from '@/lib/dashboardOverview'
 
 /** Dense Overview hints open fast; other surfaces keep the app-wide 350ms. */
 export const HINT_TOOLTIP_DELAY_MS = 120
@@ -83,36 +84,35 @@ interface MetricTileProps {
 }
 
 function Sparkline({ series, tone }: { series: number[]; tone: MetricTone }) {
-  if (series.length < 2) return null
-  const max = Math.max(...series)
-  const min = Math.min(...series)
-  const span = max - min || 1
-  const width = 96
-  const height = 30
-  const step = width / (series.length - 1)
-  const points = series
-    .map((value, index) => `${(index * step).toFixed(1)},${(height - ((value - min) / span) * (height - 4) - 2).toFixed(1)}`)
-    .join(' ')
+  const gradientId = useId()
+  const geometry = sparklineGeometry(series)
+  if (!geometry) return null
+  const color = TONE[tone].strong
 
   return (
     <svg
       aria-hidden="true"
-      viewBox={`0 0 ${width} ${height}`}
-      width={width}
-      height={height}
+      viewBox="0 0 96 30"
+      width={96}
+      height={30}
       className="ml-auto shrink-0"
-      preserveAspectRatio="none"
     >
-      <polyline
-        points={points}
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={geometry.area} fill={`url(#${gradientId})`} />
+      <path
+        d={geometry.line}
         fill="none"
-        stroke={TONE[tone].strong}
-        strokeWidth={2}
+        stroke={color}
+        strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-        opacity={0.9}
       />
+      <circle cx={geometry.last.x} cy={geometry.last.y} r={2.2} fill={color} />
     </svg>
   )
 }

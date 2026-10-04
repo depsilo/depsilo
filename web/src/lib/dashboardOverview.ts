@@ -130,6 +130,72 @@ export function periodChange(current: number | null, previous: number | null): n
   return ((current - previous) / previous) * 100
 }
 
+export interface SparklineGeometry {
+  /** Smooth path for the line. */
+  line: string
+  /** Closed path for the soft area fill beneath the line. */
+  area: string
+  /** Last sample position, for the end dot. */
+  last: { x: number; y: number }
+}
+
+function fmt(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
+}
+
+/**
+ * Builds a monotone-cubic sparkline that never overshoots the sampled data
+ * (Fritsch–Carlson tangents). Straight polylines look coarse at small sizes;
+ * a plain Catmull-Rom would invent peaks between samples, so monotone is the
+ * honest smoothing choice. Returns null with fewer than two samples.
+ */
+export function sparklineGeometry(
+  series: number[],
+  width = 96,
+  height = 30,
+  pad = 3,
+): SparklineGeometry | null {
+  if (series.length < 2) return null
+  const min = Math.min(...series)
+  const max = Math.max(...series)
+  const span = max - min || 1
+  const x = (index: number) => pad + (index * (width - 2 * pad)) / (series.length - 1)
+  const y = (value: number) => height - pad - ((value - min) / span) * (height - 2 * pad)
+  const points: Array<[number, number]> = series.map((value, index) => [x(index), y(value)])
+
+  const n = points.length
+  const dx: number[] = []
+  const slope: number[] = []
+  for (let i = 0; i < n - 1; i += 1) {
+    dx[i] = points[i + 1][0] - points[i][0]
+    slope[i] = dx[i] === 0 ? 0 : (points[i + 1][1] - points[i][1]) / dx[i]
+  }
+  const tangent: number[] = new Array(n)
+  tangent[0] = slope[0] ?? 0
+  tangent[n - 1] = slope[n - 2] ?? 0
+  for (let i = 1; i < n - 1; i += 1) {
+    if (slope[i - 1] * slope[i] <= 0) {
+      tangent[i] = 0
+    } else {
+      const w1 = 2 * dx[i] + dx[i - 1]
+      const w2 = dx[i] + 2 * dx[i - 1]
+      tangent[i] = (w1 + w2) / (w1 / slope[i - 1] + w2 / slope[i])
+    }
+  }
+
+  let line = `M ${fmt(points[0][0])} ${fmt(points[0][1])}`
+  for (let i = 0; i < n - 1; i += 1) {
+    const c1x = points[i][0] + dx[i] / 3
+    const c1y = points[i][1] + (tangent[i] * dx[i]) / 3
+    const c2x = points[i + 1][0] - dx[i] / 3
+    const c2y = points[i + 1][1] - (tangent[i + 1] * dx[i]) / 3
+    line += ` C ${fmt(c1x)} ${fmt(c1y)}, ${fmt(c2x)} ${fmt(c2y)}, ${fmt(points[i + 1][0])} ${fmt(points[i + 1][1])}`
+  }
+
+  const area = `${line} L ${fmt(points[n - 1][0])} ${height} L ${fmt(points[0][0])} ${height} Z`
+  return { line, area, last: { x: points[n - 1][0], y: points[n - 1][1] } }
+}
+
 export type ServiceHealth = 'healthy' | 'partial' | 'unavailable' | 'unknown'
 
 export type ServiceProblemCode = 'status-unavailable' | 'upstreams' | 'policy' | 'cache' | 'degraded'

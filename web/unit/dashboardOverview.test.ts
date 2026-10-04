@@ -8,6 +8,7 @@ import {
   originCoverageNote,
   periodChange,
   requestOutcome,
+  sparklineGeometry,
 } from '../src/lib/dashboardOverview'
 
 function period(overrides: Partial<DashboardPeriod> = {}): DashboardPeriod {
@@ -104,5 +105,30 @@ describe('periodChange', () => {
     expect(periodChange(2, null)).toBeNull()
     expect(periodChange(2, 0)).toBeNull()
     expect(periodChange(2, 1)).toBe(100)
+  })
+})
+
+describe('sparklineGeometry', () => {
+  it('returns nothing below two samples', () => {
+    expect(sparklineGeometry([])).toBeNull()
+    expect(sparklineGeometry([4])).toBeNull()
+  })
+
+  it('draws a smooth monotone curve that stays inside the box', () => {
+    const geometry = sparklineGeometry([1, 3, 2, 6])
+    expect(geometry).not.toBeNull()
+    expect(geometry!.line.startsWith('M ')).toBe(true)
+    expect(geometry!.line).toContain('C ')
+    expect(geometry!.area.endsWith('Z')).toBe(true)
+    expect(geometry!.last.x).toBeCloseTo(93, 5)
+    expect(geometry!.last.y).toBeGreaterThanOrEqual(3)
+    expect(geometry!.last.y).toBeLessThanOrEqual(27)
+  })
+
+  it('keeps a flat series flat instead of overshooting', () => {
+    const geometry = sparklineGeometry([5, 5, 5, 5])
+    const ys = [...geometry!.line.matchAll(/(?:M|C)\s*[-\d.]+ ([-\d.]+)|,\s*[-\d.]+ ([-\d.]+)/g)]
+      .map(match => Number(match[1] ?? match[2]))
+    expect(new Set(ys).size).toBe(1)
   })
 })

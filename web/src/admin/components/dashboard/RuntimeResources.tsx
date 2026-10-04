@@ -32,9 +32,9 @@ export default function RuntimeResources({
   const sampledAt = runtime?.sampled_at
 
   const cpuPercent = process?.cpu_percent
-  const cpuSeries = useSampleSeries(cpuPercent ?? null, sampledAt)
-  const rssSeries = useSampleSeries(process?.rss_bytes ?? null, sampledAt)
-  const cacheSeries = useSampleSeries(runtime?.cache.logical_bytes ?? null, sampledAt)
+  const cpuSeries = useSampleSeries(cpuPercent ?? null, sampledAt, 48)
+  const rssSeries = useSampleSeries(process?.rss_bytes ?? null, sampledAt, 48)
+  const cacheSeries = useSampleSeries(runtime?.cache.logical_bytes ?? null, sampledAt, 48)
 
   const cpuValue = cpuPercent === undefined
     ? (runtimePending ? '' : '—')
