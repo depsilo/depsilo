@@ -51,10 +51,12 @@ interface MetricTileProps {
   /** Large headline value. Omit when the tile is rows-only (no totals). */
   value?: string
   unit?: string
+  /** Short scope chip next to the label, e.g. "Live" or "30d". */
+  badge?: string
   detail?: ReactNode
   tone?: MetricTone
   icon?: IconName
-  /** Icon base size in px: 32 for resource tiles, 40 for traffic tiles. */
+  /** Icon base size in px. */
   iconSize?: number
   /** Real progress (memory limit / cache quota / disk). Omit when no honest denominator exists. */
   progress?: MetricProgress | null
@@ -113,10 +115,11 @@ export default function MetricTile({
   label,
   value,
   unit,
+  badge,
   detail,
   tone = 'default',
   icon,
-  iconSize = 32,
+  iconSize = 56,
   progress = null,
   series,
   seriesTone,
@@ -135,98 +138,109 @@ export default function MetricTile({
     <div
       data-dashboard-metric
       data-testid={testId}
-      className="dash-card flex min-w-0 flex-col gap-2.5 p-5"
+      className="dash-card flex min-w-0 items-start gap-4 p-5"
     >
-      <div className="flex min-w-0 items-center gap-2.5">
-        {icon && (
-          <span
-            aria-hidden="true"
-            className="grid shrink-0 place-items-center rounded-lg"
-            style={{ width: iconSize, height: iconSize, background: palette.soft, color: palette.strong }}
-          >
-            <Icon name={icon} size={iconSize >= 36 ? 'md' : 'sm'} />
-          </span>
+      {icon && (
+        <span
+          aria-hidden="true"
+          className="grid shrink-0 place-items-center rounded-xl"
+          style={{ width: iconSize, height: iconSize, background: palette.soft, color: palette.strong }}
+        >
+          <Icon name={icon} style={{ fontSize: Math.round(iconSize * 0.5) }} />
+        </span>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>
+            {label}
+          </p>
+          {badge && (
+            <span
+              className="shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium"
+              style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}
+            >
+              {badge}
+            </span>
+          )}
+          {onInfo && (
+            <button
+              type="button"
+              onClick={onInfo}
+              aria-label={infoLabel}
+              className="dash-focus ml-auto grid size-7 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+              style={{ color: 'var(--dash-muted)' }}
+            >
+              <Icon name="info" size="sm" />
+            </button>
+          )}
+        </div>
+
+        {value !== undefined && (
+          <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-3 gap-y-1">
+            <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+              {loading ? (
+                <span aria-hidden="true" className="block h-9 w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
+              ) : (
+                <>
+                  <span
+                    className="font-mono text-[30px] font-semibold leading-none tabular-nums"
+                    style={{ color: 'var(--dash-ink)' }}
+                    title={unit ? `${value} ${unit}` : value}
+                  >
+                    {value}
+                  </span>
+                  {unit && (
+                    <span className="text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{unit}</span>
+                  )}
+                </>
+              )}
+            </div>
+            {series && series.length >= 2 && <Sparkline series={series} tone={sparkTone} />}
+          </div>
         )}
-        <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>
-          {label}
-        </p>
-        {onInfo && (
-          <button
-            type="button"
-            onClick={onInfo}
-            aria-label={infoLabel}
-            className="dash-focus ml-auto grid size-7 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-            style={{ color: 'var(--dash-muted)' }}
+
+        {value === undefined && series && series.length >= 2 && (
+          <div className="flex min-w-0 justify-end">
+            <Sparkline series={series} tone={sparkTone} />
+          </div>
+        )}
+
+        {rows && rows.length > 0 && (
+          <dl className="flex flex-col gap-1.5">
+            {rows.map(row => (
+              <div key={row.label} className="flex min-w-0 items-baseline justify-between gap-3">
+                <dt className="flex min-w-0 items-center gap-1.5 text-[14px]" style={{ color: 'var(--dash-muted)' }}>
+                  <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: TONE[row.tone].strong }} />
+                  <span className="truncate">{row.label}</span>
+                </dt>
+                <dd className="shrink-0 font-mono text-[18px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>
+                  {row.value}
+                  {row.unit && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+
+        {ratio !== null && (
+          <div
+            className="h-1.5 w-full overflow-hidden rounded-full"
+            style={{ background: TONE[progressTone].soft }}
+            aria-hidden="true"
+            data-progress-label={progress?.label}
           >
-            <Icon name="info" size="sm" />
-          </button>
+            <div
+              className="h-full rounded-full transition-[width] duration-300"
+              style={{ width: `${ratio * 100}%`, background: TONE[progressTone].strong }}
+            />
+          </div>
+        )}
+
+        {detail && (
+          <p className="min-w-0 text-[14px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
         )}
       </div>
-
-      {value !== undefined && (
-        <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-3 gap-y-1">
-          <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-            {loading ? (
-              <span aria-hidden="true" className="block h-9 w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
-            ) : (
-              <>
-                <span
-                  className="font-mono text-[32px] font-semibold leading-none tabular-nums"
-                  style={{ color: 'var(--dash-ink)' }}
-                  title={unit ? `${value} ${unit}` : value}
-                >
-                  {value}
-                </span>
-                {unit && (
-                  <span className="text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{unit}</span>
-                )}
-              </>
-            )}
-          </div>
-          {series && series.length >= 2 && <Sparkline series={series} tone={sparkTone} />}
-        </div>
-      )}
-
-      {value === undefined && series && series.length >= 2 && (
-        <div className="flex min-w-0 justify-end">
-          <Sparkline series={series} tone={sparkTone} />
-        </div>
-      )}
-
-      {rows && rows.length > 0 && (
-        <dl className="flex flex-col gap-1.5">
-          {rows.map(row => (
-            <div key={row.label} className="flex min-w-0 items-baseline justify-between gap-3">
-              <dt className="flex min-w-0 items-center gap-1.5 text-[14px]" style={{ color: 'var(--dash-muted)' }}>
-                <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: TONE[row.tone].strong }} />
-                <span className="truncate">{row.label}</span>
-              </dt>
-              <dd className="shrink-0 font-mono text-[18px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>
-                {row.value}
-                {row.unit && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-
-      {ratio !== null && (
-        <div
-          className="h-1.5 w-full overflow-hidden rounded-full"
-          style={{ background: TONE[progressTone].soft }}
-          aria-hidden="true"
-          data-progress-label={progress?.label}
-        >
-          <div
-            className="h-full rounded-full transition-[width] duration-300"
-            style={{ width: `${ratio * 100}%`, background: TONE[progressTone].strong }}
-          />
-        </div>
-      )}
-
-      {detail && (
-        <p className="min-w-0 text-[14px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
-      )}
     </div>
   )
 }

@@ -31,7 +31,6 @@ export default function TrafficOverview({
   const measured = now?.rate.measured === true
   const periodLabel = t(rangeLabelKey(range))
   const coverageNote = coverageDetail(coverage, rangeStart, t)
-  const realtimeNote = measured ? t('overview.realTimeWindow') : t('overview.notCollected')
 
   return (
     <section data-dashboard-traffic aria-labelledby="overview-traffic-title" className="flex min-w-0 flex-col gap-3">
@@ -43,10 +42,10 @@ export default function TrafficOverview({
           testId="traffic-service-flow"
           label={t('overview.serviceFlow')}
           icon="hub"
-          iconSize={40}
           tone="memory"
+          badge={t('overview.liveBadge')}
           value={measured ? formatBps(now?.rate.service_bytes_per_sec ?? 0) : '—'}
-          detail={`${t('overview.clientToDepsilo')} · ${realtimeNote}`}
+          detail={measured ? undefined : t('overview.notCollected')}
           loading={nowPending && !now}
           onInfo={() => onInfo('service-flow')}
           infoLabel={t('overview.serviceFlowInfoLabel')}
@@ -55,10 +54,10 @@ export default function TrafficOverview({
           testId="traffic-origin-flow"
           label={t('overview.originFlow')}
           icon="sync"
-          iconSize={40}
           tone="origin"
+          badge={t('overview.liveBadge')}
           value={measured ? formatBps(now?.rate.origin_bytes_per_sec ?? 0) : '—'}
-          detail={`${t('overview.depsiloToUpstream')} · ${realtimeNote}`}
+          detail={measured ? undefined : t('overview.notCollected')}
           loading={nowPending && !now}
           onInfo={() => onInfo('origin-flow')}
           infoLabel={t('overview.originFlowInfoLabel')}
@@ -67,10 +66,9 @@ export default function TrafficOverview({
           testId="traffic-served-total"
           label={t('overview.servedTotal')}
           icon="download"
-          iconSize={40}
           tone="download"
+          badge={periodLabel}
           value={period ? formatBytes(period.bytes_served) : '—'}
-          detail={`${periodLabel} · ${t('overview.deliveredToClients')}`}
           onInfo={() => onInfo('served-total')}
           infoLabel={t('overview.servedTotalInfoLabel')}
         />
@@ -78,12 +76,10 @@ export default function TrafficOverview({
           testId="traffic-origin-total"
           label={t('overview.originTotal')}
           icon="cloud_sync"
-          iconSize={40}
           tone="origin"
+          badge={periodLabel}
           value={period ? formatBytes(period.upstream_bytes) : '—'}
-          detail={coverageNote
-            ? `${periodLabel} · ${coverageNote}`
-            : `${periodLabel} · ${t('overview.readFromUpstream')}`}
+          detail={coverageNote || undefined}
           onInfo={() => onInfo('origin-total')}
           infoLabel={t('overview.originTotalInfoLabel')}
         />

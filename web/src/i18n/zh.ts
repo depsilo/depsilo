@@ -326,6 +326,7 @@ const zh = {
       originTotal: '回源总量',
       clientToDepsilo: '客户端 → Depsilo',
       depsiloToUpstream: 'Depsilo → 上游',
+      liveBadge: '实时',
       realTimeWindow: '实时 · 最近 60 秒平均',
       deliveredToClients: '实际发送给客户端',
       readFromUpstream: '实际从上游读取',

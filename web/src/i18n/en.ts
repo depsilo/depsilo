@@ -323,6 +323,7 @@ const en = {
       originTotal: 'Origin total',
       clientToDepsilo: 'Client → Depsilo',
       depsiloToUpstream: 'Depsilo → upstream',
+      liveBadge: 'Live',
       realTimeWindow: 'Live · last 60s average',
       deliveredToClients: 'Actually sent to clients',
       readFromUpstream: 'Actually read from upstreams',

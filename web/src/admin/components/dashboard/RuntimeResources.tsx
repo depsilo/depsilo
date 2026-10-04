@@ -45,7 +45,9 @@ export default function RuntimeResources({
     : cpuPercent.toFixed(1)
   const cpuDetail = process?.cpu.supported === false
     ? capabilityText(process.cpu, t('overview.notSupported'))
-    : t('overview.cpuBasis', { cores: process?.cpu_cores ?? 0 })
+    : runtimePending && cpuPercent === undefined
+      ? t('overview.collecting')
+      : undefined
   // A single-core progress bar only makes sense up to one full core. Above
   // 100% the number carries the truth instead of a silently full bar.
   const cpuProgress = process?.cpu.supported === true && cpuPercent !== undefined && cpuPercent <= 100
@@ -57,8 +59,8 @@ export default function RuntimeResources({
   const used = process?.memory_used_bytes
   const memoryValue = memorySupported ? formatBytes(process.rss_bytes as number) : '—'
   const memoryDetail = memorySupported
-    ? (limit !== undefined && used !== undefined
-      ? t('overview.memoryWithLimit', { used: formatBytes(used), limit: formatBytes(limit) })
+    ? (limit !== undefined
+      ? undefined
       : t(process?.rss_basis === 'peak' ? 'overview.memoryPeak' : 'overview.memoryProcess'))
     : (process?.memory.reason || t('overview.memoryUnsupported'))
   const memoryProgress = limit !== undefined && used !== undefined && limit > 0
@@ -68,17 +70,9 @@ export default function RuntimeResources({
   const cache = runtime?.cache
   const quota = cache?.quota_bytes ?? null
   const logical = cache?.logical_bytes ?? 0
-  const cacheDetailParts: string[] = []
-  if (quota && quota > 0) {
-    cacheDetailParts.push(t('overview.cacheQuota', { value: formatBytes(quota) }))
-  } else {
-    cacheDetailParts.push(t('overview.cacheNoQuota'))
-  }
-  if (runtime?.disk.supported) {
-    cacheDetailParts.push(t('overview.diskFree', { free: formatBytes(runtime.disk.free_bytes ?? 0), total: formatBytes(runtime.disk.total_bytes ?? 0) }))
-  } else if (runtime) {
-    cacheDetailParts.push(cache?.storage_type === 's3' ? t('overview.storageS3') : t('overview.diskUnsupported'))
-  }
+  const cacheDetail = quota && quota > 0
+    ? undefined
+    : (cache?.storage_type === 's3' ? t('overview.storageS3') : t('overview.cacheNoQuota'))
   const cacheRatio = quota && quota > 0 ? logical / quota : null
 
   const measured = now?.rate.measured === true
@@ -100,7 +94,7 @@ export default function RuntimeResources({
           tone="cpu"
           value={cpuValue}
           unit="%"
-          detail={runtimePending && cpuPercent === undefined ? t('overview.collecting') : cpuDetail}
+          detail={cpuDetail}
           progress={cpuProgress}
           series={cpuSeries}
           loading={runtimePending && cpuPercent === undefined}
@@ -113,9 +107,7 @@ export default function RuntimeResources({
           icon="ram"
           tone="memory"
           value={memoryValue}
-          detail={process?.memory.supported === false
-            ? `${process.memory.reason} · ${t('overview.goRuntimeMemory', { value: formatBytes(runtime?.go_runtime.heap_alloc_bytes ?? 0) })}`
-            : memoryDetail}
+          detail={memoryDetail}
           progress={memoryProgress}
           series={memorySupported ? rssSeries : undefined}
           loading={runtimePending && !runtime}
@@ -128,7 +120,7 @@ export default function RuntimeResources({
           icon="storage"
           tone="cache"
           value={cache ? formatBytes(logical) : '—'}
-          detail={cacheDetailParts.join(' · ')}
+          detail={cacheDetail}
           progress={cacheRatio !== null ? { ratio: cacheRatio, tone: 'cache' } : null}
           series={cache ? cacheSeries : undefined}
           loading={runtimePending && !runtime}
@@ -140,6 +132,7 @@ export default function RuntimeResources({
           label={t('overview.networkLabel')}
           icon="hub"
           tone="memory"
+          badge={t('overview.liveBadge')}
           rows={[
             {
               label: t('overview.serviceRequests'),
@@ -156,7 +149,7 @@ export default function RuntimeResources({
           ]}
           series={measured ? networkSeries : undefined}
           seriesTone="memory"
-          detail={measured ? t('overview.realTimeWindow') : t('overview.notCollected')}
+          detail={measured ? undefined : t('overview.notCollected')}
           loading={nowPending && !now}
           onInfo={() => onInfo('network')}
           infoLabel={t('overview.networkInfoLabel')}
