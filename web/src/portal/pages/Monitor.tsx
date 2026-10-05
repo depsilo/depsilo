@@ -21,8 +21,8 @@ import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
 import StatusDot from '@/components/StatusDot'
 import { UpstreamGroupedPanel, type UpstreamItem } from '@/components/UpstreamCard'
-import { LANGUAGES, type MirrorStatus } from '@/lib/ecosystemData'
-import { upstreamStatus } from '@/lib/upstreamStatus'
+import { LANGUAGES } from '@/lib/ecosystemData'
+import { upstreamStatus, type MirrorStatus } from '@/lib/upstreamStatus'
 
 interface LatencyPoint {
   time: string

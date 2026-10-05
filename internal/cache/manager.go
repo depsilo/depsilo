@@ -717,10 +717,6 @@ func WithResponseValidators(body io.ReadCloser, etag, lastModified string) io.Re
 	})
 }
 
-func responseValidatorsFrom(body io.ReadCloser) ResponseValidators {
-	return responseValidatorsFromMetadata(responseMetadataFrom(body))
-}
-
 func responseValidatorsFromMetadata(headers http.Header) ResponseValidators {
 	return ResponseValidators{
 		ETag:         headers.Get("ETag"),

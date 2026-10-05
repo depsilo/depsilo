@@ -90,25 +90,6 @@ func assertGenericUnauthorized(t *testing.T, rec *httptest.ResponseRecorder, tok
 	}
 }
 
-func assertGenericForbidden(t *testing.T, rec *httptest.ResponseRecorder, token string) {
-	t.Helper()
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
-	}
-	var response map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode forbidden response: %v", err)
-	}
-	if len(response) != 2 || response["code"] != "FORBIDDEN" || response["message"] != "write capability required" {
-		t.Fatalf("forbidden response = %#v", response)
-	}
-	for _, sensitive := range []string{token, "sql", "database", "api_tokens", "users", "injected"} {
-		if sensitive != "" && strings.Contains(strings.ToLower(rec.Body.String()), strings.ToLower(sensitive)) {
-			t.Fatalf("forbidden response leaked %q: %s", sensitive, rec.Body.String())
-		}
-	}
-}
-
 func TestJWTRejectsStaleRoleAndDisabledUser(t *testing.T) {
 	database := newAuthTestDB(t)
 	user := createAuthTestUser(t, database, "operator", "admin", true)

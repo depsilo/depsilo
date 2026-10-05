@@ -12,11 +12,11 @@ import { upstreamStatus } from './upstreamStatus'
 export const DASHBOARD_RANGES: readonly DashboardRange[] = ['1h', '24h', '7d', '30d']
 
 /** First-run default. The operator's choice is remembered after that. */
-export const DEFAULT_DASHBOARD_RANGE: DashboardRange = '30d'
+const DEFAULT_DASHBOARD_RANGE: DashboardRange = '30d'
 
 const RANGE_STORAGE_KEY = 'depsilo-dashboard-range'
 
-export function isDashboardRange(value: unknown): value is DashboardRange {
+function isDashboardRange(value: unknown): value is DashboardRange {
   return typeof value === 'string' && (DASHBOARD_RANGES as readonly string[]).includes(value)
 }
 
@@ -39,7 +39,7 @@ export function hitRateValue(period: DashboardPeriod | undefined): number | null
 }
 
 /** Minimum samples before a latency comparison is presented as a claim. */
-export const MIN_LATENCY_SAMPLES = 20
+const MIN_LATENCY_SAMPLES = 20
 
 export interface LatencyComparison {
   hitMs: number | null
@@ -72,11 +72,6 @@ export function latencyComparison(period: DashboardPeriod | undefined): LatencyC
   return { hitMs, missMs, hitSamples, missSamples, reductionPct, sufficient }
 }
 
-/** Estimated origin traffic avoided by cache hits. Explicitly an estimate. */
-export function estimatedSavedBytes(period: DashboardPeriod | undefined): number {
-  return period?.hit_bytes ?? 0
-}
-
 export interface OriginCoverageNote {
   partial: boolean
   since: string | null
@@ -102,12 +97,6 @@ export function originCoverageNote(
   const partial = !coverage.window_complete
     || (Number.isFinite(start) && Number.isFinite(since) && start < since)
   return { partial, since: coverage.since, measured: true }
-}
-
-/** Compact integer formatting that keeps large counts readable. */
-export function formatCount(value: number): string {
-  if (!Number.isFinite(value)) return '—'
-  return value.toLocaleString()
 }
 
 /** Percentage with one decimal; null renders as an em dash. */

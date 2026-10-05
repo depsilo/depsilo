@@ -7,8 +7,8 @@
 // Lock: chart series need differentiation, and brand colors are
 // functional (identifying) rather than decorative.
 //
-// For ecosystems without a strong public brand color, falls back to
-// teal-aligned tones so the palette as a whole still feels cohesive.
+// Ecosystems without a strong public brand color are mapped by the caller
+// (cache charts read `--spec-*` for unknown series).
 
 export const ECOSYSTEM_COLORS: Record<string, string> = {
   pypi:     'var(--brand)',
@@ -26,21 +26,4 @@ export const ECOSYSTEM_COLORS: Record<string, string> = {
   helm:     '#0f1689',  // Helm deep blue
   docker:   '#2496ed',  // Docker blue
   huggingface: '#ffd21e', // HF yellow
-}
-
-// Brand-aligned fallback for unknown ecosystems / index-based access.
-// Uses the teal/cyan spec-* tokens so unknown series still feel cohesive
-// with the rest of the design system.
-const FALLBACK_PALETTE = [
-  'var(--spec-1)',
-  'var(--spec-2)',
-  'var(--spec-3)',
-  'var(--spec-4)',
-  'var(--brand-strong)',
-  'var(--warn)',
-]
-
-export function getEcosystemColor(name: string | undefined, indexFallback = 0): string {
-  if (name && ECOSYSTEM_COLORS[name]) return ECOSYSTEM_COLORS[name]
-  return FALLBACK_PALETTE[indexFallback % FALLBACK_PALETTE.length]
 }

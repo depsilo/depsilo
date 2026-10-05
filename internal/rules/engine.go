@@ -108,23 +108,6 @@ func WithOnLoadErrorPolicy(policy OnLoadErrorPolicy) EngineOption {
 	}
 }
 
-// WithLoadErrorPolicy is a readable alias for WithOnLoadErrorPolicy.
-func WithLoadErrorPolicy(policy OnLoadErrorPolicy) EngineOption {
-	return WithOnLoadErrorPolicy(policy)
-}
-
-// WithLoadErrorMode accepts the TOML/string representation directly.
-func WithLoadErrorMode(value string) EngineOption {
-	return func(engine *Engine) error {
-		policy, err := ParseOnLoadErrorPolicy(value)
-		if err != nil {
-			return err
-		}
-		engine.onLoadError = policy
-		return nil
-	}
-}
-
 // WithPolicyTelemetry binds metrics or another observer to the engine.
 func WithPolicyTelemetry(telemetry PolicyTelemetry) EngineOption {
 	return func(engine *Engine) error {
@@ -222,12 +205,6 @@ func (s RuleSpecificity) Compare(other RuleSpecificity) int {
 		return -1
 	}
 	return 0
-}
-
-// CompareRuleSpecificity is the function form of RuleSpecificity.Compare for
-// callers that prefer a comparator value when sorting or selecting rules.
-func CompareRuleSpecificity(a, b RuleSpecificity) int {
-	return a.Compare(b)
 }
 
 // RuleCandidate describes one rule that matched an Explain request. Rule is
@@ -659,14 +636,6 @@ const (
 	loadOutcomeAllow
 	loadOutcomeDeny
 )
-
-// loadRules preserves the package-local helper's historical signature. The
-// request evaluators use loadRulesWithState so an explicit deny fallback can
-// be distinguished from an empty, successfully loaded rule set.
-func (e *Engine) loadRules() ([]compiledRule, error) {
-	rules, _, err := e.loadRulesWithState()
-	return rules, err
-}
 
 func (e *Engine) loadRulesWithState() ([]compiledRule, loadOutcome, error) {
 	if e == nil {

@@ -1,88 +1,10 @@
 // web/src/lib/ecosystemData.ts
+//
+// The Quick Start language and package-manager catalog. Everything here is
+// real configuration data: commands, config-file paths, and per-manager
+// verification steps the user can copy into their own project.
 
 import type { EcosystemType } from '@/lib/ecosystemTypes'
-
-// ── Seeded PRNG for decorative sparklines ──────────────────────────
-
-function seeded(seed: number): () => number {
-  let s = seed
-  return () => {
-    s = (s * 9301 + 49297) % 233280
-    return s / 233280
-  }
-}
-
-export function genSeries(
-  n: number,
-  seed: number,
-  opts: { base?: number; amp?: number; drift?: number; floor?: number; ceil?: number } = {}
-): number[] {
-  const { base = 0.5, amp = 0.3, drift = 0, floor = 0, ceil = 1 } = opts
-  const r = seeded(seed)
-  const out: number[] = []
-  let v = base
-  for (let i = 0; i < n; i++) {
-    v += (r() - 0.5) * amp * 0.4 + drift / n
-    v = Math.max(floor, Math.min(ceil, v))
-    out.push(v)
-  }
-  return out
-}
-
-// ── KPI series (Monitor page) ──────────────────────────────────────
-
-export const KPI_SERIES = {
-  hitRate:  genSeries(60, 11, { base: 0.93, amp: 0.04, floor: 0.86, ceil: 0.99 }),
-  requests: genSeries(60, 23, { base: 0.55, amp: 0.5,  floor: 0.15, ceil: 0.95 }),
-  saved:    genSeries(60, 37, { base: 0.6,  amp: 0.3,  drift: 0.1,  floor: 0.3, ceil: 0.95 }),
-  latency:  genSeries(60, 51, { base: 0.4,  amp: 0.3,  floor: 0.15, ceil: 0.7 }),
-}
-
-// ── Mirror series (Monitor page) ──────────────────────────────────
-
-export type MirrorStatus = 'healthy' | 'degraded' | 'failed'
-
-export interface MirrorDef {
-  type: string
-  p50: number
-  hit: string
-  status: MirrorStatus
-  // url is intentionally absent — the Monitor page sources upstream URLs from the
-  // live /api/v1/stats API response (Task 1), not from this static decorative data.
-  series: number[]
-}
-
-const RAW_MIRRORS: Omit<MirrorDef, 'series'>[] = [
-  { type: 'pypi',     p50: 38,  hit: '96.1%', status: 'healthy'  },
-  { type: 'npm',      p50: 41,  hit: '94.7%', status: 'healthy'  },
-  { type: 'maven',    p50: 62,  hit: '89.3%', status: 'healthy'  },
-  { type: 'cargo',    p50: 35,  hit: '97.2%', status: 'healthy'  },
-  { type: 'go',       p50: 51,  hit: '92.8%', status: 'healthy'  },
-  { type: 'docker',   p50: 184, hit: '78.4%', status: 'degraded' },
-  { type: 'helm',     p50: 47,  hit: '91.5%', status: 'healthy'  },
-  { type: 'rubygems', p50: 44,  hit: '93.0%', status: 'healthy'  },
-  { type: 'nuget',    p50: 58,  hit: '88.2%', status: 'healthy'  },
-  { type: 'apt',      p50: 72,  hit: '85.6%', status: 'healthy'  },
-  { type: 'conda',    p50: 0,   hit: '-',     status: 'failed'   },
-  { type: 'cran',     p50: 53,  hit: '90.4%', status: 'healthy'  },
-  { type: 'composer', p50: 49,  hit: '92.1%', status: 'healthy'  },
-  { type: 'alpine',   p50: 40,  hit: '94.0%', status: 'healthy'  },
-]
-
-export const MIRROR_DEFS: MirrorDef[] = RAW_MIRRORS.map((m, idx) => {
-  const seed = (idx + 1) * 7
-  let series: number[]
-  if (m.status === 'failed') {
-    series = genSeries(40, seed, { base: 0.4, amp: 0.1 }).map((v, i) => (i > 26 ? 0 : v))
-  } else if (m.status === 'degraded') {
-    series = genSeries(40, seed, { base: 0.55, amp: 0.5, drift: 0.4, floor: 0.1, ceil: 1 })
-  } else {
-    series = genSeries(40, seed, { base: 0.5, amp: 0.25, floor: 0.2, ceil: 0.9 })
-  }
-  return { ...m, series }
-})
-
-// ── Language / manager data (QuickStart page) ─────────────────────
 
 // NOTE: These snippet paths use the actual Depsilo backend routes (/pypi/simple/, /rubygems/),
 // which differ from the design reference data.jsx that had incorrect paths (/pip/simple/, /gem/).

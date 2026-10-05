@@ -1,4 +1,5 @@
-import type { MirrorStatus } from '@/lib/ecosystemData'
+/** Health of one upstream mirror, as reported by the public stats endpoint. */
+export type MirrorStatus = 'healthy' | 'degraded' | 'failed'
 
 interface UpstreamStatusInput {
   healthy: boolean

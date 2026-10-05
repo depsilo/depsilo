@@ -67,16 +67,6 @@ func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheCo
 	return handler
 }
 
-// NewWithPrefix creates a legacy-layout route. Callers that identify the route
-// as an extra index must use NewWithOptions and provide an artifact signing key.
-func NewWithPrefix(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB, pathPrefix, adapterID string) (*Handler, error) {
-	return newWithOptions(cacheMgr, selector, cfg, database, Options{
-		PathPrefix:         pathPrefix,
-		AdapterID:          adapterID,
-		UpstreamSimplePath: "/simple",
-	})
-}
-
 // NewWithOptions creates a PyPI-compatible handler with an explicit upstream
 // project-index root and signed artifact references.
 func NewWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB, options Options) (*Handler, error) {

@@ -80,7 +80,7 @@ function subscribeToTheme(onStoreChange: () => void) {
   }
 }
 
-export function setThemePreference(theme: ThemePreference) {
+function setThemePreference(theme: ThemePreference) {
   memoryPreference = theme
   writeThemePreference(theme)
   applyThemePreference(theme)

@@ -97,15 +97,9 @@ func normalizeNameStrict(ecosystem, name string) (string, error) {
 	return dialect.NormalizePackageName(name)
 }
 
-// NormalizeVersion maps a valid request-side version to the dataset's
-// dialect spelling. Invalid versions return ""; production paths use the
-// strict helper so they never guess. Go advisories omit the GOPROXY "v"
-// prefix, so it is removed before validation.
-func NormalizeVersion(ecosystem, version string) string {
-	normalized, _ := normalizeVersionStrict(ecosystem, version)
-	return normalized
-}
-
+// normalizeVersionStrict maps a request-side version to the dataset's dialect
+// spelling, rejecting invalid versions instead of guessing. Go advisories omit
+// the GOPROXY "v" prefix, so it is removed before validation.
 func normalizeVersionStrict(ecosystem, version string) (string, error) {
 	if version == "" {
 		return "", nil

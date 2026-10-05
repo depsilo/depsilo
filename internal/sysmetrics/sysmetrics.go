@@ -106,14 +106,6 @@ func NewSampler(diskPath string, diskEnabled bool) *Sampler {
 	}
 }
 
-// SetInterval overrides the sampling cadence. Test-only helper.
-func (s *Sampler) SetInterval(d time.Duration) {
-	if s == nil || d <= 0 {
-		return
-	}
-	s.interval = d
-}
-
 // Start samples immediately and then on the configured interval until ctx is
 // cancelled. It is safe to call once per process.
 func (s *Sampler) Start(ctx context.Context) {

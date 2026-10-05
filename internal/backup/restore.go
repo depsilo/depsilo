@@ -426,10 +426,6 @@ func installStateWith(ctx context.Context, files map[string]extractedFile, targe
 	return installJournaled(ctx, files, targets, operations)
 }
 
-func stageBesideTarget(source, target string) (string, error) {
-	return stageBesideTargetContext(context.Background(), source, target)
-}
-
 func stageBesideTargetContext(ctx context.Context, source, target string) (string, error) {
 	in, err := os.Open(source)
 	if err != nil {

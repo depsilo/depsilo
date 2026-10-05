@@ -163,7 +163,6 @@
      `--brand*` is the neutral accent (selection, links, active navigation);
      green survives only in `--ok*` / `--hit*`, where it is a status. */
   --bg-page:   var(--background);
-  --bg-panel:  var(--card);
   --bg-card:   var(--card);
   --bg-soft:   var(--muted);
   --bg-hover:  var(--accent);
@@ -181,7 +180,6 @@
   --text-subtle: var(--muted-foreground);
 
   --brand:        var(--primary);
-  --brand-strong: var(--primary);
   --brand-soft:   var(--accent);
   --brand-border: var(--border);
   --brand-text:   var(--foreground);
@@ -226,7 +224,6 @@
   --btn:       var(--btn-primary-bg);
   --btn-press: var(--btn-primary-press);
   --btn-fg:    var(--btn-primary-fg);
-  --live:      oklch(0.6 0.14 240);
   --grid:      color-mix(in oklab, var(--border) 35%, transparent);
 
   /* shadcn/ui radius scale: --radius is 0.625rem, so sm/md/lg/xl land on
@@ -235,7 +232,7 @@
   /* Surfaces take shadcn's --radius-xl (14px); controls take md (8px). */
   --r-card: 14px;
   --r-shell: 14px;
-  --r-sm: 6px; --r-md: 8px; --r-lg: 10px; --r-xl: 14px;
+  --r-sm: 6px; --r-md: 8px;
 
   /* Portal shell geometry. The sticky header rail, the page content column,
      and the Monitor summary that pins under the header all resolve against
@@ -243,9 +240,6 @@
   --portal-header-height: 52px;
   --portal-gutter: clamp(12px, 2vw, 32px);
   --portal-width: clamp(1280px, 92vw, 1504px);
-
-  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
-  --s-6: 24px; --s-8: 32px; --s-12: 48px;
 
   /* shadcn/ui elevation: Tailwind's shadow-sm / shadow-md / shadow-lg. */
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -311,7 +305,6 @@ html.dark,
 
   /* Compatibility aliases — see the light block. */
   --bg-page:   var(--background);
-  --bg-panel:  var(--card);
   --bg-card:   var(--card);
   --bg-soft:   var(--muted);
   --bg-hover:  var(--accent);
@@ -329,7 +322,6 @@ html.dark,
   --text-subtle: var(--muted-foreground);
 
   --brand:        var(--primary);
-  --brand-strong: var(--primary);
   --brand-soft:   var(--accent);
   --brand-border: var(--border);
   --brand-text:   var(--foreground);
@@ -367,7 +359,6 @@ html.dark,
   --btn:       var(--btn-primary-bg);
   --btn-press: var(--btn-primary-press);
   --btn-fg:    var(--btn-primary-fg);
-  --live:      oklch(0.72 0.14 240);
   --grid:      color-mix(in oklab, var(--border) 35%, transparent);
 
   /* Elevation is the same offset/blur system in both themes; dark surfaces
@@ -420,7 +411,6 @@ html.dark,
     --radius: 0.625rem;
 
     --bg-page:   var(--background);
-    --bg-panel:  var(--card);
     --bg-card:   var(--card);
     --bg-soft:   var(--muted);
     --bg-hover:  var(--accent);
@@ -438,7 +428,6 @@ html.dark,
     --text-subtle: var(--muted-foreground);
 
     --brand:        var(--primary);
-    --brand-strong: var(--primary);
     --brand-soft:   var(--accent);
     --brand-border: var(--border);
     --brand-text:   var(--foreground);
@@ -469,27 +458,11 @@ html.dark,
     --focus-ring:    oklch(0.556 0 0);
 
     --bg:        oklch(0.145 0 0);
-    --surface:   oklch(0.205 0 0);
-    --inset:     oklch(0.269 0 0);
-    --hover:     oklch(0.269 0 0);
-    --line:      oklch(1 0 0 / 10%);
-    --line-2:    oklch(1 0 0 / 20%);
-    --fg:        oklch(0.985 0 0);
-    --fg-mut:    oklch(0.708 0 0);
-    --fg-faint:  oklch(0.708 0 0);
     --hit:       var(--ok);
-    --hit-press: var(--ok);
-    --hit-bg:    var(--ok-fill);
     --on-hit:    var(--ok-text);
     --btn:       var(--btn-primary-bg);
     --btn-press: var(--btn-primary-press);
     --btn-fg:    var(--btn-primary-fg);
-    --slow:      var(--warn);
-    --slow-bg:   var(--warn-fill);
-    --miss:      var(--danger);
-    --miss-bg:   var(--danger-fill);
-    --live:      oklch(0.72 0.14 240);
-    --glow:      transparent;
     --grid:      color-mix(in oklab, var(--border) 35%, transparent);
 
     --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4);
@@ -572,7 +545,7 @@ body { overflow-x: clip; }
    (e.g. `pip install --no-cache` looks like `pip install—no-cache`).
    Also reset letter-spacing so inherited negative tracking doesn't shrink
    inter-character gaps inside snippets. */
-pre, code, .code-mono {
+pre, code {
   font-feature-settings: "liga" 0, "calt" 0;
   font-variant-ligatures: none;
   letter-spacing: 0;
@@ -617,45 +590,6 @@ pre, code, .code-mono {
   box-shadow: var(--shadow-card);
 }
 
-/* Admin surface hierarchy: the canvas stays pure white in light mode while
-   primary instruments use a precise keyline and supporting rails use the
-   existing inset surface. Depth comes from material contrast, not effects. */
-.admin-primary-panel {
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border-soft);
-}
-.admin-secondary-panel {
-  background: var(--bg-soft);
-}
-
-/* One continuous data rail keeps Dashboard KPIs from reading as four loose
-   fragments. Mobile gets an internal 2x2 cross; desktop gets one baseline. */
-.admin-kpi-section > header {
-  margin-bottom: 0;
-}
-.admin-kpi-grid > * {
-  min-width: 0;
-  padding: 16px 14px 18px;
-}
-.admin-kpi-grid > :nth-child(even) {
-  border-left: 1px solid var(--border-soft);
-}
-.admin-kpi-grid > :nth-child(n + 3) {
-  border-top: 1px solid var(--border-soft);
-}
-@media (min-width: 1024px) {
-  .admin-kpi-grid > * {
-    padding: 18px 24px 20px;
-  }
-  .admin-kpi-grid > :nth-child(n) {
-    border-top: 0;
-    border-left: 0;
-  }
-  .admin-kpi-grid > :not(:first-child) {
-    border-left: 1px solid var(--border-soft);
-  }
-}
-
 .shell {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -669,14 +603,6 @@ pre, code, .code-mono {
   color: var(--logo-mark);
 }
 
-.divider-h {
-  height: 1px;
-  background: var(--border);
-}
-
-.row-hover { transition: background 140ms ease; }
-.row-hover:hover { background: var(--bg-hover); }
-
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -687,7 +613,6 @@ pre, code, .code-mono {
    delayed blocks hidden until their turn. */
 .fade-up-d1 { animation-delay: 70ms; }
 .fade-up-d2 { animation-delay: 140ms; }
-.fade-up-d3 { animation-delay: 210ms; }
 
 /* ── Hit-area extension ───────────────────────────────────
    Small header controls (endpoint pill, nav tabs, admin link) are
@@ -703,34 +628,6 @@ pre, code, .code-mono {
   bottom: -9px;
   left: 0;
   right: 0;
-}
-
-@keyframes skeletonPulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 0.85; }
-}
-.skeleton {
-  background: var(--bg-soft);
-  border-radius: var(--r-sm);
-  animation: skeletonPulse 1.4s ease-in-out infinite;
-}
-
-/* Keep existing animate-* helpers for pages that use them */
-@keyframes ping-health {
-  0%   { transform: scale(1); opacity: 1; }
-  75%  { transform: scale(2.2); opacity: 0; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-@layer utilities {
-  .animate-ping-health { animation: ping-health 1.5s cubic-bezier(0,0,0.2,1) infinite; }
-}
-
-@keyframes fade-in-down {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@layer utilities {
-  .animate-fade-in { animation: fade-in-down 0.3s ease-out; }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -790,7 +687,6 @@ a:focus:not(:focus-visible) {
      lifts link text from 5.17:1 to 5.6:1 on white. The tints follow: a cooler
      blue-grey rather than the pastel #EFF6FF wash. */
   --brand: #2b5fda;
-  --brand-strong: #1e47b8;
   --brand-text: #2b5fda;
   --brand-soft: #ecf2fd;
   --brand-border: #b9cbf4;
@@ -809,7 +705,6 @@ a:focus:not(:focus-visible) {
 :root[data-surface='portal'][data-theme='dark'],
 html.dark[data-surface='portal'] {
   --brand: #6b93f7;
-  --brand-strong: #2b5fda;
   /* Lightest step that still clears AA on the near-black canvas (10.9:1) and
      on the tinted rail surface (8.6:1) without going pastel grey. */
   --brand-text: #a8c3fb;
@@ -1171,23 +1066,6 @@ button.portal-header-control {
   animation: managerConfigReveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ── Scroll-driven reveal ─────────────────────────────────
-   Sections fade + nudge up 8px as they enter the viewport. Pure
-   CSS, GPU-composited, no IntersectionObserver. Stagger comes from
-   the explicit animation-range on each child so groups read in a
-   slight cascade rather than all at once. */
-@keyframes svReveal {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@supports (animation-timeline: view()) {
-  .sv-reveal {
-    animation: svReveal linear both;
-    animation-timeline: view();
-    animation-range: entry 0% entry 60%;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
@@ -1202,72 +1080,6 @@ button.portal-header-control {
   .fade-up { animation: none; }
 }
 
-/* ── Dashboard live download rail ──────────────────────────
-   The data itself stays still and readable. A quiet signal line plus a short
-   entrance on newly keyed rows provides motion without turning the feed into
-   a marquee. */
-@keyframes liveDownloadEnter {
-  from { opacity: 0; transform: translateX(-8px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes liveDownloadSweep {
-  from { transform: translateX(-140%); }
-  to { transform: translateX(440%); }
-}
-@keyframes liveDownloadPulse {
-  0%, 100% { opacity: 0.55; box-shadow: 0 0 0 0 color-mix(in oklab, var(--live) 28%, transparent); }
-  50% { opacity: 1; box-shadow: 0 0 0 4px color-mix(in oklab, var(--live) 0%, transparent); }
-}
-.live-download-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.live-download-item + .live-download-item {
-  border-top: 1px solid var(--border-soft, var(--border));
-}
-.live-download-row {
-  animation: liveDownloadEnter 180ms ease-out both;
-}
-.live-download-pulse {
-  animation: liveDownloadPulse 2.4s ease-in-out infinite;
-}
-.live-download-flow {
-  position: relative;
-  height: 1px;
-  overflow: hidden;
-  background: var(--border-soft, var(--border));
-}
-.live-download-flow::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 18%;
-  border-radius: 999px;
-  background: var(--live);
-  animation: liveDownloadSweep 3.2s linear infinite;
-}
-.live-download-flow-paused::after {
-  animation: none;
-  opacity: 0;
-}
-@media (min-width: 640px) {
-  .live-download-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .live-download-item + .live-download-item {
-    border-top: 0;
-    border-left: 1px solid var(--border-soft, var(--border));
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-download-row,
-  .live-download-pulse,
-  .live-download-flow::after {
-    animation: none !important;
-  }
-}
-
 /* ── Reusable chip / pill ── */
 .chip {
   display: inline-flex;
@@ -1280,12 +1092,6 @@ button.portal-header-control {
   color: var(--text-soft);
   background: transparent;
 }
-.chip-brand {
-  color: var(--brand-text);
-  background: var(--brand-soft);
-  border-color: var(--brand-border);
-}
-
 /* ── Overview (Dashboard) local palette ─────────────────────────────
    Scoped semantic variables for the Overview cards and its blue interaction
    accent. The wrapper is intentionally NOT a card: no background, radius,

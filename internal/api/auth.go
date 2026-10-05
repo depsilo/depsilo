@@ -383,12 +383,3 @@ func EnsureInitialAdmin(database *gorm.DB, setupPending bool) error {
 	}
 	return nil
 }
-
-// EnsureDefaultAdmin is retained for source compatibility. New code should
-// call EnsureInitialAdmin and explicitly say whether interactive setup is
-// pending. It no longer creates the predictable admin/admin credential.
-func EnsureDefaultAdmin(database *gorm.DB) {
-	if err := EnsureInitialAdmin(database, false); err != nil {
-		zap.L().Error("failed to create initial administrator", zap.Error(err))
-	}
-}

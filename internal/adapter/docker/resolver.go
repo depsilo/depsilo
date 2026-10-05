@@ -148,7 +148,3 @@ func (r *Resolver) Default() *Registry {
 	}
 	return r.registries[r.defaultReg]
 }
-
-func (r *Resolver) HasRegistries() bool {
-	return len(r.registries) > 0
-}

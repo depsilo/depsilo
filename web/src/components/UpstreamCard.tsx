@@ -113,7 +113,7 @@ function normalizeBeats(
   }
 }
 
-export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
+function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
   const { t } = useTranslation()
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
@@ -264,7 +264,7 @@ export function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
 
 // ── Upstream row (name + latency + dot + heartbeat) ────────────────
 
-export function UpstreamRow({
+function UpstreamRow({
   upstream,
   actions,
   metadata,
