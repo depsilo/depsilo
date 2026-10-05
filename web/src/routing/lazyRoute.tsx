@@ -1,6 +1,5 @@
 import {
   Component,
-  lazy,
   Suspense,
   type ComponentType,
   type ReactNode,
@@ -16,6 +15,11 @@ type RouteSurface = 'content' | 'page'
 
 interface LazyRouteOptions {
   surface?: RouteSurface
+}
+
+/** Route component that can be warmed before the user navigates to it. */
+export type LazyRouteComponent<Props extends object> = ComponentType<Props> & {
+  preload: () => void
 }
 
 interface RouteErrorCatcherProps {
@@ -111,8 +115,31 @@ function RouteFailure({ surface }: { surface: RouteSurface }) {
 export function lazyRoute<Props extends object>(
   load: () => Promise<{ default: ComponentType<Props> }>,
   { surface = 'content' }: LazyRouteOptions = {},
-): ComponentType<Props> {
-  const LazyComponent = lazy(load)
+): LazyRouteComponent<Props> {
+  // `React.lazy` suspends on a component's first render even when its chunk is
+  // already in memory, so a hover-warmed route still flashes the fallback on
+  // the way in. Caching the resolved component instead lets a warm route render
+  // synchronously, which is what makes prefetching actually pay off.
+  let resolved: ComponentType<Props> | undefined
+  let pending: Promise<void> | undefined
+  let failure: unknown
+
+  const start = (): Promise<void> => {
+    if (!pending && !resolved && !failure) {
+      pending = load().then(
+        module => { resolved = module.default },
+        error => { failure = error },
+      )
+    }
+    return pending ?? Promise.resolve()
+  }
+
+  function RouteContent(props: Props) {
+    if (failure) throw failure
+    if (!resolved) throw start()
+    const Resolved = resolved
+    return <Resolved {...props} />
+  }
 
   function LazyRoute(props: Props) {
     const { pathname } = useLocation()
@@ -122,12 +149,13 @@ export function lazyRoute<Props extends object>(
         fallback={<RouteFailure surface={surface} />}
       >
         <Suspense fallback={<RouteLoading surface={surface} />}>
-          <LazyComponent {...props} />
+          <RouteContent {...props} />
         </Suspense>
       </RouteErrorCatcher>
     )
   }
 
+  LazyRoute.preload = () => { void start() }
   LazyRoute.displayName = 'LazyRoute'
-  return LazyRoute
+  return LazyRoute as LazyRouteComponent<Props>
 }

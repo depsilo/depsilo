@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 
 import Badge from '@/components/Badge'
+import { prefetchAdminRoute } from '../lazyRoutes'
 import { resolveAdminRoute, type AdminNavigationGroup } from '../routes'
 
 interface AdminLocalNavProps {
@@ -14,6 +16,18 @@ export default function AdminLocalNav({ workspace }: AdminLocalNavProps) {
   const { pathname } = useLocation()
   const currentRoute = resolveAdminRoute(pathname)
 
+  // Sibling destinations are one click apart and their chunks are a few KB, so
+  // warm them as soon as the current page paints rather than on first click.
+  const currentRouteId = currentRoute?.id
+  useEffect(() => {
+    const siblings = workspace.routes.filter(route => route.id !== currentRouteId)
+    if (siblings.length === 0) return undefined
+    const timer = window.setTimeout(() => {
+      for (const route of siblings) prefetchAdminRoute(route.id)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [currentRouteId, workspace])
+
   return (
     <nav
       data-admin-page-navigation={workspace.id}
@@ -25,6 +39,8 @@ export default function AdminLocalNav({ workspace }: AdminLocalNavProps) {
           <Link
             key={route.id}
             to={route.href}
+            onPointerEnter={() => prefetchAdminRoute(route.id)}
+            onFocus={() => prefetchAdminRoute(route.id)}
             aria-current={route.id === currentRoute?.id ? 'page' : undefined}
             className="stripe-focus-ring admin-page-destination"
           >

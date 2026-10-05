@@ -11,27 +11,30 @@ import { ONBOARDING_GATE_QUERY_KEY } from '@/lib/onboarding'
 import { readLocalStorage } from '@/lib/storage'
 import { lazyRoute } from '@/routing/lazyRoute'
 import RouteNotFound from '@/routing/RouteNotFound'
+import { adminRouteComponents } from './lazyRoutes'
 import { adminRouteManifest, type AdminRouteId } from './routes'
 
 const LoginV2 = lazyRoute(() => import('./pages/Login'), { surface: 'page' })
 const AdminShell = lazyRoute(() => import('./AdminShell'), { surface: 'page' })
-const DashboardV2 = lazyRoute(() => import('./pages/Dashboard'))
-const ConnectProject = lazyRoute(() => import('./pages/ConnectProject'))
-const Attention = lazyRoute(() => import('./pages/Attention'))
-const CacheManageV2 = lazyRoute(() => import('./pages/CacheManage'))
-const CacheIndexes = lazyRoute(() => import('./pages/CacheIndexes'))
-const CompileCache = lazyRoute(() => import('./pages/CompileCache'))
-const UpstreamsV2 = lazyRoute(() => import('./pages/Upstreams'))
-const UpstreamUpdates = lazyRoute(() => import('./pages/UpstreamUpdates'))
-const AccessLogsV2 = lazyRoute(() => import('./pages/AccessLogs'))
-const AuditLogsV2 = lazyRoute(() => import('./pages/AuditLogs'))
-const Quarantine = lazyRoute(() => import('./pages/Quarantine'))
-const RulesV2 = lazyRoute(() => import('./pages/Rules'))
-const Security = lazyRoute(() => import('./pages/Security'))
-const Projects = lazyRoute(() => import('./pages/Projects'))
-const UsersV2 = lazyRoute(() => import('./pages/Users'))
-const License = lazyRoute(() => import('./pages/License'))
-const SettingsV2 = lazyRoute(() => import('./pages/Settings'))
+const {
+  dashboard: DashboardV2,
+  connect: ConnectProject,
+  attention: Attention,
+  cache: CacheManageV2,
+  cacheIndexes: CacheIndexes,
+  compileCache: CompileCache,
+  upstreams: UpstreamsV2,
+  upstreamUpdates: UpstreamUpdates,
+  accessLogs: AccessLogsV2,
+  auditLogs: AuditLogsV2,
+  quarantine: Quarantine,
+  rules: RulesV2,
+  security: Security,
+  projects: Projects,
+  users: UsersV2,
+  license: License,
+  settings: SettingsV2,
+} = adminRouteComponents
 
 const routeElements = {
   dashboard: <DashboardV2 />,

@@ -52,7 +52,6 @@ test('tab workspaces keep their own commands below the rail', async ({ page }) =
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/admin/cache')
 
-  const rail = page.locator('[data-admin-page-navigation="cache"]')
   const description = page.locator('[data-admin-page-description]')
   const actions = page.locator('[data-admin-page-actions]')
   await expect(actions.getByRole('button', { name: '预热', exact: true })).toBeVisible()
@@ -71,6 +70,35 @@ test('tab workspaces keep their own commands below the rail', async ({ page }) =
   })
   expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.rail.bottom)
   await expect(description).toBeVisible()
+})
+
+test('warmed workspace destinations switch without a loading flash', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+
+  // The rail warms sibling chunks as soon as the current page paints.
+  const warm = page.waitForResponse(response => /CacheIndexes/.test(response.url()))
+  await page.goto('/admin/cache')
+
+  const rail = page.locator('[data-admin-page-navigation="cache"]')
+  await expect(rail).toBeVisible()
+  await warm
+  await page.waitForTimeout(300)
+
+  await page.evaluate(() => {
+    const probe = { seen: false }
+    Reflect.set(window, '__loadingProbe', probe)
+    new MutationObserver(() => {
+      if (document.querySelector('[data-route-state="loading"]')) probe.seen = true
+    }).observe(document.body, { childList: true, subtree: true })
+  })
+
+  await rail.getByRole('link', { name: '索引缓存', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/indexes$/)
+  await expect(rail.getByRole('link', { name: '索引缓存', exact: true })).toHaveAttribute('aria-current', 'page')
+  const sawLoading = await page.evaluate(() => Boolean(
+    (Reflect.get(window, '__loadingProbe') as { seen: boolean }).seen,
+  ))
+  expect(sawLoading).toBe(false)
 })
 
 test('Dashboard aligns its snapshot with both fluid page content seams', async ({ page }) => {
