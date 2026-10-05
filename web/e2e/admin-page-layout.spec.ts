@@ -48,6 +48,31 @@ test('workspace destinations are the page header tabs', async ({ page }) => {
   await expect(header.locator('[data-admin-page-navigation="cache"] a[aria-current="page"]')).toHaveText('编译缓存')
 })
 
+test('tab workspaces keep their own commands below the rail', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto('/admin/cache')
+
+  const rail = page.locator('[data-admin-page-navigation="cache"]')
+  const description = page.locator('[data-admin-page-description]')
+  const actions = page.locator('[data-admin-page-actions]')
+  await expect(actions.getByRole('button', { name: '预热', exact: true })).toBeVisible()
+  await expect(actions.getByRole('button', { name: /清理缓存/ })).toBeVisible()
+
+  // The rail owns the header band; the selected tab's copy and commands sit one
+  // level below it instead of sharing the workspace navigation row.
+  const geometry = await page.evaluate(() => {
+    const box = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector)
+      if (!element) throw new Error(`missing ${selector}`)
+      const rect = element.getBoundingClientRect()
+      return { top: rect.top, bottom: rect.bottom }
+    }
+    return { rail: box('[data-admin-page-navigation="cache"]'), actions: box('[data-admin-page-actions]') }
+  })
+  expect(geometry.actions.top).toBeGreaterThanOrEqual(geometry.rail.bottom)
+  await expect(description).toBeVisible()
+})
+
 test('Dashboard aligns its snapshot with both fluid page content seams', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 2048, height: 1000 })

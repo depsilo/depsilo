@@ -53,45 +53,64 @@ export default function AdminPage({
     >
       {hasHeader && (
         <header data-admin-page-header className="mb-4 min-w-0">
-          <div
-            className={`flex min-w-0 flex-col gap-3 sm:flex-row sm:justify-between ${workspaceTabs ? 'sm:items-center sm:border-b sm:border-[var(--border)]' : 'sm:items-start'}`}
-          >
-            {(resolvedTitle || description) && (
-              <div className={`min-w-0 ${workspaceTabs ? 'flex-1' : 'max-w-[72ch]'}`}>
-                {resolvedTitle && (
-                  <h1
-                    data-admin-page-title
-                    className={workspaceTabs ? 'sr-only' : 'text-[26px] font-[650] leading-[1.25]'}
-                    style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
-                  >
-                    {resolvedTitle}
-                  </h1>
-                )}
-                {workspaceTabs && <AdminLocalNav workspace={workspaceTabs} />}
-                {!workspaceTabs && description && (
-                  <div
-                    data-admin-page-description
-                    className={`${resolvedTitle ? 'mt-1.5' : ''} text-[12px] leading-[1.6]`}
-                    style={{ color: 'var(--text-soft)' }}
-                  >
-                    {description}
-                  </div>
-                )}
-              </div>
-            )}
-            {actions && (
-              <div data-admin-page-actions className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:justify-end">
-                {actions}
-              </div>
-            )}
-          </div>
-          {workspaceTabs && description && (
-            <div
-              data-admin-page-description
-              className="mt-2 max-w-[72ch] text-[12px] leading-[1.6]"
-              style={{ color: 'var(--text-soft)' }}
-            >
-              {description}
+          {workspaceTabs ? (
+            <>
+              {resolvedTitle && (
+                <h1 data-admin-page-title className="sr-only">
+                  {resolvedTitle}
+                </h1>
+              )}
+              {/* The rail owns the header band; the destinations' own copy and
+                  commands belong to the selected tab, one level below it. */}
+              <AdminLocalNav workspace={workspaceTabs} />
+              {(description || actions) && (
+                <div className="mt-2 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  {description && (
+                    <div
+                      data-admin-page-description
+                      className="min-w-0 max-w-[72ch] text-[12px] leading-[1.6]"
+                      style={{ color: 'var(--text-soft)' }}
+                    >
+                      {description}
+                    </div>
+                  )}
+                  {actions && (
+                    <div data-admin-page-actions className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:justify-end">
+                      {actions}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              {(resolvedTitle || description) && (
+                <div className="min-w-0 max-w-[72ch]">
+                  {resolvedTitle && (
+                    <h1
+                      data-admin-page-title
+                      className="text-[26px] font-[650] leading-[1.25]"
+                      style={{ color: 'var(--text)', fontFamily: 'var(--font-display)' }}
+                    >
+                      {resolvedTitle}
+                    </h1>
+                  )}
+                  {description && (
+                    <div
+                      data-admin-page-description
+                      className={`${resolvedTitle ? 'mt-1.5' : ''} text-[12px] leading-[1.6]`}
+                      style={{ color: 'var(--text-soft)' }}
+                    >
+                      {description}
+                    </div>
+                  )}
+                </div>
+              )}
+              {actions && (
+                <div data-admin-page-actions className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto sm:justify-end">
+                  {actions}
+                </div>
+              )}
             </div>
           )}
         </header>

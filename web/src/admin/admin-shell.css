@@ -21,14 +21,6 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* From sm up the rail belongs to the header row so it also spans the page
-   actions; below sm the tabs keep their own rule above the stacked buttons. */
-@media (min-width: 640px) {
-  .admin-page-navigation {
-    border-bottom-width: 0;
-  }
-}
-
 .admin-page-destinations {
   display: flex;
   min-width: 0;
