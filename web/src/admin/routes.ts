@@ -103,6 +103,19 @@ export function getAdminRouteHref(id: AdminRouteId): string {
   return route.href
 }
 
+/**
+ * Workspaces that own sibling destinations. These render their destinations as
+ * the page header tabs, so the rail stands in for the page title. `connect` is
+ * an onboarding detour inside Overview, not a sibling of it.
+ */
+export function resolveWorkspaceNavigation(pathname: string): AdminNavigationGroup | undefined {
+  const currentRoute = resolveAdminRoute(pathname)
+  if (!currentRoute || currentRoute.id === 'connect') return undefined
+  const workspace = adminNavigationGroups.find(group => group.id === currentRoute.navGroup)
+  if (!workspace || workspace.routes.length < 2) return undefined
+  return workspace
+}
+
 function normalizePathname(pathname: string): string {
   const withoutQuery = pathname.split(/[?#]/, 1)[0] || '/'
   const withoutTrailingSlash = withoutQuery.replace(/\/+$/, '') || '/'

@@ -3,15 +3,6 @@
    Portal; under shadcn/ui both surfaces share one neutral theme, so Admin
    inherits the global tokens and this file keeps only Admin's layout. */
 
-[data-admin-shell] .admin-page-destination[aria-current="page"] {
-  color: var(--brand);
-  border-bottom-color: var(--brand);
-}
-
-[data-admin-shell] .admin-page-destination:hover {
-  color: var(--brand);
-}
-
 [data-admin-workspace-row] {
   border: 1px solid transparent;
 }
@@ -20,20 +11,29 @@
   border-color: var(--border-strong);
 }
 
+/* The workspace rail occupies the page header slot, so its destinations are
+   sized as page titles rather than as secondary navigation. */
 .admin-page-navigation {
   display: flex;
   min-width: 0;
   align-items: stretch;
   gap: 16px;
-  margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
+}
+
+/* From sm up the rail belongs to the header row so it also spans the page
+   actions; below sm the tabs keep their own rule above the stacked buttons. */
+@media (min-width: 640px) {
+  .admin-page-navigation {
+    border-bottom-width: 0;
+  }
 }
 
 .admin-page-destinations {
   display: flex;
   min-width: 0;
   flex: 1;
-  gap: 20px;
+  gap: 24px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
@@ -43,24 +43,21 @@
   min-height: 40px;
   flex-shrink: 0;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  border-bottom: 2px solid transparent;
+  padding: 6px 2px 10px;
   color: var(--text-soft);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 550;
   text-decoration: none;
   white-space: nowrap;
   transition: color 150ms;
 }
 
-.admin-page-destination {
-  border-bottom: 2px solid transparent;
-  padding: 7px 2px 9px;
-}
-
 .admin-page-destination[aria-current="page"] {
-  border-bottom-color: var(--brand);
   color: var(--text);
   font-weight: 650;
+  border-bottom-color: var(--brand);
 }
 
 .admin-page-destination:hover {
@@ -74,10 +71,13 @@
 @media (max-width: 639px) {
   .admin-page-navigation {
     gap: 12px;
-    margin-bottom: 20px;
   }
 
   .admin-page-destinations {
-    gap: 18px;
+    gap: 14px;
+  }
+
+  .admin-page-destination {
+    font-size: 15px;
   }
 }

@@ -2,16 +2,17 @@ import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 
 import Badge from '@/components/Badge'
-import { adminNavigationGroups, resolveAdminRoute } from '../routes'
+import { resolveAdminRoute, type AdminNavigationGroup } from '../routes'
+
+interface AdminLocalNavProps {
+  workspace: AdminNavigationGroup
+}
 
 /** Page-level destinations are the same workspace projection used by the sidebar. */
-export default function AdminLocalNav() {
+export default function AdminLocalNav({ workspace }: AdminLocalNavProps) {
   const { t } = useTranslation()
   const { pathname } = useLocation()
   const currentRoute = resolveAdminRoute(pathname)
-  const workspace = adminNavigationGroups.find(group => group.id === currentRoute?.navGroup)
-
-  if (!workspace || workspace.routes.length < 2 || currentRoute?.id === 'connect') return null
 
   return (
     <nav

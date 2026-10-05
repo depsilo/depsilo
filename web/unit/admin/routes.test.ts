@@ -5,6 +5,7 @@ import {
   adminRouteManifest,
   getAdminRouteHref,
   resolveAdminRoute,
+  resolveWorkspaceNavigation,
 } from '../../src/admin/routes'
 
 const expectedRoutes = {
@@ -77,5 +78,22 @@ describe('Admin route manifest', () => {
     expect(resolveAdminRoute('/admin')?.id).toBe('dashboard')
     expect(resolveAdminRoute('/admin/projects/42')).toBeUndefined()
     expect(resolveAdminRoute('/admin/does-not-exist')).toBeUndefined()
+  })
+
+  it('promotes only workspaces with sibling destinations into the page header tabs', () => {
+    expect(resolveWorkspaceNavigation('/admin/cache')?.id).toBe('cache')
+    expect(resolveWorkspaceNavigation('/ADMIN/COMPILE-CACHE/')?.id).toBe('cache')
+    expect(resolveWorkspaceNavigation('/admin/audit')?.id).toBe('logs')
+    expect(resolveWorkspaceNavigation('/admin/users')?.id).toBe('instance')
+
+    // Single-destination workspaces keep the standalone page title.
+    expect(resolveWorkspaceNavigation('/admin')).toBeUndefined()
+    expect(resolveWorkspaceNavigation('/admin/upstreams')).toBeUndefined()
+    expect(resolveWorkspaceNavigation('/admin/projects')).toBeUndefined()
+
+    // Hidden onboarding and attention routes are not sibling destinations.
+    expect(resolveWorkspaceNavigation('/admin/connect')).toBeUndefined()
+    expect(resolveWorkspaceNavigation('/admin/attention')).toBeUndefined()
+    expect(resolveWorkspaceNavigation('/admin/does-not-exist')).toBeUndefined()
   })
 })

@@ -24,15 +24,28 @@ test('readable and fluid pages preserve distinct desktop widths', async ({ page 
   expect(fluidWidth).toBeGreaterThan(readableWidth)
 })
 
-test('workspace destinations are available as a local page navigation', async ({ page }) => {
+test('workspace destinations are the page header tabs', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto('/admin/cache')
 
-  const localNavigation = page.locator('[data-admin-page-navigation="cache"]')
+  const header = page.locator('[data-admin-page-header]')
+  const localNavigation = header.locator('[data-admin-page-navigation="cache"]')
   await expect(localNavigation).toBeVisible()
   await expect(localNavigation.getByRole('link', { name: '制品缓存', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(localNavigation.getByRole('link', { name: '索引缓存', exact: true })).toHaveAttribute('href', '/admin/indexes')
   await expect(localNavigation.getByRole('link', { name: '编译缓存', exact: true })).toHaveAttribute('href', '/admin/compile-cache')
+
+  // The rail stands in for the page title, so the route heading stays in the
+  // accessibility tree without repeating the visible label.
+  const title = header.locator('[data-admin-page-title]')
+  await expect(title).toHaveText('制品缓存')
+  expect(await title.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(2)
+  await expect(page.locator('[data-admin-page-content] [data-admin-page-navigation]')).toHaveCount(0)
+
+  // Switching destinations keeps the rail in the header and moves the current tab.
+  await localNavigation.getByRole('link', { name: '编译缓存', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/compile-cache$/)
+  await expect(header.locator('[data-admin-page-navigation="cache"] a[aria-current="page"]')).toHaveText('编译缓存')
 })
 
 test('Dashboard aligns its snapshot with both fluid page content seams', async ({ page }) => {
