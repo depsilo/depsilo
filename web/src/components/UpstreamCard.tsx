@@ -44,8 +44,10 @@ export interface UpstreamItem {
 // Red is reserved for DOWN (-1): a slow-but-alive upstream must never
 // paint the panel in danger color — a wall of red on a page whose
 // header says "0 failed" reads as a contradiction. Slow is a single
-// amber tier, and the shared 150ms threshold keeps ticks and status
-// labels aligned across Portal and Admin.
+// amber tier. This floor is the per-probe tier for a single round trip,
+// which is a narrower question than the rolling-average bar that decides
+// an upstream's status label (1 s — see lib/upstreamStatus.ts): a mirror
+// can be labelled healthy while individual probes still run amber.
 const HEARTBEAT_LIMIT = 44
 const BEAT_WIDTH = 6
 const BEAT_GAP = 2

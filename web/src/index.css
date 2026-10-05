@@ -916,7 +916,8 @@ button.portal-header-control {
   border-radius: 0 var(--r-md) var(--r-md) 0;
 }
 .portal-status-pill[data-status='healthy'] { color: var(--ok-text); }
-.portal-status-pill[data-status='degraded'] { color: var(--warn-text); }
+/* No 'degraded' state here on purpose: the Portal header reports Depsilo's own
+   availability, and upstream mirror health lives on /monitor. */
 .portal-status-pill[data-status='failed'] { color: var(--danger-text); }
 .portal-status-pill[data-status='unknown'] { color: var(--text-muted); }
 .portal-status-pill[data-status='loading'] { color: var(--text-muted); }

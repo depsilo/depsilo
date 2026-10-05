@@ -153,15 +153,15 @@ func TestStatsServiceStatusReflectsUpstreamHealth(t *testing.T) {
 		{
 			name: "all healthy",
 			records: []db.UpstreamRecord{
-				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 149},
-				{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Healthy: true, AvgLatencyMs: 149},
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 999},
+				{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Healthy: true, AvgLatencyMs: 999},
 			},
 			want: "healthy",
 		},
 		{
 			name: "available but slow",
 			records: []db.UpstreamRecord{
-				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 150},
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 1000},
 			},
 			want: "degraded",
 		},
@@ -176,7 +176,7 @@ func TestStatsServiceStatusReflectsUpstreamHealth(t *testing.T) {
 		{
 			name: "slow source keeps failed pool available",
 			records: []db.UpstreamRecord{
-				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 200},
+				{ID: 1, AdapterType: "pypi", Name: "one", URL: "https://one.example", Healthy: true, AvgLatencyMs: 1200},
 				{ID: 2, AdapterType: "pypi", Name: "two", URL: "https://two.example", Healthy: false},
 			},
 			want: "degraded",

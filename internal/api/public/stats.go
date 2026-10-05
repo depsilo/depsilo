@@ -120,8 +120,11 @@ const latencyBuckets = 90
 const latencyIntervalMin = 16
 
 // Keep aligned with the shared Portal rule in web/src/lib/upstreamStatus.ts:
-// an available upstream becomes degraded at 150 ms.
-const publicUpstreamDegradedLatency = 150 * time.Millisecond
+// an available upstream becomes degraded at one second. The old 150 ms bar was
+// tuned for a same-region mirror and marked the whole service degraded on any
+// setup whose upstreams are overseas, which is most of them: healthy sources
+// answering in 300-900 ms are normal there, not a service condition.
+const publicUpstreamDegradedLatency = time.Second
 
 // allUpstreamLatencySeries runs a single query for ALL upstreams and returns
 // a map of stable upstream identity → 90-point series. Persisted upstreams use

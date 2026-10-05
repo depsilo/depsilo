@@ -121,7 +121,7 @@ test('Monitor exposes unified healthy, degraded, and failed status text and a se
       week: { total_requests: 30, hit_count: 20, hit_rate: 2 / 3, bytes_saved: 2048 },
       upstreams: [
         { name: 'fast mirror', adapter: 'pypi', url: 'https://fast.example', healthy: true, avg_latency_ms: 42, success_rate: 1 },
-        { name: 'slow mirror', adapter: 'pypi', url: 'https://slow.example', healthy: true, avg_latency_ms: 150, success_rate: 0.98 },
+        { name: 'slow mirror', adapter: 'pypi', url: 'https://slow.example', healthy: true, avg_latency_ms: 1200, success_rate: 0.98 },
         { name: 'down mirror', adapter: 'pypi', url: 'https://down.example', healthy: false, avg_latency_ms: 20, success_rate: 0 },
       ],
     },
@@ -133,7 +133,11 @@ test('Monitor exposes unified healthy, degraded, and failed status text and a se
 
   await page.goto('/monitor')
 
-  await expect(page.locator('.portal-status-pill')).toContainText('Degraded')
+  // The Portal header answers "is Depsilo serving?", so mirror health does not
+  // restate itself there — the rows below carry the per-mirror tiers.
+  const servicePill = page.locator('.portal-status-pill')
+  await expect(servicePill).toHaveAttribute('data-status', 'healthy')
+  await expect(servicePill).toContainText('Online')
   await expect(page.locator('[data-upstream-row][data-upstream-status="healthy"]')).toContainText('fast mirror')
   await expect(page.locator('[data-upstream-row][data-upstream-status="healthy"]')).toContainText('healthy')
   await expect(page.locator('[data-upstream-row][data-upstream-status="degraded"]')).toContainText('slow mirror')
@@ -223,7 +227,7 @@ test('Monitor can reduce the directory to the upstreams that need attention', as
       week: {},
       upstreams: [
         { name: 'fast mirror', adapter: 'pypi', url: 'https://fast.example', healthy: true, avg_latency_ms: 42, success_rate: 1 },
-        { name: 'slow mirror', adapter: 'npm', url: 'https://slow.example', healthy: true, avg_latency_ms: 400, success_rate: 0.98 },
+        { name: 'slow mirror', adapter: 'npm', url: 'https://slow.example', healthy: true, avg_latency_ms: 1200, success_rate: 0.98 },
         { name: 'down mirror', adapter: 'npm', url: 'https://down.example', healthy: false, avg_latency_ms: 20, success_rate: 0 },
       ],
     },
@@ -260,7 +264,7 @@ test('Monitor pins the upstream counts under the header once they scroll away', 
       week: { total_requests: 40, hit_count: 30, hit_rate: 0.75, bytes_saved: 2048 },
       upstreams: ['pypi', 'npm', 'crates', 'maven', 'go', 'rubygems'].flatMap((adapter, group) => [
         { name: `${adapter}-one`, adapter, url: `https://${adapter}1.example`, healthy: true, avg_latency_ms: 40 + group, success_rate: 1 },
-        { name: `${adapter}-two`, adapter, url: `https://${adapter}2.example`, healthy: group !== 1, avg_latency_ms: group === 1 ? 0 : 400 + group, success_rate: 1 },
+        { name: `${adapter}-two`, adapter, url: `https://${adapter}2.example`, healthy: group !== 1, avg_latency_ms: group === 1 ? 0 : 1200 + group, success_rate: 1 },
       ]),
     },
     'GET /api/v1/latency-series': {},

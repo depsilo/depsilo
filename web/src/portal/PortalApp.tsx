@@ -179,14 +179,18 @@ export default function PortalAppV2() {
     retry: false,
   })
 
+  // The Portal header answers one question for an anonymous visitor: is
+  // Depsilo serving? Upstream mirror health is a separate axis with its own
+  // page (/monitor), its own per-mirror states, and its own thresholds, so a
+  // single slow or unreachable mirror does not restate itself here as a
+  // service-wide warning. `degraded` therefore reads as online below; the API
+  // keeps reporting it for the Admin surfaces that act on upstream health.
   const serviceStatus = data?.service?.status
-  const resolvedStatus = serviceStatus === 'healthy'
-    ? 'healthy'
-    : serviceStatus === 'degraded'
-      ? 'degraded'
-      : serviceStatus === 'failed'
-        ? 'failed'
-        : 'unknown'
+  const resolvedStatus = serviceStatus === 'failed'
+    ? 'failed'
+    : serviceStatus === 'healthy' || serviceStatus === 'degraded'
+      ? 'healthy'
+      : 'unknown'
   const statusTone = isPending
     ? 'loading'
     : isError && !data
@@ -194,11 +198,9 @@ export default function PortalAppV2() {
       : resolvedStatus
   const resolvedStatusLabel = resolvedStatus === 'healthy'
     ? t('portal.online')
-    : resolvedStatus === 'degraded'
-      ? t('degraded')
-      : resolvedStatus === 'failed'
-        ? t('portal.offline')
-        : t('portal.statusUnknown')
+    : resolvedStatus === 'failed'
+      ? t('portal.offline')
+      : t('portal.statusUnknown')
   const statusLabel = statusTone === 'loading'
     ? t('portal.statusLoading')
     : statusTone === 'unavailable'
@@ -214,11 +216,9 @@ export default function PortalAppV2() {
       ? 'refresh'
       : resolvedStatus === 'healthy'
         ? 'check'
-        : resolvedStatus === 'degraded'
-          ? 'warning'
-          : resolvedStatus === 'failed'
-            ? 'close'
-            : 'help'
+        : resolvedStatus === 'failed'
+          ? 'close'
+          : 'help'
   const pytorchIndexPath = data?.extra_indexes?.find(index => index.kind === 'pytorch')?.path
 
   const statusContent = (

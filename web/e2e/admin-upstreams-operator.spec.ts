@@ -128,7 +128,7 @@ test('mobile actions, status filters, and search remain explicit and overflow-fr
     makeUpstream(2, {
       name: 'Slow backup',
       url: 'https://slow.example/simple',
-      avg_latency_ms: 240,
+      avg_latency_ms: 1200,
     }),
     makeUpstream(3, {
       name: 'Offline mirror',
@@ -209,7 +209,7 @@ test('bulk checking is capped at four requests and leaves a durable outcome summ
       return checkResponse(
         upstream,
         upstream.id !== 2 && upstream.id !== 5,
-        upstream.id === 4 ? 240 : undefined,
+        upstream.id === 4 ? 1200 : undefined,
       )
     },
   ]))
@@ -364,7 +364,7 @@ test('pending create and delete requests keep their dialogs locked until complet
 test('a populated light-theme upstream workspace passes WCAG A and AA checks', async ({ page }) => {
   const upstreams = [
     makeUpstream(1),
-    makeUpstream(2, { avg_latency_ms: 220 }),
+    makeUpstream(2, { avg_latency_ms: 1200 }),
     makeUpstream(3, { healthy: false, avg_latency_ms: 0, success_rate: 0 }),
   ]
   await page.setViewportSize({ width: 1440, height: 1000 })
