@@ -19,6 +19,7 @@ import (
 
 	"depsilo/internal/adapter/packagekey"
 	"depsilo/internal/db"
+	"depsilo/internal/traffic"
 )
 
 // countingReader wraps an io.Reader, counts bytes read through it, and
@@ -1132,6 +1133,14 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		storeCtx = ctx
 	}
 	fetchCtx, fetchCancel, cancelFetchWithCause := newFetchContext(fetchBase, fetchTimeoutFrom(ctx))
+	// An ordinary client fill runs on the manager lifecycle context, which
+	// deliberately drops request values. Re-attach the caller's origin
+	// accumulator across that seam so the bytes the pump reads from upstream
+	// land on the access-log row that caused the fetch. The process-wide meter
+	// counts every exchange regardless; this only restores per-request
+	// attribution. A coalesced follower keeps its own (empty) accumulator —
+	// the leader performed the exchange, so the bytes are charged once.
+	fetchCtx = traffic.WithAttribution(fetchCtx, traffic.AttributionFromContext(ctx))
 	body, contentType, size, upstreamName, err := fetchFn(fetchCtx)
 	flight.refreshOutcome = RefreshOutcome{
 		Upstream:    upstreamName,

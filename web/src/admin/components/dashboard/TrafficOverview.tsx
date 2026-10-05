@@ -66,6 +66,7 @@ export default function TrafficOverview({
           tone="download"
           badge={periodLabel}
           value={period ? formatBytes(period.bytes_served) : '—'}
+          detail={period ? t('overview.servedRequests', { count: period.total_requests.toLocaleString() }) : undefined}
           info={t('overview.hintServedTotal')}
           infoLabel={t('overview.servedTotalInfoLabel')}
         />

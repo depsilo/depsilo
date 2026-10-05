@@ -6,12 +6,14 @@ import TooltipV2 from '@/components/Tooltip'
 import type { DashboardPeriod, DashboardRange, OriginCoverage } from '@/lib/adminApi.types'
 import {
   coverageDetail,
+  formatEstimatedDuration,
   formatPercentRatio,
   formatSignedPercent,
   hitRateValue,
   latencyComparison,
   periodChange,
   rangeLabelKey,
+  timeSavedMs,
 } from '@/lib/dashboardOverview'
 import { formatBytes } from '@/lib/utils'
 
@@ -171,6 +173,10 @@ export default function CacheBenefits({
   const latency = latencyComparison(period)
   const maxLatency = Math.max(latency.hitMs ?? 0, latency.missMs ?? 0)
   const sampleLabel = (count: number) => t('overview.samplesShort', { count: count.toLocaleString() })
+  // Same comparable-sample gate as the reduction percentage: the summed
+  // latency difference stays an estimate of waiting avoided, not a measured
+  // build-time saving.
+  const savedTime = timeSavedMs(period)
 
   return (
     <section data-dashboard-benefits aria-labelledby="overview-benefits-title" className="dash-card flex min-w-0 flex-col">
@@ -226,6 +232,9 @@ export default function CacheBenefits({
           secondary={latency.sufficient && (
             <span className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.latencyVs')}</span>
           )}
+          footnote={savedTime !== null
+            ? t('overview.timeSavedEstimate', { duration: formatEstimatedDuration(savedTime, t) })
+            : undefined}
         >
           <dl className="flex flex-col gap-2">
             <LatencyRow

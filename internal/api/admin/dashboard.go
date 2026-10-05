@@ -331,6 +331,17 @@ func windowPayload(s aggSnapshot) gin.H {
 	if s.Total > 0 {
 		avgLatency = float64(s.SumLatency) / float64(s.Total)
 	}
+	// Estimated wall-clock waiting avoided by serving from cache:
+	// (avg miss latency − avg hit latency) × hit requests, from this period's
+	// own weighted averages. It is an estimate over comparable samples, not a
+	// measured build duration, and stays 0 when either side has no samples —
+	// callers gate on hit_requests/miss_requests instead of trusting the 0.
+	timeSavedMs := int64(0)
+	if s.Hits > 0 && misses > 0 {
+		if diff := s.avgMissLatency() - s.avgHitLatency(); diff > 0 {
+			timeSavedMs = int64(diff * float64(s.Hits))
+		}
+	}
 	return gin.H{
 		"total_requests":      s.Total,
 		"hit_count":           s.Hits,
@@ -344,6 +355,7 @@ func windowPayload(s aggSnapshot) gin.H {
 		"avg_latency_ms":      avgLatency,
 		"avg_hit_latency_ms":  s.avgHitLatency(),
 		"avg_miss_latency_ms": s.avgMissLatency(),
+		"time_saved_ms":       timeSavedMs,
 		"upstream_requests":   s.UpstreamRequests,
 		"upstream_bytes":      s.UpstreamBytes,
 		"errors":              s.Errors,

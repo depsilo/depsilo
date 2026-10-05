@@ -119,6 +119,38 @@ export function periodChange(current: number | null, previous: number | null): n
   return ((current - previous) / previous) * 100
 }
 
+/**
+ * Estimated waiting avoided by cache hits in the period. Withheld unless the
+ * hit and miss latency comparison has enough comparable samples on both sides,
+ * because the server reports 0 for "no comparable pair" as well as for a real
+ * zero. Always presented as an estimate: it is the period's latency difference
+ * summed over hits, not a measured reduction of any downstream build.
+ */
+export function timeSavedMs(period: DashboardPeriod | undefined): number | null {
+  if (!period) return null
+  const comparison = latencyComparison(period)
+  if (!comparison.sufficient || comparison.reductionPct === null) return null
+  return period.time_saved_ms > 0 ? period.time_saved_ms : null
+}
+
+/**
+ * Coarse duration for the estimated time saved, rounded to one unit so the
+ * figure stays readable ("3.4 小时", not "3 小时 24 分 12 秒").
+ */
+export function formatEstimatedDuration(ms: number, t: TFunction): string {
+  const seconds = ms / 1000
+  if (seconds < 60) return t('overview.durationSeconds', { value: trimTo(seconds) })
+  const minutes = seconds / 60
+  if (minutes < 60) return t('overview.durationMinutes', { value: trimTo(minutes) })
+  const hours = minutes / 60
+  if (hours < 24) return t('overview.durationHours', { value: trimTo(hours) })
+  return t('overview.durationDays', { value: trimTo(hours / 24) })
+}
+
+function trimTo(value: number): string {
+  return value < 10 ? value.toFixed(1) : value.toFixed(0)
+}
+
 export interface SparklineGeometry {
   /** Smooth path for the line. */
   line: string

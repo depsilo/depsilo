@@ -70,9 +70,19 @@ export default function RuntimeResources({
   const cache = runtime?.cache
   const quota = cache?.quota_bytes ?? null
   const logical = cache?.logical_bytes ?? 0
-  const cacheDetail = quota && quota > 0
+  const quotaDetail = quota && quota > 0
     ? undefined
     : (cache?.storage_type === 's3' ? t('overview.storageS3') : t('overview.cacheNoQuota'))
+  // Package and object counts come from the server's metadata aggregate and
+  // are absent until it has succeeded once, so an unreadable cache never reads
+  // as an empty one.
+  const inventoryDetail = cache?.packages != null && cache.entries != null
+    ? t('overview.cacheInventory', {
+      packages: cache.packages.toLocaleString(),
+      entries: cache.entries.toLocaleString(),
+    })
+    : undefined
+  const cacheDetailLines = [inventoryDetail, quotaDetail].filter((line): line is string => Boolean(line))
   const cacheRatio = quota && quota > 0 ? logical / quota : null
 
   const measured = now?.rate.measured === true
@@ -123,7 +133,9 @@ export default function RuntimeResources({
           tone="cache"
           reserveSlots
           value={cache ? formatBytes(logical) : '—'}
-          detail={cacheDetail}
+          detail={cacheDetailLines.length > 0
+            ? cacheDetailLines.map((line, index) => <span key={index} className="block">{line}</span>)
+            : undefined}
           progress={cacheRatio !== null ? { ratio: cacheRatio, tone: 'cache' } : null}
           series={cache ? cacheSeries : undefined}
           loading={runtimePending && !runtime}

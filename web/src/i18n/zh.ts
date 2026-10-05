@@ -307,6 +307,7 @@ const zh = {
       cacheLabel: '缓存空间',
       cacheQuota: '配额 {{value}}',
       cacheNoQuota: '未设置缓存配额',
+      cacheInventory: '共 {{packages}} 个包 · {{entries}} 个缓存对象',
       diskFree: '磁盘剩余 {{free}} / {{total}}',
       diskUnsupported: '未采集本地磁盘容量',
       storageS3: 'S3 对象存储，无本地磁盘容量',
@@ -329,6 +330,7 @@ const zh = {
       realTimeWindow: '实时 · 最近 60 秒平均',
       deliveredToClients: '实际发送给客户端',
       readFromUpstream: '实际从上游读取',
+      servedRequests: '{{count}} 次请求',
       originNotCollected: '回源计量尚未启用',
       originPartial: '周期内部分时段未采集回源流量',
       originPartialShort: '部分时段未采集',
@@ -353,6 +355,11 @@ const zh = {
       latencyInfoLabel: '查看响应表现口径',
       latencyVs: '命中 vs 回源',
       latencyNoSample: '样本不足',
+      timeSavedEstimate: '估算节省等待 {{duration}}',
+      durationSeconds: '{{value}} 秒',
+      durationMinutes: '{{value}} 分钟',
+      durationHours: '{{value}} 小时',
+      durationDays: '{{value}} 天',
       samplesShort: 'n={{count}}',
       savedShareOfServed: '占已交付字节 {{percent}}%',
       estimatedShort: '估算',
@@ -425,7 +432,7 @@ const zh = {
       // 指标口径的悬浮提示（一句话；完整说明见 ⓘ 之外的相应页面）
       hintCpu: '进程 CPU；单核基准，100% = 1 核',
       hintMemory: '进程内存；只能读到峰值时标注「峰值」',
-      hintCache: '缓存元数据逻辑大小；配额来自 cache.max_size_gb',
+      hintCache: '缓存元数据逻辑大小；配额来自 cache.max_size_gb；包数按生态与包名去重，对象数含元数据行',
       hintNetwork: '服务请求：客户端 → Depsilo；回源请求：Depsilo → 上游',
       hintServiceFlow: '最近 60 秒实际发送给客户端的字节速率',
       hintOriginFlow: '最近 60 秒实际从上游读取的字节速率',
@@ -433,7 +440,7 @@ const zh = {
       hintOriginTotal: '所选周期内实际从上游读取的累计字节',
       hintHitRate: '命中 ÷（命中 + 未命中）；无样本显示 —',
       hintSavedBytes: '按缓存命中响应字节估算，非实测账单；无流量样本时显示 —',
-      hintLatency: '命中与回源的加权平均耗时；样本不足不给缩减比例',
+      hintLatency: '命中与回源的加权平均耗时；样本不足不给缩减比例；节省等待为估算值',
 
       info: {
         resource: {

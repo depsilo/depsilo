@@ -529,6 +529,12 @@ export interface DashboardPeriod {
   avg_latency_ms: number
   avg_hit_latency_ms: number
   avg_miss_latency_ms: number
+  /**
+   * Estimated wall-clock waiting avoided by serving from cache for this
+   * period: (avg miss latency − avg hit latency) × hit requests. Zero means
+   * "no comparable hit/miss pair in the period", not a measured zero.
+   */
+  time_saved_ms: number
   /** Measured Depsilo→upstream exchanges and bytes read in the period. */
   upstream_requests: number
   upstream_bytes: number
@@ -597,6 +603,10 @@ export interface RuntimeCacheStorage {
   storage_path: string
   /** SUM(cache_entries.size): the metadata view of cached bytes. */
   logical_bytes: number
+  /** cache_entries rows. Absent until an inventory aggregate has succeeded. */
+  entries?: number | null
+  /** Distinct (ecosystem, package name) pairs behind the cache entries. */
+  packages?: number | null
   quota_bytes: number | null
   /** Reserved for a real on-disk occupancy figure; currently not collected. */
   physical_bytes: number | null

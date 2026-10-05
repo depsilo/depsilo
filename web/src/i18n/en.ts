@@ -305,6 +305,7 @@ const en = {
       cacheLabel: 'Cache space',
       cacheQuota: 'Quota {{value}}',
       cacheNoQuota: 'No cache quota configured',
+      cacheInventory: '{{packages}} packages · {{entries}} cached objects',
       diskFree: 'Disk free {{free}} / {{total}}',
       diskUnsupported: 'Local disk capacity not collected',
       storageS3: 'S3 object storage — no local disk capacity',
@@ -326,6 +327,7 @@ const en = {
       realTimeWindow: 'Live · last 60s average',
       deliveredToClients: 'Actually sent to clients',
       readFromUpstream: 'Actually read from upstreams',
+      servedRequests: '{{count}} requests',
       originNotCollected: 'Origin metering is not enabled',
       originPartial: 'Origin traffic was not collected for part of this period',
       originPartialShort: 'Partial collection',
@@ -349,6 +351,11 @@ const en = {
       latencyInfoLabel: 'View response performance measurement basis',
       latencyVs: 'hit vs origin',
       latencyNoSample: 'Not enough samples',
+      timeSavedEstimate: 'Estimated wait saved {{duration}}',
+      durationSeconds: '{{value}}s',
+      durationMinutes: '{{value}} min',
+      durationHours: '{{value}} h',
+      durationDays: '{{value}} d',
       samplesShort: 'n={{count}}',
       savedShareOfServed: '{{percent}}% of delivered bytes',
       estimatedShort: 'estimate',
@@ -418,7 +425,7 @@ const en = {
       // One-line measurement-basis hints for the metric info affordance.
       hintCpu: 'Process CPU on a single-core basis; 100% = one core',
       hintMemory: 'Process memory; labelled “Peak” when only a peak reading exists',
-      hintCache: 'Logical cache size from metadata; quota comes from cache.max_size_gb',
+      hintCache: 'Logical cache size from metadata; quota comes from cache.max_size_gb; packages are distinct by ecosystem and name, objects include metadata rows',
       hintNetwork: 'Service requests: client → Depsilo; origin requests: Depsilo → upstream',
       hintServiceFlow: 'Bytes/sec actually delivered to clients over the last 60s',
       hintOriginFlow: 'Bytes/sec actually read from upstreams over the last 60s',
@@ -426,7 +433,7 @@ const en = {
       hintOriginTotal: 'Bytes actually read from upstreams in the selected period',
       hintHitRate: 'Hits ÷ (hits + misses); no sample shows —',
       hintSavedBytes: 'Estimated from cache-hit response bytes, not a measured bill; no traffic sample shows —',
-      hintLatency: 'Weighted average hit vs origin time; no reduction below the sample threshold',
+      hintLatency: 'Weighted average hit vs origin time; no reduction below the sample threshold; wait saved is an estimate',
 
       info: {
         resource: {

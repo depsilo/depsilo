@@ -1,14 +1,17 @@
+import type { TFunction } from 'i18next'
 import { describe, expect, it } from 'vitest'
 
 import type { DashboardPeriod } from '../src/lib/adminApi.types'
 import {
   deriveServiceStatus,
+  formatEstimatedDuration,
   hitRateValue,
   latencyComparison,
   originCoverageNote,
   periodChange,
   requestOutcome,
   sparklineGeometry,
+  timeSavedMs,
 } from '../src/lib/dashboardOverview'
 
 function period(overrides: Partial<DashboardPeriod> = {}): DashboardPeriod {
@@ -25,6 +28,7 @@ function period(overrides: Partial<DashboardPeriod> = {}): DashboardPeriod {
     avg_latency_ms: 50,
     avg_hit_latency_ms: 20,
     avg_miss_latency_ms: 200,
+    time_saved_ms: 80 * 180,
     upstream_requests: 20,
     upstream_bytes: 180,
     errors: 0,
@@ -54,6 +58,32 @@ describe('latencyComparison', () => {
     const comparison = latencyComparison(period({ hit_requests: 80, miss_requests: 20 }))
     expect(comparison.sufficient).toBe(true)
     expect(comparison.reductionPct).toBeCloseTo(90, 5)
+  })
+})
+
+describe('timeSavedMs', () => {
+  it('withholds the estimate when either side lacks comparable samples', () => {
+    expect(timeSavedMs(undefined)).toBeNull()
+    expect(timeSavedMs(period({ hit_requests: 3, miss_requests: 2 }))).toBeNull()
+  })
+
+  it('withholds a zero estimate: no comparable pair is not a measured zero', () => {
+    expect(timeSavedMs(period({ time_saved_ms: 0 }))).toBeNull()
+  })
+
+  it('returns the period estimate once both sides are comparable', () => {
+    expect(timeSavedMs(period())).toBe(14_400)
+  })
+})
+
+describe('formatEstimatedDuration', () => {
+  const stubT = ((key: string, opts: { value: string }) => `${key}|${opts.value}`) as unknown as TFunction
+
+  it('rounds to the largest readable unit', () => {
+    expect(formatEstimatedDuration(1_600, stubT)).toBe('overview.durationSeconds|1.6')
+    expect(formatEstimatedDuration(90_000, stubT)).toBe('overview.durationMinutes|1.5')
+    expect(formatEstimatedDuration(3.4 * 3_600_000, stubT)).toBe('overview.durationHours|3.4')
+    expect(formatEstimatedDuration(36 * 3_600_000, stubT)).toBe('overview.durationDays|1.5')
   })
 })
 

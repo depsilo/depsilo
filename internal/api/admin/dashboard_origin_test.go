@@ -22,6 +22,7 @@ type dashboardOverviewBody struct {
 		HitBytes         int64 `json:"hit_bytes"`
 		UpstreamRequests int64 `json:"upstream_requests"`
 		UpstreamBytes    int64 `json:"upstream_bytes"`
+		TimeSavedMs      int64 `json:"time_saved_ms"`
 	} `json:"window"`
 	OriginCoverage struct {
 		Measured       bool    `json:"measured"`
