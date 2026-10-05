@@ -200,7 +200,7 @@ refreshing a pin. For an annotated tag, use the peeled `^{}` commit.
 | Stage | Official image tag | Multi-platform digest |
 |---|---|---|
 | Frontend | `node:22.23.2-alpine3.23` | `sha256:46825fbbd4e996a78b7a2cdc08d75e38a5a505bdab95dcda55605359bf124bc6` |
-| Backend | `golang:1.26.7-alpine3.23` | `sha256:b17af760035fc2f338eed92d448a6c67f2d45438844fc6c60678fa5f99e44b57` |
+| Backend | `golang:1.27.1-alpine3.23` | `sha256:0908ac9b9319e09d7c238aabe914e0395c51d63c4e3d0ae8c554fda9158a5769` |
 | Runtime | `alpine:3.23.5` | `sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40` |
 
 Resolve replacements from Docker Hub's official-image manifests:
@@ -208,7 +208,7 @@ Resolve replacements from Docker Hub's official-image manifests:
 ```bash
 docker buildx imagetools inspect node:22.23.2-alpine3.23 \
   --format '{{json .Manifest}}'
-docker buildx imagetools inspect golang:1.26.7-alpine3.23 \
+docker buildx imagetools inspect golang:1.27.1-alpine3.23 \
   --format '{{json .Manifest}}'
 docker buildx imagetools inspect alpine:3.23.5 \
   --format '{{json .Manifest}}'

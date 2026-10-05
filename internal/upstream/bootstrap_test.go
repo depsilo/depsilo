@@ -30,6 +30,21 @@ func source(name string, upstreams ...config.UpstreamConfig) SeedSource {
 	return SeedSource{Ecosystem: name, Upstreams: upstreams}
 }
 
+// bootstrapRowCounts reports the upstream and control-plane rows a reconcile
+// call may change. Schema migrations seed control-plane markers of their own,
+// so rollback assertions compare against a baseline instead of absolute counts.
+func bootstrapRowCounts(t *testing.T, database *gorm.DB) (int64, int64) {
+	t.Helper()
+	var rows, states int64
+	if err := database.Model(&dbmodel.UpstreamRecord{}).Count(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Model(&dbmodel.ControlPlaneState{}).Count(&states).Error; err != nil {
+		t.Fatal(err)
+	}
+	return rows, states
+}
+
 func TestReconcileBootstrap_FirstSeedMergesLegacyRowsAndWritesBothStates(t *testing.T) {
 	database := bootstrapDB(t)
 	legacy := dbmodel.UpstreamRecord{AdapterType: "pypi", Name: "legacy", URL: "https://legacy.example", Priority: 1}
@@ -549,6 +564,7 @@ func TestReconcileBootstrap_ValidatesAllSourcesBeforeWriting(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			wantRows, wantStates := bootstrapRowCounts(t, database)
 
 			got, err := ReconcileBootstrap(database, tt.sources)
 			if err == nil {
@@ -557,14 +573,7 @@ func TestReconcileBootstrap_ValidatesAllSourcesBeforeWriting(t *testing.T) {
 			if len(got.ActiveEcosystems) != 0 {
 				t.Fatalf("result=%v", got.ActiveEcosystems)
 			}
-			var rows, states int64
-			if err := database.Model(&dbmodel.UpstreamRecord{}).Count(&rows).Error; err != nil {
-				t.Fatal(err)
-			}
-			if err := database.Model(&dbmodel.ControlPlaneState{}).Count(&states).Error; err != nil {
-				t.Fatal(err)
-			}
-			if rows != 1 || states != 2 {
+			if rows, states := bootstrapRowCounts(t, database); rows != wantRows || states != wantStates {
 				t.Fatalf("invalid input changed database: rows=%d states=%d", rows, states)
 			}
 			var marker, active dbmodel.ControlPlaneState
@@ -729,6 +738,7 @@ func TestReconcileBootstrap_StateSaveFailureRollsBackRowsAndMarker(t *testing.T)
 	if err := database.Exec(trigger).Error; err != nil {
 		t.Fatal(err)
 	}
+	wantRows, wantStates := bootstrapRowCounts(t, database)
 
 	got, err := ReconcileBootstrap(database, []SeedSource{source("pypi", config.UpstreamConfig{Name: "one", URL: "https://one.example", Priority: 1})})
 	if err == nil {
@@ -737,14 +747,7 @@ func TestReconcileBootstrap_StateSaveFailureRollsBackRowsAndMarker(t *testing.T)
 	if len(got.ActiveEcosystems) != 0 {
 		t.Fatalf("result=%v", got.ActiveEcosystems)
 	}
-	var rows, states int64
-	if err := database.Model(&dbmodel.UpstreamRecord{}).Count(&rows).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := database.Model(&dbmodel.ControlPlaneState{}).Count(&states).Error; err != nil {
-		t.Fatal(err)
-	}
-	if rows != 0 || states != 0 {
+	if rows, states := bootstrapRowCounts(t, database); rows != wantRows || states != wantStates {
 		t.Fatalf("transaction was not rolled back: rows=%d states=%d", rows, states)
 	}
 }

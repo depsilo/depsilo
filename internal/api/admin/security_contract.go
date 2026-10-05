@@ -64,8 +64,14 @@ type updateSecurityPolicyRequest struct {
 	MinCVSSScore     securityJSONNumber `json:"min_cvss_score"`
 }
 
+// securityJSONNumber accepts a bare JSON number and rejects every other
+// literal (string, boolean, null, object). The json.Number field must stay
+// named: embedding it promotes json.Number.UnmarshalJSONFrom into this type,
+// which json/v2 (the default encoding/json implementation since Go 1.27)
+// prefers over the method below — that promoted decoder accepts a quoted
+// number, so the guard would silently stop running.
 type securityJSONNumber struct {
-	json.Number
+	number json.Number
 }
 
 func (n *securityJSONNumber) UnmarshalJSON(data []byte) error {
@@ -77,15 +83,15 @@ func (n *securityJSONNumber) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(literal, &number); err != nil {
 		return err
 	}
-	n.Number = number
+	n.number = number
 	return nil
 }
 
 func (r updateSecurityPolicyRequest) validatedMinCVSSScore() (float32, bool) {
-	if r.MinCVSSScore.Number == "" {
+	if r.MinCVSSScore.number == "" {
 		return 0, true
 	}
-	score, ok := new(big.Rat).SetString(r.MinCVSSScore.String())
+	score, ok := new(big.Rat).SetString(r.MinCVSSScore.number.String())
 	if !ok || score.Sign() < 0 || score.Cmp(big.NewRat(10, 1)) > 0 {
 		return 0, false
 	}

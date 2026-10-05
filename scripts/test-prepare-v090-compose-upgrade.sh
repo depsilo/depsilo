@@ -11,6 +11,24 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# GNU coreutils and BSD/macOS tools report inode ownership and modes through
+# different flags; both spellings below print the same values.
+file_mode() {
+    stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
+
+file_owner() {
+    stat -c '%u:%g' "$1" 2>/dev/null || stat -f '%u:%g' "$1"
+}
+
+verify_sha256_manifest() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum --check "$1"
+    else
+        shasum -a 256 --check "$1"
+    fi
+}
+
 source_dir="$fixture/source"
 state_dir="$fixture/state"
 backup_dir="$fixture/backup"
@@ -77,8 +95,8 @@ test -f "$backup_dir/config.toml"
 test -f "$backup_dir/depsilo.db"
 test -f "$backup_dir/depsilo.db-wal"
 test -f "$backup_dir/depsilo.db-shm"
-test "$(stat -c '%a' "$state_dir/config.toml")" = 600
-(cd "$backup_dir" && sha256sum --check SHA256SUMS >/dev/null)
+test "$(file_mode "$state_dir/config.toml")" = 600
+(cd "$backup_dir" && verify_sha256_manifest SHA256SUMS >/dev/null)
 grep -q '^run ' "$docker_log"
 grep -Fq -- '--network none' "$docker_log"
 grep -Fq -- '--user 0:0' "$docker_log"
@@ -164,11 +182,11 @@ DEPSILO_AUTH_JWT_SECRET="$FAKE_CONTAINER_JWT"
 
 outside_hardlink="$fixture/outside-cache-object"
 ln "$source_dir/data/cache/object" "$outside_hardlink"
-outside_hardlink_owner=$(stat -c '%u:%g' "$outside_hardlink")
+outside_hardlink_owner=$(file_owner "$outside_hardlink")
 assert_rejected 'source data containing a hard link to an inode outside the source tree' \
     --source-dir "$source_dir" --state-dir "$fixture/unused-state-hardlink" \
     --backup-dir "$fixture/unused-backup-hardlink" --old-container depsilo-v090 --image "$image"
-test "$(stat -c '%u:%g' "$outside_hardlink")" = "$outside_hardlink_owner"
+test "$(file_owner "$outside_hardlink")" = "$outside_hardlink_owner"
 rm "$outside_hardlink"
 
 occupied_state="$fixture/occupied-state"

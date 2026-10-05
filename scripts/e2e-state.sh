@@ -16,9 +16,28 @@ refuse() {
     exit 1
 }
 
+# canonicalize_dir resolves every existing path component so the reserved-root
+# check below compares paths rather than spellings: macOS reports $TMPDIR
+# through the /var symlink while `pwd -P` resolves it to /private/var, and the
+# same directory must not be rejected over that difference.
+canonicalize_dir() {
+    local path=$1
+    local parent base
+    parent=$(dirname "$path")
+    base=$(basename "$path")
+    if [[ ! -d "$parent" ]]; then
+        printf '%s\n' "$path"
+        return 0
+    fi
+    parent=$(cd "$parent" && pwd -P)
+    printf '%s/%s\n' "${parent%/}" "$base"
+}
+
 validate_state_dir() {
     local state_dir=$1
-    [[ "$state_dir" == "$RESERVED_STATE_DIR" ]] \
+    local canonical
+    canonical=$(canonicalize_dir "$state_dir")
+    [[ "$canonical" == "$RESERVED_STATE_DIR" ]] \
         || refuse "expected $RESERVED_STATE_DIR, got $state_dir"
     [[ ! -L "$state_dir" ]] || refuse "$state_dir is a symlink"
     if [[ -e "$state_dir" && ! -d "$state_dir" ]]; then

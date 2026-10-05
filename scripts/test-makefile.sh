@@ -29,6 +29,17 @@ assert_before() {
         || fail "expected before: $first -> $second"
 }
 
+# Rewrite every occurrence of a literal path in a file. BSD sed has no
+# in-place flag that is portable with GNU sed, and the paths replaced here are
+# absolute, so the separator cannot collide with them.
+substitute_in_file() {
+    local file=$1
+    local from=$2
+    local to=$3
+    sed "s|${from}|${to}|g" "$file" > "$file.tmp"
+    mv "$file.tmp" "$file"
+}
+
 # The database is used only to keep the supported real-client inventory in
 # sync; ordinary convenience targets are exercised by their owning tests.
 make_db=$(make -C "$ROOT" -pn help)
@@ -168,10 +179,10 @@ dind_smoke_escaped=$(sed -n "s|^RUN printf '\\(.*\\)' > /smoke.sh && chmod +x /s
 dind_smoke="$TMP/docker-dind-smoke.sh"
 printf '%b' "$dind_smoke_escaped" > "$dind_smoke"
 dind_log="$TMP/docker-dind-dockerd.log"
-sed -i "s|/var/log/dockerd.log|$dind_log|g" "$dind_smoke"
+substitute_in_file "$dind_smoke" "/var/log/dockerd.log" "$dind_log"
 dind_registry_host="$TMP/docker-dind-registry-host"
 printf '%s\n' 'depsilo.test:24444' > "$dind_registry_host"
-sed -i "s|/depsilo-registry-host|$dind_registry_host|g" "$dind_smoke"
+substitute_in_file "$dind_smoke" "/depsilo-registry-host" "$dind_registry_host"
 dind_pull_marker="$TMP/docker-dind-pull"
 if ! dind_smoke_output=$(
     export DOCKER_HOST=tcp://docker:2375

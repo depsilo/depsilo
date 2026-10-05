@@ -2,7 +2,9 @@ package cache
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +26,9 @@ type LocalStorage struct {
 	dirMode  fs.FileMode
 	fileMode fs.FileMode
 	private  bool
+	// foldsCase records whether this root resolves names without regard to
+	// case, which decides whether object paths need the case-safe encoding.
+	foldsCase bool
 
 	stagingMu            sync.Mutex
 	activeStaging        map[string]chan struct{}
@@ -68,6 +73,7 @@ func newLocalStorage(basePath string, dirMode, fileMode fs.FileMode, private boo
 	if err != nil {
 		return nil, fmt.Errorf("open storage directory: %w", err)
 	}
+	foldsCase := detectCaseFolding(root)
 	if err := root.Close(); err != nil {
 		return nil, fmt.Errorf("close storage directory: %w", err)
 	}
@@ -76,8 +82,35 @@ func newLocalStorage(basePath string, dirMode, fileMode fs.FileMode, private boo
 		dirMode:       dirMode,
 		fileMode:      fileMode,
 		private:       private,
+		foldsCase:     foldsCase,
 		activeStaging: make(map[string]chan struct{}),
 	}, nil
+}
+
+// detectCaseFolding probes the root once. Cache keys are case-sensitive
+// identities, so an uncertain answer assumes folding: that costs an escaped
+// path, while assuming the opposite would let two keys share one object.
+func detectCaseFolding(root *os.Root) bool {
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return true
+	}
+	name := ".depsilo-case-probe-" + hex.EncodeToString(suffix) + "-aB"
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return true
+	}
+	// The folded name only resolves while the probe file exists.
+	_, statErr := root.Stat(strings.ToLower(name))
+	closeErr := file.Close()
+	removeErr := root.Remove(name)
+	if closeErr != nil || removeErr != nil {
+		return true
+	}
+	if statErr == nil {
+		return true
+	}
+	return !errors.Is(statErr, os.ErrNotExist)
 }
 
 func validateStorageKey(key string, allowRoot bool) (string, error) {
@@ -104,6 +137,32 @@ func validateStorageKey(key string, allowRoot bool) (string, error) {
 		return "", fmt.Errorf("%w %q: use a canonical relative path", ErrInvalidStorageKey, key)
 	}
 	return key, nil
+}
+
+// objectPath resolves the on-disk path for a logical object key. A root that
+// folds case needs the key's own case distinctions escaped so distinct keys
+// never share a file; a case-sensitive root keeps the key itself, which is
+// also the layout every existing cache already uses.
+func (s *LocalStorage) objectPath(key string, allowRoot bool) (string, error) {
+	name, err := validateStorageKey(key, allowRoot)
+	if err != nil {
+		return "", err
+	}
+	return storagePath(name, s.foldsCase), nil
+}
+
+// listedObjectKey reports the logical key behind a listed object path. Object
+// keys are case-sensitive identities, so a case-folding root stores them
+// escaped and this decodes the path back into the key. A path that cannot be
+// decoded — a segment whose escaped form overflowed the component limit and
+// was therefore stored as a digest — is reported as-is; no bundled adapter
+// produces such a key, and a caller that meets one sees the storage path it
+// would need in order to degrade gracefully.
+func listedObjectKey(path string, foldsCase bool) string {
+	if key, ok := storageKeyFromPath(path, foldsCase); ok {
+		return key
+	}
+	return path
 }
 
 // localStagingPath maps every legal object key into a disjoint, reversible
@@ -184,7 +243,7 @@ func (s *LocalStorage) CheckReady(ctx context.Context) error {
 }
 
 func (s *LocalStorage) Exists(_ context.Context, key string) (bool, error) {
-	name, err := validateStorageKey(key, false)
+	name, err := s.objectPath(key, false)
 	if err != nil {
 		return false, err
 	}
@@ -205,7 +264,7 @@ func (s *LocalStorage) Exists(_ context.Context, key string) (bool, error) {
 }
 
 func (s *LocalStorage) Get(_ context.Context, key string) (io.ReadCloser, int64, error) {
-	name, err := validateStorageKey(key, false)
+	name, err := s.objectPath(key, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -243,6 +302,9 @@ func (s *LocalStorage) Put(ctx context.Context, key string, r io.Reader, _ int64
 	if err != nil {
 		return err
 	}
+	// Staging stays addressed by the logical key (its encoded path is already
+	// case-safe); the rename publishes it under the object path.
+	objectName := storagePath(name, s.foldsCase)
 	finishStaging, err := s.beginStaging(ctx, name)
 	if err != nil {
 		return err
@@ -255,7 +317,7 @@ func (s *LocalStorage) Put(ctx context.Context, key string, r io.Reader, _ int64
 	}
 	defer root.Close()
 
-	dir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(name)))
+	dir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(objectName)))
 	if err := root.MkdirAll(dir, s.dirMode); err != nil {
 		return fmt.Errorf("create directory: %w", err)
 	}
@@ -299,7 +361,7 @@ func (s *LocalStorage) Put(ctx context.Context, key string, r io.Reader, _ int64
 		return fmt.Errorf("close file: %w", err)
 	}
 
-	if err := root.Rename(stagingPath, name); err != nil {
+	if err := root.Rename(stagingPath, objectName); err != nil {
 		root.Remove(stagingPath)
 		return fmt.Errorf("rename temp file: %w", err)
 	}
@@ -412,7 +474,7 @@ func chmodDirectoryChain(root *os.Root, dir string, mode fs.FileMode) error {
 }
 
 func (s *LocalStorage) Delete(_ context.Context, key string) error {
-	name, err := validateStorageKey(key, false)
+	name, err := s.objectPath(key, false)
 	if err != nil {
 		return err
 	}
@@ -429,7 +491,7 @@ func (s *LocalStorage) Delete(_ context.Context, key string) error {
 }
 
 func (s *LocalStorage) Stat(_ context.Context, key string) (*ObjectMeta, error) {
-	name, err := validateStorageKey(key, false)
+	name, err := s.objectPath(key, false)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +517,7 @@ func (s *LocalStorage) Stat(_ context.Context, key string) (*ObjectMeta, error) 
 
 func (s *LocalStorage) List(_ context.Context, prefix string) ([]ObjectMeta, error) {
 	var results []ObjectMeta
-	name, err := validateStorageKey(prefix, true)
+	name, err := s.objectPath(prefix, true)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +548,7 @@ func (s *LocalStorage) List(_ context.Context, prefix string) ([]ObjectMeta, err
 			return err
 		}
 		results = append(results, ObjectMeta{
-			Key:          path,
+			Key:          listedObjectKey(path, s.foldsCase),
 			Size:         info.Size(),
 			LastModified: info.ModTime(),
 		})

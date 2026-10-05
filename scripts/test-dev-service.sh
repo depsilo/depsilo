@@ -42,7 +42,9 @@ PATH="$TMP/bin:$PATH" \
 
 service_pid=$(cat "$PID_FILE")
 kill -0 "$service_pid"
-if [ "$(stat -c '%a' "$LOG_FILE")" != 600 ]; then
+# GNU stat and BSD stat disagree on the format flag; both print octal modes.
+log_mode=$(stat -c '%a' "$LOG_FILE" 2>/dev/null || stat -f '%Lp' "$LOG_FILE")
+if [ "$log_mode" != 600 ]; then
     echo "background service log must be private because it can contain bootstrap credentials" >&2
     exit 1
 fi

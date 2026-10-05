@@ -211,7 +211,7 @@ func TestRestorePublishesValidatedStateWithPrivatePermissions(t *testing.T) {
 		t.Fatalf("Restore() result = %#v, want two files and three preserved predecessors", result)
 	}
 	restoredConfig := string(mustReadFile(t, targetConfig))
-	wantDatabaseDSN := "dsn = \"" + filepath.ToSlash(targetDatabase) + "\""
+	wantDatabaseDSN := "dsn = \"" + filepath.ToSlash(canonicalTestPath(t, targetDatabase)) + "\""
 	if !strings.Contains(restoredConfig, wantDatabaseDSN) {
 		t.Fatalf("restored config = %q, want canonical custom database target %q", restoredConfig, wantDatabaseDSN)
 	}
@@ -381,6 +381,19 @@ func readArchive(t *testing.T, path string) map[string][]byte {
 		}
 		files[header.Name] = body
 	}
+}
+
+// canonicalTestPath mirrors Restore's own canonicalization (existing parent
+// symlinks are resolved, the leaf is kept) so an expectation derived from
+// t.TempDir() matches on hosts where the temporary root is reached through a
+// symlink — macOS resolves /var to /private/var.
+func canonicalTestPath(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("resolve parent of %q: %v", path, err)
+	}
+	return filepath.Join(resolved, filepath.Base(path))
 }
 
 func writeTestState(t *testing.T, configPath, databasePath string) {

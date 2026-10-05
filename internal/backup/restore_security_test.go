@@ -118,8 +118,9 @@ func TestRestoreRetargetsArchivedSQLiteURIToCanonicalPlainPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	restored := string(mustReadFile(t, targetConfig))
-	if !strings.Contains(restored, "dsn = "+strconv.Quote(targetDatabase)) {
-		t.Fatalf("restored config = %q, want canonical plain target %q", restored, targetDatabase)
+	wantTarget := canonicalTestPath(t, targetDatabase)
+	if !strings.Contains(restored, "dsn = "+strconv.Quote(wantTarget)) {
+		t.Fatalf("restored config = %q, want canonical plain target %q", restored, wantTarget)
 	}
 	if strings.Contains(restored, "mode=rwc") || strings.Contains(restored, "cache=shared") || strings.Contains(restored, sourceDatabase) {
 		t.Fatalf("restored config inherited archived SQLite URI options or source path: %q", restored)

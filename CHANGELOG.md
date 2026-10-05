@@ -5,6 +5,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- The minimum toolchain is Go 1.27.1, which is also what CI and the container
+  build now use.
+
+### Fixed
+- npm metadata for packages whose names differ only in case (legacy uppercase
+  names such as `JSONStream`) no longer collide in the local cache on
+  case-folding filesystems such as macOS and Windows.
+- Rejecting a quoted `min_cvss_score` keeps working on Go 1.27, where
+  `encoding/json` runs the v2 implementation by default.
+
 ## [0.10.0] - 2026-09-15
 
 ### Added
