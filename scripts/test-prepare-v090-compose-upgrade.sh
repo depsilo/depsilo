@@ -6,6 +6,10 @@ preparer="$root/scripts/prepare-v090-compose-upgrade.sh"
 compat="$root/compose.v090-compat.yaml"
 real_qualification="$root/scripts/test-v090-compose-upgrade.sh"
 fixture=$(mktemp -d "${TMPDIR:-/tmp}/depsilo-v090-prep-test.XXXXXX")
+# The preparer canonicalizes every path it reports and mounts, so compare
+# against the resolved fixture root instead of the $TMPDIR spelling macOS
+# reaches through the /var symlink.
+fixture=$(cd "$fixture" && pwd -P)
 cleanup() {
     find "$fixture" -depth -delete >/dev/null 2>&1 || true
 }

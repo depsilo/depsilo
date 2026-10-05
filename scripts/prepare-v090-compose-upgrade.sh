@@ -22,6 +22,53 @@ die() {
   exit 1
 }
 
+# resolve_existing_dir canonicalizes a directory that the caller already
+# verified is a real, symlink-free directory. GNU realpath -e and `cd`+pwd -P
+# agree on that input, and the portable form works on macOS, where realpath has
+# no -e flag.
+resolve_existing_dir() {
+  (cd "$1" && pwd -P)
+}
+
+# canonical_path resolves a host path the way the container recorded it, so
+# comparing bind sources is an identity check rather than a spelling check:
+# macOS reports the same directory as /var/... and /private/var/... depending
+# on who produced the string.
+canonical_path() {
+  local path=$1 parent base
+  if [[ -d "$path" ]]; then
+    (cd "$path" && pwd -P)
+    return 0
+  fi
+  if [[ -e "$path" || -L "$path" ]]; then
+    parent=$(dirname "$path")
+    base=$(basename "$path")
+    if [[ -d "$parent" ]]; then
+      printf '%s/%s\n' "$(cd "$parent" && pwd -P)" "$base"
+      return 0
+    fi
+  fi
+  printf '%s\n' "$path"
+}
+
+# GNU coreutils names the SHA-256 tool sha256sum; macOS ships shasum. Both
+# write and verify the same "<digest>  <name>" manifest format.
+sha256_manifest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$@"
+  else
+    shasum -a 256 "$@"
+  fi
+}
+
+verify_sha256_manifest() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum --check "$1"
+  else
+    shasum -a 256 --check "$1"
+  fi
+}
+
 source_arg=''
 state_arg=''
 backup_arg=''
@@ -63,9 +110,11 @@ done
 [[ -f "$layout_helper" && ! -L "$layout_helper" ]] \
   || die 'v0.9 Compose layout helper is unavailable'
 
-for command in docker jq realpath sha256sum mktemp cp mv find od tr chmod id; do
+for command in docker jq mktemp cp mv find od tr chmod id; do
   command -v "$command" >/dev/null 2>&1 || die "$command is required"
 done
+command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 \
+  || die 'sha256sum or shasum is required'
 
 [[ "$old_container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] \
   || die 'old container name is invalid'
@@ -75,7 +124,7 @@ if [[ ! "$candidate_image" =~ ^sha256:[0-9a-f]{64}$ ]] &&
 fi
 
 [[ -d "$source_arg" && ! -L "$source_arg" ]] || die 'source directory must be a real directory'
-source_dir=$(realpath -e -- "$source_arg")
+source_dir=$(resolve_existing_dir "$source_arg")
 source_data="$source_dir/data"
 source_config="$source_dir/config.toml"
 source_database="$source_data/depsilo.db"
@@ -104,7 +153,7 @@ resolve_absent_target() {
   base=$(basename -- "$requested")
   [[ "$base" != '.' && "$base" != '..' && -n "$base" ]] || die "$label has an invalid basename"
   [[ -d "$parent" && ! -L "$parent" ]] || die "$label parent must be a real existing directory"
-  resolved_parent=$(realpath -e -- "$parent")
+  resolved_parent=$(resolve_existing_dir "$parent")
   printf '%s/%s\n' "$resolved_parent" "$base"
 }
 
@@ -130,13 +179,23 @@ docker run --rm --network none --user 0:0 --entrypoint /upgrade-helper \
 container_json=$(docker inspect "$old_container") || die 'old container is unavailable'
 jq -e 'length == 1 and .[0].State.Running == false' <<<"$container_json" >/dev/null \
   || die 'old container must exist and be stopped'
-jq -e --arg data "$source_data" --arg config "$source_config" '
+jq -e '
   .[0].Mounts as $mounts |
   ($mounts | length) == 2 and
-  ([$mounts[] | select(.Type == "bind" and .Source == $data and .Destination == "/app/data")] | length) == 1 and
-  ([$mounts[] | select(.Type == "bind" and .Source == $config and .Destination == "/app/config.toml")] | length) == 1
+  ([$mounts[] | select(.Type == "bind" and .Destination == "/app/data")] | length) == 1 and
+  ([$mounts[] | select(.Type == "bind" and .Destination == "/app/config.toml")] | length) == 1
 ' <<<"$container_json" >/dev/null \
   || die 'old container does not have the exact v0.9 /app/data and /app/config.toml bind layout'
+container_data_mount=$(jq -er '
+  .[0].Mounts[] | select(.Type == "bind" and .Destination == "/app/data") | .Source
+' <<<"$container_json") || die 'old container is missing its /app/data bind source'
+container_config_mount=$(jq -er '
+  .[0].Mounts[] | select(.Type == "bind" and .Destination == "/app/config.toml") | .Source
+' <<<"$container_json") || die 'old container is missing its /app/config.toml bind source'
+[[ "$(canonical_path "$container_data_mount")" == "$source_data" ]] \
+  || die 'old container /app/data is bound to a different host directory'
+[[ "$(canonical_path "$container_config_mount")" == "$source_config" ]] \
+  || die 'old container /app/config.toml is bound to a different host file'
 jq -e '
   [.[] | .Config.Env[]? | select(startswith("DEPSILO_CONFIG="))] ==
   ["DEPSILO_CONFIG=/app/config.toml"]
@@ -198,11 +257,13 @@ for database_name in "${database_backup_names[@]}"; do
 done
 (
   cd "$backup_tmp"
-  sha256sum config.toml "${database_backup_names[@]}" >SHA256SUMS
-  sha256sum --check SHA256SUMS >/dev/null
+  sha256_manifest config.toml "${database_backup_names[@]}" >SHA256SUMS
+  verify_sha256_manifest SHA256SUMS >/dev/null
 )
-mv --no-clobber --no-target-directory -- "$backup_tmp" "$backup_dir"
-[[ ! -e "$backup_tmp" && -d "$backup_dir" && ! -L "$backup_dir" ]] \
+# BSD mv rejects the GNU long options; -n keeps the no-clobber guarantee and
+# the content check below still fails if the target existed after all.
+mv -n "$backup_tmp" "$backup_dir"
+[[ ! -e "$backup_tmp" && -d "$backup_dir" && ! -L "$backup_dir" && -f "$backup_dir/config.toml" ]] \
   || die 'backup target appeared before its atomic rename'
 backup_tmp=''
 
@@ -229,11 +290,11 @@ docker run --rm --network none --user 0:0 --entrypoint /upgrade-helper \
   || die 'candidate ownership preparation changed the database file type'
 (
   cd "$backup_dir"
-  sha256sum --check SHA256SUMS >/dev/null
+  verify_sha256_manifest SHA256SUMS >/dev/null
 )
 
-mv --no-clobber --no-target-directory -- "$state_tmp" "$state_dir"
-[[ ! -e "$state_tmp" && -d "$state_dir" && ! -L "$state_dir" ]] \
+mv -n "$state_tmp" "$state_dir"
+[[ ! -e "$state_tmp" && -d "$state_dir" && ! -L "$state_dir" && -f "$state_dir/.depsilo-v090-bind-upgrade" ]] \
   || die 'state target appeared before its atomic rename'
 state_tmp=''
 
