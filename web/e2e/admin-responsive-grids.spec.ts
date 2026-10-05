@@ -1,3 +1,5 @@
+import type { Locator } from '@playwright/test'
+
 import { expect, mockAdminApi, test } from './fixtures/admin-api'
 
 function populatedDashboard(overrides: Record<string, unknown> = {}) {
@@ -65,6 +67,68 @@ test('Overview resource metrics stay readable and never overflow on mobile', asy
 
   await page.setViewportSize({ width: 1440, height: 900 })
   expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(4)
+})
+
+// The tile icon and headline are sized from the card's own width, so a 4-up
+// 1440px row (narrow cards) steps them down instead of clipping a long value
+// like "110.3 KB/s" at the card edge.
+function tileMetrics(locator: Locator) {
+  return locator.evaluate(card => {
+    const icon = card.querySelector('.dash-metric-icon')
+    const value = card.querySelector('.dash-metric-value')
+    const style = getComputedStyle(card)
+    const contentRight = card.getBoundingClientRect().right -
+      parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth)
+    return {
+      icon: icon ? Math.round(icon.getBoundingClientRect().width) : 0,
+      valueFont: value ? parseFloat(getComputedStyle(value).fontSize) : 0,
+      // Space left between the last glyph and the card's content edge.
+      slack: value ? Math.round(contentRight - value.getBoundingClientRect().right) : 0,
+    }
+  })
+}
+
+test('Overview metric tiles scale their icon and value with the card width', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/now': {
+      status: 'healthy',
+      uptime_seconds: 600,
+      now_unix: 1786032000,
+      version: 'dev',
+      rate: {
+        requests_per_min: 12,
+        ingress_bps: 112947,
+        egress_bps: 1572864,
+        has_data: true,
+        measured: true,
+        window_seconds: 60,
+        service_requests_per_sec: 12.5,
+        service_bytes_per_sec: 112947,
+        origin_requests_per_sec: 0.5,
+        origin_bytes_per_sec: 1572864,
+      },
+      upstreams: { healthy: 1, total: 1 },
+      sparkline: [],
+    },
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin')
+
+  const tile = page.locator('[data-testid="traffic-service-flow"]')
+  await expect(tile.locator('.dash-metric-value')).toHaveText('110.3 KB/s')
+
+  const narrow = await tileMetrics(tile)
+  expect(narrow.icon).toBeLessThan(56)
+  expect(narrow.slack).toBeGreaterThan(0)
+
+  await page.setViewportSize({ width: 1920, height: 900 })
+  await expect(tile.locator('.dash-metric-value')).toHaveText('110.3 KB/s')
+
+  const wide = await tileMetrics(tile)
+  expect(wide.icon).toBe(56)
+  expect(wide.valueFont).toBeGreaterThan(narrow.valueFont)
+  expect(wide.slack).toBeGreaterThan(narrow.slack)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1920)
 })
 
 test('Overview title is rendered once with a single range control', async ({ page }) => {

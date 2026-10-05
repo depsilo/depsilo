@@ -1356,6 +1356,28 @@ html.dark .dashboard-surface {
   border-radius: 12px;
   box-shadow: var(--dash-shadow);
 }
+/* Overview metric tiles are their own size containers: the icon and the
+   headline value scale from the card's inline size, not the viewport, because
+   the same tile ships in 1-, 2- and 4-up grids. A 4-up row on a 1280-1600px
+   screen leaves a card narrower than the desktop design, and a fixed 56px
+   icon then squeezed long values such as "110.3 KB/s" out of the card. The
+   divisors keep ~10px of slack beside the icon and the 16px flex gap for the
+   longest realistic headline (ten 0.6em monospace glyphs), and cap at the
+   full-size 56px/30px design values once the card is wide enough. */
+.dash-metric {
+  container-type: inline-size;
+}
+.dash-metric-icon {
+  font-size: clamp(17px, calc((100cqi - 28px) / 8.36), 28px);
+  width: 2em;
+  height: 2em;
+}
+.dash-metric-icon .icon {
+  font-size: 1em;
+}
+.dash-metric-value {
+  font-size: clamp(19px, calc((100cqi - 28px) / 7.8), 30px);
+}
 .dash-focus:focus-visible {
   outline: 2px solid var(--dash-accent);
   outline-offset: 2px;

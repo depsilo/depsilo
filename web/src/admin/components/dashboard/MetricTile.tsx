@@ -61,8 +61,6 @@ interface MetricTileProps {
   detail?: ReactNode
   tone?: MetricTone
   icon?: IconName
-  /** Icon base size in px. */
-  iconSize?: number
   /** Real progress (memory limit / cache quota / disk). Omit when no honest denominator exists. */
   progress?: MetricProgress | null
   /** Real sampled series; omitted when nothing has been sampled yet. */
@@ -130,7 +128,6 @@ export default function MetricTile({
   detail,
   tone = 'default',
   icon,
-  iconSize = 56,
   progress = null,
   series,
   seriesTone,
@@ -150,15 +147,15 @@ export default function MetricTile({
     <div
       data-dashboard-metric
       data-testid={testId}
-      className="dash-card flex min-w-0 items-start gap-4 p-5"
+      className="dash-card dash-metric flex min-w-0 items-start gap-4 p-5"
     >
       {icon && (
         <span
           aria-hidden="true"
-          className="grid shrink-0 place-items-center rounded-xl"
-          style={{ width: iconSize, height: iconSize, background: palette.soft, color: palette.strong }}
+          className="dash-metric-icon grid shrink-0 place-items-center rounded-xl"
+          style={{ background: palette.soft, color: palette.strong }}
         >
-          <Icon name={icon} style={{ fontSize: Math.round(iconSize * 0.5) }} />
+          <Icon name={icon} />
         </span>
       )}
 
@@ -203,7 +200,7 @@ export default function MetricTile({
               ) : (
                 <>
                   <span
-                    className="font-mono text-[30px] font-semibold leading-none tabular-nums"
+                    className="dash-metric-value font-mono font-semibold leading-none tabular-nums"
                     style={{ color: 'var(--dash-ink)' }}
                     title={unit ? `${value} ${unit}` : value}
                   >
