@@ -73,9 +73,12 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
       )}
 
       {query.isPending ? (
-        <div aria-hidden className="flex flex-col gap-3 px-5 pb-5">
+        <div aria-hidden className="flex flex-col gap-px px-5 pb-5">
+          {/* Match the real table's header + row heights so the populated
+              state does not shift when the first response lands. */}
+          <div className="h-9 animate-pulse rounded" style={{ background: 'var(--dash-soft)' }} />
           {Array.from({ length: limit }, (_, index) => (
-            <div key={index} className="h-10 animate-pulse rounded-md" style={{ background: 'var(--dash-soft)' }} />
+            <div key={index} className="h-[55px] animate-pulse" style={{ background: 'var(--dash-soft)' }} />
           ))}
         </div>
       ) : initialError ? (

@@ -259,6 +259,11 @@ export default function MetricTile({
         {detail && (
           <p className="min-w-0 text-[14px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
         )}
+        {/* Reserve the measurement-basis line while loading so the card does
+            not grow when the payload arrives. */}
+        {loading && !detail && (
+          <span aria-hidden="true" className="block h-[21px] w-32 animate-pulse rounded bg-[var(--dash-soft)]" />
+        )}
       </div>
     </div>
   )

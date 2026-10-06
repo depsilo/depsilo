@@ -73,9 +73,13 @@ export default function RuntimeResources({
   const cache = runtime?.cache
   const quota = cache?.quota_bytes ?? null
   const logical = cache?.logical_bytes ?? 0
-  const quotaDetail = quota && quota > 0
+  // Only claim a storage fact once the sample exists: before the first payload
+  // the tile shows its skeleton, not "no quota configured".
+  const quotaDetail = !cache
     ? undefined
-    : (cache?.storage_type === 's3' ? t('overview.storageS3') : t('overview.cacheNoQuota'))
+    : quota && quota > 0
+      ? undefined
+      : (cache.storage_type === 's3' ? t('overview.storageS3') : t('overview.cacheNoQuota'))
   // Package and object counts come from the server's metadata aggregate and
   // are absent until it has succeeded once, so an unreadable cache never reads
   // as an empty one.
