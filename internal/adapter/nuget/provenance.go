@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"depsilo/internal/packagepolicy"
 )
 
@@ -19,6 +21,22 @@ import (
 // version's publish time. The minimum-release-age gate treats it as missing
 // provenance and fails closed for a bound ecosystem.
 var errRegistrationUnavailable = errors.New("nuget registration metadata is unavailable")
+
+const (
+	// Package versions are immutable, so an exact version's publish time stays
+	// valid for a long time; negative results retry quickly because a registry
+	// hiccup or a missing page should not be pinned for the whole process.
+	provenancePositiveTTL = time.Hour
+	provenanceNegativeTTL = 30 * time.Second
+	provenanceCacheLimit  = 4096
+	registrationBaseTTL   = 10 * time.Minute
+)
+
+type nugetProvenanceEntry struct {
+	published time.Time
+	ok        bool
+	expiresAt time.Time
+}
 
 type nugetServiceIndex struct {
 	Resources []struct {
@@ -52,14 +70,51 @@ type nugetRegistrationLeaf struct {
 // publish time through the configured upstream. The registration index and
 // its pages are fetched with the same upstream selector as the flat-container
 // download, so the timestamp governs bytes from the same source.
-func (h *Handler) nugetPublishedForVersion(ctx context.Context, id, version string) (time.Time, bool, error) {
-	rawServiceIndex, err := h.cachedUpstreamFetch(ctx, CacheKey("source/v3/index.json"), "/v3/index.json")
-	if err != nil {
-		return time.Time{}, false, fmt.Errorf("%w: service index: %v", errRegistrationUnavailable, err)
+// publishedProvenance memoizes the registration lookup for repeated downloads
+// of the same immutable package version. The metadata cache already bounds
+// network traffic; this avoids re-parsing large registration documents on the
+// hot path.
+func (h *Handler) publishedProvenance(ctx context.Context, id, version string) (time.Time, bool) {
+	key := strings.ToLower(id) + "\x00" + strings.ToLower(version)
+	now := time.Now()
+	h.provenanceMu.Lock()
+	if entry, ok := h.provenanceCache[key]; ok && now.Before(entry.expiresAt) {
+		h.provenanceMu.Unlock()
+		return entry.published, entry.ok
 	}
-	basePath, ok := registrationBasePath(rawServiceIndex)
+	h.provenanceMu.Unlock()
+
+	published, ok, err := h.nugetPublishedForVersion(ctx, id, version)
+	if err != nil {
+		zap.L().Warn("nuget registration provenance unavailable; the age gate will fail closed",
+			zap.String("package", id),
+			zap.String("version", version),
+			zap.Error(err),
+		)
+	}
+	ttl := provenancePositiveTTL
 	if !ok {
-		return time.Time{}, false, fmt.Errorf("%w: no RegistrationsBaseUrl resource", errRegistrationUnavailable)
+		ttl = provenanceNegativeTTL
+	}
+	h.provenanceMu.Lock()
+	if h.provenanceCache == nil {
+		h.provenanceCache = make(map[string]nugetProvenanceEntry)
+	}
+	h.provenanceCache[key] = nugetProvenanceEntry{published: published, ok: ok, expiresAt: now.Add(ttl)}
+	for len(h.provenanceCache) > provenanceCacheLimit {
+		for cachedKey := range h.provenanceCache {
+			delete(h.provenanceCache, cachedKey)
+			break
+		}
+	}
+	h.provenanceMu.Unlock()
+	return published, ok
+}
+
+func (h *Handler) nugetPublishedForVersion(ctx context.Context, id, version string) (time.Time, bool, error) {
+	basePath, err := h.cachedRegistrationBase(ctx)
+	if err != nil {
+		return time.Time{}, false, err
 	}
 	idLower := strings.ToLower(id)
 	indexPath := basePath + idLower + "/index.json"
@@ -124,6 +179,46 @@ func (h *Handler) nugetPublishedForVersion(ctx context.Context, id, version stri
 		return published.UTC(), true, nil
 	}
 	return time.Time{}, false, fmt.Errorf("%w: version %s is not present in the registration index", errRegistrationUnavailable, version)
+}
+
+// cachedRegistrationBase resolves and memoizes the RegistrationsBaseUrl path.
+// A transient service-index failure keeps the last good path so the
+// registration fetch can surface its own error.
+func (h *Handler) cachedRegistrationBase(ctx context.Context) (string, error) {
+	now := time.Now()
+	h.provenanceMu.Lock()
+	if h.registrationBase != "" && now.Before(h.registrationBaseExpires) {
+		base := h.registrationBase
+		h.provenanceMu.Unlock()
+		return base, nil
+	}
+	h.provenanceMu.Unlock()
+
+	rawServiceIndex, err := h.cachedUpstreamFetch(ctx, CacheKey("source/v3/index.json"), "/v3/index.json")
+	if err != nil {
+		if stale := h.staleRegistrationBase(); stale != "" {
+			return stale, nil
+		}
+		return "", fmt.Errorf("%w: service index: %v", errRegistrationUnavailable, err)
+	}
+	base, ok := registrationBasePath(rawServiceIndex)
+	if !ok {
+		if stale := h.staleRegistrationBase(); stale != "" {
+			return stale, nil
+		}
+		return "", fmt.Errorf("%w: no RegistrationsBaseUrl resource", errRegistrationUnavailable)
+	}
+	h.provenanceMu.Lock()
+	h.registrationBase = base
+	h.registrationBaseExpires = now.Add(registrationBaseTTL)
+	h.provenanceMu.Unlock()
+	return base, nil
+}
+
+func (h *Handler) staleRegistrationBase() string {
+	h.provenanceMu.Lock()
+	defer h.provenanceMu.Unlock()
+	return h.registrationBase
 }
 
 // cachedUpstreamFetch reads an upstream path through the shared metadata cache.

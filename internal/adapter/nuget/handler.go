@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,7 +28,11 @@ type Handler struct {
 	// provenanceRequired enables registration-backed publish-time evidence.
 	// The composition root sets it only when a positive nuget threshold is
 	// active, so the default path keeps its zero-overhead behavior.
-	provenanceRequired bool
+	provenanceRequired      bool
+	provenanceMu            sync.Mutex
+	provenanceCache         map[string]nugetProvenanceEntry
+	registrationBase        string
+	registrationBaseExpires time.Time
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
@@ -59,13 +64,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	if id, version := packagekey.ParseNugetPath(path); id != "" && version != "" {
 		if h.provenanceRequired {
 			provenance := adapter.QuarantineProvenance{SourceID: nugetArtifactSourceID(id, version)}
-			if published, ok, err := h.nugetPublishedForVersion(c.Request.Context(), id, version); err != nil {
-				zap.L().Warn("nuget registration provenance unavailable; the age gate will fail closed",
-					zap.String("package", id),
-					zap.String("version", version),
-					zap.Error(err),
-				)
-			} else if ok {
+			if published, ok := h.publishedProvenance(c.Request.Context(), id, version); ok {
 				provenance.PublishAt = published
 			}
 			if blocked := adapter.QuarantineGateWithProvenance(c, "nuget", id, version, provenance); blocked {

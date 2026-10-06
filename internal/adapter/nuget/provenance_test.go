@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -186,4 +187,104 @@ func requestNupkg(t *testing.T, handler http.Handler, version string) *httptest.
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, target, nil))
 	return response
+}
+
+func TestNuGetProvenanceMemoizesRegistrationLookups(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Now().UTC()
+	var serviceIndexHits, registrationHits atomic.Int64
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v3/index.json":
+			serviceIndexHits.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"resources":[{"@id":"http://`+r.Host+
+				`/v3/registration5-gz-semver2/","@type":"RegistrationsBaseUrl/3.6.0"}]}`)
+		case "/v3/registration5-gz-semver2/acme.demo/index.json":
+			registrationHits.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []any{map[string]any{
+					"@id":   "http://" + r.Host + "/v3/registration5-gz-semver2/acme.demo/page/2.0.0/2.0.0.json",
+					"lower": "2.0.0",
+					"upper": "2.0.0",
+					"items": []any{map[string]any{"catalogEntry": map[string]any{
+						"version":   "2.0.0",
+						"published": now.Add(-30 * 24 * time.Hour).Format(time.RFC3339),
+						"listed":    true,
+					}}},
+				}},
+			})
+		case "/v3-flatcontainer/acme.demo/2.0.0/acme.demo.2.0.0.nupkg":
+			_, _ = io.WriteString(w, "nupkg")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(upstreamServer.Close)
+
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "nuget-memo.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Close(ctx); err != nil {
+			t.Errorf("close cache manager: %v", err)
+		}
+	})
+	pool, err := upstream.NewPool([]config.UpstreamConfig{{
+		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// TTLIndex 0 expires metadata immediately, so a second provenance lookup
+	// would hit the upstream again without the in-process memo.
+	handler := New(
+		manager,
+		upstream.NewPassiveRecoverySelector(pool),
+		config.CacheConfig{TTLIndex: 0, TTLBlob: time.Hour},
+		database,
+	)
+	handler.SetProvenanceRequired(true)
+	router := gin.New()
+	handler.Register(router.Group("/nuget"))
+
+	enabled := true
+	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"nuget": "168h"},
+	}, func(ecosystem string) bool { return ecosystem == "nuget" })
+	if err != nil {
+		t.Fatalf("NewPolicyWithProvenance: %v", err)
+	}
+	store := quarantine.NewStore(database)
+	checker, err := quarantine.NewChecker(policy, quarantine.NewLookup(store, nil), store)
+	if err != nil {
+		t.Fatalf("NewChecker: %v", err)
+	}
+	scoped := adapter.NewRequestScope(nil, nil, quarantine.Wrap(checker), nil).Wrap(router)
+
+	for attempt := 0; attempt < 2; attempt++ {
+		response := requestNupkg(t, scoped, "2.0.0")
+		if response.Code != http.StatusOK {
+			t.Fatalf("attempt %d status=%d body=%s", attempt, response.Code, response.Body.String())
+		}
+	}
+	if got := serviceIndexHits.Load(); got != 1 {
+		t.Fatalf("service index hits = %d, want 1", got)
+	}
+	if got := registrationHits.Load(); got != 1 {
+		t.Fatalf("registration index hits = %d, want 1", got)
+	}
 }
