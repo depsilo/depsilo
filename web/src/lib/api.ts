@@ -6,6 +6,7 @@ import type {
   AccessLogQuery,
   AdminSettingsResponse,
   AdminUpstream,
+  AdminCascadeInfo,
   AdminUpstreamLatenciesResponse,
   AdminUpstreamListResponse,
   AdminUpstreamUpdateListResponse,
@@ -209,6 +210,7 @@ export const adminApi = {
   updateUpstream: (id: number, data: UpstreamMutationRequest) => api.put<AdminUpstream>(`/admin/upstreams/${id}`, data),
   deleteUpstream: (id: number) => api.delete<DeleteUpstreamResponse>(`/admin/upstreams/${id}`),
   checkUpstream: (id: number) => api.post<CheckUpstreamResponse>(`/admin/upstreams/${id}/check`),
+  getCascadeInfo: (options: ApiGetOptions = {}) => api.get<AdminCascadeInfo>('/admin/cascade', options),
   getUpstreamLatencies: (range_: string = '24h', options: ApiGetOptions = {}) =>
     api.get<AdminUpstreamLatenciesResponse>('/admin/upstreams/latency', { ...options, params: { range: range_ } }),
   listUpstreamUpdates: (params: AdminUpstreamUpdateQuery, options: ApiGetOptions = {}) =>

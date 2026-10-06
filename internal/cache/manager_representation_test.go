@@ -509,7 +509,7 @@ func TestManager_PassthroughExposesSafeResponseMetadata(t *testing.T) {
 	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
 	t.Cleanup(func() { closeTestManager(t, manager) })
 
-	result, err := manager.fetchPassthrough(context.Background(),
+	result, err := manager.fetchPassthrough(context.Background(), "test-key", "test", time.Hour,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			body := WithResponseMetadata(io.NopCloser(strings.NewReader("body")), http.Header{
 				"ETag":          {`"passthrough"`},
@@ -545,7 +545,7 @@ func TestManager_FetchTimeoutHintAppliesToMissAndPassthrough(t *testing.T) {
 			return err
 		},
 		"passthrough": func(ctx context.Context) error {
-			_, err := manager.fetchPassthrough(ctx, blockingFetch)
+			_, err := manager.fetchPassthrough(ctx, "pypi/files/timeout.whl", "pypi", time.Hour, blockingFetch)
 			return err
 		},
 	} {
@@ -572,7 +572,7 @@ func TestManager_FetchIdleTimeoutHintAppliesToPassthrough(t *testing.T) {
 	defer cancel()
 	ctx := WithFetchTimeout(callerCtx, 0)
 	ctx = WithFetchIdleTimeout(ctx, 20*time.Millisecond)
-	result, err := manager.fetchPassthrough(ctx,
+	result, err := manager.fetchPassthrough(ctx, "test-key", "test", time.Hour,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			return body, "application/octet-stream", -1, "upstream", nil
 		})

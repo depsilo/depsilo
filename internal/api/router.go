@@ -45,19 +45,22 @@ type Deps struct {
 	Storage          cache.Storage
 	Config           *config.Config
 	ConfigStore      *config.Store
-	Pools            map[string]*upstream.Pool
-	UpstreamRegistry *upstream.Registry
-	Ecosystems       []string
-	CacheMgr         *cache.Manager
-	CacheRetention   *cache.Retention
-	CompileCache     CompileCacheRouteDependencies
-	IndexRefresher   upstreamupdates.Refresher
-	EventBus         *cache.EventBus
-	LicenseManager   *license.Manager
-	TrialManager     *trial.Manager       // NEW
-	Entitlement      *entitlement.Checker // NEW
-	RulesStore       *rules.Store
-	RulesEngine      *rules.Engine
+	// CascadeInstanceID is the runtime identity resolved at startup (auto-
+	// generated and persisted when configuration leaves it empty).
+	CascadeInstanceID string
+	Pools             map[string]*upstream.Pool
+	UpstreamRegistry  *upstream.Registry
+	Ecosystems        []string
+	CacheMgr          *cache.Manager
+	CacheRetention    *cache.Retention
+	CompileCache      CompileCacheRouteDependencies
+	IndexRefresher    upstreamupdates.Refresher
+	EventBus          *cache.EventBus
+	LicenseManager    *license.Manager
+	TrialManager      *trial.Manager       // NEW
+	Entitlement       *entitlement.Checker // NEW
+	RulesStore        *rules.Store
+	RulesEngine       *rules.Engine
 	// PolicyStatusProvider is a read-only snapshot seam shared by readiness,
 	// Admin status, and Prometheus telemetry. It must not refresh the store.
 	PolicyStatusProvider PolicyStatusProvider
@@ -272,6 +275,10 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.PUT("/upstreams/:id", upstreamHandler.Update)
 	adminWrite.DELETE("/upstreams/:id", upstreamHandler.Delete)
 	adminWrite.POST("/upstreams/:id/check", upstreamHandler.Check)
+
+	// Cascade deployment topology (peer URLs and names; never tokens).
+	cascadeHandler := admin.NewCascadeHandler(deps.Config.Cascade, deps.CascadeInstanceID)
+	adminRead.GET("/cascade", cascadeHandler.Info)
 
 	// Upstream latency history
 	latencyHandler := admin.NewLatencyHandler(deps.DB)

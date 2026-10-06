@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"depsilo/internal/adapter/packagekey"
+	"depsilo/internal/cascade"
 	"depsilo/internal/db"
 	"depsilo/internal/traffic"
 )
@@ -509,6 +510,7 @@ func (m *Manager) scheduleBackgroundRefresh(key, adapterType string, ttl time.Du
 		}()
 		refreshCtx := WithFetchTimeout(ctx, fetchTimeout)
 		refreshCtx = WithFetchIdleTimeout(refreshCtx, fetchIdleTimeout)
+		refreshCtx = cascade.WithFetchTTL(refreshCtx, ttl)
 		m.backgroundRefresh(refreshCtx, key, adapterType, ttl, fetchFn)
 	})
 	if !started {
@@ -552,6 +554,16 @@ func (m *Manager) isImmutable(ttl time.Duration) bool {
 // TTL so unusual but valid operator settings cannot disable index refresh.
 func (m *Manager) isMutableMetadata(adapterType, key string) bool {
 	return db.ClassifyCacheKind(adapterType, key) == db.CacheKindMetadata
+}
+
+// relayFetchKind maps the cache manager's metadata/artifact classification
+// onto the cascade wire kind so a parent cache node applies the same
+// synchronous-refresh policy as the child that requested the entry.
+func relayFetchKind(adapterType, key string) string {
+	if db.ClassifyCacheKind(adapterType, key) == db.CacheKindMetadata {
+		return cascade.KindIndex
+	}
+	return cascade.KindArtifact
 }
 
 func (m *Manager) cacheKind(adapterType, key string) string {
@@ -763,6 +775,7 @@ func (m *Manager) Prefetch(ctx context.Context, key string, adapterType string, 
 	// explicit transfer-timeout hints across that lifecycle seam.
 	operationCtx = WithFetchTimeout(operationCtx, fetchTimeoutFrom(ctx))
 	operationCtx = WithFetchIdleTimeout(operationCtx, fetchIdleTimeoutFrom(ctx))
+	operationCtx = cascade.WithChain(operationCtx, cascade.ChainFrom(ctx))
 
 	trackedCtx, tracker := withTrackedPrefetch(operationCtx)
 	result, err := m.Get(trackedCtx, key, adapterType, ttl, fetchFn)
@@ -981,7 +994,7 @@ func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl t
 					)
 				}
 			}
-			return m.fetchPassthrough(ctx, fetchFn)
+			return m.fetchPassthrough(ctx, key, adapterType, ttl, fetchFn)
 		}
 		// Transient upstream failures may use stale data as a last resort.
 		// Authoritative errors (for example a package becoming private or being
@@ -1013,7 +1026,13 @@ func (m *Manager) get(ctx context.Context, key string, adapterType string, ttl t
 // after the flight it joined failed only at the cache persistence layer. It
 // deliberately skips another cache attempt: during a storage outage, repeatedly
 // serialising followers behind doomed fills creates long tail latency.
-func (m *Manager) fetchPassthrough(ctx context.Context, fetchFn FetchFunc) (*GetResult, error) {
+func (m *Manager) fetchPassthrough(
+	ctx context.Context,
+	key string,
+	adapterType string,
+	ttl time.Duration,
+	fetchFn FetchFunc,
+) (*GetResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -1022,6 +1041,9 @@ func (m *Manager) fetchPassthrough(ctx context.Context, fetchFn FetchFunc) (*Get
 		return nil, ErrManagerClosed
 	}
 	operationCtx, operationCancel := m.bindLifecycle(ctx)
+	operationCtx = cascade.WithChain(operationCtx, cascade.ChainFrom(ctx))
+	operationCtx = cascade.WithFetchTTL(operationCtx, ttl)
+	operationCtx = cascade.WithFetchKind(operationCtx, relayFetchKind(adapterType, key))
 	fetchCtx, fetchCancel, cancelFetchWithCause := newFetchContext(operationCtx, fetchTimeoutFrom(ctx))
 	var cleanupOnce sync.Once
 	cleanup := func() {
@@ -1141,6 +1163,11 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 	// attribution. A coalesced follower keeps its own (empty) accumulator —
 	// the leader performed the exchange, so the bytes are charged once.
 	fetchCtx = traffic.WithAttribution(fetchCtx, traffic.AttributionFromContext(ctx))
+	// Cache fills run on a detached lifecycle context, so the cascade chain and
+	// freshness budget must cross the same seam for peer-relayed egress.
+	fetchCtx = cascade.WithChain(fetchCtx, cascade.ChainFrom(ctx))
+	fetchCtx = cascade.WithFetchTTL(fetchCtx, ttl)
+	fetchCtx = cascade.WithFetchKind(fetchCtx, relayFetchKind(adapterType, key))
 	body, contentType, size, upstreamName, err := fetchFn(fetchCtx)
 	flight.refreshOutcome = RefreshOutcome{
 		Upstream:    upstreamName,
@@ -1718,6 +1745,8 @@ func (m *Manager) backgroundRefresh(parentCtx context.Context, key string, adapt
 	}()
 	ctx, cancel, cancelFetchWithCause := newFetchContext(parentCtx, fetchTimeoutFrom(parentCtx))
 	defer cancel()
+	ctx = cascade.WithFetchTTL(ctx, ttl)
+	ctx = cascade.WithFetchKind(ctx, relayFetchKind(adapterType, key))
 
 	err := func() error {
 		body, contentType, size, _, err := fetchFn(ctx)

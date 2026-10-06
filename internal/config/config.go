@@ -62,6 +62,55 @@ type Config struct {
 	// of the chain head, written outside the database so a whole-database
 	// rewrite stays detectable.
 	Audit AuditConfig `mapstructure:"audit"`
+	// Cascade configures multi-level cache peering: this instance can relay
+	// upstream fetches through one or more parent Depsilo nodes, and (when
+	// enabled) accepts authenticated relay requests from child nodes.
+	Cascade CascadeConfig `mapstructure:"cascade"`
+}
+
+// CascadeConfig is the operator-facing shape of multi-level cache peering.
+//
+// Peers are deployment infrastructure: their addresses and tokens live in the
+// configuration file. Which ecosystem upstream egresses through which peer is
+// operational policy and is stored per upstream (the "via" field), so the
+// Admin upstream editor stays authoritative after the first seed.
+type CascadeConfig struct {
+	// Enabled turns this instance into a relay endpoint and allows upstreams
+	// with a non-empty via to egress through a configured peer.
+	Enabled bool `mapstructure:"enabled"`
+	// InstanceID identifies this node in loop-detection chains. Empty means
+	// "generate once and persist"; operators only set it when they need a
+	// stable value to pin in another node's configuration.
+	InstanceID string `mapstructure:"instance_id"`
+	// Token is the shared secret this instance presents to peers and requires
+	// from peers that relay through it. It must be identical across the mesh.
+	Token string `mapstructure:"token"`
+	// MaxHops bounds how many relay nodes a request may traverse before the
+	// next node refuses it. The default is cascade.DefaultMaxHops.
+	MaxHops int `mapstructure:"max_hops"`
+	// MaxTTL caps how long a parent may keep a relayed response fresh. Child
+	// freshness budgets are clamped to this value.
+	MaxTTL time.Duration `mapstructure:"max_ttl"`
+	// AllowInsecureHTTP permits plaintext http:// peer URLs on non-loopback
+	// hosts. The shared token is visible to anyone on the path unless the peer
+	// is reached over a trusted network or a TLS reverse proxy.
+	AllowInsecureHTTP bool `mapstructure:"allow_insecure_http"`
+	// Peers lists parent cache nodes this instance may dial.
+	Peers []CascadePeerConfig `mapstructure:"peers"`
+}
+
+// CascadePeerConfig is one parent Depsilo node.
+type CascadePeerConfig struct {
+	Name string `mapstructure:"name"`
+	// URL is the peer's origin, optionally with a path prefix when it is
+	// mounted behind a reverse proxy. The relay path is appended to it.
+	URL string `mapstructure:"url"`
+	// Token overrides cascade.token for this peer.
+	Token string `mapstructure:"token"`
+	// ForwardCredentials allows upstream Authorization headers to traverse the
+	// peer. Leave it false unless the peer is as trusted as the upstream
+	// itself; the peer can read everything it forwards.
+	ForwardCredentials bool `mapstructure:"forward_credentials"`
 }
 
 // AuditConfig configures the audit chain anchor.
@@ -304,6 +353,10 @@ type UpstreamConfig struct {
 	Proxy         string `mapstructure:"proxy"`
 	ProbeMode     string `mapstructure:"probe_mode"`
 	ProbeInterval string `mapstructure:"probe_interval"`
+	// Via names a cascade peer that egresses this upstream's requests. The URL
+	// remains the real upstream origin, so cache keys, provenance identities,
+	// and health accounting keep their normal meaning.
+	Via string `mapstructure:"via"`
 }
 
 // UpstreamUpdatesConfig controls the optional package-metadata watcher.

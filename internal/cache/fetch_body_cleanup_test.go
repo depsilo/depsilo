@@ -33,7 +33,7 @@ func TestFetchPassthroughClosesBodyReturnedWithError(t *testing.T) {
 	body := newCloseObservedFetchBody()
 	fetchErr := errors.New("upstream returned body and error")
 
-	result, err := manager.fetchPassthrough(t.Context(),
+	result, err := manager.fetchPassthrough(t.Context(), "test-key", "test", time.Hour,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			return body, "", -1, "upstream", fetchErr
 		})

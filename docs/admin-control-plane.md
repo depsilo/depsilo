@@ -114,6 +114,12 @@ Check returns `{upstream,check}` with HTTP 200 even when the network probe repor
 `healthy:false`. An active ecosystem keeps at least one row (`409 LAST_UPSTREAM`), and
 Admin cannot activate an inactive ecosystem (`409 ECOSYSTEM_NOT_ACTIVE`).
 
+Create and Update accept an optional `via` field naming a cascade peer configured in
+`[cascade]`. The value is stored with the upstream and points egress at that peer;
+an unknown or malformed peer name fails with `422 INVALID_UPSTREAM` before anything
+is committed. `GET /api/v1/admin/cascade` returns the deployment-level peer list
+(names and URLs, never tokens).
+
 Upstream validation and lifecycle errors use `400 BAD_REQUEST`, `404 NOT_FOUND`,
 `409 CONFLICT`, `409 LAST_UPSTREAM`, `409 ECOSYSTEM_NOT_ACTIVE`,
 `422 INVALID_UPSTREAM`, `422 IMMUTABLE_ECOSYSTEM`, and

@@ -109,8 +109,15 @@ ADR-0004.
 - The compiler cache is an isolated ccache HTTP and narrow sccache WebDAV
   compatibility service. It is not an sccache-dist scheduler or a public S3
   API.
-- The current operational model is lightweight and single-instance. SQLite is
-  the current database authority; multi-node HA is not a shipped capability.
+- Cascade cache peering lets a node egress selected Upstreams through another
+  Depsilo's authenticated relay, so a parent fills its cache once and nearby
+  devices read from it at LAN speed (ADR-0006). Peers share cache results
+  only: every node keeps its own database, policy, and cache. Docker is out
+  of scope, and cascade does not aggregate bandwidth across peers.
+- The current operational model is lightweight: SQLite is the database
+  authority per instance, and cascade connects independent nodes without a
+  shared control plane. Multi-node HA and shared-database deployments are not
+  shipped capabilities.
 - The web product is bilingual in Chinese and English. Native mobile clients
   are not part of the current product.
 - The entitlement boundary is decided: governance primitives (minimum release

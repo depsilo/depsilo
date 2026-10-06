@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"depsilo/internal/cascade"
 	"depsilo/internal/ecosystem"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/viper"
@@ -313,8 +314,25 @@ func decodeViper(v *viper.Viper) (*Config, error) {
 		}
 		cfg.CompileCache.DownloadTimeout = d
 	}
+	if raw := v.GetString("cascade.max_ttl"); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse cascade.max_ttl: %w", err)
+		}
+		cfg.Cascade.MaxTTL = d
+	}
+	cfg.Cascade.InstanceID = strings.TrimSpace(cfg.Cascade.InstanceID)
+	cfg.Cascade.Token = strings.TrimSpace(cfg.Cascade.Token)
+	for index := range cfg.Cascade.Peers {
+		cfg.Cascade.Peers[index].Name = strings.TrimSpace(cfg.Cascade.Peers[index].Name)
+		cfg.Cascade.Peers[index].URL = strings.TrimRight(strings.TrimSpace(cfg.Cascade.Peers[index].URL), "/")
+		cfg.Cascade.Peers[index].Token = strings.TrimSpace(cfg.Cascade.Peers[index].Token)
+	}
 	cfg.CompileCache.PublicURL = strings.TrimRight(strings.TrimSpace(cfg.CompileCache.PublicURL), "/")
 	if err := validateCompileCacheConfig(cfg.CompileCache); err != nil {
+		return nil, err
+	}
+	if err := validateCascadeConfig(cfg); err != nil {
 		return nil, err
 	}
 	if err := validatePolicyConfig(cfg.Policy); err != nil {
@@ -524,6 +542,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("audit.checkpoint_interval", "15m")
 	v.SetDefault("audit.checkpoint_url", "")
 	v.SetDefault("audit.checkpoint_token", "")
+	v.SetDefault("cascade.enabled", false)
+	v.SetDefault("cascade.instance_id", "")
+	v.SetDefault("cascade.token", "")
+	v.SetDefault("cascade.max_hops", cascade.DefaultMaxHops)
+	v.SetDefault("cascade.max_ttl", "168h")
+	v.SetDefault("cascade.allow_insecure_http", false)
 	// Access log rollup. retention_days bounds the raw access_logs table
 	// at 7 days of detail (the admin "recent logs" page); rollup retention
 	// keeps a year of aggregated dashboards. Operators who upgrade and

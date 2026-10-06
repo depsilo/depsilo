@@ -92,6 +92,11 @@ func ClassifyCacheKind(adapterType, key string) string {
 	key = strings.ToLower(key)
 	metadata := false
 	switch {
+	case adapterType == "relay":
+		// Cascade relay entries carry the child's own classification in the key
+		// prefix so the parent refreshes metadata synchronously and may serve
+		// immutable artifacts stale while verifying them in the background.
+		metadata = strings.HasPrefix(key, "relay-v1/index/")
 	case strings.Contains(key, "/simple/") && strings.HasSuffix(key, "/index.html"):
 		metadata = true // PyPI and configured extra indexes
 	case adapterType == "npm":

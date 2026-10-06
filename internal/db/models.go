@@ -187,6 +187,11 @@ type UpstreamRecord struct {
 	LastCheckedAt time.Time `json:"last_checked_at"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+	// Via names an optional cascade peer that egresses this upstream. Empty
+	// keeps direct egress. The URL remains the real origin. It is declared last
+	// because the schema migration appends the SQLite column; the schema-parity
+	// test compares column order.
+	Via string `gorm:"size:64;default:''" json:"via"`
 }
 
 const InitialCredentialVersion uint64 = 1

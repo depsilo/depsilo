@@ -290,6 +290,7 @@ make setup build
 | 目标 | 阅读 |
 | --- | --- |
 | 部署并定位持久状态 | [部署默认值（英文）](deployment.md) |
+| 多台 Depsilo 组成多级缓存 | [级联部署（英文）](cascade.md) |
 | 配置所有可用设置 | [`config.example.toml`](../config.example.toml) |
 | 验证已经部署的实例 | [自检清单](self-test-checklist.md) |
 | 理解 Admin 和实时配置权威 | [Admin 控制面](admin-control-plane.md) |

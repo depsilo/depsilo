@@ -851,6 +851,22 @@ export interface UpstreamMutationRequest {
   priority: number
   probe_mode: 'active' | 'passive'
   probe_interval: string
+  /** Cascade peer name; empty/omitted means direct egress. */
+  via?: string
+}
+
+export interface AdminCascadePeer {
+  name: string
+  url: string
+  forward_credentials: boolean
+}
+
+export interface AdminCascadeInfo {
+  enabled: boolean
+  instance_id: string
+  max_hops: number
+  max_ttl_seconds: number
+  peers: AdminCascadePeer[]
 }
 
 export interface AdminUpstream extends UpstreamMutationRequest {

@@ -15,8 +15,10 @@ import (
 
 type MutationInput struct {
 	AdapterType, Name, URL, Proxy string
-	Priority                      int
-	ProbeMode, ProbeInterval      string
+	// Via optionally names a configured cascade peer. Empty means direct.
+	Via                      string
+	Priority                 int
+	ProbeMode, ProbeInterval string
 }
 
 type preparedMutation struct {
@@ -32,10 +34,41 @@ type workerPlan struct {
 
 const registryBusyRetryLimit = 3
 
+// validPeerName mirrors the configuration-side peer name grammar so a DB
+// mutation cannot introduce a reference the config validator would reject.
+func validPeerName(name string) bool {
+	if name == "" || len(name) > 64 {
+		return false
+	}
+	for index, char := range name {
+		switch {
+		case char >= 'a' && char <= 'z':
+		case char >= '0' && char <= '9':
+		case char == '-' && index > 0:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// validatePeerReference keeps an Admin mutation from binding an upstream to a
+// peer name that cannot resolve at runtime.
+func (r *Registry) validatePeerReference(via string) error {
+	if via == "" {
+		return nil
+	}
+	if _, ok := r.poolOptions.Peers.Resolve(via); !ok {
+		return fmt.Errorf("%w: cascade peer %q is not configured", ErrInvalidUpstream, via)
+	}
+	return nil
+}
+
 func validateMutation(input MutationInput) (MutationInput, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.URL = strings.TrimSpace(input.URL)
 	input.Proxy = strings.TrimSpace(input.Proxy)
+	input.Via = strings.TrimSpace(input.Via)
 	if input.Name == "" || len(input.Name) > 128 || input.Priority <= 0 {
 		return input, fmt.Errorf("%w: name and positive priority are required", ErrInvalidUpstream)
 	}
@@ -44,6 +77,9 @@ func validateMutation(input MutationInput) (MutationInput, error) {
 	}
 	if input.Proxy != "" && !validHTTPURL(input.Proxy) {
 		return input, fmt.Errorf("%w: invalid proxy", ErrInvalidUpstream)
+	}
+	if input.Via != "" && !validPeerName(input.Via) {
+		return input, fmt.Errorf("%w: invalid cascade peer name", ErrInvalidUpstream)
 	}
 	if input.ProbeMode != "active" && input.ProbeMode != "passive" {
 		return input, fmt.Errorf("%w: probe_mode must be active or passive", ErrInvalidUpstream)
@@ -117,7 +153,7 @@ func (r *Registry) prepareAndCommit(ctx context.Context, ecosystem string, apply
 		if err := tx.Where("adapter_type = ?", ecosystem).Order("priority, id").Find(&records).Error; err != nil {
 			return err
 		}
-		next, err := buildPoolSnapshot(records, previous)
+		next, err := buildPoolSnapshotWithOptions(records, previous, r.poolOptions)
 		if err != nil {
 			return err
 		}
@@ -134,6 +170,9 @@ func (r *Registry) Create(ctx context.Context, input MutationInput) (RuntimeUpst
 	}
 	input, err := validateMutation(input)
 	if err != nil {
+		return RuntimeUpstream{}, err
+	}
+	if err := r.validatePeerReference(input.Via); err != nil {
 		return RuntimeUpstream{}, err
 	}
 	lock.Lock()
@@ -154,6 +193,7 @@ func (r *Registry) Create(ctx context.Context, input MutationInput) (RuntimeUpst
 			Priority:      input.Priority,
 			ProbeMode:     input.ProbeMode,
 			ProbeInterval: input.ProbeInterval,
+			Via:           input.Via,
 			Healthy:       true,
 			SuccessRate:   1,
 		}
@@ -189,6 +229,9 @@ func (r *Registry) Update(ctx context.Context, id uint, input MutationInput) (Ru
 	if err != nil {
 		return RuntimeUpstream{}, err
 	}
+	if err := r.validatePeerReference(input.Via); err != nil {
+		return RuntimeUpstream{}, err
+	}
 	lock.Lock()
 	defer lock.Unlock()
 	prepared, err := r.prepareAndCommit(ctx, current.AdapterType, func(tx *gorm.DB) (uint, error) {
@@ -212,6 +255,7 @@ func (r *Registry) Update(ctx context.Context, id uint, input MutationInput) (Ru
 			"priority":       input.Priority,
 			"probe_mode":     input.ProbeMode,
 			"probe_interval": input.ProbeInterval,
+			"via":            input.Via,
 		}).Error
 		if err != nil {
 			return 0, err
@@ -412,7 +456,8 @@ func snapshotMatches(snapshot *poolSnapshot, records []db.UpstreamRecord) bool {
 		current := snapshot.upstreams[i]
 		if current.ID != record.ID || current.AdapterType != record.AdapterType ||
 			current.Name != record.Name || current.URL != record.URL || current.Proxy != record.Proxy ||
-			current.Priority != record.Priority || current.ProbeMode != mode || current.ProbeInterval != interval {
+			current.Priority != record.Priority || current.ProbeMode != mode || current.ProbeInterval != interval ||
+			current.Via != record.Via {
 			return false
 		}
 	}
@@ -443,7 +488,7 @@ func (r *Registry) reloadEcosystemLocked(ecosystem string) error {
 	}
 	pool := r.pools[ecosystem]
 	previous := pool.load()
-	next, err := buildPoolSnapshot(records, previous)
+	next, err := buildPoolSnapshotWithOptions(records, previous, r.poolOptions)
 	if err != nil {
 		return err
 	}

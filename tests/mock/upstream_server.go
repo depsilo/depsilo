@@ -118,6 +118,16 @@ func (m *MockUpstream) RegisterNpm() {
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Write([]byte("FAKE_NPM_TARBALL"))
 	})
+	// Dedicated cascade fixture: only the cascade integration test requests
+	// this path, so the test can count origin fetches deterministically.
+	m.mux.HandleFunc("/cascade-fixture", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"name":"cascade-fixture","dist-tags":{"latest":"1.0.0"},"versions":{"1.0.0":{"name":"cascade-fixture","version":"1.0.0","dist":{"tarball":"%s/cascade-fixture/-/cascade-fixture-1.0.0.tgz"}}}}`, m.URL())
+	})
+	m.mux.HandleFunc("/cascade-fixture/-/cascade-fixture-1.0.0.tgz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		_, _ = w.Write([]byte("FAKE_CASCADE_TARBALL"))
+	})
 	// Deliberately map several declared versions to one arbitrary archive name.
 	// Depsilo must carry the versions map key into its authenticated tarball
 	// route; the filename itself provides no version evidence.

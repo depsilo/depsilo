@@ -23,6 +23,7 @@ import (
 	"depsilo/internal/backup"
 	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
+	"depsilo/internal/cascade"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/entitlement"
@@ -31,6 +32,7 @@ import (
 	"depsilo/internal/notify"
 	"depsilo/internal/quarantine"
 	"depsilo/internal/quarantine/resolvers"
+	"depsilo/internal/relay"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
 	"depsilo/internal/snapshot"
@@ -150,7 +152,20 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, fmt.Errorf("configure npm tarball provenance: %w", err)
 	}
 	definitions := standardEcosystemDefinitions(cfg, npmTarballSigningKey)
-	registry, err = upstream.NewRegistry(database, bootstrap.ActiveEcosystems)
+	registryOptions := upstream.PoolOptions{}
+	var cascadeIdentity string
+	if cfg.Cascade.Enabled {
+		cascadeIdentity, err = resolveCascadeIdentity(database, cfg.Cascade.InstanceID)
+		if err != nil {
+			return nil, fmt.Errorf("configure cascade identity: %w", err)
+		}
+		peers, peerErr := cascadePeerSet(cfg.Cascade, cascadeIdentity)
+		if peerErr != nil {
+			return nil, fmt.Errorf("configure cascade peers: %w", peerErr)
+		}
+		registryOptions.Peers = peers
+	}
+	registry, err = upstream.NewRegistryWithOptions(database, bootstrap.ActiveEcosystems, registryOptions)
 	if err != nil {
 		return nil, fmt.Errorf("build upstream registry: %w", err)
 	}
@@ -617,6 +632,27 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	r.Use(rules.Middleware(rulesEngine, extraPackageRuleRoutes...))
 	r.Use(middleware.ProjectTokenMiddleware(database))
 
+	// Cascade relay: authenticated parent endpoints that serve raw upstream
+	// exchanges to child Depsilo nodes. Registered before API and frontend
+	// routes so the SPA fallback can never swallow it.
+	if cfg.Cascade.Enabled {
+		relayHandler := &relay.Handler{
+			DB:            database,
+			Cache:         cacheMgr,
+			Identity:      cascadeIdentity,
+			Token:         cfg.Cascade.Token,
+			MaxHops:       cfg.Cascade.MaxHops,
+			MaxTTL:        cfg.Cascade.MaxTTL,
+			DefaultClient: upstream.NewRelayClient(),
+			ResolveEgress: registry.RelayEgress,
+		}
+		r.Any(cascade.RelayPath, gin.WrapH(relayHandler))
+		zap.L().Info("cascade relay enabled",
+			zap.String("instance_id", cascadeIdentity),
+			zap.Int("peers", len(cfg.Cascade.Peers)),
+		)
+	}
+
 	// Build ordered ecosystem name list (defines UI iteration order)
 	ecosystemNames := make([]string, 0, len(activeDefs))
 	for _, eco := range activeDefs {
@@ -634,6 +670,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		Storage:                    storage,
 		Config:                     cfg,
 		ConfigStore:                settingsStore,
+		CascadeInstanceID:          cascadeIdentity,
 		Pools:                      pools,
 		UpstreamRegistry:           registry,
 		Ecosystems:                 ecosystemNames,

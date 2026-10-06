@@ -937,7 +937,7 @@ func TestManagerCloseWaitsForFollowerPassthroughCloseCallback(t *testing.T) {
 	manager := NewManager(newMemStorage(), database, NewEventBus(), time.Hour)
 	body := newBlockingCloseReadBody()
 
-	result, err := manager.fetchPassthrough(context.Background(),
+	result, err := manager.fetchPassthrough(context.Background(), "test-key", "test", time.Hour,
 		func(context.Context) (io.ReadCloser, string, int64, string, error) {
 			return body, "application/octet-stream", -1, "fallback", nil
 		})

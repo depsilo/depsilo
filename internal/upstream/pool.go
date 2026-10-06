@@ -37,9 +37,13 @@ type Upstream struct {
 	Priority      int
 	ProbeMode     string        // "active" or "passive"
 	ProbeInterval time.Duration // parsed from config string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	client        *http.Client
+	// Via is the configured cascade peer this upstream egresses through, or
+	// empty for direct egress. It is reported to Admin even when the peer is
+	// no longer configured, so operators can see the dangling reference.
+	Via       string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	client    *http.Client
 	// directNetworkGuard means hostname targets are resolved and authorized by
 	// the guarded dialer before the exact resolved IP is used for the socket.
 	// Configured HTTP proxies own their DNS and egress boundary instead.
@@ -161,7 +165,21 @@ func NewPool(cfgs []config.UpstreamConfig) (*Pool, error) {
 
 // NewPoolFromRecords creates a pool from persisted upstream records.
 func NewPoolFromRecords(records []db.UpstreamRecord) (*Pool, error) {
-	next, err := buildPoolSnapshot(records, nil)
+	return NewPoolFromRecordsWithOptions(records, PoolOptions{})
+}
+
+// PoolOptions configures optional upstream egress behavior.
+type PoolOptions struct {
+	// Peers resolves a record's Via name to a parent cache node. Nil means no
+	// cascade transport is available: Via values are reported but ignored, and
+	// the upstream keeps direct egress.
+	Peers *PeerSet
+}
+
+// NewPoolFromRecordsWithOptions creates a pool that can egress selected
+// upstreams through a configured cascade peer.
+func NewPoolFromRecordsWithOptions(records []db.UpstreamRecord, options PoolOptions) (*Pool, error) {
+	next, err := buildPoolSnapshotWithOptions(records, nil, options)
 	if err != nil {
 		return nil, err
 	}
@@ -199,6 +217,10 @@ func (p *Pool) Find(id uint) (*Upstream, bool) {
 }
 
 func buildPoolSnapshot(records []db.UpstreamRecord, previous *poolSnapshot) (*poolSnapshot, error) {
+	return buildPoolSnapshotWithOptions(records, previous, PoolOptions{})
+}
+
+func buildPoolSnapshotWithOptions(records []db.UpstreamRecord, previous *poolSnapshot, options PoolOptions) (*poolSnapshot, error) {
 	next := &poolSnapshot{
 		upstreams: make([]*Upstream, 0, len(records)),
 		byID:      make(map[uint]*Upstream, len(records)),
@@ -211,7 +233,7 @@ func buildPoolSnapshot(records []db.UpstreamRecord, previous *poolSnapshot) (*po
 				continue
 			}
 		}
-		u, err := newUpstreamFromRecord(record)
+		u, err := newUpstreamFromRecord(record, options)
 		if err != nil {
 			return nil, err
 		}
@@ -240,18 +262,38 @@ func normalizeRecordProbe(record db.UpstreamRecord) (string, time.Duration, erro
 	return mode, interval, nil
 }
 
-func newUpstreamFromRecord(record db.UpstreamRecord) (*Upstream, error) {
+func newUpstreamFromRecord(record db.UpstreamRecord, options PoolOptions) (*Upstream, error) {
 	mode, interval, err := normalizeRecordProbe(record)
 	if err != nil {
 		return nil, err
 	}
-	client, err := buildClient(record.Proxy, record.URL)
+	var client *http.Client
+	if record.Via != "" && options.Peers != nil {
+		peer, ok := options.Peers.Resolve(record.Via)
+		if ok {
+			client, err = buildPeerClient(record.Proxy, peer, record.URL)
+		} else {
+			zap.L().Warn("cascade peer is not configured; upstream keeps direct egress",
+				zap.String("upstream", record.Name),
+				zap.String("via", record.Via),
+			)
+		}
+	} else if record.Via != "" {
+		zap.L().Warn("cascade is disabled; upstream keeps direct egress",
+			zap.String("upstream", record.Name),
+			zap.String("via", record.Via),
+		)
+	}
+	if client == nil {
+		client, err = buildClient(record.Proxy, record.URL)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("build client for %s: %w", record.Name, err)
 	}
 	return &Upstream{
 		ID: record.ID, AdapterType: record.AdapterType, Name: record.Name, URL: record.URL,
 		Proxy: record.Proxy, Priority: record.Priority, ProbeMode: mode, ProbeInterval: interval,
+		Via:       record.Via,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, client: client,
 		directNetworkGuard: record.Proxy == "",
 		health: healthState{
@@ -265,7 +307,29 @@ func (u *Upstream) sameConfig(record db.UpstreamRecord) bool {
 	mode, interval, err := normalizeRecordProbe(record)
 	return err == nil && u.ID == record.ID && u.AdapterType == record.AdapterType &&
 		u.Name == record.Name && u.URL == record.URL && u.Proxy == record.Proxy &&
-		u.Priority == record.Priority && u.ProbeMode == mode && u.ProbeInterval == interval
+		u.Priority == record.Priority && u.ProbeMode == mode && u.ProbeInterval == interval &&
+		u.Via == record.Via
+}
+
+// buildPeerClient reaches the peer through its own transport, then rewrites
+// every outbound exchange into an authenticated relay call. The guarded dialer
+// pins the peer origin, so private LAN peers work while relayed target URLs
+// never become direct dial targets on this hop.
+func buildPeerClient(proxy string, peer PeerEgress, source string) (*http.Client, error) {
+	client, err := buildClient(proxy, peer.URL.String())
+	if err != nil {
+		return nil, err
+	}
+	base, ok := client.Transport.(*http.Transport)
+	if !ok || base == nil {
+		return nil, fmt.Errorf("build cascade client for %s: transport unavailable", peer.Name)
+	}
+	transport, err := newPeerTransport(base, peer, source)
+	if err != nil {
+		return nil, err
+	}
+	client.Transport = transport
+	return client, nil
 }
 
 // Fetch performs an HTTP GET to the upstream, joining the given path.
@@ -436,6 +500,8 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 func responseURL(response *http.Response, fallback string) string {
 	resolved := fallback
 	if response != nil && response.Request != nil && response.Request.URL != nil {
+		// The peer transport restores the caller's origin request, so this is
+		// the origin URL even when the bytes arrived through a parent cache.
 		resolved = response.Request.URL.String()
 	}
 	parsed, err := url.Parse(resolved)

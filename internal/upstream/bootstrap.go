@@ -350,6 +350,7 @@ func insertMissingConfigRows(tx *gorm.DB, src SeedSource) error {
 			Priority:      item.Priority,
 			ProbeMode:     item.ProbeMode,
 			ProbeInterval: item.ProbeInterval,
+			Via:           item.Via,
 			Healthy:       true,
 			SuccessRate:   1,
 		}

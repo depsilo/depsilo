@@ -25,6 +25,7 @@ var upstreamMutationFields = map[string]bool{
 	"priority":       true,
 	"probe_mode":     true,
 	"probe_interval": true,
+	"via":            false,
 }
 
 type upstreamMutationRequest struct {
@@ -35,6 +36,7 @@ type upstreamMutationRequest struct {
 	Priority      int    `json:"priority" binding:"required"`
 	ProbeMode     string `json:"probe_mode" binding:"required"`
 	ProbeInterval string `json:"probe_interval" binding:"required"`
+	Via           string `json:"via"`
 }
 
 func (request upstreamMutationRequest) toMutation() upstream.MutationInput {
@@ -46,6 +48,7 @@ func (request upstreamMutationRequest) toMutation() upstream.MutationInput {
 		Priority:      request.Priority,
 		ProbeMode:     request.ProbeMode,
 		ProbeInterval: request.ProbeInterval,
+		Via:           request.Via,
 	}
 }
 
@@ -130,6 +133,7 @@ func parseUpstreamMutationRequest(body []byte) (upstreamMutationRequest, error) 
 		{name: "proxy", target: &request.Proxy},
 		{name: "probe_mode", target: &request.ProbeMode, required: true},
 		{name: "probe_interval", target: &request.ProbeInterval, required: true},
+		{name: "via", target: &request.Via},
 	}
 	for _, field := range stringFields {
 		value, exists := values[field.name]
@@ -165,6 +169,7 @@ type adminUpstreamResponse struct {
 	Priority      int        `json:"priority"`
 	ProbeMode     string     `json:"probe_mode"`
 	ProbeInterval string     `json:"probe_interval"`
+	Via           string     `json:"via"`
 	Healthy       bool       `json:"healthy"`
 	AvgLatencyMS  int64      `json:"avg_latency_ms"`
 	SuccessRate   float64    `json:"success_rate"`
@@ -218,6 +223,7 @@ func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) ad
 		Priority:      item.Priority,
 		ProbeMode:     item.ProbeMode,
 		ProbeInterval: item.ProbeInterval,
+		Via:           item.Via,
 		Healthy:       item.Healthy,
 		AvgLatencyMS:  item.AvgLatencyMS,
 		SuccessRate:   item.SuccessRate,

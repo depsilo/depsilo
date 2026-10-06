@@ -51,7 +51,7 @@ interface BulkCheckSummary {
 const emptyForm = (ecosystem: string): UpstreamMutationRequest => ({
   adapter_type: ecosystem,
   name: '', url: '', proxy: '', priority: 1,
-  probe_mode: 'active', probe_interval: '30m',
+  probe_mode: 'active', probe_interval: '30m', via: '',
 })
 
 function isHTTPURL(value: string, originOnly = false): boolean {
@@ -156,6 +156,12 @@ export default function UpstreamsV2() {
     queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data,
     retry: false,
   })
+  const { data: cascadeInfo } = useQuery({
+    queryKey: ['admin', 'cascade'],
+    queryFn: async ({ signal }) => (await adminApi.getCascadeInfo({ signal })).data,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
   const allUpstreams = useMemo(() => data?.items ?? [], [data])
 
   // Map to UpstreamItem shape
@@ -168,6 +174,7 @@ export default function UpstreamsV2() {
     success_rate: item.success_rate,
     url: item.url,
     proxy: item.proxy,
+    via: item.via,
     priority: item.priority,
     probeMode: item.probe_mode,
     probeInterval: item.probe_interval,
@@ -274,7 +281,7 @@ export default function UpstreamsV2() {
     updateMutation.reset()
     setFieldErrors({})
     setEditId(runtime.id)
-    setForm({ adapter_type: runtime.adapter_type, name: runtime.name, url: runtime.url, proxy: runtime.proxy, priority: runtime.priority, probe_mode: runtime.probe_mode, probe_interval: runtime.probe_interval })
+    setForm({ adapter_type: runtime.adapter_type, name: runtime.name, url: runtime.url, proxy: runtime.proxy, priority: runtime.priority, probe_mode: runtime.probe_mode, probe_interval: runtime.probe_interval, via: runtime.via ?? '' })
     setDialogOpen(true)
   }
 
@@ -293,6 +300,7 @@ export default function UpstreamsV2() {
       name: form.name.trim(),
       url: form.url.trim(),
       proxy: form.proxy.trim(),
+      via: (form.via ?? '').trim(),
     }
     const nextErrors: UpstreamFieldErrors = {}
     if (!normalized.name) nextErrors.name = t('upstreams.nameRequired')
@@ -678,6 +686,7 @@ export default function UpstreamsV2() {
                       </time>
                     ) : <span>{t('upstreams.neverChecked')}</span>}
                     {upstream.proxy && <span>{t('upstreams.proxyEnabled')}</span>}
+                    {upstream.via && <span>{t('upstreams.viaValue', { peer: upstream.via })}</span>}
                     {upstream.id && checkFailures.has(upstream.id) && (
                       <span style={{ color: 'var(--danger-text)' }}>
                         {t('upstreams.checkRequestFailedShort')}
@@ -794,6 +803,28 @@ export default function UpstreamsV2() {
                 }}
                 placeholder="http://127.0.0.1:7890"
               />
+              {cascadeInfo?.enabled && cascadeInfo.peers.length > 0 ? (
+                <SelectV2
+                  label={t('upstreams.via')}
+                  hint={t('upstreams.viaHint')}
+                  value={form.via ?? ''}
+                  onChange={(event) => setForm({ ...form, via: event.target.value })}
+                >
+                  <option value="">{t('upstreams.viaDirect')}</option>
+                  {cascadeInfo.peers.map(peer => (
+                    <option key={peer.name} value={peer.name}>
+                      {t('upstreams.viaPeerOption', { name: peer.name, url: peer.url })}
+                    </option>
+                  ))}
+                  {form.via && !cascadeInfo.peers.some(peer => peer.name === form.via) && (
+                    <option value={form.via}>{t('upstreams.viaMissing', { name: form.via })}</option>
+                  )}
+                </SelectV2>
+              ) : form.via ? (
+                <InlineNotice tone="warning">
+                  {t('upstreams.viaNotConfigured', { peer: form.via })}
+                </InlineNotice>
+              ) : null}
             </fieldset>
 
             <fieldset className="space-y-3 border-t border-[var(--border)] pt-4" disabled={isSaving}>

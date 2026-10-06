@@ -23,6 +23,10 @@ var (
 	testDir    string
 )
 
+// integrationCascadeToken is shared by the parent config and the cascade
+// child tests. Changing it must change both sides.
+const integrationCascadeToken = "integration-cascade-token-0123456789"
+
 func TestMain(m *testing.M) {
 	os.Exit(runIntegrationTests(m))
 }
@@ -98,6 +102,10 @@ max_size_gb = 1
 ttl_index = "5m"
 ttl_blob = "2s"
 lru_threshold = 90
+
+[cascade]
+enabled = true
+token = "%s"
 
 [auth]
 enabled = false
@@ -200,7 +208,7 @@ default_registry = "mock"
 [[docker.registries]]
 name = "mock"
 url = "%s"
-`, port, dir, dir,
+`, port, dir, dir, integrationCascadeToken,
 		upstreamURL, // blocklist mirror_url (mock OSV endpoint)
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,
 		upstreamURL, upstreamURL, upstreamURL, upstreamURL,

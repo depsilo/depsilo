@@ -53,6 +53,10 @@ _Avoid_: Driver, Plugin (we don't have a plugin system)
 A remote mirror Depsilo proxies for an Ecosystem (e.g. `tuna.tsinghua` for PyPI). Each Upstream has its own health, latency, and optional HTTP proxy.
 _Avoid_: Mirror (Operator-facing the UI uses 上游源), Origin, Source
 
+**Cascade Peer**:
+A parent Depsilo node that a local Upstream may egress through (`via`). The peer fetches the raw upstream exchange, serves it from its own cache when fresh, and never sees client-facing protocol rewrites; the child keeps its own policy, provenance, and cache keys. Peers are configured in `[cascade]`; the per-upstream binding is Admin state.
+_Avoid_: Upstream (a peer is a Depsilo node, not a mirror), Proxy (that is the per-upstream HTTP proxy), Cluster (no shared control plane)
+
 **Portal**:
 The public-facing web UI at `/` — anonymous, shows Quick Start and live service status. Targets first-time Operators in the 10-minute deploy window.
 
@@ -64,6 +68,7 @@ The authenticated web UI at `/admin` — for Operators after deployment. Hosts c
 - A **Buyer** authorises money; an **Operator** runs the product; **End Users** consume it. All three must be satisfied for a sale to stick.
 - An **Ecosystem** is the product-language name; an **Adapter** is its implementation. One Ecosystem ↔ one Adapter.
 - An **Upstream** belongs to exactly one **Ecosystem**.
+- An **Upstream** may egress through at most one **Cascade Peer**; the peer shares cache results, never the database or policy.
 - The **Portal** serves the first-90-seconds experience; the **Admin** serves everything after.
 
 ## Example dialogue

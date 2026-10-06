@@ -22,6 +22,7 @@ export interface UpstreamItem {
   success_rate: number
   url?: string
   proxy?: string
+  via?: string
   priority?: number
   beats?: (number | null)[]
   beatLabels?: string[]

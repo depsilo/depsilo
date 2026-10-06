@@ -24,14 +24,16 @@ var (
 type RuntimeUpstream struct {
 	ID                            uint
 	AdapterType, Name, URL, Proxy string
-	Priority                      int
-	ProbeMode, ProbeInterval      string
-	Healthy                       bool
-	AvgLatencyMS                  int64
-	SuccessRate                   float64
-	LastCheckedAt                 time.Time
-	WorkerRunning                 bool
-	CreatedAt, UpdatedAt          time.Time
+	// Via is the configured cascade peer, empty for direct egress.
+	Via                      string
+	Priority                 int
+	ProbeMode, ProbeInterval string
+	Healthy                  bool
+	AvgLatencyMS             int64
+	SuccessRate              float64
+	LastCheckedAt            time.Time
+	WorkerRunning            bool
+	CreatedAt, UpdatedAt     time.Time
 }
 
 type workerHandle struct {
@@ -45,6 +47,7 @@ type Registry struct {
 	commit        func(*gorm.DB) error
 	active        []string
 	pools         map[string]*Pool
+	poolOptions   PoolOptions
 	mutationLocks map[string]*sync.Mutex
 
 	lifecycleMu    sync.Mutex
@@ -62,6 +65,12 @@ type Registry struct {
 }
 
 func NewRegistry(database *gorm.DB, active []string) (*Registry, error) {
+	return NewRegistryWithOptions(database, active, PoolOptions{})
+}
+
+// NewRegistryWithOptions builds the runtime registry with optional cascade
+// peer transports for upstreams that declare a via.
+func NewRegistryWithOptions(database *gorm.DB, active []string, options PoolOptions) (*Registry, error) {
 	ordered, err := canonicalActive(active)
 	if err != nil {
 		return nil, err
@@ -71,6 +80,7 @@ func NewRegistry(database *gorm.DB, active []string) (*Registry, error) {
 		commit:        func(tx *gorm.DB) error { return tx.Commit().Error },
 		active:        ordered,
 		pools:         make(map[string]*Pool),
+		poolOptions:   options,
 		mutationLocks: make(map[string]*sync.Mutex),
 		workers:       make(map[uint]workerHandle),
 		degraded:      make(map[string]error),
@@ -83,7 +93,7 @@ func NewRegistry(database *gorm.DB, active []string) (*Registry, error) {
 		if len(records) == 0 {
 			return nil, fmt.Errorf("active ecosystem %s has no upstreams", ecosystem)
 		}
-		pool, err := NewPoolFromRecords(records)
+		pool, err := NewPoolFromRecordsWithOptions(records, options)
 		if err != nil {
 			return nil, fmt.Errorf("build %s pool: %w", ecosystem, err)
 		}
@@ -249,7 +259,7 @@ func (r *Registry) runtimeUpstream(u *Upstream) RuntimeUpstream {
 	health := u.HealthSnapshot()
 	return RuntimeUpstream{
 		ID: u.ID, AdapterType: u.AdapterType, Name: u.Name, URL: u.URL, Proxy: u.Proxy,
-		Priority: u.Priority, ProbeMode: u.ProbeMode, ProbeInterval: u.ProbeInterval.String(),
+		Via: u.Via, Priority: u.Priority, ProbeMode: u.ProbeMode, ProbeInterval: u.ProbeInterval.String(),
 		Healthy: health.Healthy, AvgLatencyMS: health.AvgLatency.Milliseconds(),
 		SuccessRate: health.SuccessRate, LastCheckedAt: health.LastCheckedAt,
 		WorkerRunning: r.WorkerRunning(u.ID), CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,

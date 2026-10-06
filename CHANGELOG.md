@@ -5,6 +5,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- Cascade cache peering (ADR-0006): a Depsilo node can egress selected
+  upstreams through another authenticated Depsilo node
+  (`[cascade]` + `[[cascade.peers]]` + per-upstream `via`, schema v10).
+  The parent fetches the raw upstream exchange, caches it under the `relay`
+  adapter type with the child's own TTL and metadata/artifact class, and
+  streams it back, so every protocol keeps its normal rewriting, provenance,
+  and policy behavior. Chains carry instance IDs and a hop budget, reject
+  loops with `508`, keep private targets behind the parent's configured
+  upstream origins, and strip credentials unless a peer opts in. Multi-level
+  cache hits arrive at LAN speed; Docker, shared control plane, HA, and
+  multi-peer bandwidth aggregation remain out of scope.
+
 ### Fixed
 - The installer resolves the newest release through the
   `github.com/depsilo/depsilo/releases/latest` redirect instead of the

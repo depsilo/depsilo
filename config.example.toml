@@ -29,6 +29,22 @@ ttl_index    = "1h"         # 索引元数据刷新间隔（过期后同步刷�
 ttl_blob     = "72h"        # wheel / .deb 文件
 lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 
+# 级联部署（多级缓存）：本机可把部分上游的出口流量交给另一台 Depsilo，
+# 由父节点回源并缓存，局域网内的其他设备再从父节点缓存读取。
+# 详见 docs/cascade.md；两端必须配置同一个 token。
+# [cascade]
+# enabled = true
+# token = "replace-with-a-random-shared-secret"
+# max_hops = 4              # 允许经过的级联节点层数
+# max_ttl = "168h"          # 父节点缓存新鲜度上限
+# allow_insecure_http = false  # 非回环地址使用 http:// peer 时必须显式开启
+#
+# [[cascade.peers]]
+# name = "home"
+# url  = "http://192.168.1.10:23333"
+# token = ""                # 缺省复用 [cascade].token；可单独覆盖
+# forward_credentials = false  # 开启后上游 Authorization 会转发给该 peer
+
 # Package-policy snapshot refresh behavior. A stale, last-known-good snapshot
 # is preferred when the policy store is temporarily unavailable; change to
 # use_stale_then_deny, allow, or deny for a different explicit fallback.
@@ -140,6 +156,7 @@ priority = 2
 name     = "npmmirror"
 url      = "https://registry.npmmirror.com"
 priority = 1
+# via      = "home"          # 可选：该上游通过名为 home 的级联节点出口
 
 [[npm.upstreams]]
 name     = "official"

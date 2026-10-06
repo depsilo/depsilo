@@ -1,6 +1,7 @@
 import { test as base, expect, type Page, type Request, type Route } from '@playwright/test'
 import type {
   AccessLogListResponse,
+  AdminCascadeInfo,
   AdminSettingsResponse,
   AdminSettingsSnapshot,
   AdminUpstreamLatenciesResponse,
@@ -218,6 +219,13 @@ const canonicalAdminApiDefaults = {
     config_writable: true,
   } satisfies AdminSettingsResponse,
   'GET /api/v1/admin/upstreams': { items: [], total: 0 } satisfies AdminUpstreamListResponse,
+  'GET /api/v1/admin/cascade': {
+    enabled: false,
+    instance_id: 'e2e-parent',
+    max_hops: 4,
+    max_ttl_seconds: 604800,
+    peers: [],
+  } satisfies AdminCascadeInfo,
   'GET /api/v1/admin/upstreams/latency': { series: [] } satisfies AdminUpstreamLatenciesResponse,
   'GET /api/v1/admin/upstream-updates': { items: [], total: 0, next_cursor: null } satisfies AdminUpstreamUpdateListResponse,
   'GET /api/v1/admin/compile-cache/status': {

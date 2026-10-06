@@ -23,6 +23,8 @@ contains the stable repository rules and links into these guides.
 - [CONTEXT.md](../CONTEXT.md): domain vocabulary.
 - [Deployment defaults](deployment.md): zero-config state paths, persistence,
   and advanced overrides.
+- [Cascade deployment](cascade.md): multi-level cache peering between
+  Depsilo nodes, configuration, and trust boundaries (ADR-0006).
 - [Admin control plane](admin-control-plane.md): configuration/database
   authority and Admin HTTP contracts.
 - [Package rules](package-rules.md): ecosystem-specific package identity,
