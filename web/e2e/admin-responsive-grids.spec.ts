@@ -208,6 +208,22 @@ test('Overview status strip and recent table keep their content at 1024 and 1440
   await expect(page.locator('[data-testid="traffic-origin-flow"]')).toContainText('上游 → Depsilo')
 })
 
+// Idle installs must stay readable too: the "no recent activity" guidance is
+// the longest string in the strip and used to truncate in the 4-column layout.
+test('Overview idle strip keeps its guidance text intact', async ({ page }) => {
+  await mockAdminApi(page)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin')
+
+  const strip = page.locator('[data-dashboard-status-strip]')
+  await expect(strip).toContainText('暂无请求')
+  await expect(strip).toContainText('接入客户端后显示最近请求')
+  const clipped = await strip.locator('.truncate').evaluateAll(elements =>
+    elements.filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.textContent),
+  )
+  expect(clipped).toEqual([])
+})
+
 test('Overview surfaces a degraded upstream as an actionable centered dialog', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/now': {

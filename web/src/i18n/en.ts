@@ -282,7 +282,7 @@ const en = {
       serviceReqRate: 'Service requests {{value}}/s',
       recentActivity: 'Recent activity',
       noActivity: 'No requests yet',
-      noActivityHint: 'The most recent package request will appear here once a client is connected.',
+      noActivityHint: 'Shown after the first client request',
       uptimeLabel: 'Uptime',
       uptimeHint: 'Since this process started',
       uptimeUnavailable: 'Uptime unavailable',

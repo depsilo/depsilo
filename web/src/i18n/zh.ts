@@ -283,7 +283,7 @@ const zh = {
       serviceReqRate: '服务请求 {{value}} 次/秒',
       recentActivity: '最近活动',
       noActivity: '暂无请求',
-      noActivityHint: '接入客户端后这里会显示最近的包请求。',
+      noActivityHint: '接入客户端后显示最近请求',
       uptimeLabel: '已运行时间',
       uptimeHint: '自本次进程启动',
       uptimeUnavailable: '运行时长不可用',
