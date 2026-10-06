@@ -626,12 +626,13 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		pypiBlocklistCovered: blCfg.IsEnabled() && blocklist.IsSyncedEcosystem("pypi"),
 		nugetRequired:        quarantinePolicy.Threshold("nuget") > 0,
 		cargoRequired:        quarantinePolicy.Threshold("cargo") > 0,
-		rubygemsRequired:     quarantinePolicy.Threshold("rubygems") > 0,
-		condaRequired:        quarantinePolicy.Threshold("conda") > 0,
-		cranRequired:         quarantinePolicy.Threshold("cran") > 0,
-		mavenRequired:        quarantinePolicy.Threshold("maven") > 0,
-		alpineRequired:       quarantinePolicy.Threshold("alpine") > 0,
-		helmRequired:         quarantinePolicy.Threshold("helm") > 0,
+		rubygemsRequired: quarantinePolicy.Threshold("rubygems") > 0 ||
+			(blCfg.IsEnabled() && blocklist.IsSyncedEcosystem("rubygems")),
+		condaRequired:  quarantinePolicy.Threshold("conda") > 0,
+		cranRequired:   quarantinePolicy.Threshold("cran") > 0,
+		mavenRequired:  quarantinePolicy.Threshold("maven") > 0,
+		alpineRequired: quarantinePolicy.Threshold("alpine") > 0,
+		helmRequired:   quarantinePolicy.Threshold("helm") > 0,
 	}
 	if quarantinePolicy.Threshold("pypi") > 0 {
 		wiring.pypiKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)

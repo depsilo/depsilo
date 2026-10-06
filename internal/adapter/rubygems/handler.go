@@ -19,11 +19,13 @@ type Handler struct {
 	selector upstream.Selector
 	proxy    *adapter.TransparentProxy
 	cfg      config.CacheConfig
-	// provenanceRequired enables compact-index publish-time evidence. The
-	// composition root sets it only when a positive rubygems threshold is
-	// active.
-	provenanceRequired bool
-	provenanceMemo     *rubygemsProvenanceMemo
+	// identityRequired enables compact-index identity resolution for .gem
+	// downloads. The composition root sets it when a positive rubygems
+	// threshold is active or when the known-malicious dataset covers
+	// RubyGems; publish-time provenance is attached whenever the index
+	// provides it.
+	identityRequired bool
+	provenanceMemo   *rubygemsProvenanceMemo
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
@@ -38,9 +40,10 @@ func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheCo
 
 func (h *Handler) Type() string { return "rubygems" }
 
-// SetProvenanceRequired enables compact-index provenance for .gem downloads.
+// SetProvenanceRequired enables compact-index identity resolution (and
+// publish-time provenance when the index provides it) for .gem downloads.
 func (h *Handler) SetProvenanceRequired(required bool) {
-	h.provenanceRequired = required
+	h.identityRequired = required
 }
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
@@ -57,10 +60,11 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	cacheKey := CacheKey(path)
 
 	// A .gem download only carries the combined name-version[-platform]
-	// filename. When the gate is enabled, the compact index resolves the exact
-	// identity and its created_at/checksum; an unresolvable artifact fails
-	// closed instead of being served without provenance.
-	if h.provenanceRequired && strings.HasPrefix(path, "gems/") && strings.HasSuffix(path, ".gem") {
+	// filename. When the known-malicious dataset or the release-age gate
+	// covers RubyGems, the compact index resolves the exact identity (and its
+	// created_at/checksum); an unresolvable artifact fails closed instead of
+	// being served without identity or provenance.
+	if h.identityRequired && strings.HasPrefix(path, "gems/") && strings.HasSuffix(path, ".gem") {
 		fullName := strings.TrimSuffix(strings.TrimPrefix(path, "gems/"), ".gem")
 		resolution, err := h.publishedProvenance(c.Request.Context(), fullName)
 		if err != nil {
@@ -72,7 +76,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 		if resolution.gem == "" || resolution.version == "" {
 			c.JSON(http.StatusUnavailableForLegalReasons, gin.H{
 				"code":    "QUARANTINED",
-				"message": "rubygems artifact provenance is unavailable; refusing to serve while the minimum-release-age gate is enabled",
+				"message": "rubygems artifact identity is unavailable; refusing to serve while the known-malicious dataset or the minimum-release-age gate covers RubyGems",
 			})
 			return
 		}

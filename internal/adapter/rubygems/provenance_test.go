@@ -166,7 +166,7 @@ func TestRubyGemsDownloadUsesCompactIndexCreatedAt(t *testing.T) {
 	}
 	unknown := requestGem(t, scoped, "unknown-gem-1.0.0.gem")
 	if unknown.Code != http.StatusUnavailableForLegalReasons ||
-		!strings.Contains(unknown.Body.String(), "provenance is unavailable") {
+		!strings.Contains(unknown.Body.String(), "identity is unavailable") {
 		t.Fatalf("unknown gem status=%d body=%s", unknown.Code, unknown.Body.String())
 	}
 }
