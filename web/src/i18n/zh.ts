@@ -230,7 +230,7 @@ const zh = {
       msUnit: '毫秒',
       trendMetricGroup: '趋势指标',
       trendTabRequests: '请求量',
-      trendTabBandwidth: '带宽',
+      trendTabBandwidth: '流量',
       trendTabLatency: '延迟',
       trendTabErrors: '错误',
       trendChartDescription: '{{range}}范围内的{{metric}}趋势图。可使用左右方向键浏览时间点。',

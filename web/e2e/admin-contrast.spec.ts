@@ -42,7 +42,8 @@ test('trend metric selector exposes tab and selected semantics', async ({ page }
   await setUiPreferences(page, 'light', 'en')
   await page.goto('/admin')
   const tablist = page.getByRole('tablist', { name: 'Activity trend' })
-  const metrics = ['Requests', 'Bandwidth', 'Latency', 'Errors'].map(name => (
+  // "Traffic" is a bucket byte total, not a bandwidth rate.
+  const metrics = ['Requests', 'Traffic', 'Latency', 'Errors'].map(name => (
     tablist.getByRole('tab', { name, exact: true })
   ))
   await expect(tablist).toBeVisible()

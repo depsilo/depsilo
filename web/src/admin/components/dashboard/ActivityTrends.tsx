@@ -246,7 +246,7 @@ function renderLineAxes(tab: TrendTab, t: Translator) {
     return <YAxis yAxisId="value" width={64} tickFormatter={(value: number) => formatBytes(value)} {...axisProps} />
   }
   if (tab === 'latency') {
-    return <YAxis yAxisId="value" width={52} tickFormatter={(value: number) => `${value}${t('dashboard.msUnit')}`} {...axisProps} />
+    return <YAxis yAxisId="value" width={58} tickFormatter={(value: number) => `${value} ${t('dashboard.msUnit')}`} {...axisProps} />
   }
   if (tab === 'errors') {
     return (

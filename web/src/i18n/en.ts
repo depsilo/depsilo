@@ -230,7 +230,7 @@ const en = {
       msUnit: 'ms',
       trendMetricGroup: 'Trend metric',
       trendTabRequests: 'Requests',
-      trendTabBandwidth: 'Bandwidth',
+      trendTabBandwidth: 'Traffic',
       trendTabLatency: 'Latency',
       trendTabErrors: 'Errors',
       trendChartDescription: '{{metric}} trend for {{range}}. Use the left and right arrow keys to inspect time points.',
