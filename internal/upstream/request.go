@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -13,6 +14,34 @@ import (
 	"sync"
 	"time"
 )
+
+// HeadLastModified performs a HEAD exchange against the configured origin and
+// returns the parsed Last-Modified time. It is used by adapters that support
+// approximate provenance; the lookup is suppressed from origin health so a
+// gate probe does not distort upstream health statistics.
+func (u *Upstream) HeadLastModified(ctx context.Context, path string) (time.Time, error) {
+	response, err := u.Request(ctx, path, RequestOptions{
+		Method:         http.MethodHead,
+		SuppressHealth: true,
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, response.Body)
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return time.Time{}, fmt.Errorf("HEAD %s returned %d", path, response.StatusCode)
+	}
+	raw := response.Header.Get("Last-Modified")
+	if raw == "" {
+		return time.Time{}, errors.New("HEAD response has no Last-Modified header")
+	}
+	parsed, err := http.ParseTime(raw)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse Last-Modified %q: %w", raw, err)
+	}
+	return parsed.UTC(), nil
+}
 
 // RequestOptions controls a raw upstream HTTP exchange.
 //

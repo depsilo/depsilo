@@ -141,6 +141,7 @@ type adapterProvenanceWiring struct {
 	cargoRequired    bool
 	rubygemsRequired bool
 	condaRequired    bool
+	cranRequired     bool
 }
 
 func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, wiring adapterProvenanceWiring) error {
@@ -194,6 +195,15 @@ func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definiti
 			})
 			if !ok {
 				return fmt.Errorf("conda adapter does not support provenance")
+			}
+			setter.SetProvenanceRequired(true)
+		}
+		if definition.name == "cran" && wiring.cranRequired {
+			setter, ok := handler.(interface {
+				SetProvenanceRequired(bool)
+			})
+			if !ok {
+				return fmt.Errorf("cran adapter does not support provenance")
 			}
 			setter.SetProvenanceRequired(true)
 		}

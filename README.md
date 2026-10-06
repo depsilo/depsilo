@@ -55,10 +55,13 @@ Package managers / CI / coding agents
   `pubtime` and `cksum` fields. RubyGems resolves the compact-index
   `created_at` and checksum for the exact `.gem` artifact. Conda is supported
   with approximate Last-Modified provenance, which the operator must
-  acknowledge through `supply_chain.approximate_sources`. Composer uses the p2
-  metadata's own `time` field but remains best-effort because Composer clients
-  fall back to the original dist URL on a 451. Other ecosystems remain rejected
-  until they are bound end to end.
+  acknowledge through `supply_chain.approximate_sources`. CRAN uses the
+  DESCRIPTION `Date/Publication` for the current source tarball and falls back
+  to the artifact's Last-Modified for archives and binaries, so it also
+  requires the approximate acknowledgement. Composer uses the p2 metadata's own
+  `time` field but remains best-effort because Composer clients fall back to
+  the original dist URL on a 451. Other ecosystems remain rejected until they
+  are bound end to end.
 - **Verify** — record first-seen hashes and surface tamper alerts when immutable
   artifacts change during a natural refresh.
 - **Audit** — keep requests, policy decisions, and Upstream health visible in

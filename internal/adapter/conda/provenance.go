@@ -4,17 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
-
-	"depsilo/internal/upstream"
 )
 
 const (
@@ -61,7 +55,8 @@ func (h *Handler) publishedProvenance(ctx context.Context, path string) (time.Ti
 		h.provenanceMemo.mu.Unlock()
 	}
 
-	lastModified, ok, err := headLastModified(ctx, selected, path)
+	lastModified, err := selected.HeadLastModified(ctx, "/"+strings.TrimPrefix(path, "/"))
+	ok := err == nil
 	if err != nil {
 		zap.L().Warn("conda artifact Last-Modified unavailable; the age gate will fail closed",
 			zap.String("path", path),
@@ -93,30 +88,6 @@ func (h *Handler) publishedProvenance(ctx context.Context, path string) (time.Ti
 		h.provenanceMemo.mu.Unlock()
 	}
 	return lastModified, upstreamSource, ok
-}
-
-func headLastModified(ctx context.Context, selected *upstream.Upstream, path string) (time.Time, bool, error) {
-	response, err := selected.Request(ctx, "/"+strings.TrimPrefix(path, "/"), upstream.RequestOptions{
-		Method:         http.MethodHead,
-		SuppressHealth: true,
-	})
-	if err != nil {
-		return time.Time{}, false, err
-	}
-	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, response.Body)
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return time.Time{}, false, fmt.Errorf("HEAD %s returned %d", path, response.StatusCode)
-	}
-	raw := response.Header.Get("Last-Modified")
-	if raw == "" {
-		return time.Time{}, false, errors.New("HEAD response has no Last-Modified header")
-	}
-	parsed, err := http.ParseTime(raw)
-	if err != nil {
-		return time.Time{}, false, fmt.Errorf("parse Last-Modified %q: %w", raw, err)
-	}
-	return parsed.UTC(), true, nil
 }
 
 // condaArtifactSourceID names the exact upstream artifact path whose

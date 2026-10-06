@@ -285,7 +285,12 @@ func (p *Policy) ApproximateProvenance(ecosystem string) bool {
 // does not make a positive threshold safe. The operator must still acknowledge
 // a listed ecosystem through approximate_sources.
 func approximateCapable(ecosystem string) bool {
-	return ecosystem == "conda"
+	switch ecosystem {
+	case "conda", "cran":
+		return true
+	default:
+		return false
+	}
 }
 
 // Threshold returns the threshold for a given ecosystem, falling

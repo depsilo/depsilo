@@ -16,11 +16,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   the compact index's `created_at` and checksum for the exact `.gem` filename.
   Conda is available with approximate Last-Modified provenance after the
   operator acknowledges it through `supply_chain.approximate_sources`, and the
-  capability summary labels it approximate. Missing, legacy, HTML-only, or
-  unlisted metadata fails closed while the gate is enabled. Composer remains
-  best-effort because its clients can fall back to the original dist URL after
-  a 451, and every other ecosystem still rejects positive thresholds at
-  startup.
+  capability summary labels it approximate. CRAN joins under the same
+  acknowledgement: the current source tarball uses the DESCRIPTION
+  `Date/Publication`, and archives or binaries use the artifact's
+  Last-Modified. Missing, legacy, HTML-only, or unlisted metadata fails closed
+  while the gate is enabled. Composer remains best-effort because its clients
+  can fall back to the original dist URL after a 451, and every other ecosystem
+  still rejects positive thresholds at startup.
 
 ### Changed
 - The S3 release contract now runs against pinned RustFS, replacing the

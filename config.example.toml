@@ -357,6 +357,9 @@ check_ttl = "24h"
 # Conda can be enabled with approximate Last-Modified provenance, but only
 # after listing it in approximate_sources below. The capability summary labels
 # it approximate rather than source-bound.
+# CRAN uses the DESCRIPTION Date/Publication for the current source tarball and
+# the artifact's Last-Modified for archives and binaries; it requires the same
+# approximate acknowledgement.
 # Every other ecosystem still rejects positive thresholds at startup because
 # its artifact source and timestamp are not yet bound end to end.
 #
@@ -370,7 +373,7 @@ min_release_age_enabled = false
 mode = "block"
 fail_closed = true
 # Ecosystems whose positive thresholds rely on approximate Last-Modified
-# provenance must be listed explicitly, for example ["conda"].
+# provenance must be listed explicitly, for example ["conda", "cran"].
 approximate_sources = []
 
 [supply_chain.min_release_age]
@@ -384,7 +387,7 @@ rubygems = "0"   # e.g. "3d"; uses the compact index created_at field
 composer = "0"   # best-effort: clients can fall back to the original dist URL
 nuget    = "0"   # e.g. "3d"; uses the v3 registration published timestamp
 conda    = "0"   # e.g. "3d"; requires approximate_sources = ["conda"]
-cran     = "0"
+cran     = "0"   # e.g. "3d"; requires approximate_sources = ["cran"]
 helm     = "0"
 alpine   = "0"
 docker   = "0"

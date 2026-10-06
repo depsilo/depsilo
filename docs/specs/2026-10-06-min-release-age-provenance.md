@@ -37,6 +37,11 @@
   the download gate HEADs the exact artifact through the configured upstream
   and uses Last-Modified, positive thresholds require the ecosystem to be listed
   in `approximate_sources`, and the capability summary reports `approximate`.
+- 2026-10-06: the CRAN slice is implemented with a mixed path — the current
+  source tarball uses the same-upstream DESCRIPTION `Date/Publication` (exact),
+  while archives and binaries use the artifact's Last-Modified (approximate).
+  Positive thresholds require `approximate_sources = ["cran"]`, and the
+  capability summary reports `approximate`.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal

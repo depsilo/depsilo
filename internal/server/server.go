@@ -627,6 +627,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		cargoRequired:    quarantinePolicy.Threshold("cargo") > 0,
 		rubygemsRequired: quarantinePolicy.Threshold("rubygems") > 0,
 		condaRequired:    quarantinePolicy.Threshold("conda") > 0,
+		cranRequired:     quarantinePolicy.Threshold("cran") > 0,
 	}
 	if quarantinePolicy.Threshold("pypi") > 0 {
 		wiring.pypiKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)
