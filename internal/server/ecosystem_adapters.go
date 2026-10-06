@@ -135,7 +135,7 @@ func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystem
 	return result, nil
 }
 
-func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, pypiProvenanceKey []byte) error {
+func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, pypiProvenanceKey []byte, nugetProvenanceRequired bool) error {
 	for _, definition := range definitions {
 		pool := pools[definition.name]
 		if pool == nil {
@@ -152,6 +152,15 @@ func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definiti
 			if err := setter.SetArtifactSigningKey(pypiProvenanceKey, true); err != nil {
 				return fmt.Errorf("enable pypi provenance: %w", err)
 			}
+		}
+		if definition.name == "nuget" && nugetProvenanceRequired {
+			setter, ok := handler.(interface {
+				SetProvenanceRequired(bool)
+			})
+			if !ok {
+				return fmt.Errorf("nuget adapter does not support provenance")
+			}
+			setter.SetProvenanceRequired(true)
 		}
 		handler.Register(root.Group(definition.route))
 		handler.Register(project.Group(definition.route))

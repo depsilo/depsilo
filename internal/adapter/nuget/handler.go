@@ -24,6 +24,10 @@ type Handler struct {
 	selector upstream.Selector
 	cfg      config.CacheConfig
 	db       *gorm.DB
+	// provenanceRequired enables registration-backed publish-time evidence.
+	// The composition root sets it only when a positive nuget threshold is
+	// active, so the default path keeps its zero-overhead behavior.
+	provenanceRequired bool
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
@@ -31,6 +35,12 @@ func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheCo
 }
 
 func (h *Handler) Type() string { return "nuget" }
+
+// SetProvenanceRequired enables registration-backed minimum-release-age
+// provenance for flat-container downloads.
+func (h *Handler) SetProvenanceRequired(required bool) {
+	h.provenanceRequired = required
+}
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.GET("/*path", h.handleRequest)
@@ -47,7 +57,21 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	// resolve to (id, version); service-index and registration JSON
 	// pass through ungated.
 	if id, version := packagekey.ParseNugetPath(path); id != "" && version != "" {
-		if blocked := adapter.QuarantineGate(c, "nuget", id, version); blocked {
+		if h.provenanceRequired {
+			provenance := adapter.QuarantineProvenance{SourceID: nugetArtifactSourceID(id, version)}
+			if published, ok, err := h.nugetPublishedForVersion(c.Request.Context(), id, version); err != nil {
+				zap.L().Warn("nuget registration provenance unavailable; the age gate will fail closed",
+					zap.String("package", id),
+					zap.String("version", version),
+					zap.Error(err),
+				)
+			} else if ok {
+				provenance.PublishAt = published
+			}
+			if blocked := adapter.QuarantineGateWithProvenance(c, "nuget", id, version, provenance); blocked {
+				return
+			}
+		} else if blocked := adapter.QuarantineGate(c, "nuget", id, version); blocked {
 			return
 		}
 	}

@@ -628,7 +628,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 			return nil, fmt.Errorf("derive pypi provenance signing key: %w", err)
 		}
 	}
-	if err := registerActiveAdapters(r, projectGroup, activeDefs, pools, cacheMgr, cfg.Cache, database, pypiProvenanceKey); err != nil {
+	if err := registerActiveAdapters(r, projectGroup, activeDefs, pools, cacheMgr, cfg.Cache, database, pypiProvenanceKey, quarantinePolicy.Threshold("nuget") > 0); err != nil {
 		return nil, err
 	}
 
@@ -788,7 +788,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 //   - composer: p2 metadata time passed with the declared dist artifact
 func sourceBoundMinimumReleaseAge(ecosystem string) bool {
 	switch ecosystem {
-	case "npm", "pypi", "composer":
+	case "npm", "pypi", "composer", "nuget":
 		return true
 	default:
 		return false

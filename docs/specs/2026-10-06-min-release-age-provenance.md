@@ -20,6 +20,10 @@
   Composer remains best-effort because clients can fall back to the original
   dist URL after a 451; hard enforcement needs egress control or metadata
   filtering.
+- 2026-10-06: the NuGet slice is implemented — the flat-container gate resolves
+  the v3 registration index's `published` time through the configured upstream
+  (including paginated registration pages), treats the 1900 unlisted sentinel
+  as missing provenance, and the policy accepts positive NuGet thresholds.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal

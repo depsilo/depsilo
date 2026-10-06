@@ -8,12 +8,12 @@ import (
 )
 
 func TestSourceBoundMinimumReleaseAgeEcosystems(t *testing.T) {
-	for _, ecosystem := range []string{"npm", "pypi", "composer"} {
+	for _, ecosystem := range []string{"npm", "pypi", "composer", "nuget"} {
 		if !sourceBoundMinimumReleaseAge(ecosystem) {
 			t.Errorf("sourceBoundMinimumReleaseAge(%q) = false, want true", ecosystem)
 		}
 	}
-	for _, ecosystem := range []string{"cargo", "nuget", "rubygems", "go", "apt", "unknown"} {
+	for _, ecosystem := range []string{"cargo", "rubygems", "go", "apt", "unknown"} {
 		if sourceBoundMinimumReleaseAge(ecosystem) {
 			t.Errorf("sourceBoundMinimumReleaseAge(%q) = true, want false", ecosystem)
 		}
@@ -28,6 +28,7 @@ func TestSourceBoundPolicyAcceptsBoundThresholdsAndRejectsUnbound(t *testing.T) 
 			"npm":      "168h",
 			"pypi":     "72h",
 			"composer": "72h",
+			"nuget":    "72h",
 		},
 	}, sourceBoundMinimumReleaseAge)
 	if err != nil {
@@ -37,6 +38,7 @@ func TestSourceBoundPolicyAcceptsBoundThresholdsAndRejectsUnbound(t *testing.T) 
 		"npm":      168 * time.Hour,
 		"pypi":     72 * time.Hour,
 		"composer": 72 * time.Hour,
+		"nuget":    72 * time.Hour,
 	} {
 		if got := policy.Threshold(ecosystem); got != want {
 			t.Errorf("Threshold(%q) = %v, want %v", ecosystem, got, want)

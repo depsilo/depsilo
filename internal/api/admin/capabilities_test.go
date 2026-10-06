@@ -81,7 +81,7 @@ func TestCapabilitySummaryDoesNotRefreshPolicy(t *testing.T) {
 func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 	enabled := true
 	bound := func(ecosystem string) bool {
-		return ecosystem == "npm" || ecosystem == "pypi" || ecosystem == "composer"
+		return ecosystem == "npm" || ecosystem == "pypi" || ecosystem == "composer" || ecosystem == "nuget"
 	}
 	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
 		MinReleaseAgeEnabled: &enabled,
@@ -89,12 +89,13 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 			"npm":      "168h",
 			"pypi":     "72h",
 			"composer": "72h",
+			"nuget":    "72h",
 		},
 	}, bound)
 	if err != nil {
 		t.Fatalf("NewPolicyWithProvenance: %v", err)
 	}
-	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi", "composer", "cargo"}, capabilityPolicyStub{}, nil, "", policy)
+	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi", "composer", "nuget", "cargo"}, capabilityPolicyStub{}, nil, "", policy)
 	r := gin.New()
 	r.GET("/summary", h.Summary)
 	response := httptest.NewRecorder()
@@ -112,7 +113,7 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 			facts[fact.Ecosystem] = fact
 		}
 	}
-	for _, ecosystem := range []string{"npm", "pypi", "composer"} {
+	for _, ecosystem := range []string{"npm", "pypi", "composer", "nuget"} {
 		fact := facts[ecosystem]
 		if fact.Support != "supported" || fact.Mode != "block" || fact.DataStatus != "source_bound" {
 			t.Fatalf("%s minimum_release_age fact = %+v", ecosystem, fact)
