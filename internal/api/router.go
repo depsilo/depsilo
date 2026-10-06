@@ -67,6 +67,10 @@ type Deps struct {
 	// adapter-side gate bound to each request by the server's adapter
 	// RequestScope; this is the admin-control-plane access path.
 	QuarantineStore *quarantine.Store
+	// QuarantinePolicy is the resolved minimum-release-age policy. It reports
+	// which ecosystems have an end-to-end source-bound gate for the capability
+	// summary; nil in isolated tests.
+	QuarantinePolicy *quarantine.Policy
 	// QuarantineApprovalsEnabled is true only when at least one source-bound
 	// minimum-release-age threshold is active. Historical approvals stay
 	// readable/revocable while creation is disabled.
@@ -372,7 +376,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.POST("/blocklist/overrides", blocklistHandler.CreateOverride)
 	adminWrite.DELETE("/blocklist/overrides/:id", blocklistHandler.RevokeOverride)
 
-	capabilityHandler := admin.NewCapabilityHandler(deps.DB, deps.Config, deps.ConfigStore, deps.Ecosystems, deps.PolicyStatusProvider, deps.BlocklistStore, deps.BlocklistMode)
+	capabilityHandler := admin.NewCapabilityHandler(deps.DB, deps.Config, deps.ConfigStore, deps.Ecosystems, deps.PolicyStatusProvider, deps.BlocklistStore, deps.BlocklistMode, deps.QuarantinePolicy)
 	adminRead.GET("/capabilities/summary", capabilityHandler.Summary)
 
 	// Pro features (require entitlement). Multi-project workspaces are

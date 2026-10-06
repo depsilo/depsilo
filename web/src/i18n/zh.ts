@@ -1134,6 +1134,7 @@ const zh = {
       capabilityRecentFailure: '最近失败',
       capabilityOverall: '总体',
       capabilitySafetyDisabled: '安全暂停',
+      capabilitySourceBound: '来源已绑定',
       capabilityNeverSynced: '从未同步',
       capabilityFresh: '数据就绪',
       capabilityStale: '继续使用最后有效数据',

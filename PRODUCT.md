@@ -75,11 +75,13 @@ ADR-0004.
   local or S3-backed artifact storage, health monitoring, access and audit
   logs, Prometheus metrics, package rules, supply-chain intelligence, and
   webhook alerts.
-- The minimum-release-age gate is safety-disabled until artifact-source and
-  timestamp provenance are bound. Positive enabled thresholds are rejected at
-  startup. Delivered, unreleased, and planned security capabilities must be
-  described according to the actual release state rather than presented as
-  uniformly available.
+- Minimum-release-age enforcement is source-bound for npm: the packument
+  publish time travels in the authenticated tarball token, and positive npm
+  thresholds are accepted. Every other ecosystem still rejects positive
+  thresholds at startup until its artifact source and timestamp are bound.
+  Delivered, unreleased, and planned security capabilities must be described
+  according to the actual release state rather than presented as uniformly
+  available.
 - The compiler cache is an isolated ccache HTTP and narrow sccache WebDAV
   compatibility service. It is not an sccache-dist scheduler or a public S3
   API.

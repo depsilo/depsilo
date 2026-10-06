@@ -32,10 +32,11 @@ type CapabilityHandler struct {
 	policy         rules.PolicyStatusProvider
 	blocklistStore *blocklist.Store
 	blocklistMode  string
+	quarantine     *quarantine.Policy
 }
 
-func NewCapabilityHandler(database *gorm.DB, cfg *config.Config, store *config.Store, ecosystems []string, policy rules.PolicyStatusProvider, blocklistStore *blocklist.Store, blocklistMode string) *CapabilityHandler {
-	return &CapabilityHandler{db: database, config: cfg, configStore: store, ecosystems: append([]string(nil), ecosystems...), policy: policy, blocklistStore: blocklistStore, blocklistMode: blocklistMode}
+func NewCapabilityHandler(database *gorm.DB, cfg *config.Config, store *config.Store, ecosystems []string, policy rules.PolicyStatusProvider, blocklistStore *blocklist.Store, blocklistMode string, quarantinePolicy *quarantine.Policy) *CapabilityHandler {
+	return &CapabilityHandler{db: database, config: cfg, configStore: store, ecosystems: append([]string(nil), ecosystems...), policy: policy, blocklistStore: blocklistStore, blocklistMode: blocklistMode, quarantine: quarantinePolicy}
 }
 
 type capabilityFact struct {
@@ -180,8 +181,21 @@ func (h *CapabilityHandler) securityFact(ctx context.Context, name string) capab
 
 func (h *CapabilityHandler) ageFact(name string) capabilityFact {
 	f := capabilityFact{Name: "minimum_release_age", Ecosystem: name, Support: "safety_disabled", Mode: "off", DataStatus: "never_synced"}
-	if quarantine.SupportsMinimumReleaseAge(name) {
-		f.Support = "supported"
+	bound := quarantine.SupportsMinimumReleaseAge(name)
+	if h.quarantine != nil {
+		bound = bound || h.quarantine.SourceProvenanceBound(name)
+	}
+	if !bound {
+		return f
+	}
+	f.Support = "supported"
+	f.DataStatus = "source_bound"
+	if h.quarantine.IsAgeGateEnabled() && h.quarantine.Threshold(name) > 0 {
+		if h.quarantine.Mode == quarantine.ModeWarn {
+			f.Mode = "warn"
+		} else {
+			f.Mode = "block"
+		}
 	}
 	return f
 }

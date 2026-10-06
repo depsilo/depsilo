@@ -5,6 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- Minimum-release-age enforcement is available for npm: the packument's
+  `time[version]` travels inside the authenticated tarball token, so the gate
+  compares the publish time of the exact Upstream that will serve the bytes.
+  Missing or legacy metadata fails closed while the gate is enabled, and every
+  other ecosystem still rejects positive thresholds at startup.
+
 ### Changed
 - The S3 release contract now runs against pinned RustFS, replacing the
   SeaweedFS image that shipped with v0.10.1.

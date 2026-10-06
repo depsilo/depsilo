@@ -75,6 +75,57 @@ func TestChecker_RejectsServeLastEligible(t *testing.T) {
 	}
 }
 
+func TestChecker_CheckWithProvenanceUsesAuthenticatedTimestamp(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	enabled := true
+	c := newChecker(t, Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"npm": "168h"},
+	}, nil, now)
+	const sourceID = "c291cmNlLWJvdW5kLW5wbQ"
+
+	t.Run("young version blocked", func(t *testing.T) {
+		d := c.CheckWithProvenance(context.Background(), "npm", "fixture", "1.0.0", "", Provenance{
+			SourceID:  sourceID,
+			PublishAt: now.Add(-time.Hour),
+		})
+		if d.Allowed || d.Code != CodeQuarantined {
+			t.Fatalf("decision = %#v, want blocked quarantine", d)
+		}
+		if !strings.Contains(d.Reason, "source "+sourceID[:12]) {
+			t.Fatalf("reason = %q, want source-bound explanation", d.Reason)
+		}
+	})
+
+	t.Run("old version allowed", func(t *testing.T) {
+		d := c.CheckWithProvenance(context.Background(), "npm", "fixture", "2.0.0", "", Provenance{
+			SourceID:  sourceID,
+			PublishAt: now.Add(-30 * 24 * time.Hour),
+		})
+		if !d.Allowed || d.Threshold != 168*time.Hour {
+			t.Fatalf("decision = %#v, want allowed with threshold", d)
+		}
+	})
+
+	t.Run("missing publish time fails closed", func(t *testing.T) {
+		d := c.CheckWithProvenance(context.Background(), "npm", "fixture", "3.0.0", "", Provenance{
+			SourceID: sourceID,
+		})
+		if d.Allowed || !strings.Contains(d.Reason, "source-bound publish time") {
+			t.Fatalf("decision = %#v, want fail-closed missing-provenance block", d)
+		}
+	})
+
+	t.Run("missing source fails closed", func(t *testing.T) {
+		d := c.CheckWithProvenance(context.Background(), "npm", "fixture", "4.0.0", "", Provenance{
+			PublishAt: now.Add(-time.Hour),
+		})
+		if d.Allowed {
+			t.Fatalf("decision = %#v, want fail-closed missing-source block", d)
+		}
+	})
+}
+
 func TestChecker_EcosystemDisabled(t *testing.T) {
 	// Empty config defaults the entire age gate off → no resolver call ever.
 	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)

@@ -73,6 +73,7 @@ function CapabilityOverview() {
   const value = (fact: CapabilityFact, field: 'support' | 'mode' | 'data_status') => {
     const raw = fact[field]
     if (raw === 'safety_disabled') return t('security.capabilitySafetyDisabled')
+    if (raw === 'source_bound') return t('security.capabilitySourceBound')
     if (raw === 'never_synced') return t('security.capabilityNeverSynced')
     if (raw === 'fresh') return t('security.capabilityFresh')
     if (raw === 'stale') return t('security.capabilityStale')

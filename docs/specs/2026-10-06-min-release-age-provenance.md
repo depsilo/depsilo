@@ -4,6 +4,14 @@
 > build order item 1. `PRODUCT.md` and the ADRs remain the authority for
 > product intent and decisions; this file records the intended implementation.
 
+## Implementation status
+
+- 2026-10-06: the npm slice is implemented — the packument `time[version]`
+  travels in the authenticated tarball token, an enabled npm threshold is
+  accepted at startup, missing or legacy provenance fails closed, and the
+  capability summary reports npm as source-bound.
+- PyPI and the remaining ecosystems follow the rollout order below.
+
 ## Goal
 
 Restore the minimum-release-age gate by binding three facts to one source

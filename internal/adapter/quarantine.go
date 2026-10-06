@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"sync/atomic"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,6 +43,27 @@ type QuarantineDecision struct {
 	// (proceed) because Allowed is true; Warned is informational for
 	// any future response-header / observability work.
 	Warned bool
+}
+
+// QuarantineProvenance is source-bound release evidence an adapter can present
+// when it has already authenticated the artifact coordinate. SourceID names
+// the exact upstream that will serve the bytes; PublishAt is the version's
+// publish time taken from that same source's metadata document. A zero
+// PublishAt means the metadata carried no usable timestamp and an enabled gate
+// must fail closed.
+type QuarantineProvenance struct {
+	SourceID  string
+	PublishAt time.Time
+}
+
+// provenanceQuarantineChecker is the optional capability a checker implements
+// when it can consume source-bound evidence instead of a registry lookup.
+type provenanceQuarantineChecker interface {
+	CheckWithProvenance(
+		ctx context.Context,
+		ecosystem, pkg, version, clientIP string,
+		provenance QuarantineProvenance,
+	) QuarantineDecision
 }
 
 // quarantineCheckerSnapshot is the compatibility representation for unscoped
@@ -99,6 +121,25 @@ func SetQuarantineChecker(c QuarantineChecker) {
 // says so. It's also visible enough in client error output that
 // CI logs make the cause obvious.
 func QuarantineGate(c *gin.Context, ecosystem, pkg, version string) bool {
+	return quarantineGate(c, ecosystem, pkg, version, nil)
+}
+
+// QuarantineGateWithProvenance evaluates the policy with source-bound release
+// evidence. Checkers that do not implement the provenance path fall back to
+// the coordinate-only check so existing test doubles keep working.
+func QuarantineGateWithProvenance(
+	c *gin.Context,
+	ecosystem, pkg, version string,
+	provenance QuarantineProvenance,
+) bool {
+	return quarantineGate(c, ecosystem, pkg, version, &provenance)
+}
+
+func quarantineGate(
+	c *gin.Context,
+	ecosystem, pkg, version string,
+	provenance *QuarantineProvenance,
+) bool {
 	var checker QuarantineChecker
 	if hooks := quarantineHooks.Load(); hooks != nil {
 		checker = hooks.checker
@@ -114,13 +155,29 @@ func QuarantineGate(c *gin.Context, ecosystem, pkg, version string) bool {
 	if pkg == "" || version == "" {
 		return false
 	}
-	d := checker.Check(
-		c.Request.Context(),
-		ecosystem,
-		pkg,
-		version,
-		c.ClientIP(),
-	)
+	var d QuarantineDecision
+	if provenance != nil {
+		if provenanceChecker, ok := checker.(provenanceQuarantineChecker); ok {
+			d = provenanceChecker.CheckWithProvenance(
+				c.Request.Context(),
+				ecosystem,
+				pkg,
+				version,
+				c.ClientIP(),
+				*provenance,
+			)
+		} else {
+			d = checker.Check(c.Request.Context(), ecosystem, pkg, version, c.ClientIP())
+		}
+	} else {
+		d = checker.Check(
+			c.Request.Context(),
+			ecosystem,
+			pkg,
+			version,
+			c.ClientIP(),
+		)
+	}
 	if d.Allowed {
 		return false
 	}

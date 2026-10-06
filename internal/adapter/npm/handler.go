@@ -250,7 +250,11 @@ func (h *Handler) proxyTarball(
 	source *upstream.Upstream,
 	cacheKey string,
 ) {
-	if blocked := adapter.QuarantineGate(c, "npm", claims.Package, claims.Version); blocked {
+	provenance := adapter.QuarantineProvenance{SourceID: claims.Source}
+	if claims.PublishAt > 0 {
+		provenance.PublishAt = time.Unix(claims.PublishAt, 0).UTC()
+	}
+	if blocked := adapter.QuarantineGateWithProvenance(c, "npm", claims.Package, claims.Version, provenance); blocked {
 		return
 	}
 	start := time.Now()

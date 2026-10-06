@@ -147,9 +147,10 @@ func DefaultThresholds() map[string]time.Duration {
 	}
 }
 
-// SupportsMinimumReleaseAge reports whether an ecosystem has a trusted request
-// identity, the exact selected artifact source, and a publish-time resolver
-// authoritative for that same source. It is intentionally a closed allow-list.
+// SupportsMinimumReleaseAge reports whether an ecosystem is in the static
+// allow-list of source-bound age gates. It is intentionally a closed list and
+// stays empty until a binding is universal; composition roots that can prove
+// the binding at runtime pass a predicate to NewPolicyWithProvenance instead.
 func SupportsMinimumReleaseAge(ecosystem string) bool {
 	return false
 }
@@ -158,6 +159,14 @@ func SupportsMinimumReleaseAge(ecosystem string) bool {
 // Returns an error if any duration string fails to parse — the
 // operator hears about config typos at startup, not at request time.
 func NewPolicy(cfg Config) (*Policy, error) {
+	return NewPolicyWithProvenance(cfg, nil)
+}
+
+// NewPolicyWithProvenance is NewPolicy plus a composition-root predicate that
+// reports which ecosystems have an end-to-end artifact-source and timestamp
+// binding. Positive thresholds are accepted only for those ecosystems; every
+// other positive threshold keeps the startup rejection.
+func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Policy, error) {
 	thresholds := DefaultThresholds()
 	ageGateEnabled := len(cfg.MinReleaseAge) > 0
 	if cfg.MinReleaseAgeEnabled != nil {
@@ -181,7 +190,9 @@ func NewPolicy(cfg Config) (*Policy, error) {
 			defaultThreshold = dur
 			continue
 		}
-		if ageGateEnabled && dur > 0 && !SupportsMinimumReleaseAge(normalizedKey) {
+		provenanceBound := SupportsMinimumReleaseAge(normalizedKey) ||
+			(bound != nil && bound(normalizedKey))
+		if ageGateEnabled && dur > 0 && !provenanceBound {
 			return nil, fmt.Errorf(
 				"quarantine: minimum release age for ecosystem %q is not supported safely; set its threshold to 0 or disable the age gate",
 				normalizedKey,
@@ -213,13 +224,27 @@ func NewPolicy(cfg Config) (*Policy, error) {
 	}
 
 	return &Policy{
-		ageGateEnabled: ageGateEnabled,
-		Thresholds:     thresholds,
-		Default:        defaultThreshold,
-		Mode:           mode,
-		Allow:          allow,
-		FailClosed:     failClosed,
+		ageGateEnabled:        ageGateEnabled,
+		Thresholds:            thresholds,
+		Default:               defaultThreshold,
+		Mode:                  mode,
+		Allow:                 allow,
+		FailClosed:            failClosed,
+		sourceProvenanceBound: bound,
 	}, nil
+}
+
+// SourceProvenanceBound reports whether an ecosystem has an end-to-end
+// artifact-source and timestamp binding in this composition root.
+func (p *Policy) SourceProvenanceBound(ecosystem string) bool {
+	if p == nil {
+		return false
+	}
+	normalized := strings.ToLower(strings.TrimSpace(ecosystem))
+	if SupportsMinimumReleaseAge(normalized) {
+		return true
+	}
+	return p.sourceProvenanceBound != nil && p.sourceProvenanceBound(normalized)
 }
 
 // Threshold returns the threshold for a given ecosystem, falling
@@ -230,11 +255,7 @@ func (p *Policy) Threshold(ecosystem string) time.Duration {
 		return 0
 	}
 	normalizedEcosystem := strings.ToLower(strings.TrimSpace(ecosystem))
-	provenanceBound := SupportsMinimumReleaseAge(normalizedEcosystem)
-	if !provenanceBound && p.sourceProvenanceBound != nil {
-		provenanceBound = p.sourceProvenanceBound(normalizedEcosystem)
-	}
-	if !provenanceBound {
+	if !p.SourceProvenanceBound(normalizedEcosystem) {
 		return 0
 	}
 	if d, ok := p.Thresholds[normalizedEcosystem]; ok {

@@ -26,6 +26,19 @@ const (
 	CodeMaliciousBlocked = "MALICIOUS_BLOCKED"
 )
 
+// errMissingProvenance marks a source-bound request whose authenticated
+// metadata carried no publish time (or whose ecosystem has no bound source
+// path). It follows the same fail-closed matrix as an unsupported resolver.
+var errMissingProvenance = errors.New("quarantine: authenticated metadata has no source-bound publish time")
+
+// Provenance is source-bound release evidence supplied by an adapter that has
+// already authenticated both the package coordinate and the upstream that will
+// serve the artifact bytes.
+type Provenance struct {
+	SourceID  string
+	PublishAt time.Time
+}
+
 type Decision struct {
 	Allowed bool
 
@@ -167,6 +180,26 @@ func (c *Checker) SetBlocklistMode(m Mode) {
 //  5. now - publishAt < threshold → Block + record ActionBlocked.
 //  6. Otherwise → Allow.
 func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP string) Decision {
+	return c.check(ctx, ecosystem, pkg, version, clientIP, nil)
+}
+
+// CheckWithProvenance evaluates the age gate against the adapter's
+// authenticated metadata timestamp instead of the public-registry resolver.
+// The adapter is responsible for having verified that SourceID names the
+// upstream that will serve the artifact.
+func (c *Checker) CheckWithProvenance(
+	ctx context.Context,
+	ecosystem, pkg, version, clientIP string,
+	provenance Provenance,
+) Decision {
+	return c.check(ctx, ecosystem, pkg, version, clientIP, &provenance)
+}
+
+func (c *Checker) check(
+	ctx context.Context,
+	ecosystem, pkg, version, clientIP string,
+	provenance *Provenance,
+) Decision {
 	if c == nil || c.policy == nil {
 		return Decision{Allowed: true}
 	}
@@ -288,18 +321,36 @@ func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP s
 		}
 	}
 
-	// Step 4: lookup publish time.
-	publishAt, err := c.lookup.Get(ctx, ecosystem, pkg, version)
-	if err != nil {
-		return c.handleLookupError(ctx, ecosystem, pkg, version, clientIP, threshold, err)
+	// Step 4: resolve the publish time. A source-bound caller supplies the
+	// timestamp from the same authenticated metadata document that declared
+	// the artifact; anything else falls back to the registry lookup.
+	var publishAt time.Time
+	sourceNote := ""
+	if provenance != nil {
+		if !c.policy.SourceProvenanceBound(ecosystem) {
+			return c.handleLookupError(ctx, ecosystem, pkg, version, clientIP, threshold,
+				fmt.Errorf("%w: ecosystem %s has no source-bound provenance path", errMissingProvenance, ecosystem))
+		}
+		if provenance.SourceID == "" || provenance.PublishAt.IsZero() {
+			return c.handleLookupError(ctx, ecosystem, pkg, version, clientIP, threshold,
+				fmt.Errorf("%w: authenticated %s metadata carried no publish time", errMissingProvenance, ecosystem))
+		}
+		publishAt = provenance.PublishAt
+		sourceNote = fmt.Sprintf(" (source %s)", shortProvenanceSource(provenance.SourceID))
+	} else {
+		var err error
+		publishAt, err = c.lookup.Get(ctx, ecosystem, pkg, version)
+		if err != nil {
+			return c.handleLookupError(ctx, ecosystem, pkg, version, clientIP, threshold, err)
+		}
 	}
 
 	// Step 5 & 6: threshold check.
 	age := c.now().Sub(publishAt)
 	if age < threshold {
 		reason := fmt.Sprintf(
-			"version %s of %s was published %s ago, which is younger than the configured %s minimum release age for %s",
-			version, pkg, formatAge(age), formatAge(threshold), ecosystem,
+			"version %s of %s was published %s ago, which is younger than the configured %s minimum release age for %s%s",
+			version, pkg, formatAge(age), formatAge(threshold), ecosystem, sourceNote,
 		)
 		if c.policy.Mode == ModeWarn {
 			c.recordEvent(ctx, db.QuarantineEvent{
@@ -345,6 +396,14 @@ func (c *Checker) Check(ctx context.Context, ecosystem, pkg, version, clientIP s
 		AgeAtCall: age,
 		Threshold: threshold,
 	}
+}
+
+func shortProvenanceSource(sourceID string) string {
+	const maxLength = 12
+	if len(sourceID) <= maxLength {
+		return sourceID
+	}
+	return sourceID[:maxLength] + "…"
 }
 
 // handleLookupError encapsulates the fail-closed/open policy on
@@ -393,6 +452,11 @@ func (c *Checker) handleLookupError(
 		reason = fmt.Sprintf(
 			"ecosystem %s does not have a quarantine resolver in this build; configured to fail-closed",
 			ecosystem,
+		)
+	case errors.Is(err, errMissingProvenance):
+		reason = fmt.Sprintf(
+			"version %s of %s has no source-bound publish time from its authenticated upstream; quarantine is configured to fail-closed",
+			version, pkg,
 		)
 	default:
 		reason = fmt.Sprintf("quarantine lookup failed: %v", err)

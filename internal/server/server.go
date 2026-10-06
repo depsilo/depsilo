@@ -318,13 +318,18 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// gate defaults off for an empty config; explicit legacy threshold tables
 	// remain enabled unless the operator sets the new switch false. Failure to
 	// build the checker (e.g. an unsupported mode) is a startup error.
-	quarantinePolicy, err := quarantine.NewPolicy(quarantine.Config{
+	//
+	// npm is the first source-bound ecosystem: the adapter carries the
+	// packument's time[version] inside the same authenticated token that pins
+	// the serving upstream for the tarball. Every other positive threshold is
+	// rejected until its metadata path binds the same way.
+	quarantinePolicy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
 		MinReleaseAgeEnabled: cfg.SupplyChain.MinReleaseAgeEnabled,
 		MinReleaseAge:        cfg.SupplyChain.MinReleaseAge,
 		Mode:                 cfg.SupplyChain.Mode,
 		Allow:                cfg.SupplyChain.Allow,
 		FailClosed:           cfg.SupplyChain.FailClosed,
-	})
+	}, func(ecosystem string) bool { return ecosystem == "npm" })
 	if err != nil {
 		return nil, fmt.Errorf("quarantine policy: %w", err)
 	}
@@ -602,6 +607,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		SecurityCatalog:            securityCatalog,
 		WebhookNotifier:            webhookNotifier,
 		QuarantineStore:            quarantineStore,
+		QuarantinePolicy:           quarantinePolicy,
 		QuarantineApprovalsEnabled: quarantinePolicy.HasActiveThresholds(),
 		BlocklistStore:             blocklistStore,
 		BlocklistSyncer:            blocklistSyncer,

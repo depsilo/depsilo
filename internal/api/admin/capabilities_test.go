@@ -10,6 +10,7 @@ import (
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/quarantine"
 	"depsilo/internal/rules"
 )
 
@@ -32,7 +33,7 @@ func TestCapabilitySummaryKeepsSupportModeAndDataIndependent(t *testing.T) {
 
 	cfg := &config.Config{Security: config.SecurityConfig{Enabled: true}}
 	provider := capabilityPolicyStub{status: rules.PolicyStatus{LastSuccessfulRefresh: now}}
-	h := NewCapabilityHandler(database, cfg, nil, []string{"pypi", "docker"}, provider, nil, "warn")
+	h := NewCapabilityHandler(database, cfg, nil, []string{"pypi", "docker"}, provider, nil, "warn", nil)
 	r := gin.New()
 	r.GET("/summary", h.Summary)
 	response := httptest.NewRecorder()
@@ -67,13 +68,54 @@ func TestCapabilitySummaryKeepsSupportModeAndDataIndependent(t *testing.T) {
 func TestCapabilitySummaryDoesNotRefreshPolicy(t *testing.T) {
 	called := false
 	provider := policyCallback{fn: func() { called = true }}
-	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"pypi"}, provider, nil, "")
+	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"pypi"}, provider, nil, "", nil)
 	r := gin.New()
 	r.GET("/summary", h.Summary)
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, httptest.NewRequest("GET", "/summary", nil))
 	if response.Code != 200 || !called {
 		t.Fatalf("status=%d called=%v", response.Code, called)
+	}
+}
+
+func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
+	enabled := true
+	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"npm": "168h"},
+	}, func(ecosystem string) bool { return ecosystem == "npm" })
+	if err != nil {
+		t.Fatalf("NewPolicyWithProvenance: %v", err)
+	}
+	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi"}, capabilityPolicyStub{}, nil, "", policy)
+	r := gin.New()
+	r.GET("/summary", h.Summary)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, httptest.NewRequest("GET", "/summary", nil))
+	if response.Code != 200 {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var got capabilitySummary
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	var npmFact, pypiFact capabilityFact
+	for _, fact := range got.Capabilities {
+		if fact.Name != "minimum_release_age" {
+			continue
+		}
+		switch fact.Ecosystem {
+		case "npm":
+			npmFact = fact
+		case "pypi":
+			pypiFact = fact
+		}
+	}
+	if npmFact.Support != "supported" || npmFact.Mode != "block" || npmFact.DataStatus != "source_bound" {
+		t.Fatalf("npm minimum_release_age fact = %+v", npmFact)
+	}
+	if pypiFact.Support != "safety_disabled" || pypiFact.Mode != "off" || pypiFact.DataStatus != "never_synced" {
+		t.Fatalf("pypi minimum_release_age fact = %+v", pypiFact)
 	}
 }
 

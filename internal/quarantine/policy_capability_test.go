@@ -3,7 +3,38 @@ package quarantine
 import (
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestMinimumReleaseAgeBoundEcosystemAcceptsPositiveThreshold(t *testing.T) {
+	enabled := true
+	bound := func(ecosystem string) bool { return ecosystem == "npm" }
+	policy, err := NewPolicyWithProvenance(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"npm": "168h"},
+	}, bound)
+	if err != nil {
+		t.Fatalf("NewPolicyWithProvenance(bound npm): %v", err)
+	}
+	if got := policy.Threshold("npm"); got != 168*time.Hour {
+		t.Fatalf("Threshold(npm) = %v, want 168h", got)
+	}
+	if !policy.SourceProvenanceBound("npm") || policy.SourceProvenanceBound("pypi") {
+		t.Fatalf("bound predicate not scoped to npm: npm=%v pypi=%v",
+			policy.SourceProvenanceBound("npm"), policy.SourceProvenanceBound("pypi"))
+	}
+	if !policy.HasActiveThresholds() {
+		t.Fatal("bound policy reported no active thresholds")
+	}
+
+	_, err = NewPolicyWithProvenance(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"pypi": "72h"},
+	}, bound)
+	if err == nil || !strings.Contains(err.Error(), "pypi") {
+		t.Fatalf("unbound pypi threshold error = %v, want ecosystem-specific rejection", err)
+	}
+}
 
 func TestMinimumReleaseAgeCapabilityProfile(t *testing.T) {
 	enabled := true

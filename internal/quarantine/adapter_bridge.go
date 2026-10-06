@@ -25,7 +25,28 @@ func (a AdapterChecker) Check(ctx context.Context, ecosystem, pkg, version, clie
 	if a.inner == nil {
 		return adapter.QuarantineDecision{Allowed: true}
 	}
-	d := a.inner.Check(ctx, ecosystem, pkg, version, clientIP)
+	return adapterDecision(a.inner.Check(ctx, ecosystem, pkg, version, clientIP))
+}
+
+// CheckWithProvenance forwards source-bound release evidence from an adapter
+// that has already authenticated the package coordinate and its serving
+// upstream.
+func (a AdapterChecker) CheckWithProvenance(
+	ctx context.Context,
+	ecosystem, pkg, version, clientIP string,
+	provenance adapter.QuarantineProvenance,
+) adapter.QuarantineDecision {
+	if a.inner == nil {
+		return adapter.QuarantineDecision{Allowed: true}
+	}
+	d := a.inner.CheckWithProvenance(ctx, ecosystem, pkg, version, clientIP, Provenance{
+		SourceID:  provenance.SourceID,
+		PublishAt: provenance.PublishAt,
+	})
+	return adapterDecision(d)
+}
+
+func adapterDecision(d Decision) adapter.QuarantineDecision {
 	return adapter.QuarantineDecision{
 		Allowed: d.Allowed,
 		Code:    d.Code,

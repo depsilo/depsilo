@@ -335,18 +335,17 @@ scan_interval = "24h"
 check_ttl = "24h"
 # proxy = "http://127.0.0.1:7890"
 
-# ─── Minimum release age — temporarily unavailable ──────────────────────
+# ─── Minimum release age — npm source-bound ─────────────────────────────
 #
-# This build does not enforce minimum release age. Artifact bytes may come
-# from a configured private or mirrored Upstream while the current timestamp
-# resolvers query a different public registry. A public timestamp cannot
-# safely govern those bytes until the selected artifact source is bound to
-# timestamp provenance.
+# npm enforces the gate from the packument's time[version], carried inside the
+# same authenticated token that pins the tarball to its serving Upstream.
+# Every other ecosystem still rejects positive thresholds at startup because
+# its artifact source and timestamp are not yet bound end to end.
 #
-# Keep the gate disabled and every threshold at zero. If the effective gate is
-# enabled, startup rejects every positive default or ecosystem threshold.
-# Explicitly disabled legacy configurations may retain positive values for
-# rollback compatibility, but those values have no runtime effect.
+# Enable the gate and set a positive npm threshold to quarantine fresh npm
+# versions; leave the other thresholds at zero. Positive defaults and positive
+# thresholds for unbound ecosystems are startup errors. Missing or legacy
+# npm metadata without a publish time fails closed while the gate is enabled.
 
 [supply_chain]
 min_release_age_enabled = false
@@ -356,7 +355,7 @@ fail_closed = true
 [supply_chain.min_release_age]
 default  = "0"
 pypi     = "0"
-npm      = "0"
+npm      = "0"   # e.g. "7d" once min_release_age_enabled = true
 go       = "0"
 cargo    = "0"
 maven    = "0"

@@ -35,6 +35,7 @@ type npmQuarantineCall struct {
 	ecosystem string
 	packageID string
 	version   string
+	publishAt time.Time
 }
 
 type npmRecordingQuarantineChecker struct {
@@ -64,6 +65,22 @@ func (checker *npmRecordingQuarantineChecker) Check(
 		ecosystem: ecosystem,
 		packageID: packageID,
 		version:   version,
+	})
+	return adapter.QuarantineDecision{Allowed: true}
+}
+
+func (checker *npmRecordingQuarantineChecker) CheckWithProvenance(
+	_ context.Context,
+	ecosystem, packageID, version, _ string,
+	provenance adapter.QuarantineProvenance,
+) adapter.QuarantineDecision {
+	checker.mu.Lock()
+	defer checker.mu.Unlock()
+	checker.calls = append(checker.calls, npmQuarantineCall{
+		ecosystem: ecosystem,
+		packageID: packageID,
+		version:   version,
+		publishAt: provenance.PublishAt,
 	})
 	return adapter.QuarantineDecision{Allowed: true}
 }
@@ -108,7 +125,11 @@ func newNPMProvenanceFixture(
 		case "/fixture":
 			metadataRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = io.WriteString(w, `{"name":"fixture","versions":{`+
+			_, _ = io.WriteString(w, `{"name":"fixture","time":{`+
+				`"1.0.0-alpha":"2026-01-01T00:00:00.000Z",`+
+				`"1.0.0":"2026-02-01T00:00:00.000Z",`+
+				`"1.1.0":"2026-03-01T00:00:00.000Z"},`+
+				`"versions":{`+
 				`"1.0.0-alpha":{"dist":{"tarball":"`+upstreamServerURL(request)+`/fixture/-/pkg-alpha.tgz"}},`+
 				`"1.0.0":{"dist":{"tarball":"`+upstreamServerURL(request)+`/fixture/-/pkg-custom.tgz"}},`+
 				`"1.1.0":{"dist":{"tarball":"`+upstreamServerURL(request)+`/fixture/-/pkg-next.tgz"}}}}`)
@@ -270,6 +291,7 @@ func TestSignedTarballUsesPackumentVersionAndRejectsTampering(t *testing.T) {
 		ecosystem: "npm",
 		packageID: "fixture",
 		version:   "1.0.0",
+		publishAt: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
 	}) {
 		t.Fatalf("checker calls = %#v", got)
 	}
@@ -702,6 +724,85 @@ func TestPreparePackumentBindsExactTargetSourceAndDeclaredDigests(t *testing.T) 
 		claims.Target != reference.Target || claims.Integrity != reference.Integrity ||
 		claims.Shasum != reference.Shasum {
 		t.Fatalf("verified claims = %#v, valid=%v", claims, valid)
+	}
+}
+
+func TestPreparePackumentCarriesSourcePublishTimeIntoClaims(t *testing.T) {
+	sourceID := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0x79}, sha256.Size))
+	publishedAt := time.Date(2026, 9, 1, 12, 30, 45, 0, time.UTC)
+	metadata := []byte(`{"name":"fixture","time":{"created":"2025-01-01T00:00:00.000Z","1.0.0":"` +
+		publishedAt.Format(time.RFC3339) +
+		`"},"versions":{"1.0.0":{"dist":{"tarball":"https://registry.example/fixture/-/fixture-1.0.0.tgz"}}}}`)
+	prepared, err := PreparePackument(metadata, "fixture", "https://registry.example/fixture", sourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Versions map[string]struct {
+			Dist struct {
+				Tarball string `json:"tarball"`
+			} `json:"dist"`
+		} `json:"versions"`
+	}
+	if err := json.Unmarshal(prepared, &document); err != nil {
+		t.Fatal(err)
+	}
+	reference, err := decodePreparedTarballReference(document.Versions["1.0.0"].Dist.Tarball)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reference.PublishAt != publishedAt.Unix() {
+		t.Fatalf("prepared publish time = %d, want %d", reference.PublishAt, publishedAt.Unix())
+	}
+
+	signer := deterministicTarballSigner(t, 0x7a)
+	runtime, err := signRuntimeTarballURLs(
+		prepared, "https://depsilo.example", "/npm", "global", "fixture", signer,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(runtime, &document); err != nil {
+		t.Fatal(err)
+	}
+	signed, err := url.Parse(document.Versions["1.0.0"].Dist.Tarball)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(signed.EscapedPath(), "/")
+	claims, valid := signer.verify(parts[len(parts)-2], "global", "fixture", "fixture-1.0.0.tgz")
+	if !valid || claims.PublishAt != publishedAt.Unix() {
+		t.Fatalf("verified claims = %#v, valid=%v", claims, valid)
+	}
+}
+
+func TestPreparePackumentLeavesUnparseablePublishTimeUnbound(t *testing.T) {
+	sourceID := base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{0x7b}, sha256.Size))
+	prepared, err := PreparePackument(
+		[]byte(`{"name":"fixture","time":{"1.0.0":"not-a-time"},"versions":{"1.0.0":{"dist":{"tarball":"https://registry.example/fixture/-/fixture-1.0.0.tgz"}}}}`),
+		"fixture",
+		"https://registry.example/fixture",
+		sourceID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Versions map[string]struct {
+			Dist struct {
+				Tarball string `json:"tarball"`
+			} `json:"dist"`
+		} `json:"versions"`
+	}
+	if err := json.Unmarshal(prepared, &document); err != nil {
+		t.Fatal(err)
+	}
+	reference, err := decodePreparedTarballReference(document.Versions["1.0.0"].Dist.Tarball)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reference.PublishAt != 0 {
+		t.Fatalf("unparseable publish time = %d, want unbound zero", reference.PublishAt)
 	}
 }
 

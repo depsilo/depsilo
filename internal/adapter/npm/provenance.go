@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -65,6 +66,11 @@ type preparedTarballReference struct {
 	Filename  string `json:"filename"`
 	Integrity string `json:"integrity,omitempty"`
 	Shasum    string `json:"shasum,omitempty"`
+	// PublishAt is the packument time[version] in Unix seconds. It is zero
+	// for legacy cached references and for versions whose source declares no
+	// parseable timestamp; an enabled minimum-release-age gate treats zero as
+	// unbound provenance and fails closed.
+	PublishAt int64 `json:"publish_at,omitempty"`
 }
 
 type tarballClaims struct {
@@ -77,6 +83,7 @@ type tarballClaims struct {
 	Filename  string `json:"filename"`
 	Integrity string `json:"integrity,omitempty"`
 	Shasum    string `json:"shasum,omitempty"`
+	PublishAt int64  `json:"publish_at,omitempty"`
 }
 
 func newTarballSigner(key []byte) (*tarballSigner, error) {
@@ -208,6 +215,7 @@ func validateTarballClaims(claims tarballClaims) error {
 		Filename:  claims.Filename,
 		Integrity: claims.Integrity,
 		Shasum:    claims.Shasum,
+		PublishAt: claims.PublishAt,
 	}
 	return validatePreparedTarballReference(reference)
 }
@@ -307,6 +315,20 @@ func PreparePackument(
 	if !ok {
 		return nil, errors.New("npm packument versions map is missing or invalid")
 	}
+	publishTimes := map[string]int64{}
+	if timeMap, ok := document["time"].(map[string]interface{}); ok {
+		for version, raw := range timeMap {
+			text, ok := raw.(string)
+			if !ok || text == "" {
+				continue
+			}
+			parsed, err := time.Parse(time.RFC3339, text)
+			if err != nil {
+				continue
+			}
+			publishTimes[version] = parsed.UTC().Unix()
+		}
+	}
 
 	for version, versionData := range versions {
 		if err := validateNPMCoordinate(documentName, version); err != nil {
@@ -352,6 +374,7 @@ func PreparePackument(
 			Filename:  filename,
 			Integrity: integrity,
 			Shasum:    shasum,
+			PublishAt: publishTimes[version],
 		}
 		// Reject metadata before cache persistence if its authenticated claims
 		// could not fit in the internal route. The longest valid project
@@ -366,6 +389,7 @@ func PreparePackument(
 			Filename:  reference.Filename,
 			Integrity: reference.Integrity,
 			Shasum:    reference.Shasum,
+			PublishAt: reference.PublishAt,
 		}); err != nil {
 			return nil, fmt.Errorf("npm packument version %q: %w", version, err)
 		}
@@ -529,7 +553,7 @@ func decodePreparedTarballReference(value string) (preparedTarballReference, err
 }
 
 func validatePreparedTarballReference(reference preparedTarballReference) error {
-	if reference.Format != preparedTarballFormat || !validProvenanceSourceID(reference.Source) ||
+	if reference.Format != preparedTarballFormat || reference.PublishAt < 0 || !validProvenanceSourceID(reference.Source) ||
 		!validTarballFilename(reference.Filename) ||
 		!validOptionalDigestField(reference.Integrity, true) ||
 		!validOptionalDigestField(reference.Shasum, true) {
@@ -631,6 +655,7 @@ func signRuntimeTarballURLs(
 			Filename:  reference.Filename,
 			Integrity: reference.Integrity,
 			Shasum:    reference.Shasum,
+			PublishAt: reference.PublishAt,
 		}
 		payload, err := json.Marshal(claims)
 		if err != nil {
