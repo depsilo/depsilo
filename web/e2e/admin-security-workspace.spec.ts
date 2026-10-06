@@ -368,3 +368,37 @@ test('Security suggestion rows do not create root overflow at 320px', async ({ p
   await expect(page.getByRole('button', { name: /忽略|Dismiss/ })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
+
+test('Security capability overview renders source-bound and safety-disabled facts', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/capabilities/summary': {
+      version: 'dev',
+      commit: 'unknown',
+      build_date: 'unknown',
+      capabilities: [
+        {
+          name: 'minimum_release_age',
+          ecosystem: 'npm',
+          support: 'supported',
+          mode: 'block',
+          data_status: 'source_bound',
+        },
+        {
+          name: 'minimum_release_age',
+          ecosystem: 'cargo',
+          support: 'safety_disabled',
+          mode: 'off',
+          data_status: 'never_synced',
+        },
+      ],
+    },
+  })
+  await page.goto('/admin/security')
+
+  const section = page.getByRole('region', { name: /运行时能力状态|Runtime capability status/ })
+  await expect(section).toContainText(/来源已绑定|Source-bound/)
+  await expect(section).toContainText(/安全暂停|Safety paused/)
+  await expect(section).toContainText(/从未同步|Never synced/)
+  await expect(section).toContainText('NPM')
+  await expect(section).toContainText('CARGO')
+})
