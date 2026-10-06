@@ -5,9 +5,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-06
+
+### Added
+- The Admin Overview now presents live service status, runtime resources,
+  client-facing and origin request rates and traffic, cache benefits, activity
+  trends, and recent requests, with centered detail dialogs that preserve deep
+  links and page state.
+- Overview reports the cached package inventory size, the number of served
+  requests, and an estimated time saved derived from comparable cache-hit and
+  origin latency samples.
+- macOS process memory reports the current RSS through libproc instead of a
+  peak-only explanation string.
+- Portal Monitor pins upstream counts while scrolling, marks problem upstreams
+  in the heartbeat, and reports service availability rather than mirror health.
+
 ### Changed
 - The minimum toolchain is Go 1.27.1, which is also what CI and the container
   build now use.
+- The web interface now uses shadcn/ui primitives over the existing Base UI
+  layer. Admin workspace destinations act as page headers, and route chunks are
+  warmed on tab switches instead of falling back to a loading state.
+- The Depsilo brand kit mark, palette, and typography are applied across Portal
+  and Admin, including the restored pale Overview palette and calmer Portal
+  accent.
+- Overview metric tiles are icon-first with hover measurement hints, and the
+  small-screen layout sizes icons from the card instead of the viewport.
 - The shadcn Tailwind layer used by the web UI is vendored under
   `web/src/styles/`, so the shadcn CLI is no longer a frontend devDependency.
   This removes its unfixable `braces` advisory chain without changing any
@@ -22,6 +45,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Frontend dependencies no longer carry the known high-severity advisories
   that blocked CI: `axios` is upgraded to 1.20.0, `brace-expansion` is pinned
   to 1.1.21 / 5.0.12, and `source-map-js` is upgraded to 1.2.2.
+- The v0.9.0 Compose upgrade helper now prepares its bind-layout state
+  portably, and narrow Admin settings rails scroll instead of overflowing.
+- Portal text no longer drops below the readable floor, sticky headers survive
+  the body and root containers, and the phone ecosystem picker stays compact.
 
 ## [0.10.0] - 2026-09-15
 
