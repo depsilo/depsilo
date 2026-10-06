@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,10 +20,12 @@ import (
 )
 
 type Handler struct {
-	cacheMgr *cache.Manager
-	selector upstream.Selector
-	cfg      config.CacheConfig
-	db       *gorm.DB
+	cacheMgr  *cache.Manager
+	selector  upstream.Selector
+	cfg       config.CacheConfig
+	db        *gorm.DB
+	distMu    sync.Mutex
+	distCache map[string]distMemoEntry
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
@@ -126,7 +129,7 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 	start := time.Now()
 	cacheKey := DistCacheKey(vendor, pkg, reference, ext)
 
-	entry, err := h.resolveDistEntry(c.Request.Context(), vendor, pkg, versionNorm, reference)
+	entry, err := h.resolveDistEntryMemoized(c.Request.Context(), vendor, pkg, versionNorm, reference)
 	if err != nil {
 		zap.L().Error("failed to resolve composer dist metadata", zap.String("package", fullName), zap.Error(err))
 		adapter.LogAccess(c.Request.Context(), h.db, "composer", c.Request.Method, cacheKey, false, "", time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
