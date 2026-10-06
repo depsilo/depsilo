@@ -108,6 +108,62 @@ func TestParseAdvisoryCoversPyPIAndRubyGems(t *testing.T) {
 	}
 }
 
+func TestSyncMatchesPyPIAndRubyGemsRequestIdentities(t *testing.T) {
+	archive := buildZip(t, map[string]string{
+		"MAL-2026-PYPI.json": `{
+			"id":"MAL-2026-PYPI",
+			"summary":"malicious PyPI release",
+			"affected":[{
+				"package":{"ecosystem":"PyPI","name":"Evil_Package"},
+				"versions":["1.0.0"]
+			}]
+		}`,
+		"MAL-2026-GEM.json": `{
+			"id":"MAL-2026-GEM",
+			"summary":"malicious gem release",
+			"affected":[{
+				"package":{"ecosystem":"RubyGems","name":"evil_gem"},
+				"versions":["6.0.1"]
+			}]
+		}`,
+	})
+	srv := newMockOSV(t, archive)
+	defer srv.Close()
+
+	store := testStore(t)
+	syncer, err := NewSyncer(store, Config{MirrorURL: srv.URL, SyncInterval: "6h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := syncer.SyncOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// The adapter normalizes artifact identity before the check, so every
+	// PEP 503 spelling of the dataset row must match.
+	for _, spelling := range []string{"Evil_Package", "evil-package", "evil_package"} {
+		if m, _, err := store.Check(ctx, "pypi", spelling, "1.0.0"); err != nil || m == nil {
+			t.Fatalf("pypi check(%q) = %+v, %v; want match", spelling, m, err)
+		}
+	}
+	if m, _, _ := store.Check(ctx, "pypi", "evil-package", "2.0.0"); m != nil {
+		t.Fatalf("pypi unrelated version matched: %+v", m)
+	}
+
+	// RubyGems names keep their exact case; the adapter resolves the base
+	// version before checking, so platform artifacts match here too.
+	if m, _, err := store.Check(ctx, "rubygems", "evil_gem", "6.0.1"); err != nil || m == nil {
+		t.Fatalf("rubygems check = %+v, %v; want match", m, err)
+	}
+	if m, _, _ := store.Check(ctx, "rubygems", "Evil_Gem", "6.0.1"); m != nil {
+		t.Fatalf("rubygems case-folded name matched: %+v", m)
+	}
+	if m, _, _ := store.Check(ctx, "rubygems", "evil_gem", "7.0.0"); m != nil {
+		t.Fatalf("rubygems unrelated version matched: %+v", m)
+	}
+}
+
 type submitterFunc func(asyncruntime.Task) error
 
 func (submit submitterFunc) Submit(task asyncruntime.Task) error { return submit(task) }
