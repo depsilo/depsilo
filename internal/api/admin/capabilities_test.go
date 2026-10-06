@@ -81,7 +81,7 @@ func TestCapabilitySummaryDoesNotRefreshPolicy(t *testing.T) {
 func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 	enabled := true
 	bound := func(ecosystem string) bool {
-		return ecosystem == "npm" || ecosystem == "pypi" || ecosystem == "composer" || ecosystem == "nuget"
+		return ecosystem == "npm" || ecosystem == "pypi" || ecosystem == "composer" || ecosystem == "nuget" || ecosystem == "cargo"
 	}
 	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
 		MinReleaseAgeEnabled: &enabled,
@@ -90,12 +90,13 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 			"pypi":     "72h",
 			"composer": "72h",
 			"nuget":    "72h",
+			"cargo":    "72h",
 		},
 	}, bound)
 	if err != nil {
 		t.Fatalf("NewPolicyWithProvenance: %v", err)
 	}
-	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi", "composer", "nuget", "cargo"}, capabilityPolicyStub{}, nil, "", policy)
+	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi", "composer", "nuget", "cargo", "rubygems"}, capabilityPolicyStub{}, nil, "", policy)
 	r := gin.New()
 	r.GET("/summary", h.Summary)
 	response := httptest.NewRecorder()
@@ -113,14 +114,14 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 			facts[fact.Ecosystem] = fact
 		}
 	}
-	for _, ecosystem := range []string{"npm", "pypi", "composer", "nuget"} {
+	for _, ecosystem := range []string{"npm", "pypi", "composer", "nuget", "cargo"} {
 		fact := facts[ecosystem]
 		if fact.Support != "supported" || fact.Mode != "block" || fact.DataStatus != "source_bound" {
 			t.Fatalf("%s minimum_release_age fact = %+v", ecosystem, fact)
 		}
 	}
-	if cargo := facts["cargo"]; cargo.Support != "safety_disabled" || cargo.Mode != "off" || cargo.DataStatus != "never_synced" {
-		t.Fatalf("cargo minimum_release_age fact = %+v", cargo)
+	if rubygems := facts["rubygems"]; rubygems.Support != "safety_disabled" || rubygems.Mode != "off" || rubygems.DataStatus != "never_synced" {
+		t.Fatalf("rubygems minimum_release_age fact = %+v", rubygems)
 	}
 }
 

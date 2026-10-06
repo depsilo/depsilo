@@ -75,12 +75,13 @@ ADR-0004.
   local or S3-backed artifact storage, health monitoring, access and audit
   logs, Prometheus metrics, package rules, supply-chain intelligence, and
   webhook alerts.
-- Minimum-release-age enforcement is source-bound for npm, PyPI, Composer, and
-  NuGet. The npm packument publish time travels in the authenticated tarball
-  token; PyPI uses the PEP 691 JSON simple index `upload-time` from the same
-  upstream that declares the artifact, and HTML-only upstreams fail closed
+- Minimum-release-age enforcement is source-bound for npm, PyPI, Composer,
+  NuGet, and Cargo. The npm packument publish time travels in the authenticated
+  tarball token; PyPI uses the PEP 691 JSON simple index `upload-time` from the
+  same upstream that declares the artifact, and HTML-only upstreams fail closed
   while the gate is enabled; NuGet uses the v3 registration index's `published`
-  timestamp, treating the 1900 unlisted sentinel as missing provenance.
+  timestamp, treating the 1900 unlisted sentinel as missing provenance; Cargo
+  uses the sparse index entry's `pubtime` together with its `cksum` identity.
   Composer uses the p2 metadata entry's own `time` field but remains
   best-effort because Composer clients can fall back to the original dist URL
   after a 451. Every other ecosystem still rejects positive thresholds at

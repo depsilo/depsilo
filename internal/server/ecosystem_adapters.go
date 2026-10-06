@@ -135,30 +135,45 @@ func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystem
 	return result, nil
 }
 
-func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, pypiProvenanceKey []byte, nugetProvenanceRequired bool) error {
+type adapterProvenanceWiring struct {
+	pypiKey       []byte
+	nugetRequired bool
+	cargoRequired bool
+}
+
+func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, wiring adapterProvenanceWiring) error {
 	for _, definition := range definitions {
 		pool := pools[definition.name]
 		if pool == nil {
 			return fmt.Errorf("active ecosystem %s has no pool", definition.name)
 		}
 		handler := definition.factory(cacheMgr, upstream.NewPassiveRecoverySelector(pool), cacheConfig, database)
-		if definition.name == "pypi" && len(pypiProvenanceKey) > 0 {
+		if definition.name == "pypi" && len(wiring.pypiKey) > 0 {
 			setter, ok := handler.(interface {
 				SetArtifactSigningKey([]byte, bool) error
 			})
 			if !ok {
 				return fmt.Errorf("pypi adapter does not support provenance signing")
 			}
-			if err := setter.SetArtifactSigningKey(pypiProvenanceKey, true); err != nil {
+			if err := setter.SetArtifactSigningKey(wiring.pypiKey, true); err != nil {
 				return fmt.Errorf("enable pypi provenance: %w", err)
 			}
 		}
-		if definition.name == "nuget" && nugetProvenanceRequired {
+		if definition.name == "nuget" && wiring.nugetRequired {
 			setter, ok := handler.(interface {
 				SetProvenanceRequired(bool)
 			})
 			if !ok {
 				return fmt.Errorf("nuget adapter does not support provenance")
+			}
+			setter.SetProvenanceRequired(true)
+		}
+		if definition.name == "cargo" && wiring.cargoRequired {
+			setter, ok := handler.(interface {
+				SetProvenanceRequired(bool)
+			})
+			if !ok {
+				return fmt.Errorf("cargo adapter does not support provenance")
 			}
 			setter.SetProvenanceRequired(true)
 		}

@@ -47,11 +47,12 @@ Package managers / CI / coding agents
   apply operator-defined rules according to the
   [Package Rule capability matrix](docs/package-rules.md), and block
   known-malicious versions for the ecosystems listed below.
-  Minimum-release-age enforcement is source-bound for npm, PyPI, Composer, and
-  NuGet. PyPI requires an upstream that serves the PEP 691 JSON simple index
-  with `upload-time`; HTML-only upstreams fail closed while the gate is enabled.
-  NuGet uses the v3 registration index's `published` timestamp for the same
-  package version. Composer uses the p2 metadata's own `time` field but remains
+  Minimum-release-age enforcement is source-bound for npm, PyPI, Composer,
+  NuGet, and Cargo. PyPI requires an upstream that serves the PEP 691 JSON
+  simple index with `upload-time`; HTML-only upstreams fail closed while the
+  gate is enabled. NuGet uses the v3 registration index's `published` timestamp
+  for the same package version. Cargo uses the sparse index's own `pubtime` and
+  `cksum` fields. Composer uses the p2 metadata's own `time` field but remains
   best-effort because Composer clients fall back to the original dist URL on a
   451. Other ecosystems remain rejected until they are bound end to end.
 - **Verify** — record first-seen hashes and surface tamper alerts when immutable

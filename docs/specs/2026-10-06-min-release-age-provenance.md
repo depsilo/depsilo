@@ -24,6 +24,10 @@
   the v3 registration index's `published` time through the configured upstream
   (including paginated registration pages), treats the 1900 unlisted sentinel
   as missing provenance, and the policy accepts positive NuGet thresholds.
+- 2026-10-06: the Cargo slice is implemented — the download gate resolves the
+  sparse index entry's `pubtime` and `cksum` through the configured upstream,
+  memoizes the lookup, and the policy accepts positive Cargo thresholds.
+  Entries without a usable `pubtime` fail closed.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal

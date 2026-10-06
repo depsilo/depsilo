@@ -6,16 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
-- Minimum-release-age enforcement is available for npm, PyPI, Composer, and
-  NuGet. npm carries the packument `time[version]` inside the authenticated
+- Minimum-release-age enforcement is available for npm, PyPI, Composer, NuGet,
+  and Cargo. npm carries the packument `time[version]` inside the authenticated
   tarball token; PyPI negotiates the PEP 691 JSON simple index and carries
   `upload-time` with the exact upstream that declared the artifact; Composer
   uses the p2 metadata entry's own `time` field; NuGet uses the v3 registration
-  index's `published` timestamp for the same immutable version. Missing,
-  legacy, HTML-only, or unlisted metadata fails closed while the gate is
-  enabled. Composer remains best-effort because its clients can fall back to
-  the original dist URL after a 451, and every other ecosystem still rejects
-  positive thresholds at startup.
+  index's `published` timestamp for the same immutable version; Cargo uses the
+  sparse index entry's `pubtime` and `cksum`. Missing, legacy, HTML-only, or
+  unlisted metadata fails closed while the gate is enabled. Composer remains
+  best-effort because its clients can fall back to the original dist URL after
+  a 451, and every other ecosystem still rejects positive thresholds at
+  startup.
 
 ### Changed
 - The S3 release contract now runs against pinned RustFS, replacing the

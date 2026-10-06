@@ -637,7 +637,7 @@ func TestRegisterActiveAdaptersAddsOnlyStandardAndProjectPyPIRoutes(t *testing.T
 	}
 	engine := gin.New()
 	project := engine.Group("/p/:slug")
-	if err := registerActiveAdapters(engine, project, definitions, registry.Pools(), testCacheManager(t, database), config.CacheConfig{}, database, nil, false); err != nil {
+	if err := registerActiveAdapters(engine, project, definitions, registry.Pools(), testCacheManager(t, database), config.CacheConfig{}, database, adapterProvenanceWiring{}); err != nil {
 		t.Fatal(err)
 	}
 	paths := make([]string, 0)
@@ -695,8 +695,7 @@ func TestRegisteredStandardAdapterRecoversUnhealthyPassiveUpstream(t *testing.T)
 		testCacheManager(t, database),
 		config.CacheConfig{},
 		database,
-		nil,
-		false,
+		adapterProvenanceWiring{},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -841,8 +840,7 @@ func TestRegisterActiveAdaptersInjectsPyPIProvenanceKey(t *testing.T) {
 		testCacheManager(t, database),
 		config.CacheConfig{},
 		database,
-		[]byte(strings.Repeat("k", 32)),
-		false,
+		adapterProvenanceWiring{pypiKey: []byte(strings.Repeat("k", 32))},
 	); err != nil {
 		t.Fatalf("registerActiveAdapters with PyPI provenance key: %v", err)
 	}

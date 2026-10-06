@@ -24,13 +24,29 @@ type Handler struct {
 	selector upstream.Selector
 	cfg      config.CacheConfig
 	db       *gorm.DB
+	// provenanceRequired enables index-backed publish-time evidence. The
+	// composition root sets it only when a positive cargo threshold is active.
+	provenanceRequired bool
+	provenanceMemo     *cargoProvenanceMemo
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
-	return &Handler{cacheMgr: cacheMgr, selector: selector, cfg: cfg, db: database}
+	return &Handler{
+		cacheMgr:       cacheMgr,
+		selector:       selector,
+		cfg:            cfg,
+		db:             database,
+		provenanceMemo: &cargoProvenanceMemo{},
+	}
 }
 
 func (h *Handler) Type() string { return "cargo" }
+
+// SetProvenanceRequired enables crate-index publish-time provenance for
+// downloads.
+func (h *Handler) SetProvenanceRequired(required bool) {
+	h.provenanceRequired = required
+}
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
 	// Gin doesn't allow catch-all wildcard with sibling routes,
@@ -195,7 +211,18 @@ func (h *Handler) handleDownload(c *gin.Context) {
 	// Quarantine gate. (crate, version) come pre-parsed from the
 	// /api/v1/crates/<crate>/<version>/download path by
 	// handleRequest above — no extra parsing needed here.
-	if blocked := adapter.QuarantineGate(c, "cargo", crateName, version); blocked {
+	if h.provenanceRequired {
+		provenance := adapter.QuarantineProvenance{}
+		if published, cksum, ok := h.publishedProvenance(c.Request.Context(), crateName, version); ok {
+			provenance = adapter.QuarantineProvenance{
+				SourceID:  cargoArtifactSourceID(crateName, version, cksum),
+				PublishAt: published,
+			}
+		}
+		if blocked := adapter.QuarantineGateWithProvenance(c, "cargo", crateName, version, provenance); blocked {
+			return
+		}
+	} else if blocked := adapter.QuarantineGate(c, "cargo", crateName, version); blocked {
 		return
 	}
 	cacheKey := CrateCacheKey(crateName, version)

@@ -621,14 +621,17 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// with their standard counterparts, so runtime mutations are immediate.
 	projectGroup := r.Group("/p/:slug")
 	projectGroup.Use(middleware.ProjectSlugMiddleware(database))
-	var pypiProvenanceKey []byte
+	wiring := adapterProvenanceWiring{
+		nugetRequired: quarantinePolicy.Threshold("nuget") > 0,
+		cargoRequired: quarantinePolicy.Threshold("cargo") > 0,
+	}
 	if quarantinePolicy.Threshold("pypi") > 0 {
-		pypiProvenanceKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)
+		wiring.pypiKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)
 		if err != nil {
 			return nil, fmt.Errorf("derive pypi provenance signing key: %w", err)
 		}
 	}
-	if err := registerActiveAdapters(r, projectGroup, activeDefs, pools, cacheMgr, cfg.Cache, database, pypiProvenanceKey, quarantinePolicy.Threshold("nuget") > 0); err != nil {
+	if err := registerActiveAdapters(r, projectGroup, activeDefs, pools, cacheMgr, cfg.Cache, database, wiring); err != nil {
 		return nil, err
 	}
 
@@ -788,7 +791,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 //   - composer: p2 metadata time passed with the declared dist artifact
 func sourceBoundMinimumReleaseAge(ecosystem string) bool {
 	switch ecosystem {
-	case "npm", "pypi", "composer", "nuget":
+	case "npm", "pypi", "composer", "nuget", "cargo":
 		return true
 	default:
 		return false

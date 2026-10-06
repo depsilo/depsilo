@@ -335,7 +335,7 @@ scan_interval = "24h"
 check_ttl = "24h"
 # proxy = "http://127.0.0.1:7890"
 
-# ─── Minimum release age — npm, PyPI, Composer, NuGet source-bound ──────
+# ─── Minimum release age — npm, PyPI, Composer, NuGet, Cargo ────────────
 #
 # npm enforces the gate from the packument's time[version], carried inside the
 # same authenticated token that pins the tarball to its serving Upstream.
@@ -349,6 +349,8 @@ check_ttl = "24h"
 # NuGet enforces it from the v3 registration index's published timestamp for
 # the same immutable package version; the 1900 unlisted sentinel is treated as
 # missing provenance and fails closed.
+# Cargo enforces it from the sparse index entry's pubtime for the exact version
+# and checksum; entries without pubtime fail closed.
 # Every other ecosystem still rejects positive thresholds at startup because
 # its artifact source and timestamp are not yet bound end to end.
 #
@@ -367,7 +369,7 @@ default  = "0"
 pypi     = "0"   # e.g. "3d"; requires a PEP 691 JSON simple-index upstream
 npm      = "0"   # e.g. "7d" once min_release_age_enabled = true
 go       = "0"
-cargo    = "0"
+cargo    = "0"   # e.g. "3d"; uses the sparse index pubtime field
 maven    = "0"
 rubygems = "0"
 composer = "0"   # best-effort: clients can fall back to the original dist URL
