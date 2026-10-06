@@ -463,6 +463,12 @@ contact = ""
 [audit]
 checkpoint_file     = ""
 checkpoint_interval = "15m"
+# Optional remote anchor: the same NDJSON checkpoint line is POSTed to this
+# endpoint (WORM gateway, log platform, or a service that timestamps on
+# receipt). Receivers should deduplicate on (head_id, head_hash); a failed
+# delivery retries after 60s. The URL and token are never returned by the API.
+# checkpoint_url   = "https://worm.example/audit-anchors"
+# checkpoint_token = ""
 
 # ── Tamper detection (content integrity of immutable artifacts) ──
 # Records the SHA-256 of each immutable artifact (wheel/.crate/.gem/…)

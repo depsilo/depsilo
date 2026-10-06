@@ -15,8 +15,8 @@ import (
 
 // AuditHandler handles Pro audit log API endpoints.
 type AuditHandler struct {
-	db         *gorm.DB
-	anchorPath string
+	db     *gorm.DB
+	anchor *audit.Anchor
 }
 
 // NewAuditHandler creates a new AuditHandler.
@@ -24,10 +24,11 @@ func NewAuditHandler(database *gorm.DB) *AuditHandler {
 	return &AuditHandler{db: database}
 }
 
-// SetAnchorPath points integrity checks at the chain-head checkpoint file, so
-// a whole-database rewrite is compared against a copy that left the database.
-func (h *AuditHandler) SetAnchorPath(path string) {
-	h.anchorPath = path
+// SetAnchor points integrity checks at the running chain anchor, so a
+// whole-database rewrite is compared against checkpoints that left the
+// database, and the admin surface can report the remote feed's health.
+func (h *AuditHandler) SetAnchor(anchor *audit.Anchor) {
+	h.anchor = anchor
 }
 
 // List returns paginated audit log entries.
@@ -68,12 +69,18 @@ func (h *AuditHandler) Integrity(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTEGRITY_CHECK_FAILED", "message": err.Error()})
 		return
 	}
-	anchors, err := audit.VerifyAnchors(c.Request.Context(), h.db, h.anchorPath)
+	anchorPath := ""
+	feed := audit.AnchorFeedStatus{}
+	if h.anchor != nil {
+		anchorPath = h.anchor.CheckpointPath()
+		feed = h.anchor.FeedStatus()
+	}
+	anchors, err := audit.VerifyAnchors(c.Request.Context(), h.db, anchorPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTEGRITY_CHECK_FAILED", "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"integrity": report, "anchors": anchors})
+	c.JSON(http.StatusOK, gin.H{"integrity": report, "anchors": anchors, "anchor_feed": feed})
 }
 
 func (h *AuditHandler) parseQuery(c *gin.Context) audit.Query {

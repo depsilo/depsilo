@@ -72,6 +72,12 @@ type AuditConfig struct {
 	CheckpointFile string `mapstructure:"checkpoint_file"`
 	// CheckpointInterval between head checkpoints (default 15m).
 	CheckpointInterval time.Duration `mapstructure:"checkpoint_interval"`
+	// CheckpointURL receives the same NDJSON checkpoint line over HTTP POST,
+	// for WORM gateways and log platforms that cannot read the local file.
+	// Receivers should deduplicate on (head_id, head_hash).
+	CheckpointURL string `mapstructure:"checkpoint_url"`
+	// CheckpointToken is an optional bearer token for CheckpointURL.
+	CheckpointToken string `mapstructure:"checkpoint_token"`
 }
 
 // ComplianceConfig is the operator-owned input for CRA-mode SBOM exports.

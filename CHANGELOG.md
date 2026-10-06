@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- Audit checkpoints can be pushed directly to a remote anchor
+  (`[audit] checkpoint_url` + optional bearer token) instead of relying on an
+  operator to ship the local file: the same NDJSON line is POSTed whenever the
+  head changes, with per-sink deduplication, a 60-second retry after failures,
+  and delivery status (`remote_head_id`, `remote_last_success_at`,
+  `remote_last_error`) in the integrity API and the audit page. A stalled
+  remote feed is reported as a warning; a checkpoint that contradicts the
+  stored row remains a hard failure with its id.
 - Audit chain anchoring: an optional `[audit] checkpoint_file` receives
   append-only chain-head checkpoints (NDJSON, fsynced, one line per changed
   head). `depsilo audit verify`, the integrity API, and the audit page

@@ -517,6 +517,15 @@ export interface AuditAnchorReport {
 export interface AuditIntegrityResponse {
   integrity: AuditChainReport
   anchors: AuditAnchorReport
+  anchor_feed?: {
+    file_configured: boolean
+    file_last_success_at?: string
+    file_last_error?: string
+    remote_configured: boolean
+    remote_last_success_at?: string
+    remote_head_id?: number
+    remote_last_error?: string
+  }
 }
 
 export interface RuleRequest { ecosystem: string; package_name: string; version: string; action: 'allow' | 'deny'; reason: string }

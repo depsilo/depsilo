@@ -1691,6 +1691,8 @@ const zh = {
       anchorVerified: '锚点：{{count}} 个检查点，最新 #{{head}}',
       anchorEmpty: '锚点已配置，尚未生成检查点',
       anchorBroken: '审计链与外部锚点矛盾（第 {{id}} 行）：{{reason}}。数据库可能被整体重建，请用锚点文件与备份核对。',
+      remoteVerified: '远程锚点已同步 #{{head}}',
+      remoteError: '远程锚点投递失败：{{message}}（链仍在本地校验，但远端副本已落后）',
     },
 
     // Monitor

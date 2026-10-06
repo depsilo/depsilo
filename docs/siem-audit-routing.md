@@ -118,6 +118,9 @@ database:
 [audit]
 checkpoint_file     = "/var/lib/depsilo-audit/anchors.ndjson"  # different volume/bucket
 checkpoint_interval = "15m"
+# or push directly, without relying on the operator to ship the file:
+# checkpoint_url   = "https://worm.example/audit-anchors"
+# checkpoint_token = "…"
 ```
 
 Each line is one checkpoint:
@@ -134,6 +137,16 @@ storage or a log platform on a schedule; that copy is what makes a
 full-database rewrite provable rather than merely suspicious. Malformed
 checkpoint lines are skipped and counted instead of hiding the rest of the
 file.
+
+`checkpoint_url` removes the shipping step: the same NDJSON line is POSTed
+(`Authorization: Bearer <checkpoint_token>` when set) whenever the head
+changes, with per-sink deduplication, a 60-second retry after a failure, and
+delivery status (`remote_head_id`, `remote_last_success_at`,
+`remote_last_error`) surfaced in the integrity API and the audit page. A
+remote delivery failure is a warning, not a chain contradiction: the local
+chain still verifies, but the off-box copy is behind. RFC 3161 timestamp
+authorities are out of scope; point the URL at a service that records arrival
+time (most log platforms and WORM gateways do).
 
 ## Admin surface
 
@@ -162,6 +175,5 @@ access.
 - Per-event routing rules beyond the action/outcome filter.
 - Mutually authenticated TLS (mTLS) to the collector; terminate that in a
   sidecar or reverse proxy.
-- External anchoring of the chain head (WORM storage, timestamping authority,
-  or a remote head checkpoint). An attacker with database access can rewrite
-  the whole chain from the first row; the SIEM's copy is the current anchor.
+- RFC 3161 timestamp authorities (see the anchoring section above for the
+  supported HTTP push).

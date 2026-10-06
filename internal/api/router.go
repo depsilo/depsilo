@@ -83,6 +83,7 @@ type Deps struct {
 	BlocklistStore  *blocklist.Store
 	SnapshotStore   *snapshot.Store
 	AuditForwarder  *audit.Forwarder
+	AuditAnchor     *audit.Anchor
 	BlocklistSyncer *blocklist.Syncer
 	BlocklistMode   string
 	Tasks           asyncruntime.Submitter
@@ -324,9 +325,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// and ADR-0003. They mount on the regular adminGroup (auth-only, no
 	// entitlement gate).
 	auditHandler := admin.NewAuditHandler(deps.DB)
-	if deps.Config != nil {
-		auditHandler.SetAnchorPath(deps.Config.Audit.CheckpointFile)
-	}
+	auditHandler.SetAnchor(deps.AuditAnchor)
 	adminRead.GET("/audit-logs", auditHandler.List)
 	adminRead.GET("/audit-logs/export", auditHandler.Export)
 	adminRead.GET("/audit/integrity", auditHandler.Integrity)

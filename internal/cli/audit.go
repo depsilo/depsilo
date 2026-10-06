@@ -58,7 +58,10 @@ func runAudit(args []string) int {
 		return printAuditError(jsonMode, err)
 	}
 	if jsonMode {
-		printJSON(map[string]any{"ok": report.OK && anchors.OK, "integrity": report, "anchors": anchors})
+		printJSON(map[string]any{
+			"ok": report.OK && anchors.OK, "integrity": report, "anchors": anchors,
+			"remote_anchor_configured": strings.TrimSpace(cfg.Audit.CheckpointURL) != "",
+		})
 		if !report.OK || !anchors.OK {
 			return 1
 		}
@@ -85,6 +88,9 @@ func runAudit(args []string) int {
 		if anchors.InvalidLines > 0 {
 			fmt.Printf("  anchor lines skipped as malformed: %d\n", anchors.InvalidLines)
 		}
+	}
+	if strings.TrimSpace(cfg.Audit.CheckpointURL) != "" {
+		fmt.Println("  remote anchor configured: verify its checkpoints at the receiving end (the local database cannot prove them)")
 	}
 	return 0
 }

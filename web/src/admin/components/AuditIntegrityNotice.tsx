@@ -22,6 +22,7 @@ export default function AuditIntegrityNotice() {
   })
   const report = query.data?.data.integrity
   const anchors = query.data?.data.anchors
+  const feed = query.data?.data.anchor_feed
 
   const verifyButton = (
     <ButtonV2
@@ -54,6 +55,16 @@ export default function AuditIntegrityNotice() {
     )
   }
   if (!report) return null
+  if (feed?.remote_configured && feed.remote_last_error) {
+    return (
+      <InlineNotice tone="warning">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span>{t('auditIntegrity.remoteError', { message: feed.remote_last_error })}</span>
+          {verifyButton}
+        </div>
+      </InlineNotice>
+    )
+  }
   if (anchors?.configured && !anchors.ok) {
     return (
       <InlineNotice tone="danger">
@@ -103,6 +114,9 @@ export default function AuditIntegrityNotice() {
                 head: anchors.latest_head_id ?? 0,
               })
               : t('auditIntegrity.anchorEmpty')}`
+            : ''}
+          {feed?.remote_configured && feed.remote_last_success_at
+            ? ` · ${t('auditIntegrity.remoteVerified', { head: feed.remote_head_id ?? 0 })}`
             : ''}
         </span>
         {verifyButton}

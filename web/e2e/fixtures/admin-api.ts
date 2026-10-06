@@ -279,6 +279,10 @@ const canonicalAdminApiDefaults = {
       checkpoints: 0,
       ok: true,
     },
+    anchor_feed: {
+      file_configured: false,
+      remote_configured: false,
+    },
   } satisfies AuditIntegrityResponse,
 }
 

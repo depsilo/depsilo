@@ -1,7 +1,7 @@
-import type { AuditChainReport } from '../src/lib/adminApi.types'
+import type { AuditChainReport, AuditIntegrityResponse } from '../src/lib/adminApi.types'
 import { expect, mockAdminApi, test } from './fixtures/admin-api'
 
-function integrity(overrides: Partial<AuditChainReport>): { integrity: AuditChainReport } {
+function integrity(overrides: Partial<AuditChainReport>): AuditIntegrityResponse {
   return {
     integrity: {
       ok: true,
@@ -14,6 +14,8 @@ function integrity(overrides: Partial<AuditChainReport>): { integrity: AuditChai
       scanned_at: '2026-10-06T10:00:00Z',
       ...overrides,
     },
+    anchors: { configured: false, checkpoints: 0, ok: true },
+    anchor_feed: { file_configured: false, remote_configured: false },
   }
 }
 
@@ -39,4 +41,21 @@ test('audit page surfaces a broken chain with the offending row', async ({ page 
 
   await expect(page.getByText(/审计链在第 842 行断裂/)).toBeVisible()
   await expect(page.getByText(/hash does not match the row content/)).toBeVisible()
+})
+
+test('audit page warns when the remote anchor feed is behind', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/audit/integrity': {
+      ...integrity({}),
+      anchor_feed: {
+        file_configured: false,
+        remote_configured: true,
+        remote_last_error: 'anchor endpoint returned HTTP 503',
+      },
+    },
+  })
+  await page.goto('/admin/audit')
+
+  await expect(page.getByText(/远程锚点投递失败/)).toBeVisible()
+  await expect(page.getByText(/HTTP 503/)).toBeVisible()
 })

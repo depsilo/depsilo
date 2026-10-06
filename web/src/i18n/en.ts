@@ -1684,6 +1684,8 @@ const en = {
       anchorVerified: 'anchors: {{count}} checkpoints, latest #{{head}}',
       anchorEmpty: 'anchoring is configured but no checkpoint exists yet',
       anchorBroken: 'The audit chain contradicts its external anchor at row {{id}}: {{reason}}. The database may have been rebuilt as a whole; compare the anchor file and your backups.',
+      remoteVerified: 'remote anchor synced #{{head}}',
+      remoteError: 'Remote anchor delivery failed: {{message}} (the local chain still verifies, but the off-box copy is behind)',
     },
 
     // Monitor
