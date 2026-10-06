@@ -41,16 +41,15 @@ auditable.
 
 ## Positioning
 
-The current implementation is differentiated by sitting directly on the
-dependency request path: it can cache, verify, audit, and refuse content at the
-moment a package is requested rather than only scanning and reporting later.
+Depsilo is a supply-chain enforcement layer plus cache until 1.0. It is
+differentiated by sitting directly on the dependency request path: it can
+cache, verify, audit, and refuse content at the moment a package is requested
+rather than only scanning and reporting later.
 
-The confirmed future direction is to expand Depsilo into a general-purpose
-artifact repository. That direction is not a claim about the current release:
-the product today is primarily a multi-ecosystem proxy, cache, and
-supply-chain enforcement service. The exact hosting, publishing, repository
-management, and migration scope of the future artifact repository remains to
-be defined.
+A general-purpose artifact repository is a candidate post-1.0 direction
+recorded in ADR-0005, not a commitment and not part of the current release.
+Reopening that direction requires a new ADR that explicitly supersedes
+ADR-0004.
 
 ## Operating Context
 
@@ -64,9 +63,9 @@ be defined.
   settings.
 - Package-manager behavior should stay familiar to End Users. Policy failures
   must explain what was refused and what an Operator can do next.
-- Depsilo may coexist with an existing registry or Upstream. Future
-  general-purpose repository work must define how proxying, hosted artifacts,
-  and enforcement compose.
+- Depsilo may coexist with an existing registry or Upstream. Post-1.0
+  repository work, if it is ever committed, must define how proxying, hosted
+  artifacts, and enforcement compose.
 
 ## Capabilities and Constraints
 
@@ -88,16 +87,20 @@ be defined.
   the current database authority; multi-node HA is not a shipped capability.
 - The web product is bilingual in Chinese and English. Native mobile clients
   are not part of the current product.
-- The commercial model is undecided. Do not present `$99 lifetime Pro`,
-  Enterprise contract licensing, trial terms, or future premium boundaries as
-  durable product truth until this decision is resolved.
-- General-purpose artifact repository support is a confirmed future direction,
-  not a shipped capability. Its formats, hosted-repository workflows,
-  permissions, retention model, and compatibility promises are open decisions.
-- This future direction conflicts with the accepted non-goal in
-  `docs/adr/0004-supply-chain-enforcement-layer.md`. PRODUCT.md records the
-  newer product intent; the ADR must be reconsidered separately before it is
-  used to guide repository architecture.
+- The entitlement boundary is decided: governance primitives (minimum release
+  age, known-malicious blocklist, OSV scanning, package rules, quarantine,
+  audit logs, and webhooks) are open source; multi-project workspaces and the
+  runtime per-project SBOM export are Pro features with a 14-day trial.
+  Pricing, packaging, and support terms remain undecided. Do not present
+  `$99 lifetime Pro` or Enterprise contract licensing as durable product
+  truth.
+- General-purpose artifact repository support is a candidate post-1.0
+  direction recorded in ADR-0005, not a shipped capability or a pre-1.0
+  commitment. Its formats, hosted-repository workflows, permissions,
+  retention model, and compatibility promises remain undefined.
+- ADR-0005 reconciles the earlier conflict between PRODUCT.md and ADR-0004:
+  ADR-0004's general-purpose-repository non-goal stays in force until 1.0,
+  and any post-1.0 direction requires a new superseding ADR.
 
 ## Brand Commitments
 
@@ -148,9 +151,9 @@ be defined.
    tolerance, and safe recovery protect every End User build.
 3. **Enforce transparently.** Security decisions must be explainable,
    auditable, and reversible only through explicit Operator action.
-4. **Grow without pretending the future has shipped.** Evolve toward a
-   general-purpose artifact repository while clearly separating current
-   capability from planned scope.
+4. **Grow without pretending the future has shipped.** Keep pre-1.0 scope on
+   request-path enforcement; record any post-1.0 repository direction
+   separately and never present it as current capability.
 5. **Preserve self-hosted trust.** Keep the open-source core inspectable, avoid
    telemetry, and never hide integrations or configuration changes.
 

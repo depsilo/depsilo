@@ -3,6 +3,10 @@
 **Status:** accepted
 **Date:** 2026-06-30
 **Supersedes parts of:** [ADR-0003 (Supply-Chain Control Point)](./0003-supply-chain-control-point.md)
+**Amended by:** [ADR-0005 (Enforcement First Until 1.0)](./0005-enforcement-first-until-1-0.md)
+— keeps this ADR's general-purpose-repository non-goal in force for the pre-1.0
+horizon and replaces its undecided Pro-tier question with a decided entitlement
+boundary.
 **Companion docs:**
 - Research: [`docs/research/2026-06-30-competitive-landscape.md`](../research/2026-06-30-competitive-landscape.md)
 - North star: [`docs/DIRECTION.md`](../DIRECTION.md)

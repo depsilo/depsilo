@@ -26,7 +26,8 @@ Single-context repo:
 │       ├── 0001-pools-map.md
 │       ├── 0002-access-log-rollup.md
 │       ├── 0003-supply-chain-control-point.md
-│       └── 0004-supply-chain-enforcement-layer.md
+│       ├── 0004-supply-chain-enforcement-layer.md
+│       └── 0005-enforcement-first-until-1-0.md
 ├── internal/
 └── web/src/
 ```

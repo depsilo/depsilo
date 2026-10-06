@@ -1,10 +1,11 @@
 # Depsilo — Product & Engineering Direction
 
 > Historical strategy snapshot from 2026-06-30. It is retained as decision
-> context, not as the current backlog. `PRODUCT.md` records the newer intent to
-> serve individuals/small teams and eventually grow toward a general-purpose
-> artifact repository. Any architecture that contradicts ADR-0004 still needs
-> an explicit superseding ADR.
+> context, not as the current backlog. [ADR-0005](./adr/0005-enforcement-first-until-1-0.md)
+> (2026-10-06) is the current authority for scope, sequencing, and the
+> entitlement boundary; `PRODUCT.md` records current product intent. Any
+> architecture that contradicts ADR-0004 still needs an explicit superseding
+> ADR.
 
 > A north-star brief for **Claude Code**. Read this before picking up roadmap work.
 > It explains where Depsilo stands, the strategic bet, and a prioritized build
