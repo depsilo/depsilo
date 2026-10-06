@@ -2,6 +2,17 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+# The contract asserts the candidate's schema, so read the version from the
+# candidate source instead of duplicating it here and letting it drift.
+expected_schema_version=$(
+  sed -n 's/^const CurrentSchemaVersion = \([0-9][0-9]*\)$/\1/p' "$root/internal/db/repository.go"
+)
+[[ -n "$expected_schema_version" ]] || {
+  echo 'unable to read CurrentSchemaVersion from internal/db/repository.go' >&2
+  exit 1
+}
+
 baseline_tag=v0.9.1
 baseline_commit=773b9ad673615d5df6a8281f7cb658e3df84527d
 baseline_compose_sha256=5abaad918604e045a32eacb81a4db14019e6a3c3d33d2f82be61e3bbe1a2a3ae
@@ -331,13 +342,14 @@ curl --fail --silent --show-error \
 docker stop --time 20 "$container_id" >/dev/null
 mkdir -p "$database_snapshot"
 docker cp "$container_id:/root/.depsilo/data/." "$database_snapshot/" >/dev/null
-python3 - "$database_snapshot/depsilo.db" <<'PY'
+python3 - "$database_snapshot/depsilo.db" "$expected_schema_version" <<'PY'
 import sqlite3
 import sys
 
 database = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+expected_schema_version = int(sys.argv[2])
 checks = {
-    "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 4,
+    "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == expected_schema_version,
     "administrator": database.execute(
         "SELECT COUNT(*) FROM users WHERE username = 'v091-image-upgrade-admin' AND role = 'admin' AND enabled = 1"
     ).fetchone()[0] == 1,
@@ -360,4 +372,4 @@ if failed:
     raise SystemExit("v0.9.1 image/state upgrade contract is incomplete: " + ", ".join(failed))
 PY
 
-echo 'v0.9.1 immutable image/state -> current upgrade contract passed (published digest, shipped named-volume layout, config, schema v4, password/JWT/API tokens, entitlement, safe package-rule migration)'
+echo "v0.9.1 immutable image/state -> current upgrade contract passed (published digest, shipped named-volume layout, config, schema v$expected_schema_version, password/JWT/API tokens, entitlement, safe package-rule migration)"

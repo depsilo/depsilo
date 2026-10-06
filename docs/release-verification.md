@@ -3,7 +3,7 @@
 Tagged releases do not start publishing assets until the offline verification
 workflow and release qualification are green. Qualification exercises all 14
 package-manager clients, Docker OCI, pinned ccache and sccache clients, real
-MinIO S3 behavior, the long-range v0.9.0 source/Compose upgrade contracts, and
+S3 storage behavior, the long-range v0.9.0 source/Compose upgrade contracts, and
 the direct-predecessor v0.9.1 source plus immutable image/state contract.
 Releases then stay in draft state until all archives and tray bundles are
 available, the Linux archive executes, its checksum set verifies, the candidate

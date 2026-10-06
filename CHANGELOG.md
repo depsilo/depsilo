@@ -49,6 +49,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   portably, and narrow Admin settings rails scroll instead of overflowing.
 - Portal text no longer drops below the readable floor, sticky headers survive
   the body and root containers, and the phone ecosystem picker stays compact.
+- The S3 release contract now runs against a pinned SeaweedFS image, because
+  MinIO withdrew its public community images and binaries in October 2026. The
+  contract still verifies signed streaming, multipart upload, listing,
+  deletion, and cross-platform images through an authenticated endpoint.
+- The v0.9.0 and v0.9.1 release upgrade contracts now derive the expected
+  schema version from the candidate source instead of a hardcoded value, and
+  wait for the legacy artifact cache row before shutting the fixture down.
 
 ## [0.10.0] - 2026-09-15
 

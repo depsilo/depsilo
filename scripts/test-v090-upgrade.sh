@@ -6,6 +6,16 @@ current_binary=${DEPSILO_UPGRADE_BINARY:-$root/bin/depsilo}
 baseline_tag=${DEPSILO_UPGRADE_BASELINE_TAG:-v0.9.0}
 baseline_commit=${DEPSILO_UPGRADE_BASELINE_COMMIT:-71e9f029877e66ae9fdb353e134358bfa55c280c}
 
+# The contract asserts the candidate's schema, so read the version from the
+# candidate source instead of duplicating it here and letting it drift.
+expected_schema_version=$(
+  sed -n 's/^const CurrentSchemaVersion = \([0-9][0-9]*\)$/\1/p' "$root/internal/db/repository.go"
+)
+[[ -n "$expected_schema_version" ]] || {
+  echo 'unable to read CurrentSchemaVersion from internal/db/repository.go' >&2
+  exit 1
+}
+
 for command in git go tar curl jq python3; do
   command -v "$command" >/dev/null 2>&1 || { echo "$command is required" >&2; exit 1; }
 done
@@ -269,6 +279,26 @@ old_tarball_url=$(jq -er '.versions["1.0.0"].dist.tarball' <<<"$old_metadata")
 old_artifact=$(curl --fail --silent --show-error "$old_tarball_url")
 [[ "$old_artifact" == 'depsilo-v0.9.0-cache-artifact' ]] || { echo 'v0.9.0 artifact cache seed failed' >&2; exit 1; }
 
+# v0.9.0 can finish persisting the artifact cache row after the response body
+# has been delivered. Wait for the fixture state asserted below before the
+# graceful shutdown so the contract does not race the cache write.
+artifact_rows=0
+for _ in $(seq 1 100); do
+  artifact_rows=$(python3 - "$database" <<'PY'
+import sqlite3
+import sys
+
+database = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+print(database.execute(
+    "SELECT COUNT(*) FROM cache_entries WHERE key = 'npm/upgrade-fixture/-/upgrade-fixture-1.0.0.tgz'"
+).fetchone()[0])
+PY
+  )
+  [[ "$artifact_rows" == "1" ]] && break
+  sleep 0.1
+done
+[[ "$artifact_rows" == "1" ]] || { echo 'v0.9.0 artifact cache row did not persist' >&2; exit 1; }
+
 stop_server "$old_log"
 kill -TERM "$mock_pid"
 wait "$mock_pid" >/dev/null 2>&1 || true
@@ -390,12 +420,13 @@ curl --fail --silent --show-error \
   --header "Authorization: Bearer $current_admin_token" \
   "$origin/api/v1/admin/projects" >/dev/null
 
-python3 - "$database" "$entitlement_snapshot" <<'PY'
+python3 - "$database" "$entitlement_snapshot" "$expected_schema_version" <<'PY'
 import json
 import sqlite3
 import sys
 
 database = sqlite3.connect(sys.argv[1])
+expected_schema_version = int(sys.argv[3])
 expected = {
     "administrator": database.execute(
         "SELECT COUNT(*) FROM users WHERE username = 'upgrade-admin' AND role = 'admin' AND enabled = 1"
@@ -419,7 +450,7 @@ expected = {
     "configured upstream": database.execute(
         "SELECT COUNT(*) FROM upstream_records WHERE adapter_type = 'npm' AND name = 'upgrade-fixture'"
     ).fetchone()[0],
-        "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 4,
+        "schema version": database.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == expected_schema_version,
 }
 failed = [name for name, value in expected.items() if value not in (1, True)]
 if failed:
