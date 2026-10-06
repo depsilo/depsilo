@@ -135,6 +135,11 @@ func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystem
 	return result, nil
 }
 
+// adapterProvenanceWiring carries the composition-root decisions each adapter
+// needs. The *Required fields enable release-age provenance for a positive
+// threshold, except rubygemsRequired which also turns on compact-index
+// identity when the known-malicious dataset covers RubyGems (dataset identity
+// and release age share the same resolution path).
 type adapterProvenanceWiring struct {
 	pypiKey              []byte
 	pypiBlocklistCovered bool
