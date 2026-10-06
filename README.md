@@ -58,8 +58,9 @@ Package managers / CI / coding agents
   acknowledge through `supply_chain.approximate_sources`. CRAN uses the
   DESCRIPTION `Date/Publication` for the current source tarball and falls back
   to the artifact's Last-Modified for archives and binaries, so it also
-  requires the approximate acknowledgement. Composer uses the p2 metadata's own
-  `time` field but remains best-effort because Composer clients fall back to
+  requires the approximate acknowledgement. Maven and Alpine use the artifact's
+  Last-Modified under the same acknowledgement. Composer uses the p2 metadata's
+  own `time` field but remains best-effort because Composer clients fall back to
   the original dist URL on a 451. Other ecosystems remain rejected until they
   are bound end to end.
 - **Verify** — record first-seen hashes and surface tamper alerts when immutable

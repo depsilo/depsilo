@@ -84,31 +84,67 @@ func TestMinimumReleaseAgeRejectsUnsupportedPositiveThresholdWhenEnabled(t *test
 
 func TestMinimumReleaseAgeApproximateSourceRequiresAcknowledgement(t *testing.T) {
 	enabled := true
-	_, err := NewPolicyWithProvenance(Config{
-		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"conda": "72h"},
-	}, nil)
-	if err == nil || !strings.Contains(err.Error(), "approximate") {
-		t.Fatalf("unacknowledged conda threshold error = %v, want approximate guidance", err)
+	for _, ecosystem := range []string{"conda", "cran", "maven", "alpine"} {
+		t.Run(ecosystem, func(t *testing.T) {
+			_, err := NewPolicyWithProvenance(Config{
+				MinReleaseAgeEnabled: &enabled,
+				MinReleaseAge:        map[string]string{ecosystem: "72h"},
+			}, nil)
+			if err == nil || !strings.Contains(err.Error(), "approximate") {
+				t.Fatalf("unacknowledged %s threshold error = %v, want approximate guidance", ecosystem, err)
+			}
+
+			policy, err := NewPolicyWithProvenance(Config{
+				MinReleaseAgeEnabled: &enabled,
+				MinReleaseAge:        map[string]string{ecosystem: "72h"},
+				ApproximateSources:   []string{ecosystem},
+			}, nil)
+			if err != nil {
+				t.Fatalf("NewPolicyWithProvenance(acknowledged %s): %v", ecosystem, err)
+			}
+			if got := policy.Threshold(ecosystem); got != 72*time.Hour {
+				t.Fatalf("Threshold(%s) = %v, want 72h", ecosystem, got)
+			}
+			if !policy.SourceProvenanceBound(ecosystem) || !policy.ApproximateProvenance(ecosystem) {
+				t.Fatalf("%s bound=%v approximate=%v, want both true",
+					ecosystem, policy.SourceProvenanceBound(ecosystem), policy.ApproximateProvenance(ecosystem))
+			}
+			if policy.ApproximateProvenance("npm") {
+				t.Fatal("npm reported as approximate provenance")
+			}
+		})
+	}
+}
+
+func TestMinimumReleaseAgeAcknowledgedUnsupportedEcosystemIsRejected(t *testing.T) {
+	enabled := true
+	// Helm and Docker are not approximate-capable yet: the operator listing
+	// them in approximate_sources must not make a positive threshold safe.
+	for _, ecosystem := range []string{"helm", "docker"} {
+		_, err := NewPolicyWithProvenance(Config{
+			MinReleaseAgeEnabled: &enabled,
+			MinReleaseAge:        map[string]string{ecosystem: "72h"},
+			ApproximateSources:   []string{ecosystem},
+		}, nil)
+		if err == nil {
+			t.Fatalf("acknowledged %s threshold was accepted", ecosystem)
+		}
+		if !strings.Contains(err.Error(), "approximate_sources does not enable it") {
+			t.Fatalf("acknowledged %s error = %v, want actionable guidance", ecosystem, err)
+		}
 	}
 
 	policy, err := NewPolicyWithProvenance(Config{
 		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"conda": "72h"},
-		ApproximateSources:   []string{"conda"},
+		MinReleaseAge:        map[string]string{"helm": "0"},
+		ApproximateSources:   []string{"helm"},
 	}, nil)
 	if err != nil {
-		t.Fatalf("NewPolicyWithProvenance(acknowledged conda): %v", err)
+		t.Fatalf("NewPolicyWithProvenance(zero helm threshold): %v", err)
 	}
-	if got := policy.Threshold("conda"); got != 72*time.Hour {
-		t.Fatalf("Threshold(conda) = %v, want 72h", got)
-	}
-	if !policy.SourceProvenanceBound("conda") || !policy.ApproximateProvenance("conda") {
-		t.Fatalf("conda bound=%v approximate=%v, want both true",
-			policy.SourceProvenanceBound("conda"), policy.ApproximateProvenance("conda"))
-	}
-	if policy.ApproximateProvenance("npm") {
-		t.Fatal("npm reported as approximate provenance")
+	if policy.SourceProvenanceBound("helm") || policy.ApproximateProvenance("helm") {
+		t.Fatalf("helm bound=%v approximate=%v, want both false",
+			policy.SourceProvenanceBound("helm"), policy.ApproximateProvenance("helm"))
 	}
 }
 

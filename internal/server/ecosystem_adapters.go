@@ -142,6 +142,8 @@ type adapterProvenanceWiring struct {
 	rubygemsRequired bool
 	condaRequired    bool
 	cranRequired     bool
+	mavenRequired    bool
+	alpineRequired   bool
 }
 
 func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, wiring adapterProvenanceWiring) error {
@@ -204,6 +206,24 @@ func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definiti
 			})
 			if !ok {
 				return fmt.Errorf("cran adapter does not support provenance")
+			}
+			setter.SetProvenanceRequired(true)
+		}
+		if definition.name == "maven" && wiring.mavenRequired {
+			setter, ok := handler.(interface {
+				SetProvenanceRequired(bool)
+			})
+			if !ok {
+				return fmt.Errorf("maven adapter does not support provenance")
+			}
+			setter.SetProvenanceRequired(true)
+		}
+		if definition.name == "alpine" && wiring.alpineRequired {
+			setter, ok := handler.(interface {
+				SetProvenanceRequired(bool)
+			})
+			if !ok {
+				return fmt.Errorf("alpine adapter does not support provenance")
 			}
 			setter.SetProvenanceRequired(true)
 		}

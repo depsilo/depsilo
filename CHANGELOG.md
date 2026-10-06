@@ -19,10 +19,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   capability summary labels it approximate. CRAN joins under the same
   acknowledgement: the current source tarball uses the DESCRIPTION
   `Date/Publication`, and archives or binaries use the artifact's
-  Last-Modified. Missing, legacy, HTML-only, or unlisted metadata fails closed
-  while the gate is enabled. Composer remains best-effort because its clients
-  can fall back to the original dist URL after a 451, and every other ecosystem
-  still rejects positive thresholds at startup.
+  Last-Modified. Maven and Alpine also join with approximate Last-Modified
+  provenance (the exact artifact is HEADed through the serving upstream, and
+  lookups are memoized per upstream and path). Missing, legacy, HTML-only, or
+  unlisted metadata fails closed while the gate is enabled. Composer remains
+  best-effort because its clients can fall back to the original dist URL after
+  a 451, and every other ecosystem still rejects positive thresholds at
+  startup.
 
 ### Changed
 - The S3 release contract now runs against pinned RustFS, replacing the

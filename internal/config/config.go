@@ -76,7 +76,9 @@ type SupplyChainConfig struct {
 	// ApproximateSources lists ecosystems whose positive thresholds are
 	// accepted with approximate (Last-Modified) provenance. Operators must opt
 	// in explicitly because the timestamp is weaker than a registry's exact
-	// publish time.
+	// publish time. The acknowledgement only takes effect for ecosystems whose
+	// adapter already provides that provenance; listing any other ecosystem
+	// leaves its positive threshold rejected at startup.
 	ApproximateSources []string `mapstructure:"approximate_sources"`
 	Mode               string   `mapstructure:"mode"`
 	Allow              []string `mapstructure:"allow"`

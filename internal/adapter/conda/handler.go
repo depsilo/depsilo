@@ -22,15 +22,15 @@ type Handler struct {
 	// must acknowledge the approximate source before the policy accepts a
 	// positive conda threshold.
 	provenanceRequired bool
-	provenanceMemo     *condaProvenanceMemo
+	approximate        *adapter.ApproximateProvenance
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
 	return &Handler{
-		selector:       selector,
-		proxy:          adapter.NewTransparentProxy("conda", cacheMgr, selector, database),
-		cfg:            cfg,
-		provenanceMemo: &condaProvenanceMemo{},
+		selector:    selector,
+		proxy:       adapter.NewTransparentProxy("conda", cacheMgr, selector, database),
+		cfg:         cfg,
+		approximate: adapter.NewApproximateProvenance(),
 	}
 }
 
@@ -57,13 +57,7 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	// repodata.json and channeldata.json pass through.
 	if pkg, version := packagekey.ParseCondaPath(path); pkg != "" && version != "" {
 		if h.provenanceRequired {
-			provenance := adapter.QuarantineProvenance{}
-			if lastModified, upstreamSource, ok := h.publishedProvenance(c.Request.Context(), path); ok {
-				provenance = adapter.QuarantineProvenance{
-					SourceID:  condaArtifactSourceID(upstreamSource, path),
-					PublishAt: lastModified,
-				}
-			}
+			provenance, _ := h.approximate.Resolve(c.Request.Context(), h.selector, "conda", path)
 			if blocked := adapter.QuarantineGateWithProvenance(c, "conda", pkg, version, provenance); blocked {
 				return
 			}

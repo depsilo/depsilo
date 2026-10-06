@@ -42,6 +42,13 @@
   while archives and binaries use the artifact's Last-Modified (approximate).
   Positive thresholds require `approximate_sources = ["cran"]`, and the
   capability summary reports `approximate`.
+- 2026-10-06: the Maven and Alpine slices are implemented with the spec's
+  approximate path. Both HEAD the exact artifact through the configured
+  upstream, share the memoizing `adapter.ApproximateProvenance` helper
+  (1h positive / 30s negative, keyed by upstream and path), require the
+  ecosystem in `approximate_sources`, and report `approximate` in the
+  capability summary. Helm and Docker stay deferred: listing them in
+  `approximate_sources` does not enable them yet.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal
@@ -168,7 +175,9 @@ authenticated token.
    `Last-Modified` of the artifact response from the same source. This is a
    weaker claim; it requires an explicit operator acknowledgement before a
    positive threshold is accepted, and the capability summary must label it
-   `approximate`.
+   `approximate`. Maven and Alpine have landed; Helm still needs
+   `index.yaml`-based resolution to recover the chart identity behind a
+   `.tgz` name, and Docker needs a registry-token-aware HEAD.
 4. **Go and APT** — remain without a gate: Go has no publish-time authority
    and APT has no per-version timestamp.
 

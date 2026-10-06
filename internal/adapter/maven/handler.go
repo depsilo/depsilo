@@ -15,15 +15,29 @@ import (
 )
 
 type Handler struct {
-	proxy *adapter.TransparentProxy
-	cfg   config.CacheConfig
+	selector           upstream.Selector
+	proxy              *adapter.TransparentProxy
+	cfg                config.CacheConfig
+	provenanceRequired bool
+	approximate        *adapter.ApproximateProvenance
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
-	return &Handler{proxy: adapter.NewTransparentProxy("maven", cacheMgr, selector, database), cfg: cfg}
+	return &Handler{
+		selector:    selector,
+		proxy:       adapter.NewTransparentProxy("maven", cacheMgr, selector, database),
+		cfg:         cfg,
+		approximate: adapter.NewApproximateProvenance(),
+	}
 }
 
 func (h *Handler) Type() string { return "maven" }
+
+// SetProvenanceRequired enables approximate Last-Modified provenance for
+// Maven artifacts.
+func (h *Handler) SetProvenanceRequired(required bool) {
+	h.provenanceRequired = required
+}
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.GET("/*path", h.handleRequest)
@@ -39,7 +53,12 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	// Quarantine gate. Maven packaging extensions are open-ended, so the
 	// repository layout identifies artifacts; metadata paths pass through.
 	if coord, version := packagekey.ParseMavenPath(path); coord != "" && version != "" {
-		if blocked := adapter.QuarantineGate(c, "maven", coord, version); blocked {
+		if h.provenanceRequired {
+			provenance, _ := h.approximate.Resolve(c.Request.Context(), h.selector, "maven", path)
+			if blocked := adapter.QuarantineGateWithProvenance(c, "maven", coord, version, provenance); blocked {
+				return
+			}
+		} else if blocked := adapter.QuarantineGate(c, "maven", coord, version); blocked {
 			return
 		}
 	}

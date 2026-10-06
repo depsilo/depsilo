@@ -93,7 +93,8 @@ ADR-0004.
   `approximate` rather than `source_bound`. CRAN is available under the same
   acknowledgement: the current source tarball uses the DESCRIPTION
   `Date/Publication`, while archives and binaries use the artifact's
-  Last-Modified.
+  Last-Modified. Maven and Alpine are available under the same acknowledgement
+  and use the artifact's Last-Modified as the approximate publish time.
   Delivered, unreleased, and planned security capabilities must be described
   according to the actual release state rather than presented as uniformly
   available.

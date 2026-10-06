@@ -106,7 +106,9 @@ type Config struct {
 	MinReleaseAge map[string]string `mapstructure:"min_release_age"`
 
 	// ApproximateSources lists ecosystems whose positive thresholds are
-	// accepted with approximate (Last-Modified) provenance.
+	// accepted with approximate (Last-Modified) provenance. Only ecosystems
+	// whose adapters already provide that provenance are bound by this
+	// acknowledgement; other entries have no effect.
 	ApproximateSources []string `mapstructure:"approximate_sources"`
 
 	// Mode: "block" and "warn" are supported. "serve_last_eligible" is
@@ -179,10 +181,19 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 	}
 
 	var defaultThreshold time.Duration
+	// approximate holds the ecosystems whose adapters really provide
+	// Last-Modified provenance; acknowledged records every ecosystem the
+	// operator listed so the rejection can explain why an unsupported entry
+	// has no effect.
 	approximate := make(map[string]bool, len(cfg.ApproximateSources))
+	acknowledged := make(map[string]bool, len(cfg.ApproximateSources))
 	for _, ecosystem := range cfg.ApproximateSources {
 		normalized := strings.ToLower(strings.TrimSpace(ecosystem))
-		if normalized != "" {
+		if normalized == "" {
+			continue
+		}
+		acknowledged[normalized] = true
+		if approximateCapable(normalized) {
 			approximate[normalized] = true
 		}
 	}
@@ -209,6 +220,12 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 			if approximateCapable(normalizedKey) {
 				return nil, fmt.Errorf(
 					"quarantine: minimum release age for ecosystem %q needs approximate Last-Modified provenance; add it to supply_chain.approximate_sources to acknowledge the weaker timestamp, or set its threshold to 0",
+					normalizedKey,
+				)
+			}
+			if acknowledged[normalizedKey] {
+				return nil, fmt.Errorf(
+					"quarantine: minimum release age for ecosystem %q is not supported safely; its adapter does not provide approximate Last-Modified provenance yet, so supply_chain.approximate_sources does not enable it; set its threshold to 0 or disable the age gate",
 					normalizedKey,
 				)
 			}
@@ -286,7 +303,7 @@ func (p *Policy) ApproximateProvenance(ecosystem string) bool {
 // a listed ecosystem through approximate_sources.
 func approximateCapable(ecosystem string) bool {
 	switch ecosystem {
-	case "conda", "cran":
+	case "conda", "cran", "maven", "alpine":
 		return true
 	default:
 		return false
