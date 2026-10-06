@@ -144,6 +144,7 @@ type adapterProvenanceWiring struct {
 	cranRequired     bool
 	mavenRequired    bool
 	alpineRequired   bool
+	helmRequired     bool
 }
 
 func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, wiring adapterProvenanceWiring) error {
@@ -224,6 +225,15 @@ func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definiti
 			})
 			if !ok {
 				return fmt.Errorf("alpine adapter does not support provenance")
+			}
+			setter.SetProvenanceRequired(true)
+		}
+		if definition.name == "helm" && wiring.helmRequired {
+			setter, ok := handler.(interface {
+				SetProvenanceRequired(bool)
+			})
+			if !ok {
+				return fmt.Errorf("helm adapter does not support provenance")
 			}
 			setter.SetProvenanceRequired(true)
 		}

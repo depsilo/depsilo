@@ -49,6 +49,15 @@
   ecosystem in `approximate_sources`, and report `approximate` in the
   capability summary. Helm and Docker stay deferred: listing them in
   `approximate_sources` does not enable them yet.
+- 2026-10-06: the Helm slice is implemented with the spec's approximate path
+  plus index-based identity. Because `<name>-<version>.tgz` cannot be split
+  safely, the gate streams the same upstream's `index.yaml` (bounded scan,
+  memoized per upstream and path) and requires exactly one entry whose
+  name/version reconstruct the filename and whose declared URL matches the
+  request. The chart is then HEADed for its Last-Modified. Helm requires
+  `approximate_sources = ["helm"]`. Docker stays deferred: listing it in
+  `approximate_sources` does not enable it, and it still needs a
+  registry-token-aware HEAD.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal
@@ -175,9 +184,8 @@ authenticated token.
    `Last-Modified` of the artifact response from the same source. This is a
    weaker claim; it requires an explicit operator acknowledgement before a
    positive threshold is accepted, and the capability summary must label it
-   `approximate`. Maven and Alpine have landed; Helm still needs
-   `index.yaml`-based resolution to recover the chart identity behind a
-   `.tgz` name, and Docker needs a registry-token-aware HEAD.
+   `approximate`. Maven, Alpine, and Helm have landed; Docker still needs a
+   registry-token-aware HEAD before its positive threshold is accepted.
 4. **Go and APT** — remain without a gate: Go has no publish-time authority
    and APT has no per-version timestamp.
 

@@ -362,6 +362,9 @@ check_ttl = "24h"
 # approximate acknowledgement.
 # Maven and Alpine HEAD the exact artifact through the configured upstream and
 # use its Last-Modified; both require the same approximate acknowledgement.
+# Helm resolves the chart identity from the same upstream's index.yaml (the
+# filename cannot be split safely) and HEADs the exact chart for its
+# Last-Modified; it requires the same approximate acknowledgement too.
 # Every other ecosystem still rejects positive thresholds at startup because
 # its artifact source and timestamp are not yet bound end to end.
 #
@@ -376,9 +379,9 @@ mode = "block"
 fail_closed = true
 # Ecosystems whose positive thresholds rely on approximate Last-Modified
 # provenance must be listed explicitly, for example
-# ["conda", "cran", "maven", "alpine"]. Helm and Docker do not provide that
-# provenance yet, so listing them here has no effect and their positive
-# thresholds stay rejected at startup.
+# ["conda", "cran", "maven", "alpine", "helm"]. Docker does not provide that
+# provenance yet, so listing it here has no effect and its positive threshold
+# stays rejected at startup.
 approximate_sources = []
 
 [supply_chain.min_release_age]
@@ -393,7 +396,7 @@ composer = "0"   # best-effort: clients can fall back to the original dist URL
 nuget    = "0"   # e.g. "3d"; uses the v3 registration published timestamp
 conda    = "0"   # e.g. "3d"; requires approximate_sources = ["conda"]
 cran     = "0"   # e.g. "3d"; requires approximate_sources = ["cran"]
-helm     = "0"
+helm     = "0"   # e.g. "3d"; resolves identity from index.yaml; requires approximate_sources = ["helm"]
 alpine   = "0"   # e.g. "3d"; requires approximate_sources = ["alpine"]
 docker   = "0"
 huggingface = "0"

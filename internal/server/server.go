@@ -630,6 +630,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		cranRequired:     quarantinePolicy.Threshold("cran") > 0,
 		mavenRequired:    quarantinePolicy.Threshold("maven") > 0,
 		alpineRequired:   quarantinePolicy.Threshold("alpine") > 0,
+		helmRequired:     quarantinePolicy.Threshold("helm") > 0,
 	}
 	if quarantinePolicy.Threshold("pypi") > 0 {
 		wiring.pypiKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)

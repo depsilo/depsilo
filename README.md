@@ -59,10 +59,12 @@ Package managers / CI / coding agents
   DESCRIPTION `Date/Publication` for the current source tarball and falls back
   to the artifact's Last-Modified for archives and binaries, so it also
   requires the approximate acknowledgement. Maven and Alpine use the artifact's
-  Last-Modified under the same acknowledgement. Composer uses the p2 metadata's
-  own `time` field but remains best-effort because Composer clients fall back to
-  the original dist URL on a 451. Other ecosystems remain rejected until they
-  are bound end to end.
+  Last-Modified under the same acknowledgement. Helm resolves the chart
+  identity from the same upstream's `index.yaml` because chart filenames cannot
+  be split into name and version safely, then HEADs the exact chart for its
+  Last-Modified. Composer uses the p2 metadata's own `time` field but remains
+  best-effort because Composer clients fall back to the original dist URL on a
+  451. Other ecosystems remain rejected until they are bound end to end.
 - **Verify** — record first-seen hashes and surface tamper alerts when immutable
   artifacts change during a natural refresh.
 - **Audit** — keep requests, policy decisions, and Upstream health visible in

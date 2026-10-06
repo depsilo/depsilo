@@ -282,6 +282,12 @@ it requires exactly one authoritative compact-index match across every hyphen
 split, resolves `created_at` and the checksum from that entry, and fails closed
 when the index is unavailable or the artifact is ambiguous. Enabling it adds no
 Package Rule or OSV-scan support for RubyGems.
+Helm's minimum-release-age gate follows the same principle from `index.yaml`:
+the identity must come from exactly one entry whose declared URL matches the
+request and whose name/version reconstruct the filename, the chart's
+Last-Modified supplies the approximate timestamp, and an artifact the index
+does not declare is refused. Neither seam exposes Helm in the Package Rule form
+or API.
 Docker is also outside the Package Rule seam; its registry/image/tag-or-digest
 identity remains owned by the separate OCI control plane.
 Hugging Face repository identities remain on the quarantine surface and are

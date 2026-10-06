@@ -303,7 +303,7 @@ func (p *Policy) ApproximateProvenance(ecosystem string) bool {
 // a listed ecosystem through approximate_sources.
 func approximateCapable(ecosystem string) bool {
 	switch ecosystem {
-	case "conda", "cran", "maven", "alpine":
+	case "conda", "cran", "maven", "alpine", "helm":
 		return true
 	default:
 		return false

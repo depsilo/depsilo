@@ -21,11 +21,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   `Date/Publication`, and archives or binaries use the artifact's
   Last-Modified. Maven and Alpine also join with approximate Last-Modified
   provenance (the exact artifact is HEADed through the serving upstream, and
-  lookups are memoized per upstream and path). Missing, legacy, HTML-only, or
-  unlisted metadata fails closed while the gate is enabled. Composer remains
-  best-effort because its clients can fall back to the original dist URL after
-  a 451, and every other ecosystem still rejects positive thresholds at
-  startup.
+  lookups are memoized per upstream and path). Helm joins under the same
+  acknowledgement: the chart identity comes from a streamed `index.yaml`
+  scan (chart filenames cannot be split safely), the exact chart is HEADed for
+  its Last-Modified, and artifacts the index does not declare are refused.
+  Missing, legacy, HTML-only, or unlisted metadata fails closed while the gate
+  is enabled. Composer remains best-effort because its clients can fall back to
+  the original dist URL after a 451, and every other ecosystem still rejects
+  positive thresholds at startup.
 
 ### Changed
 - The S3 release contract now runs against pinned RustFS, replacing the

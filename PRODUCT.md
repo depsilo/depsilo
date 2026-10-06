@@ -94,7 +94,9 @@ ADR-0004.
   acknowledgement: the current source tarball uses the DESCRIPTION
   `Date/Publication`, while archives and binaries use the artifact's
   Last-Modified. Maven and Alpine are available under the same acknowledgement
-  and use the artifact's Last-Modified as the approximate publish time.
+  and use the artifact's Last-Modified as the approximate publish time. Helm
+  resolves the chart identity from the same upstream's `index.yaml` (the
+  filename is ambiguous) and then applies the same Last-Modified rule.
   Delivered, unreleased, and planned security capabilities must be described
   according to the actual release state rather than presented as uniformly
   available.

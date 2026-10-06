@@ -118,9 +118,9 @@ func TestMinimumReleaseAgeApproximateSourceRequiresAcknowledgement(t *testing.T)
 
 func TestMinimumReleaseAgeAcknowledgedUnsupportedEcosystemIsRejected(t *testing.T) {
 	enabled := true
-	// Helm and Docker are not approximate-capable yet: the operator listing
+	// Docker is not approximate-capable yet: the operator listing
 	// them in approximate_sources must not make a positive threshold safe.
-	for _, ecosystem := range []string{"helm", "docker"} {
+	for _, ecosystem := range []string{"docker"} {
 		_, err := NewPolicyWithProvenance(Config{
 			MinReleaseAgeEnabled: &enabled,
 			MinReleaseAge:        map[string]string{ecosystem: "72h"},
@@ -136,15 +136,15 @@ func TestMinimumReleaseAgeAcknowledgedUnsupportedEcosystemIsRejected(t *testing.
 
 	policy, err := NewPolicyWithProvenance(Config{
 		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"helm": "0"},
-		ApproximateSources:   []string{"helm"},
+		MinReleaseAge:        map[string]string{"docker": "0"},
+		ApproximateSources:   []string{"docker"},
 	}, nil)
 	if err != nil {
-		t.Fatalf("NewPolicyWithProvenance(zero helm threshold): %v", err)
+		t.Fatalf("NewPolicyWithProvenance(zero docker threshold): %v", err)
 	}
-	if policy.SourceProvenanceBound("helm") || policy.ApproximateProvenance("helm") {
-		t.Fatalf("helm bound=%v approximate=%v, want both false",
-			policy.SourceProvenanceBound("helm"), policy.ApproximateProvenance("helm"))
+	if policy.SourceProvenanceBound("docker") || policy.ApproximateProvenance("docker") {
+		t.Fatalf("docker bound=%v approximate=%v, want both false",
+			policy.SourceProvenanceBound("docker"), policy.ApproximateProvenance("docker"))
 	}
 }
 
