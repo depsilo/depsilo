@@ -686,7 +686,19 @@ export default function UpstreamsV2() {
                       </time>
                     ) : <span>{t('upstreams.neverChecked')}</span>}
                     {upstream.proxy && <span>{t('upstreams.proxyEnabled')}</span>}
-                    {upstream.via && <span>{t('upstreams.viaValue', { peer: upstream.via })}</span>}
+                    {upstream.via && (
+                      <span style={cascadeInfo && !cascadeInfo.peers.some(peer => peer.name === upstream.via)
+                        ? { color: 'var(--warn-text)' }
+                        : undefined}
+                      >
+                        {t(
+                          cascadeInfo && !cascadeInfo.peers.some(peer => peer.name === upstream.via)
+                            ? 'upstreams.viaValueMissing'
+                            : 'upstreams.viaValue',
+                          { peer: upstream.via },
+                        )}
+                      </span>
+                    )}
                     {upstream.id && checkFailures.has(upstream.id) && (
                       <span style={{ color: 'var(--danger-text)' }}>
                         {t('upstreams.checkRequestFailedShort')}

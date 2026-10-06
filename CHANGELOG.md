@@ -16,7 +16,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   loops with `508`, keep private targets behind the parent's configured
   upstream origins, and strip credentials unless a peer opts in. Multi-level
   cache hits arrive at LAN speed; Docker, shared control plane, HA, and
-  multi-peer bandwidth aggregation remain out of scope.
+  multi-peer bandwidth aggregation remain out of scope. A read-only
+  Admin → Upstreams → Cascade page shows the node role, instance ID, parent
+  peers, egress bindings, and dangling peer references.
 
 ### Fixed
 - The installer resolves the newest release through the

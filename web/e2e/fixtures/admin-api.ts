@@ -222,8 +222,10 @@ const canonicalAdminApiDefaults = {
   'GET /api/v1/admin/cascade': {
     enabled: false,
     instance_id: 'e2e-parent',
+    relay_path: '/_depsilo/relay/v1',
     max_hops: 4,
     max_ttl_seconds: 604800,
+    allow_insecure_http: false,
     peers: [],
   } satisfies AdminCascadeInfo,
   'GET /api/v1/admin/upstreams/latency': { series: [] } satisfies AdminUpstreamLatenciesResponse,

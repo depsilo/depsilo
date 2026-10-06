@@ -14,7 +14,8 @@ interface MetricProps {
    * presenting higher latency as success or lower traffic as failure.
    */
   changeIntent?: MetricChangeIntent
-  valueTone?: 'default' | 'ok'
+  /** `warn` is for a count that needs attention without being an error. */
+  valueTone?: 'default' | 'ok' | 'warn'
   /** Override default 40 (top-row KPI) — pass 28 for "secondary" metric rows. */
   size?: CSSProperties['fontSize']
   /** Operational summaries scan left-to-right; legacy report grids remain centered. */
@@ -54,7 +55,11 @@ export default function Metric({
           fontSize: size,
           lineHeight: 1.05,
           fontWeight: 600,
-          color: valueTone === 'ok' ? 'var(--ok-text)' : 'var(--text)',
+          color: valueTone === 'ok'
+            ? 'var(--ok-text)'
+            : valueTone === 'warn'
+              ? 'var(--warn-text)'
+              : 'var(--text)',
         }}
       >
         {value}

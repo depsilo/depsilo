@@ -118,7 +118,8 @@ Create and Update accept an optional `via` field naming a cascade peer configure
 `[cascade]`. The value is stored with the upstream and points egress at that peer;
 an unknown or malformed peer name fails with `422 INVALID_UPSTREAM` before anything
 is committed. `GET /api/v1/admin/cascade` returns the deployment-level peer list
-(names and URLs, never tokens).
+(names and URLs, never tokens); the Admin Cascade tab renders that topology together
+with the `via` bindings from the upstream list.
 
 Upstream validation and lifecycle errors use `400 BAD_REQUEST`, `404 NOT_FOUND`,
 `409 CONFLICT`, `409 LAST_UPSTREAM`, `409 ECOSYSTEM_NOT_ACTIVE`,

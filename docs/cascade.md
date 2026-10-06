@@ -78,6 +78,10 @@ priority = 2
 Existing installations can bind an upstream to a peer in
 **Admin → Upstreams** instead of editing `config.toml`; the peer list itself
 stays in the configuration file because it carries addresses and secrets.
+The **Admin → Upstreams → Cascade** tab is a read-only view of the cascade
+state: this node's role and instance ID, configured parents, which upstreams
+egress through them, and any binding whose parent has been removed from the
+configuration.
 
 ## Operational notes
 

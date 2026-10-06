@@ -16,6 +16,7 @@ export const adminRouteComponents = {
   cacheIndexes: lazyRoute(adminRouteLoaders.cacheIndexes),
   compileCache: lazyRoute(adminRouteLoaders.compileCache),
   upstreams: lazyRoute(adminRouteLoaders.upstreams),
+  cascade: lazyRoute(adminRouteLoaders.cascade),
   upstreamUpdates: lazyRoute(adminRouteLoaders.upstreamUpdates),
   accessLogs: lazyRoute(adminRouteLoaders.accessLogs),
   auditLogs: lazyRoute(adminRouteLoaders.auditLogs),

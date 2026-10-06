@@ -16,10 +16,11 @@ import (
 func TestCascadeHandlerReturnsTopologyWithoutSecrets(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewCascadeHandler(config.CascadeConfig{
-		Enabled: true,
-		Token:   "mesh-secret-token-0123456789",
-		MaxHops: 3,
-		MaxTTL:  12 * time.Hour,
+		Enabled:           true,
+		Token:             "mesh-secret-token-0123456789",
+		MaxHops:           3,
+		MaxTTL:            12 * time.Hour,
+		AllowInsecureHTTP: true,
 		Peers: []config.CascadePeerConfig{{
 			Name:               "home",
 			URL:                "http://192.168.1.10:23333",
@@ -43,6 +44,9 @@ func TestCascadeHandlerReturnsTopologyWithoutSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !response.Enabled || response.InstanceID != "node-1" || response.MaxHops != 3 {
+		t.Fatalf("response = %#v", response)
+	}
+	if response.RelayPath != "/_depsilo/relay/v1" || !response.AllowInsecureHTTP {
 		t.Fatalf("response = %#v", response)
 	}
 	if response.MaxTTLSeconds != int64((12 * time.Hour).Seconds()) {

@@ -864,8 +864,10 @@ export interface AdminCascadePeer {
 export interface AdminCascadeInfo {
   enabled: boolean
   instance_id: string
+  relay_path: string
   max_hops: number
   max_ttl_seconds: number
+  allow_insecure_http: boolean
   peers: AdminCascadePeer[]
 }
 

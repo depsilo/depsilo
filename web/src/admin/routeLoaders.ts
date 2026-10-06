@@ -12,6 +12,7 @@ export const adminRouteLoaders: Record<AdminRouteId, () => Promise<{ default: Co
   cacheIndexes: () => import('./pages/CacheIndexes'),
   compileCache: () => import('./pages/CompileCache'),
   upstreams: () => import('./pages/Upstreams'),
+  cascade: () => import('./pages/Cascade'),
   upstreamUpdates: () => import('./pages/UpstreamUpdates'),
   accessLogs: () => import('./pages/AccessLogs'),
   auditLogs: () => import('./pages/AuditLogs'),

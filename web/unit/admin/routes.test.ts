@@ -19,6 +19,7 @@ const expectedRoutes = {
   cacheIndexes: '/admin/indexes',
   compileCache: '/admin/compile-cache',
   upstreams: '/admin/upstreams',
+  cascade: '/admin/cascade',
   upstreamUpdates: '/admin/upstream-updates',
   users: '/admin/users',
   license: '/admin/license',
@@ -30,7 +31,7 @@ const expectedRoutes = {
 
 const expectedGroups = [
   { id: 'overview', routes: ['dashboard'] },
-  { id: 'upstreams', routes: ['upstreams'] },
+  { id: 'upstreams', routes: ['upstreams', 'cascade'] },
   { id: 'cache', routes: ['cache', 'cacheIndexes', 'compileCache'] },
   { id: 'logs', routes: ['accessLogs', 'upstreamUpdates', 'auditLogs'] },
   { id: 'security', routes: ['security', 'quarantine', 'rules'] },
@@ -85,10 +86,11 @@ describe('Admin route manifest', () => {
     expect(resolveWorkspaceNavigation('/ADMIN/COMPILE-CACHE/')?.id).toBe('cache')
     expect(resolveWorkspaceNavigation('/admin/audit')?.id).toBe('logs')
     expect(resolveWorkspaceNavigation('/admin/users')?.id).toBe('instance')
+    expect(resolveWorkspaceNavigation('/admin/cascade')?.id).toBe('upstreams')
+    expect(resolveWorkspaceNavigation('/admin/upstreams')?.id).toBe('upstreams')
 
     // Single-destination workspaces keep the standalone page title.
     expect(resolveWorkspaceNavigation('/admin')).toBeUndefined()
-    expect(resolveWorkspaceNavigation('/admin/upstreams')).toBeUndefined()
     expect(resolveWorkspaceNavigation('/admin/projects')).toBeUndefined()
 
     // Hidden onboarding and attention routes are not sibling destinations.
