@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixed
+- The installer resolves the newest release through the
+  `github.com/depsilo/depsilo/releases/latest` redirect instead of the
+  unauthenticated GitHub REST API, which allows only 60 requests per hour per
+  IP. A shared NAT or office network that exhausted that quota made
+  `curl -fsSL https://depsilo.com/install.sh | bash` fail with "Could not
+  fetch the latest release metadata"; the API remains the fallback for
+  downloaders or networks where the redirect is unavailable.
+
 ## [0.11.0] - 2026-10-06
 
 ### Added

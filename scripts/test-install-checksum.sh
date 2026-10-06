@@ -95,4 +95,49 @@ assert_not_contains "$SUCCESS_OUTPUT" 'config.toml'
 assert_not_contains "$SUCCESS_OUTPUT" 'Docker'
 assert_not_contains "$SUCCESS_OUTPUT" 'docker'
 
+# The latest-release lookup must survive the unauthenticated GitHub API rate
+# limit: prefer the releases/latest redirect and fall back to the API.
+mkdir fakebin-curl-redirect
+printf '%s\n' \
+    '#!/bin/sh' \
+    'case "$*" in' \
+    '  *-fsSLI*) printf '\''%s\n'\'' "https://github.com/depsilo/depsilo/releases/tag/v9.9.9" ;;' \
+    '  *) exit 7 ;;' \
+    'esac' > fakebin-curl-redirect/curl
+chmod +x fakebin-curl-redirect/curl
+(
+    PATH="$TMP/fakebin-curl-redirect:$PATH"
+    DOWNLOAD_TOOL="curl"
+    [ "$(resolve_latest_version)" = "v9.9.9" ]
+)
+
+mkdir fakebin-curl-fallback
+printf '%s\n' \
+    '#!/bin/sh' \
+    'case "$*" in' \
+    '  *-fsSLI*) exit 22 ;;' \
+    '  *api.github.com*) printf '\''{"tag_name":"v8.8.8"}\n'\'' ;;' \
+    '  *) exit 7 ;;' \
+    'esac' > fakebin-curl-fallback/curl
+chmod +x fakebin-curl-fallback/curl
+(
+    PATH="$TMP/fakebin-curl-fallback:$PATH"
+    DOWNLOAD_TOOL="curl"
+    [ "$(resolve_latest_version)" = "v8.8.8" ]
+)
+
+mkdir fakebin-curl-broken
+printf '%s\n' \
+    '#!/bin/sh' \
+    'exit 22' > fakebin-curl-broken/curl
+chmod +x fakebin-curl-broken/curl
+if (
+    PATH="$TMP/fakebin-curl-broken:$PATH"
+    DOWNLOAD_TOOL="curl"
+    resolve_latest_version >/dev/null 2>&1
+); then
+    echo "broken release lookup was reported as success" >&2
+    exit 1
+fi
+
 echo "install checksum tests passed"

@@ -92,7 +92,12 @@ git push origin vX.Y.Z
 - [ ] Published image starts and `/ready` succeeds in the automated smoke test
 
 ### Post-release
-- [ ] `curl -fsSL https://depsilo.com/install.sh | bash` works on clean machine
+- [ ] `curl -fsSL https://depsilo.com/install.sh | bash` works on a clean
+      machine. The one-liner must resolve the newest tag without the
+      rate-limited REST API, and the pinned form
+      (`DEPSILO_VERSION=vX.Y.Z`) must install the release being verified.
+      `https://depsilo.com/install.sh` is a redirect to the `install.sh` asset
+      of the latest release, so installer fixes ship with the next release
 - [ ] `docker run ghcr.io/depsilo/depsilo:latest` starts successfully
 - [ ] Release notes published on GitHub Releases
 

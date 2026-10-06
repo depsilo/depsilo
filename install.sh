@@ -102,6 +102,32 @@ verify_checksum() {
     info "Checksum verified"
 }
 
+# resolve_latest_version prints the newest release tag. It prefers the
+# releases/latest redirect because the unauthenticated REST API allows only 60
+# requests per hour per IP — shared NATs, CI runners, and offices exhaust that
+# easily, and a rate-limited API must not break the documented one-liner. The
+# API stays as a fallback for downloaders or networks where HEAD/redirects are
+# unavailable.
+resolve_latest_version() {
+    local effective tag release_json
+    if [ "$DOWNLOAD_TOOL" = "curl" ]; then
+        effective=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+            "https://github.com/${REPO}/releases/latest" 2>/dev/null || true)
+        case "$effective" in
+            */releases/tag/*)
+                printf '%s\n' "${effective##*/}"
+                return 0
+                ;;
+        esac
+    fi
+    release_json=$(fetch_stdout "https://api.github.com/repos/${REPO}/releases/latest") || return 1
+    tag=$(printf '%s\n' "$release_json" \
+        | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
+        | head -1)
+    [ -n "$tag" ] || return 1
+    printf '%s\n' "$tag"
+}
+
 # Keep the verifier sourceable for its shell regression tests without running
 # downloads or installation as a side effect. Do not infer this from
 # BASH_SOURCE: the documented `curl ... | bash` invocation has no script path.
@@ -133,12 +159,9 @@ select_downloader
 # --- fetch latest version ---
 if [ "$VERSION" = "latest" ]; then
     info "Fetching latest release..."
-    if ! RELEASE_JSON=$(fetch_stdout "https://api.github.com/repos/${REPO}/releases/latest"); then
+    if ! VERSION=$(resolve_latest_version); then
         err "Could not fetch the latest release metadata"
     fi
-    VERSION=$(printf '%s\n' "$RELEASE_JSON" \
-        | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
-        | head -1)
     if [ -z "$VERSION" ]; then
         err "Could not determine latest version. Try setting DEPSILO_VERSION=vX.Y.Z"
     fi
