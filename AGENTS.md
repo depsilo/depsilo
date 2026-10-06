@@ -42,6 +42,7 @@ Use the narrowest current authority for the fact in question:
   `web/src/` plus the tokens in `web/src/index.css`.
 - Admin runtime authority: [docs/admin-control-plane.md](docs/admin-control-plane.md).
 - Compatibility promises: [docs/compatibility.md](docs/compatibility.md).
+- Threat model and accepted risks: [docs/threat-model.md](docs/threat-model.md).
 - Historical specs and research: `docs/specs/` and `docs/research/`; these are
   evidence, not current implementation instructions.
 

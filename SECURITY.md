@@ -2,6 +2,10 @@
 
 ## Supported Versions
 
+See [docs/threat-model.md](docs/threat-model.md) for the assets, trust
+boundaries, mitigations, and deliberately accepted risks this policy is
+written against.
+
 | Version | Supported          |
 |---------|--------------------|
 | 0.9.x   | :white_check_mark: |

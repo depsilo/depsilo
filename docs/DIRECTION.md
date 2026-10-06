@@ -152,8 +152,12 @@ Rebuilding those is now a low-ROI use of time. Updated T2:
 - [ ] **One-command deploy + Helm chart** — basic only, not feature-parity with
       AK's IaC bundle. Just enough so a k8s operator can `helm install` and have
       a working enforcement layer.
-- [ ] **Strong docs** (deployment guide, threat model, policy-tuning guide,
-      AK + Nexus + Verdaccio coexistence guide).
+- [ ] **Strong docs** — *partially landed:* deployment guide
+      (`docs/deployment.md`), threat model (`docs/threat-model.md`,
+      2026-10-06), policy guide (`docs/package-rules.md`), release
+      verification, compatibility policy, and the SIEM routing guide exist;
+      the AK + Nexus + Verdaccio coexistence guide and a policy-tuning
+      walkthrough are still open.
 - [ ] ~~**RBAC + SSO (OIDC/LDAP) in open-source.**~~ **Dropped.** Recommend
       operators deploy depsilo behind an OIDC reverse proxy
       ([oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) /

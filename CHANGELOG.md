@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- Published the threat model ([docs/threat-model.md](docs/threat-model.md)):
+  deployment assumptions, the asset inventory, in-scope adversaries, trust
+  boundaries (including the deliberately unauthenticated proxy surface and
+  the shared-cache/no-tenant-isolation boundary), threat-by-threat controls
+  with residuals, the accepted-risk list, and a verification map that ties
+  each control to its tests.
 - SIEM audit routing: the durable audit stream can be forwarded to external
   collectors as NDJSON or Splunk HEC envelopes. Each exporter keeps a cursor
   over `audit_logs`, so delivery is at-least-once, a collector outage stops the
