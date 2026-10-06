@@ -67,6 +67,7 @@ func TestFindDistEntry(t *testing.T) {
 					"name": "acme/lib",
 					"version": "2.0.0",
 					"version_normalized": "2.0.0.0",
+					"time": "2026-01-01T00:00:00+00:00",
 					"license": ["MIT"],
 					"dist": {"url": "https://example.com/2.0.0.zip", "type": "zip", "reference": "ref200"}
 				},
@@ -78,6 +79,7 @@ func TestFindDistEntry(t *testing.T) {
 				{
 					"version": "1.0.0",
 					"version_normalized": "1.0.0.0",
+					"time": "__unset",
 					"dist": {"url": "https://example.com/1.0.0.zip", "type": "zip", "reference": "ref100"},
 					"license": "__unset"
 				}
@@ -90,7 +92,8 @@ func TestFindDistEntry(t *testing.T) {
 		if ent == nil {
 			t.Fatal("expected a match")
 		}
-		if ent.Version != "1.5.0" || ent.Dist.URL != "https://example.com/1.5.0.zip" {
+		if ent.Version != "1.5.0" || ent.Dist.URL != "https://example.com/1.5.0.zip" ||
+			ent.Time != "2026-01-01T00:00:00+00:00" {
 			t.Errorf("wrong entry: %+v", ent)
 		}
 	})
@@ -113,6 +116,9 @@ func TestFindDistEntry(t *testing.T) {
 		}
 		if ent.Version != "1.0.0" {
 			t.Errorf("wrong entry: %+v", ent)
+		}
+		if ent.Time != "" {
+			t.Errorf("unset time carried forward: %+v", ent)
 		}
 	})
 
@@ -191,4 +197,20 @@ func TestFindDistEntry(t *testing.T) {
 			t.Errorf("inheritance broken: %+v", ent)
 		}
 	})
+}
+
+func TestComposerArtifactSourceIDIsStableAndArtifactSpecific(t *testing.T) {
+	first := composerArtifactSourceID("acme/lib", "1.0.0", "ref100", "https://example.com/1.0.0.zip")
+	if len(first) != 43 {
+		t.Fatalf("source id length = %d, want 43", len(first))
+	}
+	if again := composerArtifactSourceID("acme/lib", "1.0.0", "ref100", "https://example.com/1.0.0.zip"); again != first {
+		t.Fatalf("source id is not stable: %q vs %q", first, again)
+	}
+	if other := composerArtifactSourceID("acme/lib", "1.0.0", "ref101", "https://example.com/1.0.0.zip"); other == first {
+		t.Fatal("source id ignores the dist reference")
+	}
+	if other := composerArtifactSourceID("acme/lib", "1.0.0", "ref100", "https://example.com/other.zip"); other == first {
+		t.Fatal("source id ignores the dist URL")
+	}
 }

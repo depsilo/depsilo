@@ -112,6 +112,38 @@ func decodeTokenFromLocalURL(t *testing.T, localURL, adapterID string) externalA
 	return claims
 }
 
+func TestRewriteSignedJSONIndexRejectsInvalidUploadTime(t *testing.T) {
+	t.Parallel()
+	document := `{
+		"files": [{
+			"filename": "demo-1.0-py3-none-any.whl",
+			"url": "https://cdn.example/demo-1.0-py3-none-any.whl",
+			"upload-time": "not-a-time"
+		}]
+	}`
+	if _, err := rewriteSignedJSONIndex(
+		[]byte(document),
+		"/pypi",
+		"https://index.example/simple/demo/",
+		"pypi",
+		"c291cmNl",
+		testArtifactSigningKey,
+	); err == nil {
+		t.Fatal("invalid upload-time was accepted")
+	}
+}
+
+func TestSetArtifactSigningKeyRejectsShortKey(t *testing.T) {
+	t.Parallel()
+	handler := New(nil, nil, config.CacheConfig{}, nil)
+	if err := handler.SetArtifactSigningKey([]byte("short"), true); err == nil {
+		t.Fatal("short signing key was accepted")
+	}
+	if err := handler.SetArtifactSigningKey(testArtifactSigningKey, true); err != nil {
+		t.Fatalf("valid signing key rejected: %v", err)
+	}
+}
+
 func TestProvenanceIndexFlowFeedsUploadTimeToArtifactGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const artifactBody = "provenance-pypi-wheel"

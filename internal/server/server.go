@@ -319,19 +319,17 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// remain enabled unless the operator sets the new switch false. Failure to
 	// build the checker (e.g. an unsupported mode) is a startup error.
 	//
-	// npm is the first source-bound ecosystem: the adapter carries the
-	// packument's time[version] inside the same authenticated token that pins
-	// the serving upstream for the tarball. Every other positive threshold is
-	// rejected until its metadata path binds the same way.
+	// npm, PyPI, and Composer are source-bound: their adapters carry an
+	// authenticated publish time together with the artifact reference. Every
+	// other positive threshold is rejected until its metadata path binds the
+	// same way.
 	quarantinePolicy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
 		MinReleaseAgeEnabled: cfg.SupplyChain.MinReleaseAgeEnabled,
 		MinReleaseAge:        cfg.SupplyChain.MinReleaseAge,
 		Mode:                 cfg.SupplyChain.Mode,
 		Allow:                cfg.SupplyChain.Allow,
 		FailClosed:           cfg.SupplyChain.FailClosed,
-	}, func(ecosystem string) bool {
-		return ecosystem == "npm" || ecosystem == "pypi" || ecosystem == "composer"
-	})
+	}, sourceBoundMinimumReleaseAge)
 	if err != nil {
 		return nil, fmt.Errorf("quarantine policy: %w", err)
 	}
@@ -780,6 +778,21 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	return srv, nil
+}
+
+// sourceBoundMinimumReleaseAge reports whether an ecosystem's adapter carries
+// an authenticated publish time together with the artifact reference. Keep it
+// in sync with the adapter wiring in this package:
+//   - npm: packument time[version] signed into the tarball token
+//   - pypi: PEP 691 upload-time signed into the artifact reference
+//   - composer: p2 metadata time passed with the declared dist artifact
+func sourceBoundMinimumReleaseAge(ecosystem string) bool {
+	switch ecosystem {
+	case "npm", "pypi", "composer":
+		return true
+	default:
+		return false
+	}
 }
 
 func newServerRuntimeContext(parent context.Context) (context.Context, context.CancelFunc) {

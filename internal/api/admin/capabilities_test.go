@@ -80,14 +80,21 @@ func TestCapabilitySummaryDoesNotRefreshPolicy(t *testing.T) {
 
 func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 	enabled := true
+	bound := func(ecosystem string) bool {
+		return ecosystem == "npm" || ecosystem == "pypi" || ecosystem == "composer"
+	}
 	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
 		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"npm": "168h"},
-	}, func(ecosystem string) bool { return ecosystem == "npm" })
+		MinReleaseAge: map[string]string{
+			"npm":      "168h",
+			"pypi":     "72h",
+			"composer": "72h",
+		},
+	}, bound)
 	if err != nil {
 		t.Fatalf("NewPolicyWithProvenance: %v", err)
 	}
-	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi"}, capabilityPolicyStub{}, nil, "", policy)
+	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi", "composer", "cargo"}, capabilityPolicyStub{}, nil, "", policy)
 	r := gin.New()
 	r.GET("/summary", h.Summary)
 	response := httptest.NewRecorder()
@@ -99,23 +106,20 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	var npmFact, pypiFact capabilityFact
+	facts := map[string]capabilityFact{}
 	for _, fact := range got.Capabilities {
-		if fact.Name != "minimum_release_age" {
-			continue
-		}
-		switch fact.Ecosystem {
-		case "npm":
-			npmFact = fact
-		case "pypi":
-			pypiFact = fact
+		if fact.Name == "minimum_release_age" {
+			facts[fact.Ecosystem] = fact
 		}
 	}
-	if npmFact.Support != "supported" || npmFact.Mode != "block" || npmFact.DataStatus != "source_bound" {
-		t.Fatalf("npm minimum_release_age fact = %+v", npmFact)
+	for _, ecosystem := range []string{"npm", "pypi", "composer"} {
+		fact := facts[ecosystem]
+		if fact.Support != "supported" || fact.Mode != "block" || fact.DataStatus != "source_bound" {
+			t.Fatalf("%s minimum_release_age fact = %+v", ecosystem, fact)
+		}
 	}
-	if pypiFact.Support != "safety_disabled" || pypiFact.Mode != "off" || pypiFact.DataStatus != "never_synced" {
-		t.Fatalf("pypi minimum_release_age fact = %+v", pypiFact)
+	if cargo := facts["cargo"]; cargo.Support != "safety_disabled" || cargo.Mode != "off" || cargo.DataStatus != "never_synced" {
+		t.Fatalf("cargo minimum_release_age fact = %+v", cargo)
 	}
 }
 
