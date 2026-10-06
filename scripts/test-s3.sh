@@ -29,7 +29,10 @@ port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "8333/tcp
 endpoint="http://127.0.0.1:$port"
 
 ready=false
-for _ in $(seq 1 100); do
+# SeaweedFS starts the master, volume, filer, and S3 gateway in one process;
+# on a cold CI runner the gateway can take noticeably longer than on a warm
+# developer machine to accept connections.
+for _ in $(seq 1 240); do
   # With static credentials configured, an unauthenticated probe answers 403
   # once the gateway is listening; any HTTP status means it accepted the
   # connection.
@@ -38,7 +41,7 @@ for _ in $(seq 1 100); do
     ready=true
     break
   fi
-  sleep 0.2
+  sleep 0.5
 done
 if [[ "$ready" != true ]]; then
   docker logs "$container" >&2

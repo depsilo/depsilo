@@ -56,6 +56,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - The v0.9.0 and v0.9.1 release upgrade contracts now derive the expected
   schema version from the candidate source instead of a hardcoded value, and
   wait for the legacy artifact cache row before shutting the fixture down.
+- The v0.9.0 Compose contract verifies the published state directory by inode
+  identity instead of reading a host-inaccessible `0700` marker, and the S3
+  contract waits for SeaweedFS cold-start on CI runners.
 
 ## [0.10.0] - 2026-09-15
 

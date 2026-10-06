@@ -69,6 +69,16 @@ verify_sha256_manifest() {
   fi
 }
 
+# GNU and BSD stat disagree on the format flag. Both print "<device>:<inode>"
+# here, which identifies the exact directory without reading its contents.
+path_identity() {
+  if stat -c '%d:%i' "$1" >/dev/null 2>&1; then
+    stat -c '%d:%i' "$1"
+  else
+    stat -f '%d:%i' "$1"
+  fi
+}
+
 source_arg=''
 state_arg=''
 backup_arg=''
@@ -110,7 +120,7 @@ done
 [[ -f "$layout_helper" && ! -L "$layout_helper" ]] \
   || die 'v0.9 Compose layout helper is unavailable'
 
-for command in docker jq mktemp cp mv find od tr chmod id; do
+for command in docker jq mktemp cp mv find od tr chmod id stat; do
   command -v "$command" >/dev/null 2>&1 || die "$command is required"
 done
 command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 \
@@ -293,8 +303,15 @@ docker run --rm --network none --user 0:0 --entrypoint /upgrade-helper \
   verify_sha256_manifest SHA256SUMS >/dev/null
 )
 
+# The ownership-preparation container leaves the state directory owned by
+# 10001:10001 with mode 0700, so the host cannot read files inside it. Compare
+# the directory identity instead, which still detects a pre-existing target
+# without requiring access to its contents.
+state_identity=$(path_identity "$state_tmp")
 mv -n "$state_tmp" "$state_dir"
-[[ ! -e "$state_tmp" && -d "$state_dir" && ! -L "$state_dir" && -f "$state_dir/.depsilo-v090-bind-upgrade" ]] \
+[[ ! -e "$state_tmp" && -d "$state_dir" && ! -L "$state_dir" ]] \
+  || die 'state target appeared before its atomic rename'
+[[ "$(path_identity "$state_dir")" == "$state_identity" ]] \
   || die 'state target appeared before its atomic rename'
 state_tmp=''
 
