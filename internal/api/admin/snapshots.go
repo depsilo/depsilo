@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
+	"depsilo/internal/audit"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 	"depsilo/internal/snapshot"
@@ -184,7 +185,7 @@ func (h *SnapshotsHandler) audit(c *gin.Context, action string, record *db.Snaps
 		StatusCode:  http.StatusOK,
 		CreatedAt:   time.Now().UTC(),
 	}
-	if err := h.db.Create(&entry).Error; err != nil {
+	if err := audit.AppendAuditRows(c.Request.Context(), h.db, []db.AuditLog{entry}); err != nil {
 		zap.L().Warn("snapshot: write audit entry", zap.String("action", action), zap.Error(err))
 	}
 }

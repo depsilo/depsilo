@@ -37,6 +37,8 @@ func Run(cmd string, args []string) int {
 		return runDoctor(args)
 	case "diagnose":
 		return runDiagnose(args)
+	case "audit":
+		return runAudit(args)
 	case "init-agent":
 		return runInitAgent(args)
 	case "prompt":
@@ -72,6 +74,7 @@ Commands:
     flush                       Clear expired cache entries
     backup [--out file.tar.gz]  Online backup of config + SQLite state
     restore <backup.tar.gz>     Validated restore; target server must be stopped
+    audit verify [--json]       Recompute the tamper-evident audit hash chain
     help                        Show this message
 
 Common serve flags (use depsilo serve --help for full detail):

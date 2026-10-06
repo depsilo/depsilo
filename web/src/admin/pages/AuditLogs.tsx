@@ -14,6 +14,7 @@ import SelectV2 from '@/components/Select'
 import TableViewport from '@/components/TableViewport'
 import AdminPage from '@/admin/components/AdminPage'
 import SiemExportersSection from '@/admin/components/SiemExportersSection'
+import AuditIntegrityNotice from '@/admin/components/AuditIntegrityNotice'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
@@ -204,6 +205,7 @@ export default function AuditLogsV2() {
       )}
     >
       <div className="space-y-6">
+      <AuditIntegrityNotice />
       <form
         data-admin-filters
         className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center"

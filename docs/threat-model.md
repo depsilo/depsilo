@@ -150,11 +150,16 @@ with oauth2-proxy / Authelia / Pomerium for identity guarantees.
 
 Audit rows are written by the request path and by governance handlers; SIEM
 forwarding is at-least-once with a visible cursor, lag, and last error, so a
-stalled or silently broken feed is detectable from Admin.
+stalled or silently broken feed is detectable from Admin. Rows are
+hash-chained (schema v8): the chain is recomputed by the audit page, the
+`GET /api/v1/admin/audit/integrity` endpoint, and the offline
+`depsilo audit verify` CLI, and every edited, deleted, reordered, or unchained
+row is reported with its id. Rows written before the chain keep a NULL
+`prev_hash` and are reported as a pre-chain prefix.
 
-**Residual:** there is no hash chain; an attacker with database access can
-rewrite history without local detection. A tamper-evident chain is the next
-planned integrity item.
+**Residual:** the chain has no external anchor — an attacker with database
+access can recompute the entire chain from the first row. The SIEM copy (or a
+future WORM/anchor integration) is what makes that detectable.
 
 ### 5.9 SSRF through redirects, upstreams, or MCP
 
@@ -211,7 +216,8 @@ These are deliberate, documented, and not vulnerabilities:
 - Docker (mutable tags) has no age gate; Go and APT have no publish-time
   authority and no gate.
 - Tamper detection is alert-only and does not prove upstream authenticity.
-- The audit log is not hash-chained yet.
+- The audit chain has no external anchor; a full-database rewrite is
+  detectable only against a copy that left the box (SIEM, backup).
 - No in-product rate limiting (reverse proxy responsibility).
 - A configured HTTP forward proxy and cross-origin registry Bearer realms
   are trusted egress components.
@@ -232,7 +238,8 @@ These are deliberate, documented, and not vulnerabilities:
 
 ## 8. Open items
 
-1. Tamper-evident audit chain (`prev_hash`/`hash` + verification entry point).
+1. External anchoring of the audit chain head (WORM storage, timestamping
+   authority, or a remote head checkpoint).
 2. Docker age-gate semantics (digest-only or resolve-then-decide).
 3. A published reverse-proxy recipe covering rate limiting, admin-API
    network restriction, and header hygiene.

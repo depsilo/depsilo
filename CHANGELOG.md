@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- The audit log is now tamper-evident: every row written since schema v8
+  carries `prev_hash`/`hash` (versioned SHA-256 payload, UTC-normalized
+  timestamps, unique `prev_hash` so concurrent writers cannot fork the chain).
+  The audit page shows the verification result with a re-verify button,
+  `GET /api/v1/admin/audit/integrity` returns the full report, and
+  `depsilo audit verify [--json]` recomputes the chain offline against the
+  SQLite file. Rows written before the chain are reported as a pre-chain
+  prefix instead of being presented as covered; editing, deleting, or
+  re-ordering a chained row names the first broken id.
 - Published the threat model ([docs/threat-model.md](docs/threat-model.md)):
   deployment assumptions, the asset inventory, in-scope adversaries, trust
   boundaries (including the deliberately unauthenticated proxy surface and

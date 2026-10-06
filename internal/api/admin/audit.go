@@ -53,6 +53,17 @@ func (h *AuditHandler) Export(c *gin.Context) {
 	c.Data(http.StatusOK, "text/csv", data)
 }
 
+// Integrity recomputes the tamper-evident audit chain and reports the first
+// broken row, the pre-chain prefix, and the current head.
+func (h *AuditHandler) Integrity(c *gin.Context) {
+	report, err := audit.VerifyChain(c.Request.Context(), h.db, 2000)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTEGRITY_CHECK_FAILED", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"integrity": report})
+}
+
 func (h *AuditHandler) parseQuery(c *gin.Context) audit.Query {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))

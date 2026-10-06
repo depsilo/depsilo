@@ -58,7 +58,7 @@ func RecordManagementEvent(ctx context.Context, database *gorm.DB, event Managem
 		StatusCode:  statusCode,
 		CreatedAt:   time.Now().UTC(),
 	}
-	if err := database.WithContext(ctx).Create(&entry).Error; err != nil {
+	if err := AppendAuditRows(ctx, database, []db.AuditLog{entry}); err != nil {
 		return fmt.Errorf("record management audit: %w", err)
 	}
 	return nil

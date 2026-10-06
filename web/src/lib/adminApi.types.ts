@@ -486,6 +486,20 @@ export interface AuditExporterRequest {
   enabled?: boolean
 }
 
+/** Result of recomputing the tamper-evident audit hash chain. */
+export interface AuditChainReport {
+  ok: boolean
+  rows_scanned: number
+  chained_rows: number
+  unchained_rows: number
+  first_chained_id?: number
+  head_id?: number
+  head_hash?: string
+  broken_at_id?: number
+  reason?: string
+  scanned_at: string
+}
+
 export interface RuleRequest { ecosystem: string; package_name: string; version: string; action: 'allow' | 'deny'; reason: string }
 export interface RuleRecord extends RuleRequest { id: number; created_by: string; created_at: string; updated_at: string }
 export type RuleListResponse = RuleRecord[] | { items: RuleRecord[]; total?: number }

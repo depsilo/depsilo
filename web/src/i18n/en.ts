@@ -1673,6 +1673,16 @@ const en = {
       deleteDescription: 'Delete exporter "{{name}}"? Delivered records stay in the collector and the audit log itself is kept.',
     },
 
+    // Audit chain integrity
+    auditIntegrity: {
+      verifying: 'Verifying the audit chain…',
+      verify: 'Verify again',
+      verified: 'Audit chain verified: {{count}} rows, head #{{head}} {{hash}}',
+      preChain: '{{count}} rows predate the hash chain (written before schema v8 and not covered)',
+      broken: 'Audit chain broken at row {{id}}: {{reason}}. Check whether the database was modified, and restore a pre-upgrade backup if needed.',
+      unavailable: 'The audit chain could not be verified: {{message}}',
+    },
+
     // Monitor
     monitor: {
       title: 'Live monitoring',

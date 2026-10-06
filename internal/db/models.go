@@ -253,6 +253,12 @@ type AuditLog struct {
 	StatusCode  int       `json:"status_code"`
 	CreatedAt   time.Time `gorm:"index" json:"created_at"`
 	RequestID   string    `gorm:"size:128;index" json:"request_id"`
+	// PrevHash/Hash make the audit log tamper-evident. PrevHash is nil for
+	// rows written before the chain existed (schema v8) and unique otherwise:
+	// the uniqueness is what prevents two concurrent writers from forking the
+	// chain. Hash is empty exactly when the row is not chained yet.
+	PrevHash *string `gorm:"size:64;uniqueIndex:idx_audit_logs_prev_hash" json:"prev_hash,omitempty"`
+	Hash     string  `gorm:"size:64" json:"hash,omitempty"`
 }
 
 type Vulnerability struct {

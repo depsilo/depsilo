@@ -326,6 +326,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	auditHandler := admin.NewAuditHandler(deps.DB)
 	adminRead.GET("/audit-logs", auditHandler.List)
 	adminRead.GET("/audit-logs/export", auditHandler.Export)
+	adminRead.GET("/audit/integrity", auditHandler.Integrity)
 
 	// SIEM audit routing (ADR-0004 T2): forward the audit stream to external
 	// collectors. Open source like the audit log itself; not Pro-gated.

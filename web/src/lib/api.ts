@@ -18,6 +18,7 @@ import type {
   AuditExporter,
   AuditExporterListResponse,
   AuditExporterRequest,
+  AuditChainReport,
   AuditLogQuery,
   BandwidthReportResponse,
   CacheDistributionResponse,
@@ -241,6 +242,7 @@ export const adminApi = {
   updateAuditExporter: (id: number, body: AuditExporterRequest) => api.put<AuditExporter>(`${auditExportersPath}/${id}`, body),
   deleteAuditExporter: (id: number) => api.delete<{ deleted: number }>(`${auditExportersPath}/${id}`),
   testAuditExporter: (id: number) => api.post<{ delivered: boolean }>(`${auditExportersPath}/${id}/test`),
+  getAuditIntegrity: (options: ApiGetOptions = {}) => api.get<{ integrity: AuditChainReport }>('/admin/audit/integrity', options),
 
   // Package Rules (Pro)
   listRules: (options: ApiGetOptions = {}) => api.get<RuleListResponse>('/admin/rules', options),

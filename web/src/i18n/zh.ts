@@ -1680,6 +1680,16 @@ const zh = {
       deleteDescription: '删除导出器 "{{name}}"？已投递的记录不受影响，审计日志本身保留。',
     },
 
+    // Audit chain integrity
+    auditIntegrity: {
+      verifying: '正在校验审计链…',
+      verify: '重新校验',
+      verified: '审计链已校验：{{count}} 行，链头 #{{head}} {{hash}}',
+      preChain: '{{count}} 行早于哈希链（schema v8 之前写入，不在链覆盖范围）',
+      broken: '审计链在第 {{id}} 行断裂：{{reason}}。请检查数据库是否被修改，必要时从升级前备份恢复。',
+      unavailable: '暂时无法校验审计链：{{message}}',
+    },
+
     // Monitor
     monitor: {
       title: '实时监控',

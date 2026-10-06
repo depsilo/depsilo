@@ -65,6 +65,49 @@ and returns, and the forwarder owns delivery.
 Example: a security feed that only wants refusals uses `blocked`; a full
 compliance feed uses `*`.
 
+## Tamper-evident chain
+
+The audit log is hash-chained so a downstream SIEM can prove that what it
+received is what Depsilo wrote, and an operator can prove that what is stored
+now matches.
+
+- Every row written since schema v8 carries `prev_hash` (the previous row's
+  hash, `""` for the first chained row) and `hash`. `prev_hash` has a unique
+  index, so two concurrent writers cannot fork the chain: the loser retries
+  against the new head.
+- The hash formula is versioned and reproducible:
+
+  ```
+  hash = SHA-256(JSON({
+    "hash_version": "depsilo/audit-chain/v1",
+    "prev_hash":   <previous row hash>,
+    "ecosystem":   …, "package_name": …, "version": …, "action": …,
+    "cache_result": …, "client_ip": …, "user_agent": …,
+    "upstream_url": …, "latency_ms": …, "bytes_sent": …,
+    "status_code": …, "created_at": <UTC RFC3339Nano>, "request_id": …
+  }))
+  ```
+
+  Field order is the struct order above, the timestamp is normalized to UTC,
+  and the database-assigned `id` is deliberately excluded: the chain binds
+  content and order through `prev_hash`, and re-ordering, duplicating, or
+  editing a row breaks the link at the next hash.
+- Rows written before schema v8 have a NULL `prev_hash` and an empty `hash`.
+  Verification reports them as a pre-chain prefix instead of pretending they
+  are covered.
+
+Verification entry points:
+
+| Surface | Usage |
+| --- | --- |
+| Admin UI | The audit page shows the verification result (verified head, pre-chain rows, or the exact broken row) with a re-verify button. |
+| Admin API | `GET /api/v1/admin/audit/integrity` returns the report (`ok`, `chained_rows`, `unchained_rows`, `first_chained_id`, `head_id`, `head_hash`, `broken_at_id`, `reason`). |
+| CLI | `depsilo audit verify [--json]` recomputes the chain directly against the SQLite file, usable offline or after a restore. Exit code 1 means the chain is broken. |
+
+Fully switched-on SIEM consumers can also verify continuously: the forwarded
+rows carry `prev_hash`/`hash`, so the same reimplementation as above can
+recompute each batch and alarm on the first mismatch.
+
 ## Admin surface
 
 The audit page (`/admin/audit`) lists exporters under **SIEM audit routing**
@@ -92,6 +135,6 @@ access.
 - Per-event routing rules beyond the action/outcome filter.
 - Mutually authenticated TLS (mTLS) to the collector; terminate that in a
   sidecar or reverse proxy.
-- A tamper-evident hash chain over `audit_logs`. The cursor and delivery
-  counters detect a stalled feed; they do not detect an operator editing the
-  local database.
+- External anchoring of the chain head (WORM storage, timestamping authority,
+  or a remote head checkpoint). An attacker with database access can rewrite
+  the whole chain from the first row; the SIEM's copy is the current anchor.

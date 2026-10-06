@@ -94,6 +94,10 @@ func (h *AuditExporterHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "CREATE_FAILED", "message": err.Error()})
 		return
 	}
+	audit.RecordManagementEvent(c.Request.Context(), h.db, audit.ManagementEvent{
+		Action: "exporter_create", Target: exporter.Name, Success: true,
+		ClientIP: c.ClientIP(), Detail: exporter.Kind,
+	})
 	c.JSON(http.StatusCreated, toAuditExporterResponse(exporter, exporter.Cursor, false))
 }
 
@@ -135,6 +139,10 @@ func (h *AuditExporterHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "DB_ERROR", "message": err.Error()})
 		return
 	}
+	audit.RecordManagementEvent(c.Request.Context(), h.db, audit.ManagementEvent{
+		Action: "exporter_update", Target: updated.Name, Success: true,
+		ClientIP: c.ClientIP(), Detail: updated.Kind,
+	})
 	c.JSON(http.StatusOK, toAuditExporterResponse(updated, updated.Cursor, false))
 }
 
@@ -153,6 +161,9 @@ func (h *AuditExporterHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"code": "NOT_FOUND", "message": "exporter not found"})
 		return
 	}
+	audit.RecordManagementEvent(c.Request.Context(), h.db, audit.ManagementEvent{
+		Action: "exporter_delete", Target: strconv.FormatUint(id, 10), Success: true, ClientIP: c.ClientIP(),
+	})
 	c.JSON(http.StatusOK, gin.H{"deleted": id})
 }
 

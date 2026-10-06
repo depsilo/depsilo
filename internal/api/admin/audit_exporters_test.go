@@ -85,8 +85,13 @@ func TestAuditExporterCRUDStartsAtTheAuditHead(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil {
 		t.Fatal(err)
 	}
-	if listed.AuditHead != 2 || len(listed.Items) != 1 {
+	// Creating the exporter wrote its own management audit row, so the head
+	// moved past the cursor the exporter started from.
+	if listed.AuditHead != 3 || len(listed.Items) != 1 {
 		t.Fatalf("listed = %+v", listed)
+	}
+	if listed.Items[0].Lag != 1 {
+		t.Fatalf("new exporter lag = %d, want 1 (its own creation row)", listed.Items[0].Lag)
 	}
 	// A request without a write principal must not see the collector URL
 	// (HEC endpoints often carry credentials in the path).
