@@ -241,7 +241,8 @@ change the others.
 | Control | Default | Behavior |
 | --- | --- | --- |
 | Known-malicious blocklist | On | Syncs explicit and all-version OSV MAL records for npm, PyPI, Cargo, RubyGems, Composer, NuGet, Go, and Maven, then blocks a match before serving it. PyPI legacy archive formats and RubyGems platform gems are resolved through their registry metadata; an artifact whose identity cannot be proven is refused while the dataset covers that ecosystem. |
-| Minimum release age | Unavailable | Positive enabled thresholds are rejected until artifact-source and timestamp provenance are bound. |
+| Freeze / golden snapshot | Off | Promotes the cached artifacts into a named snapshot, exports/imports its manifest, and — when activated — serves only versions pinned by that snapshot (`451 SNAPSHOT_BLOCKED` otherwise). Items come from the first-seen hashes recorded by tamper detection. |
+| Minimum release age | Off by default | Enforced per ecosystem where artifact-source and timestamp provenance is bound (source-bound registries, or the approximate Last-Modified ecosystems the operator acknowledges in `supply_chain.approximate_sources`); every other positive threshold is rejected at startup. |
 | Tamper detection | On | Compares immutable artifacts against their first-seen SHA-256 during natural refreshes and emits an alert on mismatch. It is alert-only. |
 | Package allow / deny rules | Operator-defined | Applies and records only selectors supported by the [request-path capability matrix](docs/package-rules.md); unsupported surfaces do not guess package or version identity. |
 

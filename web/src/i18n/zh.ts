@@ -1609,6 +1609,33 @@ const zh = {
       downloadFailed: 'SBOM 导出失败。',
     },
 
+    // Freeze / golden snapshots
+    snapshot: {
+      title: '冻结快照',
+      description: '把当前缓存固化为快照，导出/导入清单，并只提供活动快照内的版本。',
+      name: '快照名称',
+      namePlaceholder: 'release-2026-10',
+      note: '备注（可选）',
+      create: '从当前缓存创建',
+      creating: '正在创建...',
+      createHint: '创建时会复制篡改检测记录里的全部产物哈希；从未经过本代理抓取的产物不会包含在内。',
+      import: '导入清单',
+      importing: '正在导入...',
+      export: '导出',
+      activate: '用于快照模式',
+      deactivate: '关闭快照模式',
+      active: '已启用',
+      activeNotice: '快照模式已启用：只有 "{{name}}" 内的版本会被提供，其余请求会以 SNAPSHOT_BLOCKED 拒绝。',
+      artifacts: '产物数',
+      size: '大小',
+      createdAt: '创建时间',
+      actions: '操作',
+      empty: '暂无快照',
+      table: '快照表格',
+      deleteTitle: '删除快照',
+      deleteDescription: '删除快照 "{{name}}" 及其条目？缓存中的产物字节不会被删除。',
+    },
+
     // Monitor
     monitor: {
       title: '实时监控',

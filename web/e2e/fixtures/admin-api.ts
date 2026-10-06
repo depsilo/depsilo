@@ -14,6 +14,7 @@ import type {
   PolicyStatus,
   ProjectListResponse,
   ComplianceProfile,
+  SnapshotListResponse,
   RecentDownloadsResponse,
   RuleTestResponse,
   SecurityDashboard,
@@ -254,6 +255,11 @@ const canonicalAdminApiDefaults = {
     signing_configured: false,
     component_annotation_count: 0,
   } satisfies ComplianceProfile,
+  'GET /api/v1/admin/snapshots': {
+    items: [],
+    active_snapshot_id: 0,
+    active_snapshot: '',
+  } satisfies SnapshotListResponse,
 }
 
 export const adminApiDefaults: Record<string, JsonValue> = {

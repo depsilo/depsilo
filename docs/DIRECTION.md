@@ -122,9 +122,11 @@ on the request path (refuses to serve based on policy — not just scans and rep
       *(Released in v0.8.0, 2026-07-09.)*
 - [x] **Known-malicious blocklist** — hard-block malicious (not merely vulnerable)
       versions. See **Task 2**. *(Landed on master 2026-07-09; unreleased.)*
-- [ ] **Freeze / golden snapshot.** A mode that serves only versions in an approved
+- [x] **Freeze / golden snapshot.** A mode that serves only versions in an approved
       snapshot; "promote current cache to snapshot," export/import. Enables reproducible /
-      offline builds immune to upstream poisoning.
+      offline builds immune to upstream poisoning. *(MVP landed on master
+      2026-10-06; unreleased. Items are the tamper-detection hashes, and the
+      manifest carries metadata rather than artifact bytes.)*
 - [x] **Tamper detection.** Persist a content hash per immutable artifact on first
       fetch; alert if its upstream content later changes. *(Landed on master
       2026-07-10; unreleased.)*

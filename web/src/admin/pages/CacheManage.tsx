@@ -22,6 +22,7 @@ import { useAppToast } from '@/components/Toast'
 import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import SnapshotSection from '@/admin/components/SnapshotSection'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
@@ -313,6 +314,7 @@ export default function CacheManageV2() {
         </SelectV2>
       </div>
 
+      <div data-cache-list>
       {isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]">
           <span aria-hidden="true">{t('loading')}</span>
@@ -375,6 +377,7 @@ export default function CacheManageV2() {
           )}
         </div>
       )}
+      </div>
 
       {/* Pagination */}
       <AdminPagination page={page} pageSize={20} total={total} onPageChange={setPage} />
@@ -532,6 +535,8 @@ export default function CacheManageV2() {
           </div>
         </div>
       </ModalV2>
+
+      <SnapshotSection />
       </div>
     </AdminPage>
   )

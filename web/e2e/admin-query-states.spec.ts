@@ -67,6 +67,8 @@ for (const query of recoveryQueries) {
     // and the status strip legitimately says "no recent activity".
     const emptyScope = query.path === '/admin'
       ? page.locator('[data-query-key="dashboard-trends"], [data-dashboard-recent-requests]')
+      : query.path === '/admin/cache'
+      ? page.locator('[data-cache-list]')
       : page
     await expect(emptyScope.getByText(/暂无|没有数据|暂无数据/)).toHaveCount(0)
     await error.getByRole('button', { name: /重试/ }).click()

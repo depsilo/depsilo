@@ -190,6 +190,28 @@ func TestSnapshotExportImportRoundTrip(t *testing.T) {
 	if err != nil || total != 3 || len(items) != 3 {
 		t.Fatalf("imported items total=%d len=%d err=%v", total, len(items), err)
 	}
+	// Imported hashes become tamper baselines for artifacts this instance has
+	// not seen; existing first-seen baselines are never overwritten.
+	if err := store.db.Where("key = ?", "npm/files/left-pad-1.3.0.tgz").Delete(&db.TamperRecord{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Import(ctx, bytes.NewReader(buffer.Bytes()), "golden-1-copy-2", "operator"); err != nil {
+		t.Fatal(err)
+	}
+	var reseeded db.TamperRecord
+	if err := store.db.First(&reseeded, "key = ?", "npm/files/left-pad-1.3.0.tgz").Error; err != nil {
+		t.Fatal(err)
+	}
+	if reseeded.SHA256 != "cc"+strings.Repeat("0", 62) {
+		t.Fatalf("reseeded baseline = %+v", reseeded)
+	}
+	var preserved db.TamperRecord
+	if err := store.db.First(&preserved, "key = ?", "pypi/files/requests-2.31.0.whl").Error; err != nil {
+		t.Fatal(err)
+	}
+	if preserved.SHA256 != "aa"+strings.Repeat("0", 62) {
+		t.Fatalf("existing baseline overwritten: %+v", preserved)
+	}
 
 	if _, err := store.Import(ctx, strings.NewReader(`{"format":"nope","name":"x","items":[{"ecosystem":"pypi","package":"a","version":"1","cache_key":"k","sha256":"`+strings.Repeat("a", 64)+`"}]}`), "", "operator"); err == nil {
 		t.Fatal("unsupported format was accepted")

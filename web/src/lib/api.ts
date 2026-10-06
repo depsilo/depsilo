@@ -65,6 +65,8 @@ import type {
   RuntimeResponse,
   RecentDownloadsResponse,
   RuleListResponse,
+  Snapshot,
+  SnapshotListResponse,
   RuleRecord,
   RuleRequest,
   RuleTestRequest,
@@ -281,6 +283,15 @@ export const adminApi = {
   regenerateProjectToken: (id: number) => api.post<RegenerateProjectTokenResponse>(`/admin/projects/${id}/token`),
   exportSbom: (id: number, params: ProjectSBOMQuery, options: ApiGetOptions = {}) => api.get<Blob>(`/admin/projects/${id}/sbom`, { ...options, params, responseType: 'blob' }),
   complianceProfile: (options: ApiGetOptions = {}) => api.get<ComplianceProfile>('/admin/compliance/profile', options),
+  listSnapshots: (options: ApiGetOptions = {}) => api.get<SnapshotListResponse>('/admin/snapshots', options),
+  createSnapshot: (body: { name: string; note?: string }) => api.post<Snapshot>('/admin/snapshots', body),
+  activateSnapshot: (snapshotId: number) => api.put<{ active_snapshot_id: number; active_snapshot: string }>('/admin/snapshots/active', { snapshot_id: snapshotId }),
+  deleteSnapshot: (id: number) => api.delete<{ deleted: number }>(`/admin/snapshots/${id}`),
+  exportSnapshot: (id: number, options: ApiGetOptions = {}) => api.get<Blob>(`/admin/snapshots/${id}/export`, { ...options, responseType: 'blob' }),
+  importSnapshot: (manifest: string, name?: string) => api.post<Snapshot>('/admin/snapshots/import', manifest, {
+    params: name ? { name } : undefined,
+    headers: { 'Content-Type': 'application/json' },
+  }),
 }
 
 // Setup wizard (no auth)

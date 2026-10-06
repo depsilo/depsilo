@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- Freeze / golden snapshots: promote the cached artifact set into a named,
+  hash-pinned snapshot, export and import the manifest
+  (`depsilo/snapshot/v1`), and switch snapshot-only mode on from the Cache
+  page or the Admin API. Snapshot mode refuses anything outside the active
+  snapshot with 451 `SNAPSHOT_BLOCKED` after the malware gate, and
+  membership lookups fail closed. Snapshots pin the SHA-256 values recorded
+  by tamper detection; importing a manifest seeds missing baselines so a
+  first fetch that differs from the manifest raises a tamper alert.
 - The per-project SBOM export (Pro) gains a CRA mode and a technical-file
   preset. CRA mode carries the NTIA/CRA minimum elements: purl, SHA-256
   checksums recorded by tamper detection, supplier/license fields, and

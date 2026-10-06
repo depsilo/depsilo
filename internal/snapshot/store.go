@@ -410,5 +410,38 @@ func (s *Store) Import(ctx context.Context, reader io.Reader, nameOverride, acto
 		})
 		totalBytes += entry.Size
 	}
-	return s.insert(ctx, name, manifest.Note, actor, items, totalBytes)
+	record, err := s.insert(ctx, name, manifest.Note, actor, items, totalBytes)
+	if err != nil {
+		return nil, err
+	}
+	// Seed tamper-detection baselines for artifacts this instance has not seen
+	// yet, so a first fetch whose bytes differ from the imported manifest
+	// raises a tamper alert instead of silently adopting the upstream bytes.
+	// Existing first-seen baselines are never overwritten.
+	if err := s.seedTamperBaselines(ctx, items); err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func (s *Store) seedTamperBaselines(ctx context.Context, items []db.SnapshotItem) error {
+	now := time.Now().UTC()
+	records := make([]db.TamperRecord, 0, len(items))
+	for _, item := range items {
+		records = append(records, db.TamperRecord{
+			Key: item.CacheKey, Ecosystem: item.Ecosystem, Package: item.Package,
+			Version: item.Version, SHA256: item.SHA256, Size: item.Size,
+			FirstSeenAt: now, LastVerifiedAt: now,
+		})
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}},
+		DoNothing: true,
+	}).CreateInBatches(&records, 500).Error; err != nil {
+		return fmt.Errorf("seed tamper baselines from snapshot: %w", err)
+	}
+	return nil
 }

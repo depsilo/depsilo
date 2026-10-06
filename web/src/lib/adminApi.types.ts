@@ -685,6 +685,42 @@ export interface ComplianceProfile {
   component_annotation_count: number
 }
 
+export interface SnapshotItem {
+  id: number
+  snapshot_id: number
+  ecosystem: string
+  package: string
+  version: string
+  cache_key: string
+  sha256: string
+  size: number
+}
+
+export interface Snapshot {
+  id: number
+  name: string
+  note: string
+  created_by: string
+  artifact_count: number
+  total_bytes: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SnapshotListResponse {
+  items: Snapshot[]
+  active_snapshot_id: number
+  active_snapshot: string
+}
+
+export interface SnapshotDetailResponse {
+  snapshot: Snapshot
+  items: SnapshotItem[]
+  total: number
+  page: number
+  active: boolean
+}
+
 export interface AdminUser { id: number; username: string; role: UserRole; enabled: boolean; last_login_at: string | null; created_at: string; updated_at: string }
 export interface CreateUserRequest { username: string; password: string; role: UserRole }
 export interface UpdateUserRequest { password?: string; role?: UserRole; enabled?: boolean }

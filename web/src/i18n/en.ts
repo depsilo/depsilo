@@ -1602,6 +1602,33 @@ const en = {
       downloadFailed: 'SBOM export failed.',
     },
 
+    // Freeze / golden snapshots
+    snapshot: {
+      title: 'Freeze snapshot',
+      description: 'Pin the cached artifact set, export or import its manifest, and serve only versions inside the active snapshot.',
+      name: 'Snapshot name',
+      namePlaceholder: 'release-2026-10',
+      note: 'Note (optional)',
+      create: 'Promote current cache',
+      creating: 'Creating...',
+      createHint: 'Promotion copies every cached artifact hash recorded by tamper detection. Artifacts never fetched through this proxy are not included.',
+      import: 'Import manifest',
+      importing: 'Importing...',
+      export: 'Export',
+      activate: 'Use for snapshot mode',
+      deactivate: 'Disable snapshot mode',
+      active: 'Active',
+      activeNotice: 'Snapshot-only mode is enabled: only versions inside "{{name}}" are served. Everything else is refused with SNAPSHOT_BLOCKED.',
+      artifacts: 'Artifacts',
+      size: 'Size',
+      createdAt: 'Created',
+      actions: 'Actions',
+      empty: 'No snapshots yet',
+      table: 'Snapshot table',
+      deleteTitle: 'Delete snapshot',
+      deleteDescription: 'Delete snapshot "{{name}}" and its pinned items? Cached artifact bytes are not touched.',
+    },
+
     // Monitor
     monitor: {
       title: 'Live monitoring',
