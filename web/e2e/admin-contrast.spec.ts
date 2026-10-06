@@ -131,6 +131,36 @@ test('1h trend tooltips distinguish adjacent ten-second buckets in local time', 
   await expect(await hoverTrendEndpoint(chart, 'last')).toHaveText(lastExpected)
 })
 
+// The footnote must describe the aggregation the selected tab actually uses:
+// byte/request totals are sums, latency is a sample-weighted mean, and errors
+// carry both a count and a rate.
+test('trend footnotes and latency tooltip state their aggregation', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard/trends': { points: populatedTrendPoints },
+  })
+  await page.goto('/admin')
+
+  const card = page.locator('[data-query-key="dashboard-trends"]')
+  const footnote = card.locator('p').filter({ hasText: /缺失区间不补零/ })
+  for (const [tab, expected] of [
+    ['请求量', '每桶累计请求数'],
+    ['流量', '每桶累计字节'],
+    ['延迟', '均值（按请求数加权）'],
+    ['错误', '错误数与错误率'],
+  ] as const) {
+    await card.getByRole('tab', { name: tab, exact: true }).click()
+    await expect(footnote).toContainText(expected)
+  }
+
+  // Latency tooltips carry the bucket's sample count next to the mean.
+  await card.getByRole('tab', { name: '延迟', exact: true }).click()
+  const chart = card.locator('.recharts-wrapper')
+  const box = await chart.boundingBox()
+  expect(box).not.toBeNull()
+  await chart.hover({ position: { x: box!.width - 50, y: 80 } })
+  await expect(card.locator('.recharts-tooltip-wrapper')).toContainText(/n=\d/)
+})
+
 test('30d trend tooltips distinguish same-day two-hour buckets in local time', async ({ page }) => {
   const points = populatedTrendPoints.slice(0, 2).map((point, index) => ({
     ...point,

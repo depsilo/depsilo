@@ -273,7 +273,7 @@ const zh = {
       statusUnknown: '状态未知',
       statusStale: '状态待确认',
       allNominal: '所有服务运行良好',
-      problemCount: '{{count}} 项需要关注',
+      problemCount: '{{count}} 类问题需要关注',
       currentActivity: '当前活动',
       activityServing: '正在服务',
       activityIdle: '当前空闲',
@@ -373,7 +373,10 @@ const zh = {
 
       // F. 活动趋势与最近请求
       trendsTitle: '活动趋势',
-      trendAggregation: '{{range}}内的每桶累计值；缺失区间不补零',
+      trendAggregationRequests: '{{range}}内的每桶累计请求数；缺失区间不补零',
+      trendAggregationTraffic: '{{range}}内的每桶累计字节；缺失区间不补零',
+      trendAggregationLatency: '{{range}}内的每桶客户端响应耗时均值（按请求数加权）；缺失区间不补零',
+      trendAggregationErrors: '{{range}}内的每桶错误数与错误率；缺失区间不补零',
       clientLatency: '客户端响应耗时',
       recentRequestsTitle: '最近请求',
       recentRequestsCaption: '最近发生的客户端请求，不受上方统计周期限制。',

@@ -258,6 +258,9 @@ test('Overview surfaces a degraded upstream as an actionable centered dialog', a
   await page.goto('/admin')
 
   await expect(page.locator('[data-dashboard-status-strip]')).toContainText('部分能力异常')
+  // The strip counts problem categories, while the panel lists the affected
+  // upstreams — the wording must not present the two counts as the same unit.
+  await expect(page.locator('[data-dashboard-status-strip]')).toContainText('1 类问题需要关注')
   const problemsButton = page.getByRole('button', { name: '查看问题' })
   await expect(problemsButton).toBeVisible()
   await problemsButton.click()

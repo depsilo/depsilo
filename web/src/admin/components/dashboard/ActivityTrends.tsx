@@ -21,6 +21,14 @@ import { formatBytes } from '@/lib/utils'
 
 export type TrendTab = 'requests' | 'bandwidth' | 'latency' | 'errors'
 
+/** Each metric aggregates differently; the footnote must say which. */
+const TREND_FOOTNOTE_KEY: Record<TrendTab, string> = {
+  requests: 'overview.trendAggregationRequests',
+  bandwidth: 'overview.trendAggregationTraffic',
+  latency: 'overview.trendAggregationLatency',
+  errors: 'overview.trendAggregationErrors',
+}
+
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const ACCENT = 'var(--dash-accent, var(--brand))'
@@ -99,7 +107,13 @@ function ChartTooltip({ active, payload, label, range }: TooltipContentProps<Too
         let display: string
         if (entry.dataKey === 'errorRatePct') display = `${value.toFixed(1)}%`
         else if (entry.dataKey === 'serviceBytes' || entry.dataKey === 'originBytes') display = formatBytes(value)
-        else if (entry.dataKey === 'latency') display = `${value.toLocaleString()} ${t('dashboard.msUnit')}`
+        else if (entry.dataKey === 'latency') {
+          const samples = (payload[0]?.payload as { serviceRequests?: number } | undefined)?.serviceRequests
+          display = `${value.toLocaleString()} ${t('dashboard.msUnit')}`
+          if (samples && samples > 0) {
+            display += ` · ${t('overview.samplesShort', { count: samples.toLocaleString() })}`
+          }
+        }
         else display = value.toLocaleString()
         return (
           <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
@@ -230,7 +244,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
             )}
           </ResponsiveContainer>
           <p className="px-3 pt-1 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
-            {t('overview.trendAggregation', { range: t(`dashboard.range${dataRange}`) })}
+            {t(TREND_FOOTNOTE_KEY[tab], { range: t(`dashboard.range${dataRange}`) })}
             {range !== dataRange ? ` · ${t('overview.switchingRange')}` : ''}
           </p>
         </div>
