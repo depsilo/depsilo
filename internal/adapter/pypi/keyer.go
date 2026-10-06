@@ -17,7 +17,7 @@ func IndexCacheKey(prefix, packageName string) string {
 func signedIndexCacheKey(prefix, packageName string, signingKey []byte) string {
 	digest := sha256.Sum256(signingKey)
 	return prefix + "/simple/" + canonicalProjectName(packageName) +
-		"/_signed/" + externalArtifactTokenVersion + "/" + hex.EncodeToString(digest[:]) + "/index.html"
+		"/_signed/" + externalArtifactTokenVersionV2 + "/" + hex.EncodeToString(digest[:]) + "/index.html"
 }
 
 // canonicalProjectName applies the PEP 503 identity rule used by PyPI: ASCII

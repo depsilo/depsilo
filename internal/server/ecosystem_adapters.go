@@ -135,13 +135,24 @@ func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystem
 	return result, nil
 }
 
-func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB) error {
+func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, pypiProvenanceKey []byte) error {
 	for _, definition := range definitions {
 		pool := pools[definition.name]
 		if pool == nil {
 			return fmt.Errorf("active ecosystem %s has no pool", definition.name)
 		}
 		handler := definition.factory(cacheMgr, upstream.NewPassiveRecoverySelector(pool), cacheConfig, database)
+		if definition.name == "pypi" && len(pypiProvenanceKey) > 0 {
+			setter, ok := handler.(interface {
+				SetArtifactSigningKey([]byte, bool) error
+			})
+			if !ok {
+				return fmt.Errorf("pypi adapter does not support provenance signing")
+			}
+			if err := setter.SetArtifactSigningKey(pypiProvenanceKey, true); err != nil {
+				return fmt.Errorf("enable pypi provenance: %w", err)
+			}
+		}
 		handler.Register(root.Group(definition.route))
 		handler.Register(project.Group(definition.route))
 	}

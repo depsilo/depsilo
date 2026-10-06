@@ -335,17 +335,20 @@ scan_interval = "24h"
 check_ttl = "24h"
 # proxy = "http://127.0.0.1:7890"
 
-# ─── Minimum release age — npm source-bound ─────────────────────────────
+# ─── Minimum release age — npm and PyPI source-bound ────────────────────
 #
 # npm enforces the gate from the packument's time[version], carried inside the
 # same authenticated token that pins the tarball to its serving Upstream.
+# PyPI enforces it from the PEP 691 JSON simple index's upload-time for the
+# artifact URL declared by the same Upstream; mirrors that only serve HTML
+# (for example some Aliyun mirrors) fail closed while the PyPI gate is enabled.
 # Every other ecosystem still rejects positive thresholds at startup because
 # its artifact source and timestamp are not yet bound end to end.
 #
-# Enable the gate and set a positive npm threshold to quarantine fresh npm
+# Enable the gate and set a positive npm or PyPI threshold to quarantine fresh
 # versions; leave the other thresholds at zero. Positive defaults and positive
 # thresholds for unbound ecosystems are startup errors. Missing or legacy
-# npm metadata without a publish time fails closed while the gate is enabled.
+# metadata without a publish time fails closed while the gate is enabled.
 
 [supply_chain]
 min_release_age_enabled = false
@@ -354,7 +357,7 @@ fail_closed = true
 
 [supply_chain.min_release_age]
 default  = "0"
-pypi     = "0"
+pypi     = "0"   # e.g. "3d"; requires a PEP 691 JSON simple-index upstream
 npm      = "0"   # e.g. "7d" once min_release_age_enabled = true
 go       = "0"
 cargo    = "0"

@@ -101,7 +101,7 @@ func TestSignedRewriteResolvesRealPyTorchArtifactShapes(t *testing.T) {
 			html := `<a href="` + tt.href + `">artifact</a>`
 			got, err := rewriteSignedArtifactURLs(
 				html, "", "/pypi-torch-cu128", pageURL,
-				"extra:pytorch-cu128", testArtifactSigningKey,
+				"extra:pytorch-cu128", "c291cmNl", testArtifactSigningKey,
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -152,7 +152,7 @@ func TestSignedRewriteHandlesHrefQuotingAndLeavesNonArtifactsAlone(t *testing.T)
 	html := `<a HREF='wheel-1.0-py3-none-any.whl'>wheel</a><a href=../>parent</a>`
 	got, err := rewriteSignedArtifactURLs(
 		html, "", "/extra", "https://index.example/simple/wheel/",
-		"extra:wheel", testArtifactSigningKey,
+		"extra:wheel", "c291cmNl", testArtifactSigningKey,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestSignedRewriteDecodesHTMLAttributeEntities(t *testing.T) {
 	got, err := rewriteSignedArtifactURLs(
 		`<a href="https://cdn.example/pkg-1.0.whl?download=1&amp;mirror=primary">pkg</a>`,
 		"", "/extra", "https://index.example/simple/pkg/",
-		"extra:pkg", testArtifactSigningKey,
+		"extra:pkg", "c291cmNl", testArtifactSigningKey,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -226,7 +226,7 @@ func TestSignedRewriteRejectsUnsafeTarget(t *testing.T) {
 	_, err := rewriteSignedArtifactURLs(
 		`<a href="https://user:secret@cdn.example/pkg-1.0.whl">pkg</a>`,
 		"", "/extra", "https://index.example/simple/pkg/",
-		"extra:pkg", testArtifactSigningKey,
+		"extra:pkg", "c291cmNl", testArtifactSigningKey,
 	)
 	if err == nil {
 		t.Fatal("credential-bearing target was accepted")
@@ -238,7 +238,7 @@ func TestSignedRewriteRejectsHTTPSArtifactDowngrade(t *testing.T) {
 	_, err := rewriteSignedArtifactURLs(
 		`<a href="http://cdn.example/pkg-1.0-py3-none-any.whl">pkg</a>`,
 		"", "/extra", "https://index.example/simple/pkg/",
-		"extra:pkg", testArtifactSigningKey,
+		"extra:pkg", "c291cmNl", testArtifactSigningKey,
 	)
 	if !errors.Is(err, errArtifactSchemeDowngrade) {
 		t.Fatalf("HTTPS-to-HTTP downgrade error = %v", err)
@@ -247,7 +247,7 @@ func TestSignedRewriteRejectsHTTPSArtifactDowngrade(t *testing.T) {
 	got, err := rewriteSignedArtifactURLs(
 		`<a href="http://cdn.example/pkg-1.0-py3-none-any.whl">pkg</a>`,
 		"", "/extra", "http://index.internal/simple/pkg/",
-		"extra:pkg", testArtifactSigningKey,
+		"extra:pkg", "c291cmNl", testArtifactSigningKey,
 	)
 	if err != nil || !strings.Contains(got, "/extra/files/_external/") {
 		t.Fatalf("HTTP index with HTTP artifact should remain supported: output=%q error=%v", got, err)

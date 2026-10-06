@@ -329,7 +329,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		Mode:                 cfg.SupplyChain.Mode,
 		Allow:                cfg.SupplyChain.Allow,
 		FailClosed:           cfg.SupplyChain.FailClosed,
-	}, func(ecosystem string) bool { return ecosystem == "npm" })
+	}, func(ecosystem string) bool { return ecosystem == "npm" || ecosystem == "pypi" })
 	if err != nil {
 		return nil, fmt.Errorf("quarantine policy: %w", err)
 	}
@@ -621,7 +621,14 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	// with their standard counterparts, so runtime mutations are immediate.
 	projectGroup := r.Group("/p/:slug")
 	projectGroup.Use(middleware.ProjectSlugMiddleware(database))
-	if err := registerActiveAdapters(r, projectGroup, activeDefs, pools, cacheMgr, cfg.Cache, database); err != nil {
+	var pypiProvenanceKey []byte
+	if quarantinePolicy.Threshold("pypi") > 0 {
+		pypiProvenanceKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)
+		if err != nil {
+			return nil, fmt.Errorf("derive pypi provenance signing key: %w", err)
+		}
+	}
+	if err := registerActiveAdapters(r, projectGroup, activeDefs, pools, cacheMgr, cfg.Cache, database, pypiProvenanceKey); err != nil {
 		return nil, err
 	}
 

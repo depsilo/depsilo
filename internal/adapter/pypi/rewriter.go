@@ -70,6 +70,7 @@ func rewriteSignedArtifactURLs(
 	pathPrefix string,
 	pageURL string,
 	adapterID string,
+	sourceID string,
 	signingKey []byte,
 ) (string, error) {
 	if len(signingKey) == 0 {
@@ -117,7 +118,10 @@ func rewriteSignedArtifactURLs(
 			rewriteErr = filenameErr
 			return match
 		}
-		token, tokenErr := encodeExternalArtifactToken(signingKey, adapterID, externalArtifactClaims{Target: target.String()})
+		token, tokenErr := encodeExternalArtifactToken(signingKey, adapterID, externalArtifactClaims{
+			Target: target.String(),
+			Source: sourceID,
+		})
 		if tokenErr != nil {
 			rewriteErr = tokenErr
 			return match

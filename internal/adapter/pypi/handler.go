@@ -1,6 +1,7 @@
 package pypi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -41,6 +42,10 @@ type Handler struct {
 	upstreamSimplePath string
 	artifactSigningKey []byte
 	artifactSelector   upstream.Selector
+	// provenanceRequired requests the PEP 691 JSON simple index and signs the
+	// registry upload-time into artifact references. It is only set for the
+	// built-in PyPI adapter when the minimum-release-age gate is enabled.
+	provenanceRequired bool
 }
 
 // Options configures one PyPI-compatible route while keeping the public route
@@ -55,6 +60,9 @@ type Options struct {
 	// ArtifactSelector chooses the egress client for signed artifact downloads.
 	// Nil falls back to the metadata selector for backward compatibility.
 	ArtifactSelector upstream.Selector
+	// ProvenanceRequired negotiates the PEP 691 JSON simple index and carries
+	// upload-time in signed artifact references. Requires ArtifactSigningKey.
+	ProvenanceRequired bool
 }
 
 // New creates a new PyPI handler.
@@ -83,6 +91,9 @@ func newWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg con
 	if strings.HasPrefix(options.AdapterID, "extra:") && len(options.ArtifactSigningKey) < 32 {
 		return nil, errors.New("extra PyPI index requires an artifact signing key of at least 32 bytes")
 	}
+	if options.ProvenanceRequired && len(options.ArtifactSigningKey) < 32 {
+		return nil, errors.New("PyPI provenance mode requires an artifact signing key of at least 32 bytes")
+	}
 	simplePath, err := normalizeUpstreamSimplePath(options.UpstreamSimplePath)
 	if err != nil {
 		return nil, err
@@ -99,7 +110,24 @@ func newWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg con
 		upstreamSimplePath: simplePath,
 		artifactSigningKey: append([]byte(nil), options.ArtifactSigningKey...),
 		artifactSelector:   options.ArtifactSelector,
+		provenanceRequired: options.ProvenanceRequired,
 	}, nil
+}
+
+// SetArtifactSigningKey enables signed artifact references after construction.
+// The composition root uses it for the built-in PyPI adapter only when the
+// minimum-release-age gate is enabled, so the default proxy behavior keeps the
+// legacy URL shape.
+func (h *Handler) SetArtifactSigningKey(key []byte, provenanceRequired bool) error {
+	if h == nil {
+		return errors.New("nil PyPI handler")
+	}
+	if len(key) < 32 {
+		return errors.New("PyPI artifact signing key must be at least 32 bytes")
+	}
+	h.artifactSigningKey = append([]byte(nil), key...)
+	h.provenanceRequired = provenanceRequired
+	return nil
 }
 
 func (h *Handler) Type() string { return h.adapterID }
@@ -145,7 +173,7 @@ func (h *Handler) handlePackageRedirect(c *gin.Context) {
 func (h *Handler) handlePackageIndex(c *gin.Context) {
 	pkg := c.Param("package")
 	cacheKey := IndexCacheKey(h.cacheIdentity(), pkg)
-	if strings.HasPrefix(h.adapterID, "extra:") {
+	if len(h.artifactSigningKey) > 0 {
 		cacheKey = signedIndexCacheKey(h.cacheIdentity(), pkg, h.artifactSigningKey)
 	}
 	start := time.Now()
@@ -170,10 +198,14 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 			zap.String("upstream", ups.Name),
 		)
 
-		fetchResult, err := ups.FetchWithHeaders(ctx, h.upstreamProjectPath(pkg), map[string]string{
+		headers := map[string]string{
 			"If-None-Match":     cachedValidators.ETag,
 			"If-Modified-Since": cachedValidators.LastModified,
-		})
+		}
+		if h.provenanceRequired {
+			headers["Accept"] = "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html;q=0.5, text/html;q=0.2"
+		}
+		fetchResult, err := ups.FetchWithHeaders(ctx, h.upstreamProjectPath(pkg), headers)
 		if err != nil {
 			return nil, "", 0, ups.Name, err
 		}
@@ -182,27 +214,20 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 			return nil, "", 0, ups.Name, cache.ErrNotModified
 		}
 
-		// Read the HTML to rewrite URLs
+		// Read the index document and rewrite artifact URLs before caching.
 		body, err := io.ReadAll(fetchResult.Body)
 		fetchResult.Body.Close()
 		if err != nil {
 			return nil, "", 0, ups.Name, err
 		}
 
-		html, err := rewriteSignedArtifactURLs(
-			string(body),
-			"",
-			h.pathPrefix,
-			fetchResult.URL,
-			h.tokenAudience(),
-			h.artifactSigningKey,
-		)
+		rewritten, contentType, err := h.rewriteIndex(body, fetchResult.ContentType, fetchResult.URL, ups.ProvenanceSourceID())
 		if err != nil {
 			return nil, "", 0, ups.Name, err
 		}
 
-		bodyReader := io.NopCloser(strings.NewReader(html))
-		return cache.WithResponseValidators(bodyReader, fetchResult.ETag, fetchResult.LastModified), fetchResult.ContentType, int64(len(html)), ups.Name, nil
+		bodyReader := io.NopCloser(bytes.NewReader(rewritten))
+		return cache.WithResponseValidators(bodyReader, fetchResult.ETag, fetchResult.LastModified), contentType, int64(len(rewritten)), ups.Name, nil
 	})
 
 	if err != nil {
@@ -219,26 +244,83 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	}
 	defer result.Reader.Close()
 
-	// Read cached HTML and apply runtime URL rewriting with actual base URL
+	// Read the cached representation and apply the client-facing URL shape.
 	body, err := io.ReadAll(result.Reader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "read cache"})
 		return
 	}
 
-	// The cached version has relative /pypi/files/... paths.
-	// Replace them with the full base URL for the client.
-	html := string(body)
-	html = strings.ReplaceAll(html, `href="`+h.pathPrefix+`/files/`, `href="`+baseURL+h.pathPrefix+`/files/`)
-
 	ct := result.ContentType
 	if ct == "" {
 		ct = "text/html"
 	}
+	body, ct, err = h.withClientRepresentation(body, ct, baseURL, c.GetHeader("Accept"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "render index"})
+		return
+	}
 	c.Header("Content-Type", ct)
-	c.String(http.StatusOK, html)
+	c.String(http.StatusOK, string(body))
 
-	adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(html)))
+	adapter.LogAccess(c.Request.Context(), h.db, h.adapterID, c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), int64(len(body)))
+}
+
+// rewriteIndex converts the upstream simple index into cache-stable local
+// artifact references. PEP 691 JSON is used when provenance is required; an
+// upstream that ignores the negotiation returns HTML and the gate fails
+// closed later because those references carry no upload-time.
+func (h *Handler) rewriteIndex(body []byte, contentType, pageURL, sourceID string) ([]byte, string, error) {
+	if h.provenanceRequired && strings.Contains(strings.ToLower(contentType), "json") {
+		rewritten, err := rewriteSignedJSONIndex(body, h.pathPrefix, pageURL, h.tokenAudience(), sourceID, h.artifactSigningKey)
+		if err != nil {
+			return nil, "", err
+		}
+		return rewritten, "application/vnd.pypi.simple.v1+json", nil
+	}
+	html, err := rewriteSignedArtifactURLs(
+		string(body),
+		"",
+		h.pathPrefix,
+		pageURL,
+		h.tokenAudience(),
+		sourceID,
+		h.artifactSigningKey,
+	)
+	if err != nil {
+		return nil, "", err
+	}
+	return []byte(html), contentType, nil
+}
+
+// withClientRepresentation injects the request origin and serves HTML to
+// clients that did not advertise PEP 691 JSON support.
+func (h *Handler) withClientRepresentation(body []byte, contentType, baseURL, accept string) ([]byte, string, error) {
+	jsonRepresentation := strings.Contains(strings.ToLower(contentType), "json")
+	clientAcceptsJSON := strings.Contains(strings.ToLower(accept), "application/vnd.pypi.simple.v1+json")
+	if jsonRepresentation && !clientAcceptsJSON {
+		rendered, err := renderSimpleHTMLFromJSON(body)
+		if err != nil {
+			return nil, "", err
+		}
+		return bytes.ReplaceAll(
+			rendered,
+			[]byte(`href="`+h.pathPrefix+`/files/`),
+			[]byte(`href="`+baseURL+h.pathPrefix+`/files/`),
+		), "text/html; charset=utf-8", nil
+	}
+	if jsonRepresentation {
+		return bytes.ReplaceAll(
+			body,
+			[]byte(`"url":"`+h.pathPrefix+`/files/`),
+			[]byte(`"url":"`+baseURL+h.pathPrefix+`/files/`),
+		), contentType, nil
+	}
+	return bytes.ReplaceAll(
+		body,
+		[]byte(`href="`+h.pathPrefix+`/files/`),
+		[]byte(`href="`+baseURL+h.pathPrefix+`/files/`),
+	), contentType, nil
 }
 
 // handleFileDownload proxies and caches package file downloads.

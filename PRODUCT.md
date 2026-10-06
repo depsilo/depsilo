@@ -75,10 +75,12 @@ ADR-0004.
   local or S3-backed artifact storage, health monitoring, access and audit
   logs, Prometheus metrics, package rules, supply-chain intelligence, and
   webhook alerts.
-- Minimum-release-age enforcement is source-bound for npm: the packument
-  publish time travels in the authenticated tarball token, and positive npm
-  thresholds are accepted. Every other ecosystem still rejects positive
-  thresholds at startup until its artifact source and timestamp are bound.
+- Minimum-release-age enforcement is source-bound for npm and PyPI. The npm
+  packument publish time travels in the authenticated tarball token; PyPI uses
+  the PEP 691 JSON simple index `upload-time` from the same upstream that
+  declares the artifact, and HTML-only upstreams fail closed while the gate is
+  enabled. Every other ecosystem still rejects positive thresholds at startup
+  until its artifact source and timestamp are bound.
   Delivered, unreleased, and planned security capabilities must be described
   according to the actual release state rather than presented as uniformly
   available.

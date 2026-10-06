@@ -12,7 +12,7 @@ func TestSignedIndexCacheKeyVersionsSignedHTML(t *testing.T) {
 	if first == second {
 		t.Fatal("rotated signing key reused the signed index cache key")
 	}
-	if !strings.Contains(first, "/_signed/"+externalArtifactTokenVersion+"/") {
+	if !strings.Contains(first, "/_signed/"+externalArtifactTokenVersionV2+"/") {
 		t.Fatalf("signed index key does not include token version: %q", first)
 	}
 	if pkg, ok := IndexPackageFromCacheKey("extra:torch", first); !ok || pkg != "torch" {

@@ -10,7 +10,11 @@
   travels in the authenticated tarball token, an enabled npm threshold is
   accepted at startup, missing or legacy provenance fails closed, and the
   capability summary reports npm as source-bound.
-- PyPI and the remaining ecosystems follow the rollout order below.
+- 2026-10-06: the PyPI slice is implemented — the adapter negotiates the
+  PEP 691 JSON simple index, signs `upload-time` and the declaring upstream
+  into the artifact reference, renders the legacy HTML representation for
+  clients that do not accept JSON, and fails closed on HTML-only upstreams.
+- The remaining ecosystems follow the rollout order below.
 
 ## Goal
 

@@ -637,7 +637,7 @@ func TestRegisterActiveAdaptersAddsOnlyStandardAndProjectPyPIRoutes(t *testing.T
 	}
 	engine := gin.New()
 	project := engine.Group("/p/:slug")
-	if err := registerActiveAdapters(engine, project, definitions, registry.Pools(), testCacheManager(t, database), config.CacheConfig{}, database); err != nil {
+	if err := registerActiveAdapters(engine, project, definitions, registry.Pools(), testCacheManager(t, database), config.CacheConfig{}, database, nil); err != nil {
 		t.Fatal(err)
 	}
 	paths := make([]string, 0)
@@ -695,6 +695,7 @@ func TestRegisteredStandardAdapterRecoversUnhealthyPassiveUpstream(t *testing.T)
 		testCacheManager(t, database),
 		config.CacheConfig{},
 		database,
+		nil,
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -805,5 +806,42 @@ func waitForAccessLogs(t *testing.T, database *gorm.DB, wanted int64) {
 			t.Fatalf("access logs=%d want>=%d", count, wanted)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestRegisterActiveAdaptersInjectsPyPIProvenanceKey(t *testing.T) {
+	database := serverTestDB(t)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<a href="package.whl">package</a>`)
+	}))
+	t.Cleanup(target.Close)
+	record := db.UpstreamRecord{
+		AdapterType: "pypi", Name: "provenance", URL: target.URL, Priority: 1,
+		ProbeMode: "passive", ProbeInterval: "30m", Healthy: true,
+	}
+	if err := database.Create(&record).Error; err != nil {
+		t.Fatal(err)
+	}
+	registry, err := upstream.NewRegistry(database, []string{"pypi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions, err := activeDefinitions(standardEcosystemDefinitions(&config.Config{}, nil), []string{"pypi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := gin.New()
+	if err := registerActiveAdapters(
+		engine,
+		engine.Group("/p/:slug"),
+		definitions,
+		registry.Pools(),
+		testCacheManager(t, database),
+		config.CacheConfig{},
+		database,
+		[]byte(strings.Repeat("k", 32)),
+	); err != nil {
+		t.Fatalf("registerActiveAdapters with PyPI provenance key: %v", err)
 	}
 }
