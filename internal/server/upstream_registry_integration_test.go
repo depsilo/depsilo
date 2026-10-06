@@ -354,12 +354,18 @@ func TestConcurrentAndRepeatedShutdownCleansUpExactlyOnce(t *testing.T) {
 
 func TestCleanupErrorDoesNotPoisonLaterShutdown(t *testing.T) {
 	sentinel := errors.New("cleanup sentinel")
+	releaseRetry := make(chan struct{})
+	retryStarted := make(chan struct{})
 	var cleanupCalls atomic.Int64
 	srv, _ := startLifecycleTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}), func() error {
-		if cleanupCalls.Add(1) == 1 {
+		switch cleanupCalls.Add(1) {
+		case 1:
 			return sentinel
+		case 2:
+			close(retryStarted)
+			<-releaseRetry
 		}
 		return nil
 	})
@@ -367,17 +373,29 @@ func TestCleanupErrorDoesNotPoisonLaterShutdown(t *testing.T) {
 	if err := Shutdown(context.Background(), srv); !errors.Is(err, sentinel) {
 		t.Fatalf("first Shutdown error=%v", err)
 	}
+	// The failed cleanup keeps the lifecycle registered while the single
+	// background retry owner attempts the second cleanup.
+	select {
+	case <-retryStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("background cleanup retry did not start")
+	}
 	if _, ok := serverLifecycles.Load(srv); !ok {
 		t.Fatal("failed cleanup deleted lifecycle entry")
 	}
-	if err := Shutdown(context.Background(), srv); err != nil {
-		t.Fatalf("retry Shutdown error=%v", err)
+	close(releaseRetry)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, ok := serverLifecycles.Load(srv); !ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("background cleanup retry did not finish")
+		}
+		time.Sleep(time.Millisecond)
 	}
 	if got := cleanupCalls.Load(); got != 2 {
 		t.Fatalf("cleanup calls=%d want=2", got)
-	}
-	if _, ok := serverLifecycles.Load(srv); ok {
-		t.Fatal("completed lifecycle retained sync.Map entry")
 	}
 	if err := Shutdown(context.Background(), srv); err != nil {
 		t.Fatalf("completed Shutdown error=%v", err)
