@@ -668,7 +668,22 @@ export interface ProjectPackagesResponse { items: ProjectPackage[]; total: numbe
 export interface RegenerateProjectTokenResponse { token: string; proxy_url: string }
 export interface DeleteProjectResponse { status: 'deleted' }
 export type ProjectSBOMFormat = 'spdx' | 'cyclonedx'
-export interface ProjectSBOMQuery { format: ProjectSBOMFormat; ecosystem?: string }
+export type ProjectSBOMPreset = 'technical-file'
+export interface ProjectSBOMQuery {
+  format: ProjectSBOMFormat
+  ecosystem?: string
+  /** CRA technical-file envelope with coverage manifest (implies CRA mode). */
+  preset?: ProjectSBOMPreset
+  /** Detached Ed25519 signature over the exact response body. */
+  sign?: boolean
+}
+
+export interface ComplianceProfile {
+  organization: string
+  contact: string
+  signing_configured: boolean
+  component_annotation_count: number
+}
 
 export interface AdminUser { id: number; username: string; role: UserRole; enabled: boolean; last_login_at: string | null; created_at: string; updated_at: string }
 export interface CreateUserRequest { username: string; password: string; role: UserRole }

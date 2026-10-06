@@ -6,6 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- The per-project SBOM export (Pro) gains a CRA mode and a technical-file
+  preset. CRA mode carries the NTIA/CRA minimum elements: purl, SHA-256
+  checksums recorded by tamper detection, supplier/license fields, and
+  explicit product-to-component dependency relationships. The preset wraps
+  the SBOM in a manifest with product identity, manufacturer, coverage
+  counts, relationship depth, and explicit limitations. Supplier and license
+  values come from operator-declared `[compliance.components]` annotations;
+  unlisted components export as unknown. With a configured Ed25519 key,
+  `sign=true` returns a detached signature over the exact response body so
+  the document itself stays valid JSON for its format.
 - The guaranteed malicious-package dataset now covers PyPI and RubyGems.
   PyPI verifies legacy archive filenames (`.zip`, `.egg`, `.tar.bz2`, legacy
   sdists, …) against the declaring package's simple index; RubyGems resolves

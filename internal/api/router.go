@@ -395,6 +395,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	projectsHandler := admin.NewProjectsHandler(deps.DB)
 	if deps.Config != nil {
 		projectsHandler.SetCompliance(deps.Config.Compliance)
+		adminRead.GET("/compliance/profile", admin.NewComplianceHandler(deps.Config.Compliance).Profile)
 	}
 	proRead.GET("/projects", projectsHandler.List)
 	proRead.GET("/projects/:id", projectsHandler.Detail)

@@ -1600,6 +1600,13 @@ const zh = {
       filterEcosystem: '筛选生态',
       allEcosystems: '全部生态',
       generating: '正在生成...',
+      technicalFile: 'CRA 技术文件',
+      technicalFileHint: '附带覆盖率清单与依赖关系（NTIA/CRA 最低要素）。',
+      sign: '签名（Ed25519）',
+      signHint: '会同时下载签名文件。',
+      signUnavailable: '未配置签名密钥，导出不会签名。',
+      organizationMissing: '未配置 compliance.organization，技术文件将没有制造商信息。',
+      downloadFailed: 'SBOM 导出失败。',
     },
 
     // Monitor

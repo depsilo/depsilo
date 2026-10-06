@@ -1593,6 +1593,13 @@ const en = {
       filterEcosystem: 'Filter Ecosystem',
       allEcosystems: 'All Ecosystems',
       generating: 'Generating...',
+      technicalFile: 'CRA technical file',
+      technicalFileHint: 'Wrap the SBOM with a coverage manifest and dependency relationships (NTIA/CRA minimum elements).',
+      sign: 'Sign (Ed25519)',
+      signHint: 'A detached signature file is downloaded next to the SBOM.',
+      signUnavailable: 'No signing key is configured; the export stays unsigned.',
+      organizationMissing: 'compliance.organization is not configured, so the technical file has no manufacturer.',
+      downloadFailed: 'SBOM export failed.',
     },
 
     // Monitor

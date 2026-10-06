@@ -128,9 +128,12 @@ on the request path (refuses to serve based on policy — not just scans and rep
 - [x] **Tamper detection.** Persist a content hash per immutable artifact on first
       fetch; alert if its upstream content later changes. *(Landed on master
       2026-07-10; unreleased.)*
-- [ ] **CRA-mode SBOM export.** Ensure output carries NTIA/CRA minimum elements
+- [x] **CRA-mode SBOM export.** Output carries NTIA/CRA minimum elements
       (name+version, supplier, **purl**, **SHA-256** hash, license, dependency
-      relationships), is signable, and has a "technical-file" export preset.
+      relationships), is signable with an operator-configured Ed25519 key, and
+      has a "technical-file" export preset. *(Landed on master 2026-10-06;
+      unreleased. Supplier/license are operator-declared; the manifest reports
+      coverage gaps instead of inventing values.)*
 
 ### T2 — Adoptability & trust (table stakes — **reduced scope post-2026-06-30**)
 

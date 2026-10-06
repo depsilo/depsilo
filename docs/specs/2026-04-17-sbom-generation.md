@@ -233,3 +233,32 @@ sbom.includeVulnerabilities / 包含漏洞信息
 - No license field population (needs separate license scanning feature)
 - Vulnerability enrichment is optional and best-effort
 - All packages are listed as direct dependencies (DESCRIBES relationship) — no dependency tree
+
+## 2026-10-06 update — CRA mode and technical-file preset
+
+The runtime per-project export (Pro) now has two additions on the same
+endpoint:
+
+- `cra=true` adds the NTIA/CRA minimum elements. Each component carries the
+  SHA-256 values recorded by tamper detection for its artifacts (all of them,
+  sorted; absent when the artifact was never fetched through the cache), the
+  purl, and supplier/license fields. SPDX adds a product package with
+  `DEPENDS_ON` relationships; CycloneDX adds a root `bom-ref`, a
+  `dependencies` array, and coverage properties in `metadata.properties`.
+  Supplier and license values are operator-declared through
+  `[compliance.components]` (`<ecosystem>:<package>` or
+  `<ecosystem>:<package>@<version>`); unlisted components export as unknown
+  (`NOASSERTION`), never as guessed values.
+- `preset=technical-file` implies CRA mode and wraps the document in a
+  technical-file envelope: product identity, manufacturer
+  (`compliance.organization`/`contact`), the embedded document's format and
+  component count, coverage counts for SHA-256/supplier/license, the
+  relationship depth, and explicit limitations. Relationship depth stays
+  top-level: the proxy records downloads, not a dependency graph.
+- `sign=true` requires `compliance.signing_key_file` (PKCS#8 PEM Ed25519) and
+  returns a detached signature over the exact response body in
+  `X-Depsilo-SBOM-Signature-*` headers. The document itself is unchanged, so
+  SPDX and CycloneDX consumers keep working.
+
+The Admin Projects page exposes the preset and signing options and saves the
+signature as a `.sig.json` sidecar next to the downloaded document.

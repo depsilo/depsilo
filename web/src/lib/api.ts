@@ -50,6 +50,7 @@ import type {
   OnboardingStatusQuery,
   OnboardingStatusResponse,
   OnboardingTerminalStatus,
+  ComplianceProfile,
   Principal,
   PolicyStatus,
   Project,
@@ -279,6 +280,7 @@ export const adminApi = {
   listProjectPackages: (id: number, params: ProjectPackageQuery, options: ApiGetOptions = {}) => api.get<ProjectPackagesResponse>(`/admin/projects/${id}/packages`, { ...options, params }),
   regenerateProjectToken: (id: number) => api.post<RegenerateProjectTokenResponse>(`/admin/projects/${id}/token`),
   exportSbom: (id: number, params: ProjectSBOMQuery, options: ApiGetOptions = {}) => api.get<Blob>(`/admin/projects/${id}/sbom`, { ...options, params, responseType: 'blob' }),
+  complianceProfile: (options: ApiGetOptions = {}) => api.get<ComplianceProfile>('/admin/compliance/profile', options),
 }
 
 // Setup wizard (no auth)

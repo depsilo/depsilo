@@ -13,6 +13,7 @@ import type {
   OnboardingStatusResponse,
   PolicyStatus,
   ProjectListResponse,
+  ComplianceProfile,
   RecentDownloadsResponse,
   RuleTestResponse,
   SecurityDashboard,
@@ -29,6 +30,7 @@ export interface MockHttpResponse {
   body: JsonValue
   contentType?: string
   serialize?: 'json' | 'text'
+  headers?: Record<string, string>
 }
 export type AdminApiResponder = (request: Request) => JsonValue | Promise<JsonValue>
 export type AdminApiOverride = JsonValue
@@ -246,6 +248,12 @@ const canonicalAdminApiDefaults = {
   'GET /api/v1/admin/security/packages': { items: [], total: 0, page: 1 } satisfies SecurityPackagePage,
   'GET /api/v1/admin/security/suggestions': { items: [], total: 0, page: 1 } satisfies SecuritySuggestionPage,
   'GET /api/v1/admin/projects': { items: [], total: 0 } satisfies ProjectListResponse,
+  'GET /api/v1/admin/compliance/profile': {
+    organization: '',
+    contact: '',
+    signing_configured: false,
+    component_annotation_count: 0,
+  } satisfies ComplianceProfile,
 }
 
 export const adminApiDefaults: Record<string, JsonValue> = {
@@ -359,6 +367,7 @@ export async function mockAdminApi(
     await route.fulfill({
       status: wrapped.status,
       contentType: wrapped.contentType ?? 'application/json',
+      headers: wrapped.headers,
       body: wrapped.serialize === 'text' ? String(wrapped.body) : JSON.stringify(wrapped.body),
     })
   })

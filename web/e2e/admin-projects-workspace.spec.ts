@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 import type {
+  ComplianceProfile,
   ProjectDetail,
   ProjectListResponse,
   ProjectPackagesResponse,
@@ -66,6 +67,12 @@ async function mockPopulatedProject(page: Page, summary: ProjectSummary = projec
       proxy_url: `https://depsilo.example/p/${summary.slug}`,
     } satisfies ProjectDetail,
     [`GET /api/v1/admin/projects/${summary.id}/packages`]: projectPackages,
+    'GET /api/v1/admin/compliance/profile': {
+      organization: 'Acme GmbH',
+      contact: 'security@acme.example',
+      signing_configured: true,
+      component_annotation_count: 2,
+    } satisfies ComplianceProfile,
   })
 }
 
@@ -217,4 +224,45 @@ test('long project detail, SBOM controls, package filter, and pagination remain 
   await pagination.getByRole('button', { name: '下一页' }).click()
   await expect(pagination.getByText('第 2 / 3 页', { exact: true })).toBeVisible()
   await expectNoRootOverflow(page, 320)
+})
+
+test('SBOM export requests the CRA preset and saves the detached signature', async ({ page }) => {
+  await mockPopulatedProject(page)
+  const sbomQueries: string[] = []
+  await page.route('**/api/v1/admin/projects/7/sbom*', async route => {
+    const url = new URL(route.request().url())
+    sbomQueries.push(url.search)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: {
+        'x-depsilo-sbom-signature-algorithm': 'ed25519',
+        'x-depsilo-sbom-signature': 'c2lnbmF0dXJl',
+        'x-depsilo-sbom-signature-publickey': 'cHVibGljLWtleQ==',
+        'x-depsilo-sbom-signature-payloadsha256': 'a'.repeat(64),
+      },
+      body: JSON.stringify({
+        sbom: { spdxVersion: 'SPDX-2.3', packages: [] },
+        technical_file: { format: 'depsilo/cra-technical-file/v1' },
+      }),
+    })
+  })
+
+  await page.goto('/admin/projects')
+  await page.getByRole('button', { name: `查看 ${projectName}`, exact: true }).click()
+  await page.getByRole('checkbox', { name: /CRA 技术文件/ }).check()
+  await page.getByRole('checkbox', { name: /签名（Ed25519）/ }).check()
+
+  const downloads: string[] = []
+  page.on('download', download => {
+    downloads.push(download.suggestedFilename())
+  })
+  await page.getByRole('button', { name: '下载 SBOM' }).click()
+
+  await expect.poll(() => sbomQueries.length).toBe(1)
+  expect(sbomQueries[0]).toContain('preset=technical-file')
+  expect(sbomQueries[0]).toContain('sign=true')
+  await expect.poll(() => downloads.length).toBe(2)
+  expect(downloads).toContain(`${projectName}-cra-technical-file.json`)
+  expect(downloads).toContain(`${projectName}-cra-technical-file.json.sig.json`)
 })

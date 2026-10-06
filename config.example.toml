@@ -428,6 +428,31 @@ sync_interval = "6h"
 # mirror_url  = "https://osv-vulnerabilities.storage.googleapis.com"
 # proxy       = "http://127.0.0.1:7890"   # required in mainland China
 
+# ── Compliance (CRA-mode SBOM technical file) ─────────────────────────
+# The per-project SBOM export (Pro) always emits purl and version. Adding
+# ?cra=true, or the "CRA technical file" option in the Admin UI, adds the
+# NTIA/CRA minimum elements: SHA-256 checksums from tamper detection,
+# supplier/license fields, and explicit dependency relationships from the
+# product to each component. Depsilo never invents supplier or license
+# values: declare them below, or the component exports as unknown
+# (NOASSERTION) and the technical-file manifest reports the gap.
+[compliance]
+# Manufacturer/supplier of the product described by the technical file.
+organization = ""
+# Security contact published in the technical file.
+contact = ""
+# Optional Ed25519 PKCS#8 PEM key that signs CRA exports (?sign=true).
+#   openssl genpkey -algorithm ed25519 -out /etc/depsilo/sbom-signing-key.pem
+# signing_key_file = "/etc/depsilo/sbom-signing-key.pem"
+
+# Per-package facts. The ID is "<ecosystem>:<package>" for every version or
+# "<ecosystem>:<package>@<version>" for one version; the version-specific
+# entry wins per field when both exist.
+# [[compliance.components]]
+# id       = "pypi:requests"
+# supplier = "Python Software Foundation"
+# license  = "Apache-2.0"
+
 # ── Tamper detection (content integrity of immutable artifacts) ──
 # Records the SHA-256 of each immutable artifact (wheel/.crate/.gem/…)
 # on first fetch. When the artifact is naturally re-fetched (background

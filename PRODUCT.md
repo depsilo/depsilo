@@ -110,7 +110,8 @@ ADR-0004.
 - The entitlement boundary is decided: governance primitives (minimum release
   age, known-malicious blocklist, OSV scanning, package rules, quarantine,
   audit logs, and webhooks) are open source; multi-project workspaces and the
-  runtime per-project SBOM export are Pro features with a 14-day trial.
+  runtime per-project SBOM export — including its CRA mode and technical-file
+  preset — are Pro features with a 14-day trial.
   Pricing, packaging, and support terms remain undecided. Do not present
   `$99 lifetime Pro` or Enterprise contract licensing as durable product
   truth.

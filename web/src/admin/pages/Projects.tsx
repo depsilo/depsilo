@@ -59,6 +59,9 @@ export default function ProjectsV2() {
   const [pkgEcosystem, setPkgEcosystem] = useState('')
   const [sbomFormat, setSbomFormat] = useState<ProjectSBOMFormat>('spdx')
   const [sbomEcosystem, setSbomEcosystem] = useState('')
+  const [sbomTechnicalFile, setSbomTechnicalFile] = useState(false)
+  const [sbomSign, setSbomSign] = useState(false)
+  const [sbomError, setSbomError] = useState('')
   const [sbomLoading, setSbomLoading] = useState(false)
 
   const locale = i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en-US'
@@ -99,6 +102,14 @@ export default function ProjectsV2() {
     retry: false,
   })
   const pkgData = packagesQuery.data
+  const complianceQuery = useQuery({
+    queryKey: ['admin', 'compliance', 'profile'],
+    queryFn: ({ signal }) => adminApi.complianceProfile({ signal }),
+    enabled: !!selectedProject,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+  const compliance = complianceQuery.data?.data
   const packages = pkgData?.data.items ?? []
   const pkgTotal = pkgData?.data.total ?? 0
 
@@ -143,26 +154,60 @@ export default function ProjectsV2() {
     createMutation.mutate(createForm)
   }
 
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function sbomFailureMessage(error: unknown) {
+    const response = (error as { response?: { data?: unknown } }).response
+    const body = response?.data
+    if (body instanceof Blob) {
+      try {
+        const parsed = JSON.parse(await body.text()) as { message?: string }
+        if (parsed.message) return parsed.message
+      } catch {
+        // Not a JSON error body; fall through to the generic message.
+      }
+    }
+    return t('sbom.downloadFailed')
+  }
+
   async function handleSbomDownload() {
     if (!selectedProject) return
     setSbomLoading(true)
+    setSbomError('')
     try {
       const res = await adminApi.exportSbom(selectedProject.id, {
         format: sbomFormat,
         ecosystem: sbomEcosystem || undefined,
+        preset: sbomTechnicalFile ? 'technical-file' : undefined,
+        sign: sbomSign || undefined,
       })
-      const blob = new Blob([res.data])
-      const ext = sbomFormat === 'spdx' ? 'spdx.json' : 'cdx.json'
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${projectDetail?.name || 'project'}-sbom.${ext}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch {
-      // ignore
+      const base = `${projectDetail?.name || 'project'}-sbom`
+      const filename = sbomTechnicalFile
+        ? `${projectDetail?.name || 'project'}-cra-technical-file.json`
+        : `${base}.${sbomFormat === 'spdx' ? 'spdx.json' : 'cdx.json'}`
+      downloadBlob(new Blob([res.data], { type: 'application/json' }), filename)
+      const signature = res.headers?.['x-depsilo-sbom-signature']
+      if (typeof signature === 'string' && signature) {
+        const sidecar = {
+          algorithm: res.headers['x-depsilo-sbom-signature-algorithm'],
+          payload_sha256: res.headers['x-depsilo-sbom-signature-payloadsha256'],
+          public_key: res.headers['x-depsilo-sbom-signature-publickey'],
+          signature,
+          document: filename,
+        }
+        downloadBlob(new Blob([JSON.stringify(sidecar, null, 2)], { type: 'application/json' }), `${filename}.sig.json`)
+      }
+    } catch (error) {
+      setSbomError(await sbomFailureMessage(error))
     } finally {
       setSbomLoading(false)
     }
@@ -305,6 +350,38 @@ export default function ProjectsV2() {
               <Icon name="download" size="sm" />
               {sbomLoading ? t('sbom.generating') : t('sbom.download')}
             </ButtonV2>
+          </div>
+          <div className="mt-3 grid gap-2">
+            <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[var(--brand)] stripe-focus-ring"
+                checked={sbomTechnicalFile}
+                onChange={(event) => setSbomTechnicalFile(event.target.checked)}
+              />
+              <span>
+                {t('sbom.technicalFile')}
+                <span className="block text-[13px] text-[var(--text-soft)]">{t('sbom.technicalFileHint')}</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[var(--brand)] stripe-focus-ring"
+                checked={sbomSign}
+                onChange={(event) => setSbomSign(event.target.checked)}
+              />
+              <span>
+                {t('sbom.sign')}
+                <span className="block text-[13px] text-[var(--text-soft)]">
+                  {compliance?.signing_configured ? t('sbom.signHint') : t('sbom.signUnavailable')}
+                </span>
+              </span>
+            </label>
+            {sbomTechnicalFile && !compliance?.organization && (
+              <p className="text-[13px] text-[var(--text-soft)]">{t('sbom.organizationMissing')}</p>
+            )}
+            {sbomError && <InlineNotice tone="danger">{sbomError}</InlineNotice>}
           </div>
         </section>
 
