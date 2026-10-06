@@ -277,6 +277,11 @@ neither an artifact-triggered background scan nor a periodic cache scan records
 a filename-derived identity as clean. Existing pre-v3 RubyGems vulnerability
 checks, advisories, dismissals, and project-package identities are invalidated
 during the schema-v3 upgrade; cached gem bytes remain available.
+Minimum release age is a separate seam and does not rely on filename guessing:
+it requires exactly one authoritative compact-index match across every hyphen
+split, resolves `created_at` and the checksum from that entry, and fails closed
+when the index is unavailable or the artifact is ambiguous. Enabling it adds no
+Package Rule or OSV-scan support for RubyGems.
 Docker is also outside the Package Rule seam; its registry/image/tag-or-digest
 identity remains owned by the separate OCI control plane.
 Hugging Face repository identities remain on the quarantine surface and are
