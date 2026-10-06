@@ -393,6 +393,9 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	proWrite.Use(entitlement.RequirePro(deps.Entitlement))
 
 	projectsHandler := admin.NewProjectsHandler(deps.DB)
+	if deps.Config != nil {
+		projectsHandler.SetCompliance(deps.Config.Compliance)
+	}
 	proRead.GET("/projects", projectsHandler.List)
 	proRead.GET("/projects/:id", projectsHandler.Detail)
 	proRead.GET("/projects/:id/packages", projectsHandler.ListPackages)

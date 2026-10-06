@@ -28,7 +28,7 @@ func newProjectsContractRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := database.AutoMigrate(&db.Project{}, &db.ProjectPackage{}); err != nil {
+	if err := database.AutoMigrate(&db.Project{}, &db.ProjectPackage{}, &db.TamperRecord{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	h := NewProjectsHandler(database)

@@ -53,6 +53,34 @@ type Config struct {
 	// duration parsing + allow-list semantics next to the code that
 	// consumes them; this config carries the raw operator-facing shape.
 	SupplyChain SupplyChainConfig `mapstructure:"supply_chain"`
+	// Compliance carries the operator-declared facts a CRA technical file
+	// needs: the manufacturer identity, an optional Ed25519 signing key, and
+	// per-package supplier/license annotations. Depsilo never invents these
+	// values; components without an annotation are exported as unknown.
+	Compliance ComplianceConfig `mapstructure:"compliance"`
+}
+
+// ComplianceConfig is the operator-owned input for CRA-mode SBOM exports.
+type ComplianceConfig struct {
+	// Organization names the manufacturer/supplier of the product described
+	// by the technical file.
+	Organization string `mapstructure:"organization"`
+	// Contact is the security contact published in the technical file.
+	Contact string `mapstructure:"contact"`
+	// SigningKeyFile points at a PKCS#8 PEM Ed25519 private key used to sign
+	// CRA exports. Empty disables signing.
+	SigningKeyFile string `mapstructure:"signing_key_file"`
+	// Components annotates package-level supplier/license facts. The ID is
+	// "<ecosystem>:<package>" or "<ecosystem>:<package>@<version>"; the
+	// version-specific entry wins over the package-wide entry.
+	Components []ComplianceComponentConfig `mapstructure:"components"`
+}
+
+// ComplianceComponentConfig is one operator-declared package fact.
+type ComplianceComponentConfig struct {
+	ID       string `mapstructure:"id"`
+	Supplier string `mapstructure:"supplier"`
+	License  string `mapstructure:"license"`
 }
 
 // PolicyConfig controls the behavior used when the package-rule snapshot

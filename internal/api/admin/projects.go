@@ -3,6 +3,7 @@ package admin
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,17 +15,34 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/config"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
 	"depsilo/internal/sbom"
 )
 
 type ProjectsHandler struct {
-	db *gorm.DB
+	db         *gorm.DB
+	compliance config.ComplianceConfig
 }
 
 func NewProjectsHandler(database *gorm.DB) *ProjectsHandler {
 	return &ProjectsHandler{db: database}
+}
+
+// SetCompliance supplies the operator-declared CRA facts used by SBOM
+// exports. It is called once at wiring time.
+func (h *ProjectsHandler) SetCompliance(compliance config.ComplianceConfig) {
+	h.compliance = compliance
+}
+
+// complianceProfile converts the operator config into the generator's lookup.
+func (h *ProjectsHandler) complianceProfile() sbom.ComplianceProfile {
+	entries := make(map[string]sbom.ComponentFacts, len(h.compliance.Components))
+	for _, component := range h.compliance.Components {
+		entries[component.ID] = sbom.ComponentFacts{Supplier: component.Supplier, License: component.License}
+	}
+	return sbom.NewComplianceProfile(h.compliance.Organization, h.compliance.Contact, entries)
 }
 
 var slugRegex = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -291,6 +309,14 @@ func (h *ProjectsHandler) ListPackages(c *gin.Context) {
 }
 
 // ExportSBOM generates and downloads an SBOM for a project.
+//
+// Query parameters:
+//   - format: spdx (default) or cyclonedx
+//   - ecosystem: optional adapter identity filter
+//   - cra: true adds the NTIA/CRA minimum elements
+//   - preset: "technical-file" wraps the SBOM in a CRA technical-file
+//     envelope (implies cra) with an operator-facing manifest
+//   - sign: true adds a detached Ed25519 signature over the SBOM document
 func (h *ProjectsHandler) ExportSBOM(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 
@@ -300,41 +326,85 @@ func (h *ProjectsHandler) ExportSBOM(c *gin.Context) {
 		return
 	}
 
-	// Get packages
-	query := h.db.Where("project_id = ?", project.ID)
-	if eco := c.Query("ecosystem"); eco != "" {
-		query = query.Where("ecosystem = ?", eco)
+	ecosystem := c.Query("ecosystem")
+	format := c.DefaultQuery("format", "spdx")
+	if format != "cyclonedx" {
+		format = "spdx"
 	}
+	preset := c.Query("preset")
+	if preset != "" && preset != "technical-file" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    "UNKNOWN_PRESET",
+			"message": fmt.Sprintf("unknown SBOM preset %q (want technical-file)", preset),
+		})
+		return
+	}
+	cra := preset == "technical-file" || queryFlag(c, "cra")
+	sign := queryFlag(c, "sign")
 
-	var packages []db.ProjectPackage
-	if err := query.Order("ecosystem, package_name, version").Find(&packages).Error; err != nil {
+	profile := h.complianceProfile()
+	gen := sbom.NewGenerator(h.db)
+	components, err := gen.Components(c.Request.Context(), project.ID, ecosystem, profile)
+	if err != nil {
 		writeProjectDBError(c, err)
 		return
 	}
 
-	format := c.DefaultQuery("format", "spdx")
-	gen := sbom.NewGenerator(h.db)
-
-	var data []byte
-	var err error
+	options := sbom.Options{CRA: cra, Profile: profile}
+	var document []byte
 	var filename string
-
 	switch format {
 	case "cyclonedx":
-		data, err = gen.GenerateCycloneDX(&project, packages)
+		document, err = gen.GenerateCycloneDX(&project, components, options)
 		filename = fmt.Sprintf("%s-sbom-%s.cyclonedx.json", project.Slug, time.Now().Format("2006-01-02"))
 	default:
-		data, err = gen.GenerateSPDX(&project, packages)
+		document, err = gen.GenerateSPDX(&project, components, options)
 		filename = fmt.Sprintf("%s-sbom-%s.spdx.json", project.Slug, time.Now().Format("2006-01-02"))
 	}
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "GENERATE_FAILED", "message": err.Error()})
 		return
 	}
 
+	data := document
+	if preset == "technical-file" {
+		envelope := gin.H{"sbom": json.RawMessage(document)}
+		envelope["technical_file"] = sbom.BuildTechnicalFile(
+			&project, components, options, format, ecosystem, time.Now())
+		filename = fmt.Sprintf("%s-cra-technical-file-%s.json", project.Slug, time.Now().Format("2006-01-02"))
+		encoded, err := json.MarshalIndent(envelope, "", "  ")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "GENERATE_FAILED", "message": err.Error()})
+			return
+		}
+		data = encoded
+	}
+
+	// The detached signature covers the exact response body. It travels in
+	// headers so the document itself stays valid JSON for its format.
+	if sign {
+		key, err := sbom.LoadSigningKey(h.compliance.SigningKeyFile)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "SIGNING_UNAVAILABLE", "message": err.Error()})
+			return
+		}
+		detached := sbom.SignDocument(key, data)
+		c.Header("X-Depsilo-SBOM-Signature-Algorithm", detached.Algorithm)
+		c.Header("X-Depsilo-SBOM-Signature", detached.Signature)
+		c.Header("X-Depsilo-SBOM-Signature-PublicKey", detached.PublicKey)
+		c.Header("X-Depsilo-SBOM-Signature-PayloadSHA256", detached.PayloadSHA256)
+	}
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/json", data)
+}
+
+func queryFlag(c *gin.Context, name string) bool {
+	switch strings.ToLower(strings.TrimSpace(c.Query(name))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // RegenerateToken creates a new token for a project.
