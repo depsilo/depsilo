@@ -155,13 +155,13 @@ export default function DashboardStatusStrip({
       data-query-key="now"
       aria-label={t('overview.serviceStatusLabel')}
       aria-busy={nowPending || undefined}
-      className="dash-card flex min-w-0 flex-col gap-3 py-1 lg:flex-row lg:items-center"
+      className="dash-card flex min-w-0 flex-col gap-3 py-1 xl:flex-row xl:items-center"
     >
-      <div className="grid min-w-0 flex-1 grid-cols-1 divide-y divide-[var(--dash-border)] sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
+      <div className="grid min-w-0 flex-1 grid-cols-1 divide-y divide-[var(--dash-border)] sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
         {cells}
       </div>
       {status.problems.length > 0 && !nowPending && (
-        <div className="flex shrink-0 items-center px-5 pb-3 lg:pb-0 lg:pr-5">
+        <div className="flex shrink-0 items-center justify-end px-5 pb-3 xl:justify-start xl:pb-0 xl:pr-5">
           <ButtonV2 type="button" variant="secondary" size="sm" onClick={onOpenProblems}>
             <Icon name="warning" size="sm" />
             {t('overview.viewProblems')}
@@ -171,7 +171,7 @@ export default function DashboardStatusStrip({
       {nowStale && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-2 px-5 pb-3 text-[13px] lg:pb-0 lg:pr-5"
+          className="flex flex-wrap items-center gap-2 px-5 pb-3 text-[13px] xl:pb-0 xl:pr-5"
           style={{ color: 'var(--dash-warn)' }}
         >
           <span>{t('now.staleData')}</span>

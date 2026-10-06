@@ -143,6 +143,71 @@ test('Overview title is rendered once with a single range control', async ({ pag
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440)
 })
 
+// 1024–1279px keeps four columns from squeezing the status labels and the
+// request table from clipping its time column; both were visible regressions
+// when the strip used the lg breakpoint and the table demanded 680px.
+test('Overview status strip and recent table keep their content at 1024 and 1440', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/now': {
+      status: 'degraded',
+      uptime_seconds: 3 * 86400,
+      now_unix: 1786032000,
+      version: 'dev',
+      rate: {
+        requests_per_min: 744,
+        ingress_bps: 3_400_000,
+        egress_bps: 380_000,
+        has_data: true,
+        measured: true,
+        window_seconds: 60,
+        service_requests_per_sec: 12.4,
+        service_bytes_per_sec: 3_400_000,
+        origin_requests_per_sec: 0.7,
+        origin_bytes_per_sec: 380_000,
+      },
+      upstreams: { healthy: 1, total: 2 },
+      sparkline: [],
+    },
+    'GET /api/v1/admin/dashboard': populatedDashboard({
+      upstreams: [
+        { id: 1, name: 'ruby-china', adapter: 'rubygems', healthy: false, avg_latency_ms: 890, success_rate: 0.71 },
+        { id: 2, name: 'tuna', adapter: 'pypi', healthy: true, avg_latency_ms: 42, success_rate: 0.99 },
+      ],
+    }),
+    'GET /api/v1/admin/logs': {
+      items: [
+        {
+          id: 1, adapter_type: 'rubygems', package_name: 'nokogiri', version: '1.18.4',
+          hit: false, cache_result: 'miss', upstream: 'crash', latency_ms: 30_120,
+          status_code: 500, bytes_sent: 0, client_ip: '10.0.0.9',
+          created_at: '2026-10-06T10:00:00Z',
+        },
+      ],
+      total: 1, page: 1, page_size: 5,
+    },
+  })
+
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await page.goto('/admin')
+
+  const strip = page.locator('[data-dashboard-status-strip]')
+  await expect(strip).toContainText('部分能力异常')
+  // Every truncating label inside the strip must fit its box at 1024.
+  const clippedStrip = await strip.locator('.truncate').evaluateAll(elements =>
+    elements.filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.textContent),
+  )
+  expect(clippedStrip).toEqual([])
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const table = page.locator('[data-table-viewport]').filter({ hasText: '包名及版本' })
+  await expect(table).toContainText('30.1 s')
+  const tableFits = await table.evaluate(element => element.scrollWidth <= element.clientWidth + 1)
+  expect(tableFits).toBe(true)
+
+  await expect(page.locator('[data-testid="traffic-service-flow"]')).toContainText('Depsilo → 客户端')
+  await expect(page.locator('[data-testid="traffic-origin-flow"]')).toContainText('上游 → Depsilo')
+})
+
 test('Overview surfaces a degraded upstream as an actionable centered dialog', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/now': {

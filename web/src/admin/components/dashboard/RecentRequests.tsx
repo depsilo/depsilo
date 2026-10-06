@@ -11,7 +11,7 @@ import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { REQUEST_OUTCOME_META, requestOutcome } from '@/lib/dashboardOverview'
-import { formatBytes, formatTime } from '@/lib/utils'
+import { formatBytes, formatLatency, formatTime } from '@/lib/utils'
 
 const REFRESH_MS = 5_000
 
@@ -94,12 +94,12 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
           <table className="w-full border-collapse text-left">
             <thead>
               <tr style={{ color: 'var(--dash-muted)' }}>
-                <th className="px-5 py-2.5 text-[13px] font-medium">{t('overview.colPackage')}</th>
+                <th className="px-4 py-2.5 text-[13px] font-medium">{t('overview.colPackage')}</th>
                 <th className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colEcosystem')}</th>
                 <th className="px-3 py-2.5 text-[13px] font-medium whitespace-nowrap">{t('overview.colOutcome')}</th>
                 <th className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colSize')}</th>
                 <th className="px-3 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colLatency')}</th>
-                <th className="px-5 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colTime')}</th>
+                <th className="px-4 py-2.5 text-right text-[13px] font-medium whitespace-nowrap">{t('overview.colTime')}</th>
               </tr>
             </thead>
             <tbody>
@@ -115,7 +115,7 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
                     style={{ borderColor: 'var(--dash-border)' }}
                     onClick={() => onOpenDetails(item.id)}
                   >
-                    <td className="max-w-[240px] px-5 py-4">
+                    <td className="max-w-[180px] px-4 py-4">
                       <button
                         type="button"
                         onClick={event => { event.stopPropagation(); onOpenDetails(item.id) }}
@@ -140,9 +140,9 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
                       {formatBytes(item.bytes_sent)}
                     </td>
                     <td className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
-                      {item.latency_ms.toLocaleString()} ms
+                      {formatLatency(item.latency_ms)}
                     </td>
-                    <td className="px-5 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
+                    <td className="px-4 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>
                       <time dateTime={item.created_at}>{formatTime(item.created_at, 'auto')}</time>
                     </td>
                   </tr>

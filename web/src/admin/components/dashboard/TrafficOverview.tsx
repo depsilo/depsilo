@@ -28,6 +28,9 @@ export default function TrafficOverview({
   const periodLabel = t(rangeLabelKey(range))
   const coverageNote = coverageDetail(coverage, rangeStart, t)
   const coverageFlag = coverageNote ? t('overview.originPartialShort') : undefined
+  const originRequestsDetail = period
+    ? t('overview.originRequestsTotal', { count: period.upstream_requests.toLocaleString() })
+    : undefined
 
   return (
     <section data-dashboard-traffic aria-labelledby="overview-traffic-title" className="flex min-w-0 flex-col gap-3">
@@ -42,7 +45,7 @@ export default function TrafficOverview({
           tone="memory"
           badge={t('overview.liveBadge')}
           value={measured ? formatBps(now?.rate.service_bytes_per_sec ?? 0) : '—'}
-          detail={measured ? undefined : t('overview.notCollected')}
+          detail={measured ? t('overview.directionService') : t('overview.notCollected')}
           loading={nowPending && !now}
           info={t('overview.hintServiceFlow')}
           infoLabel={t('overview.serviceFlowInfoLabel')}
@@ -54,7 +57,7 @@ export default function TrafficOverview({
           tone="origin"
           badge={t('overview.liveBadge')}
           value={measured ? formatBps(now?.rate.origin_bytes_per_sec ?? 0) : '—'}
-          detail={measured ? undefined : t('overview.notCollected')}
+          detail={measured ? t('overview.directionOrigin') : t('overview.notCollected')}
           loading={nowPending && !now}
           info={t('overview.hintOriginFlow')}
           infoLabel={t('overview.originFlowInfoLabel')}
@@ -77,7 +80,7 @@ export default function TrafficOverview({
           tone="origin"
           badge={periodLabel}
           value={period ? formatBytes(period.upstream_bytes) : '—'}
-          detail={coverageFlag}
+          detail={coverageFlag ? `${coverageFlag} · ${originRequestsDetail ?? ''}`.trim() : originRequestsDetail}
           info={t('overview.hintOriginTotal')}
           infoLabel={t('overview.originTotalInfoLabel')}
         />

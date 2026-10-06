@@ -25,6 +25,20 @@ export function formatBps(bytesPerSecond: number): string {
   return `${formatBytes(bytesPerSecond)}/s`
 }
 
+/**
+ * Renders a request latency with the unit that keeps it readable: ms below a
+ * second, seconds below a minute, minutes beyond. The Overview request table
+ * uses this because one stalled upstream can push a row far past the typical
+ * range while the rest stay in milliseconds.
+ */
+export function formatLatency(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  if (ms < 1_000) return `${Math.round(ms)} ms`
+  if (ms < 60_000) return `${(ms / 1_000).toFixed(ms < 10_000 ? 2 : 1)} s`
+  const minutes = ms / 60_000
+  return `${minutes.toFixed(minutes < 10 ? 1 : 0)} min`
+}
+
 export type FormatTimeMode = 'auto' | 'time' | 'relative'
 
 function resolveTimeLocale(locale?: string): 'zh-CN' | 'en-US' {

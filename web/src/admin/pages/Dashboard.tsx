@@ -255,7 +255,7 @@ export default function Dashboard() {
                 rangeStart={overview?.range?.start}
                 coverage={overview?.origin_coverage}
               />
-              <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+              <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
                 <CacheBenefits
                   period={overview?.window}
                   prev={overview?.prev}
