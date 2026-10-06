@@ -53,7 +53,9 @@ Package managers / CI / coding agents
   the gate is enabled. NuGet uses the v3 registration index's `published`
   timestamp for the same package version. Cargo uses the sparse index's own
   `pubtime` and `cksum` fields. RubyGems resolves the compact-index
-  `created_at` and checksum for the exact `.gem` artifact. Composer uses the p2
+  `created_at` and checksum for the exact `.gem` artifact. Conda is supported
+  with approximate Last-Modified provenance, which the operator must
+  acknowledge through `supply_chain.approximate_sources`. Composer uses the p2
   metadata's own `time` field but remains best-effort because Composer clients
   fall back to the original dist URL on a 451. Other ecosystems remain rejected
   until they are bound end to end.

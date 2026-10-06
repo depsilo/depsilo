@@ -87,7 +87,10 @@ ADR-0004.
   metadata entry's own `time` field but remains best-effort because Composer
   clients can fall back to the original dist URL after a 451. Every other
   ecosystem still rejects positive thresholds at startup until its artifact
-  source and timestamp are bound.
+  source and timestamp are bound. Conda is available with approximate
+  Last-Modified provenance once the operator acknowledges it through
+  `supply_chain.approximate_sources`, and the capability summary labels it
+  `approximate` rather than `source_bound`.
   Delivered, unreleased, and planned security capabilities must be described
   according to the actual release state rather than presented as uniformly
   available.

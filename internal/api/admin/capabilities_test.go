@@ -92,12 +92,14 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 			"nuget":    "72h",
 			"cargo":    "72h",
 			"rubygems": "72h",
+			"conda":    "72h",
 		},
+		ApproximateSources: []string{"conda"},
 	}, bound)
 	if err != nil {
 		t.Fatalf("NewPolicyWithProvenance: %v", err)
 	}
-	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi", "composer", "nuget", "cargo", "rubygems", "conda"}, capabilityPolicyStub{}, nil, "", policy)
+	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"npm", "pypi", "composer", "nuget", "cargo", "rubygems", "conda", "maven"}, capabilityPolicyStub{}, nil, "", policy)
 	r := gin.New()
 	r.GET("/summary", h.Summary)
 	response := httptest.NewRecorder()
@@ -121,8 +123,11 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 			t.Fatalf("%s minimum_release_age fact = %+v", ecosystem, fact)
 		}
 	}
-	if conda := facts["conda"]; conda.Support != "safety_disabled" || conda.Mode != "off" || conda.DataStatus != "never_synced" {
+	if conda := facts["conda"]; conda.Support != "supported" || conda.Mode != "block" || conda.DataStatus != "approximate" {
 		t.Fatalf("conda minimum_release_age fact = %+v", conda)
+	}
+	if maven := facts["maven"]; maven.Support != "safety_disabled" || maven.Mode != "off" || maven.DataStatus != "never_synced" {
+		t.Fatalf("maven minimum_release_age fact = %+v", maven)
 	}
 }
 

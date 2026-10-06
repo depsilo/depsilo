@@ -33,6 +33,10 @@
   by trying authoritative hyphen splits, memoizes the lookup, and the policy
   accepts positive RubyGems thresholds. Ambiguous filenames and entries without
   `created_at` fail closed.
+- 2026-10-06: the Conda slice is implemented with the spec's approximate path —
+  the download gate HEADs the exact artifact through the configured upstream
+  and uses Last-Modified, positive thresholds require the ecosystem to be listed
+  in `approximate_sources`, and the capability summary reports `approximate`.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal

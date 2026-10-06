@@ -52,12 +52,13 @@ type Policy struct {
 	// any ecosystem is active: source-unbound thresholds are forced to zero.
 	ageGateEnabled bool
 
-	// sourceProvenanceBound is nil in every production policy today. It is the
-	// explicit seam a future composition root must provide only after proving
-	// the selected artifact and timestamp share one source identity. Keeping the
-	// predicate on Policy also lets checker unit tests exercise decision logic
-	// without weakening NewPolicy's startup rejection.
+	// sourceProvenanceBound is the composition-root predicate for ecosystems
+	// whose adapters carry an authenticated publish time with the artifact.
 	sourceProvenanceBound func(ecosystem string) bool
+
+	// approximateProvenance lists ecosystems the operator explicitly accepted
+	// with Last-Modified-based provenance.
+	approximateProvenance map[string]bool
 
 	// Per-ecosystem threshold lookup. Keys are lowercase ecosystem
 	// names matching internal/adapter directory names ("pypi", "npm",
@@ -103,6 +104,10 @@ type Config struct {
 	// sets the fallback. The "d" suffix isn't standard time.Duration
 	// — see ParseDuration below.
 	MinReleaseAge map[string]string `mapstructure:"min_release_age"`
+
+	// ApproximateSources lists ecosystems whose positive thresholds are
+	// accepted with approximate (Last-Modified) provenance.
+	ApproximateSources []string `mapstructure:"approximate_sources"`
 
 	// Mode: "block" and "warn" are supported. "serve_last_eligible" is
 	// retained as a recognized legacy value so the checker can return an
@@ -174,6 +179,13 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 	}
 
 	var defaultThreshold time.Duration
+	approximate := make(map[string]bool, len(cfg.ApproximateSources))
+	for _, ecosystem := range cfg.ApproximateSources {
+		normalized := strings.ToLower(strings.TrimSpace(ecosystem))
+		if normalized != "" {
+			approximate[normalized] = true
+		}
+	}
 
 	for key, value := range cfg.MinReleaseAge {
 		dur, err := ParseDuration(value)
@@ -191,8 +203,15 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 			continue
 		}
 		provenanceBound := SupportsMinimumReleaseAge(normalizedKey) ||
-			(bound != nil && bound(normalizedKey))
+			(bound != nil && bound(normalizedKey)) ||
+			approximate[normalizedKey]
 		if ageGateEnabled && dur > 0 && !provenanceBound {
+			if approximateCapable(normalizedKey) {
+				return nil, fmt.Errorf(
+					"quarantine: minimum release age for ecosystem %q needs approximate Last-Modified provenance; add it to supply_chain.approximate_sources to acknowledge the weaker timestamp, or set its threshold to 0",
+					normalizedKey,
+				)
+			}
 			return nil, fmt.Errorf(
 				"quarantine: minimum release age for ecosystem %q is not supported safely; set its threshold to 0 or disable the age gate",
 				normalizedKey,
@@ -231,6 +250,7 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 		Allow:                 allow,
 		FailClosed:            failClosed,
 		sourceProvenanceBound: bound,
+		approximateProvenance: approximate,
 	}, nil
 }
 
@@ -244,7 +264,28 @@ func (p *Policy) SourceProvenanceBound(ecosystem string) bool {
 	if SupportsMinimumReleaseAge(normalized) {
 		return true
 	}
-	return p.sourceProvenanceBound != nil && p.sourceProvenanceBound(normalized)
+	if p.sourceProvenanceBound != nil && p.sourceProvenanceBound(normalized) {
+		return true
+	}
+	return p.approximateProvenance[normalized]
+}
+
+// ApproximateProvenance reports whether an ecosystem's enabled threshold uses
+// the weaker Last-Modified-based timestamp accepted via approximate_sources.
+func (p *Policy) ApproximateProvenance(ecosystem string) bool {
+	if p == nil {
+		return false
+	}
+	return p.approximateProvenance[strings.ToLower(strings.TrimSpace(ecosystem))]
+}
+
+// approximateCapable lists the ecosystems whose adapters already provide
+// Last-Modified provenance. Other Last-Modified-capable ecosystems are added
+// here as their slices land; before that, listing them in approximate_sources
+// does not make a positive threshold safe. The operator must still acknowledge
+// a listed ecosystem through approximate_sources.
+func approximateCapable(ecosystem string) bool {
+	return ecosystem == "conda"
 }
 
 // Threshold returns the threshold for a given ecosystem, falling

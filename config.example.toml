@@ -354,6 +354,9 @@ check_ttl = "24h"
 # RubyGems resolves the compact-index created_at and checksum for the exact
 # `.gem` artifact; entries without created_at or an ambiguous filename fail
 # closed.
+# Conda can be enabled with approximate Last-Modified provenance, but only
+# after listing it in approximate_sources below. The capability summary labels
+# it approximate rather than source-bound.
 # Every other ecosystem still rejects positive thresholds at startup because
 # its artifact source and timestamp are not yet bound end to end.
 #
@@ -366,6 +369,9 @@ check_ttl = "24h"
 min_release_age_enabled = false
 mode = "block"
 fail_closed = true
+# Ecosystems whose positive thresholds rely on approximate Last-Modified
+# provenance must be listed explicitly, for example ["conda"].
+approximate_sources = []
 
 [supply_chain.min_release_age]
 default  = "0"
@@ -377,7 +383,7 @@ maven    = "0"
 rubygems = "0"   # e.g. "3d"; uses the compact index created_at field
 composer = "0"   # best-effort: clients can fall back to the original dist URL
 nuget    = "0"   # e.g. "3d"; uses the v3 registration published timestamp
-conda    = "0"
+conda    = "0"   # e.g. "3d"; requires approximate_sources = ["conda"]
 cran     = "0"
 helm     = "0"
 alpine   = "0"

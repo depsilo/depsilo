@@ -68,10 +68,47 @@ func TestMinimumReleaseAgeRejectsUnsupportedPositiveThresholdWhenEnabled(t *test
 			if err == nil {
 				t.Fatal("NewPolicy accepted a positive threshold without a trustworthy artifact-to-release identity seam")
 			}
-			if !strings.Contains(err.Error(), ecosystem) || !strings.Contains(err.Error(), "not supported") {
-				t.Fatalf("NewPolicy error = %q, want ecosystem-specific unsupported error", err)
+			if !strings.Contains(err.Error(), ecosystem) {
+				t.Fatalf("NewPolicy error = %q, want ecosystem-specific error", err)
+			}
+			want := "not supported"
+			if approximateCapable(ecosystem) {
+				want = "approximate"
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("NewPolicy error = %q, want %q guidance", err, want)
 			}
 		})
+	}
+}
+
+func TestMinimumReleaseAgeApproximateSourceRequiresAcknowledgement(t *testing.T) {
+	enabled := true
+	_, err := NewPolicyWithProvenance(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"conda": "72h"},
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "approximate") {
+		t.Fatalf("unacknowledged conda threshold error = %v, want approximate guidance", err)
+	}
+
+	policy, err := NewPolicyWithProvenance(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"conda": "72h"},
+		ApproximateSources:   []string{"conda"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewPolicyWithProvenance(acknowledged conda): %v", err)
+	}
+	if got := policy.Threshold("conda"); got != 72*time.Hour {
+		t.Fatalf("Threshold(conda) = %v, want 72h", got)
+	}
+	if !policy.SourceProvenanceBound("conda") || !policy.ApproximateProvenance("conda") {
+		t.Fatalf("conda bound=%v approximate=%v, want both true",
+			policy.SourceProvenanceBound("conda"), policy.ApproximateProvenance("conda"))
+	}
+	if policy.ApproximateProvenance("npm") {
+		t.Fatal("npm reported as approximate provenance")
 	}
 }
 

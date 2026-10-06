@@ -1128,6 +1128,7 @@ const en = {
       capabilityOverall: 'Overall',
       capabilitySafetyDisabled: 'Safety paused',
       capabilitySourceBound: 'Source-bound',
+      capabilityApproximate: 'Approximate (Last-Modified)',
       capabilityNeverSynced: 'Never synced',
       capabilityFresh: 'Ready',
       capabilityStale: 'Using last good data',

@@ -385,10 +385,17 @@ test('Security capability overview renders source-bound and safety-disabled fact
         },
         {
           name: 'minimum_release_age',
-          ecosystem: 'conda',
+          ecosystem: 'maven',
           support: 'safety_disabled',
           mode: 'off',
           data_status: 'never_synced',
+        },
+        {
+          name: 'minimum_release_age',
+          ecosystem: 'conda',
+          support: 'supported',
+          mode: 'block',
+          data_status: 'approximate',
         },
       ],
     },
@@ -399,6 +406,8 @@ test('Security capability overview renders source-bound and safety-disabled fact
   await expect(section).toContainText(/来源已绑定|Source-bound/)
   await expect(section).toContainText(/安全暂停|Safety paused/)
   await expect(section).toContainText(/从未同步|Never synced/)
+  await expect(section).toContainText(/近似（Last-Modified）|Approximate \(Last-Modified\)/)
   await expect(section).toContainText('NPM')
+  await expect(section).toContainText('MAVEN')
   await expect(section).toContainText('CONDA')
 })

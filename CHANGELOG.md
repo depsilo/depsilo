@@ -14,10 +14,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   registration index's `published` timestamp for the same immutable version;
   Cargo uses the sparse index entry's `pubtime` and `cksum`; RubyGems resolves
   the compact index's `created_at` and checksum for the exact `.gem` filename.
-  Missing, legacy, HTML-only, or unlisted metadata fails closed while the gate
-  is enabled. Composer remains best-effort because its clients can fall back to
-  the original dist URL after a 451, and every other ecosystem still rejects
-  positive thresholds at startup.
+  Conda is available with approximate Last-Modified provenance after the
+  operator acknowledges it through `supply_chain.approximate_sources`, and the
+  capability summary labels it approximate. Missing, legacy, HTML-only, or
+  unlisted metadata fails closed while the gate is enabled. Composer remains
+  best-effort because its clients can fall back to the original dist URL after
+  a 451, and every other ecosystem still rejects positive thresholds at
+  startup.
 
 ### Changed
 - The S3 release contract now runs against pinned RustFS, replacing the

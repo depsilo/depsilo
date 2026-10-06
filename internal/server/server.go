@@ -326,6 +326,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	quarantinePolicy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
 		MinReleaseAgeEnabled: cfg.SupplyChain.MinReleaseAgeEnabled,
 		MinReleaseAge:        cfg.SupplyChain.MinReleaseAge,
+		ApproximateSources:   cfg.SupplyChain.ApproximateSources,
 		Mode:                 cfg.SupplyChain.Mode,
 		Allow:                cfg.SupplyChain.Allow,
 		FailClosed:           cfg.SupplyChain.FailClosed,
@@ -625,6 +626,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		nugetRequired:    quarantinePolicy.Threshold("nuget") > 0,
 		cargoRequired:    quarantinePolicy.Threshold("cargo") > 0,
 		rubygemsRequired: quarantinePolicy.Threshold("rubygems") > 0,
+		condaRequired:    quarantinePolicy.Threshold("conda") > 0,
 	}
 	if quarantinePolicy.Threshold("pypi") > 0 {
 		wiring.pypiKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)

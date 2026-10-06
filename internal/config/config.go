@@ -73,9 +73,14 @@ type SupplyChainConfig struct {
 	// configuration defaults the age gate off. Explicit false always wins.
 	MinReleaseAgeEnabled *bool             `mapstructure:"min_release_age_enabled"`
 	MinReleaseAge        map[string]string `mapstructure:"min_release_age"`
-	Mode                 string            `mapstructure:"mode"`
-	Allow                []string          `mapstructure:"allow"`
-	FailClosed           *bool             `mapstructure:"fail_closed"`
+	// ApproximateSources lists ecosystems whose positive thresholds are
+	// accepted with approximate (Last-Modified) provenance. Operators must opt
+	// in explicitly because the timestamp is weaker than a registry's exact
+	// publish time.
+	ApproximateSources []string `mapstructure:"approximate_sources"`
+	Mode               string   `mapstructure:"mode"`
+	Allow              []string `mapstructure:"allow"`
+	FailClosed         *bool    `mapstructure:"fail_closed"`
 	// Blocklist mirrors blocklist.Config field-for-field — same
 	// convention as the fields above (config carries the raw operator
 	// shape; the domain package owns semantics and defaults).
