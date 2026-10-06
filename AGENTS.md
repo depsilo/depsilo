@@ -22,9 +22,10 @@ guides only when the current task needs them; do not preload historical plans.
   storage. Shared-database multi-instance/HA is not shipped.
 - The anonymous Portal handles connection guidance and status. Authenticated
   Admin handles operations, policy, security, users, and settings.
-- Minimum release age is safety-disabled until artifact-source and timestamp
-  provenance are bound. Positive enabled thresholds are rejected at startup;
-  do not present the gate as available.
+- Minimum release age is enforced per ecosystem only where artifact-source and
+  timestamp provenance is bound; the shipped state and each binding's
+  strength live in
+  [docs/specs/2026-10-06-min-release-age-provenance.md](docs/specs/2026-10-06-min-release-age-provenance.md).
 - General-purpose artifact repository support is a future direction, not a
   current capability. Architectural work in that direction requires an ADR
   update because ADR-0004 records an older non-goal.
