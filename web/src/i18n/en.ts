@@ -299,6 +299,7 @@ const en = {
       memoryProcess: 'Process RSS',
       memoryPeakBadge: 'Peak',
       memoryRuntimeBadge: 'Runtime',
+      memoryRuntimeHint: 'This platform does not expose process memory; the value is Go runtime usage',
       memoryUnsupported: 'Process memory is unavailable',
       memoryInfoLabel: 'View memory measurement basis',
       goRuntimeMemory: 'Go runtime memory {{value}}',

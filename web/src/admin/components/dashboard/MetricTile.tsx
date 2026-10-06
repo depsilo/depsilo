@@ -206,7 +206,9 @@ export default function MetricTile({
                   >
                     {value}
                   </span>
-                  {unit && (
+                  {/* A unit next to an unavailable placeholder reads as a
+                      measurement ("— %"); keep it only for real numbers. */}
+                  {unit && value !== '—' && (
                     <span className="text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{unit}</span>
                   )}
                 </>
@@ -224,7 +226,7 @@ export default function MetricTile({
                   </dt>
                   <dd className="shrink-0 font-mono text-[18px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
                     {row.value}
-                    {row.unit && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
+                    {row.unit && row.value !== '—' && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
                   </dd>
                 </div>
               ))}

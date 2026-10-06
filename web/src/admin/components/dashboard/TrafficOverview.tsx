@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import type { DashboardPeriod, DashboardRange, NowResponse, OriginCoverage } from '@/lib/adminApi.types'
-import { coverageDetail, rangeLabelKey } from '@/lib/dashboardOverview'
+import { coverageDetail, originCoverageNote, rangeLabelKey } from '@/lib/dashboardOverview'
 import { formatBytes, formatBps } from '@/lib/utils'
 
 import MetricTile from './MetricTile'
@@ -26,6 +26,9 @@ export default function TrafficOverview({
   const { t } = useTranslation()
   const measured = now?.rate.measured === true
   const periodLabel = t(rangeLabelKey(range))
+  // Origin byte totals only exist once the Upstream→Depsilo meter has run.
+  // Before that the range is "not collected", not a measured zero.
+  const originMeasured = originCoverageNote(coverage, rangeStart).measured
   const coverageNote = coverageDetail(coverage, rangeStart, t)
   const coverageFlag = coverageNote ? t('overview.originPartialShort') : undefined
   const originRequestsDetail = period
@@ -79,8 +82,12 @@ export default function TrafficOverview({
           icon="cloud_sync"
           tone="origin"
           badge={periodLabel}
-          value={period ? formatBytes(period.upstream_bytes) : '—'}
-          detail={coverageFlag ? `${coverageFlag} · ${originRequestsDetail ?? ''}`.trim() : originRequestsDetail}
+          value={period && originMeasured ? formatBytes(period.upstream_bytes) : '—'}
+          detail={!originMeasured
+            ? t('overview.notCollected')
+            : coverageFlag
+              ? `${coverageFlag} · ${originRequestsDetail ?? ''}`.trim()
+              : originRequestsDetail}
           info={t('overview.hintOriginTotal')}
           infoLabel={t('overview.originTotalInfoLabel')}
         />

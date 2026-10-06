@@ -301,6 +301,7 @@ const zh = {
       memoryProcess: '进程 RSS',
       memoryPeakBadge: '峰值',
       memoryRuntimeBadge: '运行时',
+      memoryRuntimeHint: '当前平台不提供进程内存采样，此处显示 Go 运行时占用',
       memoryUnsupported: '无法获取进程内存',
       memoryInfoLabel: '查看内存口径',
       goRuntimeMemory: 'Go 运行时内存 {{value}}',

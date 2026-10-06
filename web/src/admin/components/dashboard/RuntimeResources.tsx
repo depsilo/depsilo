@@ -13,12 +13,11 @@ interface RuntimeResourcesProps {
   nowPending: boolean
 }
 
-function capabilityText(
-  capability: { supported: boolean; reason?: string } | undefined,
-  fallback: string,
-): string {
-  if (!capability) return fallback
-  return capability.supported ? fallback : (capability.reason || fallback)
+// The tile keeps the localized label; the platform's own reason sentence is a
+// diagnostic and belongs in the hint, not as English copy in a zh-CN tile.
+function capabilityHint(base: string, capability: { supported: boolean; reason?: string } | undefined): string {
+  if (!capability || capability.supported || !capability.reason) return base
+  return `${base} · ${capability.reason}`
 }
 
 export default function RuntimeResources({
@@ -40,10 +39,11 @@ export default function RuntimeResources({
     ? (runtimePending ? '' : '—')
     : cpuPercent.toFixed(1)
   const cpuDetail = process?.cpu.supported === false
-    ? capabilityText(process.cpu, t('overview.notSupported'))
+    ? t('overview.notSupported')
     : runtimePending && cpuPercent === undefined
       ? t('overview.collecting')
       : undefined
+  const cpuHint = capabilityHint(t('overview.hintCpu'), process?.cpu)
   // A single-core progress bar only makes sense up to one full core. Above
   // 100% the number carries the truth instead of a silently full bar.
   const cpuProgress = process?.cpu.supported === true && cpuPercent !== undefined && cpuPercent <= 100
@@ -66,6 +66,9 @@ export default function RuntimeResources({
   const memoryProgress = limit !== undefined && used !== undefined && limit > 0
     ? { ratio: used / limit, tone: 'memory' as const }
     : null
+  const memoryHint = process?.memory.supported === false
+    ? capabilityHint(t('overview.memoryRuntimeHint'), process?.memory)
+    : capabilityHint(t('overview.hintMemory'), process?.memory)
 
   const cache = runtime?.cache
   const quota = cache?.quota_bytes ?? null
@@ -109,7 +112,7 @@ export default function RuntimeResources({
           progress={cpuProgress}
           series={cpuSeries}
           loading={runtimePending && cpuPercent === undefined}
-          info={t('overview.hintCpu')}
+          info={cpuHint}
           infoLabel={t('overview.cpuInfoLabel')}
         />
         <MetricTile
@@ -123,7 +126,7 @@ export default function RuntimeResources({
           progress={memoryProgress}
           series={memorySupported ? rssSeries : undefined}
           loading={runtimePending && !runtime}
-          info={t('overview.hintMemory')}
+          info={memoryHint}
           infoLabel={t('overview.memoryInfoLabel')}
         />
         <MetricTile
