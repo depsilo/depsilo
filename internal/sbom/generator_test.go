@@ -22,6 +22,13 @@ func sbomTestProject() *db.Project {
 	return &db.Project{ID: 1, Name: "Acme App", Slug: "acme-app", Description: "test product"}
 }
 
+func TestTechnicalFileFormatIdentifierIsVersioned(t *testing.T) {
+	t.Parallel()
+	if !strings.HasPrefix(TechnicalFileFormat, "depsilo/") || !strings.HasSuffix(TechnicalFileFormat, "/v1") {
+		t.Fatalf("technical-file format identifier %q lost its /vN suffix", TechnicalFileFormat)
+	}
+}
+
 func sbomTestComponents() []Component {
 	return []Component{
 		{

@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- Published the compatibility policy ([docs/compatibility.md](docs/compatibility.md)):
+  patch releases stay compatible; before `v1.0.0` a breaking API/config change
+  needs a full minor release or 90 days of deprecation (whichever is longer),
+  and from `v1.0.0` the window is two minor releases or 180 days. It documents
+  the `/api/v1` additive rule, `config_version`/unknown-key behavior, one-way
+  schema migrations with backup-as-rollback, and the `/vN` document format
+  identifiers, with contract tests enforcing the checkable parts.
 - Freeze / golden snapshots: promote the cached artifact set into a named,
   hash-pinned snapshot, export and import the manifest
   (`depsilo/snapshot/v1`), and switch snapshot-only mode on from the Cache

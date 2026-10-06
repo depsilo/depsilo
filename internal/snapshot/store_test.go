@@ -32,6 +32,13 @@ func newSnapshotTestStore(t *testing.T) *Store {
 	return NewStore(database)
 }
 
+func TestSnapshotFormatIdentifierIsVersioned(t *testing.T) {
+	t.Parallel()
+	if !strings.HasPrefix(Format, "depsilo/") || !strings.HasSuffix(Format, "/v1") {
+		t.Fatalf("snapshot format identifier %q lost its /vN suffix", Format)
+	}
+}
+
 func TestCreateFromCachePinsTamperRecords(t *testing.T) {
 	store := newSnapshotTestStore(t)
 	ctx := context.Background()

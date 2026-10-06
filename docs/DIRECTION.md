@@ -306,7 +306,9 @@ Document oauth2-proxy / Authelia / Pomerium instead of building a shallow OIDC l
 commodity self-hosted infrastructure should not distract from enforcement primitives.
 
 **Versioning policy until v1.0:** breaking changes allowed across minor versions;
-config-file backwards compatibility guaranteed within each `v0.x` line.
+config-file backwards compatibility guaranteed within each `v0.x` line. The
+published API/config/schema/export promises and the explicit deprecation window
+live in [`docs/compatibility.md`](compatibility.md).
 
 **No telemetry / anonymous reporting.** Self-hosted trust commitment is incompatible
 with phoning home.

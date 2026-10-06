@@ -51,9 +51,11 @@ fields, and 64-hex SHA-256 values, deduplicates identical artifacts, accepts a
 name override, and seeds missing tamper baselines from the manifest so a first
 fetch whose bytes differ from the manifest raises a tamper alert.
 
-The manifest carries metadata, not artifact bytes. Moving bytes between
-instances uses the existing `depsilo backup` / `restore` (SQLite plus storage)
-path.
+The manifest carries metadata, not artifact bytes. `depsilo backup` /
+`restore` covers configuration and the SQLite database only, so byte transfer
+between instances is an out-of-band storage copy; otherwise the target
+fetches from its own upstream and the imported baselines turn a byte mismatch
+into a tamper alert (they do not block the fetch).
 
 ## Admin API
 

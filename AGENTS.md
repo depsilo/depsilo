@@ -41,6 +41,7 @@ Use the narrowest current authority for the fact in question:
 - UI contracts: the current Portal, Setup, and Admin implementation under
   `web/src/` plus the tokens in `web/src/index.css`.
 - Admin runtime authority: [docs/admin-control-plane.md](docs/admin-control-plane.md).
+- Compatibility promises: [docs/compatibility.md](docs/compatibility.md).
 - Historical specs and research: `docs/specs/` and `docs/research/`; these are
   evidence, not current implementation instructions.
 
