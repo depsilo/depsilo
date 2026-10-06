@@ -72,6 +72,10 @@ weekly run keeps the smaller all-package-client matrix.
   Do not launch a browser to test a pure array or function.
 - Real-client Docker fixtures prove native client compatibility. They should
   stay small and network-dependent rather than being disguised as unit tests.
+  `make test-e2e` leaves its background server running on purpose so the
+  matrix can reuse it; after an interrupted or failed run, execute
+  `make test-clean` before retrying, otherwise the next attempt can talk to
+  the stale server and report misleading client errors.
 
 For changes to local hot reload, run the focused lifecycle and route contracts
 before the aggregate script gate:
