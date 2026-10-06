@@ -127,3 +127,37 @@ func TestRubyGemsIdentityUnavailableIsRefusedUnderDatasetCoverage(t *testing.T) 
 		t.Fatalf("unresolvable gem status=%d body=%s", response.Code, response.Body.String())
 	}
 }
+
+func TestRubyGemsPlatformArtifactUsesBaseVersionForDatasetMatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstreamServer, _ := rubyGemsTestFixture(t, time.Now().UTC())
+	// The dataset knows the platform-less release only.
+	scoped := newRubyGemsDatasetHandler(t, upstreamServer.URL, staticBlocklist{
+		ecosystem: "rubygems",
+		pkg:       "acme-demo",
+		version:   "1.0.0",
+		sourceID:  "MAL-2026-0002",
+	})
+
+	blocked := requestRubyGemsArtifact(t, scoped, "acme-demo-1.0.0-x86_64-linux")
+	if blocked.Code != http.StatusUnavailableForLegalReasons ||
+		!strings.Contains(blocked.Body.String(), `"code":"MALICIOUS_BLOCKED"`) {
+		t.Fatalf("platform gem status=%d body=%s", blocked.Code, blocked.Body.String())
+	}
+}
+
+func TestBaseVersionTokenRequiresListedPrefix(t *testing.T) {
+	t.Parallel()
+	info := []byte("1.0.0 dep|checksum:aaa,created_at:2026-01-01T00:00:00Z\n" +
+		"1.0.0-x86_64-linux dep|checksum:bbb,created_at:2026-01-01T00:00:00Z\n" +
+		"2.0.0-java|checksum:ccc\n")
+	if got := baseVersionToken(info, "1.0.0-x86_64-linux"); got != "1.0.0" {
+		t.Fatalf("base version = %q, want 1.0.0", got)
+	}
+	if got := baseVersionToken(info, "2.0.0-java"); got != "2.0.0-java" {
+		t.Fatalf("unlisted base version = %q, want the full token", got)
+	}
+	if got := baseVersionToken(info, "1.0.0"); got != "1.0.0" {
+		t.Fatalf("plain version = %q, want unchanged", got)
+	}
+}

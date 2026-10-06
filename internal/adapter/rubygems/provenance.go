@@ -114,7 +114,11 @@ func (h *Handler) resolveProvenance(ctx context.Context, fullName string) (rubyg
 		if !found {
 			continue
 		}
-		resolution := rubygemsResolution{gem: gem, version: versionToken, cksum: cksum}
+		// A platform artifact (1.17.2-x86_64-linux) is the same release as the
+		// platform-less gem version when the compact index lists that base
+		// version too. Report the base identity so dataset rows and allow
+		// rules written for 1.17.2 also govern the platform artifacts.
+		resolution := rubygemsResolution{gem: gem, version: baseVersionToken(info, versionToken), cksum: cksum}
 		if cksum != "" && createdAt != "" {
 			if published, err := time.Parse(time.RFC3339, createdAt); err == nil {
 				resolution.published = published.UTC()
@@ -127,6 +131,36 @@ func (h *Handler) resolveProvenance(ctx context.Context, fullName string) (rubyg
 		return rubygemsResolution{}, fmt.Errorf("%w: %d compact-index candidates for %s", errRubyGemsIndexUnavailable, len(matches), fullName)
 	}
 	return matches[0], nil
+}
+
+// baseVersionToken returns the platform-less version for a compact-index
+// version token. The prefix must itself be a listed version of the same gem,
+// so a hyphen inside the version is never stripped by guesswork.
+func baseVersionToken(info []byte, token string) string {
+	if !strings.Contains(token, "-") {
+		return token
+	}
+	listed := make(map[string]bool, 64)
+	for _, line := range strings.Split(string(info), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "" {
+			continue
+		}
+		end := strings.IndexAny(line, " |")
+		if end <= 0 {
+			continue
+		}
+		listed[line[:end]] = true
+	}
+	for index := 0; index < len(token); index++ {
+		if token[index] != '-' {
+			continue
+		}
+		if listed[token[:index]] {
+			return token[:index]
+		}
+	}
+	return token
 }
 
 func (h *Handler) fetchInfo(ctx context.Context, gem string) ([]byte, error) {
