@@ -260,5 +260,7 @@ func currentSchemaModelsForTest() []any {
 		&MalwareOverride{},
 		&BlocklistSyncState{},
 		&TamperRecord{},
+		&Snapshot{},
+		&SnapshotItem{},
 	}
 }

@@ -33,6 +33,7 @@ import (
 	"depsilo/internal/quarantine/resolvers"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
+	"depsilo/internal/snapshot"
 	"depsilo/internal/sysmetrics"
 	"depsilo/internal/tamper"
 	"depsilo/internal/traffic"
@@ -347,6 +348,19 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	if err != nil {
 		return nil, fmt.Errorf("quarantine checker: %w", err)
 	}
+
+	// Freeze / golden snapshots (ADR-0005 item 4). The store keeps the active
+	// snapshot in memory; the checker consults it after the malware gate.
+	snapshotStore := snapshot.NewStore(database)
+	if err := snapshotStore.Load(ctx); err != nil {
+		return nil, fmt.Errorf("snapshot store: %w", err)
+	}
+	if activeID, activeName := snapshotStore.Active(); activeID != 0 {
+		zap.L().Info("snapshot-only mode enabled",
+			zap.Uint("snapshot_id", activeID), zap.String("snapshot", activeName))
+	}
+	quarantineChecker.SetSnapshotGate(snapshotStore.QuarantineBridge())
+
 	requestScope := adapter.NewRequestScope(
 		accessRecorder,
 		auditLogger,
@@ -613,6 +627,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		BlocklistStore:             blocklistStore,
 		BlocklistSyncer:            blocklistSyncer,
 		BlocklistMode:              string(blocklistMode),
+		SnapshotStore:              snapshotStore,
 		Tasks:                      background,
 		TrafficMeter:               trafficMeter,
 		Runtime:                    resourceSampler,

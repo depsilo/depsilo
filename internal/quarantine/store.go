@@ -74,6 +74,11 @@ const (
 	// re-fetched bytes did not match the first-seen SHA-256. Written
 	// by internal/tamper; shares the quarantine event stream.
 	ActionTamperDetected = "tamper_detected"
+
+	// Freeze / golden snapshot: the request was refused because
+	// snapshot-only mode is active and the version is not pinned by
+	// the active snapshot.
+	ActionSnapshotBlocked = "snapshot_blocked"
 )
 
 // Store wraps the GORM handle with the small set of helpers the

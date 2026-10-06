@@ -22,6 +22,7 @@ import (
 	"depsilo/internal/quarantine"
 	"depsilo/internal/rules"
 	"depsilo/internal/security"
+	"depsilo/internal/snapshot"
 	"depsilo/internal/sysmetrics"
 	"depsilo/internal/traffic"
 	"depsilo/internal/trial"
@@ -79,6 +80,7 @@ type Deps struct {
 	// blocklist admin endpoints (status / manual sync / overrides).
 	// Both nil when [supply_chain.blocklist] enabled = false.
 	BlocklistStore  *blocklist.Store
+	SnapshotStore   *snapshot.Store
 	BlocklistSyncer *blocklist.Syncer
 	BlocklistMode   string
 	Tasks           asyncruntime.Submitter
@@ -378,6 +380,20 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 
 	capabilityHandler := admin.NewCapabilityHandler(deps.DB, deps.Config, deps.ConfigStore, deps.Ecosystems, deps.PolicyStatusProvider, deps.BlocklistStore, deps.BlocklistMode, deps.QuarantinePolicy)
 	adminRead.GET("/capabilities/summary", capabilityHandler.Summary)
+
+	// Freeze / golden snapshots (ADR-0005 item 4). Open source like the
+	// other governance primitives: promote the current cache to a snapshot,
+	// export/import the manifest, and switch snapshot-only mode.
+	if deps.SnapshotStore != nil {
+		snapshotsHandler := admin.NewSnapshotsHandler(deps.SnapshotStore, deps.DB)
+		adminRead.GET("/snapshots", snapshotsHandler.List)
+		adminRead.GET("/snapshots/:id", snapshotsHandler.Get)
+		adminRead.GET("/snapshots/:id/export", snapshotsHandler.Export)
+		adminWrite.POST("/snapshots", snapshotsHandler.Create)
+		adminWrite.POST("/snapshots/import", snapshotsHandler.Import)
+		adminWrite.PUT("/snapshots/active", snapshotsHandler.Activate)
+		adminWrite.DELETE("/snapshots/:id", snapshotsHandler.Delete)
+	}
 
 	// Pro features (require entitlement). Multi-project workspaces are
 	// the only UI surface gated today — production teams running Depsilo

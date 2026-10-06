@@ -24,6 +24,7 @@ import (
 const (
 	CodeQuarantined      = "QUARANTINED"
 	CodeMaliciousBlocked = "MALICIOUS_BLOCKED"
+	CodeSnapshotBlocked  = "SNAPSHOT_BLOCKED"
 )
 
 // errMissingProvenance marks a source-bound request whose authenticated
@@ -104,6 +105,19 @@ type Blocklist interface {
 	Check(ctx context.Context, ecosystem, pkg, version string) (*BlocklistMatch, bool, error)
 }
 
+// SnapshotGate is the freeze / golden-snapshot membership check consulted
+// after the malicious blocklist. A nil gate disables snapshot-only mode.
+type SnapshotGate interface {
+	Check(ctx context.Context, ecosystem, pkg, version string) (SnapshotMatch, error)
+}
+
+// SnapshotMatch mirrors snapshot.Decision without importing the package.
+type SnapshotMatch struct {
+	Allowed      bool
+	SnapshotID   uint
+	SnapshotName string
+}
+
 type Checker struct {
 	policy    *Policy
 	lookup    *Lookup
@@ -111,6 +125,7 @@ type Checker struct {
 	now       func() time.Time // injectable for tests
 	onBlock   OnBlockFn
 	blocklist Blocklist
+	snapshot  SnapshotGate
 	// blocklistMode controls the known-malicious step independently
 	// from the minimum-release-age policy mode. Defaults to block.
 	blocklistMode Mode
@@ -121,6 +136,12 @@ type Checker struct {
 // once during server boot; nil disables the malware gate.
 func (c *Checker) SetBlocklist(bl Blocklist) {
 	c.blocklist = bl
+}
+
+// SetSnapshotGate installs the freeze / golden-snapshot gate. Same lifecycle
+// contract as SetBlocklist: wire once during server boot.
+func (c *Checker) SetSnapshotGate(gate SnapshotGate) {
+	c.snapshot = gate
 }
 
 // NewChecker validates the policy and wires up the dependencies.
@@ -263,6 +284,45 @@ func (c *Checker) check(
 		} else if err != nil {
 			zap.L().Warn("quarantine: blocklist lookup failed — continuing without it",
 				zap.String("ecosystem", ecosystem), zap.String("package", pkg), zap.Error(err))
+		}
+	}
+
+	// Step 0.5: freeze / golden-snapshot membership. Snapshot-only mode is an
+	// explicit operator choice for reproducible builds; an artifact outside
+	// the active snapshot is refused, and a lookup failure fails closed
+	// because serving would silently break the pin.
+	if c.snapshot != nil && version != "" {
+		match, err := c.snapshot.Check(ctx, ecosystem, pkg, version)
+		if err != nil {
+			zap.L().Warn("quarantine: snapshot membership lookup failed — failing closed",
+				zap.String("ecosystem", ecosystem),
+				zap.String("package", pkg),
+				zap.Error(err))
+			reason := fmt.Sprintf("snapshot membership for %s@%s could not be verified; snapshot-only mode is enabled", pkg, version)
+			c.recordEvent(ctx, db.QuarantineEvent{
+				Ecosystem: ecosystem,
+				Package:   pkg,
+				Version:   version,
+				Action:    ActionSnapshotBlocked,
+				Reason:    reason,
+				ClientIP:  clientIP,
+			})
+			return Decision{Allowed: false, Code: CodeSnapshotBlocked, Reason: reason}
+		}
+		if !match.Allowed {
+			reason := fmt.Sprintf(
+				"version %s of %s is not in the active snapshot %q; snapshot-only mode is enabled — update the snapshot or disable snapshot-only mode",
+				version, pkg, match.SnapshotName,
+			)
+			c.recordEvent(ctx, db.QuarantineEvent{
+				Ecosystem: ecosystem,
+				Package:   pkg,
+				Version:   version,
+				Action:    ActionSnapshotBlocked,
+				Reason:    reason,
+				ClientIP:  clientIP,
+			})
+			return Decision{Allowed: false, Code: CodeSnapshotBlocked, Reason: reason}
 		}
 	}
 
