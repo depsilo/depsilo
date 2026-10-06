@@ -16,7 +16,7 @@
 - [ ] `make test-e2e` passes with all 14 official package-manager clients
 - [ ] `make test-docker-docker` passes with the Docker Registry client and dind
 - [ ] `make test-compiler-cache-qualified` passes with pinned ccache and sccache
-- [ ] `make test-s3` passes against the pinned S3 contract image (SeaweedFS)
+- [ ] `make test-s3` passes against the pinned S3 contract image (RustFS)
 - [ ] `make test-v090-upgrade` reopens v0.9.0 state and preserves config,
       SQLite identities, password/JWT/API credentials, and legacy npm cache
       records; it rejects unsigned cached npm data while offline, then refetches

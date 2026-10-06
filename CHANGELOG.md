@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Changed
+- The S3 release contract now runs against pinned RustFS, replacing the
+  SeaweedFS image that shipped with v0.10.1.
+
 ## [0.10.1] - 2026-10-06
 
 ### Added

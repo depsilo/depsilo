@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # MinIO withdrew its public community images and binaries in October 2026, so
-# the S3 storage contract runs against pinned SeaweedFS instead. The digest is
-# the multi-arch index, covering both linux/amd64 and linux/arm64.
-image='chrislusf/seaweedfs@sha256:1055999e08eed1789b0ae45d235126e4495e23d3fb9d6396293fd42539b1ae6a'
+# the S3 storage contract runs against pinned RustFS instead. The digest is the
+# multi-arch index, covering both linux/amd64 and linux/arm64.
+image='rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c'
 container="depsilo-s3-contract-$$"
 access_key='depsilo-test-access'
 secret_key='depsilo-test-secret-key-0123456789'
@@ -15,29 +15,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-s3_config=$(printf '{"identities":[{"name":"depsilo-contract","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' \
-  "$access_key" "$secret_key")
-
 docker run --detach --rm \
   --name "$container" \
-  --publish 127.0.0.1::8333 \
-  --env "S3_CONFIG_JSON=$s3_config" \
-  --entrypoint sh \
-  "$image" -c 'printf %s "$S3_CONFIG_JSON" > /etc/seaweedfs/s3.json && exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=16' >/dev/null
+  --publish 127.0.0.1::9000 \
+  --env "RUSTFS_ACCESS_KEY=$access_key" \
+  --env "RUSTFS_SECRET_KEY=$secret_key" \
+  "$image" server /data >/dev/null
 
-port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "8333/tcp") 0).HostPort}}' "$container")
+port=$(docker inspect --format '{{(index (index .NetworkSettings.Ports "9000/tcp") 0).HostPort}}' "$container")
 endpoint="http://127.0.0.1:$port"
 
 ready=false
-# SeaweedFS starts the master, volume, filer, and S3 gateway in one process;
-# on a cold CI runner the gateway can take noticeably longer than on a warm
-# developer machine to accept connections.
+# RustFS starts the object store and S3 API in one process; on a cold CI runner
+# it can take noticeably longer than on a warm developer machine to answer.
 for _ in $(seq 1 240); do
-  # With static credentials configured, an unauthenticated probe answers 403
-  # once the gateway is listening; any HTTP status means it accepted the
-  # connection.
-  status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$endpoint/" || true)
-  if [[ "$status" != '000' ]]; then
+  status=$(curl --silent --output /dev/null --write-out '%{http_code}' "$endpoint/health" || true)
+  if [[ "$status" == '200' ]]; then
     ready=true
     break
   fi
@@ -45,7 +38,7 @@ for _ in $(seq 1 240); do
 done
 if [[ "$ready" != true ]]; then
   docker logs "$container" >&2
-  echo 'SeaweedFS did not become ready' >&2
+  echo 'RustFS did not become ready' >&2
   exit 1
 fi
 

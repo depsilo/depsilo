@@ -194,7 +194,7 @@ test-compiler-cache:              ## 用官方 ccache + sccache 验证已运行�
 test-compiler-cache-qualified: build-dev-server  # 发布：自举服务与凭据后运行官方编译缓存客户端
 	@bash scripts/test-compiler-cache-qualified.sh
 
-test-s3:                         ## 用固定 SeaweedFS 验证 S3 存储契约
+test-s3:                         ## 用固定 RustFS 验证 S3 存储契约
 	@bash scripts/test-s3.sh
 
 test-v090-upgrade: build-dev-server  # 发布：验证 v0.9.0 配置、SQLite、凭据与缓存原地升级
