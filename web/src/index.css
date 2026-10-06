@@ -1,10 +1,10 @@
 @import "tailwindcss";
 /* shadcn/ui runtime: `tw-animate-css` supplies the enter/exit animations
- * shadcn components reference (animate-in, fade-in-0, zoom-in-95, ...) and
- * `shadcn/tailwind.css` supplies the state variants (data-open, data-checked,
+ * shadcn components reference (animate-in, fade-in-0, zoom-in-95, ...) and the
+ * vendored stylesheet supplies the state variants (data-open, data-checked,
  * data-active, data-horizontal, ...) plus the scroll-fade utilities. */
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "./styles/shadcn-tailwind.css";
 
 /* The UI ships Chinese and English locales. Load only each typeface's Latin
  * variable subset; CJK and any other scripts deliberately fall through to

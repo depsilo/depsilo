@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - The minimum toolchain is Go 1.27.1, which is also what CI and the container
   build now use.
+- The shadcn Tailwind layer used by the web UI is vendored under
+  `web/src/styles/`, so the shadcn CLI is no longer a frontend devDependency.
+  This removes its unfixable `braces` advisory chain without changing any
+  component behaviour.
 
 ### Fixed
 - npm metadata for packages whose names differ only in case (legacy uppercase
@@ -15,6 +19,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   case-folding filesystems such as macOS and Windows.
 - Rejecting a quoted `min_cvss_score` keeps working on Go 1.27, where
   `encoding/json` runs the v2 implementation by default.
+- Frontend dependencies no longer carry the known high-severity advisories
+  that blocked CI: `axios` is upgraded to 1.20.0, `brace-expansion` is pinned
+  to 1.1.21 / 5.0.12, and `source-map-js` is upgraded to 1.2.2.
 
 ## [0.10.0] - 2026-09-15
 
