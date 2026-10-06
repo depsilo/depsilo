@@ -201,5 +201,8 @@ func TestExportProjectSBOMRejectsUnknownPresetAndUnsignedRequests(t *testing.T) 
 }
 
 func nowDate() string {
-	return time.Now().UTC().Format("2006-01-02")
+	// Download filenames are generated with the server's local clock
+	// (internal/api/admin/projects.go); using UTC here made the assertion fail
+	// for every local timezone that had already crossed midnight.
+	return time.Now().Format("2006-01-02")
 }

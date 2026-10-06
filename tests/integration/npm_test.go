@@ -94,7 +94,10 @@ func TestNpm_TarballDownload(t *testing.T) {
 }
 
 func TestNpm_LegacyDirectTarballRejected(t *testing.T) {
-	const upstreamPath = "/testpkg/-/testpkg-1.0.0.tgz"
+	// Use a path no other test downloads. Reusing testpkg would race the
+	// parent's background tamper re-verification of its 2s-TTL blob entry,
+	// which legitimately fetches the same upstream path.
+	const upstreamPath = "/legacy-reject-fixture/-/legacy-reject-fixture-1.0.0.tgz"
 	before := mockRequestCountForPath(upstreamPath)
 	resp := httpGet(t, depsiloURL+"/npm"+upstreamPath)
 	assertStatus(t, resp, http.StatusNotFound)
