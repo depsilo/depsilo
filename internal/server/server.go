@@ -325,6 +325,19 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, err
 	}
 
+	// Audit chain anchor (threat model §5.8): checkpoint the chain head into an
+	// operator-chosen file outside the database so a whole-database rewrite
+	// contradicts a copy that already left the box.
+	auditAnchor := audit.NewAnchor(database, cfg.Audit.CheckpointFile, cfg.Audit.CheckpointInterval)
+	if auditAnchor.Enabled() {
+		if err := submitBackground("audit anchor", func(ctx context.Context) {
+			auditAnchor.Start(ctx)
+		}); err != nil {
+			return nil, err
+		}
+		zap.L().Info("audit chain anchoring enabled", zap.String("file", cfg.Audit.CheckpointFile))
+	}
+
 	// Supply-chain quarantine (T1 Task 1 — minimum release age). The age
 	// gate defaults off for an empty config; explicit legacy threshold tables
 	// remain enabled unless the operator sets the new switch false. Failure to

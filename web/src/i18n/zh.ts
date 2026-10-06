@@ -1688,6 +1688,9 @@ const zh = {
       preChain: '{{count}} 行早于哈希链（schema v8 之前写入，不在链覆盖范围）',
       broken: '审计链在第 {{id}} 行断裂：{{reason}}。请检查数据库是否被修改，必要时从升级前备份恢复。',
       unavailable: '暂时无法校验审计链：{{message}}',
+      anchorVerified: '锚点：{{count}} 个检查点，最新 #{{head}}',
+      anchorEmpty: '锚点已配置，尚未生成检查点',
+      anchorBroken: '审计链与外部锚点矛盾（第 {{id}} 行）：{{reason}}。数据库可能被整体重建，请用锚点文件与备份核对。',
     },
 
     // Monitor

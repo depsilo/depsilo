@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"depsilo/internal/audit"
 	"depsilo/internal/config"
@@ -52,12 +53,21 @@ func runAudit(args []string) int {
 	if err != nil {
 		return printAuditError(jsonMode, err)
 	}
+	anchors, err := audit.VerifyAnchors(context.Background(), database, cfg.Audit.CheckpointFile)
+	if err != nil {
+		return printAuditError(jsonMode, err)
+	}
 	if jsonMode {
-		printJSON(map[string]any{"ok": report.OK, "integrity": report})
-		if !report.OK {
+		printJSON(map[string]any{"ok": report.OK && anchors.OK, "integrity": report, "anchors": anchors})
+		if !report.OK || !anchors.OK {
 			return 1
 		}
 		return 0
+	}
+	if !anchors.OK {
+		fmt.Printf("✗ audit anchor contradiction at row %d: %s\n", anchors.BrokenAtID, anchors.Reason)
+		fmt.Printf("  checkpoints: %d (%s)\n", anchors.Checkpoints, anchors.Path)
+		return 1
 	}
 	if !report.OK {
 		fmt.Printf("✗ audit chain broken at row %d: %s\n", report.BrokenAtID, report.Reason)
@@ -68,6 +78,13 @@ func runAudit(args []string) int {
 	fmt.Printf("  chained rows: %d (head %d, %s)\n", report.ChainedRows, report.HeadID, shortHash(report.HeadHash))
 	if report.UnchainedRows > 0 {
 		fmt.Printf("  pre-chain rows: %d (written before schema v8; not covered by the chain)\n", report.UnchainedRows)
+	}
+	if anchors.Configured {
+		fmt.Printf("  anchor checkpoints: %d (latest head %d at %s)\n",
+			anchors.Checkpoints, anchors.LatestHeadID, anchors.LatestCheckedAt.Format(time.RFC3339))
+		if anchors.InvalidLines > 0 {
+			fmt.Printf("  anchor lines skipped as malformed: %d\n", anchors.InvalidLines)
+		}
 	}
 	return 0
 }

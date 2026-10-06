@@ -500,6 +500,25 @@ export interface AuditChainReport {
   scanned_at: string
 }
 
+/** Cross-check between chain-head checkpoints and the current database. */
+export interface AuditAnchorReport {
+  configured: boolean
+  path?: string
+  checkpoints: number
+  invalid_lines?: number
+  latest_checked_at?: string
+  latest_head_id?: number
+  latest_head_hash?: string
+  ok: boolean
+  broken_at_id?: number
+  reason?: string
+}
+
+export interface AuditIntegrityResponse {
+  integrity: AuditChainReport
+  anchors: AuditAnchorReport
+}
+
 export interface RuleRequest { ecosystem: string; package_name: string; version: string; action: 'allow' | 'deny'; reason: string }
 export interface RuleRecord extends RuleRequest { id: number; created_by: string; created_at: string; updated_at: string }
 export type RuleListResponse = RuleRecord[] | { items: RuleRecord[]; total?: number }

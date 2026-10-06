@@ -1681,6 +1681,9 @@ const en = {
       preChain: '{{count}} rows predate the hash chain (written before schema v8 and not covered)',
       broken: 'Audit chain broken at row {{id}}: {{reason}}. Check whether the database was modified, and restore a pre-upgrade backup if needed.',
       unavailable: 'The audit chain could not be verified: {{message}}',
+      anchorVerified: 'anchors: {{count}} checkpoints, latest #{{head}}',
+      anchorEmpty: 'anchoring is configured but no checkpoint exists yet',
+      anchorBroken: 'The audit chain contradicts its external anchor at row {{id}}: {{reason}}. The database may have been rebuilt as a whole; compare the anchor file and your backups.',
     },
 
     // Monitor

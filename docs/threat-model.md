@@ -158,8 +158,13 @@ row is reported with its id. Rows written before the chain keep a NULL
 `prev_hash` and are reported as a pre-chain prefix.
 
 **Residual:** the chain has no external anchor — an attacker with database
-access can recompute the entire chain from the first row. The SIEM copy (or a
-future WORM/anchor integration) is what makes that detectable.
+access can recompute the entire chain from the first row. The audit chain
+anchor (`[audit] checkpoint_file`) closes most of that: periodic chain-head
+checkpoints are written outside the database and verified by the audit page,
+the integrity API, and `depsilo audit verify`, so a rewritten or truncated
+chain contradicts a copy the operator already holds. What remains is
+operational: the operator must ship the anchor file to storage the database
+attacker cannot rewrite (WORM, a log platform, a backup target).
 
 ### 5.9 SSRF through redirects, upstreams, or MCP
 
@@ -217,7 +222,8 @@ These are deliberate, documented, and not vulnerabilities:
   authority and no gate.
 - Tamper detection is alert-only and does not prove upstream authenticity.
 - The audit chain has no external anchor; a full-database rewrite is
-  detectable only against a copy that left the box (SIEM, backup).
+  detectable with the checkpoint file or a copy that left the box (SIEM,
+  backup). Anchoring without shipping the file off-box adds little.
 - No in-product rate limiting (reverse proxy responsibility).
 - A configured HTTP forward proxy and cross-origin registry Bearer realms
   are trusted egress components.
@@ -238,8 +244,8 @@ These are deliberate, documented, and not vulnerabilities:
 
 ## 8. Open items
 
-1. External anchoring of the audit chain head (WORM storage, timestamping
-   authority, or a remote head checkpoint).
+1. Push anchor checkpoints directly to WORM storage or a timestamping
+   authority instead of relying on the operator to ship the local file.
 2. Docker age-gate semantics (digest-only or resolve-then-decide).
 3. A published reverse-proxy recipe covering rate limiting, admin-API
    network restriction, and header hygiene.

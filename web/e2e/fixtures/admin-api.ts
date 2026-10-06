@@ -16,7 +16,7 @@ import type {
   ComplianceProfile,
   SnapshotListResponse,
   AuditExporterListResponse,
-  AuditChainReport,
+  AuditIntegrityResponse,
   RecentDownloadsResponse,
   RuleTestResponse,
   SecurityDashboard,
@@ -274,7 +274,12 @@ const canonicalAdminApiDefaults = {
       unchained_rows: 0,
       scanned_at: '2026-10-06T10:00:00Z',
     },
-  } satisfies { integrity: AuditChainReport },
+    anchors: {
+      configured: false,
+      checkpoints: 0,
+      ok: true,
+    },
+  } satisfies AuditIntegrityResponse,
 }
 
 export const adminApiDefaults: Record<string, JsonValue> = {

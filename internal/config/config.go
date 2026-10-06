@@ -58,6 +58,20 @@ type Config struct {
 	// per-package supplier/license annotations. Depsilo never invents these
 	// values; components without an annotation are exported as unknown.
 	Compliance ComplianceConfig `mapstructure:"compliance"`
+	// Audit controls the tamper-evident audit chain anchor: periodic checkpoints
+	// of the chain head, written outside the database so a whole-database
+	// rewrite stays detectable.
+	Audit AuditConfig `mapstructure:"audit"`
+}
+
+// AuditConfig configures the audit chain anchor.
+type AuditConfig struct {
+	// CheckpointFile is an append-only NDJSON file holding chain-head
+	// checkpoints. Point it at a different volume, bucket, or backup target
+	// than the SQLite database; an empty path disables anchoring.
+	CheckpointFile string `mapstructure:"checkpoint_file"`
+	// CheckpointInterval between head checkpoints (default 15m).
+	CheckpointInterval time.Duration `mapstructure:"checkpoint_interval"`
 }
 
 // ComplianceConfig is the operator-owned input for CRA-mode SBOM exports.

@@ -453,6 +453,17 @@ contact = ""
 # supplier = "Python Software Foundation"
 # license  = "Apache-2.0"
 
+# ── Audit chain anchoring ─────────────────────────────────────────────
+# The audit log is hash-chained (schema v8). Anchoring writes periodic
+# checkpoints of the chain head to an append-only file, so rewriting the whole
+# database becomes detectable: `depsilo audit verify` and the audit page
+# compare the stored chain against these checkpoints. Point the file at a
+# different volume, bucket, or backup target than the SQLite database — a
+# checkpoint saved next to the database adds little.
+[audit]
+checkpoint_file     = ""
+checkpoint_interval = "15m"
+
 # ── Tamper detection (content integrity of immutable artifacts) ──
 # Records the SHA-256 of each immutable artifact (wheel/.crate/.gem/…)
 # on first fetch. When the artifact is naturally re-fetched (background

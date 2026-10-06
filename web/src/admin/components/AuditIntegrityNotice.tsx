@@ -21,6 +21,7 @@ export default function AuditIntegrityNotice() {
     staleTime: 60_000,
   })
   const report = query.data?.data.integrity
+  const anchors = query.data?.data.anchors
 
   const verifyButton = (
     <ButtonV2
@@ -53,6 +54,21 @@ export default function AuditIntegrityNotice() {
     )
   }
   if (!report) return null
+  if (anchors?.configured && !anchors.ok) {
+    return (
+      <InlineNotice tone="danger">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span>
+            {t('auditIntegrity.anchorBroken', {
+              id: anchors.broken_at_id ?? 0,
+              reason: anchors.reason ?? '',
+            })}
+          </span>
+          {verifyButton}
+        </div>
+      </InlineNotice>
+    )
+  }
   if (!report.ok) {
     return (
       <InlineNotice tone="danger">
@@ -79,6 +95,14 @@ export default function AuditIntegrityNotice() {
           })}
           {report.unchained_rows > 0
             ? ` · ${t('auditIntegrity.preChain', { count: report.unchained_rows.toLocaleString() })}`
+            : ''}
+          {anchors?.configured
+            ? ` · ${anchors.checkpoints > 0
+              ? t('auditIntegrity.anchorVerified', {
+                count: anchors.checkpoints,
+                head: anchors.latest_head_id ?? 0,
+              })
+              : t('auditIntegrity.anchorEmpty')}`
             : ''}
         </span>
         {verifyButton}

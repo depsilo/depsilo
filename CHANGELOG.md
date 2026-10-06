@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- Audit chain anchoring: an optional `[audit] checkpoint_file` receives
+  append-only chain-head checkpoints (NDJSON, fsynced, one line per changed
+  head). `depsilo audit verify`, the integrity API, and the audit page
+  cross-check every checkpointed `(head_id, head_hash)` pair against the
+  stored row, so a rewritten or truncated chain — internally consistent and
+  therefore invisible to the chain walk alone — is reported with its row id.
 - The audit log is now tamper-evident: every row written since schema v8
   carries `prev_hash`/`hash` (versioned SHA-256 payload, UTC-normalized
   timestamps, unique `prev_hash` so concurrent writers cannot fork the chain).

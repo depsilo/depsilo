@@ -520,6 +520,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.jwt_secret", "change-me-in-production")
 	v.SetDefault("auth.token_ttl", "168h")
 	v.SetDefault("policy.on_load_error", defaultPolicyOnLoadError)
+	v.SetDefault("audit.checkpoint_file", "")
+	v.SetDefault("audit.checkpoint_interval", "15m")
 	// Access log rollup. retention_days bounds the raw access_logs table
 	// at 7 days of detail (the admin "recent logs" page); rollup retention
 	// keeps a year of aggregated dashboards. Operators who upgrade and

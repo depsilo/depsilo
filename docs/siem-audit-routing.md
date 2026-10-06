@@ -108,6 +108,33 @@ Fully switched-on SIEM consumers can also verify continuously: the forwarded
 rows carry `prev_hash`/`hash`, so the same reimplementation as above can
 recompute each batch and alarm on the first mismatch.
 
+### External anchoring
+
+A chain alone cannot detect a rewrite that recomputes every hash. Anchoring
+solves that by storing periodic checkpoints of the chain head outside the
+database:
+
+```toml
+[audit]
+checkpoint_file     = "/var/lib/depsilo-audit/anchors.ndjson"  # different volume/bucket
+checkpoint_interval = "15m"
+```
+
+Each line is one checkpoint:
+
+```json
+{"format":"depsilo/audit-anchor/v1","checked_at":"…","head_id":1200,"head_hash":"…"}
+```
+
+`depsilo audit verify` and `GET /api/v1/admin/audit/integrity` cross-check
+every checkpointed `(head_id, head_hash)` pair against the stored row, so a
+deleted or rewritten head — which an internally consistent rebuilt chain would
+otherwise hide — is reported with its id. Ship the anchor file to WORM
+storage or a log platform on a schedule; that copy is what makes a
+full-database rewrite provable rather than merely suspicious. Malformed
+checkpoint lines are skipped and counted instead of hiding the rest of the
+file.
+
 ## Admin surface
 
 The audit page (`/admin/audit`) lists exporters under **SIEM audit routing**
