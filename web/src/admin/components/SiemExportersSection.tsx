@@ -105,7 +105,7 @@ export default function SiemExportersSection() {
       {notice && <InlineNotice tone="success">{notice}</InlineNotice>}
 
       {canWrite && (
-        <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,10rem)_minmax(0,9rem)_minmax(0,1fr)_minmax(0,10rem)_minmax(0,9rem)_auto] xl:items-end">
+        <div className="mt-3 grid min-w-0 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <InputV2 label={t('siem.name')} value={form.name} onChange={event => setForm(value => ({ ...value, name: event.target.value }))} placeholder={t('siem.namePlaceholder')} />
           <SelectV2 label={t('siem.kind')} value={form.kind} onChange={event => setForm(value => ({ ...value, kind: event.target.value as AuditExporterKind }))}>
             <option value="ndjson">{t('siem.kindNdjson')}</option>
@@ -120,7 +120,7 @@ export default function SiemExportersSection() {
           <InputV2 label={t('siem.token')} type="password" value={form.token} onChange={event => setForm(value => ({ ...value, token: event.target.value }))} placeholder={t('siem.tokenOptional')} />
           <InputV2 label={t('siem.events')} value={form.events} onChange={event => setForm(value => ({ ...value, events: event.target.value }))} placeholder="*" />
           <ButtonV2
-            className="w-full xl:w-auto"
+            className="w-full"
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || form.name.trim() === '' || form.url.trim() === ''}
           >
@@ -166,7 +166,7 @@ export default function SiemExportersSection() {
                     </td>
                     <td className="px-2 py-3" style={{ color: 'var(--text-soft)' }}>
                       {exporter.kind === 'splunk_hec' ? 'Splunk HEC' : 'NDJSON'}
-                      {exporter.token_set && <span className="ml-1.5"><Icon name="key" size="sm" /></span>}
+                      {exporter.token_set && <span className="ml-1"><Icon name="key" size="sm" /></span>}
                     </td>
                     <td className="px-2 py-3">
                       <BadgeV2 variant={exporter.enabled ? 'success' : 'neutral'}>

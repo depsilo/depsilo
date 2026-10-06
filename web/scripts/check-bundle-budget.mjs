@@ -9,10 +9,11 @@ const assetsDir = path.join(distDir, 'assets')
 const entryBudgetBytes = 450_000
 const chunkBudgetBytes = 500_000
 // Raised from 650 kB by the Portal brand surface (docs/brand tokens scoped to
-// the anonymous Portal) plus the code-block scroll affordance. Headroom is
-// kept at the same ~1.8 kB it had before, so the guardrail still catches
-// accidental growth rather than only deliberate additions.
-const initialAssetsBudgetBytes = 653_000
+// the anonymous Portal) plus the code-block scroll affordance, and to 655 kB by
+// the SIEM audit-routing surface (exporter API client + audit-page section).
+// Headroom is kept at the same ~1.8 kB it had before, so the guardrail still
+// catches accidental growth rather than only deliberate additions.
+const initialAssetsBudgetBytes = 655_000
 const initialAssetsTransferBudgetBytes = 320_000
 const lazyModules = ['PortalApp-', 'SetupWizard-', 'AdminApp-', 'AdminShell-']
 

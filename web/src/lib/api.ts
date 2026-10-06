@@ -95,6 +95,8 @@ import type {
 
 const api = axios.create({ baseURL: '/api/v1' })
 
+const auditExportersPath = '/admin/audit/exporters'
+
 export interface ApiGetOptions {
   signal?: AbortSignal
 }
@@ -234,11 +236,11 @@ export const adminApi = {
   // Audit Logs (open source)
   listAuditLogs: (params: AuditLogQuery, options: ApiGetOptions = {}) => api.get<AuditLogListResponse>('/admin/audit-logs', { ...options, params }),
   exportAuditLogs: (params: AuditLogQuery, options: ApiGetOptions = {}) => api.get<Blob>('/admin/audit-logs/export', { ...options, params, responseType: 'blob' }),
-  listAuditExporters: (options: ApiGetOptions = {}) => api.get<AuditExporterListResponse>('/admin/audit/exporters', options),
-  createAuditExporter: (body: AuditExporterRequest) => api.post<AuditExporter>('/admin/audit/exporters', body),
-  updateAuditExporter: (id: number, body: AuditExporterRequest) => api.put<AuditExporter>(`/admin/audit/exporters/${id}`, body),
-  deleteAuditExporter: (id: number) => api.delete<{ deleted: number }>(`/admin/audit/exporters/${id}`),
-  testAuditExporter: (id: number) => api.post<{ delivered: boolean }>(`/admin/audit/exporters/${id}/test`),
+  listAuditExporters: (options: ApiGetOptions = {}) => api.get<AuditExporterListResponse>(auditExportersPath, options),
+  createAuditExporter: (body: AuditExporterRequest) => api.post<AuditExporter>(auditExportersPath, body),
+  updateAuditExporter: (id: number, body: AuditExporterRequest) => api.put<AuditExporter>(`${auditExportersPath}/${id}`, body),
+  deleteAuditExporter: (id: number) => api.delete<{ deleted: number }>(`${auditExportersPath}/${id}`),
+  testAuditExporter: (id: number) => api.post<{ delivered: boolean }>(`${auditExportersPath}/${id}/test`),
 
   // Package Rules (Pro)
   listRules: (options: ApiGetOptions = {}) => api.get<RuleListResponse>('/admin/rules', options),
