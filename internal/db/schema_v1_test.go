@@ -262,5 +262,6 @@ func currentSchemaModelsForTest() []any {
 		&TamperRecord{},
 		&Snapshot{},
 		&SnapshotItem{},
+		&AuditExporter{},
 	}
 }

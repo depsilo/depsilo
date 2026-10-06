@@ -315,6 +315,16 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		return nil, err
 	}
 
+	// SIEM audit routing (ADR-0004 T2): stream the durable audit log to
+	// external collectors. The log table is the buffer; delivery never blocks a
+	// request and resumes from each exporter's cursor after a restart.
+	auditForwarder := audit.NewForwarder(database)
+	if err := submitBackground("audit forwarder", func(ctx context.Context) {
+		auditForwarder.Start(ctx)
+	}); err != nil {
+		return nil, err
+	}
+
 	// Supply-chain quarantine (T1 Task 1 — minimum release age). The age
 	// gate defaults off for an empty config; explicit legacy threshold tables
 	// remain enabled unless the operator sets the new switch false. Failure to
@@ -628,6 +638,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		BlocklistSyncer:            blocklistSyncer,
 		BlocklistMode:              string(blocklistMode),
 		SnapshotStore:              snapshotStore,
+		AuditForwarder:             auditForwarder,
 		Tasks:                      background,
 		TrafficMeter:               trafficMeter,
 		Runtime:                    resourceSampler,

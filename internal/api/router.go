@@ -11,6 +11,7 @@ import (
 	"depsilo/internal/api/admin"
 	"depsilo/internal/api/public"
 	"depsilo/internal/asyncruntime"
+	"depsilo/internal/audit"
 	"depsilo/internal/blocklist"
 	"depsilo/internal/cache"
 	"depsilo/internal/compilecache"
@@ -81,6 +82,7 @@ type Deps struct {
 	// Both nil when [supply_chain.blocklist] enabled = false.
 	BlocklistStore  *blocklist.Store
 	SnapshotStore   *snapshot.Store
+	AuditForwarder  *audit.Forwarder
 	BlocklistSyncer *blocklist.Syncer
 	BlocklistMode   string
 	Tasks           asyncruntime.Submitter
@@ -324,6 +326,15 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	auditHandler := admin.NewAuditHandler(deps.DB)
 	adminRead.GET("/audit-logs", auditHandler.List)
 	adminRead.GET("/audit-logs/export", auditHandler.Export)
+
+	// SIEM audit routing (ADR-0004 T2): forward the audit stream to external
+	// collectors. Open source like the audit log itself; not Pro-gated.
+	auditExporterHandler := admin.NewAuditExporterHandler(deps.DB, deps.AuditForwarder)
+	adminRead.GET("/audit/exporters", auditExporterHandler.List)
+	adminWrite.POST("/audit/exporters", auditExporterHandler.Create)
+	adminWrite.PUT("/audit/exporters/:id", auditExporterHandler.Update)
+	adminWrite.DELETE("/audit/exporters/:id", auditExporterHandler.Delete)
+	adminWrite.POST("/audit/exporters/:id/test", auditExporterHandler.Test)
 	upstreamUpdateHandler := admin.NewUpstreamUpdateHandler(deps.DB)
 	adminRead.GET("/upstream-updates", upstreamUpdateHandler.List)
 
