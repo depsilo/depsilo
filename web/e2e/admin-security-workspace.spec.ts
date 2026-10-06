@@ -385,7 +385,7 @@ test('Security capability overview renders source-bound and safety-disabled fact
         },
         {
           name: 'minimum_release_age',
-          ecosystem: 'rubygems',
+          ecosystem: 'conda',
           support: 'safety_disabled',
           mode: 'off',
           data_status: 'never_synced',
@@ -400,5 +400,5 @@ test('Security capability overview renders source-bound and safety-disabled fact
   await expect(section).toContainText(/安全暂停|Safety paused/)
   await expect(section).toContainText(/从未同步|Never synced/)
   await expect(section).toContainText('NPM')
-  await expect(section).toContainText('RUBYGEMS')
+  await expect(section).toContainText('CONDA')
 })

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/adapter"
@@ -14,15 +15,33 @@ import (
 )
 
 type Handler struct {
-	proxy *adapter.TransparentProxy
-	cfg   config.CacheConfig
+	cacheMgr *cache.Manager
+	selector upstream.Selector
+	proxy    *adapter.TransparentProxy
+	cfg      config.CacheConfig
+	// provenanceRequired enables compact-index publish-time evidence. The
+	// composition root sets it only when a positive rubygems threshold is
+	// active.
+	provenanceRequired bool
+	provenanceMemo     *rubygemsProvenanceMemo
 }
 
 func New(cacheMgr *cache.Manager, selector upstream.Selector, cfg config.CacheConfig, database *gorm.DB) *Handler {
-	return &Handler{proxy: adapter.NewTransparentProxy("rubygems", cacheMgr, selector, database), cfg: cfg}
+	return &Handler{
+		cacheMgr:       cacheMgr,
+		selector:       selector,
+		proxy:          adapter.NewTransparentProxy("rubygems", cacheMgr, selector, database),
+		cfg:            cfg,
+		provenanceMemo: &rubygemsProvenanceMemo{},
+	}
 }
 
 func (h *Handler) Type() string { return "rubygems" }
+
+// SetProvenanceRequired enables compact-index provenance for .gem downloads.
+func (h *Handler) SetProvenanceRequired(required bool) {
+	h.provenanceRequired = required
+}
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.GET("/*path", h.handleRequest)
@@ -37,9 +56,37 @@ func (h *Handler) handleRequest(c *gin.Context) {
 
 	cacheKey := CacheKey(path)
 
-	// Platform gem filenames do not expose a reversible name/version/platform
-	// boundary. Quarantine stays disabled until compact-index provenance or the
-	// embedded gemspec can establish the identity without guessing.
+	// A .gem download only carries the combined name-version[-platform]
+	// filename. When the gate is enabled, the compact index resolves the exact
+	// identity and its created_at/checksum; an unresolvable artifact fails
+	// closed instead of being served without provenance.
+	if h.provenanceRequired && strings.HasPrefix(path, "gems/") && strings.HasSuffix(path, ".gem") {
+		fullName := strings.TrimSuffix(strings.TrimPrefix(path, "gems/"), ".gem")
+		resolution, err := h.publishedProvenance(c.Request.Context(), fullName)
+		if err != nil {
+			zap.L().Warn("rubygems artifact provenance unavailable; refusing to serve",
+				zap.String("artifact", fullName),
+				zap.Error(err),
+			)
+		}
+		if resolution.gem == "" || resolution.version == "" {
+			c.JSON(http.StatusUnavailableForLegalReasons, gin.H{
+				"code":    "QUARANTINED",
+				"message": "rubygems artifact provenance is unavailable; refusing to serve while the minimum-release-age gate is enabled",
+			})
+			return
+		}
+		provenance := adapter.QuarantineProvenance{}
+		if resolution.ok {
+			provenance = adapter.QuarantineProvenance{
+				SourceID:  rubygemsArtifactSourceID(resolution.gem, resolution.version, resolution.cksum),
+				PublishAt: resolution.published,
+			}
+		}
+		if blocked := adapter.QuarantineGateWithProvenance(c, "rubygems", resolution.gem, resolution.version, provenance); blocked {
+			return
+		}
+	}
 
 	// Determine TTL by path type
 	ttl := h.cfg.TTLIndex // default short for metadata

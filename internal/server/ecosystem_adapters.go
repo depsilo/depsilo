@@ -136,9 +136,10 @@ func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystem
 }
 
 type adapterProvenanceWiring struct {
-	pypiKey       []byte
-	nugetRequired bool
-	cargoRequired bool
+	pypiKey          []byte
+	nugetRequired    bool
+	cargoRequired    bool
+	rubygemsRequired bool
 }
 
 func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, wiring adapterProvenanceWiring) error {
@@ -174,6 +175,15 @@ func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definiti
 			})
 			if !ok {
 				return fmt.Errorf("cargo adapter does not support provenance")
+			}
+			setter.SetProvenanceRequired(true)
+		}
+		if definition.name == "rubygems" && wiring.rubygemsRequired {
+			setter, ok := handler.(interface {
+				SetProvenanceRequired(bool)
+			})
+			if !ok {
+				return fmt.Errorf("rubygems adapter does not support provenance")
 			}
 			setter.SetProvenanceRequired(true)
 		}

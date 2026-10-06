@@ -28,6 +28,11 @@
   sparse index entry's `pubtime` and `cksum` through the configured upstream,
   memoizes the lookup, and the policy accepts positive Cargo thresholds.
   Entries without a usable `pubtime` fail closed.
+- 2026-10-06: the RubyGems slice is implemented — the download gate resolves
+  the compact index's `created_at` and checksum for the exact `.gem` filename
+  by trying authoritative hyphen splits, memoizes the lookup, and the policy
+  accepts positive RubyGems thresholds. Ambiguous filenames and entries without
+  `created_at` fail closed.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal

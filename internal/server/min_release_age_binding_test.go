@@ -8,12 +8,12 @@ import (
 )
 
 func TestSourceBoundMinimumReleaseAgeEcosystems(t *testing.T) {
-	for _, ecosystem := range []string{"npm", "pypi", "composer", "nuget", "cargo"} {
+	for _, ecosystem := range []string{"npm", "pypi", "composer", "nuget", "cargo", "rubygems"} {
 		if !sourceBoundMinimumReleaseAge(ecosystem) {
 			t.Errorf("sourceBoundMinimumReleaseAge(%q) = false, want true", ecosystem)
 		}
 	}
-	for _, ecosystem := range []string{"rubygems", "go", "apt", "unknown"} {
+	for _, ecosystem := range []string{"conda", "go", "apt", "unknown"} {
 		if sourceBoundMinimumReleaseAge(ecosystem) {
 			t.Errorf("sourceBoundMinimumReleaseAge(%q) = true, want false", ecosystem)
 		}
@@ -30,6 +30,7 @@ func TestSourceBoundPolicyAcceptsBoundThresholdsAndRejectsUnbound(t *testing.T) 
 			"composer": "72h",
 			"nuget":    "72h",
 			"cargo":    "72h",
+			"rubygems": "72h",
 		},
 	}, sourceBoundMinimumReleaseAge)
 	if err != nil {
@@ -41,18 +42,19 @@ func TestSourceBoundPolicyAcceptsBoundThresholdsAndRejectsUnbound(t *testing.T) 
 		"composer": 72 * time.Hour,
 		"nuget":    72 * time.Hour,
 		"cargo":    72 * time.Hour,
+		"rubygems": 72 * time.Hour,
 	} {
 		if got := policy.Threshold(ecosystem); got != want {
 			t.Errorf("Threshold(%q) = %v, want %v", ecosystem, got, want)
 		}
 	}
-	if policy.SourceProvenanceBound("rubygems") {
-		t.Error("rubygems reported as source-bound")
+	if policy.SourceProvenanceBound("conda") {
+		t.Error("conda reported as source-bound")
 	}
 	if _, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
 		MinReleaseAgeEnabled: &enabled,
-		MinReleaseAge:        map[string]string{"rubygems": "72h"},
+		MinReleaseAge:        map[string]string{"conda": "72h"},
 	}, sourceBoundMinimumReleaseAge); err == nil {
-		t.Fatal("unbound rubygems threshold was accepted")
+		t.Fatal("unbound conda threshold was accepted")
 	}
 }

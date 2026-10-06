@@ -622,8 +622,9 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	projectGroup := r.Group("/p/:slug")
 	projectGroup.Use(middleware.ProjectSlugMiddleware(database))
 	wiring := adapterProvenanceWiring{
-		nugetRequired: quarantinePolicy.Threshold("nuget") > 0,
-		cargoRequired: quarantinePolicy.Threshold("cargo") > 0,
+		nugetRequired:    quarantinePolicy.Threshold("nuget") > 0,
+		cargoRequired:    quarantinePolicy.Threshold("cargo") > 0,
+		rubygemsRequired: quarantinePolicy.Threshold("rubygems") > 0,
 	}
 	if quarantinePolicy.Threshold("pypi") > 0 {
 		wiring.pypiKey, err = derivePyPIArtifactSigningKey(cfg.Auth.JWTSecret)
@@ -791,7 +792,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 //   - composer: p2 metadata time passed with the declared dist artifact
 func sourceBoundMinimumReleaseAge(ecosystem string) bool {
 	switch ecosystem {
-	case "npm", "pypi", "composer", "nuget", "cargo":
+	case "npm", "pypi", "composer", "nuget", "cargo", "rubygems":
 		return true
 	default:
 		return false
