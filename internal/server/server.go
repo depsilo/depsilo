@@ -329,7 +329,9 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		Mode:                 cfg.SupplyChain.Mode,
 		Allow:                cfg.SupplyChain.Allow,
 		FailClosed:           cfg.SupplyChain.FailClosed,
-	}, func(ecosystem string) bool { return ecosystem == "npm" || ecosystem == "pypi" })
+	}, func(ecosystem string) bool {
+		return ecosystem == "npm" || ecosystem == "pypi" || ecosystem == "composer"
+	})
 	if err != nil {
 		return nil, fmt.Errorf("quarantine policy: %w", err)
 	}

@@ -155,13 +155,22 @@ func (h *Handler) handleDist(c *gin.Context, path string) {
 		return
 	}
 
-	// Quarantine gate with the pretty version — the same string the
-	// composer publish-time resolver matches against p2 metadata.
-	// NOTE: composer falls back to the original dist URL on 451
+	// Quarantine gate with the pretty version and the p2 entry's own
+	// publish time. The timestamp and dist URL come from the same
+	// server-side metadata document, so no public-registry lookup is
+	// needed. NOTE: composer falls back to the original dist URL on 451
 	// (see the enforcement caveat in rewriter.go), so this blocks
 	// best-effort and records the audit event; it is not airtight
 	// against a client with direct registry egress.
-	if blocked := adapter.QuarantineGate(c, "composer", fullName, entry.Version); blocked {
+	provenance := adapter.QuarantineProvenance{
+		SourceID: composerArtifactSourceID(fullName, entry.Version, entry.Dist.Reference, entry.Dist.URL),
+	}
+	if entry.Time != "" {
+		if parsed, err := time.Parse(time.RFC3339, entry.Time); err == nil {
+			provenance.PublishAt = parsed.UTC()
+		}
+	}
+	if blocked := adapter.QuarantineGateWithProvenance(c, "composer", fullName, entry.Version, provenance); blocked {
 		return
 	}
 

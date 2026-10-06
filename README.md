@@ -47,10 +47,12 @@ Package managers / CI / coding agents
   apply operator-defined rules according to the
   [Package Rule capability matrix](docs/package-rules.md), and block
   known-malicious versions for the ecosystems listed below.
-  Minimum-release-age enforcement is source-bound for npm and PyPI. PyPI
-  requires an upstream that serves the PEP 691 JSON simple index with
-  `upload-time`; HTML-only upstreams fail closed while the gate is enabled, and
-  other ecosystems remain rejected until they are bound end to end.
+  Minimum-release-age enforcement is source-bound for npm, PyPI, and Composer.
+  PyPI requires an upstream that serves the PEP 691 JSON simple index with
+  `upload-time`; HTML-only upstreams fail closed while the gate is enabled.
+  Composer uses the p2 metadata's own `time` field but remains best-effort
+  because Composer clients fall back to the original dist URL on a 451. Other
+  ecosystems remain rejected until they are bound end to end.
 - **Verify** — record first-seen hashes and surface tamper alerts when immutable
   artifacts change during a natural refresh.
 - **Audit** — keep requests, policy decisions, and Upstream health visible in

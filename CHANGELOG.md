@@ -6,12 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
-- Minimum-release-age enforcement is available for npm and PyPI. npm carries
-  the packument `time[version]` inside the authenticated tarball token; PyPI
-  negotiates the PEP 691 JSON simple index and carries `upload-time` with the
-  exact upstream that declared the artifact. Missing, legacy, or HTML-only
-  metadata fails closed while the gate is enabled, and every other ecosystem
-  still rejects positive thresholds at startup.
+- Minimum-release-age enforcement is available for npm, PyPI, and Composer.
+  npm carries the packument `time[version]` inside the authenticated tarball
+  token; PyPI negotiates the PEP 691 JSON simple index and carries
+  `upload-time` with the exact upstream that declared the artifact; Composer
+  uses the p2 metadata entry's own `time` field. Missing, legacy, or HTML-only
+  metadata fails closed while the gate is enabled. Composer remains best-effort
+  because its clients can fall back to the original dist URL after a 451, and
+  every other ecosystem still rejects positive thresholds at startup.
 
 ### Changed
 - The S3 release contract now runs against pinned RustFS, replacing the

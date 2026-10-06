@@ -14,6 +14,12 @@
   PEP 691 JSON simple index, signs `upload-time` and the declaring upstream
   into the artifact reference, renders the legacy HTML representation for
   clients that do not accept JSON, and fails closed on HTML-only upstreams.
+- 2026-10-06: the Composer slice is implemented — the dist handler uses the
+  p2 metadata entry's own `time` and a source identity derived from the
+  declared artifact, and the policy accepts positive Composer thresholds.
+  Composer remains best-effort because clients can fall back to the original
+  dist URL after a 451; hard enforcement needs egress control or metadata
+  filtering.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal

@@ -1,6 +1,8 @@
 package composer
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 )
@@ -39,6 +41,7 @@ func ParseDistPath(path string) (vendor, pkg, versionNorm, reference, ext string
 type distEntry struct {
 	Version           string `json:"version"`
 	VersionNormalized string `json:"version_normalized"`
+	Time              string `json:"time"`
 	Dist              struct {
 		URL       string `json:"url"`
 		Type      string `json:"type"`
@@ -116,8 +119,35 @@ func decodeDistEntry(fields map[string]json.RawMessage) *distEntry {
 			return nil
 		}
 	}
+	if raw, has := fields["time"]; has {
+		if json.Unmarshal(raw, &ent.Time) != nil {
+			// A malformed timestamp is treated as missing: the entry stays
+			// servable while an enabled age gate fails closed.
+			ent.Time = ""
+		}
+	}
 	if ent.Version == "" {
 		return nil
 	}
 	return ent
+}
+
+// composerArtifactSourceID names the exact artifact declaration that produced
+// a dist request. Composer metadata is fetched server-side from a configured
+// Upstream, and the dist URL, reference, and publish time all come from that
+// same p2 entry, so a hash of those fields is a stable source identity even
+// when the fetch was served from the metadata cache.
+func composerArtifactSourceID(fullName, version, reference, distURL string) string {
+	hash := sha256.New()
+	for _, value := range []string{
+		"depsilo/composer-artifact-source/v1",
+		fullName,
+		version,
+		reference,
+		distURL,
+	} {
+		_, _ = hash.Write([]byte(value))
+		_, _ = hash.Write([]byte{0})
+	}
+	return base64.RawURLEncoding.EncodeToString(hash.Sum(nil))
 }

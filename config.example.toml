@@ -335,13 +335,17 @@ scan_interval = "24h"
 check_ttl = "24h"
 # proxy = "http://127.0.0.1:7890"
 
-# ─── Minimum release age — npm and PyPI source-bound ────────────────────
+# ─── Minimum release age — npm, PyPI, and Composer source-bound ─────────
 #
 # npm enforces the gate from the packument's time[version], carried inside the
 # same authenticated token that pins the tarball to its serving Upstream.
 # PyPI enforces it from the PEP 691 JSON simple index's upload-time for the
 # artifact URL declared by the same Upstream; mirrors that only serve HTML
 # (for example some Aliyun mirrors) fail closed while the PyPI gate is enabled.
+# Composer enforces it from the p2 metadata entry's own time field. Composer
+# clients fall back to the original dist URL after a 451, so the Composer gate
+# provides caching, audit events, and best-effort blocking rather than hard
+# enforcement without egress control.
 # Every other ecosystem still rejects positive thresholds at startup because
 # its artifact source and timestamp are not yet bound end to end.
 #
@@ -363,7 +367,7 @@ go       = "0"
 cargo    = "0"
 maven    = "0"
 rubygems = "0"
-composer = "0"
+composer = "0"   # best-effort: clients can fall back to the original dist URL
 nuget    = "0"
 conda    = "0"
 cran     = "0"
