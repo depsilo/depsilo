@@ -144,6 +144,11 @@ Rebuilding those is now a low-ROI use of time. Updated T2:
 
 - [x] **Alerting:** webhook/Slack on policy hits (blocked malware, quarantined
       version, CVE over threshold). **Shipped 2026-06-29 (T1/7).**
+- [x] **SIEM audit routing:** forward the durable audit stream to external
+      collectors as NDJSON or Splunk HEC, with per-exporter cursors, retry
+      backoff, event filters, and lag/error status in Admin. *(Landed on master
+      2026-10-06; unreleased. See
+      [docs/siem-audit-routing.md](siem-audit-routing.md).)*
 - [ ] **One-command deploy + Helm chart** — basic only, not feature-parity with
       AK's IaC bundle. Just enough so a k8s operator can `helm install` and have
       a working enforcement layer.

@@ -450,6 +450,42 @@ export interface AuditLogQuery {
 }
 export interface AuditLogListResponse { items: AuditLog[]; total: number; page: number }
 
+export type AuditExporterKind = 'ndjson' | 'splunk_hec'
+
+/** One SIEM collector the audit stream is forwarded to. */
+export interface AuditExporter {
+  id: number
+  name: string
+  kind: AuditExporterKind
+  url: string
+  token_set: boolean
+  events: string
+  enabled: boolean
+  cursor: number
+  /** audit_log rows not yet delivered (audit head − cursor). */
+  lag: number
+  delivered_count: number
+  last_error: string
+  last_attempt_at: string | null
+  last_success_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AuditExporterListResponse {
+  items: AuditExporter[]
+  audit_head: number
+}
+
+export interface AuditExporterRequest {
+  name?: string
+  kind?: AuditExporterKind
+  url?: string
+  token?: string
+  events?: string
+  enabled?: boolean
+}
+
 export interface RuleRequest { ecosystem: string; package_name: string; version: string; action: 'allow' | 'deny'; reason: string }
 export interface RuleRecord extends RuleRequest { id: number; created_by: string; created_at: string; updated_at: string }
 export type RuleListResponse = RuleRecord[] | { items: RuleRecord[]; total?: number }

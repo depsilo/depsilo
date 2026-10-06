@@ -13,6 +13,7 @@ import QueryErrorState from '@/components/QueryErrorState'
 import SelectV2 from '@/components/Select'
 import TableViewport from '@/components/TableViewport'
 import AdminPage from '@/admin/components/AdminPage'
+import SiemExportersSection from '@/admin/components/SiemExportersSection'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
@@ -360,6 +361,8 @@ export default function AuditLogsV2() {
 
       {/* Pagination */}
       <AdminPagination page={page} pageSize={50} total={total} onPageChange={setPage} />
+
+      <SiemExportersSection />
       </div>
     </AdminPage>
   )

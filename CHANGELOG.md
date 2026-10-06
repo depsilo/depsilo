@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- SIEM audit routing: the durable audit stream can be forwarded to external
+  collectors as NDJSON or Splunk HEC envelopes. Each exporter keeps a cursor
+  over `audit_logs`, so delivery is at-least-once, a collector outage stops the
+  cursor instead of dropping records, restarts resume from the last successful
+  batch, and failures back off from 10s to 5min. Event filters select actions
+  and outcomes (`blocked`, `miss`, …); new exporters start at the current audit
+  head. Admin API and an audit-page section cover CRUD, enable/disable, lag and
+  last-error status, and a test delivery through the real path.
 - Published the compatibility policy ([docs/compatibility.md](docs/compatibility.md)):
   patch releases stay compatible; before `v1.0.0` a breaking API/config change
   needs a full minor release or 90 days of deprecation (whichever is longer),

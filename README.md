@@ -358,6 +358,7 @@ before a normal change; `make verify` is the complete offline gate.
 | Configure ccache or sccache | [Compiler cache (Chinese)](docs/compile-cache.md) |
 | Verify signed releases, images, and SBOMs | [Release verification](docs/release-verification.md) |
 | Compatibility promises (API, config, schema, exports) | [Compatibility policy](docs/compatibility.md) |
+| Forward the audit stream to a SIEM | [SIEM audit routing](docs/siem-audit-routing.md) |
 | Run an isolated pilot and collect feedback | [Trial guide](docs/trial-guide.md) |
 | See what changed in each release | [Changelog](CHANGELOG.md) · [GitHub Releases](https://github.com/depsilo/depsilo/releases) |
 | Understand current product scope and constraints | [Product](PRODUCT.md) |

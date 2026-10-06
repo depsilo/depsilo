@@ -15,6 +15,7 @@ import type {
   ProjectListResponse,
   ComplianceProfile,
   SnapshotListResponse,
+  AuditExporterListResponse,
   RecentDownloadsResponse,
   RuleTestResponse,
   SecurityDashboard,
@@ -260,6 +261,10 @@ const canonicalAdminApiDefaults = {
     active_snapshot_id: 0,
     active_snapshot: '',
   } satisfies SnapshotListResponse,
+  'GET /api/v1/admin/audit/exporters': {
+    items: [],
+    audit_head: 0,
+  } satisfies AuditExporterListResponse,
 }
 
 export const adminApiDefaults: Record<string, JsonValue> = {
