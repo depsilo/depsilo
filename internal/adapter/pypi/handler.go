@@ -259,7 +259,14 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 	// remains distinct from the public PyPI registry.
 	if base := lastPathSegment(artifactPath); base != "" {
 		if pkg, version := packagekey.ParsePypiFilename(base); pkg != "" && version != "" {
-			if blocked := adapter.QuarantineGate(c, h.adapterID, pkg, version); blocked {
+			provenance := adapter.QuarantineProvenance{}
+			if external {
+				provenance = adapter.QuarantineProvenance{
+					SourceID:  externalTarget.source,
+					PublishAt: externalTarget.uploadTime,
+				}
+			}
+			if blocked := adapter.QuarantineGateWithProvenance(c, h.adapterID, pkg, version, provenance); blocked {
 				return
 			}
 		}
@@ -348,9 +355,11 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 }
 
 type externalArtifactTarget struct {
-	url      string
-	host     string
-	filename string
+	url        string
+	host       string
+	filename   string
+	source     string
+	uploadTime time.Time
 }
 
 var errInvalidExternalArtifactReference = errors.New("invalid external artifact reference")
@@ -366,11 +375,11 @@ func (h *Handler) resolveExternalArtifact(filepath string) (externalArtifactTarg
 		strings.Contains(requestedFilename, "/") || len(requestedFilename) > maxArtifactFilenameLength+len(".metadata") {
 		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
 	}
-	targetText, err := decodeExternalArtifactToken(h.artifactSigningKey, h.tokenAudience(), token)
+	claims, err := decodeExternalArtifactToken(h.artifactSigningKey, h.tokenAudience(), token)
 	if err != nil {
 		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
 	}
-	target, err := parseFetchableArtifactURL(targetText)
+	target, err := parseFetchableArtifactURL(claims.Target)
 	if err != nil || !obviousPythonArtifactURL(target) {
 		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
 	}
@@ -389,10 +398,20 @@ func (h *Handler) resolveExternalArtifact(filepath string) (externalArtifactTarg
 	default:
 		return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
 	}
+	var uploadTime time.Time
+	if claims.UploadTime != "" {
+		parsed, err := time.Parse(time.RFC3339, claims.UploadTime)
+		if err != nil {
+			return externalArtifactTarget{}, true, errInvalidExternalArtifactReference
+		}
+		uploadTime = parsed.UTC()
+	}
 	return externalArtifactTarget{
-		url:      target.String(),
-		host:     target.Hostname(),
-		filename: artifactFilename,
+		url:        target.String(),
+		host:       target.Hostname(),
+		filename:   artifactFilename,
+		source:     claims.Source,
+		uploadTime: uploadTime,
 	}, true, nil
 }
 

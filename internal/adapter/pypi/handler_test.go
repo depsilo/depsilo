@@ -541,7 +541,7 @@ func TestExternalArtifactRouteRejectsTamperedToken(t *testing.T) {
 	router := gin.New()
 	handler.Register(router.Group("/pypi-torch-cu128"))
 	target := "https://cdn.example/whl/cu128/torch-2.7.1-py3-none-any.whl"
-	token, err := encodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", target)
+	token, err := encodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", externalArtifactClaims{Target: target})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -557,6 +557,112 @@ func TestExternalArtifactRouteRejectsTamperedToken(t *testing.T) {
 	}
 }
 
+type provenanceRecordingQuarantineChecker struct {
+	ecosystem string
+	sourceID  string
+	publishAt time.Time
+}
+
+func (c *provenanceRecordingQuarantineChecker) Check(_ context.Context, ecosystem, _, _, _ string) adapter.QuarantineDecision {
+	c.ecosystem = ecosystem
+	return adapter.QuarantineDecision{Allowed: true}
+}
+
+func (c *provenanceRecordingQuarantineChecker) CheckWithProvenance(
+	_ context.Context,
+	ecosystem, _, _, _ string,
+	provenance adapter.QuarantineProvenance,
+) adapter.QuarantineDecision {
+	c.ecosystem = ecosystem
+	c.sourceID = provenance.SourceID
+	c.publishAt = provenance.PublishAt
+	return adapter.QuarantineDecision{Allowed: true}
+}
+
+func TestExternalArtifactGateReceivesSourceBoundProvenance(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const artifactBody = "source-bound-pypi-artifact"
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/packages/demo-1.0-py3-none-any.whl" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, artifactBody)
+	}))
+	t.Cleanup(upstreamServer.Close)
+
+	database, err := db.Open("sqlite", filepath.Join(t.TempDir(), "pypi-provenance.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(database); err != nil {
+		t.Fatal(err)
+	}
+	storage, err := cache.NewLocalStorage(filepath.Join(t.TempDir(), "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := cache.NewManager(storage, database, cache.NewEventBus(), 72*time.Hour)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := manager.Close(ctx); err != nil {
+			t.Errorf("close cache manager: %v", err)
+		}
+	})
+
+	pool, err := upstream.NewPool([]config.UpstreamConfig{{
+		Name: "mock", URL: upstreamServer.URL, Priority: 1, ProbeMode: "passive",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := NewWithOptions(
+		manager,
+		upstream.NewPassiveRecoverySelector(pool),
+		config.CacheConfig{TTLBlob: time.Hour},
+		database,
+		Options{
+			PathPrefix:         "/pypi",
+			AdapterID:          "pypi",
+			UpstreamSimplePath: "/simple",
+			ArtifactSigningKey: testArtifactSigningKey,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	handler.Register(router.Group("/pypi"))
+	checker := &provenanceRecordingQuarantineChecker{}
+	scoped := adapter.NewRequestScope(nil, nil, checker, nil).Wrap(router)
+
+	wantTime := time.Date(2026, 9, 1, 12, 30, 45, 0, time.UTC)
+	target := upstreamServer.URL + "/packages/demo-1.0-py3-none-any.whl"
+	token, err := encodeExternalArtifactToken(testArtifactSigningKey, "pypi", externalArtifactClaims{
+		Target:     target,
+		Source:     "c291cmNlLWJvdW5k",
+		UploadTime: wantTime.Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/pypi/files/_external/"+token+"/demo-1.0-py3-none-any.whl",
+		nil,
+	)
+	scoped.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Body.String() != artifactBody {
+		t.Fatalf("artifact status=%d body=%q", response.Code, response.Body.String())
+	}
+	if checker.ecosystem != "pypi" || checker.sourceID != "c291cmNlLWJvdW5k" || !checker.publishAt.Equal(wantTime) {
+		t.Fatalf("gate provenance = %#v", checker)
+	}
+}
+
 func TestExternalArtifactReferenceValidatesFilenameAndMetadata(t *testing.T) {
 	t.Parallel()
 	handler := &Handler{
@@ -564,7 +670,7 @@ func TestExternalArtifactReferenceValidatesFilenameAndMetadata(t *testing.T) {
 		artifactSigningKey: append([]byte(nil), testArtifactSigningKey...),
 	}
 	target := "https://cdn.example/whl/torch-2.7.1%2Bcu128-py3-none-any.whl"
-	token, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, target)
+	token, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, externalArtifactClaims{Target: target})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -578,7 +684,7 @@ func TestExternalArtifactReferenceValidatesFilenameAndMetadata(t *testing.T) {
 		t.Fatalf("metadata reference = %+v, external=%v, err=%v", metadata, external, err)
 	}
 	sdistTarget := "https://cdn.example/source/demo-1.0.tar.gz"
-	sdistToken, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, sdistTarget)
+	sdistToken, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, externalArtifactClaims{Target: sdistTarget})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -615,7 +721,7 @@ func TestExternalArtifactReferenceRejectsSignedUnsafeURL(t *testing.T) {
 		"https://cdn.example/a%2Fb-1.0-py3-none-any.whl",
 	} {
 		t.Run(target, func(t *testing.T) {
-			token, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, target)
+			token, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, externalArtifactClaims{Target: target})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -635,7 +741,7 @@ func TestExtraIndexArtifactKeepsExtraPolicyIdentity(t *testing.T) {
 		artifactSigningKey: append([]byte(nil), testArtifactSigningKey...),
 	}
 	target := "https://cdn.example/torch-2.7.1-py3-none-any.whl"
-	token, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, target)
+	token, err := encodeExternalArtifactToken(testArtifactSigningKey, handler.adapterID, externalArtifactClaims{Target: target})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,11 +1,55 @@
 package pypi
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/url"
 	"strings"
 	"testing"
 )
+
+func TestExternalArtifactTokenV2CarriesSourceAndUploadTime(t *testing.T) {
+	t.Parallel()
+	claims := externalArtifactClaims{
+		Target:     "https://cdn.example/demo-1.0-py3-none-any.whl",
+		Source:     "c291cmNlLWJvdW5k",
+		UploadTime: "2026-09-01T12:30:45Z",
+	}
+	token, err := encodeExternalArtifactToken(testArtifactSigningKey, "pypi", claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(token, externalArtifactTokenVersionV2+".") {
+		t.Fatalf("token = %q, want v2 prefix", token)
+	}
+	decoded, err := decodeExternalArtifactToken(testArtifactSigningKey, "pypi", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded != claims {
+		t.Fatalf("decoded = %#v, want %#v", decoded, claims)
+	}
+	if _, err := encodeExternalArtifactToken(testArtifactSigningKey, "pypi", externalArtifactClaims{
+		Target: claims.Target, UploadTime: "not-a-time",
+	}); err == nil {
+		t.Fatal("encoded an unparseable upload time")
+	}
+}
+
+func TestExternalArtifactTokenStillDecodesLegacyV1(t *testing.T) {
+	t.Parallel()
+	target := "https://cdn.example/legacy-1.0-py3-none-any.whl"
+	payload := base64.RawURLEncoding.EncodeToString([]byte(target))
+	mac := externalArtifactMAC(testArtifactSigningKey, "pypi", externalArtifactTokenVersion, payload)
+	token := externalArtifactTokenVersion + "." + payload + "." + base64.RawURLEncoding.EncodeToString(mac)
+	decoded, err := decodeExternalArtifactToken(testArtifactSigningKey, "pypi", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Target != target || decoded.Source != "" || decoded.UploadTime != "" {
+		t.Fatalf("legacy decoded = %#v", decoded)
+	}
+}
 
 func TestSignedRewriteResolvesRealPyTorchArtifactShapes(t *testing.T) {
 	t.Parallel()
@@ -79,14 +123,14 @@ func TestSignedRewriteResolvesRealPyTorchArtifactShapes(t *testing.T) {
 			if !ok || token == "" || filename == "" {
 				t.Fatalf("rewritten path does not retain filename: %q", parsed.Path)
 			}
-			target, err := decodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", token)
+			claims, err := decodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", token)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if target != tt.expected {
-				t.Fatalf("signed target = %q, want %q", target, tt.expected)
+			if claims.Target != tt.expected {
+				t.Fatalf("signed target = %q, want %q", claims.Target, tt.expected)
 			}
-			targetURL, _ := url.Parse(target)
+			targetURL, _ := url.Parse(claims.Target)
 			wantFilename, _ := artifactFilename(targetURL)
 			if filename != wantFilename {
 				t.Fatalf("local filename = %q, want %q", filename, wantFilename)
@@ -140,23 +184,23 @@ func TestSignedRewriteDecodesHTMLAttributeEntities(t *testing.T) {
 	if !ok {
 		t.Fatalf("signed path is malformed: %q", parsed.Path)
 	}
-	target, err := decodeExternalArtifactToken(testArtifactSigningKey, "extra:pkg", token)
+	claims, err := decodeExternalArtifactToken(testArtifactSigningKey, "extra:pkg", token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if target != "https://cdn.example/pkg-1.0.whl?download=1&mirror=primary" {
-		t.Fatalf("decoded target = %q", target)
+	if claims.Target != "https://cdn.example/pkg-1.0.whl?download=1&mirror=primary" {
+		t.Fatalf("decoded target = %q", claims.Target)
 	}
 }
 
 func TestSignedTokenRejectsTamperingCrossRouteReplayAndLengthAbuse(t *testing.T) {
 	t.Parallel()
 	target := "https://cdn.example/torch-2.7.1-py3-none-any.whl?download=1"
-	token, err := encodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", target)
+	token, err := encodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", externalArtifactClaims{Target: target})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded, err := decodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", token); err != nil || decoded != target {
+	if decoded, err := decodeExternalArtifactToken(testArtifactSigningKey, "extra:pytorch-cu128", token); err != nil || decoded.Target != target {
 		t.Fatalf("valid token decode = %q, %v", decoded, err)
 	}
 

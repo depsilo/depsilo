@@ -1,24 +1,28 @@
 package pypi
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	stdhtml "html"
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
 
 const (
-	externalArtifactTokenVersion = "v1"
-	maxArtifactURLLength         = 4096
-	maxArtifactFilenameLength    = 512
-	maxExternalArtifactTokenLen  = 5600
+	externalArtifactTokenVersion   = "v1"
+	externalArtifactTokenVersionV2 = "v2"
+	maxArtifactURLLength           = 4096
+	maxArtifactFilenameLength      = 512
+	maxExternalArtifactTokenLen    = 6400
 )
 
 var hrefRe = regexp.MustCompile(`(?i)href\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))`)
@@ -113,7 +117,7 @@ func rewriteSignedArtifactURLs(
 			rewriteErr = filenameErr
 			return match
 		}
-		token, tokenErr := encodeExternalArtifactToken(signingKey, adapterID, target.String())
+		token, tokenErr := encodeExternalArtifactToken(signingKey, adapterID, externalArtifactClaims{Target: target.String()})
 		if tokenErr != nil {
 			rewriteErr = tokenErr
 			return match
@@ -196,41 +200,94 @@ func artifactFilename(target *url.URL) (string, error) {
 	return filename, nil
 }
 
-func encodeExternalArtifactToken(signingKey []byte, adapterID, targetURL string) (string, error) {
-	if len(signingKey) == 0 || adapterID == "" || len(targetURL) == 0 || len(targetURL) > maxArtifactURLLength {
+// externalArtifactClaims is the authenticated payload of a PyPI artifact
+// reference. Source and UploadTime stay empty for legacy HTML indexes that
+// cannot prove release provenance; the quarantine gate fails closed for a
+// bound ecosystem when they are missing.
+type externalArtifactClaims struct {
+	Target     string `json:"target"`
+	Source     string `json:"source,omitempty"`
+	UploadTime string `json:"upload_time,omitempty"`
+}
+
+func encodeExternalArtifactToken(signingKey []byte, adapterID string, claims externalArtifactClaims) (string, error) {
+	if len(signingKey) == 0 || adapterID == "" || len(claims.Target) == 0 || len(claims.Target) > maxArtifactURLLength {
 		return "", errors.New("invalid external artifact token input")
 	}
-	payload := base64.RawURLEncoding.EncodeToString([]byte(targetURL))
-	mac := externalArtifactMAC(signingKey, adapterID, payload)
-	token := externalArtifactTokenVersion + "." + payload + "." + base64.RawURLEncoding.EncodeToString(mac)
+	if claims.UploadTime != "" {
+		if _, err := time.Parse(time.RFC3339, claims.UploadTime); err != nil {
+			return "", errors.New("invalid external artifact upload time")
+		}
+	}
+	payloadJSON, err := json.Marshal(claims)
+	if err != nil {
+		return "", errors.New("encode external artifact claims")
+	}
+	payload := base64.RawURLEncoding.EncodeToString(payloadJSON)
+	mac := externalArtifactMAC(signingKey, adapterID, externalArtifactTokenVersionV2, payload)
+	token := externalArtifactTokenVersionV2 + "." + payload + "." + base64.RawURLEncoding.EncodeToString(mac)
 	if len(token) > maxExternalArtifactTokenLen {
 		return "", errors.New("external artifact token is too long")
 	}
 	return token, nil
 }
 
-func decodeExternalArtifactToken(signingKey []byte, adapterID, token string) (string, error) {
+func decodeExternalArtifactToken(signingKey []byte, adapterID, token string) (externalArtifactClaims, error) {
 	if len(signingKey) == 0 || adapterID == "" || len(token) == 0 || len(token) > maxExternalArtifactTokenLen {
-		return "", errors.New("invalid external artifact token")
+		return externalArtifactClaims{}, errors.New("invalid external artifact token")
 	}
 	parts := strings.Split(token, ".")
-	if len(parts) != 3 || parts[0] != externalArtifactTokenVersion || parts[1] == "" || parts[2] == "" {
-		return "", errors.New("invalid external artifact token")
+	if len(parts) != 3 || parts[1] == "" || parts[2] == "" {
+		return externalArtifactClaims{}, errors.New("invalid external artifact token")
 	}
 	providedMAC, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil || len(providedMAC) != sha256.Size || !hmac.Equal(providedMAC, externalArtifactMAC(signingKey, adapterID, parts[1])) {
-		return "", errors.New("invalid external artifact token")
+	if err != nil || len(providedMAC) != sha256.Size {
+		return externalArtifactClaims{}, errors.New("invalid external artifact token")
 	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || len(payload) == 0 || len(payload) > maxArtifactURLLength {
-		return "", errors.New("invalid external artifact token")
+
+	var claims externalArtifactClaims
+	switch parts[0] {
+	case externalArtifactTokenVersion:
+		if !hmac.Equal(providedMAC, externalArtifactMAC(signingKey, adapterID, externalArtifactTokenVersion, parts[1])) {
+			return externalArtifactClaims{}, errors.New("invalid external artifact token")
+		}
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil || len(payload) == 0 || len(payload) > maxArtifactURLLength {
+			return externalArtifactClaims{}, errors.New("invalid external artifact token")
+		}
+		claims.Target = string(payload)
+	case externalArtifactTokenVersionV2:
+		if !hmac.Equal(providedMAC, externalArtifactMAC(signingKey, adapterID, externalArtifactTokenVersionV2, parts[1])) {
+			return externalArtifactClaims{}, errors.New("invalid external artifact token")
+		}
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil || len(payload) == 0 || len(payload) > maxArtifactURLLength+512 {
+			return externalArtifactClaims{}, errors.New("invalid external artifact token")
+		}
+		if err := json.Unmarshal(payload, &claims); err != nil {
+			return externalArtifactClaims{}, errors.New("invalid external artifact token")
+		}
+		canonical, err := json.Marshal(claims)
+		if err != nil || !bytes.Equal(canonical, payload) {
+			return externalArtifactClaims{}, errors.New("invalid external artifact token")
+		}
+		if claims.Target == "" || len(claims.Target) > maxArtifactURLLength {
+			return externalArtifactClaims{}, errors.New("invalid external artifact token")
+		}
+		if claims.UploadTime != "" {
+			if _, err := time.Parse(time.RFC3339, claims.UploadTime); err != nil {
+				return externalArtifactClaims{}, errors.New("invalid external artifact token")
+			}
+		}
+	default:
+		return externalArtifactClaims{}, errors.New("invalid external artifact token")
 	}
-	return string(payload), nil
+	return claims, nil
 }
 
-func externalArtifactMAC(signingKey []byte, adapterID, encodedPayload string) []byte {
+func externalArtifactMAC(signingKey []byte, adapterID, version, encodedPayload string) []byte {
 	mac := hmac.New(sha256.New, signingKey)
-	_, _ = mac.Write([]byte(externalArtifactTokenVersion))
+	_, _ = mac.Write([]byte(version))
 	_, _ = mac.Write([]byte{0})
 	_, _ = mac.Write([]byte(adapterID))
 	_, _ = mac.Write([]byte{0})
