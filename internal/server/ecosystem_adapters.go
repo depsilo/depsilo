@@ -136,15 +136,16 @@ func activeDefinitions(definitions []ecosystemDef, active []string) ([]ecosystem
 }
 
 type adapterProvenanceWiring struct {
-	pypiKey          []byte
-	nugetRequired    bool
-	cargoRequired    bool
-	rubygemsRequired bool
-	condaRequired    bool
-	cranRequired     bool
-	mavenRequired    bool
-	alpineRequired   bool
-	helmRequired     bool
+	pypiKey              []byte
+	pypiBlocklistCovered bool
+	nugetRequired        bool
+	cargoRequired        bool
+	rubygemsRequired     bool
+	condaRequired        bool
+	cranRequired         bool
+	mavenRequired        bool
+	alpineRequired       bool
+	helmRequired         bool
 }
 
 func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definitions []ecosystemDef, pools map[string]*upstream.Pool, cacheMgr *cache.Manager, cacheConfig config.CacheConfig, database *gorm.DB, wiring adapterProvenanceWiring) error {
@@ -164,6 +165,15 @@ func registerActiveAdapters(root *gin.Engine, project *gin.RouterGroup, definiti
 			if err := setter.SetArtifactSigningKey(wiring.pypiKey, true); err != nil {
 				return fmt.Errorf("enable pypi provenance: %w", err)
 			}
+		}
+		if definition.name == "pypi" && wiring.pypiBlocklistCovered {
+			setter, ok := handler.(interface {
+				SetBlocklistCovered(bool)
+			})
+			if !ok {
+				return fmt.Errorf("pypi adapter does not support blocklist identity coverage")
+			}
+			setter.SetBlocklistCovered(true)
 		}
 		if definition.name == "nuget" && wiring.nugetRequired {
 			setter, ok := handler.(interface {

@@ -46,9 +46,16 @@ type Handler struct {
 	// registry upload-time into artifact references. It is only set for the
 	// built-in PyPI adapter when the minimum-release-age gate is enabled.
 	provenanceRequired bool
+	// blocklistCovered is set by the composition root when the synced
+	// known-malicious dataset covers PyPI. Every served artifact then needs an
+	// authoritative identity so the blocklist cannot be bypassed by legacy
+	// archive formats that PEP 625 parsing does not cover.
+	blocklistCovered bool
 	// renderMemo is shared by shallow Handler copies (channel families) and is
 	// never copied, keeping the struct safe to copy.
 	renderMemo *renderMemoState
+	// identityMemo is shared by shallow Handler copies too.
+	identityMemo *artifactIdentityMemo
 }
 
 // Options configures one PyPI-compatible route while keeping the public route
@@ -115,6 +122,7 @@ func newWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg con
 		artifactSelector:   options.ArtifactSelector,
 		provenanceRequired: options.ProvenanceRequired,
 		renderMemo:         &renderMemoState{},
+		identityMemo:       &artifactIdentityMemo{},
 	}, nil
 }
 
@@ -344,11 +352,34 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 		artifactPath = externalTarget.filename
 	}
 	// PyPI file paths carry (package, version) in their PEP 427 / 625
-	// filename. Keep adapterID as the policy identity: the blocklist layer
-	// canonicalizes extra:* to PyPI, while extra-index release-age resolution
-	// remains distinct from the public PyPI registry.
+	// filename. Legacy archive shapes are verified against the declaring
+	// package index when the known-malicious dataset or the release-age gate
+	// covers PyPI, so no served artifact can bypass the blocklist. Keep
+	// adapterID as the policy identity: the blocklist layer canonicalizes
+	// extra:* to PyPI, while extra-index release-age resolution remains
+	// distinct from the public PyPI registry.
 	if base := lastPathSegment(artifactPath); base != "" {
+		identity := artifactIdentity{}
 		if pkg, version := packagekey.ParsePypiFilename(base); pkg != "" && version != "" {
+			identity = artifactIdentity{pkg: pkg, version: version}
+		} else if h.identityRequired() {
+			resolved, err := h.resolveArtifactIdentity(c.Request.Context(), base)
+			if err != nil {
+				zap.L().Warn("pypi artifact identity unavailable; refusing to serve",
+					zap.String("filename", base),
+					zap.Error(err),
+				)
+			}
+			identity = resolved
+			if !identity.ok() {
+				c.JSON(http.StatusUnavailableForLegalReasons, gin.H{
+					"code":    "QUARANTINED",
+					"message": "pypi artifact identity is unavailable; refusing to serve while the known-malicious dataset or the minimum-release-age gate covers PyPI",
+				})
+				return
+			}
+		}
+		if identity.ok() {
 			provenance := adapter.QuarantineProvenance{}
 			if external {
 				provenance = adapter.QuarantineProvenance{
@@ -356,7 +387,7 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 					PublishAt: externalTarget.uploadTime,
 				}
 			}
-			if blocked := adapter.QuarantineGateWithProvenance(c, h.adapterID, pkg, version, provenance); blocked {
+			if blocked := adapter.QuarantineGateWithProvenance(c, h.adapterID, identity.pkg, identity.version, provenance); blocked {
 				return
 			}
 		}
