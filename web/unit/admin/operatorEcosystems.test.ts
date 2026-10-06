@@ -74,7 +74,7 @@ describe('Operator ecosystem catalogs', () => {
 
   it('exposes only ecosystems with end-to-end malicious dataset enforcement', () => {
     expect(maliciousBlocklistEcosystems.map(ecosystem => ecosystem.id)).toEqual([
-      'npm', 'cargo', 'composer', 'nuget', 'go', 'maven',
+      'npm', 'pypi', 'cargo', 'rubygems', 'composer', 'nuget', 'go', 'maven',
     ])
   })
 

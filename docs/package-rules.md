@@ -288,6 +288,11 @@ request and whose name/version reconstruct the filename, the chart's
 Last-Modified supplies the approximate timestamp, and an artifact the index
 does not declare is refused. Neither seam exposes Helm in the Package Rule form
 or API.
+The known-malicious dataset covers RubyGems under the same compact-index
+identity: a gem whose identity cannot be resolved is refused while the dataset
+is enabled, and platform artifacts inherit the dataset row of their base
+version. Automatic vulnerability scans stay disabled for RubyGems; this is
+malware blocking, not CVE scanning.
 Docker is also outside the Package Rule seam; its registry/image/tag-or-digest
 identity remains owned by the separate OCI control plane.
 Hugging Face repository identities remain on the quarantine surface and are

@@ -684,6 +684,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 			UpstreamSimplePath: idx.SimplePath,
 			ArtifactSigningKey: extraIndexArtifactKey,
 			ArtifactSelector:   upstream.NewEgressSelector(idxPool),
+			BlocklistCovered:   blCfg.IsEnabled() && blocklist.IsSyncedEcosystem("pypi"),
 		}
 		if idx.Kind == config.ExtraIndexKindPyTorch {
 			idxHandler, err := pypi.NewChannelFamily(

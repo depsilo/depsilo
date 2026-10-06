@@ -51,6 +51,63 @@ func TestParseAdvisoryRejectsInvalidExplicitVersion(t *testing.T) {
 	}
 }
 
+func TestParseAdvisoryCoversPyPIAndRubyGems(t *testing.T) {
+	t.Parallel()
+
+	// PyPI wheel names are escaped with underscores in the dataset; the PEP
+	// 503 dialect normalizes them so request-side identities match.
+	pypi := `{
+		"id":"MAL-2026-PYPI",
+		"summary":"malicious PyPI release",
+		"affected":[{
+			"package":{"ecosystem":"PyPI","name":"Evil_Package"},
+			"versions":["1.0.0","2.0.0RC1"]
+		}]
+	}`
+	rows, err := parseAdvisory(strings.NewReader(pypi), "pypi", "PyPI", time.Unix(1, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Package != "evil-package" || rows[0].Versions != `["1.0.0","2.0.0rc1"]` {
+		t.Fatalf("pypi rows = %#v", rows)
+	}
+
+	// RubyGems versions keep their exact spelling (prerelease dots included).
+	rubygems := `{
+		"id":"MAL-2026-GEM",
+		"summary":"malicious gem release",
+		"affected":[{
+			"package":{"ecosystem":"RubyGems","name":"evil_gem"},
+			"versions":["6.0.1","1.0.0.pre.1"]
+		}]
+	}`
+	rows, err = parseAdvisory(strings.NewReader(rubygems), "rubygems", "RubyGems", time.Unix(1, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Package != "evil_gem" || rows[0].Versions != `["6.0.1","1.0.0.pre.1"]` {
+		t.Fatalf("rubygems rows = %#v", rows)
+	}
+
+	// A PyPI advisory that marks every range as affected imports as an
+	// all-versions row, matching the dataset's dominant shape.
+	allVersions := `{
+		"id":"MAL-2026-PYPI-ALL",
+		"summary":"typosquat",
+		"affected":[{
+			"package":{"ecosystem":"PyPI","name":"ascii2text"},
+			"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"}]}]
+		}]
+	}`
+	rows, err = parseAdvisory(strings.NewReader(allVersions), "pypi", "PyPI", time.Unix(1, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Package != "ascii2text" || rows[0].Versions != "" {
+		t.Fatalf("all-version pypi rows = %#v", rows)
+	}
+}
+
 type submitterFunc func(asyncruntime.Task) error
 
 func (submit submitterFunc) Submit(task asyncruntime.Task) error { return submit(task) }

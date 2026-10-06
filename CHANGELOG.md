@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- The guaranteed malicious-package dataset now covers PyPI and RubyGems.
+  PyPI verifies legacy archive filenames (`.zip`, `.egg`, `.tar.bz2`, legacy
+  sdists, …) against the declaring package's simple index; RubyGems resolves
+  the exact gem identity, including platform artifacts, from the compact
+  index. While the dataset covers an ecosystem, an artifact whose identity
+  cannot be proven is refused instead of being served unchecked, and
+  RubyGems matching treats `1.17.2-x86_64-linux` as the `1.17.2` release.
 - Minimum-release-age enforcement is available for npm, PyPI, Composer, NuGet,
   Cargo, and RubyGems. npm carries the packument `time[version]` inside the
   authenticated tarball token; PyPI negotiates the PEP 691 JSON simple index

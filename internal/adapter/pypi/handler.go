@@ -73,6 +73,10 @@ type Options struct {
 	// ProvenanceRequired negotiates the PEP 691 JSON simple index and carries
 	// upload-time in signed artifact references. Requires ArtifactSigningKey.
 	ProvenanceRequired bool
+	// BlocklistCovered marks the route as covered by the synced known-malicious
+	// dataset, so legacy archive formats must resolve an identity instead of
+	// bypassing the blocklist.
+	BlocklistCovered bool
 }
 
 // New creates a new PyPI handler.
@@ -121,6 +125,7 @@ func newWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg con
 		artifactSigningKey: append([]byte(nil), options.ArtifactSigningKey...),
 		artifactSelector:   options.ArtifactSelector,
 		provenanceRequired: options.ProvenanceRequired,
+		blocklistCovered:   options.BlocklistCovered,
 		renderMemo:         &renderMemoState{},
 		identityMemo:       &artifactIdentityMemo{},
 	}, nil

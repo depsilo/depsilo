@@ -403,9 +403,15 @@ huggingface = "0"
 apt      = "0"
 
 # ── Known-malicious blocklist ─────────────────────────────────────────
-# Syncs OSV MAL-* records for npm, cargo, composer, nuget, go, and maven.
-# Explicit version lists and all-version advisories are
+# Syncs OSV MAL-* records for npm, pypi, cargo, rubygems, composer, nuget,
+# go, and maven. Explicit version lists and all-version advisories are
 # imported; bounded ranges without a version list are skipped.
+# PyPI resolves legacy archive filenames (.zip, .egg, .tar.bz2, …) through
+# the declaring package's simple index, and RubyGems resolves the exact gem
+# (including platform artifacts) through the compact index. An artifact whose
+# identity cannot be proven is refused while the dataset covers it, so a
+# non-standard filename cannot bypass the blocklist. Upstreams for those two
+# ecosystems must serve the corresponding index metadata.
 # Records may carry GHSA aliases.
 # The quarantine allow-list CANNOT bypass a malware match — the only
 # exemption is an audited admin override that expires after 24h.

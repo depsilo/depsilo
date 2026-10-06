@@ -50,7 +50,7 @@ export const securityEcosystems = Object.freeze(
 )
 
 const maliciousBlocklistEcosystemIds = [
-  'npm', 'cargo', 'composer', 'nuget', 'go', 'maven',
+  'npm', 'pypi', 'cargo', 'rubygems', 'composer', 'nuget', 'go', 'maven',
 ] as const satisfies readonly OperatorEcosystemId[]
 
 /** Ecosystems with end-to-end MAL dataset enforcement on artifact requests. */

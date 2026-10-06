@@ -218,10 +218,12 @@ Pre-release / yanked versions use the same decision path.
 
 ### Task 2 — Known-malicious blocklist
 
-> **Current enforcement scope:** npm, Cargo, Composer, NuGet, Go, and Maven.
-> PyPI and RubyGems are excluded from the guaranteed dataset surface until all
-> served artifact formats establish complete request identity. The original
-> eight-ecosystem goal below is retained as historical intent.
+> **Current enforcement scope:** npm, PyPI, Cargo, RubyGems, Composer, NuGet,
+> Go, and Maven. PyPI legacy archive formats resolve their identity from the
+> declaring package's simple index, and RubyGems resolves the exact gem
+> (including platform artifacts) from the compact index; an artifact whose
+> identity cannot be proven is refused while the dataset covers that
+> ecosystem.
 
 **Goal:** hard-block versions known to be **malicious** (distinct from merely vulnerable).
 
