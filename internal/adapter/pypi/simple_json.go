@@ -1,14 +1,78 @@
 package pypi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	stdhtml "html"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
+
+// renderSimpleHTML is the handler's renderer seam. Tests replace it to count
+// render invocations without changing production behavior.
+var renderSimpleHTML = renderSimpleHTMLFromJSON
+
+const (
+	renderMemoTTL        = 5 * time.Minute
+	renderMemoMaxEntries = 64
+	renderMemoMaxBytes   = 8 << 20
+)
+
+type renderedHTMLMemo struct {
+	body      []byte
+	expiresAt time.Time
+}
+
+type renderMemoState struct {
+	mu    sync.Mutex
+	cache map[string]renderedHTMLMemo
+	bytes int
+}
+
+// cachedRenderedHTML memoizes the HTML rendering of a cached PEP 691 document
+// in-process, keyed by the document content hash. A refreshed JSON document
+// produces a new key, so a stale rendering cannot outlive its source entry.
+func (h *Handler) cachedRenderedHTML(cacheKey string, body []byte) ([]byte, error) {
+	memo := h.renderMemo
+	if memo == nil {
+		return renderSimpleHTML(body)
+	}
+	digest := sha256.Sum256(body)
+	renderKey := cacheKey + "\x00" + hex.EncodeToString(digest[:8])
+	now := time.Now()
+	memo.mu.Lock()
+	if entry, ok := memo.cache[renderKey]; ok && now.Before(entry.expiresAt) {
+		rendered := entry.body
+		memo.mu.Unlock()
+		return rendered, nil
+	}
+	memo.mu.Unlock()
+
+	rendered, err := renderSimpleHTML(body)
+	if err != nil {
+		return nil, err
+	}
+	memo.mu.Lock()
+	if memo.cache == nil {
+		memo.cache = make(map[string]renderedHTMLMemo)
+	}
+	memo.bytes += len(rendered)
+	memo.cache[renderKey] = renderedHTMLMemo{body: rendered, expiresAt: now.Add(renderMemoTTL)}
+	for (len(memo.cache) > renderMemoMaxEntries || memo.bytes > renderMemoMaxBytes) && len(memo.cache) > 0 {
+		for cachedKey, entry := range memo.cache {
+			memo.bytes -= len(entry.body)
+			delete(memo.cache, cachedKey)
+			break
+		}
+	}
+	memo.mu.Unlock()
+	return rendered, nil
+}
 
 // rewriteSignedJSONIndex converts a PEP 691 simple-index document into local
 // signed artifact routes. Each file's authenticated claims carry the exact

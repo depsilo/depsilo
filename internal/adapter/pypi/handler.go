@@ -46,6 +46,9 @@ type Handler struct {
 	// registry upload-time into artifact references. It is only set for the
 	// built-in PyPI adapter when the minimum-release-age gate is enabled.
 	provenanceRequired bool
+	// renderMemo is shared by shallow Handler copies (channel families) and is
+	// never copied, keeping the struct safe to copy.
+	renderMemo *renderMemoState
 }
 
 // Options configures one PyPI-compatible route while keeping the public route
@@ -111,6 +114,7 @@ func newWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg con
 		artifactSigningKey: append([]byte(nil), options.ArtifactSigningKey...),
 		artifactSelector:   options.ArtifactSelector,
 		provenanceRequired: options.ProvenanceRequired,
+		renderMemo:         &renderMemoState{},
 	}, nil
 }
 
@@ -255,7 +259,7 @@ func (h *Handler) handlePackageIndex(c *gin.Context) {
 	if ct == "" {
 		ct = "text/html"
 	}
-	body, ct, err = h.withClientRepresentation(body, ct, baseURL, c.GetHeader("Accept"))
+	body, ct, err = h.withClientRepresentation(cacheKey, body, ct, baseURL, c.GetHeader("Accept"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "render index"})
 		return
@@ -295,11 +299,15 @@ func (h *Handler) rewriteIndex(body []byte, contentType, pageURL, sourceID strin
 
 // withClientRepresentation injects the request origin and serves HTML to
 // clients that did not advertise PEP 691 JSON support.
-func (h *Handler) withClientRepresentation(body []byte, contentType, baseURL, accept string) ([]byte, string, error) {
+func (h *Handler) withClientRepresentation(
+	cacheKey string,
+	body []byte,
+	contentType, baseURL, accept string,
+) ([]byte, string, error) {
 	jsonRepresentation := strings.Contains(strings.ToLower(contentType), "json")
 	clientAcceptsJSON := strings.Contains(strings.ToLower(accept), "application/vnd.pypi.simple.v1+json")
 	if jsonRepresentation && !clientAcceptsJSON {
-		rendered, err := renderSimpleHTMLFromJSON(body)
+		rendered, err := h.cachedRenderedHTML(cacheKey, body)
 		if err != nil {
 			return nil, "", err
 		}

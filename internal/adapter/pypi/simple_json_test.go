@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -146,6 +147,14 @@ func TestSetArtifactSigningKeyRejectsShortKey(t *testing.T) {
 
 func TestProvenanceIndexFlowFeedsUploadTimeToArtifactGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	originalRender := renderSimpleHTML
+	var renderCalls atomic.Int64
+	renderSimpleHTML = func(data []byte) ([]byte, error) {
+		renderCalls.Add(1)
+		return originalRender(data)
+	}
+	t.Cleanup(func() { renderSimpleHTML = originalRender })
+
 	const artifactBody = "provenance-pypi-wheel"
 	now := time.Now().UTC()
 	youngTime := now.Add(-time.Hour)
@@ -308,5 +317,15 @@ func TestProvenanceIndexFlowFeedsUploadTimeToArtifactGate(t *testing.T) {
 		!strings.Contains(htmlResponse.Body.String(), "/_external/") {
 		t.Fatalf("html fallback status=%d type=%q body=%s",
 			htmlResponse.Code, htmlResponse.Header().Get("Content-Type"), htmlResponse.Body.String())
+	}
+	secondHTML := httptest.NewRecorder()
+	secondRequest := httptest.NewRequest(http.MethodGet, "/pypi/simple/demo/", nil)
+	secondRequest.Header.Set("Accept", "text/html")
+	scoped.ServeHTTP(secondHTML, secondRequest)
+	if secondHTML.Code != http.StatusOK || !strings.Contains(secondHTML.Body.String(), "/_external/") {
+		t.Fatalf("second html fallback status=%d body=%s", secondHTML.Code, secondHTML.Body.String())
+	}
+	if got := renderCalls.Load(); got != 1 {
+		t.Fatalf("HTML render calls = %d, want 1 (second response should hit the render cache)", got)
 	}
 }
