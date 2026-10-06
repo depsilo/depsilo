@@ -397,6 +397,13 @@ test('Security capability overview renders source-bound and safety-disabled fact
           mode: 'block',
           data_status: 'approximate',
         },
+        {
+          name: 'minimum_release_age',
+          ecosystem: 'docker',
+          support: 'supported',
+          mode: 'block',
+          data_status: 'observed',
+        },
       ],
     },
   })
@@ -407,7 +414,34 @@ test('Security capability overview renders source-bound and safety-disabled fact
   await expect(section).toContainText(/安全暂停|Safety paused/)
   await expect(section).toContainText(/从未同步|Never synced/)
   await expect(section).toContainText(/近似（Last-Modified）|Approximate \(Last-Modified\)/)
+  await expect(section).toContainText(/首次观测（非发布时间）|First observed \(not publish time\)/)
   await expect(section).toContainText('NPM')
   await expect(section).toContainText('MAVEN')
   await expect(section).toContainText('CONDA')
+  await expect(section).toContainText('DOCKER')
+})
+
+test('Security capability overview explains the disabled Docker age gate', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/capabilities/summary': {
+      version: 'dev',
+      commit: 'unknown',
+      build_date: 'unknown',
+      capabilities: [
+        {
+          name: 'minimum_release_age',
+          ecosystem: 'docker',
+          support: 'safety_disabled',
+          mode: 'off',
+          data_status: 'never_synced',
+        },
+      ],
+    },
+  })
+  await page.goto('/admin/security')
+
+  const section = page.getByRole('region', { name: /运行时能力状态|Runtime capability status/ })
+  await expect(section).toContainText(
+    /Docker registry 不提供可用的发布时间|Docker registries expose no usable publish time/,
+  )
 })

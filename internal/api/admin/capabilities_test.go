@@ -138,4 +138,38 @@ func TestCapabilitySummaryReportsSourceBoundMinimumReleaseAge(t *testing.T) {
 
 type policyCallback struct{ fn func() }
 
+func TestCapabilitySummaryReportsObservedMinimumReleaseAge(t *testing.T) {
+	enabled := true
+	policy, err := quarantine.NewPolicyWithProvenance(quarantine.Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"docker": "168h"},
+		ObservationSources:   []string{"docker"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewPolicyWithProvenance: %v", err)
+	}
+	h := NewCapabilityHandler(nil, &config.Config{}, nil, []string{"docker"}, capabilityPolicyStub{}, nil, "", policy)
+	r := gin.New()
+	r.GET("/summary", h.Summary)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, httptest.NewRequest("GET", "/summary", nil))
+	if response.Code != 200 {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var got capabilitySummary
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, fact := range got.Capabilities {
+		if fact.Name != "minimum_release_age" || fact.Ecosystem != "docker" {
+			continue
+		}
+		if fact.Support != "supported" || fact.Mode != "block" || fact.DataStatus != "observed" {
+			t.Fatalf("docker minimum_release_age fact = %+v", fact)
+		}
+		return
+	}
+	t.Fatal("docker minimum_release_age fact missing")
+}
+
 func (p policyCallback) PolicyStatus() rules.PolicyStatus { p.fn(); return rules.PolicyStatus{} }

@@ -60,6 +60,10 @@ type Policy struct {
 	// with Last-Modified-based provenance.
 	approximateProvenance map[string]bool
 
+	// observationProvenance lists ecosystems the operator explicitly accepted
+	// with first-observation age (currently Docker).
+	observationProvenance map[string]bool
+
 	// Per-ecosystem threshold lookup. Keys are lowercase ecosystem
 	// names matching internal/adapter directory names ("pypi", "npm",
 	// "cargo", ...). Missing key → fall back to Default.
@@ -110,6 +114,12 @@ type Config struct {
 	// whose adapters already provide that provenance are bound by this
 	// acknowledgement; other entries have no effect.
 	ApproximateSources []string `mapstructure:"approximate_sources"`
+
+	// ObservationSources lists ecosystems whose positive thresholds are
+	// accepted with first-observation provenance — the age starts when this
+	// instance first pulled the artifact digest. Only ecosystems whose
+	// adapters record observations are bound by this acknowledgement.
+	ObservationSources []string `mapstructure:"observation_sources"`
 
 	// Mode: "block" and "warn" are supported. "serve_last_eligible" is
 	// retained as a recognized legacy value so the checker can return an
@@ -197,6 +207,18 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 			approximate[normalized] = true
 		}
 	}
+	observed := make(map[string]bool, len(cfg.ObservationSources))
+	observedAcknowledged := make(map[string]bool, len(cfg.ObservationSources))
+	for _, ecosystem := range cfg.ObservationSources {
+		normalized := strings.ToLower(strings.TrimSpace(ecosystem))
+		if normalized == "" {
+			continue
+		}
+		observedAcknowledged[normalized] = true
+		if observationCapable(normalized) {
+			observed[normalized] = true
+		}
+	}
 
 	for key, value := range cfg.MinReleaseAge {
 		dur, err := ParseDuration(value)
@@ -215,7 +237,8 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 		}
 		provenanceBound := SupportsMinimumReleaseAge(normalizedKey) ||
 			(bound != nil && bound(normalizedKey)) ||
-			approximate[normalizedKey]
+			approximate[normalizedKey] ||
+			observed[normalizedKey]
 		if ageGateEnabled && dur > 0 && !provenanceBound {
 			if approximateCapable(normalizedKey) {
 				return nil, fmt.Errorf(
@@ -224,8 +247,26 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 				)
 			}
 			if acknowledged[normalizedKey] {
+				if observationCapable(normalizedKey) {
+					return nil, fmt.Errorf(
+						"quarantine: minimum release age for ecosystem %q cannot use approximate_sources: its registries expose no usable Last-Modified publish time, so add it to supply_chain.observation_sources to acknowledge first-observation age, or set its threshold to 0",
+						normalizedKey,
+					)
+				}
 				return nil, fmt.Errorf(
 					"quarantine: minimum release age for ecosystem %q is not supported safely; its adapter does not provide approximate Last-Modified provenance yet, so supply_chain.approximate_sources does not enable it; set its threshold to 0 or disable the age gate",
+					normalizedKey,
+				)
+			}
+			if observedAcknowledged[normalizedKey] {
+				return nil, fmt.Errorf(
+					"quarantine: minimum release age for ecosystem %q is not supported safely; its adapter does not record first-observation provenance yet, so supply_chain.observation_sources does not enable it; set its threshold to 0 or disable the age gate",
+					normalizedKey,
+				)
+			}
+			if observationCapable(normalizedKey) {
+				return nil, fmt.Errorf(
+					"quarantine: minimum release age for ecosystem %q needs first-observation provenance; add it to supply_chain.observation_sources to acknowledge that the age starts at the first pull by this instance, or set its threshold to 0",
 					normalizedKey,
 				)
 			}
@@ -268,6 +309,7 @@ func NewPolicyWithProvenance(cfg Config, bound func(ecosystem string) bool) (*Po
 		FailClosed:            failClosed,
 		sourceProvenanceBound: bound,
 		approximateProvenance: approximate,
+		observationProvenance: observed,
 	}, nil
 }
 
@@ -284,7 +326,7 @@ func (p *Policy) SourceProvenanceBound(ecosystem string) bool {
 	if p.sourceProvenanceBound != nil && p.sourceProvenanceBound(normalized) {
 		return true
 	}
-	return p.approximateProvenance[normalized]
+	return p.approximateProvenance[normalized] || p.observationProvenance[normalized]
 }
 
 // ApproximateProvenance reports whether an ecosystem's enabled threshold uses
@@ -296,6 +338,16 @@ func (p *Policy) ApproximateProvenance(ecosystem string) bool {
 	return p.approximateProvenance[strings.ToLower(strings.TrimSpace(ecosystem))]
 }
 
+// ObservationProvenance reports whether an ecosystem's enabled threshold uses
+// first-observation age (the time this instance first pulled the digest)
+// acknowledged through observation_sources.
+func (p *Policy) ObservationProvenance(ecosystem string) bool {
+	if p == nil {
+		return false
+	}
+	return p.observationProvenance[strings.ToLower(strings.TrimSpace(ecosystem))]
+}
+
 // approximateCapable lists the ecosystems whose adapters already provide
 // Last-Modified provenance. Other Last-Modified-capable ecosystems are added
 // here as their slices land; before that, listing them in approximate_sources
@@ -304,6 +356,20 @@ func (p *Policy) ApproximateProvenance(ecosystem string) bool {
 func approximateCapable(ecosystem string) bool {
 	switch ecosystem {
 	case "conda", "cran", "maven", "alpine", "helm":
+		return true
+	default:
+		return false
+	}
+}
+
+// observationCapable lists the ecosystems whose adapters record a first-seen
+// timestamp for the exact artifact. Docker joins first: its registries expose
+// no portable publish time, but the digest identity plus our own observation
+// gives a gate the publisher cannot forge. The operator must still
+// acknowledge the ecosystem through observation_sources.
+func observationCapable(ecosystem string) bool {
+	switch ecosystem {
+	case "docker":
 		return true
 	default:
 		return false

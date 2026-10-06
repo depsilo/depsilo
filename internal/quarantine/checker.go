@@ -38,7 +38,14 @@ var errMissingProvenance = errors.New("quarantine: authenticated metadata has no
 type Provenance struct {
 	SourceID  string
 	PublishAt time.Time
+	// Kind names what PublishAt means. The zero value is a registry publish
+	// time; ProvenanceKindFirstObserved is the time this instance first saw
+	// the artifact, which the QUARANTINED reason must state explicitly.
+	Kind string
 }
+
+// ProvenanceKindFirstObserved marks first-observation provenance.
+const ProvenanceKindFirstObserved = "first_observed"
 
 type Decision struct {
 	Allowed bool
@@ -408,9 +415,13 @@ func (c *Checker) check(
 	// Step 5 & 6: threshold check.
 	age := c.now().Sub(publishAt)
 	if age < threshold {
+		origin := "was published"
+		if provenance != nil && provenance.Kind == ProvenanceKindFirstObserved {
+			origin = "was first observed"
+		}
 		reason := fmt.Sprintf(
-			"version %s of %s was published %s ago, which is younger than the configured %s minimum release age for %s%s",
-			version, pkg, formatAge(age), formatAge(threshold), ecosystem, sourceNote,
+			"version %s of %s %s %s ago, which is younger than the configured %s minimum release age for %s%s",
+			version, pkg, origin, formatAge(age), formatAge(threshold), ecosystem, sourceNote,
 		)
 		if c.policy.Mode == ModeWarn {
 			c.recordEvent(ctx, db.QuarantineEvent{

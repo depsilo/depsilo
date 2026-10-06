@@ -1143,6 +1143,8 @@ const zh = {
       capabilitySafetyDisabled: '安全暂停',
       capabilitySourceBound: '来源已绑定',
       capabilityApproximate: '近似（Last-Modified）',
+      capabilityObserved: '首次观测（非发布时间）',
+      dockerAgeExcluded: 'Docker registry 不提供可用的发布时间：生产请用 image@sha256 固定 digest；如需门禁，可在 supply_chain.observation_sources 中确认后启用首次观测年龄。',
       capabilityNeverSynced: '从未同步',
       capabilityFresh: '数据就绪',
       capabilityStale: '继续使用最后有效数据',

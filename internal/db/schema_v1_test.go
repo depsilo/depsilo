@@ -263,5 +263,6 @@ func currentSchemaModelsForTest() []any {
 		&Snapshot{},
 		&SnapshotItem{},
 		&AuditExporter{},
+		&DockerImageObservation{},
 	}
 }

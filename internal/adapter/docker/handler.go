@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,25 +24,49 @@ const manifestAccept = "application/vnd.docker.distribution.manifest.v2+json, " 
 	"application/vnd.oci.image.index.v1+json, " +
 	"*/*"
 
+// quarantineProvenanceFirstObserved mirrors
+// quarantine.ProvenanceKindFirstObserved without making the adapter package
+// import the checker (the string is part of the adapter→checker contract).
+const quarantineProvenanceFirstObserved = "first_observed"
+
+// errMissingManifestDigest marks a registry that answered a manifest request
+// without Docker-Content-Digest: identity cannot be proven, so the armed gate
+// refuses instead of guessing.
+var errMissingManifestDigest = errors.New("docker registry did not return a manifest digest")
+
 type Handler struct {
 	cacheMgr *cache.Manager
 	cacheCfg config.CacheConfig
 	db       *gorm.DB
 	resolver *Resolver
 	auth     *AuthManager
+	// observationRequired enables the first-observation age gate: tag
+	// references are resolved to a digest, the digest is observed, the gate
+	// decides, and the manifest is then fetched by that exact digest so the
+	// served bytes match the decision.
+	observationRequired bool
+	observations        *observationStore
 }
 
 func New(cacheMgr *cache.Manager, cacheCfg config.CacheConfig, database *gorm.DB, dockerCfg config.DockerConfig) *Handler {
 	return &Handler{
-		cacheMgr: cacheMgr,
-		cacheCfg: cacheCfg,
-		db:       database,
-		resolver: NewResolver(dockerCfg),
-		auth:     NewAuthManager(),
+		cacheMgr:     cacheMgr,
+		cacheCfg:     cacheCfg,
+		db:           database,
+		resolver:     NewResolver(dockerCfg),
+		auth:         NewAuthManager(),
+		observations: newObservationStore(database),
 	}
 }
 
 func (h *Handler) Type() string { return "docker" }
+
+// SetProvenanceRequired enables first-observation provenance for manifest
+// requests. The composition root sets it when a positive docker threshold is
+// active.
+func (h *Handler) SetProvenanceRequired(required bool) {
+	h.observationRequired = required
+}
 
 func (h *Handler) Register(rg *gin.RouterGroup) {
 	rg.HEAD("/*path", h.handleRequest)
@@ -80,12 +105,49 @@ func (h *Handler) handleRequest(c *gin.Context) {
 
 func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpoint string, start time.Time) {
 	reference := strings.TrimPrefix(endpoint, "manifests/")
+	resolved := reference
 
-	// Quarantine gate. Only fires on tag references; digest pulls
-	// ("sha256:...") are already content-addressed and can't be
-	// "freshly poisoned" without changing the digest, which the
-	// runtime would reject — so we skip the check for sha256 refs.
-	if !strings.HasPrefix(reference, "sha256:") {
+	if h.observationRequired {
+		digest, status, err := h.resolveManifestDigest(c.Request.Context(), reg, imageName, reference)
+		switch {
+		case errors.Is(err, errMissingManifestDigest):
+			adapter.LogPolicyBlock(c.Request.Context(), "docker", imageName, reference, http.StatusUnavailableForLegalReasons, c.ClientIP())
+			c.JSON(http.StatusUnavailableForLegalReasons, gin.H{
+				"code":    "QUARANTINED",
+				"message": "docker registry did not return a manifest digest; refusing to serve while the observation-age gate is enabled",
+			})
+			return
+		case err != nil:
+			if status != 0 {
+				adapter.LogPolicyBlock(c.Request.Context(), "docker", imageName, reference, status, c.ClientIP())
+				c.Status(status)
+				return
+			}
+			adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, ManifestCacheKey(reg.Name, imageName, reference), false, reg.Name, time.Since(start), http.StatusBadGateway, c.ClientIP(), 0)
+			c.JSON(http.StatusBadGateway, gin.H{"code": "UPSTREAM_UNAVAILABLE", "message": err.Error()})
+			return
+		}
+		firstSeen, err := h.observations.Observe(c.Request.Context(), reg.Name, digest)
+		if err != nil {
+			zap.L().Error("docker observation failed", zap.String("image", imageName), zap.String("digest", digest), zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "OBSERVATION_FAILED", "message": "docker observation store unavailable"})
+			return
+		}
+		provenance := adapter.QuarantineProvenance{
+			SourceID:  dockerObservationSourceID(reg.Name, digest),
+			PublishAt: firstSeen,
+			Kind:      quarantineProvenanceFirstObserved,
+		}
+		if blocked := adapter.QuarantineGateWithProvenance(c, "docker", imageName, digest, provenance); blocked {
+			return
+		}
+		// Pin the fetch to the digest that was just gated: a tag move between
+		// the decision and the fetch must not serve unchecked bytes.
+		resolved = digest
+	} else if !strings.HasPrefix(reference, "sha256:") {
+		// Without an armed observation gate, digest pulls are content
+		// addressed and cannot be freshly repointed, so only tags need the
+		// blocklist gate.
 		if blocked := adapter.QuarantineGate(c, "docker", imageName, reference); blocked {
 			return
 		}
@@ -100,12 +162,12 @@ func (h *Handler) handleManifest(c *gin.Context, reg *Registry, imageName, endpo
 	scope := fmt.Sprintf("repository:%s:pull", imageName)
 
 	if c.Request.Method == "HEAD" {
-		h.handleHead(c, reg, imageName, endpoint, scope, cacheKey, start)
+		h.handleHead(c, reg, imageName, "manifests/"+resolved, scope, cacheKey, start)
 		return
 	}
 
 	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, "docker", ttl, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
-		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "manifests/"+reference, scope, true)
+		body, ct, sz, err := h.fetchFromUpstream(ctx, reg, imageName, "manifests/"+resolved, scope, true)
 		return body, ct, sz, reg.Name, err
 	})
 	if err != nil {
@@ -161,6 +223,49 @@ func (h *Handler) handleTagList(c *gin.Context, reg *Registry, imageName, rawQue
 	defer result.Reader.Close()
 
 	h.streamResponse(c, result, cacheKey, start)
+}
+
+// resolveManifestDigest returns the immutable digest a manifest request refers
+// to. Digest references already are the identity; tags are resolved with a
+// HEAD against the same registry (and the same token scope) that will serve
+// the manifest.
+func (h *Handler) resolveManifestDigest(ctx context.Context, reg *Registry, imageName, reference string) (string, int, error) {
+	if strings.HasPrefix(reference, "sha256:") {
+		return reference, 0, nil
+	}
+	scope := fmt.Sprintf("repository:%s:pull", imageName)
+	token, err := h.auth.GetToken(ctx, reg.Client, reg.URL, reg.Name, reg.Username, reg.Password, scope)
+	if err != nil {
+		return "", 0, err
+	}
+	upstreamURL := fmt.Sprintf("%s/v2/%s/manifests/%s", reg.URL, imageName, reference)
+	request, err := http.NewRequestWithContext(ctx, http.MethodHead, upstreamURL, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	request.Header.Set("User-Agent", "docker/27.0.0 depsilo")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	request.Header.Set("Accept", manifestAccept)
+
+	response, err := reg.Client.Do(request)
+	if err != nil {
+		return "", 0, err
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, response.Body)
+	if response.StatusCode != http.StatusOK {
+		if response.StatusCode >= 400 && response.StatusCode < 500 {
+			return "", response.StatusCode, fmt.Errorf("registry returned %d for %s", response.StatusCode, reference)
+		}
+		return "", 0, fmt.Errorf("registry returned %d for %s", response.StatusCode, reference)
+	}
+	digest := strings.TrimSpace(response.Header.Get("Docker-Content-Digest"))
+	if digest == "" {
+		return "", 0, errMissingManifestDigest
+	}
+	return digest, 0, nil
 }
 
 func (h *Handler) handleHead(c *gin.Context, reg *Registry, imageName, endpoint, scope, cacheKey string, start time.Time) {

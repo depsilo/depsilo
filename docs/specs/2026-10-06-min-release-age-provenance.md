@@ -58,6 +58,18 @@
   `approximate_sources = ["helm"]`. Docker stays deferred: listing it in
   `approximate_sources` does not enable it, and it still needs a
   registry-token-aware HEAD.
+- 2026-10-06: the Docker slice is implemented with first-observation age
+  instead of Last-Modified. Registries do not portably expose a publish time,
+  so the age is measured from the first time this instance saw the manifest
+  digest: an armed gate resolves tags to a digest (registry-token-aware HEAD),
+  records `(registry, digest)` in `docker_image_observations` on first sight,
+  evaluates the threshold against that timestamp, and then fetches the
+  manifest pinned to the resolved digest so a tag move cannot substitute
+  bytes after the decision. Unseen digests stay quarantined until the
+  threshold passes; a registry that omits `Docker-Content-Digest` fails
+  closed. The operator acknowledges the weaker semantics through
+  `supply_chain.observation_sources = ["docker"]`, and the capability summary
+  reports `observed` rather than `approximate` or `source_bound`.
 - The remaining ecosystems follow the rollout order below.
 
 ## Goal
@@ -180,12 +192,16 @@ authenticated token.
    index; the same index must also declare the artifact URL.
 2. **Cargo / Composer / NuGet / RubyGems** — source-bound metadata endpoints
    where the registry exposes a version-level publish time.
-3. **Last-Modified ecosystems** (Maven, Conda, Helm, Alpine, Docker) — the HTTP
-   `Last-Modified` of the artifact response from the same source. This is a
-   weaker claim; it requires an explicit operator acknowledgement before a
-   positive threshold is accepted, and the capability summary must label it
-   `approximate`. Maven, Alpine, and Helm have landed; Docker still needs a
-   registry-token-aware HEAD before its positive threshold is accepted.
+3. **Last-Modified ecosystems** (Maven, Conda, Helm, Alpine) — the HTTP
+   `Last-Modified` of the artifact response from the same source. Docker was
+   moved out of this group: registries do not portably return `Last-Modified`
+   for manifests, and it would be the proxy's own fetch time on a cold cache
+   anyway. Docker instead uses first-observation age (see the status list),
+   which is honest about what it measures and is unforgeable by publishers.
+   The Last-Modified claim is weaker: it requires an explicit operator
+   acknowledgement before a positive threshold is accepted, and the
+   capability summary must label it `approximate`. Maven, Alpine, and Helm
+   have landed.
 4. **Go and APT** — remain without a gate: Go has no publish-time authority
    and APT has no per-version timestamp.
 

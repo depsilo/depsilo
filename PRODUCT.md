@@ -96,7 +96,13 @@ ADR-0004.
   Last-Modified. Maven and Alpine are available under the same acknowledgement
   and use the artifact's Last-Modified as the approximate publish time. Helm
   resolves the chart identity from the same upstream's `index.yaml` (the
-  filename is ambiguous) and then applies the same Last-Modified rule.
+  filename is ambiguous) and then applies the same Last-Modified rule. Docker
+  registries expose no portable publish time, so Docker is available only with
+  first-observation age, acknowledged through
+  `supply_chain.observation_sources`: an armed threshold resolves a tag to its
+  digest, records the first time this instance saw that digest, and fetches
+  the manifest pinned to the digest. The capability summary labels it
+  `observed`; the age is explicitly not presented as a publish time.
   Delivered, unreleased, and planned security capabilities must be described
   according to the actual release state rather than presented as uniformly
   available.

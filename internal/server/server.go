@@ -357,6 +357,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		MinReleaseAgeEnabled: cfg.SupplyChain.MinReleaseAgeEnabled,
 		MinReleaseAge:        cfg.SupplyChain.MinReleaseAge,
 		ApproximateSources:   cfg.SupplyChain.ApproximateSources,
+		ObservationSources:   cfg.SupplyChain.ObservationSources,
 		Mode:                 cfg.SupplyChain.Mode,
 		Allow:                cfg.SupplyChain.Allow,
 		FailClosed:           cfg.SupplyChain.FailClosed,
@@ -692,6 +693,10 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 
 	if len(cfg.Docker.Registries) > 0 {
 		dockerHandler := dockeradapter.New(cacheMgr, cfg.Cache, database, cfg.Docker)
+		if quarantinePolicy.Threshold("docker") > 0 {
+			dockerHandler.SetProvenanceRequired(true)
+			zap.L().Info("docker observation-age gate enabled")
+		}
 		dockerGroup := r.Group("/v2")
 		dockerHandler.Register(dockerGroup)
 		zap.L().Info("docker registry proxy enabled",

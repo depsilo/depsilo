@@ -6,6 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Added
+- Docker first-observation age gate: registries expose no portable publish
+  time, so an operator can now acknowledge `supply_chain.observation_sources =
+  ["docker"]` and run a positive Docker minimum-release-age threshold. An armed
+  gate resolves tags to a digest with a registry-token-aware HEAD, records the
+  first time this instance saw that digest (schema v9,
+  `docker_image_observations`), and fetches the manifest pinned to the digest
+  so a tag move cannot serve bytes that were not gated. Unseen digests stay
+  quarantined until the threshold passes, a registry that omits
+  `Docker-Content-Digest` fails closed, and the capability summary reports the
+  age as `observed` — first sighting by this instance, explicitly not a
+  publisher release time.
 - Audit checkpoints can be pushed directly to a remote anchor
   (`[audit] checkpoint_url` + optional bearer token) instead of relying on an
   operator to ship the local file: the same NDJSON line is POSTed whenever the

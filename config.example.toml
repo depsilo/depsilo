@@ -384,6 +384,16 @@ fail_closed = true
 # stays rejected at startup.
 approximate_sources = []
 
+# Ecosystems whose positive thresholds rely on first-observation age — the
+# clock starts when this instance first pulls the artifact digest, not when
+# the publisher released it. Only adapters that record observations are bound;
+# listing anything else has no effect. Currently Docker: its registries expose
+# no portable publish time, so a positive docker threshold requires this
+# acknowledgement, and unseen digests stay quarantined until the threshold
+# passes (approve individual images through the quarantine approvals flow).
+# observation_sources = ["docker"]
+observation_sources = []
+
 [supply_chain.min_release_age]
 default  = "0"
 pypi     = "0"   # e.g. "3d"; requires a PEP 691 JSON simple-index upstream
@@ -398,7 +408,7 @@ conda    = "0"   # e.g. "3d"; requires approximate_sources = ["conda"]
 cran     = "0"   # e.g. "3d"; requires approximate_sources = ["cran"]
 helm     = "0"   # e.g. "3d"; resolves identity from index.yaml; requires approximate_sources = ["helm"]
 alpine   = "0"   # e.g. "3d"; requires approximate_sources = ["alpine"]
-docker   = "0"
+docker   = "0"   # e.g. "3d"; requires observation_sources = ["docker"]
 huggingface = "0"
 apt      = "0"
 

@@ -75,6 +75,7 @@ function CapabilityOverview() {
     if (raw === 'safety_disabled') return t('security.capabilitySafetyDisabled')
     if (raw === 'source_bound') return t('security.capabilitySourceBound')
     if (raw === 'approximate') return t('security.capabilityApproximate')
+    if (raw === 'observed') return t('security.capabilityObserved')
     if (raw === 'never_synced') return t('security.capabilityNeverSynced')
     if (raw === 'fresh') return t('security.capabilityFresh')
     if (raw === 'stale') return t('security.capabilityStale')
@@ -101,6 +102,9 @@ function CapabilityOverview() {
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilitySupport')}: </span>{value(fact, 'support')}</div>
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilityMode')}: </span>{value(fact, 'mode')}</div>
                     <div><span className="text-[var(--text-soft)]">{t('security.capabilityData')}: </span>{value(fact, 'data_status')}</div>
+                    {fact.name === 'minimum_release_age' && fact.ecosystem === 'docker' && fact.support === 'safety_disabled' && (
+                      <div className="mt-1 text-[var(--text-soft)]">{t('security.dockerAgeExcluded')}</div>
+                    )}
                     {fact.last_success_at && <div className="text-[var(--text-soft)]">{t('security.capabilityLastSuccess')}: {formatTime(fact.last_success_at)}</div>}
                     {fact.recent_failure && <div className="break-words text-[var(--danger)]">{t('security.capabilityRecentFailure')}: {fact.recent_failure}</div>}
                   </div>

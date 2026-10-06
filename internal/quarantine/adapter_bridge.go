@@ -42,6 +42,7 @@ func (a AdapterChecker) CheckWithProvenance(
 	d := a.inner.CheckWithProvenance(ctx, ecosystem, pkg, version, clientIP, Provenance{
 		SourceID:  provenance.SourceID,
 		PublishAt: provenance.PublishAt,
+		Kind:      provenance.Kind,
 	})
 	return adapterDecision(d)
 }

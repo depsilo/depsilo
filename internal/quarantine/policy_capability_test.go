@@ -118,8 +118,9 @@ func TestMinimumReleaseAgeApproximateSourceRequiresAcknowledgement(t *testing.T)
 
 func TestMinimumReleaseAgeAcknowledgedUnsupportedEcosystemIsRejected(t *testing.T) {
 	enabled := true
-	// Docker is not approximate-capable yet: the operator listing
-	// them in approximate_sources must not make a positive threshold safe.
+	// Docker is not approximate-capable: its registries expose no usable
+	// Last-Modified, so listing it in approximate_sources must not make a
+	// positive threshold safe and the error must point at the real alternative.
 	for _, ecosystem := range []string{"docker"} {
 		_, err := NewPolicyWithProvenance(Config{
 			MinReleaseAgeEnabled: &enabled,
@@ -129,7 +130,8 @@ func TestMinimumReleaseAgeAcknowledgedUnsupportedEcosystemIsRejected(t *testing.
 		if err == nil {
 			t.Fatalf("acknowledged %s threshold was accepted", ecosystem)
 		}
-		if !strings.Contains(err.Error(), "approximate_sources does not enable it") {
+		if !strings.Contains(err.Error(), "cannot use approximate_sources") ||
+			!strings.Contains(err.Error(), "observation_sources") {
 			t.Fatalf("acknowledged %s error = %v, want actionable guidance", ecosystem, err)
 		}
 	}
@@ -145,6 +147,47 @@ func TestMinimumReleaseAgeAcknowledgedUnsupportedEcosystemIsRejected(t *testing.
 	if policy.SourceProvenanceBound("docker") || policy.ApproximateProvenance("docker") {
 		t.Fatalf("docker bound=%v approximate=%v, want both false",
 			policy.SourceProvenanceBound("docker"), policy.ApproximateProvenance("docker"))
+	}
+}
+
+func TestMinimumReleaseAgeObservationSourceRequiresAcknowledgement(t *testing.T) {
+	enabled := true
+	_, err := NewPolicyWithProvenance(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"docker": "72h"},
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "first-observation") {
+		t.Fatalf("unacknowledged docker threshold error = %v, want first-observation guidance", err)
+	}
+
+	policy, err := NewPolicyWithProvenance(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"docker": "72h"},
+		ObservationSources:   []string{"docker"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewPolicyWithProvenance(acknowledged docker): %v", err)
+	}
+	if got := policy.Threshold("docker"); got != 72*time.Hour {
+		t.Fatalf("Threshold(docker) = %v, want 72h", got)
+	}
+	if !policy.SourceProvenanceBound("docker") || !policy.ObservationProvenance("docker") {
+		t.Fatalf("docker bound=%v observed=%v, want both true",
+			policy.SourceProvenanceBound("docker"), policy.ObservationProvenance("docker"))
+	}
+	if policy.ApproximateProvenance("docker") {
+		t.Fatal("docker reported as approximate Last-Modified provenance")
+	}
+
+	// Listing an ecosystem whose adapter records no observations must not arm
+	// its threshold.
+	_, err = NewPolicyWithProvenance(Config{
+		MinReleaseAgeEnabled: &enabled,
+		MinReleaseAge:        map[string]string{"go": "72h"},
+		ObservationSources:   []string{"go"},
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "observation_sources does not enable it") {
+		t.Fatalf("acknowledged go threshold error = %v, want observation_sources guidance", err)
 	}
 }
 

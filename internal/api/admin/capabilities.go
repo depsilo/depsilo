@@ -193,6 +193,9 @@ func (h *CapabilityHandler) ageFact(name string) capabilityFact {
 	if h.quarantine.ApproximateProvenance(name) {
 		f.DataStatus = "approximate"
 	}
+	if h.quarantine.ObservationProvenance(name) {
+		f.DataStatus = "observed"
+	}
 	if h.quarantine.IsAgeGateEnabled() && h.quarantine.Threshold(name) > 0 {
 		if h.quarantine.Mode == quarantine.ModeWarn {
 			f.Mode = "warn"

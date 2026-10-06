@@ -294,7 +294,12 @@ is enabled, and platform artifacts inherit the dataset row of their base
 version. Automatic vulnerability scans stay disabled for RubyGems; this is
 malware blocking, not CVE scanning.
 Docker is also outside the Package Rule seam; its registry/image/tag-or-digest
-identity remains owned by the separate OCI control plane.
+identity remains owned by the separate OCI control plane. Docker's
+minimum-release-age gate lives on that same OCI route (see
+`docs/specs/2026-10-06-min-release-age-provenance.md`): it is opt-in through
+`supply_chain.observation_sources`, measures the first time this instance saw
+the resolved digest, and does not add Docker to the Package Rule or OSV-scan
+identity surfaces.
 Hugging Face repository identities remain on the quarantine surface and are
 not selectable as Package Rules.
 

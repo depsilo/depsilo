@@ -64,7 +64,14 @@ Package managers / CI / coding agents
   be split into name and version safely, then HEADs the exact chart for its
   Last-Modified. Composer uses the p2 metadata's own `time` field but remains
   best-effort because Composer clients fall back to the original dist URL on a
-  451. Other ecosystems remain rejected until they are bound end to end.
+  451. Docker registries expose no usable publish time, so Docker uses
+  first-observation age instead, acknowledged through
+  `supply_chain.observation_sources = ["docker"]`: the tag is resolved to a
+  digest, the first time this instance saw that digest starts the clock, the
+  manifest is fetched pinned to the digest, and unseen digests stay quarantined
+  until the threshold passes. The capability summary labels it `observed`, not
+  `source_bound`. Other ecosystems remain rejected until they are bound end to
+  end.
 - **Verify** — record first-seen hashes and surface tamper alerts when immutable
   artifacts change during a natural refresh.
 - **Audit** — keep requests, policy decisions, and Upstream health visible in
@@ -242,7 +249,7 @@ change the others.
 | --- | --- | --- |
 | Known-malicious blocklist | On | Syncs explicit and all-version OSV MAL records for npm, PyPI, Cargo, RubyGems, Composer, NuGet, Go, and Maven, then blocks a match before serving it. PyPI legacy archive formats and RubyGems platform gems are resolved through their registry metadata; an artifact whose identity cannot be proven is refused while the dataset covers that ecosystem. |
 | Freeze / golden snapshot | Off | Promotes the cached artifacts into a named snapshot, exports/imports its manifest, and — when activated — serves only versions pinned by that snapshot (`451 SNAPSHOT_BLOCKED` otherwise). Items come from the first-seen hashes recorded by tamper detection. |
-| Minimum release age | Off by default | Enforced per ecosystem where artifact-source and timestamp provenance is bound (source-bound registries, or the approximate Last-Modified ecosystems the operator acknowledges in `supply_chain.approximate_sources`); every other positive threshold is rejected at startup. |
+| Minimum release age | Off by default | Enforced per ecosystem where artifact-source and timestamp provenance is bound (source-bound registries, the approximate Last-Modified ecosystems the operator acknowledges in `supply_chain.approximate_sources`, or Docker's first-observation age acknowledged in `supply_chain.observation_sources`); every other positive threshold is rejected at startup. |
 | Tamper detection | On | Compares immutable artifacts against their first-seen SHA-256 during natural refreshes and emits an alert on mismatch. It is alert-only. |
 | Package allow / deny rules | Operator-defined | Applies and records only selectors supported by the [request-path capability matrix](docs/package-rules.md); unsupported surfaces do not guess package or version identity. |
 

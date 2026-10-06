@@ -54,6 +54,9 @@ type QuarantineDecision struct {
 type QuarantineProvenance struct {
 	SourceID  string
 	PublishAt time.Time
+	// Kind is empty for a registry publish time and
+	// quarantine.ProvenanceKindFirstObserved for first-observation age.
+	Kind string
 }
 
 // provenanceQuarantineChecker is the optional capability a checker implements

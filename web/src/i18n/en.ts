@@ -1136,6 +1136,8 @@ const en = {
       capabilitySafetyDisabled: 'Safety paused',
       capabilitySourceBound: 'Source-bound',
       capabilityApproximate: 'Approximate (Last-Modified)',
+      capabilityObserved: 'First observed (not publish time)',
+      dockerAgeExcluded: 'Docker registries expose no usable publish time: pin image@sha256 in production, or acknowledge supply_chain.observation_sources to enable the first-observation age gate.',
       capabilityNeverSynced: 'Never synced',
       capabilityFresh: 'Ready',
       capabilityStale: 'Using last good data',

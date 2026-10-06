@@ -128,6 +128,12 @@ type SupplyChainConfig struct {
 	// adapter already provides that provenance; listing any other ecosystem
 	// leaves its positive threshold rejected at startup.
 	ApproximateSources []string `mapstructure:"approximate_sources"`
+	// ObservationSources lists ecosystems whose positive thresholds are
+	// accepted with first-observation provenance (the age is measured from the
+	// first time this instance pulled the digest, not from a registry publish
+	// time). Currently only Docker, whose registries expose no usable
+	// publish-time authority. The capability summary labels it `observed`.
+	ObservationSources []string `mapstructure:"observation_sources"`
 	Mode               string   `mapstructure:"mode"`
 	Allow              []string `mapstructure:"allow"`
 	FailClosed         *bool    `mapstructure:"fail_closed"`

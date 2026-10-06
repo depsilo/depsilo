@@ -90,11 +90,21 @@ Minimum release age quarantines versions younger than the configured
 threshold. Each decision is bound to the same upstream that will serve the
 artifact: npm/PyPI/Composer/NuGet/Cargo/RubyGems carry a signed,
 source-bound timestamp; Conda/CRAN/Maven/Alpine/Helm use an operator-
-acknowledged approximate `Last-Modified`. Missing provenance fails closed
-while a threshold is active.
+acknowledged approximate `Last-Modified`. Docker registries expose no usable
+publish time, so an armed Docker threshold measures first-observation age: the
+tag is resolved to a digest with a registry-token-aware HEAD, the digest's
+first sighting by this instance is recorded once and never updated, and the
+manifest is then fetched pinned to that digest, so a tag moved between the
+decision and the fetch cannot serve unchecked bytes. The operator
+acknowledges the semantics through `supply_chain.observation_sources`. Missing
+provenance fails closed while a threshold is active; a registry that omits
+`Docker-Content-Digest` is refused rather than guessed.
 
 **Residual:** approximate ecosystems trust the serving upstream's headers;
-Docker has no age gate (mutable tags, deferred decision).
+Docker's observation age starts when this instance first pulls the digest, not
+when the publisher released it, so a digest is quarantined only on its first
+sighted pull and a pre-existing installation clock starts late. Tags without
+the gate remain mutable.
 
 ### 5.3 Republished artifact (same version, different bytes)
 
@@ -112,7 +122,8 @@ metadata-derived otherwise; every refusal is audited with its identity.
 
 **Residual, documented:** metadata/index requests are not gated (clients see
 which versions exist); artifacts whose identity cannot be established skip
-identity-based gates; Docker tags are mutable.
+identity-based gates; Docker tags are mutable, which is why the observation
+gate resolves and pins the digest before deciding.
 
 ### 5.5 Cache poisoning via a compromised mirror
 
@@ -220,8 +231,10 @@ These are deliberate, documented, and not vulnerabilities:
 - The bootstrap token is printed to the log during first-run setup.
 - The proxy surface is unauthenticated; restrict network reachability.
 - Approximate provenance ecosystems trust upstream headers.
-- Docker (mutable tags) has no age gate; Go and APT have no publish-time
-  authority and no gate.
+- Docker's age gate is opt-in and measures first-observation age, not publish
+  time; without `supply_chain.observation_sources` a positive Docker
+  threshold is rejected at startup. Go and APT have no publish-time authority
+  and no gate.
 - Tamper detection is alert-only and does not prove upstream authenticity.
 - The audit chain has no external anchor; a full-database rewrite is
   detectable with the checkpoint file or a copy that left the box (SIEM,
@@ -237,7 +250,7 @@ These are deliberate, documented, and not vulnerabilities:
 | Control | Evidence |
 | --- | --- |
 | Malware gate, overrides, dataset coverage | `internal/blocklist`, `internal/quarantine` tests; `docs/siem-audit-routing.md` |
-| Minimum release age provenance | `internal/adapter/*/provenance_test.go`, `internal/quarantine/policy_capability_test.go`, `docs/specs/2026-10-06-min-release-age-provenance.md` |
+| Minimum release age provenance | `internal/adapter/*/provenance_test.go` (including Docker's tag-resolve/observe/pin flow), `internal/quarantine/policy_capability_test.go`, `docs/specs/2026-10-06-min-release-age-provenance.md` |
 | Tamper detection | `internal/tamper/recorder_test.go`, `internal/cache` tamper paths |
 | Snapshot-only mode | `internal/snapshot`, `internal/quarantine/snapshot_gate_test.go`, `docs/specs/2026-10-06-freeze-snapshot.md` |
 | SSRF and redirect guards | `internal/upstream/request` tests, `internal/api/mcp_ssrf_test.go`, Docker resolver tests |
@@ -250,8 +263,9 @@ These are deliberate, documented, and not vulnerabilities:
 
 1. An RFC 3161 timestamp-authority client, if operators need a third-party
    cryptographic timestamp rather than an arrival time at their own endpoint.
-2. Docker age-gate semantics (digest-only or resolve-then-decide).
-3. A published reverse-proxy recipe covering rate limiting, admin-API
+   For Docker that would upgrade first-observation age into a
+   third-party-attested one.
+2. A published reverse-proxy recipe covering rate limiting, admin-API
    network restriction, and header hygiene.
-4. Optional mTLS to SIEM collectors (currently sidecar/reverse-proxy
+3. Optional mTLS to SIEM collectors (currently sidecar/reverse-proxy
    territory).
