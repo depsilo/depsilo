@@ -26,6 +26,35 @@ read_pid() {
     printf '%s' "$pid"
 }
 
+# ready_url_port extracts the explicit TCP port from a base URL. It returns 1
+# when the URL carries no port, in which case the ownership check is skipped
+# rather than guessing the scheme default.
+ready_url_port() {
+    local url=$1
+    local hostport=${url#*://}
+    hostport=${hostport%%/*}
+    case "$hostport" in
+        \[*\]:*) printf '%s' "${hostport##*:}" ;;
+        *:*) printf '%s' "${hostport##*:}" ;;
+        *) return 1 ;;
+    esac
+}
+
+# foreign_listeners_on_port prints the pids (one per line, deduplicated) that
+# listen on the given TCP port but are not the process we just started. On
+# platforms that allow binding a wildcard address while a loopback address is
+# already bound, a second Depsilo can start "successfully" while clients still
+# reach the older instance; this check turns that silent mismatch into a
+# startup failure. It is best-effort: without lsof the caller proceeds.
+foreign_listeners_on_port() {
+    local port=$1
+    local pid=$2
+    command -v lsof >/dev/null 2>&1 || return 0
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null |
+        sort -u |
+        grep -vx "$pid" || true
+}
+
 is_expected_process() {
     local pid=$1
     local binary=$2
@@ -122,6 +151,17 @@ start_service() {
         if curl -fsS "$ready_url" >/dev/null 2>&1; then
             consecutive_healthy=$((consecutive_healthy + 1))
             if [ "$consecutive_healthy" -ge 2 ]; then
+                local ready_port foreign_pids
+                if ready_port=$(ready_url_port "$ready_url") &&
+                    [[ "$ready_port" =~ ^[0-9]+$ ]]; then
+                    foreign_pids=$(foreign_listeners_on_port "$ready_port" "$pid")
+                    if [ -n "$foreign_pids" ]; then
+                        kill "$pid" 2>/dev/null || true
+                        rm -f "$pid_file"
+                        echo ">>> FAILED to start: port $ready_port is already served by pid(s) $(printf '%s' "$foreign_pids" | paste -sd, -); clients may reach that instance instead. Stop it (make stop) and retry." >&2
+                        exit 1
+                    fi
+                fi
                 echo ">>> Depsilo running  pid=$pid  ${ready_url%/ready}"
                 return 0
             fi

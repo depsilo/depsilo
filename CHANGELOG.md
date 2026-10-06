@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-06
+
 ### Added
 - Docker first-observation age gate: registries expose no portable publish
   time, so an operator can now acknowledge `supply_chain.observation_sources =
@@ -111,6 +113,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   positive thresholds at startup.
 
 ### Changed
+- The Admin Overview got a correctness pass: request-rate and traffic series
+  are named by link direction instead of implying a source classification,
+  origin traffic that was never collected is separated from a measured zero,
+  each trend states its aggregation window, the first load keeps its layout and
+  makes no pre-payload claims, and the idle status strip fits its guidance
+  without overflow.
 - The S3 release contract now runs against pinned RustFS, replacing the
   SeaweedFS image that shipped with v0.10.1.
 

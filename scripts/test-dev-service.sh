@@ -5,6 +5,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TMP=$(mktemp -d)
 cleanup() {
     [ -z "${sleep_pid:-}" ] || kill "$sleep_pid" 2>/dev/null || true
+    [ -z "${listener_pid:-}" ] || kill "$listener_pid" 2>/dev/null || true
     [ -z "${zombie_parent_pid:-}" ] || kill "$zombie_parent_pid" 2>/dev/null || true
     [ -z "${service_pid:-}" ] || kill "$service_pid" 2>/dev/null || true
     rm -rf "$TMP"
@@ -63,6 +64,47 @@ if kill -0 "$service_pid" 2>/dev/null; then
     exit 1
 fi
 service_pid=
+
+# Starting a second instance while another process already listens on the port
+# must fail instead of reporting success: on BSD/macOS the wildcard bind
+# succeeds while loopback traffic still reaches the older instance, so the
+# clients of a qualification run would silently talk to the wrong server.
+listener_marker="$TMP/port-probe"
+python3 - "$listener_marker" <<'PY' &
+import http.server
+import pathlib
+import socketserver
+import sys
+
+server = socketserver.TCPServer(("127.0.0.1", 18081), http.server.SimpleHTTPRequestHandler)
+pathlib.Path(sys.argv[1]).write_text("ready\n", encoding="utf-8")
+server.serve_forever()
+PY
+listener_pid=$!
+for _ in $(seq 1 100); do
+    [ -s "$listener_marker" ] && break
+    sleep 0.05
+done
+[ -s "$listener_marker" ] || { echo "occupied-port fixture did not start" >&2; exit 1; }
+if output=$(DEPSILO_AUTH_JWT_SECRET='development-service-test-secret' \
+    PATH="$TMP/bin:$PATH" \
+    bash "$ROOT/scripts/dev-service.sh" start \
+        "$FAKE_BINARY" "$TMP/missing.toml" "$TMP/shared.pid" "$TMP/shared.log" \
+        'http://localhost:18081' --port 18081 2>&1); then
+    echo "second instance on an occupied port reported success" >&2
+    exit 1
+fi
+if [[ "$output" != *"already served by pid"* ]]; then
+    echo "occupied-port failure did not name the conflicting listener: $output" >&2
+    exit 1
+fi
+if [ -e "$TMP/shared.pid" ]; then
+    echo "occupied-port failure left a PID file behind" >&2
+    exit 1
+fi
+kill "$listener_pid" 2>/dev/null || true
+wait "$listener_pid" 2>/dev/null || true
+listener_pid=
 
 sleep 30 &
 sleep_pid=$!

@@ -13,6 +13,11 @@
       succeeds with its single state volume
 
 ### Release qualification
+- [ ] No other Depsilo instance holds the qualification port. On platforms
+      that allow a wildcard bind next to an existing loopback bind (macOS),
+      containers reach the older instance; run `make stop` first. The service
+      manager now fails the start instead of reporting success when another
+      listener shares the port.
 - [ ] `make test-e2e` passes with all 14 official package-manager clients
 - [ ] `make test-docker-docker` passes with the Docker Registry client and dind
 - [ ] `make test-compiler-cache-qualified` passes with pinned ccache and sccache
@@ -26,12 +31,22 @@
       secret, preserves passwords, API tokens, database, license and legacy
       npm cache records, rejects unsigned legacy npm artifacts, establishes fresh
       source-bound signed provenance after reconnect, and proves Admin Settings
-      can atomically rewrite the prepared candidate config
+      can atomically rewrite the prepared candidate config. Linux only: the
+      contract needs `findmnt` and GNU-style `sha256sum`
 - [ ] `make test-v091-upgrade` upgrades the fixed direct-predecessor source and
       immutable published v0.9.1 image. It reopens the shipped named-volume
       state with the candidate, preserves config, password/JWT/API credentials,
       trial and paid entitlement, and migrates a safe ecosystem-wide Package
       Rule to schema v3 with dialect revision 1
+
+### Rollback rehearsal
+- [ ] `bin/depsilo backup --out <file>.tar.gz --json` reports `ok`, and the
+      archive contains exactly `config.toml`, `depsilo.db`, and `manifest.json`
+- [ ] `bin/depsilo restore <file>.tar.gz --config-target <dir>/config.toml
+      --database-target <dir>/data/depsilo.db` writes both files with mode `600`
+      into a fresh directory while the original server is stopped
+- [ ] the restored state starts, `/ready` succeeds, and the administrator
+      created before the backup can log in
 
 ### Binary
 - [ ] `make build` produces `bin/depsilo` successfully
