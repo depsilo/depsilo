@@ -871,6 +871,52 @@ export interface AdminCascadeInfo {
   peers: AdminCascadePeer[]
 }
 
+export interface AdminCascadeConfigPeer {
+  name: string
+  url: string
+  /** An explicit per-peer token override exists; the value is never returned. */
+  token_set: boolean
+  forward_credentials: boolean
+}
+
+export interface AdminCascadeConfigState {
+  enabled: boolean
+  max_hops: number
+  max_ttl: string
+  allow_insecure_http: boolean
+  /** The shared secret exists in config.toml; the value is never returned. */
+  token_set: boolean
+  peers: AdminCascadeConfigPeer[]
+  /** config.toml and its directory are writable by the service. */
+  config_writable: boolean
+  /** The running process still uses an older version of these values. */
+  pending_restart: boolean
+}
+
+export interface AdminCascadeConfigPeerPatch {
+  name: string
+  url: string
+  /** Omitted keeps the stored override; "" removes it (inherit shared token). */
+  token?: string
+  forward_credentials: boolean
+}
+
+export interface AdminCascadeConfigPatch {
+  enabled?: boolean
+  max_hops?: number
+  max_ttl?: string
+  allow_insecure_http?: boolean
+  /** Omitted keeps the stored secret; "" clears it. */
+  shared_token?: string
+  peers?: AdminCascadeConfigPeerPatch[]
+}
+
+export interface AdminCascadeConfigUpdateResponse {
+  state: AdminCascadeConfigState
+  changed: string[]
+  restart_required: boolean
+}
+
 export interface AdminUpstream extends UpstreamMutationRequest {
   id: number
   healthy: boolean

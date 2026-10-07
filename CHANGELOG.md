@@ -18,7 +18,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   cache hits arrive at LAN speed; Docker, shared control plane, HA, and
   multi-peer bandwidth aggregation remain out of scope. A read-only
   Admin → Upstreams → Cascade page shows the node role, instance ID, parent
-  peers, egress bindings, and dangling peer references.
+  peers, egress bindings, and dangling peer references, and can now edit the
+  `[cascade]` section and peer list in place. The editor writes `config.toml`
+  atomically, keeps secrets write-only, validates the full document (including
+  upstream `via` references) before saving, requires a restart to apply, and
+  disables itself with an inline explanation when the account lacks the write
+  role or the file is not writable.
 
 ### Fixed
 - The installer resolves the newest release through the

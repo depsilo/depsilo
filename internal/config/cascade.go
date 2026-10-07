@@ -20,6 +20,10 @@ const (
 	cascadeMaxTTLCeiling = 30 * 24 * time.Hour
 	// cascadeMaxPeers bounds configuration parsing and outbound fan-out.
 	cascadeMaxPeers = 16
+	// defaultCascadeMaxHops and defaultCascadeMaxTTL mirror the loader defaults
+	// so validation and fingerprinting agree on a config that omits them.
+	defaultCascadeMaxHops = cascade.DefaultMaxHops
+	defaultCascadeMaxTTL  = 7 * 24 * time.Hour
 )
 
 // validateCascadeConfig normalizes defaults and rejects configurations that
@@ -29,33 +33,26 @@ func validateCascadeConfig(cfg *Config) error {
 		return errors.New("config is nil")
 	}
 	settings := &cfg.Cascade
-	if !settings.Enabled {
-		if len(settings.Peers) > 0 {
-			return errors.New("cascade.peers requires cascade.enabled = true")
-		}
-		if settings.Token != "" || settings.InstanceID != "" {
-			return errors.New("cascade.token and cascade.instance_id require cascade.enabled = true")
-		}
-		return nil
-	}
-
 	if settings.InstanceID != "" && !cascade.ValidInstanceID(settings.InstanceID) {
 		return errors.New("cascade.instance_id must be 1-64 lowercase letters, digits, or '-'")
-	}
-	if len(settings.Token) < cascadeTokenMinBytes {
-		return fmt.Errorf("cascade.token must be at least %d bytes", cascadeTokenMinBytes)
 	}
 	if strings.ContainsAny(settings.Token, " \t\r\n") {
 		return errors.New("cascade.token must not contain whitespace")
 	}
+	if settings.Enabled && settings.Token == "" {
+		return errors.New("cascade.token is required when cascade.enabled = true")
+	}
+	if settings.Token != "" && len(settings.Token) < cascadeTokenMinBytes {
+		return fmt.Errorf("cascade.token must be at least %d bytes", cascadeTokenMinBytes)
+	}
 	if settings.MaxHops == 0 {
-		settings.MaxHops = cascade.DefaultMaxHops
+		settings.MaxHops = defaultCascadeMaxHops
 	}
 	if settings.MaxHops < 1 || settings.MaxHops > cascade.MaxChainEntries {
 		return fmt.Errorf("cascade.max_hops must be between 1 and %d", cascade.MaxChainEntries)
 	}
 	if settings.MaxTTL == 0 {
-		settings.MaxTTL = 7 * 24 * time.Hour
+		settings.MaxTTL = defaultCascadeMaxTTL
 	}
 	if settings.MaxTTL < time.Minute || settings.MaxTTL > cascadeMaxTTLCeiling {
 		return errors.New("cascade.max_ttl must be between 1m and 720h")
@@ -78,7 +75,12 @@ func validateCascadeConfig(cfg *Config) error {
 			return fmt.Errorf("cascade.peers[%d] (%s): %w", index, peer.Name, err)
 		}
 		if peer.Token == "" {
-			peer.Token = settings.Token
+			// Empty means "inherit cascade.token"; keep the file faithful by
+			// validating the effective value without materializing it.
+			if settings.Enabled && settings.Token == "" {
+				return fmt.Errorf("cascade.peers[%d] (%s) has no token and cascade.token is empty", index, peer.Name)
+			}
+			continue
 		}
 		if len(peer.Token) < cascadeTokenMinBytes {
 			return fmt.Errorf("cascade.peers[%d] (%s).token must be at least %d bytes", index, peer.Name, cascadeTokenMinBytes)

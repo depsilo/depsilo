@@ -53,10 +53,17 @@ func cascadePeerSet(settings config.CascadeConfig, identity string) (*upstream.P
 		if err != nil {
 			return nil, fmt.Errorf("parse cascade peer %s URL: %w", peer.Name, err)
 		}
+		token := peer.Token
+		if token == "" {
+			// An empty peer token inherits the shared secret. Validation never
+			// materializes it, so the config file stays authoritative about
+			// which peers carry explicit overrides.
+			token = settings.Token
+		}
 		entries = append(entries, upstream.PeerEgress{
 			Name:               peer.Name,
 			URL:                parsed,
-			Token:              peer.Token,
+			Token:              token,
 			LocalInstanceID:    identity,
 			MaxHops:            settings.MaxHops,
 			ForwardCredentials: peer.ForwardCredentials,

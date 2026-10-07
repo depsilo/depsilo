@@ -2,6 +2,7 @@ import { test as base, expect, type Page, type Request, type Route } from '@play
 import type {
   AccessLogListResponse,
   AdminCascadeInfo,
+  AdminCascadeConfigState,
   AdminSettingsResponse,
   AdminSettingsSnapshot,
   AdminUpstreamLatenciesResponse,
@@ -228,6 +229,16 @@ const canonicalAdminApiDefaults = {
     allow_insecure_http: false,
     peers: [],
   } satisfies AdminCascadeInfo,
+  'GET /api/v1/admin/cascade/config': {
+    enabled: false,
+    max_hops: 4,
+    max_ttl: '168h',
+    allow_insecure_http: false,
+    token_set: false,
+    peers: [],
+    config_writable: true,
+    pending_restart: false,
+  } satisfies AdminCascadeConfigState,
   'GET /api/v1/admin/upstreams/latency': { series: [] } satisfies AdminUpstreamLatenciesResponse,
   'GET /api/v1/admin/upstream-updates': { items: [], total: 0, next_cursor: null } satisfies AdminUpstreamUpdateListResponse,
   'GET /api/v1/admin/compile-cache/status': {

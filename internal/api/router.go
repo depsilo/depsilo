@@ -279,6 +279,9 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Cascade deployment topology (peer URLs and names; never tokens).
 	cascadeHandler := admin.NewCascadeHandler(deps.Config.Cascade, deps.CascadeInstanceID)
 	adminRead.GET("/cascade", cascadeHandler.Info)
+	cascadeConfigHandler := admin.NewCascadeConfigHandler(deps.ConfigStore, deps.UpstreamRegistry)
+	adminRead.GET("/cascade/config", cascadeConfigHandler.Get)
+	adminWrite.PUT("/cascade/config", cascadeConfigHandler.Update)
 
 	// Upstream latency history
 	latencyHandler := admin.NewLatencyHandler(deps.DB)

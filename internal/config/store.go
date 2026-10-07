@@ -30,12 +30,13 @@ func (e *StoreError) Error() string { return e.Err.Error() }
 func (e *StoreError) Unwrap() error { return e.Err }
 
 type Store struct {
-	mu        sync.Mutex
-	path      string
-	effective SettingsSnapshot
-	overrides map[SettingPath]string
-	logLevel  zap.AtomicLevel
-	writer    atomicFileWriter
+	mu               sync.Mutex
+	path             string
+	effective        SettingsSnapshot
+	effectiveCascade cascadeFingerprint
+	overrides        map[SettingPath]string
+	logLevel         zap.AtomicLevel
+	writer           atomicFileWriter
 }
 
 var settingEnvNames = map[SettingPath]string{
@@ -64,13 +65,17 @@ func newStore(path string, effective *Config, level zap.AtomicLevel, writer atom
 			overrides[settingPath] = name
 		}
 	}
-	return &Store{
+	store := &Store{
 		path:      path,
 		effective: SettingsSnapshotFromConfig(effective),
 		overrides: overrides,
 		logLevel:  level,
 		writer:    writer,
 	}
+	if effective != nil {
+		store.effectiveCascade = fingerprintCascade(effective.Cascade)
+	}
+	return store
 }
 
 func (s *Store) Snapshot(ctx context.Context) (SettingsState, error) {

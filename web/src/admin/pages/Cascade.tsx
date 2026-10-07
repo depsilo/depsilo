@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
+import CascadeConfigDialog from '@/admin/components/CascadeConfigDialog'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { getAdminRouteHref } from '@/admin/routes'
 import BadgeV2 from '@/components/Badge'
@@ -16,6 +17,8 @@ import Metric from '@/components/Metric'
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
 import TableViewport from '@/components/TableViewport'
+import { useAppToast } from '@/components/Toast'
+import { usePrincipal } from '@/hooks/usePrincipal'
 import { useTransientState } from '@/hooks/useTransientFlag'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
@@ -42,7 +45,11 @@ function truncateMiddle(value: string, max = 56): string {
 
 export default function Cascade() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const toast = useAppToast()
+  const { canWrite } = usePrincipal()
   const [copiedValue, showCopiedValue] = useTransientState<string | null>(null)
+  const [configDialogOpen, setConfigDialogOpen] = useState(false)
 
   const infoQuery = useQuery({
     queryKey: ['admin', 'cascade'],
@@ -55,8 +62,15 @@ export default function Cascade() {
     queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data,
     retry: false,
   })
+  const configQuery = useQuery({
+    queryKey: ['admin', 'cascade-config'],
+    queryFn: async ({ signal }) => (await adminApi.getCascadeConfig({ signal })).data,
+    retry: false,
+    staleTime: 30_000,
+  })
 
   const info = infoQuery.data
+  const config = configQuery.data
   const upstreams = useMemo(() => upstreamsQuery.data?.items ?? [], [upstreamsQuery.data])
   const boundUpstreams = useMemo(
     () => upstreams.filter(upstream => (upstream.via ?? '').trim() !== ''),
@@ -93,20 +107,33 @@ export default function Cascade() {
     <AdminPage
       description={t('cascade.subtitle')}
       actions={(
-        <ButtonV2
-          type="button"
-          variant="secondary"
-          size="sm"
-          aria-busy={infoQuery.isFetching || undefined}
-          disabled={infoQuery.isFetching}
-          onClick={() => {
-            void infoQuery.refetch()
-            void upstreamsQuery.refetch()
-          }}
-        >
-          <Icon name={infoQuery.isFetching ? 'progress_activity' : 'refresh'} size="sm" />
-          {t(infoQuery.isFetching ? 'cascade.refreshing' : 'cascade.refresh')}
-        </ButtonV2>
+        <>
+          <ButtonV2
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!canWrite || !config?.config_writable}
+            title={t(!canWrite ? 'cascade.readonlyPrincipal' : 'cascade.configReadOnly')}
+            onClick={() => setConfigDialogOpen(true)}
+          >
+            <Icon name="edit" size="sm" />
+            {t('cascade.editConfig')}
+          </ButtonV2>
+          <ButtonV2
+            type="button"
+            variant="secondary"
+            size="sm"
+            aria-busy={infoQuery.isFetching || undefined}
+            disabled={infoQuery.isFetching}
+            onClick={() => {
+              void infoQuery.refetch()
+              void upstreamsQuery.refetch()
+            }}
+          >
+            <Icon name={infoQuery.isFetching ? 'progress_activity' : 'refresh'} size="sm" />
+            {t(infoQuery.isFetching ? 'cascade.refreshing' : 'cascade.refresh')}
+          </ButtonV2>
+        </>
       )}
     >
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -124,6 +151,17 @@ export default function Cascade() {
           />
         ) : info ? (
           <>
+            {(!canWrite || (config && !config.config_writable) || config?.pending_restart) && (
+              <div className="space-y-3">
+                {!canWrite && <InlineNotice tone="info">{t('cascade.readonlyPrincipal')}</InlineNotice>}
+                {canWrite && config && !config.config_writable && (
+                  <InlineNotice tone="warning">{t('cascade.configReadOnly')}</InlineNotice>
+                )}
+                {config?.pending_restart && (
+                  <InlineNotice tone="warning">{t('cascade.pendingRestart')}</InlineNotice>
+                )}
+              </div>
+            )}
             {showStale && (
               <StaleDataNotice
                 message={t('cascade.stale')}
@@ -377,6 +415,22 @@ url  = "http://192.168.1.10:23333"
           </>
         ) : null}
       </div>
+      {config && configDialogOpen && (
+        <CascadeConfigDialog
+          state={config}
+          onClose={() => setConfigDialogOpen(false)}
+          onSaved={(result) => {
+            setConfigDialogOpen(false)
+            toast.show({
+              tone: 'success',
+              message: t(result.restart_required ? 'cascade.configSavedRestart' : 'cascade.configSaved'),
+            })
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade-config'] })
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade'] })
+            void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+          }}
+        />
+      )}
     </AdminPage>
   )
 }

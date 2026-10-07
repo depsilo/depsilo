@@ -8,10 +8,13 @@ import (
 	"time"
 )
 
-func TestValidateCascadeConfigRejectsDisabledReferences(t *testing.T) {
+func TestValidateCascadeConfigAllowsStagedPeersWhileDisabled(t *testing.T) {
 	cfg := &Config{Cascade: CascadeConfig{Peers: []CascadePeerConfig{{Name: "home", URL: "https://cache.example"}}}}
-	if err := validateCascadeConfig(cfg); err == nil {
-		t.Fatal("peers without cascade.enabled must be rejected")
+	if err := validateCascadeConfig(cfg); err != nil {
+		t.Fatalf("a disabled cascade may keep staged peers for a later enable: %v", err)
+	}
+	if cfg.Cascade.MaxHops == 0 || cfg.Cascade.MaxTTL == 0 {
+		t.Fatal("disabled cascade defaults were not normalized")
 	}
 }
 
@@ -36,8 +39,8 @@ func TestValidateCascadeConfigNormalizesAndValidates(t *testing.T) {
 	if cfg.Cascade.MaxTTL != 7*24*time.Hour {
 		t.Fatalf("max_ttl default = %s", cfg.Cascade.MaxTTL)
 	}
-	if cfg.Cascade.Peers[0].Token != cfg.Cascade.Token {
-		t.Fatal("peer token did not inherit the shared token")
+	if cfg.Cascade.Peers[0].Token != "" {
+		t.Fatal("validation must not materialize an inherited peer token")
 	}
 }
 
@@ -50,7 +53,8 @@ func TestValidateCascadeConfigRejectsBadPeersAndReferences(t *testing.T) {
 		}}
 	}
 	cases := map[string]func(*Config){
-		"short token": func(cfg *Config) { cfg.Cascade.Token = "short" },
+		"short token":           func(cfg *Config) { cfg.Cascade.Token = "short" },
+		"enabled without token": func(cfg *Config) { cfg.Cascade.Token = "" },
 		"whitespace token": func(cfg *Config) {
 			cfg.Cascade.Token = "0123456789abcdef "
 		},

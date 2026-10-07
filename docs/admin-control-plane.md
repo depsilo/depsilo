@@ -121,6 +121,17 @@ is committed. `GET /api/v1/admin/cascade` returns the deployment-level peer list
 (names and URLs, never tokens); the Admin Cascade tab renders that topology together
 with the `via` bindings from the upstream list.
 
+`GET /api/v1/admin/cascade/config` returns the cascade section of `config.toml`
+with `token_set` booleans instead of secrets and a `config_writable` flag.
+`PUT` accepts a partial patch (`enabled`, `max_hops`, `max_ttl`,
+`allow_insecure_http`, `shared_token`, and a full `peers` replacement), validates
+the resulting document, and writes it atomically; every change is reported as
+restart-required. The route sits on the Admin write group, so a read-only
+principal receives `403`; a read-only file returns `409 CONFIG_READ_ONLY`, and
+invalid values or a peer removal still referenced by an upstream return
+`422 INVALID_SETTING` before the file is touched. Stored secrets are never
+returned in any response.
+
 Upstream validation and lifecycle errors use `400 BAD_REQUEST`, `404 NOT_FOUND`,
 `409 CONFLICT`, `409 LAST_UPSTREAM`, `409 ECOSYSTEM_NOT_ACTIVE`,
 `422 INVALID_UPSTREAM`, `422 IMMUTABLE_ECOSYSTEM`, and

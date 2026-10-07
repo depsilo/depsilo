@@ -7,6 +7,9 @@ import type {
   AdminSettingsResponse,
   AdminUpstream,
   AdminCascadeInfo,
+  AdminCascadeConfigPatch,
+  AdminCascadeConfigState,
+  AdminCascadeConfigUpdateResponse,
   AdminUpstreamLatenciesResponse,
   AdminUpstreamListResponse,
   AdminUpstreamUpdateListResponse,
@@ -211,6 +214,9 @@ export const adminApi = {
   deleteUpstream: (id: number) => api.delete<DeleteUpstreamResponse>(`/admin/upstreams/${id}`),
   checkUpstream: (id: number) => api.post<CheckUpstreamResponse>(`/admin/upstreams/${id}/check`),
   getCascadeInfo: (options: ApiGetOptions = {}) => api.get<AdminCascadeInfo>('/admin/cascade', options),
+  getCascadeConfig: (options: ApiGetOptions = {}) => api.get<AdminCascadeConfigState>('/admin/cascade/config', options),
+  updateCascadeConfig: (data: AdminCascadeConfigPatch) =>
+    api.put<AdminCascadeConfigUpdateResponse>('/admin/cascade/config', data),
   getUpstreamLatencies: (range_: string = '24h', options: ApiGetOptions = {}) =>
     api.get<AdminUpstreamLatenciesResponse>('/admin/upstreams/latency', { ...options, params: { range: range_ } }),
   listUpstreamUpdates: (params: AdminUpstreamUpdateQuery, options: ApiGetOptions = {}) =>

@@ -82,6 +82,13 @@ unchanged. A multi-level chain connects when an intermediate node has an
 upstream with the same source URL configured through its own peer; otherwise
 that node egresses directly.
 
+The Admin Cascade tab may edit the peer list and cascade limits, but it does so
+by patching the same `config.toml` document through the existing atomic config
+writer: comments and unrelated keys survive, tokens stay write-only, the whole
+result is validated before the write, and a change takes effect on restart.
+The file remains the single authority; the UI is a guarded editor, not a
+second source of truth.
+
 ## Consequences
 
 - All current GET/HEAD package ecosystems can be cascaded without adapter

@@ -57,3 +57,54 @@ test('cascade page explains how to enable the feature when it is off', { tag: '@
   await expect(page.locator('[data-cascade-config-example]')).toContainText('[cascade]')
   await expect(page.getByText('当前实例未启用级联')).toBeVisible()
 })
+
+test('cascade page surfaces a read-only config file', { tag: '@smoke' }, async ({ page }) => {
+  await setUiPreferences(page, 'light', 'zh')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/cascade/config': {
+      enabled: true,
+      max_hops: 4,
+      max_ttl: '168h',
+      allow_insecure_http: false,
+      token_set: true,
+      peers: [{ name: 'home', url: 'https://cache.example', token_set: false, forward_credentials: false }],
+      config_writable: false,
+      pending_restart: false,
+    },
+  })
+  await page.goto('/admin/cascade')
+  await expect(page.getByText('config.toml 当前不可写')).toBeVisible()
+  await expect(page.getByRole('button', { name: '编辑配置' })).toBeDisabled()
+})
+
+test('cascade configuration dialog keeps stored secrets masked', { tag: '@smoke' }, async ({ page }) => {
+  await setUiPreferences(page, 'light', 'zh')
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/cascade': {
+      enabled: true,
+      instance_id: 'node-1',
+      relay_path: '/_depsilo/relay/v1',
+      max_hops: 4,
+      max_ttl_seconds: 604800,
+      allow_insecure_http: false,
+      peers: [{ name: 'home', url: 'https://cache.example', forward_credentials: false }],
+    },
+    'GET /api/v1/admin/cascade/config': {
+      enabled: true,
+      max_hops: 4,
+      max_ttl: '168h',
+      allow_insecure_http: false,
+      token_set: true,
+      peers: [{ name: 'home', url: 'https://cache.example', token_set: true, forward_credentials: false }],
+      config_writable: true,
+      pending_restart: false,
+    },
+  })
+  await page.goto('/admin/cascade')
+  await page.getByRole('button', { name: '编辑配置' }).click()
+  await expect(page.getByRole('dialog')).toContainText('编辑级联配置')
+  await expect(page.getByRole('dialog').getByLabel('共享密钥')).toHaveValue('')
+  await expect(page.getByRole('dialog')).toContainText('已有密钥，留空保持不变')
+  await expect(page.locator('[data-cascade-peer-editor]').getByLabel('名称')).toHaveValue('home')
+  await page.getByRole('button', { name: '取消' }).click()
+})

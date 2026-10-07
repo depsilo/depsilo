@@ -32,6 +32,8 @@ lru_threshold = 90          # 使用率超过此百分比触发 LRU 清理
 # 级联部署（多级缓存）：本机可把部分上游的出口流量交给另一台 Depsilo，
 # 由父节点回源并缓存，局域网内的其他设备再从父节点缓存读取。
 # 详见 docs/cascade.md；两端必须配置同一个 token。
+# 这些值也可以在 Admin → 上游源 → 级联 页面编辑：保存写回本文件并需要
+# 重启生效；token 只写不读，页面不会回显已保存的值。
 # [cascade]
 # enabled = true
 # token = "replace-with-a-random-shared-secret"
