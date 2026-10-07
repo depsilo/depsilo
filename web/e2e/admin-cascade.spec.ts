@@ -45,7 +45,7 @@ test('cascade page shows peers, bindings, and dangling references', { tag: '@smo
   })
 
   await page.goto('/admin/cascade')
-  await expect(page.locator('[data-cascade-peer="home"]')).toContainText('192.168.1.10')
+  await expect(page.locator('[data-cascade-upstream="1"] select')).toHaveValue('home')
   await expect(page.locator('[data-cascade-upstream="1"]')).toContainText('home')
   await expect(page.locator('[data-cascade-upstream="3"]')).toContainText('失效')
   await expect(page.getByRole('link', { name: '管理上游源' })).toBeVisible()
@@ -74,10 +74,10 @@ test('cascade page surfaces a read-only config file', { tag: '@smoke' }, async (
   })
   await page.goto('/admin/cascade')
   await expect(page.getByText('config.toml 当前不可写')).toBeVisible()
-  await expect(page.getByRole('button', { name: '编辑配置' })).toBeDisabled()
+  await expect(page.getByLabel('共享密钥')).toBeDisabled()
 })
 
-test('cascade configuration dialog keeps stored secrets masked', { tag: '@smoke' }, async ({ page }) => {
+test('cascade inline editor keeps stored secrets masked', { tag: '@smoke' }, async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
   await mockAdminApi(page, {
     'GET /api/v1/admin/cascade': {
@@ -101,10 +101,13 @@ test('cascade configuration dialog keeps stored secrets masked', { tag: '@smoke'
     },
   })
   await page.goto('/admin/cascade')
-  await page.getByRole('button', { name: '编辑配置' }).click()
-  await expect(page.getByRole('dialog')).toContainText('编辑级联配置')
-  await expect(page.getByRole('dialog').getByLabel('共享密钥')).toHaveValue('')
-  await expect(page.getByRole('dialog')).toContainText('已有密钥，留空保持不变')
+  await expect(page.locator('[data-cascade-config-form]')).toBeVisible()
+  await expect(page.getByLabel('共享密钥')).toHaveValue('')
+  await expect(page.getByText('已有密钥，留空保持不变')).toBeVisible()
   await expect(page.locator('[data-cascade-peer-editor]').getByLabel('名称')).toHaveValue('home')
-  await page.getByRole('button', { name: '取消' }).click()
+  // Editing reveals the sticky save bar without any dialog layer.
+  await page.getByLabel('最大跳数').fill('5')
+  await expect(page.locator('[data-cascade-save-bar]')).toContainText('有未保存的修改')
+  await page.getByRole('button', { name: '放弃修改' }).click()
+  await expect(page.locator('[data-cascade-save-bar]')).toHaveCount(0)
 })

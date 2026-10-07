@@ -83,11 +83,13 @@ state: this node's role and instance ID, configured parents, which upstreams
 egress through them, and any binding whose parent has been removed from the
 configuration.
 
-The same tab can edit the cascade section through **Edit configuration**:
+The same tab edits the cascade section directly on the page — no dialog layer:
 
 - The patch is written atomically into `config.toml`, preserving comments and
   every key outside `[cascade]` / `[[cascade.peers]]`.
-- Shared and per-peer secrets are write-only. The dialog never echoes a stored
+- Fields and peer rows are edited inline; a sticky save bar appears only while
+  there are unsaved changes and offers **Discard** or **Save**.
+- Shared and per-peer secrets are write-only. The form never echoes a stored
   value; it shows whether one exists and offers an explicit clear action.
 - Saving validates the whole result before writing. Removing a peer that is
   still referenced by an upstream (in the file or in the database) is refused
@@ -96,8 +98,11 @@ The same tab can edit the cascade section through **Edit configuration**:
   **pending restart** until Depsilo restarts.
 - The API enforces the operator's write role. The page also checks the file
   itself: when the account is read-only or `config.toml` is not writable, the
-  edit button is disabled and the reason is shown inline. A write that races a
+  fields are disabled and the reason is shown inline. A write that races a
   permission change still fails closed with `409 CONFIG_READ_ONLY`.
+- The **Upstreams using a cascade egress** table can rebind an upstream with a
+  single select (direct or one of the running peers). That path changes only
+  the database binding and applies immediately, without a restart.
 
 ## Operational notes
 

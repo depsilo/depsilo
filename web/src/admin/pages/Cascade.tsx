@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
-import CascadeConfigDialog from '@/admin/components/CascadeConfigDialog'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
+import CascadeConfigForm from '@/admin/cascade/CascadeConfigForm'
 import { getAdminRouteHref } from '@/admin/routes'
 import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
@@ -16,6 +16,7 @@ import InlineNotice from '@/components/InlineNotice'
 import Metric from '@/components/Metric'
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
+import SelectV2 from '@/components/Select'
 import TableViewport from '@/components/TableViewport'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
@@ -23,6 +24,7 @@ import { useTransientState } from '@/hooks/useTransientFlag'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import { copyText } from '@/lib/clipboard'
+import type { AdminUpstream, UpstreamMutationRequest } from '@/lib/adminApi.types'
 
 const navigateLinkClass = 'stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-hover)]'
 const tableHeadClass = 'px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase first:pl-0'
@@ -49,7 +51,6 @@ export default function Cascade() {
   const toast = useAppToast()
   const { canWrite } = usePrincipal()
   const [copiedValue, showCopiedValue] = useTransientState<string | null>(null)
-  const [configDialogOpen, setConfigDialogOpen] = useState(false)
 
   const infoQuery = useQuery({
     queryKey: ['admin', 'cascade'],
@@ -80,14 +81,6 @@ export default function Cascade() {
     () => new Set((info?.peers ?? []).map(peer => peer.name)),
     [info],
   )
-  const boundByPeer = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const upstream of boundUpstreams) {
-      const via = upstream.via ?? ''
-      counts.set(via, (counts.get(via) ?? 0) + 1)
-    }
-    return counts
-  }, [boundUpstreams])
   const unresolved = useMemo(
     () => boundUpstreams.filter(upstream => !peerNames.has(upstream.via ?? '')),
     [boundUpstreams, peerNames],
@@ -99,6 +92,44 @@ export default function Cascade() {
   const loadError = getApiError(infoQuery.error)
   const showStale = Boolean(info && (infoQuery.isRefetchError || upstreamsQuery.isRefetchError))
 
+  const rebindMutation = useMutation({
+    mutationFn: ({ id, request }: { id: number; request: UpstreamMutationRequest }) =>
+      adminApi.updateUpstream(id, request),
+    onSuccess: ({ data }) => {
+      toast.show({
+        tone: 'success',
+        message: t('cascade.rebindSaved', {
+          name: data.name,
+          target: data.via ? data.via : t('cascade.viaDirect'),
+        }),
+      })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade'] })
+    },
+    onError: (error) => {
+      toast.show({
+        tone: 'danger',
+        message: t('cascade.rebindFailed', { reason: getApiError(error).message }),
+      })
+    },
+  })
+
+  function rebindUpstream(upstream: AdminUpstream, via: string) {
+    rebindMutation.mutate({
+      id: upstream.id,
+      request: {
+        adapter_type: upstream.adapter_type,
+        name: upstream.name,
+        url: upstream.url,
+        proxy: upstream.proxy,
+        priority: upstream.priority,
+        probe_mode: upstream.probe_mode,
+        probe_interval: upstream.probe_interval,
+        via,
+      },
+    })
+  }
+
   async function copyInstanceID(value: string) {
     if (await copyText(value)) showCopiedValue(value)
   }
@@ -107,33 +138,21 @@ export default function Cascade() {
     <AdminPage
       description={t('cascade.subtitle')}
       actions={(
-        <>
-          <ButtonV2
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={!canWrite || !config?.config_writable}
-            title={t(!canWrite ? 'cascade.readonlyPrincipal' : 'cascade.configReadOnly')}
-            onClick={() => setConfigDialogOpen(true)}
-          >
-            <Icon name="edit" size="sm" />
-            {t('cascade.editConfig')}
-          </ButtonV2>
-          <ButtonV2
-            type="button"
-            variant="secondary"
-            size="sm"
-            aria-busy={infoQuery.isFetching || undefined}
-            disabled={infoQuery.isFetching}
-            onClick={() => {
-              void infoQuery.refetch()
-              void upstreamsQuery.refetch()
-            }}
-          >
-            <Icon name={infoQuery.isFetching ? 'progress_activity' : 'refresh'} size="sm" />
-            {t(infoQuery.isFetching ? 'cascade.refreshing' : 'cascade.refresh')}
-          </ButtonV2>
-        </>
+        <ButtonV2
+          type="button"
+          variant="secondary"
+          size="sm"
+          aria-busy={infoQuery.isFetching || undefined}
+          disabled={infoQuery.isFetching}
+          onClick={() => {
+            void infoQuery.refetch()
+            void upstreamsQuery.refetch()
+            void configQuery.refetch()
+          }}
+        >
+          <Icon name={infoQuery.isFetching ? 'progress_activity' : 'refresh'} size="sm" />
+          {t(infoQuery.isFetching ? 'cascade.refreshing' : 'cascade.refresh')}
+        </ButtonV2>
       )}
     >
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -267,141 +286,133 @@ url  = "http://192.168.1.10:23333"
               )}
             </section>
 
-            {info.enabled && (
-              <>
-                <section aria-labelledby="cascade-peers-heading">
-                  <SectionHeader title={t('cascade.peersTitle')} hint={t('cascade.peersHint')} />
-                  <span id="cascade-peers-heading" className="sr-only">{t('cascade.peersTitle')}</span>
-                  {info.peers.length === 0 ? (
-                    <EmptyState
-                      icon="hub"
-                      title={t('cascade.peersEmptyTitle')}
-                      hint={t('cascade.peersEmptyHint')}
-                      minHeight={200}
-                    />
-                  ) : (
-                    <TableViewport label={t('cascade.peersTitle')} minWidth={720}>
-                      <table className="w-full text-[12px]">
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                            {[t('cascade.peerName'), t('cascade.peerURL'), t('cascade.peerCredentials'), t('cascade.peerBoundCount')].map(heading => (
-                              <th key={heading} scope="col" className={tableHeadClass} style={{ color: 'var(--text-subtle)' }}>
-                                {heading}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {info.peers.map(peer => (
-                            <tr
-                              key={peer.name}
-                              data-cascade-peer={peer.name}
-                              style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
-                            >
-                              <td className={tableCellClass}>
-                                <span className="font-mono font-[600]" style={{ color: 'var(--text)' }}>{peer.name}</span>
-                              </td>
-                              <td className={`${tableCellClass} font-mono`} style={{ color: 'var(--text-muted)' }}>
-                                <span title={peer.url}>{truncateMiddle(peer.url)}</span>
-                              </td>
-                              <td className={tableCellClass}>
-                                <BadgeV2 variant={peer.forward_credentials ? 'warning' : 'neutral'}>
-                                  {t(peer.forward_credentials ? 'cascade.credentialsForwarded' : 'cascade.credentialsLocal')}
-                                </BadgeV2>
-                              </td>
-                              <td className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--text)' }}>
-                                {boundByPeer.get(peer.name) ?? 0}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </TableViewport>
-                  )}
-                </section>
+            <section aria-labelledby="cascade-config-heading">
+              <SectionHeader title={t('cascade.configSectionTitle')} hint={t('cascade.configSectionHint')} />
+              <span id="cascade-config-heading" className="sr-only">{t('cascade.configSectionTitle')}</span>
+              {configQuery.isPending ? (
+                <div aria-busy="true" className="py-10 text-center text-[13px] text-[var(--text-soft)]">
+                  {t('loading')}
+                </div>
+              ) : configQuery.isError && !config ? (
+                <QueryErrorState
+                  message={getApiError(configQuery.error).status === 403
+                    ? t('common.permissionDenied')
+                    : t('cascade.loadError')}
+                  onRetry={() => { void configQuery.refetch() }}
+                />
+              ) : config ? (
+                <CascadeConfigForm
+                  state={config}
+                  canWrite={canWrite}
+                  onSaved={(result) => {
+                    toast.show({
+                      tone: 'success',
+                      message: t(result.restart_required ? 'cascade.configSavedRestart' : 'cascade.configSaved'),
+                    })
+                    void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade-config'] })
+                    void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade'] })
+                    void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+                  }}
+                />
+              ) : null}
+            </section>
 
-                <section aria-labelledby="cascade-upstreams-heading">
-                  <SectionHeader
-                    title={t('cascade.upstreamsTitle')}
-                    hint={t('cascade.upstreamsHint')}
-                    action={(
-                      <Link to={getAdminRouteHref('upstreams')} className={navigateLinkClass}>
-                        {t('cascade.manageUpstreams')}
-                      </Link>
-                    )}
-                  />
-                  <span id="cascade-upstreams-heading" className="sr-only">{t('cascade.upstreamsTitle')}</span>
-                  {unresolved.length > 0 && (
-                    <InlineNotice tone="warning">
-                      {t('cascade.unresolvedBody', { count: unresolved.length })}
-                    </InlineNotice>
-                  )}
-                  {boundUpstreams.length === 0 ? (
-                    <EmptyState
-                      icon="cloud_sync"
-                      title={t('cascade.upstreamsEmptyTitle')}
-                      hint={t('cascade.upstreamsEmptyHint')}
-                      minHeight={200}
-                    />
-                  ) : (
-                    <TableViewport label={t('cascade.upstreamsTitle')} minWidth={860}>
-                      <table className="w-full text-[12px]">
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                            {[
-                              t('cascade.upstreamEcosystem'),
-                              t('cascade.upstreamName'),
-                              t('cascade.upstreamURL'),
-                              t('cascade.upstreamVia'),
-                              t('cascade.upstreamPriority'),
-                            ].map(heading => (
-                              <th key={heading} scope="col" className={tableHeadClass} style={{ color: 'var(--text-subtle)' }}>
-                                {heading}
-                              </th>
-                            ))}
+            <section aria-labelledby="cascade-upstreams-heading">
+              <SectionHeader
+                title={t('cascade.upstreamsTitle')}
+                hint={t(canWrite && info.enabled ? 'cascade.upstreamsQuickHint' : 'cascade.upstreamsHint')}
+                action={(
+                  <Link to={getAdminRouteHref('upstreams')} className={navigateLinkClass}>
+                    {t('cascade.manageUpstreams')}
+                  </Link>
+                )}
+              />
+              <span id="cascade-upstreams-heading" className="sr-only">{t('cascade.upstreamsTitle')}</span>
+              {unresolved.length > 0 && (
+                <InlineNotice tone="warning">
+                  {t('cascade.unresolvedBody', { count: unresolved.length })}
+                </InlineNotice>
+              )}
+              {canWrite && !info.enabled && (
+                <InlineNotice tone="info">{t('cascade.rebindRuntimeDisabled')}</InlineNotice>
+              )}
+              {boundUpstreams.length === 0 ? (
+                <EmptyState
+                  icon="cloud_sync"
+                  title={t('cascade.upstreamsEmptyTitle')}
+                  hint={t('cascade.upstreamsEmptyHint')}
+                  minHeight={200}
+                />
+              ) : (
+                <TableViewport label={t('cascade.upstreamsTitle')} minWidth={860}>
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        {[
+                          t('cascade.upstreamEcosystem'),
+                          t('cascade.upstreamName'),
+                          t('cascade.upstreamURL'),
+                          t('cascade.upstreamVia'),
+                          t('cascade.upstreamPriority'),
+                        ].map(heading => (
+                          <th key={heading} scope="col" className={tableHeadClass} style={{ color: 'var(--text-subtle)' }}>
+                            {heading}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {boundUpstreams.map(upstream => {
+                        const via = upstream.via ?? ''
+                        const missing = !peerNames.has(via)
+                        return (
+                          <tr
+                            key={upstream.id}
+                            data-cascade-upstream={upstream.id}
+                            style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
+                          >
+                            <td className={tableCellClass}>
+                              <span className="font-mono uppercase" style={{ color: 'var(--text-muted)' }}>
+                                {upstream.adapter_type}
+                              </span>
+                            </td>
+                            <td className={`${tableCellClass} font-[500]`} style={{ color: 'var(--text)' }}>
+                              {upstream.name}
+                            </td>
+                            <td className={`${tableCellClass} font-mono`} style={{ color: 'var(--text-muted)' }}>
+                              <span title={upstream.url}>{truncateMiddle(upstream.url, 48)}</span>
+                            </td>
+                            <td className={tableCellClass}>
+                              {canWrite && info.enabled ? (
+                                <SelectV2
+                                  aria-label={t('cascade.upstreamVia')}
+                                  value={via}
+                                  disabled={rebindMutation.isPending}
+                                  onChange={event => rebindUpstream(upstream, event.target.value)}
+                                >
+                                  <option value="">{t('cascade.viaDirect')}</option>
+                                  {info.peers.map(peer => (
+                                    <option key={peer.name} value={peer.name}>{peer.name}</option>
+                                  ))}
+                                  {missing && <option value={via}>{t('cascade.viaMissing', { peer: via })}</option>}
+                                </SelectV2>
+                              ) : missing ? (
+                                <BadgeV2 variant="warning">{t('cascade.viaMissing', { peer: via })}</BadgeV2>
+                              ) : (
+                                <span className="font-mono" style={{ color: 'var(--text)' }}>{via}</span>
+                              )}
+                            </td>
+                            <td className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--text)' }}>
+                              {upstream.priority}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {boundUpstreams.map(upstream => {
-                            const via = upstream.via ?? ''
-                            const missing = !peerNames.has(via)
-                            return (
-                              <tr
-                                key={upstream.id}
-                                data-cascade-upstream={upstream.id}
-                                style={{ borderBottom: '1px solid var(--border-soft, var(--border))' }}
-                              >
-                                <td className={tableCellClass}>
-                                  <span className="font-mono uppercase" style={{ color: 'var(--text-muted)' }}>
-                                    {upstream.adapter_type}
-                                  </span>
-                                </td>
-                                <td className={`${tableCellClass} font-[500]`} style={{ color: 'var(--text)' }}>
-                                  {upstream.name}
-                                </td>
-                                <td className={`${tableCellClass} font-mono`} style={{ color: 'var(--text-muted)' }}>
-                                  <span title={upstream.url}>{truncateMiddle(upstream.url, 48)}</span>
-                                </td>
-                                <td className={tableCellClass}>
-                                  {missing ? (
-                                    <BadgeV2 variant="warning">{t('cascade.viaMissing', { peer: via })}</BadgeV2>
-                                  ) : (
-                                    <span className="font-mono" style={{ color: 'var(--text)' }}>{via}</span>
-                                  )}
-                                </td>
-                                <td className={`${tableCellClass} font-mono tabular-nums`} style={{ color: 'var(--text)' }}>
-                                  {upstream.priority}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </TableViewport>
-                  )}
-                </section>
-              </>
-            )}
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </TableViewport>
+              )}
+            </section>
 
             <section aria-labelledby="cascade-how-heading">
               <SectionHeader title={t('cascade.howTitle')} />
@@ -415,22 +426,6 @@ url  = "http://192.168.1.10:23333"
           </>
         ) : null}
       </div>
-      {config && configDialogOpen && (
-        <CascadeConfigDialog
-          state={config}
-          onClose={() => setConfigDialogOpen(false)}
-          onSaved={(result) => {
-            setConfigDialogOpen(false)
-            toast.show({
-              tone: 'success',
-              message: t(result.restart_required ? 'cascade.configSavedRestart' : 'cascade.configSaved'),
-            })
-            void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade-config'] })
-            void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade'] })
-            void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
-          }}
-        />
-      )}
     </AdminPage>
   )
 }
