@@ -23,7 +23,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   atomically, keeps secrets write-only, validates the full document (including
   upstream `via` references) before saving, requires a restart to apply, and
   disables itself with an inline explanation when the account lacks the write
-  role or the file is not writable.
+  role or the file is not writable. The same page generates copy-ready client
+  commands (npm/pip/Go), a child-Depsilo peer snippet with a relay probe, and
+  an upstream-parent snippet with per-peer health checks; the address field is
+  a local-only generator and secrets stay placeholders.
 
 ### Fixed
 - The installer resolves the newest release through the

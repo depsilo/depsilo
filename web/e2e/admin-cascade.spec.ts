@@ -49,6 +49,15 @@ test('cascade page shows peers, bindings, and dangling references', { tag: '@smo
   await expect(page.locator('[data-cascade-upstream="1"]')).toContainText('home')
   await expect(page.locator('[data-cascade-upstream="3"]')).toContainText('失效')
   await expect(page.getByRole('link', { name: '管理上游源' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '快速连接' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '让客户端连接本机' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '连接上游 Depsilo' })).toBeVisible()
+  await expect(page.getByText('npm config set registry http://127.0.0.1:4173/npm').first()).toBeVisible()
+  await expect(page.getByText('curl -fsS http://192.168.1.10:23333/health').first()).toBeVisible()
+
+  // The generated commands follow the client-reachable address field.
+  await page.getByLabel('本机访问地址').fill('http://10.0.0.9:23333')
+  await expect(page.getByText('npm config set registry http://10.0.0.9:23333/npm').first()).toBeVisible()
 })
 
 test('cascade page explains how to enable the feature when it is off', { tag: '@smoke' }, async ({ page }) => {

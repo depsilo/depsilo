@@ -6,6 +6,7 @@ import { Link } from 'react-router'
 import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import CascadeConfigForm from '@/admin/cascade/CascadeConfigForm'
+import CascadeQuickConnect from '@/admin/cascade/CascadeQuickConnect'
 import { getAdminRouteHref } from '@/admin/routes'
 import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
@@ -413,6 +414,8 @@ url  = "http://192.168.1.10:23333"
                 </TableViewport>
               )}
             </section>
+
+            <CascadeQuickConnect info={info} config={config} />
 
             <section aria-labelledby="cascade-how-heading">
               <SectionHeader title={t('cascade.howTitle')} />

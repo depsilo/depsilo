@@ -104,6 +104,21 @@ The same tab edits the cascade section directly on the page — no dialog layer:
   single select (direct or one of the running peers). That path changes only
   the database binding and applies immediately, without a restart.
 
+The **Quick connect** section generates copy-ready commands from an editable
+address field (defaulting to the browser origin):
+
+- Package-manager commands for npm, pip, and Go that point clients at this
+  node, plus a link to the full Connect page for the remaining ecosystems.
+- A child-Depsilo `config.toml` snippet and a relay probe command, so another
+  node can use this one as its parent without leaving the page.
+- A parent-Depsilo snippet with the matching `via` binding, a relay probe, and
+  a health check per configured parent.
+
+The address field is only a generator; it is kept in browser local storage and
+is never written to the server. The snippets use a placeholder for the shared
+secret and warn against pointing a node at itself, which the relay rejects
+with `508`.
+
 ## Operational notes
 
 - **Cache semantics.** The child sends the TTL and metadata/artifact class it
