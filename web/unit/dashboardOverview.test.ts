@@ -1,8 +1,9 @@
 import type { TFunction } from 'i18next'
 import { describe, expect, it } from 'vitest'
 
-import type { DashboardPeriod } from '../src/lib/adminApi.types'
+import type { DashboardPeriod, NowResponse } from '../src/lib/adminApi.types'
 import {
+  buildRequestFlow,
   deriveServiceStatus,
   formatEstimatedDuration,
   hitRateValue,
@@ -160,5 +161,84 @@ describe('sparklineGeometry', () => {
     const ys = [...geometry!.line.matchAll(/(?:M|C)\s*[-\d.]+ ([-\d.]+)|,\s*[-\d.]+ ([-\d.]+)/g)]
       .map(match => Number(match[1] ?? match[2]))
     expect(new Set(ys).size).toBe(1)
+  })
+})
+
+describe('buildRequestFlow', () => {
+  const measuredNow: NowResponse = {
+    status: 'healthy',
+    uptime_seconds: 600,
+    now_unix: 1786032000,
+    version: 'dev',
+    rate: {
+      requests_per_min: 12,
+      ingress_bps: 10,
+      egress_bps: 20,
+      has_data: true,
+      measured: true,
+      window_seconds: 60,
+      service_requests_per_sec: 1,
+      service_bytes_per_sec: 1024,
+      origin_requests_per_sec: 0.1,
+      origin_bytes_per_sec: 2048,
+    },
+    upstreams: { healthy: 1, total: 1 },
+    sparkline: [],
+  }
+  const measuredCoverage = { measured: true, since: null, window_complete: true }
+
+  it('withholds live rates until the 60s meter reports a sample', () => {
+    const model = buildRequestFlow({
+      now: { ...measuredNow, rate: { ...measuredNow.rate, measured: false } },
+      period: period(),
+      coverage: measuredCoverage,
+      rangeStart: undefined,
+    })
+    expect(model.liveServiceBytesPerSec).toBeNull()
+    expect(model.liveOriginBytesPerSec).toBeNull()
+    expect(model.hitRate).toBe(0.8)
+  })
+
+  it('renders a period without a hit/miss sample as unknown, not 0%', () => {
+    const model = buildRequestFlow({
+      now: measuredNow,
+      period: period({ total_requests: 0, hit_requests: 0, miss_requests: 0, hit_rate: 0, bytes_served: 0 }),
+      coverage: measuredCoverage,
+      rangeStart: undefined,
+    })
+    expect(model.hitRate).toBeNull()
+    expect(model.hitRequests).toBeNull()
+    expect(model.missRequests).toBeNull()
+    expect(model.servedBytes).toBe(0)
+    expect(model.servedRequests).toBe(0)
+  })
+
+  it('treats an unmetered origin window as not collected, not zero', () => {
+    const model = buildRequestFlow({
+      now: measuredNow,
+      period: period(),
+      coverage: { measured: false, since: null, window_complete: false },
+      rangeStart: undefined,
+    })
+    expect(model.originMeasured).toBe(false)
+    expect(model.originBytes).toBeNull()
+    expect(model.originRequests).toBeNull()
+    // Client-facing totals stay measurable even when origin metering never ran.
+    expect(model.servedBytes).toBe(1000)
+    expect(model.hitRequests).toBe(80)
+  })
+
+  it('passes measured zeros through with the live rails intact', () => {
+    const model = buildRequestFlow({
+      now: measuredNow,
+      period: period({ bytes_served: 0, upstream_bytes: 0, upstream_requests: 0 }),
+      coverage: measuredCoverage,
+      rangeStart: undefined,
+    })
+    expect(model.servedBytes).toBe(0)
+    expect(model.originBytes).toBe(0)
+    expect(model.originRequests).toBe(0)
+    expect(model.liveServiceBytesPerSec).toBe(1024)
+    expect(model.liveOriginBytesPerSec).toBe(2048)
   })
 })

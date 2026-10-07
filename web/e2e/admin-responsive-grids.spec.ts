@@ -1,6 +1,7 @@
 import type { Locator } from '@playwright/test'
 
-import { expect, mockAdminApi, test } from './fixtures/admin-api'
+import type { RuntimeResponse } from '../src/lib/adminApi.types'
+import { adminApiDefaults, expect, mockAdminApi, test } from './fixtures/admin-api'
 
 function populatedDashboard(overrides: Record<string, unknown> = {}) {
   return {
@@ -69,9 +70,9 @@ test('Overview resource metrics stay readable and never overflow on mobile', asy
   expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(4)
 })
 
-// The tile icon and headline are sized from the card's own width, so a 4-up
-// 1440px row (narrow cards) steps them down instead of clipping a long value
-// like "110.3 KB/s" at the card edge.
+// Resource cells are size containers: the icon and headline scale from the
+// cell's own inline size, so a long value ("1023.9 GB") keeps its slack at the
+// cell edge instead of colliding with the icon.
 function tileMetrics(locator: Locator) {
   return locator.evaluate(card => {
     const icon = card.querySelector('.dash-metric-icon')
@@ -88,46 +89,28 @@ function tileMetrics(locator: Locator) {
   })
 }
 
-test('Overview metric tiles scale their icon and value with the card width', async ({ page }) => {
+test('Overview resource cells keep a long value inside the shared card', async ({ page }) => {
+  const runtime = adminApiDefaults['GET /api/v1/admin/runtime'] as RuntimeResponse
   await mockAdminApi(page, {
-    'GET /api/v1/now': {
-      status: 'healthy',
-      uptime_seconds: 600,
-      now_unix: 1786032000,
-      version: 'dev',
-      rate: {
-        requests_per_min: 12,
-        ingress_bps: 112947,
-        egress_bps: 1572864,
-        has_data: true,
-        measured: true,
-        window_seconds: 60,
-        service_requests_per_sec: 12.5,
-        service_bytes_per_sec: 112947,
-        origin_requests_per_sec: 0.5,
-        origin_bytes_per_sec: 1572864,
-      },
-      upstreams: { healthy: 1, total: 1 },
-      sparkline: [],
+    'GET /api/v1/admin/runtime': {
+      ...runtime,
+      cache: { ...runtime.cache, logical_bytes: 1_099_400_000_000, quota_bytes: 2_199_023_255_552 },
     },
   })
-  await page.setViewportSize({ width: 1440, height: 900 })
+
+  await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/admin')
-
-  const tile = page.locator('[data-testid="traffic-service-flow"]')
-  await expect(tile.locator('.dash-metric-value')).toHaveText('110.3 KB/s')
-
-  const narrow = await tileMetrics(tile)
-  expect(narrow.icon).toBeLessThan(56)
-  expect(narrow.slack).toBeGreaterThan(0)
+  const cell = page.locator('[data-testid="resource-cache"]')
+  await expect(cell).toContainText('1023.9 GB')
+  const compact = await tileMetrics(cell)
+  expect(compact.icon).toBeLessThan(56)
+  expect(compact.slack).toBeGreaterThan(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
   await page.setViewportSize({ width: 1920, height: 900 })
-  await expect(tile.locator('.dash-metric-value')).toHaveText('110.3 KB/s')
-
-  const wide = await tileMetrics(tile)
+  const wide = await tileMetrics(cell)
   expect(wide.icon).toBe(56)
-  expect(wide.valueFont).toBeGreaterThan(narrow.valueFont)
-  expect(wide.slack).toBeGreaterThan(narrow.slack)
+  expect(wide.slack).toBeGreaterThan(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1920)
 })
 

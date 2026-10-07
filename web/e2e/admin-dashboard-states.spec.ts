@@ -94,12 +94,12 @@ test('Overview separates uncollected data from a measured zero', async ({ page }
   await expect(originTotal).toContainText('未采集')
   await expect(originTotal).not.toContainText('0 B')
   const servedTotal = page.locator('[data-testid="traffic-served-total"]')
-  await expect(servedTotal.locator('.dash-metric-value')).toHaveText('0 B')
+  await expect(servedTotal).toContainText('0 B')
   await expect(servedTotal).toContainText('0 次请求')
 
-  // Live rates are not collected yet: dash, localized detail, no unit.
+  // Live rails are not collected yet: dash, localized detail, no unit.
   const serviceFlow = page.locator('[data-testid="traffic-service-flow"]')
-  await expect(serviceFlow.locator('.dash-metric-value')).toHaveText('—')
+  await expect(serviceFlow).toContainText('—')
   await expect(serviceFlow).toContainText('未采集')
   await expect(serviceFlow).not.toContainText('次/秒')
 

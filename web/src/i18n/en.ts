@@ -341,6 +341,12 @@ const en = {
       originFlowInfoLabel: 'View origin traffic measurement basis',
       servedTotalInfoLabel: 'View delivered total measurement basis',
       originTotalInfoLabel: 'View origin total measurement basis',
+      flowAria: 'Dependency request path',
+      flowClients: 'Developer / CI / Agent',
+      flowUpstream: 'Upstream registry',
+      flowOutcomesLabel: 'Request outcomes',
+      flowBlockedHint: 'Policy-blocked requests are excluded from the hit-rate totals; open Security for the block and quarantine records.',
+      flowBlockedLinkLabel: 'Blocked by policy, open Security',
 
       benefitsTitle: 'Cache benefits',
       hitRateLabel: 'Request hit rate',

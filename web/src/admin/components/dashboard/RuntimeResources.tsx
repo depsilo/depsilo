@@ -103,80 +103,91 @@ export default function RuntimeResources({
       <h2 id="overview-resources-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
         {t('overview.resourcesTitle')}
       </h2>
-      <div data-dashboard-kpis className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile
-          testId="resource-cpu"
-          label={t('overview.cpuLabel')}
-          icon="memory"
-          tone="cpu"
-          reserveSlots
-          value={cpuValue}
-          unit="%"
-          detail={cpuDetail}
-          progress={cpuProgress}
-          series={cpuSeries}
-          loading={runtimePending && cpuPercent === undefined}
-          info={cpuHint}
-          infoLabel={t('overview.cpuInfoLabel')}
-        />
-        <MetricTile
-          testId="resource-memory"
-          label={t('overview.memoryLabel')}
-          icon="ram"
-          tone="memory"
-          reserveSlots
-          value={memoryValue}
-          badge={memoryBadge}
-          progress={memoryProgress}
-          series={memorySupported ? rssSeries : undefined}
-          loading={runtimePending && !runtime}
-          info={memoryHint}
-          infoLabel={t('overview.memoryInfoLabel')}
-        />
-        <MetricTile
-          testId="resource-cache"
-          label={t('overview.cacheLabel')}
-          icon="storage"
-          tone="cache"
-          reserveSlots
-          value={cache ? formatBytes(logical) : '—'}
-          detail={cacheDetailLines.length > 0
-            ? cacheDetailLines.map((line, index) => <span key={index} className="block">{line}</span>)
-            : undefined}
-          progress={cacheRatio !== null ? { ratio: cacheRatio, tone: 'cache' } : null}
-          series={cache ? cacheSeries : undefined}
-          loading={runtimePending && !runtime}
-          info={t('overview.hintCache')}
-          infoLabel={t('overview.cacheInfoLabel')}
-        />
-        <MetricTile
-          testId="resource-network"
-          label={t('overview.networkLabel')}
-          icon="hub"
-          tone="memory"
-          reserveSlots
-          badge={t('overview.liveBadge')}
-          rows={[
-            {
-              label: t('overview.serviceRequests'),
-              value: measured ? serviceRate.toFixed(2) : '—',
-              unit: t('overview.perSecond'),
-              tone: 'memory',
-            },
-            {
-              label: t('overview.originRequests'),
-              value: measured ? originRate.toFixed(2) : '—',
-              unit: t('overview.perSecond'),
-              tone: 'origin',
-            },
-          ]}
-          series={measured ? networkSeries : undefined}
-          seriesTone="memory"
-          detail={measured ? undefined : t('overview.notCollected')}
-          loading={nowPending && !now}
-          info={t('overview.hintNetwork')}
-          infoLabel={t('overview.networkInfoLabel')}
-        />
+      {/* One shared surface with divided cells, matching the status strip,
+          instead of four peer cards for four related resource readings. */}
+      <div className="dash-card min-w-0">
+        <div
+          data-dashboard-kpis
+          className="grid min-w-0 grid-cols-1 divide-y divide-[var(--dash-border)] sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x"
+        >
+          <MetricTile
+            testId="resource-cpu"
+            framed={false}
+            label={t('overview.cpuLabel')}
+            icon="memory"
+            tone="cpu"
+            reserveSlots
+            value={cpuValue}
+            unit="%"
+            detail={cpuDetail}
+            progress={cpuProgress}
+            series={cpuSeries}
+            loading={runtimePending && cpuPercent === undefined}
+            info={cpuHint}
+            infoLabel={t('overview.cpuInfoLabel')}
+          />
+          <MetricTile
+            testId="resource-memory"
+            framed={false}
+            label={t('overview.memoryLabel')}
+            icon="ram"
+            tone="memory"
+            reserveSlots
+            value={memoryValue}
+            badge={memoryBadge}
+            progress={memoryProgress}
+            series={memorySupported ? rssSeries : undefined}
+            loading={runtimePending && !runtime}
+            info={memoryHint}
+            infoLabel={t('overview.memoryInfoLabel')}
+          />
+          <MetricTile
+            testId="resource-cache"
+            framed={false}
+            label={t('overview.cacheLabel')}
+            icon="storage"
+            tone="cache"
+            reserveSlots
+            value={cache ? formatBytes(logical) : '—'}
+            detail={cacheDetailLines.length > 0
+              ? cacheDetailLines.map((line, index) => <span key={index} className="block">{line}</span>)
+              : undefined}
+            progress={cacheRatio !== null ? { ratio: cacheRatio, tone: 'cache' } : null}
+            series={cache ? cacheSeries : undefined}
+            loading={runtimePending && !runtime}
+            info={t('overview.hintCache')}
+            infoLabel={t('overview.cacheInfoLabel')}
+          />
+          <MetricTile
+            testId="resource-network"
+            framed={false}
+            label={t('overview.networkLabel')}
+            icon="hub"
+            tone="memory"
+            reserveSlots
+            badge={t('overview.liveBadge')}
+            rows={[
+              {
+                label: t('overview.serviceRequests'),
+                value: measured ? serviceRate.toFixed(2) : '—',
+                unit: t('overview.perSecond'),
+                tone: 'memory',
+              },
+              {
+                label: t('overview.originRequests'),
+                value: measured ? originRate.toFixed(2) : '—',
+                unit: t('overview.perSecond'),
+                tone: 'origin',
+              },
+            ]}
+            series={measured ? networkSeries : undefined}
+            seriesTone="memory"
+            detail={measured ? undefined : t('overview.notCollected')}
+            loading={nowPending && !now}
+            info={t('overview.hintNetwork')}
+            infoLabel={t('overview.networkInfoLabel')}
+          />
+        </div>
       </div>
     </section>
   )

@@ -1,10 +1,9 @@
 import { useTranslation } from 'react-i18next'
 
 import type { DashboardPeriod, DashboardRange, NowResponse, OriginCoverage } from '@/lib/adminApi.types'
-import { coverageDetail, originCoverageNote, rangeLabelKey } from '@/lib/dashboardOverview'
-import { formatBytes, formatBps } from '@/lib/utils'
+import { rangeLabelKey } from '@/lib/dashboardOverview'
 
-import MetricTile from './MetricTile'
+import RequestFlow from './RequestFlow'
 
 interface TrafficOverviewProps {
   now?: NowResponse
@@ -15,6 +14,11 @@ interface TrafficOverviewProps {
   coverage?: OriginCoverage
 }
 
+/**
+ * One request-path card replaces the four metric tiles: the clients →
+ * Depsilo → upstream flow with its live rails, then the selected period's
+ * outcome chips. The section header carries the range so it is stated once.
+ */
 export default function TrafficOverview({
   now,
   nowPending,
@@ -24,72 +28,25 @@ export default function TrafficOverview({
   coverage,
 }: TrafficOverviewProps) {
   const { t } = useTranslation()
-  const measured = now?.rate.measured === true
   const periodLabel = t(rangeLabelKey(range))
-  // Origin byte totals only exist once the Upstream→Depsilo meter has run.
-  // Before that the range is "not collected", not a measured zero.
-  const originMeasured = originCoverageNote(coverage, rangeStart).measured
-  const coverageNote = coverageDetail(coverage, rangeStart, t)
-  const coverageFlag = coverageNote ? t('overview.originPartialShort') : undefined
-  const originRequestsDetail = period
-    ? t('overview.originRequestsTotal', { count: period.upstream_requests.toLocaleString() })
-    : undefined
 
   return (
     <section data-dashboard-traffic aria-labelledby="overview-traffic-title" className="flex min-w-0 flex-col gap-3">
-      <h2 id="overview-traffic-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
-        {t('overview.trafficTitle')}
-      </h2>
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile
-          testId="traffic-service-flow"
-          label={t('overview.serviceFlow')}
-          icon="hub"
-          tone="memory"
-          badge={t('overview.liveBadge')}
-          value={measured ? formatBps(now?.rate.service_bytes_per_sec ?? 0) : '—'}
-          detail={measured ? t('overview.directionService') : t('overview.notCollected')}
-          loading={nowPending && !now}
-          info={t('overview.hintServiceFlow')}
-          infoLabel={t('overview.serviceFlowInfoLabel')}
-        />
-        <MetricTile
-          testId="traffic-origin-flow"
-          label={t('overview.originFlow')}
-          icon="sync"
-          tone="origin"
-          badge={t('overview.liveBadge')}
-          value={measured ? formatBps(now?.rate.origin_bytes_per_sec ?? 0) : '—'}
-          detail={measured ? t('overview.directionOrigin') : t('overview.notCollected')}
-          loading={nowPending && !now}
-          info={t('overview.hintOriginFlow')}
-          infoLabel={t('overview.originFlowInfoLabel')}
-        />
-        <MetricTile
-          testId="traffic-served-total"
-          label={t('overview.servedTotal')}
-          icon="download"
-          tone="download"
-          badge={periodLabel}
-          value={period ? formatBytes(period.bytes_served) : '—'}
-          detail={period ? t('overview.servedRequests', { count: period.total_requests.toLocaleString() }) : undefined}
-          info={t('overview.hintServedTotal')}
-          infoLabel={t('overview.servedTotalInfoLabel')}
-        />
-        <MetricTile
-          testId="traffic-origin-total"
-          label={t('overview.originTotal')}
-          icon="cloud_sync"
-          tone="origin"
-          badge={periodLabel}
-          value={period && originMeasured ? formatBytes(period.upstream_bytes) : '—'}
-          detail={!originMeasured
-            ? t('overview.notCollected')
-            : coverageFlag
-              ? `${coverageFlag} · ${originRequestsDetail ?? ''}`.trim()
-              : originRequestsDetail}
-          info={t('overview.hintOriginTotal')}
-          infoLabel={t('overview.originTotalInfoLabel')}
+      <header className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <h2 id="overview-traffic-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+          {t('overview.trafficTitle')}
+        </h2>
+        {period && (
+          <span className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{periodLabel}</span>
+        )}
+      </header>
+      <div className="dash-card min-w-0 px-5 py-4">
+        <RequestFlow
+          now={now}
+          nowPending={nowPending}
+          period={period}
+          rangeStart={rangeStart}
+          coverage={coverage}
         />
       </div>
     </section>

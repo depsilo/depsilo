@@ -4,37 +4,12 @@ import Icon, { type IconName } from '@/components/Icon'
 import TooltipV2 from '@/components/Tooltip'
 import { sparklineGeometry } from '@/lib/dashboardOverview'
 
+import { METRIC_TONE_PALETTE, type MetricTone } from './metricTone'
+
 /** Dense Overview hints open fast; other surfaces keep the app-wide 350ms. */
 export const HINT_TOOLTIP_DELAY_MS = 120
 
-/**
- * Category tones. They express identity — which resource or request path a
- * metric belongs to — never health. Real warnings use the warn/danger tones.
- */
-export type MetricTone =
-  | 'default'
-  | 'ok'
-  | 'warn'
-  | 'danger'
-  | 'accent'
-  | 'cpu'
-  | 'memory'
-  | 'cache'
-  | 'origin'
-  | 'download'
-
-const TONE: Record<MetricTone, { strong: string; soft: string }> = {
-  default: { strong: 'var(--dash-ink)', soft: 'var(--dash-soft)' },
-  ok: { strong: 'var(--dash-ok)', soft: 'var(--dash-ok-soft)' },
-  warn: { strong: 'var(--dash-warn)', soft: 'var(--dash-warn-soft)' },
-  danger: { strong: 'var(--dash-danger)', soft: 'var(--dash-danger-soft)' },
-  accent: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
-  cpu: { strong: 'var(--dash-cpu)', soft: 'var(--dash-cpu-soft)' },
-  memory: { strong: 'var(--dash-memory)', soft: 'var(--dash-memory-soft)' },
-  cache: { strong: 'var(--dash-cache)', soft: 'var(--dash-cache-soft)' },
-  origin: { strong: 'var(--dash-origin)', soft: 'var(--dash-origin-soft)' },
-  download: { strong: 'var(--dash-download)', soft: 'var(--dash-download-soft)' },
-}
+export type { MetricTone }
 
 export interface MetricProgress {
   /** 0..1; values are clamped for the bar while the numeric value stays exact. */
@@ -79,13 +54,18 @@ interface MetricTileProps {
   info?: string
   infoLabel?: string
   testId?: string
+  /**
+   * Framed tiles are their own card. Set false when the caller already draws
+   * one shared surface and the tile is a cell inside it (Overview rails).
+   */
+  framed?: boolean
 }
 
 function Sparkline({ series, tone }: { series: number[]; tone: MetricTone }) {
   const gradientId = useId()
   const geometry = sparklineGeometry(series)
   if (!geometry) return null
-  const color = TONE[tone].strong
+  const color = METRIC_TONE_PALETTE[tone].strong
 
   return (
     <svg
@@ -137,17 +117,18 @@ export default function MetricTile({
   info,
   infoLabel,
   testId,
+  framed = true,
 }: MetricTileProps) {
   const ratio = progress ? Math.min(1, Math.max(0, progress.ratio)) : null
   const progressTone = progress?.tone ?? tone
-  const palette = TONE[tone]
+  const palette = METRIC_TONE_PALETTE[tone]
   const sparkTone = seriesTone ?? tone
 
   return (
     <div
       data-dashboard-metric
       data-testid={testId}
-      className="dash-card dash-metric flex min-w-0 items-start gap-4 p-5"
+      className={`dash-metric flex min-w-0 items-start gap-4 p-5${framed ? ' dash-card' : ''}`}
     >
       {icon && (
         <span
@@ -221,7 +202,7 @@ export default function MetricTile({
               {rows.map(row => (
                 <div key={row.label} className="flex min-h-5 min-w-0 items-center justify-between gap-3 leading-none">
                   <dt className="flex min-w-0 items-center gap-1.5 text-[14px] leading-none" style={{ color: 'var(--dash-muted)' }}>
-                    <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: TONE[row.tone].strong }} />
+                    <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE[row.tone].strong }} />
                     <span className="truncate">{row.label}</span>
                   </dt>
                   <dd className="shrink-0 font-mono text-[18px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
@@ -243,13 +224,13 @@ export default function MetricTile({
         {ratio !== null ? (
           <div
             className="h-1.5 w-full overflow-hidden rounded-full"
-            style={{ background: TONE[progressTone].soft }}
+            style={{ background: METRIC_TONE_PALETTE[progressTone].soft }}
             aria-hidden="true"
             data-progress-label={progress?.label}
           >
             <div
               className="h-full rounded-full transition-[width] duration-300"
-              style={{ width: `${ratio * 100}%`, background: TONE[progressTone].strong }}
+              style={{ width: `${ratio * 100}%`, background: METRIC_TONE_PALETTE[progressTone].strong }}
             />
           </div>
         ) : reserveSlots ? (

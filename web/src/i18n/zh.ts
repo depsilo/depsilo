@@ -344,6 +344,12 @@ const zh = {
       originFlowInfoLabel: '查看回源流量口径',
       servedTotalInfoLabel: '查看下载总量口径',
       originTotalInfoLabel: '查看回源总量口径',
+      flowAria: '依赖请求路径',
+      flowClients: '开发者 / CI / Agent',
+      flowUpstream: '上游仓库',
+      flowOutcomesLabel: '请求结果',
+      flowBlockedHint: '策略拦截的请求不计入命中率统计；前往安全页查看拦截与隔离记录。',
+      flowBlockedLinkLabel: '策略拦截，前往安全页查看',
 
       // E. 缓存收益
       benefitsTitle: '缓存收益',

@@ -134,6 +134,72 @@ export function timeSavedMs(period: DashboardPeriod | undefined): number | null 
 }
 
 /**
+ * Overview metric dictionary — the only place that decides what each Overview
+ * region means. UI copy stays out of this file; the gating lives here so the
+ * request-flow visual, the tiles and the tests all read from one definition.
+ *
+ * - Status strip health      deriveServiceStatus(...) + now.status/upstreams/policy
+ * - Status strip activity    now.rate.service_requests_per_sec, gated by rate.measured
+ * - Flow rail service        now.rate.service_bytes_per_sec (last 60s, Depsilo → clients)
+ * - Flow rail origin         now.rate.origin_bytes_per_sec  (last 60s, upstreams → Depsilo)
+ * - Flow node clients        window.bytes_served / total_requests
+ * - Flow node Depsilo        window.hit_rate + hit/miss requests (no sample → —)
+ * - Flow node upstream       window.upstream_bytes / upstream_requests, gated by
+ *                            origin coverage: an unmetered window is "not collected",
+ *                            never a measured zero.
+ * - Flow outcome BLOCK       Countless by design. Blocked rows are excluded from the
+ *                            period aggregate (internal/api/admin/dashboard.go), so
+ *                            they cannot share the hit-rate denominator. Security owns
+ *                            the blocked/quarantine record; the chip links there.
+ * - Cache benefits           hit_rate, hit_bytes (estimated savings), latencyComparison
+ * - Runtime resources        runtime.process / runtime.cache / now.rate
+ *
+ * A zero is rendered only when the API measured a zero. "Not collected", "no
+ * sample" and "unsupported" keep their own honest states throughout.
+ */
+
+export interface RequestFlowModel {
+  /** Live 60s byte rates; null until the meter has produced a sample. */
+  liveServiceBytesPerSec: number | null
+  liveOriginBytesPerSec: number | null
+  /** Period hit rate; null without a hit/miss sample (renders —, not 0%). */
+  hitRate: number | null
+  hitRequests: number | null
+  missRequests: number | null
+  /** Period totals; 0 stays a measured zero once the payload exists. */
+  servedBytes: number | null
+  servedRequests: number | null
+  /** Upstream period totals; null when origin metering never ran. */
+  originBytes: number | null
+  originRequests: number | null
+  originMeasured: boolean
+}
+
+export function buildRequestFlow(args: {
+  now?: NowResponse
+  period?: DashboardPeriod
+  coverage?: OriginCoverage
+  rangeStart?: string
+}): RequestFlowModel {
+  const { now, period, coverage, rangeStart } = args
+  const measured = now?.rate.measured === true
+  const hitRate = hitRateValue(period)
+  const originMeasured = originCoverageNote(coverage, rangeStart).measured
+  return {
+    liveServiceBytesPerSec: measured ? (now?.rate.service_bytes_per_sec ?? 0) : null,
+    liveOriginBytesPerSec: measured ? (now?.rate.origin_bytes_per_sec ?? 0) : null,
+    hitRate,
+    hitRequests: hitRate === null ? null : (period?.hit_requests ?? 0),
+    missRequests: hitRate === null ? null : (period?.miss_requests ?? 0),
+    servedBytes: period ? period.bytes_served : null,
+    servedRequests: period ? period.total_requests : null,
+    originBytes: period && originMeasured ? period.upstream_bytes : null,
+    originRequests: period && originMeasured ? period.upstream_requests : null,
+    originMeasured,
+  }
+}
+
+/**
  * Coarse duration for the estimated time saved, rounded to one unit so the
  * figure stays readable ("3.4 小时", not "3 小时 24 分 12 秒").
  */
