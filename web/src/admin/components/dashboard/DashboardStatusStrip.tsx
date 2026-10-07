@@ -130,8 +130,8 @@ export default function DashboardStatusStrip({
         label={t('overview.currentActivity')}
         title={activityTitle}
         detail={activityDetail}
-        toneColor="var(--dash-accent)"
-        toneSoft="var(--dash-accent-soft)"
+        toneColor="var(--dash-memory)"
+        toneSoft="var(--dash-memory-soft)"
         loading={nowPending}
       />
       <StatusCell
@@ -139,8 +139,8 @@ export default function DashboardStatusStrip({
         label={t('overview.recentActivity')}
         title={lastTitle}
         detail={lastDetail}
-        toneColor="var(--dash-accent)"
-        toneSoft="var(--dash-accent-soft)"
+        toneColor="var(--dash-memory)"
+        toneSoft="var(--dash-memory-soft)"
         loading={nowPending}
       />
       <StatusCell
@@ -148,8 +148,8 @@ export default function DashboardStatusStrip({
         label={t('overview.uptimeLabel')}
         title={uptimeTitle}
         detail={uptimeDetail}
-        toneColor="var(--dash-accent)"
-        toneSoft="var(--dash-accent-soft)"
+        toneColor="var(--dash-memory)"
+        toneSoft="var(--dash-memory-soft)"
         loading={nowPending}
       />
     </>

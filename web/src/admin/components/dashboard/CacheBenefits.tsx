@@ -22,9 +22,9 @@ import { HINT_TOOLTIP_DELAY_MS, type MetricTone } from './MetricTile'
 // Only the three identity colours this card needs; the shared tile palette
 // carries the rest.
 const TONE: Partial<Record<MetricTone, { strong: string; soft: string }>> = {
-  cpu: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
+  cpu: { strong: 'var(--dash-cpu)', soft: 'var(--dash-cpu-soft)' },
   origin: { strong: 'var(--dash-origin)', soft: 'var(--dash-origin-soft)' },
-  memory: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
+  memory: { strong: 'var(--dash-memory)', soft: 'var(--dash-memory-soft)' },
 }
 
 function Track({ children }: { children?: ReactNode }) {
@@ -209,7 +209,7 @@ export default function CacheBenefits({
             })
             : undefined}
         >
-          {hitRate !== null && <Track><Fill ratio={hitRate} color="var(--dash-accent)" /></Track>}
+          {hitRate !== null && <Track><Fill ratio={hitRate} color="var(--dash-cpu)" /></Track>}
         </BenefitColumn>
 
         <BenefitColumn
@@ -221,7 +221,7 @@ export default function CacheBenefits({
           value={cachedShare === null ? '—' : formatBytes(savedBytes)}
           footnote={savedFootnote}
         >
-          {cachedShare !== null && <Track><Fill ratio={cachedShare} color="var(--dash-accent)" /></Track>}
+          {cachedShare !== null && <Track><Fill ratio={cachedShare} color="var(--dash-cpu)" /></Track>}
         </BenefitColumn>
 
         <BenefitColumn
@@ -243,7 +243,7 @@ export default function CacheBenefits({
               label={t('overview.latencyHit')}
               ms={latency.hitMs}
               max={maxLatency}
-              color="var(--dash-accent)"
+              color="var(--dash-memory)"
               samplesLabel={sampleLabel(latency.hitSamples)}
             />
             <LatencyRow
