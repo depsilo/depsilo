@@ -8,6 +8,7 @@ import IconButton from '@/components/IconButton'
 import InlineNotice from '@/components/InlineNotice'
 import InputV2 from '@/components/Input'
 import SwitchV2 from '@/components/Switch'
+import { Switch } from '@/components/ui/switch'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
 import type {
@@ -30,6 +31,8 @@ interface CascadeConfigFormProps {
   canWrite: boolean
   onSaved: (result: AdminCascadeConfigUpdateResponse) => void
 }
+
+const peerRowGrid = 'grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)_auto_auto] lg:items-center'
 
 /**
  * Inline editor for the [cascade] section. It lives directly on the Cascade
@@ -79,18 +82,11 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
 
   const saveError = saveMutation.error ? getApiError(saveMutation.error) : null
   const disabled = !canWrite || !state.config_writable || saveMutation.isPending
-
-  function sharedTokenHint(): string {
-    if (draft.clearSharedToken) return t('cascade.config.tokenClearedHint')
-    if (draft.sharedTokenSet) return t('cascade.config.tokenKeepHint')
-    return t('cascade.config.tokenNewHint')
-  }
-
-  function peerTokenHint(peer: CascadePeerDraft): string {
-    if (peer.clearToken) return t('cascade.config.peerTokenClearedHint')
-    if (peer.tokenSet) return t('cascade.config.peerTokenKeepHint')
-    return t('cascade.config.peerTokenInheritHint')
-  }
+  const sharedTokenPlaceholder = draft.clearSharedToken
+    ? t('cascade.config.tokenClearedPlaceholder')
+    : draft.sharedTokenSet
+      ? t('cascade.config.tokenKeepPlaceholder')
+      : t('cascade.config.tokenNewPlaceholder')
 
   return (
     <form
@@ -114,7 +110,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
             onCheckedChange={checked => update({ allowInsecureHTTP: checked })}
           />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <InputV2
             label={t('cascade.config.maxHops')}
             type="number"
@@ -129,117 +125,121 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
             mono
             value={draft.maxTTL}
             error={errors.maxTTL ? t(errors.maxTTL) : undefined}
-            hint={t('cascade.config.maxTTLHint')}
             onChange={event => update({ maxTTL: event.target.value })}
           />
-        </div>
-        <div>
-          <InputV2
-            label={t('cascade.config.sharedToken')}
-            type="password"
-            autoComplete="new-password"
-            value={draft.sharedToken}
-            hint={sharedTokenHint()}
-            error={errors.sharedToken ? t(errors.sharedToken) : undefined}
-            onChange={event => update({ sharedToken: event.target.value, clearSharedToken: false })}
-          />
-          {draft.sharedTokenSet && draft.sharedToken === '' && (
-            <ButtonV2
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mt-1"
-              onClick={() => update({ clearSharedToken: !draft.clearSharedToken })}
-            >
-              {t(draft.clearSharedToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
-            </ButtonV2>
-          )}
+          <div className="flex items-end gap-1">
+            <InputV2
+              className="min-w-0 flex-1"
+              label={t('cascade.config.sharedToken')}
+              type="password"
+              autoComplete="new-password"
+              value={draft.sharedToken}
+              placeholder={sharedTokenPlaceholder}
+              error={errors.sharedToken ? t(errors.sharedToken) : undefined}
+              onChange={event => update({ sharedToken: event.target.value, clearSharedToken: false })}
+            />
+            {draft.sharedTokenSet && draft.sharedToken === '' && (
+              <IconButton
+                icon={draft.clearSharedToken ? 'undo' : 'key'}
+                label={t(draft.clearSharedToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
+                className="mb-0.5"
+                onClick={() => update({ clearSharedToken: !draft.clearSharedToken })}
+              />
+            )}
+          </div>
         </div>
       </fieldset>
 
-      <fieldset className="space-y-3" disabled={disabled}>
+      <fieldset className="space-y-2" disabled={disabled}>
         <legend className="text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
           {t('cascade.config.peersSection')}
         </legend>
+        <div className={`${peerRowGrid} hidden px-1 text-[10px] font-[600] uppercase tracking-[0.06em] lg:grid`} style={{ color: 'var(--text-subtle)' }}>
+          <span>{t('cascade.config.peerName')}</span>
+          <span>{t('cascade.config.peerURL')}</span>
+          <span>{t('cascade.config.peerTokenShort')}</span>
+          <span className="text-center">{t('cascade.config.peerForwardShort')}</span>
+          <span />
+        </div>
         {draft.peers.length === 0 ? (
           <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {t('cascade.config.peersEmpty')}
           </p>
         ) : (
-          <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
-            {draft.peers.map((peer, index) => {
+          <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+            {draft.peers.map(peer => {
               const peerErrors = errors.peers[peer.key]
+              const tokenPlaceholder = peer.clearToken
+                ? t('cascade.config.peerTokenClearedPlaceholder')
+                : peer.tokenSet
+                  ? t('cascade.config.peerTokenKeepPlaceholder')
+                  : t('cascade.config.peerTokenInheritPlaceholder')
               return (
                 <div
                   key={peer.key}
                   data-cascade-peer-editor={peer.key}
-                  className="space-y-3 rounded-md border p-3"
+                  className={`${peerRowGrid} rounded-md border p-2 lg:border-0 lg:p-0`}
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
-                      {t('cascade.config.peerLabel', { index: index + 1 })}
-                    </span>
-                    <IconButton
-                      icon="delete"
-                      label={t('cascade.config.removePeer', {
-                        name: peer.name || t('cascade.config.peerLabel', { index: index + 1 }),
-                      })}
-                      tone="danger"
-                      onClick={() => {
-                        setDraft(current => ({
-                          ...current,
-                          peers: current.peers.filter(candidate => candidate.key !== peer.key),
-                        }))
-                        setDirty(true)
-                      }}
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <InputV2
-                      label={t('cascade.config.peerName')}
-                      value={peer.name}
-                      maxLength={64}
-                      autoComplete="off"
-                      error={peerErrors?.name ? t(peerErrors.name) : undefined}
-                      onChange={event => updatePeer(peer.key, { name: event.target.value })}
-                    />
-                    <InputV2
-                      label={t('cascade.config.peerURL')}
-                      mono
-                      autoComplete="off"
-                      spellCheck={false}
-                      value={peer.url}
-                      error={peerErrors?.url ? t(peerErrors.url) : undefined}
-                      onChange={event => updatePeer(peer.key, { url: event.target.value })}
-                    />
-                  </div>
                   <InputV2
-                    label={t('cascade.config.peerToken')}
-                    type="password"
-                    autoComplete="new-password"
-                    value={peer.token}
-                    hint={peerTokenHint(peer)}
-                    error={peerErrors?.token ? t(peerErrors.token) : undefined}
-                    onChange={event => updatePeer(peer.key, { token: event.target.value, clearToken: false })}
+                    aria-label={t('cascade.config.peerName')}
+                    placeholder={t('cascade.config.peerName')}
+                    value={peer.name}
+                    maxLength={64}
+                    autoComplete="off"
+                    error={peerErrors?.name ? t(peerErrors.name) : undefined}
+                    onChange={event => updatePeer(peer.key, { name: event.target.value })}
                   />
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <InputV2
+                    aria-label={t('cascade.config.peerURL')}
+                    placeholder="https://cache.example:23333"
+                    mono
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={peer.url}
+                    error={peerErrors?.url ? t(peerErrors.url) : undefined}
+                    onChange={event => updatePeer(peer.key, { url: event.target.value })}
+                  />
+                  <div className="flex items-center gap-1">
+                    <InputV2
+                      className="min-w-0 flex-1"
+                      aria-label={t('cascade.config.peerToken')}
+                      placeholder={tokenPlaceholder}
+                      type="password"
+                      autoComplete="new-password"
+                      value={peer.token}
+                      error={peerErrors?.token ? t(peerErrors.token) : undefined}
+                      onChange={event => updatePeer(peer.key, { token: event.target.value, clearToken: false })}
+                    />
                     {peer.tokenSet && peer.token === '' && (
-                      <ButtonV2
-                        type="button"
-                        variant="ghost"
-                        size="sm"
+                      <IconButton
+                        icon={peer.clearToken ? 'undo' : 'key'}
+                        label={t(peer.clearToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
                         onClick={() => updatePeer(peer.key, { clearToken: !peer.clearToken })}
-                      >
-                        {t(peer.clearToken ? 'cascade.config.undoClear' : 'cascade.config.clearToken')}
-                      </ButtonV2>
+                      />
                     )}
-                    <SwitchV2
-                      label={t('cascade.config.peerForwardCredentials')}
+                  </div>
+                  <div className="flex justify-start lg:justify-center">
+                    <Switch
+                      aria-label={t('cascade.config.peerForwardCredentials')}
                       checked={peer.forwardCredentials}
                       onCheckedChange={checked => updatePeer(peer.key, { forwardCredentials: checked })}
                     />
                   </div>
+                  <IconButton
+                    icon="delete"
+                    label={t('cascade.config.removePeer', {
+                      name: peer.name || t('cascade.config.peerName'),
+                    })}
+                    tone="danger"
+                    onClick={() => {
+                      setDraft(current => ({
+                        ...current,
+                        peers: current.peers.filter(candidate => candidate.key !== peer.key),
+                      }))
+                      setDirty(true)
+                    }}
+                  />
                 </div>
               )
             })}

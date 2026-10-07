@@ -26,7 +26,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
   role or the file is not writable. The same page generates copy-ready client
   commands (npm/pip/Go), a child-Depsilo peer snippet with a relay probe, and
   an upstream-parent snippet with per-peer health checks; the address field is
-  a local-only generator and secrets stay placeholders.
+  a local-only generator and secrets stay placeholders. The page is organized
+  as a live topology diagram, an inline configuration form, a tabbed
+  quick-connect card, and the upstream bindings table.
 
 ### Fixed
 - The installer resolves the newest release through the

@@ -3,43 +3,32 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import AdminPage from '@/admin/components/AdminPage'
-import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import CascadeConfigForm from '@/admin/cascade/CascadeConfigForm'
 import CascadeQuickConnect from '@/admin/cascade/CascadeQuickConnect'
+import CascadeTopology from '@/admin/cascade/CascadeTopology'
+import AdminPage from '@/admin/components/AdminPage'
+import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { getAdminRouteHref } from '@/admin/routes'
 import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
 import EmptyState from '@/components/EmptyState'
 import Icon from '@/components/Icon'
-import IconButton from '@/components/IconButton'
 import InlineNotice from '@/components/InlineNotice'
-import Metric from '@/components/Metric'
 import QueryErrorState from '@/components/QueryErrorState'
 import SectionHeader from '@/components/SectionHeader'
 import SelectV2 from '@/components/Select'
 import TableViewport from '@/components/TableViewport'
 import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
-import { useTransientState } from '@/hooks/useTransientFlag'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
-import { copyText } from '@/lib/clipboard'
 import type { AdminUpstream, UpstreamMutationRequest } from '@/lib/adminApi.types'
 
 const navigateLinkClass = 'stripe-focus-ring inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[600] no-underline text-[var(--brand-text)] hover:bg-[var(--bg-hover)]'
 const tableHeadClass = 'px-3 py-2 text-left font-mono text-[10px] font-[600] uppercase first:pl-0'
 const tableCellClass = 'px-3 py-3 align-top first:pl-0'
 
-function formatTTL(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '—'
-  if (seconds % 86_400 === 0) return `${seconds / 86_400}d`
-  if (seconds % 3_600 === 0) return `${seconds / 3_600}h`
-  if (seconds % 60 === 0) return `${seconds / 60}m`
-  return `${seconds}s`
-}
-
-function truncateMiddle(value: string, max = 56): string {
+function truncateMiddle(value: string, max = 48): string {
   const characters = Array.from(value)
   if (characters.length <= max) return value
   const half = Math.floor((max - 1) / 2)
@@ -51,7 +40,6 @@ export default function Cascade() {
   const queryClient = useQueryClient()
   const toast = useAppToast()
   const { canWrite } = usePrincipal()
-  const [copiedValue, showCopiedValue] = useTransientState<string | null>(null)
 
   const infoQuery = useQuery({
     queryKey: ['admin', 'cascade'],
@@ -86,12 +74,8 @@ export default function Cascade() {
     () => boundUpstreams.filter(upstream => !peerNames.has(upstream.via ?? '')),
     [boundUpstreams, peerNames],
   )
-
-  const roleKey = !info?.enabled
-    ? 'cascade.roleDisabled'
-    : (info.peers.length > 0 ? 'cascade.roleBoth' : 'cascade.roleParent')
-  const loadError = getApiError(infoQuery.error)
   const showStale = Boolean(info && (infoQuery.isRefetchError || upstreamsQuery.isRefetchError))
+  const loadError = getApiError(infoQuery.error)
 
   const rebindMutation = useMutation({
     mutationFn: ({ id, request }: { id: number; request: UpstreamMutationRequest }) =>
@@ -131,10 +115,6 @@ export default function Cascade() {
     })
   }
 
-  async function copyInstanceID(value: string) {
-    if (await copyText(value)) showCopiedValue(value)
-  }
-
   return (
     <AdminPage
       description={t('cascade.subtitle')}
@@ -156,10 +136,7 @@ export default function Cascade() {
         </ButtonV2>
       )}
     >
-      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {copiedValue ? t('cascade.copied') : ''}
-      </span>
-      <div className="space-y-12">
+      <div className="space-y-8">
         {infoQuery.isPending ? (
           <div aria-busy="true" className="py-16 text-center text-[13px] text-[var(--text-soft)]">
             {t('loading')}
@@ -171,8 +148,8 @@ export default function Cascade() {
           />
         ) : info ? (
           <>
-            {(!canWrite || (config && !config.config_writable) || config?.pending_restart) && (
-              <div className="space-y-3">
+            {(!canWrite || (config && !config.config_writable) || config?.pending_restart || showStale) && (
+              <div className="space-y-2">
                 {!canWrite && <InlineNotice tone="info">{t('cascade.readonlyPrincipal')}</InlineNotice>}
                 {canWrite && config && !config.config_writable && (
                   <InlineNotice tone="warning">{t('cascade.configReadOnly')}</InlineNotice>
@@ -180,112 +157,24 @@ export default function Cascade() {
                 {config?.pending_restart && (
                   <InlineNotice tone="warning">{t('cascade.pendingRestart')}</InlineNotice>
                 )}
+                {showStale && (
+                  <StaleDataNotice
+                    message={t('cascade.stale')}
+                    refreshing={infoQuery.isFetching || upstreamsQuery.isFetching}
+                    onRefresh={() => {
+                      void infoQuery.refetch()
+                      void upstreamsQuery.refetch()
+                    }}
+                  />
+                )}
               </div>
             )}
-            {showStale && (
-              <StaleDataNotice
-                message={t('cascade.stale')}
-                refreshing={infoQuery.isFetching || upstreamsQuery.isFetching}
-                onRefresh={() => {
-                  void infoQuery.refetch()
-                  void upstreamsQuery.refetch()
-                }}
-              />
-            )}
 
-            <section aria-labelledby="cascade-status-heading">
-              <SectionHeader
-                title={t('cascade.statusTitle')}
-                hint={t('cascade.statusHint')}
-                action={(
-                  <BadgeV2 variant={info.enabled ? 'success' : 'warning'}>
-                    {t(info.enabled ? 'cascade.enabled' : 'cascade.disabled')}
-                  </BadgeV2>
-                )}
-              />
-              <span id="cascade-status-heading" className="sr-only">{t('cascade.statusTitle')}</span>
-
-              {!info.enabled ? (
-                <div className="space-y-5">
-                  <InlineNotice tone="info">{t('cascade.disabledBody')}</InlineNotice>
-                  <div>
-                    <p className="mb-2 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
-                      {t('cascade.configExampleLabel')}
-                    </p>
-                    <pre
-                      data-cascade-config-example
-                      className="overflow-x-auto rounded-md border p-4 font-mono text-[12px] leading-6"
-                      style={{ borderColor: 'var(--border)', background: 'var(--bg-soft)', color: 'var(--text-muted)' }}
-                    >
-{`[cascade]
-enabled = true
-token = "<shared-secret>"
-
-[[cascade.peers]]
-name = "home"
-url  = "http://192.168.1.10:23333"
-# allow_insecure_http = true   # plain HTTP outside loopback`}
-                    </pre>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-7">
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-7 lg:grid-cols-4">
-                    <Metric label={t('cascade.roleLabel')} value={t(roleKey)} size={24} />
-                    <Metric label={t('cascade.peersLabel')} value={String(info.peers.length)} size={30} />
-                    <Metric label={t('cascade.boundLabel')} value={String(boundUpstreams.length)} size={30} />
-                    <Metric
-                      label={t('cascade.unresolvedLabel')}
-                      value={String(unresolved.length)}
-                      size={30}
-                      valueTone={unresolved.length > 0 ? 'warn' : 'default'}
-                    />
-                  </div>
-
-                  <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div className="min-w-0">
-                      <dt className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{t('cascade.instanceId')}</dt>
-                      <dd className="mt-1 flex min-w-0 items-center gap-1">
-                        <span className="break-all font-mono text-[12px]" style={{ color: 'var(--text)' }}>
-                          {info.instance_id}
-                        </span>
-                        <IconButton
-                          icon={copiedValue === info.instance_id ? 'check' : 'content_copy'}
-                          label={t('cascade.copyInstanceId')}
-                          onClick={() => { void copyInstanceID(info.instance_id) }}
-                        />
-                      </dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{t('cascade.relayPath')}</dt>
-                      <dd className="mt-1 break-all font-mono text-[12px]" style={{ color: 'var(--text)' }}>
-                        {info.relay_path}
-                      </dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{t('cascade.maxHops')}</dt>
-                      <dd className="mt-1 font-mono text-[12px]" style={{ color: 'var(--text)' }}>{info.max_hops}</dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{t('cascade.maxTTL')}</dt>
-                      <dd className="mt-1 font-mono text-[12px]" style={{ color: 'var(--text)' }}>
-                        {formatTTL(info.max_ttl_seconds)}
-                      </dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{t('cascade.plaintextHTTP')}</dt>
-                      <dd className="mt-1 text-[12px]" style={{ color: 'var(--text)' }}>
-                        {t(info.allow_insecure_http ? 'cascade.plaintextAllowed' : 'cascade.plaintextDenied')}
-                      </dd>
-                    </div>
-                    <div className="min-w-0">
-                      <dt className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{t('cascade.tokenLabel')}</dt>
-                      <dd className="mt-1 text-[12px]" style={{ color: 'var(--text)' }}>{t('cascade.tokenNote')}</dd>
-                    </div>
-                  </dl>
-                </div>
-              )}
-            </section>
+            <CascadeTopology
+              info={info}
+              boundUpstreams={boundUpstreams.length}
+              unresolved={unresolved.length}
+            />
 
             <section aria-labelledby="cascade-config-heading">
               <SectionHeader title={t('cascade.configSectionTitle')} hint={t('cascade.configSectionHint')} />
@@ -318,10 +207,12 @@ url  = "http://192.168.1.10:23333"
               ) : null}
             </section>
 
+            <CascadeQuickConnect info={info} config={config} />
+
             <section aria-labelledby="cascade-upstreams-heading">
               <SectionHeader
                 title={t('cascade.upstreamsTitle')}
-                hint={t(canWrite && info.enabled ? 'cascade.upstreamsQuickHint' : 'cascade.upstreamsHint')}
+                hint={canWrite && info.enabled ? t('cascade.upstreamsQuickHint') : undefined}
                 action={(
                   <Link to={getAdminRouteHref('upstreams')} className={navigateLinkClass}>
                     {t('cascade.manageUpstreams')}
@@ -342,10 +233,10 @@ url  = "http://192.168.1.10:23333"
                   icon="cloud_sync"
                   title={t('cascade.upstreamsEmptyTitle')}
                   hint={t('cascade.upstreamsEmptyHint')}
-                  minHeight={200}
+                  minHeight={140}
                 />
               ) : (
-                <TableViewport label={t('cascade.upstreamsTitle')} minWidth={860}>
+                <TableViewport label={t('cascade.upstreamsTitle')} minWidth={760}>
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -381,7 +272,7 @@ url  = "http://192.168.1.10:23333"
                               {upstream.name}
                             </td>
                             <td className={`${tableCellClass} font-mono`} style={{ color: 'var(--text-muted)' }}>
-                              <span title={upstream.url}>{truncateMiddle(upstream.url, 48)}</span>
+                              <span title={upstream.url}>{truncateMiddle(upstream.url)}</span>
                             </td>
                             <td className={tableCellClass}>
                               {canWrite && info.enabled ? (
@@ -413,18 +304,6 @@ url  = "http://192.168.1.10:23333"
                   </table>
                 </TableViewport>
               )}
-            </section>
-
-            <CascadeQuickConnect info={info} config={config} />
-
-            <section aria-labelledby="cascade-how-heading">
-              <SectionHeader title={t('cascade.howTitle')} />
-              <span id="cascade-how-heading" className="sr-only">{t('cascade.howTitle')}</span>
-              <ul className="space-y-3 text-[12px] leading-6" style={{ color: 'var(--text-muted)' }}>
-                <li className="flex gap-2"><Icon name="arrow_forward" size="sm" className="mt-1 shrink-0 text-[var(--brand-text)]" />{t('cascade.howBody1')}</li>
-                <li className="flex gap-2"><Icon name="shield" size="sm" className="mt-1 shrink-0 text-[var(--brand-text)]" />{t('cascade.howBody2')}</li>
-                <li className="flex gap-2"><Icon name="sync" size="sm" className="mt-1 shrink-0 text-[var(--brand-text)]" />{t('cascade.howBody3')}</li>
-              </ul>
             </section>
           </>
         ) : null}

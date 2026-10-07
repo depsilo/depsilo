@@ -85,6 +85,9 @@ configuration.
 
 The same tab edits the cascade section directly on the page — no dialog layer:
 
+- The page reads top to bottom as a live topology (clients → this node →
+  parents → upstream), the inline configuration, a tabbed quick-connect card,
+  and the upstream bindings table.
 - The patch is written atomically into `config.toml`, preserving comments and
   every key outside `[cascade]` / `[[cascade.peers]]`.
 - Fields and peer rows are edited inline; a sticky save bar appears only while

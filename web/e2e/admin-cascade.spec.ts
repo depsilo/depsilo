@@ -50,21 +50,24 @@ test('cascade page shows peers, bindings, and dangling references', { tag: '@smo
   await expect(page.locator('[data-cascade-upstream="3"]')).toContainText('失效')
   await expect(page.getByRole('link', { name: '管理上游源' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '快速连接' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '让客户端连接本机' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: '连接上游 Depsilo' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '客户端接入' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '作为父节点' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '作为子节点' })).toBeVisible()
   await expect(page.getByText('npm config set registry http://127.0.0.1:4173/npm').first()).toBeVisible()
-  await expect(page.getByText('curl -fsS http://192.168.1.10:23333/health').first()).toBeVisible()
 
   // The generated commands follow the client-reachable address field.
   await page.getByLabel('本机访问地址').fill('http://10.0.0.9:23333')
   await expect(page.getByText('npm config set registry http://10.0.0.9:23333/npm').first()).toBeVisible()
+  // The child tab exposes the parent health check.
+  await page.getByRole('tab', { name: '作为子节点' }).click()
+  await expect(page.getByText('curl -fsS http://192.168.1.10:23333/health').first()).toBeVisible()
 })
 
 test('cascade page explains how to enable the feature when it is off', { tag: '@smoke' }, async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
   await page.goto('/admin/cascade')
-  await expect(page.locator('[data-cascade-config-example]')).toContainText('[cascade]')
-  await expect(page.getByText('当前实例未启用级联')).toBeVisible()
+  await expect(page.locator('[data-cascade-topology]')).toContainText('未启用')
+  await expect(page.locator('[data-cascade-config-form]')).toBeVisible()
 })
 
 test('cascade page surfaces a read-only config file', { tag: '@smoke' }, async ({ page }) => {
@@ -112,7 +115,7 @@ test('cascade inline editor keeps stored secrets masked', { tag: '@smoke' }, asy
   await page.goto('/admin/cascade')
   await expect(page.locator('[data-cascade-config-form]')).toBeVisible()
   await expect(page.getByLabel('共享密钥')).toHaveValue('')
-  await expect(page.getByText('已有密钥，留空保持不变')).toBeVisible()
+  await expect(page.getByLabel('共享密钥')).toHaveAttribute('placeholder', '已设置 · 留空保持')
   await expect(page.locator('[data-cascade-peer-editor]').getByLabel('名称')).toHaveValue('home')
   // Editing reveals the sticky save bar without any dialog layer.
   await page.getByLabel('最大跳数').fill('5')
