@@ -22,9 +22,9 @@ import { HINT_TOOLTIP_DELAY_MS, type MetricTone } from './MetricTile'
 // Only the three identity colours this card needs; the shared tile palette
 // carries the rest.
 const TONE: Partial<Record<MetricTone, { strong: string; soft: string }>> = {
-  cpu: { strong: 'var(--dash-cpu)', soft: 'var(--dash-cpu-soft)' },
+  cpu: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
   origin: { strong: 'var(--dash-origin)', soft: 'var(--dash-origin-soft)' },
-  memory: { strong: 'var(--dash-memory)', soft: 'var(--dash-memory-soft)' },
+  memory: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
 }
 
 function Track({ children }: { children?: ReactNode }) {
@@ -76,7 +76,9 @@ function BenefitColumn({
         >
           <Icon name={icon} size="md" />
         </span>
-        <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</p>
+        {/* Wraps instead of truncating: the three benefit columns are narrow at
+            1280 and "预计节省回源流量" clipped to "预计节省回…". */}
+        <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{label}</p>
         <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
           <button
             type="button"
@@ -207,7 +209,7 @@ export default function CacheBenefits({
             })
             : undefined}
         >
-          {hitRate !== null && <Track><Fill ratio={hitRate} color="var(--dash-cpu)" /></Track>}
+          {hitRate !== null && <Track><Fill ratio={hitRate} color="var(--dash-accent)" /></Track>}
         </BenefitColumn>
 
         <BenefitColumn
@@ -219,7 +221,7 @@ export default function CacheBenefits({
           value={cachedShare === null ? '—' : formatBytes(savedBytes)}
           footnote={savedFootnote}
         >
-          {cachedShare !== null && <Track><Fill ratio={cachedShare} color="var(--dash-cpu)" /></Track>}
+          {cachedShare !== null && <Track><Fill ratio={cachedShare} color="var(--dash-accent)" /></Track>}
         </BenefitColumn>
 
         <BenefitColumn
@@ -241,7 +243,7 @@ export default function CacheBenefits({
               label={t('overview.latencyHit')}
               ms={latency.hitMs}
               max={maxLatency}
-              color="var(--dash-memory)"
+              color="var(--dash-accent)"
               samplesLabel={sampleLabel(latency.hitSamples)}
             />
             <LatencyRow

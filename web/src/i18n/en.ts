@@ -267,6 +267,7 @@ const en = {
       notSupported: 'Not supported on this platform',
 
       serviceStatusLabel: 'Service status',
+      runtimeStatusLabel: 'Runtime status',
       statusHealthy: 'Operating normally',
       statusPartial: 'Partial degradation',
       statusUnavailable: 'Unavailable',
@@ -278,7 +279,7 @@ const en = {
       activityServing: 'Serving requests',
       activityIdle: 'Idle',
       activityUnknown: 'Activity unknown',
-      activityIdleHint: 'No service requests in the last 60 seconds.',
+      activityIdleHint: 'No requests in the last 60 seconds.',
       activityUnknownHint: 'Activity data is not available yet.',
       serviceReqRate: 'Service requests {{value}}/s',
       recentActivity: 'Recent activity',
@@ -314,8 +315,8 @@ const en = {
       cacheInfoLabel: 'View cache space measurement basis',
       networkLabel: 'Network requests',
       perSecond: 'req/s',
-      serviceRequests: 'Service requests',
-      originRequests: 'Origin requests',
+      serviceRequests: 'Served',
+      originRequests: 'Origin',
       networkInfoLabel: 'View network request measurement basis',
 
       trafficTitle: 'Traffic overview',

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import ButtonV2 from '@/components/Button'
@@ -43,11 +44,13 @@ function StatusCell({ icon, label, title, detail, toneColor, toneSoft, iconSize 
         {loading ? (
           <span aria-hidden="true" className="mt-1 block h-5 w-28 animate-pulse rounded bg-[var(--dash-soft)]" />
         ) : (
-          <p data-status-value className="mt-0.5 truncate text-[18px] font-semibold leading-tight" style={{ color: 'var(--dash-ink)' }}>
+          <p data-status-value className="mt-0.5 text-[18px] font-semibold leading-tight" style={{ color: 'var(--dash-ink)' }}>
             {title}
           </p>
         )}
-        <p className="mt-0.5 truncate text-[13px]" style={{ color: 'var(--dash-muted)' }} title={detail}>{detail}</p>
+        {/* Wraps instead of truncating: with the problems button on a 1280
+            row the cell narrows and the guidance sentence used to clip. */}
+        <p className="mt-0.5 text-[13px] leading-tight" style={{ color: 'var(--dash-muted)' }} title={detail}>{detail}</p>
       </div>
     </div>
   )
@@ -59,6 +62,8 @@ interface DashboardStatusStripProps {
   nowStale: boolean
   nowError: boolean
   status: ServiceStatusModel
+  /** Resource cells rendered as the card's second, divided row. */
+  resources?: ReactNode
   onOpenProblems: () => void
   onRefresh: () => void
 }
@@ -69,6 +74,7 @@ export default function DashboardStatusStrip({
   nowStale,
   nowError,
   status,
+  resources,
   onOpenProblems,
   onRefresh,
 }: DashboardStatusStripProps) {
@@ -124,8 +130,8 @@ export default function DashboardStatusStrip({
         label={t('overview.currentActivity')}
         title={activityTitle}
         detail={activityDetail}
-        toneColor="var(--dash-memory)"
-        toneSoft="var(--dash-memory-soft)"
+        toneColor="var(--dash-accent)"
+        toneSoft="var(--dash-accent-soft)"
         loading={nowPending}
       />
       <StatusCell
@@ -133,8 +139,8 @@ export default function DashboardStatusStrip({
         label={t('overview.recentActivity')}
         title={lastTitle}
         detail={lastDetail}
-        toneColor="var(--dash-memory)"
-        toneSoft="var(--dash-memory-soft)"
+        toneColor="var(--dash-accent)"
+        toneSoft="var(--dash-accent-soft)"
         loading={nowPending}
       />
       <StatusCell
@@ -142,8 +148,8 @@ export default function DashboardStatusStrip({
         label={t('overview.uptimeLabel')}
         title={uptimeTitle}
         detail={uptimeDetail}
-        toneColor="var(--dash-memory)"
-        toneSoft="var(--dash-memory-soft)"
+        toneColor="var(--dash-accent)"
+        toneSoft="var(--dash-accent-soft)"
         loading={nowPending}
       />
     </>
@@ -153,31 +159,40 @@ export default function DashboardStatusStrip({
     <section
       data-dashboard-status-strip
       data-query-key="now"
-      aria-label={t('overview.serviceStatusLabel')}
-      aria-busy={nowPending || undefined}
-      className="dash-card flex min-w-0 flex-col gap-3 py-1 xl:flex-row xl:items-center"
+      aria-label={t('overview.runtimeStatusLabel')}
+      className="dash-card flex min-w-0 flex-col"
     >
-      <div className="grid min-w-0 flex-1 grid-cols-1 divide-y divide-[var(--dash-border)] sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
-        {cells}
-      </div>
-      {status.problems.length > 0 && !nowPending && (
-        <div className="flex shrink-0 items-center justify-end px-5 pb-3 xl:justify-start xl:pb-0 xl:pr-5">
-          <ButtonV2 type="button" variant="secondary" size="sm" onClick={onOpenProblems}>
-            <Icon name="warning" size="sm" />
-            {t('overview.viewProblems')}
-          </ButtonV2>
+      <div
+        aria-busy={nowPending || undefined}
+        className="flex min-w-0 flex-col gap-3 py-1 xl:flex-row xl:items-center"
+      >
+        <div className="grid min-w-0 flex-1 grid-cols-1 divide-y divide-[var(--dash-border)] sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
+          {cells}
         </div>
-      )}
-      {nowStale && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center gap-2 px-5 pb-3 text-[13px] xl:pb-0 xl:pr-5"
-          style={{ color: 'var(--dash-warn)' }}
-        >
-          <span>{t('now.staleData')}</span>
-          <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRefresh}>
-            {t('now.refresh')}
-          </ButtonV2>
+        {status.problems.length > 0 && !nowPending && (
+          <div className="flex shrink-0 items-center justify-end px-5 pb-3 xl:justify-start xl:pb-0 xl:pr-5">
+            <ButtonV2 type="button" variant="secondary" size="sm" onClick={onOpenProblems}>
+              <Icon name="warning" size="sm" />
+              {t('overview.viewProblems')}
+            </ButtonV2>
+          </div>
+        )}
+        {nowStale && (
+          <div
+            role="status"
+            className="flex flex-wrap items-center gap-2 px-5 pb-3 text-[13px] xl:pb-0 xl:pr-5"
+            style={{ color: 'var(--dash-warn)' }}
+          >
+            <span>{t('now.staleData')}</span>
+            <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRefresh}>
+              {t('now.refresh')}
+            </ButtonV2>
+          </div>
+        )}
+      </div>
+      {resources && (
+        <div className="min-w-0 border-t" style={{ borderColor: 'var(--dash-border)' }}>
+          {resources}
         </div>
       )}
     </section>

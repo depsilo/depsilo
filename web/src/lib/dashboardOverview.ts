@@ -301,6 +301,23 @@ export interface ServiceStatusModel {
 }
 
 /**
+ * Distinct unhealthy upstream names with a repeat count, capped so the tile
+ * line stays short. A deployment can bind several upstreams under the same
+ * name, and "official, official, official" read as a rendering bug instead of
+ * a fact; the count keeps the real number visible.
+ */
+function summarizeUnhealthyNames(upstreams: DashboardUpstream[]): string {
+  const counts = new Map<string, number>()
+  for (const upstream of upstreams) {
+    counts.set(upstream.name, (counts.get(upstream.name) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .slice(0, 3)
+    .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name))
+    .join(', ')
+}
+
+/**
  * Combines availability, upstream health, and policy-snapshot state into one
  * status. Availability, upstreams, policy, and data collection are distinct:
  * a missing sample is "unknown", not a healthy service, and idle is not failure.
@@ -324,7 +341,7 @@ export function deriveServiceStatus(args: {
       code: 'upstreams',
       severity: allDown ? 'danger' : 'warning',
       count: unhealthy.length,
-      names: unhealthy.slice(0, 3).map(item => item.name).join(', '),
+      names: summarizeUnhealthyNames(unhealthy),
     })
   } else if (args.nowStatus === 'down' || args.nowStatus === 'degraded') {
     problems.push({ code: 'degraded', severity: args.nowStatus === 'down' ? 'danger' : 'warning' })

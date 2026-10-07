@@ -213,12 +213,23 @@ export default function Dashboard() {
         data-dashboard-health
         className="dashboard-surface flex min-w-0 flex-col gap-5"
       >
+          {/* Runtime resources come from /admin/runtime and stay mounted even
+              when the period aggregate fails; they render as the status card's
+              second row so the first screen keeps one surface. */}
           <DashboardStatusStrip
             now={now}
             nowPending={nowPending}
             nowStale={nowStale}
             nowError={nowInitialError}
             status={status}
+            resources={(
+              <RuntimeResources
+                runtime={runtimeQuery.data}
+                runtimePending={runtimePending}
+                now={now}
+                nowPending={nowPending}
+              />
+            )}
             onOpenProblems={() => setShowProblems(true)}
             onRefresh={refreshAll}
           />
@@ -228,15 +239,6 @@ export default function Dashboard() {
               {t('overview.overviewStale', { range: t(RANGE_KEY[overviewRange]) })}
             </p>
           )}
-
-          {/* Runtime resources come from /admin/runtime and stay mounted even
-              when the period aggregate fails. */}
-          <RuntimeResources
-            runtime={runtimeQuery.data}
-            runtimePending={runtimePending}
-            now={now}
-            nowPending={nowPending}
-          />
 
           {overviewInitialError ? (
             <div className="dash-card p-5">

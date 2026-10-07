@@ -1104,19 +1104,15 @@ button.portal-header-control {
   --dash-border: #e3e9f1;
   --dash-accent: #2563eb;
   --dash-accent-soft: #eaf1fe;
-  /* Per-category identity colours. These restore the confirmed Overview's
-     pale-tinted icon bases, progress tracks and sparklines. Category colour is
-     identity, not status: a green CPU icon does not mean "CPU healthy". */
-  --dash-cpu: #16a365;
-  --dash-cpu-soft: #e8f7ef;
-  --dash-memory: #2563eb;
-  --dash-memory-soft: #eaf2ff;
-  --dash-cache: #8055de;
-  --dash-cache-soft: #f0eafc;
-  --dash-origin: #d88416;
-  --dash-origin-soft: #fff3e2;
-  --dash-download: #159b72;
-  --dash-download-soft: #e7f7f0;
+  /* Category identity is one accent plus a neutral. The previous five-hue
+     palette (green CPU, purple cache, amber origin) put four saturated colours
+     on one screen and read as decoration rather than information. Identity now
+     rides on the brand blue; every category but the origin path maps to it in
+     metricTone.ts, and only the slate lives here because it is a distinct
+     value. Status colours stay exclusive to ok/warn/danger: a blue CPU icon
+     still does not mean "CPU healthy". */
+  --dash-origin: #64748b;
+  --dash-origin-soft: #eef2f7;
   /* Text-safe success green: 4.59:1 on white so the 13px delta label passes AA.
      (The brand --ok token is used for fills; this one is used for small text.) */
   --dash-ok: #118657;
@@ -1137,16 +1133,8 @@ html.dark .dashboard-surface {
   --dash-border: var(--border);
   --dash-accent: #60a5fa;
   --dash-accent-soft: color-mix(in oklab, #60a5fa 18%, transparent);
-  --dash-cpu: #4ade80;
-  --dash-cpu-soft: color-mix(in oklab, #4ade80 16%, transparent);
-  --dash-memory: #60a5fa;
-  --dash-memory-soft: color-mix(in oklab, #60a5fa 16%, transparent);
-  --dash-cache: #c084fc;
-  --dash-cache-soft: color-mix(in oklab, #c084fc 18%, transparent);
-  --dash-origin: #fbbf24;
-  --dash-origin-soft: color-mix(in oklab, #fbbf24 16%, transparent);
-  --dash-download: #34d399;
-  --dash-download-soft: color-mix(in oklab, #34d399 16%, transparent);
+  --dash-origin: #94a3b8;
+  --dash-origin-soft: color-mix(in oklab, #94a3b8 18%, transparent);
   --dash-ok: var(--ok-text);
   --dash-ok-soft: var(--ok-fill);
   --dash-warn: var(--warn-text);

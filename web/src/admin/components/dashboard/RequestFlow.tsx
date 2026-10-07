@@ -184,7 +184,9 @@ function FlowNode({
       )}
       <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>{title}</p>
+          {/* Wraps instead of truncating: "开发者 / CI / Agent" cannot fit the
+              node column at 1280, and the three audiences are all real. */}
+          <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{title}</p>
           <InfoHint text={info} label={infoLabel} />
         </div>
         <p className="font-mono text-[20px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>
@@ -231,7 +233,7 @@ function FlowRail({
 
   const labelRow = (
     <div className="flex min-w-0 items-center gap-1.5">
-      <span className="min-w-0 truncate text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</span>
+      <span className="min-w-0 text-[13px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{label}</span>
       <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
         {badge}
       </span>

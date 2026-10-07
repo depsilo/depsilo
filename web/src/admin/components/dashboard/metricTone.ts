@@ -3,6 +3,13 @@
  * request path a metric belongs to — never health. Real warnings use the
  * warn/danger tones.
  *
+ * Identity is deliberately narrow: every category resolves to the one brand
+ * accent, except the origin/secondary path which takes the neutral slate.
+ * Earlier each category carried its own hue (green CPU, purple cache, amber
+ * origin), which competed with the status colours and read as decoration.
+ * The actual values live in `.dashboard-surface` (web/src/index.css) so the
+ * whole convergence can be reviewed or rolled back in one place.
+ *
  * Lives outside MetricTile so the request-flow component can share the same
  * palette without re-exporting a runtime object from a component module.
  */
@@ -24,9 +31,9 @@ export const METRIC_TONE_PALETTE: Record<MetricTone, { strong: string; soft: str
   warn: { strong: 'var(--dash-warn)', soft: 'var(--dash-warn-soft)' },
   danger: { strong: 'var(--dash-danger)', soft: 'var(--dash-danger-soft)' },
   accent: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
-  cpu: { strong: 'var(--dash-cpu)', soft: 'var(--dash-cpu-soft)' },
-  memory: { strong: 'var(--dash-memory)', soft: 'var(--dash-memory-soft)' },
-  cache: { strong: 'var(--dash-cache)', soft: 'var(--dash-cache-soft)' },
+  cpu: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
+  memory: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
+  cache: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
   origin: { strong: 'var(--dash-origin)', soft: 'var(--dash-origin-soft)' },
-  download: { strong: 'var(--dash-download)', soft: 'var(--dash-download-soft)' },
+  download: { strong: 'var(--dash-accent)', soft: 'var(--dash-accent-soft)' },
 }

@@ -129,6 +129,17 @@ describe('deriveServiceStatus', () => {
     expect(deriveServiceStatus({ nowAvailable: true, nowStatus: 'degraded', upstreams: [healthy, degraded], policyNeedsAttention: false }).health).toBe('partial')
     expect(deriveServiceStatus({ nowAvailable: true, nowStatus: 'down', upstreams: [degraded], policyNeedsAttention: false }).health).toBe('unavailable')
   })
+
+  it('collapses repeated upstream names into one counted entry', () => {
+    const upstream = (id: number, name: string) =>
+      ({ id, name, adapter: 'npm', healthy: false, avg_latency_ms: 0, success_rate: 0 })
+    const status = deriveServiceStatus({
+      nowAvailable: true,
+      upstreams: [upstream(1, 'official'), upstream(2, 'official'), upstream(3, 'official'), upstream(4, 'tuna')],
+      policyNeedsAttention: false,
+    })
+    expect(status.problems[0]).toMatchObject({ code: 'upstreams', count: 4, names: 'official ×3, tuna' })
+  })
 })
 
 describe('periodChange', () => {

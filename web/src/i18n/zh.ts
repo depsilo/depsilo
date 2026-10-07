@@ -268,6 +268,7 @@ const zh = {
 
       // B. 服务状态条
       serviceStatusLabel: '服务状态',
+      runtimeStatusLabel: '运行状态',
       statusHealthy: '服务正常',
       statusPartial: '部分能力异常',
       statusUnavailable: '服务不可用',
@@ -279,7 +280,7 @@ const zh = {
       activityServing: '正在服务',
       activityIdle: '当前空闲',
       activityUnknown: '活跃度未知',
-      activityIdleHint: '最近 60 秒没有服务请求。',
+      activityIdleHint: '最近 60 秒无请求。',
       activityUnknownHint: '尚未取得活跃度数据。',
       serviceReqRate: '服务请求 {{value}} 次/秒',
       recentActivity: '最近活动',

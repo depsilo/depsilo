@@ -43,12 +43,6 @@ interface MetricTileProps {
   seriesTone?: MetricTone
   /** Independent value rows instead of one headline number. */
   rows?: MetricRow[]
-  /**
-   * Reserve the sparkline and progress rows even when this tile has neither, so
-   * every tile in a row keeps identical slot positions. Use for rows whose
-   * members mix those graphics; leave off for compact rows (traffic).
-   */
-  reserveSlots?: boolean
   loading?: boolean
   /** Short measurement-basis hint shown on hover/focus of the info affordance. */
   info?: string
@@ -71,8 +65,8 @@ function Sparkline({ series, tone }: { series: number[]; tone: MetricTone }) {
     <svg
       aria-hidden="true"
       viewBox="0 0 96 30"
-      width={96}
-      height={30}
+      width={84}
+      height={26}
       className="ml-auto shrink-0"
     >
       <defs>
@@ -112,7 +106,6 @@ export default function MetricTile({
   series,
   seriesTone,
   rows,
-  reserveSlots = false,
   loading = false,
   info,
   infoLabel,
@@ -128,7 +121,7 @@ export default function MetricTile({
     <div
       data-dashboard-metric
       data-testid={testId}
-      className={`dash-metric flex min-w-0 items-start gap-4 p-5${framed ? ' dash-card' : ''}`}
+      className={`dash-metric flex min-w-0 items-start gap-4 px-5 py-4${framed ? ' dash-card' : ''}`}
     >
       {icon && (
         <span
@@ -142,7 +135,7 @@ export default function MetricTile({
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="min-w-0 truncate text-[15px] font-medium" style={{ color: 'var(--dash-muted)' }}>
+          <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>
             {label}
           </p>
           {badge && (
@@ -167,13 +160,9 @@ export default function MetricTile({
           )}
         </div>
 
-        {/* Fixed vertical rhythm so every tile in a row lines up. reserveSlots
-            keeps the sparkline/progress rows in place for rows that mix those
-            graphics; compact rows omit them entirely. */}
-        <div
-          className="flex min-w-0 flex-col justify-start gap-1.5"
-          style={reserveSlots ? { minHeight: 52 } : undefined}
-        >
+        {/* Only the parts that carry real data render, so a sparse tile never
+            reserves empty height. */}
+        <div className="flex min-w-0 flex-col justify-start gap-1.5">
           {value !== undefined && (
             <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
               {loading ? (
@@ -215,13 +204,13 @@ export default function MetricTile({
           )}
         </div>
 
-        {(series && series.length >= 2) || reserveSlots ? (
-          <div className="flex h-[30px] min-w-0 items-center justify-end">
-            {series && series.length >= 2 && <Sparkline series={series} tone={sparkTone} />}
+        {series && series.length >= 2 && (
+          <div className="flex h-[26px] min-w-0 items-center justify-end">
+            <Sparkline series={series} tone={sparkTone} />
           </div>
-        ) : null}
+        )}
 
-        {ratio !== null ? (
+        {ratio !== null && (
           <div
             className="h-1.5 w-full overflow-hidden rounded-full"
             style={{ background: METRIC_TONE_PALETTE[progressTone].soft }}
@@ -233,9 +222,7 @@ export default function MetricTile({
               style={{ width: `${ratio * 100}%`, background: METRIC_TONE_PALETTE[progressTone].strong }}
             />
           </div>
-        ) : reserveSlots ? (
-          <div aria-hidden="true" className="h-1.5" />
-        ) : null}
+        )}
 
         {detail && (
           <p className="min-w-0 text-[14px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
