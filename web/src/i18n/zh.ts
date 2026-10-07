@@ -269,6 +269,7 @@ const zh = {
       // B. 服务状态条
       serviceStatusLabel: '服务状态',
       runtimeStatusLabel: '运行状态',
+      scopeNote: '状态与资源为实时采样；流量、缓存收益与趋势按所选周期统计。',
       statusHealthy: '服务正常',
       statusPartial: '部分能力异常',
       statusUnavailable: '服务不可用',

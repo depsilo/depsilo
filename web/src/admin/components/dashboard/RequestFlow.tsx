@@ -134,7 +134,7 @@ export default function RequestFlow({
           <Link
             to={getAdminRouteHref('security')}
             aria-label={t('overview.flowBlockedLinkLabel')}
-            className="dash-focus inline-flex min-h-8 min-w-0 items-center gap-2 rounded-md px-1.5 text-[14px] no-underline transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+            className="dash-focus inline-flex min-h-8 min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] no-underline transition-colors duration-150 hover:bg-[var(--dash-soft)]"
           >
             <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE.danger.strong }} />
             <span style={{ color: 'var(--dash-muted)' }}>{t('overview.outcomeBlocked')}</span>
@@ -189,7 +189,7 @@ function FlowNode({
           <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{title}</p>
           <InfoHint text={info} label={infoLabel} />
         </div>
-        <p className="font-mono text-[20px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>
+        <p className="font-mono text-[22px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>
         {detail && (
           <p className="min-w-0 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
         )}
@@ -234,7 +234,7 @@ function FlowRail({
   const labelRow = (
     <div className="flex min-w-0 items-center gap-1.5">
       <span className="min-w-0 text-[13px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{label}</span>
-      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
+      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[12px] font-medium" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
         {badge}
       </span>
       <InfoHint text={info} label={infoLabel} />
@@ -251,7 +251,7 @@ function FlowRail({
           <span className="h-px flex-1" style={{ background: 'var(--dash-border)' }} />
           <Icon name="arrow_forward" size="sm" style={{ color: 'var(--dash-muted)' }} />
         </div>
-        <p className="text-[12px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
+        <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
       </div>
       {/* Narrow screens: short vertical connector + the same facts. */}
       <div className="flex min-w-0 items-start gap-3 pl-4 lg:hidden">
@@ -262,7 +262,7 @@ function FlowRail({
         <div className="flex min-w-0 flex-col gap-0.5">
           {labelRow}
           {valueNode}
-          <p className="text-[12px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
+          <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
         </div>
       </div>
     </div>
@@ -271,7 +271,7 @@ function FlowRail({
 
 function OutcomeChip({ tone, label, value }: { tone: MetricTone; label: string; value: string }) {
   return (
-    <p className="inline-flex min-h-8 min-w-0 items-center gap-2 text-[14px]">
+    <p className="inline-flex min-h-8 min-w-0 items-center gap-2 text-[13px]">
       <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE[tone].strong }} />
       <span style={{ color: 'var(--dash-muted)' }}>{label}</span>
       <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>

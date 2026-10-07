@@ -179,31 +179,6 @@ export default function Dashboard() {
             <Icon name="refresh" size="sm" />
             {t('overview.refresh')}
           </button>
-          <div
-            role="group"
-            aria-label={t('overview.rangeGroup')}
-            className="flex items-center overflow-hidden rounded-md border"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            {DASHBOARD_RANGES.map(value => {
-              const active = range === value
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleRangeChange(value)}
-                  aria-pressed={active}
-                  className="stripe-focus-ring min-h-10 px-3 text-[13px] font-medium transition-colors duration-150"
-                  style={{
-                    background: active ? 'var(--btn)' : 'transparent',
-                    color: active ? 'var(--btn-fg)' : 'var(--text-soft)',
-                  }}
-                >
-                  {t(RANGE_KEY[value])}
-                </button>
-              )
-            })}
-          </div>
         </div>
       )}
     >
@@ -213,6 +188,40 @@ export default function Dashboard() {
         data-dashboard-health
         className="dashboard-surface flex min-w-0 flex-col gap-5"
       >
+          {/* One scope row states what the filter covers, so the cards do not
+              each repeat the period and the control stops competing with the
+              page title in the toolbar. */}
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="min-w-0 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
+              {t('overview.scopeNote')}
+            </p>
+            <div
+              role="group"
+              aria-label={t('overview.rangeGroup')}
+              className="flex shrink-0 items-center overflow-hidden rounded-md border"
+              style={{ borderColor: 'var(--dash-border)' }}
+            >
+              {DASHBOARD_RANGES.map(value => {
+                const active = range === value
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => handleRangeChange(value)}
+                    aria-pressed={active}
+                    className="dash-focus min-h-8 px-3 text-[13px] font-medium transition-colors duration-150"
+                    style={{
+                      background: active ? 'var(--dash-accent-soft)' : 'transparent',
+                      color: active ? 'var(--dash-accent)' : 'var(--dash-muted)',
+                      boxShadow: active ? 'inset 0 0 0 1px var(--dash-accent)' : undefined,
+                    }}
+                  >
+                    {t(RANGE_KEY[value])}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           {/* Runtime resources come from /admin/runtime and stay mounted even
               when the period aggregate fails; they render as the status card's
               second row so the first screen keeps one surface. */}
@@ -253,7 +262,6 @@ export default function Dashboard() {
                 now={now}
                 nowPending={nowPending}
                 period={overview?.window}
-                range={overviewRange}
                 rangeStart={overview?.range?.start}
                 coverage={overview?.origin_coverage}
               />
@@ -261,7 +269,6 @@ export default function Dashboard() {
                 <CacheBenefits
                   period={overview?.window}
                   prev={overview?.prev}
-                  range={overviewRange}
                   rangeStart={overview?.range?.start}
                   coverage={overview?.origin_coverage}
                 />
@@ -352,7 +359,7 @@ function DashboardAttentionPanel({ problems, onOpenProblems }: {
       className="dash-card flex min-w-0 flex-col"
     >
       <header className="flex items-center justify-between gap-2 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
-        <h2 id="overview-attention-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+        <h2 id="overview-attention-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
           {t('dashboard.needsAttention')}
         </h2>
         <span

@@ -268,6 +268,7 @@ const en = {
 
       serviceStatusLabel: 'Service status',
       runtimeStatusLabel: 'Runtime status',
+      scopeNote: 'Status and resources are live samples; traffic, cache benefits, and trends follow the selected range.',
       statusHealthy: 'Operating normally',
       statusPartial: 'Partial degradation',
       statusUnavailable: 'Unavailable',

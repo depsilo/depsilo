@@ -27,11 +27,26 @@ interface StatusCellProps {
   toneSoft: string
   iconSize?: 'md' | 'lg'
   loading?: boolean
+  /** When set, the whole cell becomes the action instead of a detached button. */
+  onActivate?: () => void
+  /** Inline affordance appended to the detail line, e.g. "查看问题". */
+  actionLabel?: string
 }
 
-function StatusCell({ icon, label, title, detail, toneColor, toneSoft, iconSize = 'md', loading = false }: StatusCellProps) {
-  return (
-    <div className="flex min-w-0 items-center gap-3 px-5 py-4">
+function StatusCell({
+  icon,
+  label,
+  title,
+  detail,
+  toneColor,
+  toneSoft,
+  iconSize = 'md',
+  loading = false,
+  onActivate,
+  actionLabel,
+}: StatusCellProps) {
+  const body = (
+    <>
       <span
         aria-hidden="true"
         className={`grid shrink-0 place-items-center rounded-full ${iconSize === 'lg' ? 'size-12' : 'size-9'}`}
@@ -44,16 +59,40 @@ function StatusCell({ icon, label, title, detail, toneColor, toneSoft, iconSize 
         {loading ? (
           <span aria-hidden="true" className="mt-1 block h-5 w-28 animate-pulse rounded bg-[var(--dash-soft)]" />
         ) : (
-          <p data-status-value className="mt-0.5 text-[18px] font-semibold leading-tight" style={{ color: 'var(--dash-ink)' }}>
+          <p data-status-value className="mt-0.5 text-[16px] font-semibold leading-tight" style={{ color: 'var(--dash-ink)' }}>
             {title}
           </p>
         )}
         {/* Wraps instead of truncating: with the problems button on a 1280
             row the cell narrows and the guidance sentence used to clip. */}
-        <p className="mt-0.5 text-[13px] leading-tight" style={{ color: 'var(--dash-muted)' }} title={detail}>{detail}</p>
+        <p className="mt-0.5 text-[13px] leading-tight" style={{ color: 'var(--dash-muted)' }} title={detail}>
+          {detail}
+          {actionLabel && (
+            <>
+              <span aria-hidden="true"> · </span>
+              <span className="inline-flex items-center gap-0.5 font-medium" style={{ color: 'var(--dash-accent)' }}>
+                {actionLabel}
+                <Icon name="chevron_right" size="sm" />
+              </span>
+            </>
+          )}
+        </p>
       </div>
-    </div>
+    </>
   )
+
+  if (onActivate) {
+    return (
+      <button
+        type="button"
+        onClick={onActivate}
+        className="dash-focus flex min-w-0 w-full items-center gap-3 px-5 py-4 text-left transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+      >
+        {body}
+      </button>
+    )
+  }
+  return <div className="flex min-w-0 items-center gap-3 px-5 py-4">{body}</div>
 }
 
 interface DashboardStatusStripProps {
@@ -124,6 +163,8 @@ export default function DashboardStatusStrip({
         toneSoft={tone.soft}
         iconSize="lg"
         loading={nowPending}
+        onActivate={status.problems.length > 0 && !nowPending ? onOpenProblems : undefined}
+        actionLabel={status.problems.length > 0 && !nowPending ? t('overview.viewProblems') : undefined}
       />
       <StatusCell
         icon="speed"
@@ -159,9 +200,14 @@ export default function DashboardStatusStrip({
     <section
       data-dashboard-status-strip
       data-query-key="now"
-      aria-label={t('overview.runtimeStatusLabel')}
+      aria-labelledby="overview-runtime-title"
       className="dash-card flex min-w-0 flex-col"
     >
+      <header className="flex min-w-0 items-center border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
+        <h2 id="overview-runtime-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+          {t('overview.runtimeStatusLabel')}
+        </h2>
+      </header>
       <div
         aria-busy={nowPending || undefined}
         className="flex min-w-0 flex-col gap-3 py-1 xl:flex-row xl:items-center"
@@ -169,14 +215,6 @@ export default function DashboardStatusStrip({
         <div className="grid min-w-0 flex-1 grid-cols-1 divide-y divide-[var(--dash-border)] sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
           {cells}
         </div>
-        {status.problems.length > 0 && !nowPending && (
-          <div className="flex shrink-0 items-center justify-end px-5 pb-3 xl:justify-start xl:pb-0 xl:pr-5">
-            <ButtonV2 type="button" variant="secondary" size="sm" onClick={onOpenProblems}>
-              <Icon name="warning" size="sm" />
-              {t('overview.viewProblems')}
-            </ButtonV2>
-          </div>
-        )}
         {nowStale && (
           <div
             role="status"

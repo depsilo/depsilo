@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import Icon from '@/components/Icon'
 import TooltipV2 from '@/components/Tooltip'
-import type { DashboardPeriod, DashboardRange, OriginCoverage } from '@/lib/adminApi.types'
+import type { DashboardPeriod, OriginCoverage } from '@/lib/adminApi.types'
 import {
   coverageDetail,
   formatEstimatedDuration,
@@ -12,7 +12,6 @@ import {
   hitRateValue,
   latencyComparison,
   periodChange,
-  rangeLabelKey,
   timeSavedMs,
 } from '@/lib/dashboardOverview'
 import { formatBytes } from '@/lib/utils'
@@ -130,7 +129,7 @@ function LatencyRow({
       <dd className="w-16 shrink-0 text-right font-mono tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
         {ms !== null ? `${ms.toFixed(0)} ms` : '—'}
       </dd>
-      <dd className="w-16 shrink-0 text-right font-mono text-[12px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }} title={samplesLabel}>
+      <dd className="w-16 shrink-0 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }} title={samplesLabel}>
         {samplesLabel}
       </dd>
     </div>
@@ -140,7 +139,6 @@ function LatencyRow({
 interface CacheBenefitsProps {
   period?: DashboardPeriod
   prev?: DashboardPeriod
-  range: DashboardRange
   rangeStart?: string
   coverage?: OriginCoverage
 }
@@ -148,12 +146,10 @@ interface CacheBenefitsProps {
 export default function CacheBenefits({
   period,
   prev,
-  range,
   rangeStart,
   coverage,
 }: CacheBenefitsProps) {
   const { t } = useTranslation()
-  const periodLabel = t(rangeLabelKey(range))
 
   // ── Request hit rate ────────────────────────────────────────────────
   const hitRate = hitRateValue(period)
@@ -183,10 +179,9 @@ export default function CacheBenefits({
   return (
     <section data-dashboard-benefits aria-labelledby="overview-benefits-title" className="dash-card flex min-w-0 flex-col">
       <header className="flex items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
-        <h2 id="overview-benefits-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+        <h2 id="overview-benefits-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
           {t('overview.benefitsTitle')}
         </h2>
-        <span className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{periodLabel}</span>
       </header>
 
       <div className="grid min-w-0 grid-cols-1 divide-y divide-[var(--dash-border)] lg:grid-cols-3 lg:divide-x lg:divide-y-0">

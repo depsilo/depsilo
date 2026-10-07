@@ -47,9 +47,9 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
       aria-busy={query.isPending || undefined}
       className="dash-card flex min-w-0 flex-col"
     >
-      <header className="flex flex-wrap items-center justify-between gap-2 px-5 pb-2 pt-4">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
         <div className="min-w-0">
-          <h2 id="overview-recent-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+          <h2 id="overview-recent-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
             {t('overview.recentRequestsTitle')}
           </h2>
           <p className="mt-0.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>

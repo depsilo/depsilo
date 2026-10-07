@@ -190,11 +190,11 @@ export default function MetricTile({
             <dl className="flex flex-col gap-1.5">
               {rows.map(row => (
                 <div key={row.label} className="flex min-h-5 min-w-0 items-center justify-between gap-3 leading-none">
-                  <dt className="flex min-w-0 items-center gap-1.5 text-[14px] leading-none" style={{ color: 'var(--dash-muted)' }}>
+                  <dt className="flex min-w-0 items-center gap-1.5 text-[15px] leading-none" style={{ color: 'var(--dash-muted)' }}>
                     <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE[row.tone].strong }} />
                     <span className="truncate">{row.label}</span>
                   </dt>
-                  <dd className="shrink-0 font-mono text-[18px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
+                  <dd className="shrink-0 font-mono text-[16px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
                     {row.value}
                     {row.unit && row.value !== '—' && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
                   </dd>
@@ -225,7 +225,7 @@ export default function MetricTile({
         )}
 
         {detail && (
-          <p className="min-w-0 text-[14px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
+          <p className="min-w-0 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
         )}
         {/* Reserve the measurement-basis line while loading so the card does
             not grow when the payload arrives. */}

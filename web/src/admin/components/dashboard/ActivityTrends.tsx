@@ -172,8 +172,8 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
       aria-busy={isStale || range !== dataRange || undefined}
       className="dash-card flex min-w-0 flex-col"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 px-5 pb-2 pt-4">
-        <h2 id="overview-trends-title" className="text-[19px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
+        <h2 id="overview-trends-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
           {t('overview.trendsTitle')}
         </h2>
         {/* Wraps rather than shrinking: four segments do not fit beside the
@@ -218,7 +218,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
             <Icon name="show_chart" size="md" />
           </span>
           <h3 className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{t('dashboard.emptyTrendTitle')}</h3>
-          <p className="max-w-[48ch] text-[14px]" style={{ color: 'var(--dash-muted)' }}>{t('dashboard.emptyTrendHint')}</p>
+          <p className="max-w-[48ch] text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('dashboard.emptyTrendHint')}</p>
         </div>
       ) : (
         <div className="px-2 pb-4">
