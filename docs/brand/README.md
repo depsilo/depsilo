@@ -26,7 +26,7 @@
 | `logo-horizontal-dark.svg` | 深色 | 深色页眉和横向版头 |
 | `logo-stacked-light.svg` | 浅色 | README、启动页、关于页面 |
 | `logo-stacked-dark.svg` | 深色 | 深色 README 和展示场景 |
-| `web/public/favicon.svg` | 自动 | 光学校正版，随系统主题切换外壳蓝 |
+| `web/src/assets/favicon.svg` | 自动 | 光学校正版，随系统主题切换外壳蓝；构建时由 Vite 生成内容哈希 URL |
 
 文件名描述其适用的背景主题，而不是图形自身的明暗。标记本身是彩色的，
 浅色与深色场景都使用同一套蓝 + 绿；深色版本只调整字标与描述语的前景
@@ -64,9 +64,10 @@
   大小写 `Depsilo`。
 - 不把 Logo 当作状态图标；健康、命中和警告继续使用各自语义组件。
 - SVG 必须自包含，不能加载远程字体、滤镜或其他网络资源。
-- 修改母版时，同步 `web/src/components/Logo.tsx`、`web/public/favicon.svg`
+- 修改母版时，同步 `web/src/components/Logo.tsx`、`web/src/assets/favicon.svg`
   和 `assets/macos/icon.svg`（Linux 安装脚本复用该文件），并检查浅色、
-  深色及最小尺寸。
+  深色及最小尺寸。favicon 经 Vite 资源管线输出为内容哈希 URL，改版后
+  浏览器会立即拉取新图标，无需手动清缓存或改文件名。
 
 ## 与产品主题的关系
 
