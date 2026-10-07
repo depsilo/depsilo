@@ -192,12 +192,9 @@ via  = "${parentName}"`
 
   return (
     <section aria-labelledby="cascade-quick-heading">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="cascade-quick-heading" className="text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
-          {t('cascade.quick.title')}
-        </h2>
-        <p className="text-[11px]" style={{ color: 'var(--text-soft)' }}>{t('cascade.quick.hint')}</p>
-      </div>
+      <h2 id="cascade-quick-heading" className="mb-1 text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
+        {t('cascade.quick.title')}
+      </h2>
       <TabsV2
         ariaLabel={t('cascade.quick.title')}
         value={tab}

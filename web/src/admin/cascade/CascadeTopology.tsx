@@ -13,60 +13,52 @@ interface CascadeTopologyProps {
   unresolved: number
 }
 
-function Node({
+function FlowNode({
   icon,
-  eyebrow,
   title,
   subtitle,
   badge,
+  highlight = false,
 }: {
   icon: IconName
-  eyebrow: string
   title: ReactNode
   subtitle?: ReactNode
   badge?: ReactNode
+  highlight?: boolean
 }) {
   return (
     <div
       data-cascade-node
-      className="min-w-0 flex-1 rounded-md border px-4 py-3"
-      style={{ borderColor: 'var(--border)', background: 'var(--bg-soft)' }}
+      className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border px-3 py-2"
+      style={{
+        borderColor: highlight ? 'color-mix(in oklab, var(--brand-text) 35%, var(--border))' : 'var(--border)',
+        background: highlight ? 'var(--brand-soft)' : 'var(--bg-soft)',
+      }}
     >
-      <div className="flex items-center gap-2">
-        <span
-          className="grid size-7 shrink-0 place-items-center rounded-md"
-          style={{ background: 'var(--brand-soft)', color: 'var(--brand-text)' }}
-        >
-          <Icon name={icon} size="sm" />
+      <Icon name={icon} size="sm" className="shrink-0" style={{ color: 'var(--brand-text)' }} />
+      <span className="min-w-0">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-[12px] font-[600]" style={{ color: 'var(--text)' }}>{title}</span>
+          {badge}
         </span>
-        <span className="text-[10px] font-[600] uppercase tracking-[0.08em]" style={{ color: 'var(--text-subtle)' }}>
-          {eyebrow}
-        </span>
-        {badge && <span className="ml-auto shrink-0">{badge}</span>}
-      </div>
-      <div className="mt-2 truncate text-[13px] font-[600]" style={{ color: 'var(--text)' }} title={typeof title === 'string' ? title : undefined}>
-        {title}
-      </div>
-      {subtitle && (
-        <div className="mt-0.5 truncate text-[11px]" style={{ color: 'var(--text-soft)' }} title={typeof subtitle === 'string' ? subtitle : undefined}>
-          {subtitle}
-        </div>
-      )}
+        {subtitle && (
+          <span className="block truncate text-[10px]" style={{ color: 'var(--text-soft)' }}>{subtitle}</span>
+        )}
+      </span>
     </div>
   )
 }
 
-function Connector({ label, dashed }: { label: string; dashed?: boolean }) {
+function FlowArrow({ label, dashed }: { label: string; dashed?: boolean }) {
   return (
-    <div className="flex shrink-0 flex-row items-center gap-1 lg:flex-col lg:justify-center">
-      <span className="text-[10px] whitespace-nowrap" style={{ color: 'var(--text-subtle)' }}>{label}</span>
+    <span className="hidden shrink-0 flex-col items-center px-1 sm:inline-flex">
+      <span className="text-[9px] whitespace-nowrap" style={{ color: 'var(--text-subtle)' }}>{label}</span>
       <Icon
         name="arrow_forward"
         size="sm"
-        className="rotate-90 lg:rotate-0"
         style={{ color: dashed ? 'var(--text-subtle)' : 'var(--brand-text)' }}
       />
-    </div>
+    </span>
   )
 }
 
@@ -84,87 +76,89 @@ export default function CascadeTopology({
   const peerTitle = peers.length > 0
     ? peers.slice(0, 2).map(peer => peer.name).join(' · ') + (peers.length > 2 ? ` +${peers.length - 2}` : '')
     : t('cascade.topology.direct')
-  const peerSubtitle = peers.length > 0
-    ? peers[0].url
-    : t('cascade.topology.directHint')
+  const peerSubtitle = peers.length > 0 ? peers[0].url : t('cascade.topology.directHint')
+
+  const chips: ReactNode[] = []
+  if (info.enabled && info.instance_id) {
+    chips.push(
+      <span key="instance" className="inline-flex items-center gap-0.5">
+        <span style={{ color: 'var(--text-subtle)' }}>{t('cascade.instanceId')}</span>
+        <span className="font-mono" style={{ color: 'var(--text)' }}>{info.instance_id}</span>
+        <IconButton
+          icon={copied ? 'check' : 'content_copy'}
+          label={t('cascade.copyInstanceId')}
+          style={{ width: 26, height: 26, minWidth: 26, minHeight: 26 }}
+          onClick={() => {
+            void copyText(info.instance_id).then(ok => { if (ok) showCopied(true) })
+          }}
+        />
+      </span>,
+    )
+    chips.push(
+      <span key="relay">
+        {t('cascade.relayPath')} <span className="font-mono" style={{ color: 'var(--text)' }}>{info.relay_path}</span>
+      </span>,
+    )
+  }
+  if (boundUpstreams > 0 || info.enabled) {
+    chips.push(
+      <span key="bound">
+        {t('cascade.boundLabel')} <span className="font-mono" style={{ color: 'var(--text)' }}>{boundUpstreams}</span>
+      </span>,
+    )
+  }
+  if (unresolved > 0) {
+    chips.push(
+      <span key="unresolved" style={{ color: 'var(--warn-text)' }}>
+        {t('cascade.unresolvedLabel')} <span className="font-mono">{unresolved}</span>
+      </span>,
+    )
+  }
 
   return (
     <div
       data-cascade-topology
-      className="rounded-lg border px-5 py-4"
+      className="rounded-lg border px-4 py-3"
       style={{ borderColor: 'var(--border)', background: 'var(--bg-card)' }}
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch">
-        <Node
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FlowNode
           icon="computer"
-          eyebrow={t('cascade.topology.clients')}
-          title="npm · pip · go · docker"
-          subtitle={t('cascade.topology.clientsHint')}
+          title={t('cascade.topology.clients')}
+          subtitle="npm · pip · go · docker"
         />
-        <Connector label={t('cascade.topology.serviceRequests')} dashed={!info.enabled} />
-        <Node
+        <FlowArrow label={t('cascade.topology.serviceRequests')} dashed={!info.enabled} />
+        <FlowNode
           icon="hub"
-          eyebrow={t('cascade.topology.thisNode')}
           title={roleLabel}
-          subtitle={info.instance_id ? t('cascade.topology.instance', { id: info.instance_id.slice(0, 10) }) : undefined}
+          subtitle={info.enabled && info.instance_id ? t('cascade.topology.instance', { id: info.instance_id.slice(0, 10) }) : undefined}
+          highlight
           badge={(
             <span
-              className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-[600]"
-              style={{
-                color: info.enabled ? 'var(--ok-text)' : 'var(--warn-text)',
-                background: info.enabled ? 'var(--ok-fill)' : 'var(--warn-fill)',
-              }}
-            >
-              <span className="size-1.5 rounded-full" style={{ background: 'currentColor' }} />
-              {t(info.enabled ? 'cascade.enabled' : 'cascade.disabled')}
-            </span>
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ background: info.enabled ? 'var(--ok-text)' : 'var(--warn-text)' }}
+              title={t(info.enabled ? 'cascade.enabled' : 'cascade.disabled')}
+            />
           )}
         />
-        <Connector label={t('cascade.topology.originRequests')} dashed={!info.enabled} />
-        <Node
+        <FlowArrow
+          label={peers.length > 0 ? t('cascade.topology.originRequests') : t('cascade.topology.direct')}
+          dashed={!info.enabled || peers.length === 0}
+        />
+        <FlowNode
           icon={peers.length > 0 ? 'cloud_sync' : 'database'}
-          eyebrow={peers.length > 0 ? t('cascade.topology.parents') : t('cascade.topology.upstream')}
           title={peerTitle}
           subtitle={peerSubtitle}
         />
       </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-[11px]" style={{ borderColor: 'var(--border)', color: 'var(--text-soft)' }}>
-        <span className="inline-flex items-center gap-1">
-          <span style={{ color: 'var(--text-subtle)' }}>{t('cascade.instanceId')}</span>
-          <span className="font-mono" style={{ color: 'var(--text)' }}>{info.instance_id || '—'}</span>
-          {info.instance_id && (
-            <IconButton
-              icon={copied ? 'check' : 'content_copy'}
-              label={t('cascade.copyInstanceId')}
-              style={{ width: 30, height: 30, minWidth: 30, minHeight: 30 }}
-              onClick={() => {
-                void copyText(info.instance_id).then(ok => { if (ok) showCopied(true) })
-              }}
-            />
-          )}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span style={{ color: 'var(--text-subtle)' }}>{t('cascade.relayPath')}</span>
-          <span className="font-mono" style={{ color: 'var(--text)' }}>{info.relay_path}</span>
-        </span>
-        <span>{t('cascade.maxHops')} <span className="font-mono" style={{ color: 'var(--text)' }}>{info.max_hops}</span></span>
-        <span>{t('cascade.maxTTL')} <span className="font-mono" style={{ color: 'var(--text)' }}>{formatTTL(info.max_ttl_seconds)}</span></span>
-        <span>{t('cascade.boundLabel')} <span className="font-mono" style={{ color: 'var(--text)' }}>{boundUpstreams}</span></span>
-        {unresolved > 0 && (
-          <span style={{ color: 'var(--warn-text)' }}>
-            {t('cascade.unresolvedLabel')} <span className="font-mono">{unresolved}</span>
-          </span>
-        )}
-      </div>
+      {chips.length > 0 && (
+        <div
+          className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-2 text-[11px]"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-soft)' }}
+        >
+          {chips}
+        </div>
+      )}
     </div>
   )
-}
-
-function formatTTL(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '—'
-  if (seconds % 86_400 === 0) return `${seconds / 86_400}d`
-  if (seconds % 3_600 === 0) return `${seconds / 3_600}h`
-  if (seconds % 60 === 0) return `${seconds / 60}m`
-  return `${seconds}s`
 }

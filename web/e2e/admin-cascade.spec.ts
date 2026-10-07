@@ -66,7 +66,7 @@ test('cascade page shows peers, bindings, and dangling references', { tag: '@smo
 test('cascade page explains how to enable the feature when it is off', { tag: '@smoke' }, async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
   await page.goto('/admin/cascade')
-  await expect(page.locator('[data-cascade-topology]')).toContainText('未启用')
+  await expect(page.locator('[data-cascade-topology]')).toContainText('未参与级联')
   await expect(page.locator('[data-cascade-config-form]')).toBeVisible()
 })
 

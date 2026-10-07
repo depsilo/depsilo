@@ -11,7 +11,6 @@ import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { getAdminRouteHref } from '@/admin/routes'
 import BadgeV2 from '@/components/Badge'
 import ButtonV2 from '@/components/Button'
-import EmptyState from '@/components/EmptyState'
 import Icon from '@/components/Icon'
 import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
@@ -117,7 +116,6 @@ export default function Cascade() {
 
   return (
     <AdminPage
-      description={t('cascade.subtitle')}
       actions={(
         <ButtonV2
           type="button"
@@ -136,7 +134,7 @@ export default function Cascade() {
         </ButtonV2>
       )}
     >
-      <div className="space-y-8">
+      <div className="space-y-5">
         {infoQuery.isPending ? (
           <div aria-busy="true" className="py-16 text-center text-[13px] text-[var(--text-soft)]">
             {t('loading')}
@@ -176,43 +174,45 @@ export default function Cascade() {
               unresolved={unresolved.length}
             />
 
-            <section aria-labelledby="cascade-config-heading">
-              <SectionHeader title={t('cascade.configSectionTitle')} hint={t('cascade.configSectionHint')} />
-              <span id="cascade-config-heading" className="sr-only">{t('cascade.configSectionTitle')}</span>
-              {configQuery.isPending ? (
-                <div aria-busy="true" className="py-10 text-center text-[13px] text-[var(--text-soft)]">
-                  {t('loading')}
-                </div>
-              ) : configQuery.isError && !config ? (
-                <QueryErrorState
-                  message={getApiError(configQuery.error).status === 403
-                    ? t('common.permissionDenied')
-                    : t('cascade.loadError')}
-                  onRetry={() => { void configQuery.refetch() }}
-                />
-              ) : config ? (
-                <CascadeConfigForm
-                  state={config}
-                  canWrite={canWrite}
-                  onSaved={(result) => {
-                    toast.show({
-                      tone: 'success',
-                      message: t(result.restart_required ? 'cascade.configSavedRestart' : 'cascade.configSaved'),
-                    })
-                    void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade-config'] })
-                    void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade'] })
-                    void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
-                  }}
-                />
-              ) : null}
-            </section>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+              <section aria-labelledby="cascade-config-heading">
+                <SectionHeader title={t('cascade.configSectionTitle')} divider={false} />
+                <span id="cascade-config-heading" className="sr-only">{t('cascade.configSectionTitle')}</span>
+                {configQuery.isPending ? (
+                  <div aria-busy="true" className="py-10 text-center text-[13px] text-[var(--text-soft)]">
+                    {t('loading')}
+                  </div>
+                ) : configQuery.isError && !config ? (
+                  <QueryErrorState
+                    message={getApiError(configQuery.error).status === 403
+                      ? t('common.permissionDenied')
+                      : t('cascade.loadError')}
+                    onRetry={() => { void configQuery.refetch() }}
+                  />
+                ) : config ? (
+                  <CascadeConfigForm
+                    state={config}
+                    canWrite={canWrite}
+                    onSaved={(result) => {
+                      toast.show({
+                        tone: 'success',
+                        message: t(result.restart_required ? 'cascade.configSavedRestart' : 'cascade.configSaved'),
+                      })
+                      void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade-config'] })
+                      void queryClient.invalidateQueries({ queryKey: ['admin', 'cascade'] })
+                      void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams'] })
+                    }}
+                  />
+                ) : null}
+              </section>
 
-            <CascadeQuickConnect info={info} config={config} />
+              <CascadeQuickConnect info={info} config={config} />
+            </div>
 
+            {boundUpstreams.length > 0 && (
             <section aria-labelledby="cascade-upstreams-heading">
               <SectionHeader
                 title={t('cascade.upstreamsTitle')}
-                hint={canWrite && info.enabled ? t('cascade.upstreamsQuickHint') : undefined}
                 action={(
                   <Link to={getAdminRouteHref('upstreams')} className={navigateLinkClass}>
                     {t('cascade.manageUpstreams')}
@@ -228,15 +228,7 @@ export default function Cascade() {
               {canWrite && !info.enabled && (
                 <InlineNotice tone="info">{t('cascade.rebindRuntimeDisabled')}</InlineNotice>
               )}
-              {boundUpstreams.length === 0 ? (
-                <EmptyState
-                  icon="cloud_sync"
-                  title={t('cascade.upstreamsEmptyTitle')}
-                  hint={t('cascade.upstreamsEmptyHint')}
-                  minHeight={140}
-                />
-              ) : (
-                <TableViewport label={t('cascade.upstreamsTitle')} minWidth={760}>
+              <TableViewport label={t('cascade.upstreamsTitle')} minWidth={760}>
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -303,8 +295,8 @@ export default function Cascade() {
                     </tbody>
                   </table>
                 </TableViewport>
-              )}
             </section>
+            )}
           </>
         ) : null}
       </div>

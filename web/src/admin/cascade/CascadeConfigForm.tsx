@@ -91,7 +91,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
   return (
     <form
       data-cascade-config-form
-      className="space-y-5"
+      className="space-y-4"
       onSubmit={event => {
         event.preventDefault()
         submit()
@@ -151,22 +151,37 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
       </fieldset>
 
       <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
-          {t('cascade.config.peersSection')}
-        </legend>
-        <div className={`${peerRowGrid} hidden px-1 text-[10px] font-[600] uppercase tracking-[0.06em] lg:grid`} style={{ color: 'var(--text-subtle)' }}>
-          <span>{t('cascade.config.peerName')}</span>
-          <span>{t('cascade.config.peerURL')}</span>
-          <span>{t('cascade.config.peerTokenShort')}</span>
-          <span className="text-center">{t('cascade.config.peerForwardShort')}</span>
-          <span />
+        <div className="flex items-center justify-between gap-2">
+          <legend className="text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+            {t('cascade.config.peersSection')}
+          </legend>
+          <ButtonV2
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setDraft(current => ({ ...current, peers: [...current.peers, newPeerDraft()] }))
+              setDirty(true)
+            }}
+          >
+            <Icon name="add" size="sm" />
+            {t('cascade.config.addPeer')}
+          </ButtonV2>
         </div>
         {draft.peers.length === 0 ? (
           <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
             {t('cascade.config.peersEmpty')}
           </p>
         ) : (
-          <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+          <>
+            <div className={`${peerRowGrid} hidden px-1 text-[10px] font-[600] uppercase tracking-[0.06em] lg:grid`} style={{ color: 'var(--text-subtle)' }}>
+              <span>{t('cascade.config.peerName')}</span>
+              <span>{t('cascade.config.peerURL')}</span>
+              <span>{t('cascade.config.peerTokenShort')}</span>
+              <span className="text-center">{t('cascade.config.peerForwardShort')}</span>
+              <span />
+            </div>
+            <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
             {draft.peers.map(peer => {
               const peerErrors = errors.peers[peer.key]
               const tokenPlaceholder = peer.clearToken
@@ -243,20 +258,9 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
                 </div>
               )
             })}
-          </div>
+            </div>
+          </>
         )}
-        <ButtonV2
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => {
-            setDraft(current => ({ ...current, peers: [...current.peers, newPeerDraft()] }))
-            setDirty(true)
-          }}
-        >
-          <Icon name="add" size="sm" />
-          {t('cascade.config.addPeer')}
-        </ButtonV2>
       </fieldset>
 
       {saveError && (
