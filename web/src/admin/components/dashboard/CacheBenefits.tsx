@@ -57,8 +57,9 @@ function BenefitColumn({
   label: string
   icon: 'donut_large' | 'bolt' | 'speed'
   tone: MetricTone
-  info: string
-  infoLabel: string
+  /** Optional: only columns whose basis needs decoding carry an affordance. */
+  info?: string
+  infoLabel?: string
   value: string
   secondary?: ReactNode
   children?: ReactNode
@@ -78,16 +79,18 @@ function BenefitColumn({
         {/* Wraps instead of truncating: the three benefit columns are narrow at
             1280 and "预计节省回源流量" clipped to "预计节省回…". */}
         <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{label}</p>
-        <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
-          <button
-            type="button"
-            aria-label={infoLabel}
-            className="dash-focus ml-auto grid size-7 shrink-0 place-items-center rounded-full hover:bg-[var(--dash-soft)]"
-            style={{ color: 'var(--dash-muted)' }}
-          >
-            <Icon name="info" size="sm" />
-          </button>
-        </TooltipV2>
+        {info && infoLabel && (
+          <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
+            <button
+              type="button"
+              aria-label={infoLabel}
+              className="dash-focus ml-auto grid size-7 shrink-0 place-items-center rounded-full hover:bg-[var(--dash-soft)]"
+              style={{ color: 'var(--dash-muted)' }}
+            >
+              <Icon name="info" size="sm" />
+            </button>
+          </TooltipV2>
+        )}
       </div>
 
       <div className="flex min-h-9 min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -193,8 +196,13 @@ export default function CacheBenefits({
           infoLabel={t('overview.hitRateInfoLabel')}
           value={formatPercentRatio(hitRate)}
           secondary={hitRateChange !== null && (
-            <span className="font-mono text-[13px] tabular-nums" style={{ color: changeTone }}>
-              {formatSignedPercent(hitRateChange)}
+            // The delta is meaningless without its baseline: say what the
+            // comparison is against instead of leaving a bare ±x.x%.
+            <span className="inline-flex items-baseline gap-1 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
+              {t('overview.changeVsPrevious')}
+              <span className="font-mono tabular-nums" style={{ color: changeTone }}>
+                {formatSignedPercent(hitRateChange)}
+              </span>
             </span>
           )}
           footnote={period && period.total_requests > 0
@@ -223,8 +231,6 @@ export default function CacheBenefits({
           label={t('overview.latencyLabel')}
           icon="speed"
           tone="memory"
-          info={t('overview.hintLatency')}
-          infoLabel={t('overview.latencyInfoLabel')}
           value={latency.reductionPct !== null ? `−${latency.reductionPct.toFixed(0)}%` : '—'}
           secondary={latency.sufficient && (
             <span className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.latencyVs')}</span>

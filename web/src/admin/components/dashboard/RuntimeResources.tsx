@@ -43,7 +43,11 @@ export default function RuntimeResources({
     : runtimePending && cpuPercent === undefined
       ? t('overview.collecting')
       : undefined
-  const cpuHint = capabilityHint(t('overview.hintCpu'), process?.cpu)
+  // Only the unsupported platform carries a hint worth opening; the normal
+  // case says nothing the tile does not already show.
+  const cpuHint = process?.cpu.supported === false
+    ? capabilityHint(t('overview.hintCpu'), process?.cpu)
+    : undefined
   // A single-core progress bar only makes sense up to one full core. Above
   // 100% the number carries the truth instead of a silently full bar.
   const cpuProgress = process?.cpu.supported === true && cpuPercent !== undefined && cpuPercent <= 100
@@ -66,10 +70,6 @@ export default function RuntimeResources({
   const memoryProgress = limit !== undefined && used !== undefined && limit > 0
     ? { ratio: used / limit, tone: 'memory' as const }
     : null
-  const memoryHint = process?.memory.supported === false
-    ? capabilityHint(t('overview.memoryRuntimeHint'), process?.memory)
-    : capabilityHint(t('overview.hintMemory'), process?.memory)
-
   const cache = runtime?.cache
   const quota = cache?.quota_bytes ?? null
   const logical = cache?.logical_bytes ?? 0
@@ -122,7 +122,7 @@ export default function RuntimeResources({
         series={cpuSeries}
         loading={runtimePending && cpuPercent === undefined}
         info={cpuHint}
-        infoLabel={t('overview.cpuInfoLabel')}
+        infoLabel={cpuHint ? t('overview.cpuInfoLabel') : undefined}
       />
       <MetricTile
         testId="resource-memory"
@@ -135,8 +135,6 @@ export default function RuntimeResources({
         progress={memoryProgress}
         series={memorySupported ? rssSeries : undefined}
         loading={runtimePending && !runtime}
-        info={memoryHint}
-        infoLabel={t('overview.memoryInfoLabel')}
       />
       <MetricTile
         testId="resource-cache"
@@ -179,8 +177,6 @@ export default function RuntimeResources({
         seriesTone="memory"
         detail={measured ? t('overview.perSecond') : t('overview.notCollected')}
         loading={nowPending && !now}
-        info={t('overview.hintNetwork')}
-        infoLabel={t('overview.networkInfoLabel')}
       />
     </div>
   )

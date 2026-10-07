@@ -302,9 +302,7 @@ const en = {
       memoryProcess: 'Process RSS',
       memoryPeakBadge: 'Peak',
       memoryRuntimeBadge: 'Runtime',
-      memoryRuntimeHint: 'This platform does not expose process memory; the value is Go runtime usage',
       memoryUnsupported: 'Process memory is unavailable',
-      memoryInfoLabel: 'View memory measurement basis',
       goRuntimeMemory: 'Go runtime memory {{value}}',
       cacheLabel: 'Cache space',
       cacheQuota: 'Quota {{value}}',
@@ -318,7 +316,6 @@ const en = {
       perSecond: 'req/s',
       serviceRequests: 'Served',
       originRequests: 'Origin',
-      networkInfoLabel: 'View network request measurement basis',
 
       trafficTitle: 'Traffic overview',
       serviceFlow: 'Service traffic',
@@ -339,9 +336,6 @@ const en = {
       originPartial: 'Origin traffic was not collected for part of this period',
       originPartialShort: 'Partial collection',
       originPartialSince: 'Collected since {{time}}',
-      serviceFlowInfoLabel: 'View service traffic measurement basis',
-      originFlowInfoLabel: 'View origin traffic measurement basis',
-      servedTotalInfoLabel: 'View delivered total measurement basis',
       originTotalInfoLabel: 'View origin total measurement basis',
       flowAria: 'Dependency request path',
       flowClients: 'Developer / CI / Agent',
@@ -361,8 +355,8 @@ const en = {
       latencyLabel: 'Response performance',
       latencyReductionDetail: 'Hit ≈ {{hit}} ms, origin ≈ {{miss}} ms',
       insufficientSamples: 'Not enough samples to state a reduction',
-      latencyInfoLabel: 'View response performance measurement basis',
-      latencyVs: 'hit vs origin',
+      changeVsPrevious: 'vs previous',
+      latencyVs: 'hits beat origin',
       latencyNoSample: 'Not enough samples',
       timeSavedEstimate: 'Estimated wait saved {{duration}}',
       durationSeconds: '{{value}}s',
@@ -440,16 +434,10 @@ const en = {
 
       // One-line measurement-basis hints for the metric info affordance.
       hintCpu: 'Process CPU on a single-core basis; 100% = one core',
-      hintMemory: 'Process memory; labelled “Peak” when only a peak reading exists',
       hintCache: 'Logical cache size from metadata; quota comes from cache.max_size_gb; packages are distinct by ecosystem and name, objects include metadata rows',
-      hintNetwork: 'Service requests: client → Depsilo; origin requests: Depsilo → upstream',
-      hintServiceFlow: 'Bytes/sec actually delivered to clients over the last 60s',
-      hintOriginFlow: 'Bytes/sec actually read from upstreams over the last 60s',
-      hintServedTotal: 'Bytes actually delivered to clients in the selected period',
       hintOriginTotal: 'Bytes actually read from upstreams in the selected period',
       hintHitRate: 'Hits ÷ (hits + misses); no sample shows —',
       hintSavedBytes: 'Estimated from cache-hit response bytes, not a measured bill; no traffic sample shows —',
-      hintLatency: 'Weighted average hit vs origin time; no reduction below the sample threshold; wait saved is an estimate',
 
       info: {
         resource: {

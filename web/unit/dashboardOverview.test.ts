@@ -12,6 +12,7 @@ import {
   periodChange,
   requestOutcome,
   sparklineGeometry,
+  sparklineHasVariance,
   timeSavedMs,
 } from '../src/lib/dashboardOverview'
 
@@ -139,6 +140,15 @@ describe('deriveServiceStatus', () => {
       policyNeedsAttention: false,
     })
     expect(status.problems[0]).toMatchObject({ code: 'upstreams', count: 4, names: 'official ×3, tuna' })
+  })
+})
+
+describe('sparklineHasVariance', () => {
+  it('hides flat or single-sample series and keeps a real range', () => {
+    expect(sparklineHasVariance([])).toBe(false)
+    expect(sparklineHasVariance([5])).toBe(false)
+    expect(sparklineHasVariance([5, 5, 5, 5])).toBe(false)
+    expect(sparklineHasVariance([5, 5.4, 5.1])).toBe(true)
   })
 })
 

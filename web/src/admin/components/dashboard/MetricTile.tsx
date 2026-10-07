@@ -2,7 +2,7 @@ import { useId, type ReactNode } from 'react'
 
 import Icon, { type IconName } from '@/components/Icon'
 import TooltipV2 from '@/components/Tooltip'
-import { sparklineGeometry } from '@/lib/dashboardOverview'
+import { sparklineGeometry, sparklineHasVariance } from '@/lib/dashboardOverview'
 
 import { METRIC_TONE_PALETTE, type MetricTone } from './metricTone'
 
@@ -204,7 +204,7 @@ export default function MetricTile({
           )}
         </div>
 
-        {series && series.length >= 2 && (
+        {series && sparklineHasVariance(series) && (
           <div className="flex h-[26px] min-w-0 items-center justify-end">
             <Sparkline series={series} tone={sparkTone} />
           </div>

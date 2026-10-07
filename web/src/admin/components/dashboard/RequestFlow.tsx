@@ -62,8 +62,6 @@ export default function RequestFlow({
           detail={flow.servedRequests === null
             ? undefined
             : t('overview.servedRequests', { count: flow.servedRequests.toLocaleString() })}
-          info={t('overview.hintServedTotal')}
-          infoLabel={t('overview.servedTotalInfoLabel')}
         />
 
         <FlowRail
@@ -73,8 +71,6 @@ export default function RequestFlow({
           value={flow.liveServiceBytesPerSec === null ? '—' : formatBps(flow.liveServiceBytesPerSec)}
           pending={livePending}
           detail={flow.liveServiceBytesPerSec === null ? t('overview.notCollected') : t('overview.directionService')}
-          info={t('overview.hintServiceFlow')}
-          infoLabel={t('overview.serviceFlowInfoLabel')}
         />
 
         <FlowNode
@@ -94,8 +90,6 @@ export default function RequestFlow({
           value={flow.liveOriginBytesPerSec === null ? '—' : formatBps(flow.liveOriginBytesPerSec)}
           pending={livePending}
           detail={flow.liveOriginBytesPerSec === null ? t('overview.notCollected') : t('overview.directionOrigin')}
-          info={t('overview.hintOriginFlow')}
-          infoLabel={t('overview.originFlowInfoLabel')}
         />
 
         <FlowNode
@@ -161,8 +155,9 @@ function FlowNode({
   title: string
   value: string
   detail?: string
-  info: string
-  infoLabel: string
+  /** Optional: only hints that add a real measurement basis get an affordance. */
+  info?: string
+  infoLabel?: string
   tone?: MetricTone
   icon?: IconName
   /** Custom leading mark (the brand mark for Depsilo); wins over icon/tone. */
@@ -187,7 +182,7 @@ function FlowNode({
           {/* Wraps instead of truncating: "开发者 / CI / Agent" cannot fit the
               node column at 1280, and the three audiences are all real. */}
           <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{title}</p>
-          <InfoHint text={info} label={infoLabel} />
+          {info && infoLabel && <InfoHint text={info} label={infoLabel} />}
         </div>
         <p className="font-mono text-[22px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>
         {detail && (
@@ -220,8 +215,9 @@ function FlowRail({
   pending: boolean
   /** Direction of the measured bytes, or the honest "not collected" label. */
   detail: string
-  info: string
-  infoLabel: string
+  /** Optional: the live rate already states its own direction and window. */
+  info?: string
+  infoLabel?: string
 }) {
   const valueNode = pending
     ? <span aria-hidden className="block h-6 w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
@@ -237,7 +233,7 @@ function FlowRail({
       <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[12px] font-medium" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
         {badge}
       </span>
-      <InfoHint text={info} label={infoLabel} />
+      {info && infoLabel && <InfoHint text={info} label={infoLabel} />}
     </div>
   )
 

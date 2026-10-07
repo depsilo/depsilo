@@ -304,9 +304,7 @@ const zh = {
       memoryProcess: '进程 RSS',
       memoryPeakBadge: '峰值',
       memoryRuntimeBadge: '运行时',
-      memoryRuntimeHint: '当前平台不提供进程内存采样，此处显示 Go 运行时占用',
       memoryUnsupported: '无法获取进程内存',
-      memoryInfoLabel: '查看内存口径',
       goRuntimeMemory: 'Go 运行时内存 {{value}}',
       cacheLabel: '缓存空间',
       cacheQuota: '配额 {{value}}',
@@ -320,7 +318,6 @@ const zh = {
       perSecond: '次/秒',
       serviceRequests: '服务请求',
       originRequests: '回源请求',
-      networkInfoLabel: '查看网络请求口径',
 
       // D. 流量概览
       trafficTitle: '流量概览',
@@ -342,9 +339,6 @@ const zh = {
       originPartial: '周期内部分时段未采集回源流量',
       originPartialShort: '部分时段未采集',
       originPartialSince: '自 {{time}} 起采集',
-      serviceFlowInfoLabel: '查看服务流量口径',
-      originFlowInfoLabel: '查看回源流量口径',
-      servedTotalInfoLabel: '查看下载总量口径',
       originTotalInfoLabel: '查看回源总量口径',
       flowAria: '依赖请求路径',
       flowClients: '开发者 / CI / Agent',
@@ -365,8 +359,8 @@ const zh = {
       latencyLabel: '响应表现',
       latencyReductionDetail: '命中约 {{hit}} ms，回源约 {{miss}} ms',
       insufficientSamples: '样本不足，暂不给出缩减比例',
-      latencyInfoLabel: '查看响应表现口径',
-      latencyVs: '命中 vs 回源',
+      changeVsPrevious: '较上一周期',
+      latencyVs: '命中比回源快',
       latencyNoSample: '样本不足',
       timeSavedEstimate: '估算节省等待 {{duration}}',
       durationSeconds: '{{value}} 秒',
@@ -447,16 +441,10 @@ const zh = {
 
       // 指标口径的悬浮提示（一句话；完整说明见 ⓘ 之外的相应页面）
       hintCpu: '进程 CPU；单核基准，100% = 1 核',
-      hintMemory: '进程内存；只能读到峰值时标注「峰值」',
       hintCache: '缓存元数据逻辑大小；配额来自 cache.max_size_gb；包数按生态与包名去重，对象数含元数据行',
-      hintNetwork: '服务请求：客户端 → Depsilo；回源请求：Depsilo → 上游',
-      hintServiceFlow: '最近 60 秒实际发送给客户端的字节速率',
-      hintOriginFlow: '最近 60 秒实际从上游读取的字节速率',
-      hintServedTotal: '所选周期内实际发送给客户端的累计字节',
       hintOriginTotal: '所选周期内实际从上游读取的累计字节',
       hintHitRate: '命中 ÷（命中 + 未命中）；无样本显示 —',
       hintSavedBytes: '按缓存命中响应字节估算，非实测账单；无流量样本时显示 —',
-      hintLatency: '命中与回源的加权平均耗时；样本不足不给缩减比例；节省等待为估算值',
 
       info: {
         resource: {

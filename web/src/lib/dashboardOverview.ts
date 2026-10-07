@@ -283,6 +283,16 @@ export function sparklineGeometry(
   return { line, area, last: { x: points[n - 1][0], y: points[n - 1][1] } }
 }
 
+/**
+ * A flat sample series is decoration, not information: the resource tile only
+ * draws its sparkline once the window carries a real range. Kept beside the
+ * geometry helper so both the chart and its tests share one rule.
+ */
+export function sparklineHasVariance(series: number[]): boolean {
+  if (series.length < 2) return false
+  return Math.max(...series) - Math.min(...series) > 0
+}
+
 export type ServiceHealth = 'healthy' | 'partial' | 'unavailable' | 'unknown'
 
 export type ServiceProblemCode = 'status-unavailable' | 'upstreams' | 'policy' | 'cache' | 'degraded'
