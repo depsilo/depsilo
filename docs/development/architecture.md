@@ -24,9 +24,8 @@ composition root.
 
 ```text
 package client
-  -> Gin route / project request scope
-  -> ecosystem adapter
-  -> package rules and enabled supply-chain checks
+  -> Gin middleware (package rules, project token)
+  -> ecosystem adapter (protocol identity, enabled supply-chain checks)
   -> cache.Manager
        -> hit: storage + SQLite metadata
        -> miss: selected Upstream -> streamed response -> durable cache commit
@@ -64,7 +63,8 @@ duplicating endpoint tables in new documentation.
 | Ordinary active Upstreams | SQLite | Registry publishes updates to subsequent requests |
 | Docker registries and extra indexes | `config.toml` | Restart-managed |
 | Editable settings | `config.toml` | Some apply immediately; others require restart |
-| Users, tokens, rules, policy, audit | SQLite | Handler-specific live behavior |
+| Users, tokens, package rules, security policies, audit | SQLite | Handler-specific live behavior |
+| Minimum-release-age thresholds, blocklist/tamper settings | `config.toml` | Loaded at startup; restart to change |
 | Package objects | Local filesystem or S3 | Coordinated by cache metadata in SQLite |
 | Compiler cache objects | Separate local/S3 area | Separate capacity and credentials |
 

@@ -8,7 +8,8 @@ by the root `Makefile`; run `make help` if this guide and the Makefile diverge.
 - Go 1.27.1 or newer, as pinned by `go.mod`.
 - Node.js 22.23.2 or newer and npm 10 or newer.
 - GNU Make.
-- Docker only for container and real-client tests.
+- Docker for container, S3 storage-contract, upgrade, and real-client tests;
+  ordinary local development does not need it.
 
 Install locked dependencies:
 

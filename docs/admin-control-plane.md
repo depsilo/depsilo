@@ -12,7 +12,8 @@ role is `admin` and a token whose permission is `readwrite`.
 | Settings | `config.toml` | Log level applies immediately; Cache/Auth changes require restart |
 | Ordinary active Upstreams | Database | Registry atomically updates the next proxy request |
 | Docker registries and extra indexes | `config.toml` | Restart-managed; absent from Admin Upstream CRUD |
-| Users, tokens, rules, Webhooks, security policy | Database | Existing handler-specific runtime behavior |
+| Users, tokens, package rules, Webhooks, security scan policies | Database | Existing handler-specific runtime behavior |
+| Minimum-release-age thresholds, blocklist/tamper settings | `config.toml` | Loaded at startup; restart to change |
 
 ## Permissions
 
@@ -47,15 +48,15 @@ plus the owner's current enabled state and role.
 
 ## Contract compatibility
 
-`GET /api/v1/admin/security/vulnerabilities` uses `package`; the deprecated `q` alias
-remains accepted for one release only when `package` is absent. Security policy responses
-and writes use `auto_block_enabled` and `min_cvss_score`, with the score constrained to
-`0..10`.
+`GET /api/v1/admin/security/vulnerabilities` uses `package`; the legacy `q` alias
+remains accepted only when `package` is absent. No removal date has been announced.
+Security policy responses and writes use `auto_block_enabled` and
+`min_cvss_score`, with the score constrained to `0..10`.
 
 `GET /api/v1/admin/audit-logs` and `GET /api/v1/admin/audit-logs/export` use `package`;
-the deprecated `search` alias remains accepted for one release only when `package` is
-absent. `GET /api/v1/admin/logs/export` accepts the same filters as the access-log list and
-exports at most 10,000 matching rows.
+the legacy `search` alias remains accepted only when `package` is absent. No
+removal date has been announced. `GET /api/v1/admin/logs/export` accepts the
+same filters as the access-log list and exports at most 10,000 matching rows.
 
 Project package responses use `ecosystem`, `package_name`, `version`, `first_seen_at`,
 `last_seen_at`, and `download_count`. Project proxy URLs fall back to `/p/{slug}`.

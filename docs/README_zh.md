@@ -42,7 +42,13 @@
   并在上游不可用时继续提供符合条件的已缓存制品。
 - **执行（Enforce）**：仅当代理请求携带可信的包身份时，才按
   [Package Rule 能力矩阵](package-rules.md)执行运维者定义的规则；已知恶意版本阻断
-  仅覆盖下表列出的生态。最小发布年龄目前安全停用，等待制品来源与发布时间证明完成绑定。
+  仅覆盖下表列出的生态。最小发布年龄默认关闭；npm、PyPI、Composer、NuGet、Cargo
+  和 RubyGems 可以按已绑定的制品来源与时间戳执行。PyPI 要求上游提供带
+  `upload-time` 的 PEP 691 JSON simple index；门禁启用时仅提供 HTML 的上游会
+  拒绝请求。Conda、CRAN、Maven、Alpine、Helm 使用需要运维者明确确认的近似
+  来源；Docker 使用明确确认的首次观察时间，不是镜像发布时间。门禁启用时，
+  不支持来源证明的正阈值会在启动时被拒绝。Composer 客户端可能在
+  镜像分发地址收到 451 后回退到原始地址，因此其阻断仍是尽力而为。
 - **校验（Verify）**：记录首次发现的哈希，并在不可变制品自然刷新发生变化时提示
   篡改。
 - **审计（Audit）**：在管理后台、API、日志、Webhook 和 Prometheus 指标中呈现
@@ -106,9 +112,8 @@ Docker Hub 作为镜像源同步维护。
 [bind mount Compose 模板](../compose.bind.yaml)，先准备目录所有权，并保持容器目标路径
 为 `/root/.depsilo`。
 
-镜像从 v0.9.1 起固定以非 root UID/GID `10001:10001` 运行。复用 v0.9.0 创建的
-旧 Volume 时，必须按[部署指南](deployment.md)完成一次性所有权迁移；使用 v0.9.0
-官方 bind-mount Compose 布局时，必须使用指南中的独立兼容流程。
+复用 v0.9.0 创建的旧 Volume 时，必须按[部署指南](deployment.md)完成一次性所有权
+迁移；使用 v0.9.0 官方 bind-mount Compose 布局时，必须使用指南中的独立兼容流程。
 
 ### Docker Compose
 
@@ -193,8 +198,9 @@ Portal 已提供 Docker Registry 和 Hugging Face 的客户端说明，但首次
 
 | 控制 | 默认值 | 行为 |
 | --- | --- | --- |
-| 已知恶意包列表 | 开启 | 为 npm、Cargo、Composer、NuGet、Go 和 Maven 同步 OSV MAL 的明确版本和全版本记录，并在返回软件包前阻断命中项。 |
-| 最小发布年龄 | 暂不可用 | 制品来源与发布时间证明完成绑定前，启用状态下的正阈值会导致启动拒绝。 |
+| 已知恶意包列表 | 开启 | 为 npm、PyPI、Cargo、RubyGems、Composer、NuGet、Go 和 Maven 同步 OSV MAL 的明确版本和全版本记录，并在返回软件包前阻断命中项。PyPI 的旧式归档文件名及 RubyGems 的平台制品会通过上游元数据确认身份；这两类制品无法证明身份时会被拒绝。 |
+| 冻结 / 黄金快照 | 关闭 | 将已缓存制品提升为命名快照，导出或导入清单；激活后仅提供快照中固定的版本，其他请求返回 `451 SNAPSHOT_BLOCKED`。快照使用篡改检测记录的首次发现哈希。 |
+| 最小发布年龄 | 默认关闭 | npm、PyPI、Composer、NuGet、Cargo 和 RubyGems 使用与制品来源绑定的时间戳；Conda、CRAN、Maven、Alpine 和 Helm 需通过 `supply_chain.approximate_sources` 确认近似来源，Docker 需通过 `supply_chain.observation_sources` 确认首次观察时间。门禁启用时，不支持来源证明的正阈值会在启动时被拒绝。 |
 | 篡改检测 | 开启 | 在自然刷新时比较不可变制品与首次发现的 SHA-256，不一致时产生告警；它不会直接阻断请求。 |
 | 包 Allow / Deny 规则 | 运维者定义 | 仅执行并记录[请求链路能力矩阵](package-rules.md)支持的选择器；不在不支持的入口猜测包或版本身份。 |
 

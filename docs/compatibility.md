@@ -8,7 +8,9 @@
 
 | Surface | Versioning unit | Authority |
 | --- | --- | --- |
-| Admin and public HTTP API | `/api/v1` path prefix | this file |
+| Admin and public JSON HTTP API | `/api/v1` path prefix | this file |
+| MCP endpoint | `/mcp` | this file |
+| Health, readiness, and metrics | `/health`, `/live`, `/ready`, `/metrics` | this file |
 | Compiler-cache HTTP APIs | `/ccache/v1`, `/sccache/v1` | this file |
 | Configuration file | `config_version` + the schema in `config.example.toml` | this file |
 | Database schema | numbered migration ledger | this file |
@@ -58,9 +60,11 @@ consequence.
 
 ## HTTP API
 
-- All Depsilo-owned API routes live under `/api/v1`; new routes are added
-  there, and a future incompatible API becomes `/api/v2` rather than
-  changing `/api/v1`.
+- Admin and public JSON API routes live under `/api/v1`; new JSON API routes
+  are added there, and a future incompatible JSON API becomes `/api/v2`
+  rather than changing `/api/v1`. The authenticated MCP endpoint (`POST /mcp`),
+  health/readiness/metrics, compiler-cache, package-proxy, and cascade relay
+  routes are separate HTTP surfaces, not unversioned JSON API routes.
 - Within the window, changes are additive: new endpoints, new optional
   request fields, new response fields, and new enum values. Clients must
   ignore fields they do not know and treat unknown enum values as opaque.
@@ -70,8 +74,9 @@ consequence.
 - Deleting a field, renaming a field, changing a type, changing a default, or
   making an optional request field required is a breaking change and follows
   the deprecation window.
-- Response ordering is not part of the contract; list endpoints are paginated
-  and may return new items between calls.
+- Response ordering is not part of the contract unless an endpoint documents
+  an order. Lists may return new items between calls; pagination is
+  endpoint-specific.
 
 ## Configuration
 
@@ -138,15 +143,18 @@ consequence.
 
 ## Current deprecations
 
-None. The next deprecation is added here with its announcement release and
-`Sunset` date.
+No removal has an announced `Sunset` date. The legacy Admin query aliases
+`q` (vulnerabilities) and `search` (audit logs) still work when `package` is
+absent; they must not be removed until a deprecation is announced with the
+window above. The next formally announced deprecation is added here with its
+announcement release and `Sunset` date.
 
 ## Enforcement
 
 The mechanically checkable parts of this policy are covered by tests:
 
-- `internal/api/api_version_contract_test.go` keeps every Depsilo-owned API
-  route under the versioned `/api/v1` group.
+- `internal/api/api_version_contract_test.go` keeps `/api/` JSON routes under
+  the versioned `/api/v1` group; separate HTTP surfaces retain their own paths.
 - `internal/config/loader_test.go` covers unknown-key rejection,
   newer-`config_version` rejection, and that `config.example.toml` loads at
   the current version.

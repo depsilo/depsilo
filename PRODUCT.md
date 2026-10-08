@@ -85,10 +85,10 @@ ADR-0004.
   together with its `cksum` identity; RubyGems resolves the compact index's
   `created_at` and checksum for the exact `.gem` filename. Composer uses the p2
   metadata entry's own `time` field but remains best-effort because Composer
-  clients can fall back to the original dist URL after a 451. Every other
-  ecosystem still rejects positive thresholds at startup until its artifact
-  source and timestamp are bound. Conda is available with approximate
-  Last-Modified provenance once the operator acknowledges it through
+  clients can fall back to the original dist URL after a 451. With the age gate
+  enabled, positive thresholds without supported provenance fail at startup.
+  Conda is available with approximate Last-Modified provenance once the
+  operator acknowledges it through
   `supply_chain.approximate_sources`, and the capability summary labels it
   `approximate` rather than `source_bound`. CRAN is available under the same
   acknowledgement: the current source tarball uses the DESCRIPTION
