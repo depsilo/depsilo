@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
+import type { Request } from '@playwright/test'
 
 import {
   expect,
@@ -76,7 +77,7 @@ test('quarantine mobile lists keep decision context and available actions visibl
   await expect(eventList.getByText('2026.07.29-security-review-candidate', { exact: true })).toBeVisible()
   await expect(eventList.getByText('Blocked', { exact: true })).toBeVisible()
   await expect(eventList.getByText(/newer than the configured minimum age/)).toBeVisible()
-  await expect(page.getByText(/Minimum release age is safety-disabled/)).toBeVisible()
+  await expect(page.getByText(/Minimum release age is safety-disabled/)).toHaveCount(0)
   await expect(eventList.getByRole('button', { name: 'Approve' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
@@ -108,4 +109,77 @@ test('quarantine mobile lists keep decision context and available actions visibl
 
   const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
   expect(result.violations).toEqual([])
+})
+
+test('quarantine events and approvals can reach older pages, and filtering resets the event page', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/quarantine/events': (request: Request) => {
+      const params = new URL(request.url()).searchParams
+      const offset = Number(params.get('offset'))
+      const filtered = params.has('ecosystem')
+      return {
+        items: [{ id: offset + 1, ecosystem: 'npm', package: filtered ? 'filtered' : `event-${offset + 1}`, version: '1.0', action: 'blocked', reason: 'too new', created_at: '2026-10-06T10:00:00Z' }],
+        total: filtered ? 1 : 101,
+      }
+    },
+    'GET /api/v1/admin/quarantine/approvals': (request: Request) => {
+      const offset = Number(new URL(request.url()).searchParams.get('offset'))
+      return { items: [{ id: offset + 1, ecosystem: 'npm', package: `approval-${offset + 1}`, version: '1.0', reason: 'reviewed', created_at: '2026-10-06T10:00:00Z' }], total: 101 }
+    },
+  })
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/admin/quarantine')
+
+  const events = page.locator('[data-quarantine-mobile-list="events"]')
+  await expect(events).toContainText('event-1')
+  await page.getByRole('navigation', { name: '分页' }).getByRole('button', { name: '下一页' }).click()
+  await expect(events).toContainText('event-51')
+  await page.getByRole('combobox', { name: '生态' }).selectOption('npm')
+  await expect(events).toContainText('filtered')
+  await expect(page.locator('[data-admin-pagination]')).toHaveCount(0)
+
+  await page.getByRole('combobox', { name: '拦截视图' }).selectOption('approvals')
+  const approvals = page.locator('[data-quarantine-mobile-list="approvals"]')
+  await expect(approvals).toContainText('approval-1')
+  await page.getByRole('navigation', { name: '分页' }).getByRole('button', { name: '下一页' }).click()
+  await expect(approvals).toContainText('approval-51')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+})
+
+test('only confirmed active age gates allow creating a permanent approval', async ({ page }) => {
+  let active = true
+  let submitted = 0
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/capabilities/summary': () => ({
+      version: 'dev', commit: '', build_date: '', capabilities: [
+        { name: 'minimum_release_age', ecosystem: 'npm', support: 'supported', mode: active ? 'block' : 'off', data_status: 'source_bound' },
+        { name: 'minimum_release_age', ecosystem: 'go', support: 'safety_disabled', mode: 'off', data_status: 'never_synced' },
+      ],
+    }),
+    'POST /api/v1/admin/quarantine/approve': (request: Request) => {
+      submitted += 1
+      const body = request.postDataJSON() as { ecosystem: string; package: string; version: string; reason: string }
+      expect(body).toEqual({ ecosystem: 'npm', package: 'library', version: '1.2.3', reason: 'Reviewed source' })
+      return submitted === 1 ? { status: 503, body: { message: 'write failed' } } : { ...body, approved_by: 1 }
+    },
+  })
+  await page.goto('/admin/quarantine')
+  await page.getByRole('combobox', { name: '拦截视图' }).selectOption('approvals')
+  await page.getByRole('button', { name: '新建放行' }).click()
+  const dialog = page.getByRole('dialog', { name: '新建最小发布年龄放行' })
+  await expect(dialog.getByRole('combobox', { name: '生态' }).locator('option')).toHaveCount(1)
+  await dialog.getByRole('textbox', { name: '包名' }).fill('library')
+  await dialog.getByRole('textbox', { name: '版本' }).fill('1.2.3')
+  await dialog.getByRole('textbox', { name: '原因' }).fill('Reviewed source')
+  await dialog.getByRole('button', { name: '新建放行' }).click()
+  await expect(dialog).toContainText('write failed')
+  await expect(dialog.getByRole('textbox', { name: '包名' })).toHaveValue('library')
+  await dialog.getByRole('button', { name: '新建放行' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(submitted).toBe(2)
+
+  active = false
+  await page.reload()
+  await page.getByRole('combobox', { name: '拦截视图' }).selectOption('approvals')
+  await expect(page.getByRole('button', { name: '新建放行' })).toHaveCount(0)
 })

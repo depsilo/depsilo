@@ -73,6 +73,11 @@ function CapabilityOverview() {
   const value = (fact: CapabilityFact, field: 'support' | 'mode' | 'data_status') => {
     const raw = fact[field]
     if (raw === 'safety_disabled') return t('security.capabilitySafetyDisabled')
+    if (raw === 'supported') return t('security.capabilitySupported')
+    if (raw === 'unsupported') return t('security.capabilityUnsupported')
+    if (raw === 'off') return t('security.capabilityOff')
+    if (raw === 'warn') return t('security.capabilityWarn')
+    if (raw === 'block') return t('security.capabilityBlock')
     if (raw === 'source_bound') return t('security.capabilitySourceBound')
     if (raw === 'approximate') return t('security.capabilityApproximate')
     if (raw === 'observed') return t('security.capabilityObserved')

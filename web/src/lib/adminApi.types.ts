@@ -578,7 +578,7 @@ export interface RuleTestResponse {
   policy_status?: PolicyStatus
 }
 
-export interface QuarantineQuery { limit?: number; ecosystem?: string; action?: string; package?: string }
+export interface QuarantineQuery { limit?: number; offset?: number; ecosystem?: string; action?: string; package?: string }
 
 export interface DashboardWindow {
   total_requests: number

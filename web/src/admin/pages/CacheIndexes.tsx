@@ -82,6 +82,16 @@ export default function CacheIndexes() {
     setPage(1)
   }
 
+  function clearFilters() {
+    setSearch('')
+    setAppliedSearch('')
+    setAdapterType('all')
+    setStatus('all')
+    setPage(1)
+  }
+
+  const hasFilters = Boolean(appliedSearch || adapterType !== 'all' || status !== 'all')
+
   if (query.isPending) {
     return (
       <AdminPage description={t('cacheIndexes.subtitle')}>
@@ -120,7 +130,7 @@ export default function CacheIndexes() {
             icon="inventory_2"
             title={t('cacheIndexes.noSummaryTitle')}
             hint={t('cacheIndexes.noSummaryHint')}
-            minHeight={140}
+            minHeight={96}
           />
         ) : (
           <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2 xl:grid-cols-4">
@@ -195,9 +205,14 @@ export default function CacheIndexes() {
       {items.length === 0 ? (
         <EmptyState
           icon="inventory_2"
-          title={t('cacheIndexes.emptyTitle')}
-          hint={t('cacheIndexes.emptyHint')}
-          minHeight={220}
+          title={t(hasFilters ? 'cacheIndexes.emptyTitle' : 'cacheIndexes.emptyUnfilteredTitle')}
+          hint={t(hasFilters ? 'cacheIndexes.emptyHint' : 'cacheIndexes.emptyUnfilteredHint')}
+          minHeight={160}
+          action={hasFilters ? (
+            <ButtonV2 type="button" variant="secondary" size="sm" onClick={clearFilters}>
+              {t('cacheIndexes.clearFilters')}
+            </ButtonV2>
+          ) : undefined}
         />
       ) : (
         <TableViewport label={t('cacheIndexes.tableLabel')} minWidth={canWrite ? 1210 : 1160}>

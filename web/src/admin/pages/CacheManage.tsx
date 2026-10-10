@@ -184,7 +184,7 @@ export default function CacheManageV2() {
         </>
       ) : undefined}
     >
-      <div className="space-y-12">
+      <div className={distribution?.total_size === 0 ? 'space-y-8' : 'space-y-12'}>
       {/* ── Storage overview + Treemap (no card wrappers) ─────────── */}
       {distributionQuery.isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
@@ -196,7 +196,7 @@ export default function CacheManageV2() {
             <StaleDataNotice onRefresh={() => { void distributionQuery.refetch() }} />
           )}
           {distribution ? (
-        <div className="grid grid-cols-1 gap-y-12 xl:grid-cols-3 xl:gap-x-10">
+        <div className={`grid grid-cols-1 xl:grid-cols-3 xl:gap-x-10 ${distribution.total_size === 0 ? 'gap-y-6' : 'gap-y-12'}`}>
           {/* Left: usage + ecosystem breakdown */}
           <section>
             <SectionHeader title={t('cache.storageOverview')} />
@@ -288,7 +288,7 @@ export default function CacheManageV2() {
                 </Treemap>
               </ResponsiveContainer>
             ) : (
-              <EmptyState icon="grid_view" title={t('noData')} minHeight={200} />
+              <EmptyState icon="grid_view" title={t('noData')} minHeight={distribution.total_size === 0 ? 96 : 200} />
             )}
           </section>
         </div>

@@ -19,7 +19,7 @@ import IconButton from '@/components/IconButton'
 import QueryErrorState from '@/components/QueryErrorState'
 import AdminPage from '@/admin/components/AdminPage'
 import { usePrincipal } from '@/hooks/usePrincipal'
-import { useTransientFlag } from '@/hooks/useTransientFlag'
+import { useTransientState } from '@/hooks/useTransientFlag'
 import { getApiError } from '@/lib/apiError'
 import type {
   AdminUser,
@@ -53,7 +53,7 @@ export default function UsersV2() {
   const [tokenForm, setTokenForm] = useState<CreateAPITokenRequest>({ name: '', permissions: 'readonly', ttl: '7d' })
   const [createdToken, setCreatedToken] = useState<string | null>(null)
   const [tokenResultOpen, setTokenResultOpen] = useState(false)
-  const [copied, showCopied] = useTransientFlag()
+  const [copied, showCopied, resetCopied] = useTransientState(false)
   const [togglingUserIds, setTogglingUserIds] = useState<ReadonlySet<number>>(() => new Set())
   const [disableTarget, setDisableTarget] = useState<AdminUser | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<APITokenSummary | null>(null)
@@ -91,7 +91,19 @@ export default function UsersV2() {
       return next
     }),
   })
-  const createTokenMutation = useMutation({ mutationFn: (data: CreateAPITokenRequest) => adminApi.createToken(data), onSuccess: (res) => { setCreatedToken(res.data.token); setTokenDialogOpen(false); setTokenResultOpen(true); queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] }) } })
+  const createTokenMutation = useMutation({
+    mutationFn: async (data: CreateAPITokenRequest) => {
+      const response = await adminApi.createToken(data)
+      // Do not retain the one-time secret in the mutation cache.
+      setCreatedToken(response.data.token)
+    },
+    onSuccess: () => {
+      setTokenDialogOpen(false)
+      setTokenResultOpen(true)
+      setTokenForm({ name: '', permissions: 'readonly', ttl: '7d' })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'tokens'] })
+    },
+  })
   const deleteTokenMutation = useMutation({
     mutationFn: (id: number) => adminApi.deleteToken(id),
     onSuccess: () => {
@@ -116,6 +128,22 @@ export default function UsersV2() {
     if (!canWrite) return
     toggleUserMutation.reset()
     toggleUserMutation.mutate({ id: user.id, enabled: true })
+  }
+  function openTokenDialog() {
+    createTokenMutation.reset()
+    setTokenForm({ name: '', permissions: 'readonly', ttl: '7d' })
+    setTokenDialogOpen(true)
+  }
+  function closeTokenDialog() {
+    if (createTokenMutation.isPending) return
+    setTokenDialogOpen(false)
+    createTokenMutation.reset()
+  }
+  function closeTokenResult() {
+    setTokenResultOpen(false)
+    setCreatedToken(null)
+    resetCopied()
+    createTokenMutation.reset()
   }
   function openRevokeDialog(token: APITokenSummary) {
     deleteTokenMutation.reset()
@@ -142,7 +170,7 @@ export default function UsersV2() {
   async function copyToken() {
     if (!createdToken) return
     if (await copyText(createdToken)) {
-      showCopied()
+      showCopied(true)
     }
   }
 
@@ -153,7 +181,7 @@ export default function UsersV2() {
 
   const userColumns = [
     { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-md text-[13px] font-[500] shrink-0" style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
-    { key: 'role', label: t('users.role'), render: (v: unknown) => <BadgeV2 variant={(v as string) === 'admin' ? 'ecosystem' : 'default'}>{v as string}</BadgeV2> },
+    { key: 'role', label: t('users.role'), render: (v: unknown) => <BadgeV2 variant={(v as string) === 'admin' ? 'ecosystem' : 'default'}>{t((v as string) === 'admin' ? 'users.admin' : 'users.readonly')}</BadgeV2> },
     { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'error'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
@@ -162,7 +190,7 @@ export default function UsersV2() {
 
   const tokenColumns = [
     { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-[500]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-    { key: 'permissions', label: t('users.permissions'), render: (v: unknown) => <BadgeV2>{v as string}</BadgeV2> },
+    { key: 'permissions', label: t('users.permissions'), render: (v: unknown) => <BadgeV2>{t((v as string) === 'readwrite' ? 'users.readwrite' : 'users.readonly')}</BadgeV2> },
     { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'expires_at', label: t('users.expiresAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverExpires')}</span> },
     { key: 'id', label: t('actions'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => canWrite ? <ButtonV2 variant="ghost" size="sm" className="!text-[12px]" style={{ color: 'var(--danger)' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openRevokeDialog(row) }}>{t('users.revoke')}</ButtonV2> : null },
@@ -233,7 +261,7 @@ export default function UsersV2() {
       <section>
         <SectionHeader
           title={t('users.apiTokensTitle')}
-          action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={() => { createTokenMutation.reset(); setTokenDialogOpen(true) }}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2> : undefined}
+          action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={openTokenDialog}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2> : undefined}
         />
         {tokensQuery.isPending ? (
           <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
@@ -257,13 +285,13 @@ export default function UsersV2() {
         <form onSubmit={handleUserSubmit} className="space-y-4">
           <InputV2 label={t('login.username')} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} disabled={!!editUserId} required={!editUserId} />
           <InputV2 label={editUserId ? t('users.newPasswordHint') : t('login.password')} hint={t('users.passwordPolicy')} type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
-          <SelectV2 label={t('users.role')} value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">admin</option><option value="readonly">readonly</option></SelectV2>
+          <SelectV2 label={t('users.role')} value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">{t('users.admin')}</option><option value="readonly">{t('users.readonly')}</option></SelectV2>
           {userSaveError && <InlineNotice tone="danger">{getApiError(userSaveError).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={isUserSaving} onClick={closeUserDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</ButtonV2></div>
         </form>
       </ModalV2>
 
-      <ModalV2 open={tokenDialogOpen} onClose={() => setTokenDialogOpen(false)} title={t('users.generateToken')} closeDisabled={createTokenMutation.isPending}>
+      <ModalV2 open={tokenDialogOpen} onClose={closeTokenDialog} title={t('users.generateToken')} closeDisabled={createTokenMutation.isPending}>
         <form onSubmit={handleTokenSubmit} className="space-y-4">
           <InputV2
             label={t('name')}
@@ -275,18 +303,18 @@ export default function UsersV2() {
           <SelectV2 label={t('users.permissions')} value={tokenForm.permissions} onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value as TokenPermissions })}><option value="readonly">{t('users.readonly')}</option><option value="readwrite">{t('users.readwrite')}</option></SelectV2>
           <SelectV2 label={t('users.validity')} value={tokenForm.ttl} onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value as CreateAPITokenRequest['ttl'] })}><option value="7d">{t('users.days7')}</option><option value="30d">{t('users.days30')}</option><option value="90d">{t('users.days90')}</option><option value="never">{t('users.neverExpires')}</option></SelectV2>
           {createTokenMutation.isError && <InlineNotice tone="danger">{getApiError(createTokenMutation.error).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={createTokenMutation.isPending} onClick={() => setTokenDialogOpen(false)}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</ButtonV2></div>
+          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={createTokenMutation.isPending} onClick={closeTokenDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</ButtonV2></div>
         </form>
       </ModalV2>
 
-      <ModalV2 open={tokenResultOpen} onClose={() => setTokenResultOpen(false)} title={t('users.tokenGenerated')}>
+      <ModalV2 open={tokenResultOpen} onClose={closeTokenResult} title={t('users.tokenGenerated')}>
         <p className="text-[14px] mb-3" style={{ color: 'var(--text-soft)' }}>{t('users.tokenCopyWarning')}</p>
         <div className="flex items-center gap-2 rounded-sm p-3" style={{ background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
           <code className="flex-1 font-mono text-[13px] break-all" style={{ color: 'var(--text)' }}>{createdToken}</code>
           <IconButton icon={copied ? 'check' : 'content_copy'} label={t('users.copyToken')} onClick={copyToken} />
         </div>
         <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('users.tokenSaveWarning')}</p>
-        <div className="flex justify-end mt-4"><ButtonV2 onClick={() => setTokenResultOpen(false)}>{t('confirm')}</ButtonV2></div>
+        <div className="flex justify-end mt-4"><ButtonV2 onClick={closeTokenResult}>{t('confirm')}</ButtonV2></div>
       </ModalV2>
 
       <ConfirmActionDialog
@@ -295,7 +323,7 @@ export default function UsersV2() {
         description={t('users.disableImpact', { name: disableTarget?.username ?? '' })}
         details={disableTarget ? [
           { label: t('users.user'), value: disableTarget.username },
-          { label: t('users.role'), value: disableTarget.role, mono: true },
+          { label: t('users.role'), value: t(disableTarget.role === 'admin' ? 'users.admin' : 'users.readonly') },
           { label: t('status'), value: t('users.enabled') },
         ] : []}
         cancelLabel={t('cancel')}
@@ -315,7 +343,7 @@ export default function UsersV2() {
         description={t('users.revokeImpact', { name: revokeTarget?.name ?? '' })}
         details={revokeTarget ? [
           { label: t('name'), value: revokeTarget.name },
-          { label: t('users.permissions'), value: revokeTarget.permissions, mono: true },
+          { label: t('users.permissions'), value: t(revokeTarget.permissions === 'readwrite' ? 'users.readwrite' : 'users.readonly') },
           {
             label: t('users.expiresAt'),
             value: revokeTarget.expires_at ? formatTime(revokeTarget.expires_at) : t('users.neverExpires'),

@@ -72,6 +72,18 @@ test('tab workspaces keep their own commands below the rail', async ({ page }) =
   await expect(description).toBeVisible()
 })
 
+test('empty cache keeps the search controls close to the storage overview on mobile', async ({ page }) => {
+  await mockAdminApi(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/admin/cache')
+
+  await expect(page.getByRole('textbox', { name: '搜索缓存' })).toBeVisible()
+  await expect(page.getByText('暂无数据')).toBeVisible()
+  const filters = await page.locator('[data-admin-filters]').boundingBox()
+  expect(filters?.y).toBeLessThan(750)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+})
+
 test('warmed workspace destinations switch without a loading flash', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
 

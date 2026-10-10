@@ -623,13 +623,7 @@ export default function UpstreamsV2() {
                 icon="hub"
                 title={t('upstreams.emptyTitle')}
                 hint={canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}
-                minHeight={220}
-                action={canWrite ? (
-                  <ButtonV2 type="button" className="min-h-[40px]" onClick={openCreate}>
-                    <Icon name="add" size="sm" />
-                    {t('upstreams.addFirst')}
-                  </ButtonV2>
-                ) : undefined}
+                minHeight={160}
               />
             ) : visibleUpstreams.length === 0 ? (
               <EmptyState

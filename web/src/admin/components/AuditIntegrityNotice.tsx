@@ -55,44 +55,32 @@ export default function AuditIntegrityNotice() {
     )
   }
   if (!report) return null
-  if (feed?.remote_configured && feed.remote_last_error) {
+  const chainBroken = !report.ok
+  const anchorBroken = anchors?.configured && !anchors.ok
+  const remoteError = feed?.remote_configured && feed.remote_last_error
+  if (chainBroken || anchorBroken || remoteError || query.isRefetchError) {
     return (
-      <InlineNotice tone="warning">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span>{t('auditIntegrity.remoteError', { message: feed.remote_last_error })}</span>
+      <div className="space-y-2">
+        {chainBroken && (
+          <InlineNotice tone="danger">
+            {t('auditIntegrity.broken', { id: report.broken_at_id ?? 0, reason: report.reason ?? '' })}
+          </InlineNotice>
+        )}
+        {anchorBroken && (
+          <InlineNotice tone="danger">
+            {t('auditIntegrity.anchorBroken', { id: anchors.broken_at_id ?? 0, reason: anchors.reason ?? '' })}
+          </InlineNotice>
+        )}
+        {query.isRefetchError && (
+          <InlineNotice tone="warning">{t('auditIntegrity.stale')}</InlineNotice>
+        )}
+        {remoteError && (
+          <InlineNotice tone="warning">{t('auditIntegrity.remoteError', { message: feed.remote_last_error })}</InlineNotice>
+        )}
+        <div className="flex justify-end">
           {verifyButton}
         </div>
-      </InlineNotice>
-    )
-  }
-  if (anchors?.configured && !anchors.ok) {
-    return (
-      <InlineNotice tone="danger">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span>
-            {t('auditIntegrity.anchorBroken', {
-              id: anchors.broken_at_id ?? 0,
-              reason: anchors.reason ?? '',
-            })}
-          </span>
-          {verifyButton}
-        </div>
-      </InlineNotice>
-    )
-  }
-  if (!report.ok) {
-    return (
-      <InlineNotice tone="danger">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span>
-            {t('auditIntegrity.broken', {
-              id: report.broken_at_id ?? 0,
-              reason: report.reason ?? '',
-            })}
-          </span>
-          {verifyButton}
-        </div>
-      </InlineNotice>
+      </div>
     )
   }
   return (

@@ -174,3 +174,41 @@ test('enabling remains direct but exposes a visible failure with retry', async (
   await expect(failure).not.toBeVisible()
   await expect(page.getByRole('button', { name: /禁用 operator|Disable operator/ })).toBeVisible()
 })
+
+test('one-time token stays visible until confirmed, then clears before another generation', async ({ page }) => {
+  let releaseRequest!: () => void
+  let startRequest!: () => void
+  const started = new Promise<void>(resolve => { startRequest = resolve })
+  const released = new Promise<void>(resolve => { releaseRequest = resolve })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/users': [operator],
+    'GET /api/v1/admin/tokens': [apiToken],
+    'POST /api/v1/admin/tokens': async () => {
+      startRequest()
+      await released
+      return { token: 'one-time-secret-value' }
+    },
+  })
+  await page.goto('/admin/users')
+
+  await expect(page.getByRole('region', { name: '用户表格' })).toContainText('只读')
+  await expect(page.getByRole('region', { name: 'API Token 表格' })).toContainText('读写')
+  await page.getByRole('button', { name: '生成 Token' }).click()
+  const create = page.getByRole('dialog', { name: '生成 Token' })
+  await create.getByRole('textbox', { name: '名称' }).fill('build-agent')
+  await create.getByRole('button', { name: '生成', exact: true }).click()
+  await started
+  await expect(create.getByRole('button', { name: '取消' })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(create).toBeVisible()
+  releaseRequest()
+
+  const result = page.getByRole('dialog', { name: 'Token 已生成' })
+  await expect(result).toContainText('one-time-secret-value')
+  await result.getByRole('button', { name: '确定' }).click()
+  await expect(result).toHaveCount(0)
+  await expect(page.getByText('one-time-secret-value')).toHaveCount(0)
+  await page.getByRole('button', { name: '生成 Token' }).click()
+  await expect(create.getByRole('textbox', { name: '名称' })).toHaveValue('')
+  await expect(create.getByRole('combobox', { name: '权限' })).toHaveValue('readonly')
+})

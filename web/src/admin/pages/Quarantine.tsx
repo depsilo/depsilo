@@ -16,6 +16,8 @@ import TableViewport from '@/components/TableViewport'
 import QueryErrorState from '@/components/QueryErrorState'
 import SelectV2 from '@/components/Select'
 import AdminPage from '@/admin/components/AdminPage'
+import AdminPagination from '@/admin/components/AdminPagination'
+import { useAppToast } from '@/components/Toast'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
 import { isAdminEcosystem } from '@/lib/adminApi.types'
@@ -50,6 +52,7 @@ type ApprovedVersion = {
 
 const ECOSYSTEMS = ['pypi', 'apt', 'npm', 'go', 'cargo', 'maven', 'rubygems', 'composer', 'nuget', 'conda', 'cran', 'alpine', 'helm', 'docker', 'huggingface']
 const ACTIONS = ['blocked', 'malware_blocked', 'tamper_detected', 'served_eligible', 'bypassed', 'malware_bypassed', 'warned', 'malware_warned', 'approved', 'approval_revoked', 'override_created', 'override_revoked']
+const PAGE_SIZE = 50
 
 type BlocklistStatus = {
   enabled: boolean
@@ -112,6 +115,8 @@ export default function Quarantine() {
   const qc = useQueryClient()
   const { canWrite } = usePrincipal()
   const [tab, setTab] = useState<'events' | 'approvals' | 'blocklist'>('events')
+  const [eventsPage, setEventsPage] = useState(1)
+  const [approvalsPage, setApprovalsPage] = useState(1)
 
   // Filters (events tab)
   const [ecoFilter, setEcoFilter] = useState('all')
@@ -123,7 +128,7 @@ export default function Quarantine() {
   const [revokeReason, setRevokeReason] = useState('')
 
   // ── Data ──────────────────────────────────────────────────────
-  const eventsParams: Record<string, string | number> = { limit: 100 }
+  const eventsParams: Record<string, string | number> = { limit: PAGE_SIZE, offset: (eventsPage - 1) * PAGE_SIZE }
   if (ecoFilter !== 'all') eventsParams.ecosystem = ecoFilter
   if (actionFilter !== 'all') eventsParams.action = actionFilter
   if (pkgSearch.trim()) eventsParams.package = pkgSearch.trim()
@@ -140,9 +145,9 @@ export default function Quarantine() {
   })
 
   const approvalsQ = useQuery({
-    queryKey: ['admin', 'quarantine', 'approvals'],
+    queryKey: ['admin', 'quarantine', 'approvals', approvalsPage],
     queryFn: async ({ signal }) => {
-      const res = await adminApi.listQuarantineApprovals({ limit: 200 }, { signal })
+      const res = await adminApi.listQuarantineApprovals({ limit: PAGE_SIZE, offset: (approvalsPage - 1) * PAGE_SIZE }, { signal })
       return res.data as { items: ApprovedVersion[]; total: number }
     },
     enabled: tab === 'approvals',
@@ -156,6 +161,7 @@ export default function Quarantine() {
       adminApi.revokeQuarantineApproval(revokeTarget!.id, { reason: revokeReason.trim() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
+      if (approvalsPage > 1 && approvalsQ.data?.items.length === 1) setApprovalsPage(approvalsPage - 1)
       setRevokeOpen(false)
       setRevokeTarget(null)
       setRevokeReason('')
@@ -166,7 +172,6 @@ export default function Quarantine() {
   return (
     <AdminPage description={t('quarantine.subtitle')}>
     <div className="space-y-6">
-      <InlineNotice tone="warning">{t('quarantine.minimum_age_unavailable')}</InlineNotice>
       <div className="max-w-xs">
         <SelectV2
           label={t('quarantine.view')}
@@ -183,14 +188,16 @@ export default function Quarantine() {
       </div>
       {tab === 'events' && <EventsTab
         eventsQ={eventsQ}
+        page={eventsPage}
+        setPage={setEventsPage}
         ecoFilter={ecoFilter}
-        setEcoFilter={setEcoFilter}
+        setEcoFilter={value => { setEcoFilter(value); setEventsPage(1) }}
         actionFilter={actionFilter}
-        setActionFilter={setActionFilter}
+        setActionFilter={value => { setActionFilter(value); setEventsPage(1) }}
         pkgSearch={pkgSearch}
-        setPkgSearch={setPkgSearch}
+        setPkgSearch={value => { setPkgSearch(value); setEventsPage(1) }}
       />}
-      {tab === 'approvals' && <ApprovalsTab approvalsQ={approvalsQ} canWrite={canWrite} onRevoke={(row) => {
+      {tab === 'approvals' && <ApprovalsTab approvalsQ={approvalsQ} page={approvalsPage} setPage={setApprovalsPage} canWrite={canWrite} onRevoke={(row) => {
         revokeM.reset()
         setRevokeTarget(row)
         setRevokeReason('')
@@ -244,6 +251,7 @@ export default function Quarantine() {
 
 function EventsTab(props: {
   eventsQ: ReturnType<typeof useQuery>
+  page: number; setPage: (page: number) => void
   ecoFilter: string; setEcoFilter: (v: string) => void
   actionFilter: string; setActionFilter: (v: string) => void
   pkgSearch: string; setPkgSearch: (v: string) => void
@@ -364,6 +372,7 @@ function EventsTab(props: {
         </div>
         </>
         )}
+        <AdminPagination page={props.page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={props.setPage} />
         </div>
       )}
     </div>
@@ -374,10 +383,41 @@ function EventsTab(props: {
 
 function ApprovalsTab(props: {
   approvalsQ: ReturnType<typeof useQuery>
+  page: number; setPage: (page: number) => void
   canWrite: boolean
   onRevoke: (row: ApprovedVersion) => void
 }) {
   const { t } = useTranslation()
+  const qc = useQueryClient()
+  const toast = useAppToast()
+  const [createOpen, setCreateOpen] = useState(false)
+  const [form, setForm] = useState({ ecosystem: '', package: '', version: '', reason: '' })
+  const capabilityQ = useQuery({
+    queryKey: ['admin', 'capabilities', 'summary'],
+    queryFn: ({ signal }) => adminApi.getCapabilitySummary({ signal }),
+    enabled: props.canWrite,
+    staleTime: 30_000,
+    retry: false,
+  })
+  const activeEcosystems = (capabilityQ.data?.data.capabilities ?? [])
+    .filter(fact => fact.name === 'minimum_release_age' && fact.support === 'supported'
+      && (fact.mode === 'warn' || fact.mode === 'block') && fact.ecosystem)
+    .map(fact => fact.ecosystem!)
+  const createM = useMutation({
+    mutationFn: () => adminApi.approveQuarantine({
+      ecosystem: form.ecosystem,
+      package: form.package.trim(),
+      version: form.version.trim(),
+      reason: form.reason.trim(),
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'quarantine'] })
+      props.setPage(1)
+      setCreateOpen(false)
+      setForm({ ecosystem: '', package: '', version: '', reason: '' })
+      toast.show({ tone: 'success', message: t('quarantine.approvals.createSuccess') })
+    },
+  })
   const data = props.approvalsQ.data as { items: ApprovedVersion[]; total: number } | undefined
   const items = data?.items ?? []
 
@@ -390,6 +430,30 @@ function ApprovalsTab(props: {
   }
   return (
     <div className="space-y-3">
+    {props.canWrite && capabilityQ.isError && (
+      <InlineNotice tone="warning">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span>{t('quarantine.approvals.capabilityUnavailable')}</span>
+          <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void capabilityQ.refetch() }}>
+            {t('common.retry')}
+          </ButtonV2>
+        </div>
+      </InlineNotice>
+    )}
+    {props.canWrite && !capabilityQ.isPending && !capabilityQ.isError && activeEcosystems.length === 0 && (
+      <InlineNotice tone="info">{t('quarantine.approvals.noActiveGate')}</InlineNotice>
+    )}
+    {props.canWrite && activeEcosystems.length > 0 && !capabilityQ.isError && (
+      <div className="flex justify-end">
+        <ButtonV2 type="button" size="sm" onClick={() => {
+          createM.reset()
+          setForm({ ecosystem: activeEcosystems[0], package: '', version: '', reason: '' })
+          setCreateOpen(true)
+        }}>
+          <Icon name="add" size="sm" />{t('quarantine.approvals.create')}
+        </ButtonV2>
+      </div>
+    )}
     {Boolean(data) && props.approvalsQ.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void props.approvalsQ.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
     {items.length === 0 ? (
       <EmptyState
@@ -477,6 +541,32 @@ function ApprovalsTab(props: {
     </div>
     </>
     )}
+    <AdminPagination page={props.page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={props.setPage} />
+    <ModalV2
+      open={createOpen}
+      onClose={() => { if (!createM.isPending) setCreateOpen(false) }}
+      closeDisabled={createM.isPending}
+      title={t('quarantine.approvals.createTitle')}
+    >
+      <form className="space-y-4" onSubmit={event => {
+        event.preventDefault()
+        if (!props.canWrite || !activeEcosystems.includes(form.ecosystem) || !form.package.trim()
+          || !form.version.trim() || form.reason.trim().length < 3) return
+        createM.mutate()
+      }}>
+        <SelectV2 label={t('quarantine.col.ecosystem')} value={form.ecosystem} disabled={createM.isPending} onChange={event => setForm({ ...form, ecosystem: event.target.value })}>
+          {activeEcosystems.map(ecosystem => <option key={ecosystem} value={ecosystem}>{ecosystem.toUpperCase()}</option>)}
+        </SelectV2>
+        <InputV2 label={t('quarantine.col.package')} value={form.package} required disabled={createM.isPending} onChange={event => setForm({ ...form, package: event.target.value })} />
+        <InputV2 label={t('quarantine.col.version')} value={form.version} required disabled={createM.isPending} onChange={event => setForm({ ...form, version: event.target.value })} />
+        <InputV2 label={t('quarantine.col.reason')} value={form.reason} required minLength={3} disabled={createM.isPending} onChange={event => setForm({ ...form, reason: event.target.value })} />
+        {createM.isError && <InlineNotice tone="danger">{getApiError(createM.error).message}</InlineNotice>}
+        <div className="flex justify-end gap-2">
+          <ButtonV2 type="button" variant="secondary" disabled={createM.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
+          <ButtonV2 type="submit" aria-busy={createM.isPending || undefined} disabled={createM.isPending || !form.package.trim() || !form.version.trim() || form.reason.trim().length < 3}>{t('quarantine.approvals.create')}</ButtonV2>
+        </div>
+      </form>
+    </ModalV2>
     </div>
   )
 }

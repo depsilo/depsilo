@@ -411,6 +411,10 @@ test('Security capability overview renders source-bound and safety-disabled fact
 
   const section = page.getByRole('region', { name: /运行时能力状态|Runtime capability status/ })
   await expect(section).toContainText(/来源已绑定|Source-bound/)
+  await expect(section).toContainText('支持范围: 已支持')
+  await expect(section).toContainText('当前模式: 拦截')
+  await expect(section).toContainText('当前模式: 未启用')
+  await expect(section).not.toContainText('supported')
   await expect(section).toContainText(/安全暂停|Safety paused/)
   await expect(section).toContainText(/从未同步|Never synced/)
   await expect(section).toContainText(/近似（Last-Modified）|Approximate \(Last-Modified\)/)

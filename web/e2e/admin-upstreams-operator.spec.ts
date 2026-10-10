@@ -90,6 +90,17 @@ async function expectAssociatedError(input: Locator, expectedText: string) {
   expect(association.descriptions).toContain(expectedText)
 }
 
+test('an empty upstream list has one working create action', async ({ page }) => {
+  await mockAdminApi(page, { 'GET /api/v1/admin/upstreams': listResponse([]) })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/admin/upstreams')
+
+  await expect(page.getByRole('button', { name: '添加上游源', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: '添加第一个上游源' })).toHaveCount(0)
+  await page.getByRole('button', { name: '添加上游源', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '添加上游源' })).toBeVisible()
+})
+
 test('desktop adaptive layout keeps a large ecosystem operable and exposes routing metadata', async ({ page }) => {
   const upstreams = Array.from({ length: 27 }, (_, index) => makeUpstream(index + 1))
   await page.setViewportSize({ width: 1440, height: 1000 })
@@ -293,7 +304,7 @@ test('invalid upstream and proxy schemes expose associated errors without an API
   })
 
   await page.goto('/admin/upstreams')
-  await page.getByRole('button', { name: 'Add first upstream', exact: true }).click()
+  await page.getByRole('button', { name: 'Add Upstream', exact: true }).click()
 
   const dialog = page.getByRole('dialog', { name: 'Add Upstream' })
   const name = dialog.getByLabel('Name', { exact: true })
