@@ -13,6 +13,8 @@ export interface PolicyStatusSignal {
   isStale: boolean
   /** The engine reports a failure without a usable last-known-good snapshot. */
   isUnverified: boolean
+  /** The engine has not needed to load its first rule snapshot yet. */
+  isIdle: boolean
   needsAttention: boolean
   /** Pre-formatted relative age of the last good snapshot, when one exists. */
   refreshTime: string | null
@@ -57,13 +59,19 @@ export function usePolicyStatus(): PolicyStatusSignal {
   // when the first policy load has never succeeded.
   const isStale = status?.using_stale_snapshot === true
   const unavailable = query.isError
-  const isUnverified = unavailable || (
+  const snapshotLoadedAt = status?.snapshot_loaded_at ?? status?.last_successful_refresh
+  const isIdle = status?.status === 'unavailable'
+    && status.degraded === false
+    && status.refresh_failures === 0
+    && !snapshotLoadedAt
+    && !isStale
+    && !unavailable
+  const isUnverified = unavailable || (!isIdle &&
     status !== undefined
     && status.status !== 'healthy'
     && status.status !== 'ready'
     && !isStale
   )
-  const snapshotLoadedAt = status?.snapshot_loaded_at ?? status?.last_successful_refresh
   const refreshTime = snapshotLoadedAt
     ? (formatSnapshotAge(status?.snapshot_age_seconds ?? Number.NaN, i18n.language)
       || formatTime(snapshotLoadedAt, 'relative', i18n.language))
@@ -74,6 +82,7 @@ export function usePolicyStatus(): PolicyStatusSignal {
     unavailable,
     isStale,
     isUnverified,
+    isIdle,
     needsAttention: isStale || isUnverified,
     refreshTime,
     refreshing: query.isFetching,

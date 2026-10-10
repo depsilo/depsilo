@@ -11,6 +11,13 @@ import { usePolicyStatus } from '../usePolicyStatus'
 export default function PolicyStatusNotice() {
   const { t } = useTranslation()
   const policy = usePolicyStatus()
+  if (policy.isIdle) {
+    return (
+      <div data-admin-policy-idle className="mb-4" role="status">
+        <InlineNotice tone="info">{t('policy.awaitingFirstEvaluation')}</InlineNotice>
+      </div>
+    )
+  }
   if (!policy.needsAttention) return null
 
   return (

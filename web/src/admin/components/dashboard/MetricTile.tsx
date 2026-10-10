@@ -151,7 +151,7 @@ export default function MetricTile({
               <button
                 type="button"
                 aria-label={infoLabel}
-                className="dash-focus ml-auto grid size-7 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+                className="dash-focus ml-auto grid size-[40px] shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
                 style={{ color: 'var(--dash-muted)' }}
               >
                 <Icon name="info" size="sm" />

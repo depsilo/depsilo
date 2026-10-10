@@ -400,7 +400,8 @@ const zh = {
       problemsTitle: '需要关注的问题',
       problemsDescription: '以下问题可能影响依赖交付，逐项确认后再判断服务是否健康。',
       problemUpstreams: '{{count}} 个上游源降级或不可用：{{names}}',
-      problemPolicy: '包规则快照已过期或未确认',
+      problemPolicy: '包规则状态暂时不可用',
+      problemPolicyStale: '包规则正在使用旧快照',
       problemCache: '缓存使用率为 {{percent}}%',
       problemUnavailable: '服务状态暂时不可用',
       problemDegraded: '服务部分能力异常',
@@ -565,9 +566,9 @@ const zh = {
       emptyHint: '服务已启动。配置你的第一个客户端开始接收请求。',
     },
 
-    // 包规则快照状态——当请求链路使用过期或不可用的策略快照时，
-    // 在管理后台 shell 中显式提示。
+    // 包规则快照状态——在安全页面中区分首次加载前的空闲状态与真实故障。
     policy: {
+      awaitingFirstEvaluation: '尚未进行首次包规则检查；规则将在首次检查时加载。',
       staleSnapshot: '包规则正在使用过期快照。',
       lastSuccessfulRefresh: '上次成功刷新：{{time}}',
       neverRefreshed: '尚未成功刷新过包规则快照。',

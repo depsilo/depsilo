@@ -99,9 +99,8 @@ export default function RuntimeResources({
   const networkSeries = now?.sparkline?.map(point => point.requests) ?? []
 
   return (
-    // One row of divided cells inside the merged Runtime status card. The
-    // accessible name replaces the old "程序资源占用" heading; the tiles label
-    // themselves and the section no longer pays for a second card surface.
+    // Diagnostics sit below request outcomes; the status strip stays focused
+    // on service health and activity.
     <div
       data-dashboard-resources
       data-dashboard-kpis

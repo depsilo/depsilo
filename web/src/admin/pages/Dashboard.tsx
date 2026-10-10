@@ -30,6 +30,7 @@ import {
   writeDashboardRange,
 } from '@/lib/dashboardOverview'
 import { formatTime } from '@/lib/utils'
+import './Dashboard.css'
 
 const TREND_REFRESH_INTERVAL: Record<DashboardRange, number> = {
   '1h': 5_000,
@@ -54,6 +55,7 @@ export default function Dashboard() {
   const { t } = useTranslation()
   const [range, setRange] = useState<DashboardRange>(() => readDashboardRange())
   const [showProblems, setShowProblems] = useState(false)
+  const [mobileResourcesOpen, setMobileResourcesOpen] = useState(false)
   const [detailsLogId, setDetailsLogId] = useState<number | null>(null)
   const policy = usePolicyStatus()
 
@@ -186,7 +188,7 @@ export default function Dashboard() {
         data-dashboard-root
         data-query-key="dashboard-snapshot"
         data-dashboard-health
-        className="dashboard-surface flex min-w-0 flex-col gap-5"
+        className="dashboard-surface flex min-w-0 flex-col gap-4"
       >
           {/* One scope row states what the filter covers, so the cards do not
               each repeat the period and the control stops competing with the
@@ -209,7 +211,7 @@ export default function Dashboard() {
                     type="button"
                     onClick={() => handleRangeChange(value)}
                     aria-pressed={active}
-                    className="dash-focus min-h-8 px-3 text-[13px] font-medium transition-colors duration-150"
+                    className="dash-focus min-h-[40px] px-3 text-[13px] font-medium transition-colors duration-150"
                     style={{
                       background: active ? 'var(--dash-accent-soft)' : 'transparent',
                       color: active ? 'var(--dash-accent)' : 'var(--dash-muted)',
@@ -222,25 +224,14 @@ export default function Dashboard() {
               })}
             </div>
           </div>
-          {/* Runtime resources come from /admin/runtime and stay mounted even
-              when the period aggregate fails; they render as the status card's
-              second row so the first screen keeps one surface. */}
           <DashboardStatusStrip
             now={now}
             nowPending={nowPending}
             nowStale={nowStale}
             nowError={nowInitialError}
             status={status}
-            resources={(
-              <RuntimeResources
-                runtime={runtimeQuery.data}
-                runtimePending={runtimePending}
-                now={now}
-                nowPending={nowPending}
-              />
-            )}
-            onOpenProblems={() => setShowProblems(true)}
             onRefresh={refreshAll}
+            onOpenProblems={() => setShowProblems(true)}
           />
 
           {overviewStale && (
@@ -265,18 +256,12 @@ export default function Dashboard() {
                 rangeStart={overview?.range?.start}
                 coverage={overview?.origin_coverage}
               />
-              <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-                <CacheBenefits
-                  period={overview?.window}
-                  prev={overview?.prev}
-                  rangeStart={overview?.range?.start}
-                  coverage={overview?.origin_coverage}
-                />
-                <DashboardAttentionPanel
-                  problems={status.problems}
-                  onOpenProblems={() => setShowProblems(true)}
-                />
-              </div>
+              <CacheBenefits
+                period={overview?.window}
+                prev={overview?.prev}
+                rangeStart={overview?.range?.start}
+                coverage={overview?.origin_coverage}
+              />
             </>
           )}
 
@@ -285,8 +270,8 @@ export default function Dashboard() {
           {/* Chart and request table share a row only while the table can keep
               its readable minimum width; otherwise the table wraps full-width
               onto the next line instead of squeezing into an unreadable column. */}
-          <div className="flex min-w-0 flex-wrap items-start gap-5">
-            <div className="min-w-[min(420px,100%)] grow basis-[480px]">
+          <div className="dashboard-lower-grid flex min-w-0 flex-wrap items-start gap-5">
+            <div data-dashboard-trends-column className="min-w-[min(420px,100%)] grow basis-[480px]">
               {trendsLoading ? (
                 <div className="dash-card p-5">
                   <div aria-hidden className="h-[272px] animate-pulse rounded-md" style={{ background: 'var(--dash-soft)' }} />
@@ -312,22 +297,46 @@ export default function Dashboard() {
               <RecentRequests limit={5} onOpenDetails={setDetailsLogId} />
             </div>
           </div>
+          <section data-dashboard-resources-panel aria-labelledby="overview-resources-heading" className="dashboard-resources-panel" style={{ borderColor: 'var(--dash-border)' }}>
+            <h2 id="overview-resources-heading" className="dashboard-resources-heading" style={{ color: 'var(--dash-ink)' }}>
+              {t('overview.resourcesTitle')}
+            </h2>
+            <button
+              type="button"
+              className="dash-focus dashboard-resources-toggle"
+              style={{ color: 'var(--dash-ink)' }}
+              aria-expanded={mobileResourcesOpen}
+              aria-controls="overview-runtime-resources"
+              onClick={() => setMobileResourcesOpen(open => !open)}
+            >
+              {t('overview.resourcesTitle')}
+              <Icon name="expand_more" size="sm" className={mobileResourcesOpen ? 'rotate-180' : ''} />
+            </button>
+            <div id="overview-runtime-resources" className={`dash-card dashboard-resources-content ${mobileResourcesOpen ? '' : 'hidden sm:block'}`}>
+              <RuntimeResources
+                runtime={runtimeQuery.data}
+                runtimePending={runtimePending}
+                now={now}
+                nowPending={nowPending}
+              />
+            </div>
+          </section>
           {swapped && (
             <p role="status" className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.switchingRange')}</p>
           )}
       </div>
 
-      <ProblemsDialog open={showProblems} onClose={() => setShowProblems(false)} status={status} />
+      <ProblemsDialog open={showProblems} onClose={() => setShowProblems(false)} status={status} policyStale={policy.isStale} />
       <RequestDetailsDialog logId={detailsLogId} onClose={() => setDetailsLogId(null)} />
     </AdminPage>
   )
 }
 
-/** Category text for one issue, shared by the queue row and the dialog. */
-function problemTitle(problem: ServiceProblem, t: TFunction): string {
+/** Category text for one issue in the service-status dialog. */
+function problemTitle(problem: ServiceProblem, t: TFunction, policyStale: boolean): string {
   switch (problem.code) {
     case 'upstreams': return t('overview.problemUpstreams', { count: problem.count ?? 0, names: problem.names ?? '' })
-    case 'policy': return t('overview.problemPolicy')
+    case 'policy': return t(policyStale ? 'overview.problemPolicyStale' : 'overview.problemPolicy')
     case 'cache': return t('overview.problemCache', { percent: (problem.percent ?? 0).toFixed(1) })
     case 'status-unavailable': return t('overview.problemUnavailable')
     default: return t('overview.problemDegraded')
@@ -344,77 +353,17 @@ function problemEntry(code: ServiceProblemCode): { href: string; labelKey: strin
   }
 }
 
-/** Attention queue: real issues only, each opening the centered problem dialog. */
-function DashboardAttentionPanel({ problems, onOpenProblems }: {
-  problems: ServiceProblem[]
-  onOpenProblems: () => void
-}) {
-  const { t } = useTranslation()
-  const visible = problems.slice(0, 3)
-
-  return (
-    <section
-      data-dashboard-attention
-      aria-labelledby="overview-attention-title"
-      className="dash-card flex min-w-0 flex-col"
-    >
-      <header className="flex items-center justify-between gap-2 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
-        <h2 id="overview-attention-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
-          {t('dashboard.needsAttention')}
-        </h2>
-        <span
-          className="font-mono text-[15px] font-semibold tabular-nums"
-          style={{ color: problems.length > 0 ? 'var(--dash-warn)' : 'var(--dash-ok)' }}
-          aria-label={t('dashboard.attentionCount', { count: problems.length })}
-        >
-          {problems.length}
-        </span>
-      </header>
-      {visible.length === 0 ? (
-        <div className="flex items-center gap-3 px-5 py-4">
-          <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full" style={{ background: 'var(--dash-ok-soft)', color: 'var(--dash-ok)' }}>
-            <Icon name="check_circle" size="md" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{t('dashboard.noActiveIssues')}</p>
-            <p className="mt-0.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('dashboard.noActiveIssuesHint')}</p>
-          </div>
-        </div>
-      ) : (
-        <ul className="flex flex-col">
-          {visible.map(problem => (
-            <li key={problem.code} className="border-t first:border-t-0" style={{ borderColor: 'var(--dash-border)' }}>
-              <button
-                type="button"
-                onClick={onOpenProblems}
-                className="dash-focus flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-              >
-                <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-full" style={{ background: 'var(--dash-warn-soft)', color: 'var(--dash-warn)' }}>
-                  <Icon name="warning" size="md" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{problemTitle(problem, t)}</p>
-                  <p className="mt-0.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.problemSuggestion')}</p>
-                </div>
-                <Icon name="chevron_right" size="sm" className="shrink-0" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-/** Centered detail for the attention queue; metric tiles use hover tooltips. */
+/** Centered service-status detail; metric tiles use hover tooltips. */
 function ProblemsDialog({
   open,
   onClose,
   status,
+  policyStale,
 }: {
   open: boolean
   onClose: () => void
   status: ServiceStatusModel
+  policyStale: boolean
 }) {
   const { t } = useTranslation()
   return (
@@ -428,7 +377,7 @@ function ProblemsDialog({
         {status.problems.map(problem => (
           <li key={problem.code} className="rounded-md border px-3 py-2" style={{ borderColor: 'var(--border)' }}>
             <p className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>
-              {problemTitle(problem, t)}
+              {problemTitle(problem, t, policyStale)}
             </p>
             <p className="mt-1 text-[13px]" style={{ color: 'var(--text-soft)' }}>{t('overview.problemSuggestion')}</p>
             {problemEntry(problem.code) && (

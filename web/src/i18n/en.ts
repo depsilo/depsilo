@@ -394,7 +394,8 @@ const en = {
       problemsTitle: 'Items needing attention',
       problemsDescription: 'These can affect dependency delivery. Confirm each one before treating the service as healthy.',
       problemUpstreams: '{{count}} upstreams are degraded or unavailable: {{names}}',
-      problemPolicy: 'The package-rule snapshot is stale or unconfirmed',
+      problemPolicy: 'Policy status is temporarily unavailable',
+      problemPolicyStale: 'Policy rules are using a stale snapshot',
       problemCache: 'Cache usage is {{percent}}%',
       problemUnavailable: 'Service status is temporarily unavailable',
       problemDegraded: 'Part of the service is degraded',
@@ -558,9 +559,9 @@ const en = {
       emptyHint: 'Service is up. Configure your first client to start receiving requests.',
     },
 
-    // Package-rule snapshot status — visible in the Admin shell when the
-    // request path is operating from a stale or unavailable policy snapshot.
+    // Package-rule snapshot status — distinguish first-load idle from failure.
     policy: {
+      awaitingFirstEvaluation: 'No package-rule check has run yet. Rules load at the first evaluation.',
       staleSnapshot: 'Policy rules are using a stale snapshot.',
       lastSuccessfulRefresh: 'Last successful refresh: {{time}}',
       neverRefreshed: 'No successful policy snapshot refresh has completed yet.',

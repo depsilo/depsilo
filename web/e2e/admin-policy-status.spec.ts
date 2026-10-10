@@ -1,5 +1,26 @@
 import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 
+test('a policy engine awaiting its first evaluation is informative, not an active issue', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/policy/status': {
+      status: 'unavailable', degraded: false, using_stale_snapshot: false,
+      snapshot_loaded_at: null, snapshot_age_seconds: 0, refresh_failures: 0,
+      on_load_error: 'use_stale_then_allow',
+    },
+  })
+  await setUiPreferences(page, 'light', 'zh')
+  const policyResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/admin/policy/status'))
+  await page.goto('/admin')
+  await policyResponse
+
+  await expect(page.locator('[data-dashboard-status-strip]')).toContainText('服务正常')
+  await expect(page.locator('[data-dashboard-status-issues]')).toHaveCount(0)
+
+  await page.goto('/admin/rules')
+  await expect(page.locator('[data-admin-policy-status-banner]')).toHaveCount(0)
+  await expect(page.locator('[data-admin-policy-idle]')).toContainText('首次检查')
+})
+
 test('Admin shows when policy decisions use a stale snapshot and can refresh it', async ({ page }) => {
   let calls = 0
   await mockAdminApi(page, {
@@ -61,6 +82,29 @@ test('Admin does not present an unavailable policy probe as healthy', async ({ p
   await expect(banner).toBeVisible()
   await expect(banner).toContainText('Policy status is temporarily unavailable.')
   await expect(banner).not.toContainText('Policy rules are using a stale snapshot.')
+
+  await page.goto('/admin')
+  const issues = page.locator('[data-dashboard-status-issues]')
+  await expect(issues).toBeVisible()
+  await issues.click()
+  await expect(page.locator('[data-dashboard-info-dialog]')).toContainText('Policy status is temporarily unavailable')
+  await expect(page.locator('[data-admin-policy-idle]')).toHaveCount(0)
+})
+
+test('a failed policy status request remains actionable', async ({ page }) => {
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/policy/status': { status: 503, body: { error: 'unavailable' } },
+  })
+  await setUiPreferences(page, 'light', 'zh')
+  await page.goto('/admin')
+
+  const issues = page.locator('[data-dashboard-status-issues]')
+  await expect(issues).toBeVisible()
+  await issues.click()
+  await expect(page.locator('[data-dashboard-info-dialog]')).toContainText('包规则状态暂时不可用')
+  await page.goto('/admin/rules')
+  await expect(page.locator('[data-admin-policy-status-banner]')).toBeVisible()
+  await expect(page.locator('[data-admin-policy-idle]')).toHaveCount(0)
 })
 
 test('policy status belongs to Overview and Governance, including client-side navigation', async ({ page }) => {
@@ -88,12 +132,13 @@ test('policy status belongs to Overview and Governance, including client-side na
 
   const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
   await navigation.locator('a[href="/admin"]').click()
-  // Overview owns policy status as a "needs attention" queue item, so it never
-  // occupies the top of the page ahead of the Dashboard's own content.
-  const attention = page.locator('[data-dashboard-attention]')
-  await expect(attention).toContainText('package-rule snapshot is stale')
-  await attention.getByRole('button').first().click()
+  // Overview surfaces policy status from the service status cell, without a
+  // separate panel ahead of the traffic and benefit sections.
+  const issues = page.locator('[data-dashboard-status-issues]')
+  await expect(issues).toBeVisible()
+  await issues.click()
   const problemDialog = page.locator('[data-slot="dialog-content"]')
+  await expect(problemDialog).toContainText('using a stale snapshot')
   await expect(problemDialog.getByRole('link', { name: 'Review rules' })).toHaveAttribute('href', '/admin/rules')
   await page.keyboard.press('Escape')
   await expect(problemDialog).toHaveCount(0)

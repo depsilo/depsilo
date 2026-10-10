@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import ButtonV2 from '@/components/Button'
@@ -25,11 +24,8 @@ interface StatusCellProps {
   detail: string
   toneColor: string
   toneSoft: string
-  iconSize?: 'md' | 'lg'
   loading?: boolean
-  /** When set, the whole cell becomes the action instead of a detached button. */
   onActivate?: () => void
-  /** Inline affordance appended to the detail line, e.g. "查看问题". */
   actionLabel?: string
 }
 
@@ -40,21 +36,20 @@ function StatusCell({
   detail,
   toneColor,
   toneSoft,
-  iconSize = 'md',
   loading = false,
   onActivate,
   actionLabel,
 }: StatusCellProps) {
-  const body = (
+  const content = (
     <>
       <span
         aria-hidden="true"
-        className={`grid shrink-0 place-items-center rounded-full ${iconSize === 'lg' ? 'size-12' : 'size-9'}`}
+        className="grid size-8 shrink-0 place-items-center rounded-full"
         style={{ background: toneSoft, color: toneColor }}
       >
-        <Icon name={icon} size={iconSize === 'lg' ? 'lg' : 'md'} />
+        <Icon name={icon} size="md" />
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{label}</p>
         {loading ? (
           <span aria-hidden="true" className="mt-1 block h-5 w-28 animate-pulse rounded bg-[var(--dash-soft)]" />
@@ -63,36 +58,30 @@ function StatusCell({
             {title}
           </p>
         )}
-        {/* Wraps instead of truncating: with the problems button on a 1280
-            row the cell narrows and the guidance sentence used to clip. */}
         <p className="mt-0.5 text-[13px] leading-tight" style={{ color: 'var(--dash-muted)' }} title={detail}>
           {detail}
-          {actionLabel && (
-            <>
-              <span aria-hidden="true"> · </span>
-              <span className="inline-flex items-center gap-0.5 font-medium" style={{ color: 'var(--dash-accent)' }}>
-                {actionLabel}
-                <Icon name="chevron_right" size="sm" />
-              </span>
-            </>
-          )}
+          {actionLabel && <span className="ml-1.5 font-medium" style={{ color: 'var(--dash-accent)' }}>{actionLabel}</span>}
         </p>
       </div>
+      {onActivate && <Icon name="chevron_right" size="sm" className="shrink-0" />}
     </>
   )
 
-  if (onActivate) {
-    return (
-      <button
-        type="button"
-        onClick={onActivate}
-        className="dash-focus flex min-w-0 w-full items-center gap-3 px-5 py-4 text-left transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-      >
-        {body}
-      </button>
-    )
-  }
-  return <div className="flex min-w-0 items-center gap-3 px-5 py-4">{body}</div>
+  return onActivate ? (
+    <button
+      type="button"
+      data-dashboard-status-issues
+      aria-haspopup="dialog"
+      onClick={onActivate}
+      className="dashboard-status-cell dashboard-status-action dash-focus"
+    >
+      {content}
+    </button>
+  ) : (
+    <div className="dashboard-status-cell">
+      {content}
+    </div>
+  )
 }
 
 interface DashboardStatusStripProps {
@@ -101,10 +90,8 @@ interface DashboardStatusStripProps {
   nowStale: boolean
   nowError: boolean
   status: ServiceStatusModel
-  /** Resource cells rendered as the card's second, divided row. */
-  resources?: ReactNode
-  onOpenProblems: () => void
   onRefresh: () => void
+  onOpenProblems: () => void
 }
 
 export default function DashboardStatusStrip({
@@ -113,9 +100,8 @@ export default function DashboardStatusStrip({
   nowStale,
   nowError,
   status,
-  resources,
-  onOpenProblems,
   onRefresh,
+  onOpenProblems,
 }: DashboardStatusStripProps) {
   const { t } = useTranslation()
   const nowAvailable = Boolean(now) && !nowError
@@ -161,10 +147,9 @@ export default function DashboardStatusStrip({
           : t('overview.allNominal')}
         toneColor={tone.color}
         toneSoft={tone.soft}
-        iconSize="lg"
         loading={nowPending}
-        onActivate={status.problems.length > 0 && !nowPending ? onOpenProblems : undefined}
-        actionLabel={status.problems.length > 0 && !nowPending ? t('overview.viewProblems') : undefined}
+        onActivate={!nowPending && status.problems.length > 0 ? onOpenProblems : undefined}
+        actionLabel={!nowPending && status.problems.length > 0 ? t('overview.viewProblems') : undefined}
       />
       <StatusCell
         icon="speed"
@@ -201,16 +186,16 @@ export default function DashboardStatusStrip({
       data-dashboard-status-strip
       data-query-key="now"
       aria-labelledby="overview-runtime-title"
-      className="dash-card flex min-w-0 flex-col"
+      className="dashboard-status dash-card flex min-w-0 flex-col"
     >
-      <header className="flex min-w-0 items-center border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
-        <h2 id="overview-runtime-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+      <header className="dashboard-status-heading" style={{ borderColor: 'var(--dash-border)' }}>
+        <h2 id="overview-runtime-title" className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
           {t('overview.runtimeStatusLabel')}
         </h2>
       </header>
       <div
         aria-busy={nowPending || undefined}
-        className="flex min-w-0 flex-col gap-3 py-1 xl:flex-row xl:items-center"
+        className="flex min-w-0 flex-col gap-2 xl:flex-row xl:items-center"
       >
         <div className="grid min-w-0 flex-1 grid-cols-1 divide-y divide-[var(--dash-border)] sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
           {cells}
@@ -228,11 +213,6 @@ export default function DashboardStatusStrip({
           </div>
         )}
       </div>
-      {resources && (
-        <div className="min-w-0 border-t" style={{ borderColor: 'var(--dash-border)' }}>
-          {resources}
-        </div>
-      )}
     </section>
   )
 }

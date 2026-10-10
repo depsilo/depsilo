@@ -43,6 +43,7 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
   return (
     <section
       data-dashboard-recent-requests
+      data-dashboard-recent-empty={!query.isPending && !initialError && items.length === 0 ? 'true' : undefined}
       aria-labelledby="overview-recent-title"
       aria-busy={query.isPending || undefined}
       className="dash-card flex min-w-0 flex-col"
@@ -86,7 +87,7 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
           {getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}
         </p>
       ) : items.length === 0 ? (
-        <div className="flex min-h-[160px] flex-col items-center justify-center gap-2 px-5 pb-6 text-center">
+        <div className="flex min-h-[96px] flex-col items-center justify-center gap-2 px-5 pb-5 text-center">
           <span aria-hidden className="grid size-9 place-items-center rounded-full" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
             <Icon name="download" size="md" />
           </span>

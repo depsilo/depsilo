@@ -52,7 +52,7 @@ export default function RequestFlow({
       aria-label={t('overview.flowAria')}
       className="flex min-w-0 flex-col gap-4"
     >
-      <div className="grid min-w-0 grid-cols-1 items-center gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(120px,0.7fr)_minmax(0,1fr)_minmax(120px,0.7fr)_minmax(0,1fr)] lg:gap-4">
+      <div className="dashboard-flow-grid grid min-w-0 grid-cols-1 items-center gap-3 lg:grid-cols-6 lg:gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(120px,0.7fr)_minmax(0,1fr)_minmax(120px,0.7fr)_minmax(0,1fr)]">
         <FlowNode
           testId="traffic-served-total"
           tone="memory"
@@ -281,7 +281,7 @@ function InfoHint({ text, label }: { text: string; label: string }) {
       <button
         type="button"
         aria-label={label}
-        className="dash-focus grid size-7 shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+        className="dash-focus grid size-[40px] shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
         style={{ color: 'var(--dash-muted)' }}
       >
         <Icon name="info" size="sm" />
