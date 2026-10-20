@@ -1,0 +1,13 @@
+{
+  "package": "vllm==0.10.2",
+  "python_version": "3.11",
+  "platform": "linux/amd64",
+  "channel": "",
+  "resolver": "uv 0.12.18",
+  "source_index": "https://pypi.org/simple/",
+  "lock_command": "uv pip compile requirements.in --python-version 3.11 --python-platform x86_64-unknown-linux-gnu --default-index https://pypi.org/simple/ --generate-hashes --no-annotate --no-header --no-build",
+  "hash_scope": "PyPI wheel hashes from resolver lock, filtered to the recorded Linux x86_64 CPython 3.11 client tags",
+  "torch_dependency": "2.8.0",
+  "installation_status": "not run; input preparation only",
+  "client_image_for_hash_selection": "python@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce"
+}

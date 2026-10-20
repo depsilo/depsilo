@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
@@ -77,6 +79,7 @@ func newReadAuthRouter(t *testing.T) (*gin.Engine, string, string) {
 		LifecycleContext: context.Background(),
 		DB:               database,
 		Config:           cfg,
+		ConfigStore:      config.NewStore(filepath.Join(t.TempDir(), "config.toml"), cfg, zap.NewAtomicLevel()),
 		EventBus:         cache.NewEventBus(),
 	})
 	return router, jwtToken, apiToken
@@ -254,6 +257,58 @@ func TestOnboardingRoutesRequireAdminCapabilities(t *testing.T) {
 			router.ServeHTTP(response, request)
 			if response.Code != test.want {
 				t.Fatalf("status = %d, want %d; body=%q", response.Code, test.want, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestDockerBootstrapRoutesRequireAdminCapabilities(t *testing.T) {
+	router, jwtToken, apiToken := newReadAuthRouter(t)
+	for _, test := range []struct {
+		name   string
+		method string
+		token  string
+		want   int
+	}{
+		{name: "anonymous read", method: http.MethodGet, want: http.StatusUnauthorized},
+		{name: "JWT read", method: http.MethodGet, token: jwtToken, want: http.StatusOK},
+		{name: "readonly read", method: http.MethodGet, token: apiToken, want: http.StatusOK},
+		{name: "anonymous write", method: http.MethodPost, want: http.StatusUnauthorized},
+		{name: "readonly write", method: http.MethodPost, token: apiToken, want: http.StatusForbidden},
+		{name: "JWT write", method: http.MethodPost, token: jwtToken, want: http.StatusOK},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(test.method, "/api/v1/admin/docker/bootstrap", nil)
+			if test.token != "" {
+				request.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			router.ServeHTTP(response, request)
+			if response.Code != test.want {
+				t.Fatalf("status = %d, want %d; body=%q", response.Code, test.want, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestCacheTransfersRequireAdminReadAuthentication(t *testing.T) {
+	router, jwtToken, apiToken := newReadAuthRouter(t)
+	for _, tc := range []struct {
+		name, token string
+		status      int
+	}{{"anonymous", "", http.StatusUnauthorized}, {"administrator", jwtToken, http.StatusOK}, {"readonly", apiToken, http.StatusOK}} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/cache/transfers", nil)
+			if tc.token != "" {
+				req.Header.Set("Authorization", "Bearer "+tc.token)
+			}
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			if response.Code != tc.status {
+				t.Fatalf("status=%d want=%d", response.Code, tc.status)
+			}
+			if tc.status == http.StatusOK && !strings.Contains(response.Body.String(), `"items":[]`) {
+				t.Fatalf("unexpected empty result: %s", response.Body.String())
 			}
 		})
 	}

@@ -450,6 +450,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'docker', name: 'Docker', hint: 'Daemon registry mirror',
         quick:      { lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
+        test:       { lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
         ],
@@ -476,7 +477,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         ],
         persistent: { file: '/etc/containerd/config.toml', lang: 'toml',
           body: '[plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]\n  endpoint = ["{URL}"]' },
-        verify:     { lang: 'sh', body: 'ctr -n k8s.io image pull {HOST}/library/alpine:3.19' },
+        verify:     { lang: 'sh', body: 'crictl pull {HOST}/library/alpine:3.19' },
         paths: [
           { os: 'containerd', path: '/etc/containerd/config.toml' },
           { os: 'k3s',        path: '/etc/rancher/k3s/registries.yaml' },

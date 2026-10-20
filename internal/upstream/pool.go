@@ -114,15 +114,17 @@ type FetchResult struct {
 	// Body remains part of the exchange lifecycle: a complete EOF records a
 	// successful origin response, while an early Close or read error records a
 	// failure. Callers must always close it.
-	Body         io.ReadCloser
-	ContentType  string
-	Size         int64
-	StatusCode   int
-	ETag         string
-	LastModified string
+	Body            io.ReadCloser
+	ContentType     string
+	Size            int64
+	StatusCode      int
+	ETag            string
+	LastModified    string
+	ContentRange    string
+	ContentEncoding string
 	// URL is the final response URL after redirects, with credentials and the
-	// fragment removed. Adapters use it only as a base for resolving links
-	// declared by upstream metadata.
+	// fragment removed. It supports metadata link resolution and checks that
+	// resumed artifact reads stay on the same final target.
 	URL string
 }
 
@@ -390,11 +392,18 @@ func (u *Upstream) fetchURL(
 }
 
 func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchResult, error) {
+	return u.doWithHeaders(ctx, reqURL, report, nil)
+}
+
+func (u *Upstream) doWithHeaders(ctx context.Context, reqURL string, report bool, headers map[string]string) (*FetchResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request for %s: invalid URL", safeURLOrigin(reqURL))
 	}
 	req.Header.Set("User-Agent", "depsilo/0.1")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 
 	if u.client == nil {
 		return nil, fmt.Errorf("fetch %s: upstream client unavailable", safeURLOrigin(reqURL))
@@ -428,13 +437,15 @@ func (u *Upstream) do(ctx context.Context, reqURL string, report bool) (*FetchRe
 	}
 
 	return &FetchResult{
-		Body:         wrapOriginBody(ctx, resp.Body),
-		ContentType:  resp.Header.Get("Content-Type"),
-		Size:         resp.ContentLength,
-		StatusCode:   resp.StatusCode,
-		ETag:         resp.Header.Get("ETag"),
-		LastModified: resp.Header.Get("Last-Modified"),
-		URL:          responseURL(resp, reqURL),
+		Body:            wrapOriginBody(ctx, resp.Body),
+		ContentType:     resp.Header.Get("Content-Type"),
+		Size:            resp.ContentLength,
+		StatusCode:      resp.StatusCode,
+		ETag:            resp.Header.Get("ETag"),
+		LastModified:    resp.Header.Get("Last-Modified"),
+		ContentRange:    resp.Header.Get("Content-Range"),
+		ContentEncoding: resp.Header.Get("Content-Encoding"),
+		URL:             responseURL(resp, reqURL),
 	}, nil
 }
 
@@ -487,13 +498,15 @@ func (u *Upstream) FetchWithHeaders(ctx context.Context, path string, headers ma
 	}
 
 	return &FetchResult{
-		Body:         wrapOriginBody(ctx, resp.Body),
-		ContentType:  resp.Header.Get("Content-Type"),
-		Size:         resp.ContentLength,
-		StatusCode:   resp.StatusCode,
-		ETag:         resp.Header.Get("ETag"),
-		LastModified: resp.Header.Get("Last-Modified"),
-		URL:          responseURL(resp, reqURL),
+		Body:            wrapOriginBody(ctx, resp.Body),
+		ContentType:     resp.Header.Get("Content-Type"),
+		Size:            resp.ContentLength,
+		StatusCode:      resp.StatusCode,
+		ETag:            resp.Header.Get("ETag"),
+		LastModified:    resp.Header.Get("Last-Modified"),
+		ContentRange:    resp.Header.Get("Content-Range"),
+		ContentEncoding: resp.Header.Get("Content-Encoding"),
+		URL:             responseURL(resp, reqURL),
 	}, nil
 }
 

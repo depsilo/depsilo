@@ -105,6 +105,72 @@ test('fresh admin is routed through copyable config and a real miss-to-hit miles
   await expect(page.getByText('Served from local cache.')).toBeVisible()
 })
 
+test('Docker Hub activation is restart-managed and does not claim an active proxy early', async ({ page }) => {
+  await setUiPreferences(page, 'light', 'en')
+  let saved = false
+  let restarted = false
+  const state = () => ({
+    configured: saved, effective: restarted, docker_hub: saved && restarted,
+    pending_restart: saved && !restarted, config_writable: true, blocked_by_override: false,
+  })
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/onboarding/status': {
+      status: 'completed', started_at: startedAt, next_after_id: 10, events: [], has_more: false,
+    },
+    'GET /api/v1/admin/docker/bootstrap': state,
+    'POST /api/v1/admin/docker/bootstrap': () => { saved = true; return state() },
+  })
+  await page.goto('/admin/connect')
+  await page.getByRole('button', { name: 'View all ecosystems' }).click()
+  await page.getByRole('button', { name: 'Docker Container' }).click()
+  await expect(page.getByText('Docker image proxying is off.', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: 'Enable Docker Hub' }).click()
+  await expect(page.getByText('Restart Depsilo to activate Docker proxying', { exact: false })).toBeVisible()
+  await expect(page.getByText('Docker Hub proxy is active.', { exact: false })).toHaveCount(0)
+
+  restarted = true
+  await page.reload()
+  await page.getByRole('button', { name: 'View all ecosystems' }).click()
+  await page.getByRole('button', { name: 'Docker Container' }).click()
+  await expect(page.getByText('Docker Hub proxy is active.', { exact: false })).toBeVisible()
+  await expect(page.getByText('docker pull', { exact: false }).first()).toBeVisible()
+  await expect(page.getByText('docker pull alpine:3.19', { exact: true })).toBeVisible()
+})
+
+test('Docker onboarding ignores another ecosystem cache hit', async ({ page }) => {
+  await page.clock.install()
+  await setUiPreferences(page, 'light', 'en')
+  let polls = 0
+  let startedDocker = false
+  let emitDockerEvent = false
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/onboarding/status': (request: Request) => {
+      if (!new URL(request.url()).searchParams.has('after_id')) {
+        return { status: 'completed', started_at: startedAt, next_after_id: 10, events: [], has_more: false }
+      }
+      if (!startedDocker) return { status: 'completed', started_at: startedAt, next_after_id: 10, events: [], has_more: false }
+      polls += 1
+      return { status: 'completed', started_at: startedAt, next_after_id: 10 + 2 * polls,
+        events: emitDockerEvent
+          ? [{ ...event(10 + 2 * polls, 'miss'), ecosystem: 'docker', package_name: 'library/alpine', version: '3.19' }]
+          : [event(9 + 2 * polls, 'hit'), { ...event(10 + 2 * polls, 'hit'), ecosystem: 'docker', package_name: 'unrelated/image' }], has_more: false }
+    },
+  })
+  await page.goto('/admin/connect')
+  await page.getByRole('button', { name: 'View all ecosystems' }).click()
+  await page.getByRole('button', { name: 'Docker Container' }).click()
+  startedDocker = true
+  await expect(page.getByText('Waiting for your first dependency request')).toBeVisible()
+  await page.clock.fastForward(2_600)
+  await expect.poll(() => polls).toBeGreaterThan(0)
+  await expect(page.getByText('Waiting for your first dependency request')).toBeVisible()
+  emitDockerEvent = true
+  await page.clock.fastForward(2_600)
+  await expect(page.getByRole('heading', { name: 'First request received' })).toBeVisible()
+  await expect(page.getByRole('definition').filter({ hasText: /^Docker$/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'First cache hit' })).toHaveCount(0)
+})
+
 test('an existing completed deployment goes straight to the Dashboard', async ({ page }) => {
   await setUiPreferences(page, 'light', 'en')
   await mockAdminApi(page, {

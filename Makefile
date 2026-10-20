@@ -42,6 +42,7 @@ GO_RACE_PKGS := \
 	./internal/rules/... \
 	./internal/security/... \
 	./internal/server/... \
+	./internal/traffic/... \
 	./internal/trial/... \
 	./internal/upstream/... \
 	./internal/upstreamupdates/...
@@ -249,10 +250,20 @@ $(TEST_DOCKER_ALL_TARGETS): test-docker-%: test-e2e-server
 		-t depsilo-test-$* $(TEST_DIR)/docker-$*
 
 test-docker-docker: test-e2e-server  # opt-in：Docker Registry dind E2E
-	@echo "=== [docker] docker pull alpine (dind) ==="
+	@echo "=== [docker] two clean dind clients via Docker Hub mirror ==="
 	docker build $(DOCKER_E2E_BUILD_FLAGS) --build-arg DEPSILO_URL=$(DEPSILO_URL) \
 		-t depsilo-test-docker $(TEST_DIR)/docker-docker
-	docker run --rm --privileged --add-host=$(DOCKER_HOST_ALIAS):host-gateway depsilo-test-docker
+	@set -eu; \
+		command -v jq >/dev/null; \
+		before=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.total_requests'); \
+		docker run --rm --privileged --add-host=$(DOCKER_HOST_ALIAS):host-gateway depsilo-test-docker; \
+		first=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.total_requests'); \
+		test "$$first" -gt "$$before" || { echo 'Docker Hub pull bypassed Depsilo' >&2; exit 1; }; \
+		first_hits=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.hit_count'); \
+		docker run --rm --privileged --add-host=$(DOCKER_HOST_ALIAS):host-gateway depsilo-test-docker; \
+		second_hits=$$(curl -fsS "$(DEV_URL)/api/v1/stats" | jq -r '.today.hit_count'); \
+		test "$$second_hits" -gt "$$first_hits" || { echo 'second clean Docker client did not hit Depsilo cache' >&2; exit 1; }; \
+		echo "Docker proxy verified: requests $$before -> $$first, hits $$first_hits -> $$second_hits"
 
 test-e2e: $(TEST_DOCKER_ALL_TARGETS)  ## 运行 14 个真实客户端 E2E
 	@echo ">>> ALL 14 ECOSYSTEMS PASSED"

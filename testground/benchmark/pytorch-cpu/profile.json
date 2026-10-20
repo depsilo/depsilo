@@ -1,0 +1,10 @@
+{
+  "package": "torch==2.8.0+cpu",
+  "python_version": "3.11",
+  "platform": "linux/amd64",
+  "channel": "cpu",
+  "resolver": "uv 0.12.18",
+  "source_index": "https://download.pytorch.org/whl/cpu",
+  "lock_command": "uv pip compile requirements.in --python-version 3.11 --python-platform x86_64-unknown-linux-gnu --default-index https://download.pytorch.org/whl/cpu --generate-hashes --no-annotate --no-header --no-build",
+  "hash_scope": "published distributions; installer selects compatible wheels"
+}

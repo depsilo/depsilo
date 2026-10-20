@@ -34,6 +34,7 @@ type Store struct {
 	path             string
 	effective        SettingsSnapshot
 	effectiveCascade cascadeFingerprint
+	effectiveDocker  DockerConfig
 	overrides        map[SettingPath]string
 	logLevel         zap.AtomicLevel
 	writer           atomicFileWriter
@@ -74,6 +75,7 @@ func newStore(path string, effective *Config, level zap.AtomicLevel, writer atom
 	}
 	if effective != nil {
 		store.effectiveCascade = fingerprintCascade(effective.Cascade)
+		store.effectiveDocker = effective.Docker
 	}
 	return store
 }

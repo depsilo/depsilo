@@ -208,6 +208,9 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	onboardingHandler := NewOnboardingHandler(deps.DB)
 	adminRead.GET("/onboarding/status", onboardingHandler.Status)
 	adminWrite.PUT("/onboarding", onboardingHandler.Update)
+	dockerBootstrapHandler := admin.NewDockerBootstrapHandler(deps.ConfigStore)
+	adminRead.GET("/docker/bootstrap", dockerBootstrapHandler.Get)
+	adminWrite.POST("/docker/bootstrap", dockerBootstrapHandler.Enable)
 
 	// Dashboard
 	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Pools, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled, deps.Config.Cache.MaxSizeGB)
@@ -238,7 +241,11 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	// Cache management
 	cacheHandler := admin.NewCacheHandler(deps.DB, deps.CacheRetention, deps.Config.Cache.MaxSizeGB)
 	cacheHandler.SetIndexRefresher(deps.IndexRefresher)
+	if deps.CacheMgr != nil {
+		cacheHandler.SetTransferReader(deps.CacheMgr.TransferSnapshots)
+	}
 	adminRead.GET("/cache", cacheHandler.List)
+	adminRead.GET("/cache/transfers", cacheHandler.ListTransfers)
 	adminRead.GET("/cache/indexes", cacheHandler.ListIndexes)
 	adminRead.GET("/cache/distribution", cacheHandler.GetDistribution)
 	adminRead.GET("/cache/cleanup/preview", cacheHandler.PreviewCleanup)

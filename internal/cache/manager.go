@@ -77,6 +77,7 @@ type SecurityScanner interface {
 //     fills. DB entry is committed only after storage write succeeds.
 //   - If upstream open fails on miss but stale cache exists: serve stale (HIT).
 type Manager struct {
+	transfers       *traffic.Transfers
 	storage         Storage
 	db              *gorm.DB
 	eventBus        *EventBus
@@ -137,6 +138,7 @@ const (
 // commits, then read from cache. Same semantics as a singleflight that releases
 // when storage is durable — not when the leader's client finishes reading.
 type inflightFetch struct {
+	transfer       *traffic.TransferHandle
 	done           chan struct{}
 	err            error
 	committedEntry *db.CacheEntry
@@ -157,6 +159,7 @@ func (m *Manager) SetSecurityScanner(s SecurityScanner) {
 func NewManager(storage Storage, database *gorm.DB, eventBus *EventBus, immutableThreshold time.Duration) *Manager {
 	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	m := &Manager{
+		transfers:           traffic.NewTransfers(),
 		storage:             storage,
 		db:                  database,
 		eventBus:            eventBus,
@@ -1134,7 +1137,7 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		m.inflightMu.Unlock()
 		return m.followInflight(ctx, lifecycleCtx, key, flight)
 	}
-	flight := &inflightFetch{done: make(chan struct{})}
+	flight := &inflightFetch{done: make(chan struct{}), transfer: m.transfers.Start(adapterType, traffic.TransferName(ctx))}
 	if tracker != nil {
 		tracker.markUsed()
 		flight.trackers = append(flight.trackers, tracker)
@@ -1163,6 +1166,7 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 	// attribution. A coalesced follower keeps its own (empty) accumulator —
 	// the leader performed the exchange, so the bytes are charged once.
 	fetchCtx = traffic.WithAttribution(fetchCtx, traffic.AttributionFromContext(ctx))
+	fetchCtx = traffic.WithTransfer(fetchCtx, flight.transfer)
 	// Cache fills run on a detached lifecycle context, so the cascade chain and
 	// freshness budget must cross the same seam for peer-relayed egress.
 	fetchCtx = cascade.WithChain(fetchCtx, cascade.ChainFrom(ctx))
@@ -1210,6 +1214,8 @@ func (m *Manager) fetchAndStore(ctx context.Context, key string, adapterType str
 		return nil, err
 	}
 	body = WithBodyIdleTimeout(body, fetchIdleTimeoutFrom(ctx), cancelFetchWithCause)
+	flight.transfer.Downloading(size, upstreamName)
+	body = traffic.ObserveTransferBody(body, flight.transfer)
 
 	// Two detachable pipes fan out from a single source. Either consumer may
 	// disappear independently: a client disconnect still allows a healthy cache
@@ -1727,6 +1733,7 @@ func (m *Manager) releaseInflight(key string, flight *inflightFetch, err error, 
 	trackers := append([]*RefreshTracker(nil), flight.trackers...)
 	outcome := flight.refreshOutcome
 	m.inflightMu.Unlock()
+	flight.transfer.Finish(err == nil && len(committed) > 0)
 	for _, tracker := range trackers {
 		tracker.complete(outcome, err)
 	}
@@ -2025,3 +2032,6 @@ func versionFromKey(adapterType, key string) string {
 	}
 	return ""
 }
+
+// TransferSnapshots reports bounded, process-local cache-fill activity.
+func (m *Manager) TransferSnapshots() []traffic.Transfer { return m.transfers.Snapshot() }

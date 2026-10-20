@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
+import DockerBootstrap from '@/admin/components/DockerBootstrap'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getAdminRouteHref } from '@/admin/routes'
 import Button from '@/components/Button'
@@ -32,6 +33,8 @@ import CodeBlock from '@/portal/components/CodeBlock'
 
 const pollIntervalMs = 2_500
 const troubleshootingDelayMs = 30_000
+const dockerTestImage = 'library/alpine'
+const dockerTestTag = '3.19'
 
 function eventLabel(event: OnboardingEvent) {
   return [event.package_name, event.version].filter(Boolean).join('@')
@@ -124,7 +127,10 @@ export default function ConnectProject() {
   const acceptResponse = useCallback((response: OnboardingStatusResponse) => {
     const current = sessionRef.current
     if (!current) return
-    const next = advanceOnboardingSession(current, response)
+    const selectedEvents = languageId === 'container'
+      ? response.events.filter(event => event.ecosystem === 'docker' && event.package_name === dockerTestImage && event.version === dockerTestTag)
+      : response.events
+    const next = advanceOnboardingSession(current, { ...response, events: selectedEvents })
     const receivedFirstRequest = !current.firstRequest && Boolean(next.firstRequest)
     const receivedFirstHit = !current.firstCacheHit && Boolean(next.firstCacheHit)
     sessionRef.current = next
@@ -139,7 +145,7 @@ export default function ConnectProject() {
       }
     }
     if (receivedFirstHit) setAnnouncement(t('onboarding.cacheHitAnnouncement'))
-  }, [recordTerminalStatus, t])
+  }, [languageId, recordTerminalStatus, t])
 
   const startSession = useCallback(async (signal?: AbortSignal) => {
     setInitialError(null)
@@ -185,7 +191,7 @@ export default function ConnectProject() {
           started_at: current.startedAt,
         }, { signal: controller.signal })
         acceptResponse(response.data)
-        if (!response.data.events.some(event => event.outcome === 'hit')) {
+        if (!response.data.events.some(event => event.outcome === 'hit' && (languageId !== 'container' || (event.ecosystem === 'docker' && event.package_name === dockerTestImage && event.version === dockerTestTag)))) {
           schedule(response.data.has_more ? 0 : pollIntervalMs)
         }
       } catch {
@@ -211,7 +217,7 @@ export default function ConnectProject() {
       window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [acceptResponse, sessionActive])
+  }, [acceptResponse, languageId, sessionActive])
 
   useEffect(() => {
     if (firstRequest) return
@@ -319,7 +325,7 @@ export default function ConnectProject() {
               key={candidate.id}
               type="button"
               aria-pressed={candidate.id === language?.id}
-              onClick={() => setLanguageId(candidate.id)}
+              onClick={() => { setLanguageId(candidate.id); setSession(null) }}
               className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-md border px-3 text-left text-[13px] font-[600] transition-[background,border-color,color] duration-150"
               style={{
                 background: candidate.id === language?.id ? 'var(--brand-soft)' : 'var(--bg-card)',
@@ -333,6 +339,8 @@ export default function ConnectProject() {
           ))}
         </div>
       </section>
+
+      {language?.id === 'container' && <DockerBootstrap />}
 
       {language && manager && (
         <section aria-labelledby="onboarding-manager-title" className="mt-7 border-t border-[var(--border)] pt-6">
@@ -360,6 +368,15 @@ export default function ConnectProject() {
               </p>
               {testCommand && manager.test && (
                 <CodeBlock code={testCommand} language={manager.test.lang} copyName={t('onboarding.testCommand')} />
+              )}
+              {language.id === 'container' && manager.id === 'docker' && (
+                <div className="mt-4">
+                  <p className="mb-2 text-[12px] leading-5 text-[var(--text-muted)]">{t('onboarding.docker.mirrorTest')}</p>
+                  <CodeBlock code={`docker pull alpine:${dockerTestTag}`} language="sh" copyName={t('onboarding.docker.mirrorCommand')} />
+                </div>
+              )}
+              {language.id === 'container' && (
+                <p className="mt-2 text-[12px] leading-5 text-[var(--text-muted)]">{t('onboarding.docker.clientNotes')}</p>
               )}
             </div>
           </div>

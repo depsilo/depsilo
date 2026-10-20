@@ -199,7 +199,7 @@ test('empty states for wide Admin tables do not create local scroll regions at 3
     { path: '/admin/logs', text: /暂无日志|No logs/ },
     { path: '/admin/audit', text: /暂无审计日志|No audit logs/ },
     { path: '/admin/cache', text: /暂无缓存数据|No cache entries/ },
-    { path: '/admin/indexes', text: /没有符合条件的索引缓存|No matching cached indexes/ },
+    { path: '/admin/indexes', text: /暂无索引缓存|No cached indexes/ },
   ]
 
   for (const emptyCase of emptyCases) {

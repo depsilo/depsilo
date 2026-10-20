@@ -23,10 +23,12 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
+	"depsilo/internal/traffic"
 	"depsilo/internal/upstreamupdates"
 )
 
 type CacheHandler struct {
+	transferReader func() []traffic.Transfer
 	db             *gorm.DB
 	retention      *cache.Retention
 	maxSizeGB      int
@@ -724,4 +726,15 @@ func (h *CacheHandler) GetDistribution(c *gin.Context) {
 		"by_type":       byType,
 		"top_packages":  topPackages,
 	})
+}
+
+func (h *CacheHandler) SetTransferReader(read func() []traffic.Transfer) { h.transferReader = read }
+
+// ListTransfers exposes runtime progress only on the authenticated Admin surface.
+func (h *CacheHandler) ListTransfers(c *gin.Context) {
+	items := make([]traffic.Transfer, 0)
+	if h.transferReader != nil {
+		items = h.transferReader()
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items, "limit": traffic.TransferLimit})
 }

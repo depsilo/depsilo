@@ -66,6 +66,10 @@ const editableSettings: AdminSettingsResponse['editable'] = [
 ]
 
 const existingAdminApiDefaults: Record<string, JsonValue> = {
+  'GET /api/v1/admin/docker/bootstrap': {
+    configured: true, effective: true, docker_hub: true,
+    pending_restart: false, config_writable: true, blocked_by_override: false,
+  },
   'GET /api/v1/auth/me': { id: 1, username: 'admin', role: 'admin', enabled: true, auth_method: 'jwt', token_permissions: null, can_write: true },
   'GET /api/v1/integration-prompt': { status: 200, body: '# Depsilo project integration\nUse the configured Depsilo package mirror.', contentType: 'text/plain; charset=utf-8', serialize: 'text' },
   'GET /api/v1/stats': {
@@ -191,6 +195,7 @@ const existingAdminApiDefaults: Record<string, JsonValue> = {
   'GET /api/v1/admin/quarantine/approvals': { items: [], total: 0 },
   'GET /api/v1/admin/blocklist/status': { enabled: true, count: 0 },
   'GET /api/v1/admin/blocklist/overrides': { items: [] },
+  'GET /api/v1/admin/cache/transfers': { items: [], limit: 64 },
   'GET /api/v1/admin/cache/distribution': { total_size: 0, max_size: 1, by_type: [], top_packages: [] },
   'GET /api/v1/admin/cache/cleanup/preview': { generated_at: '2026-08-06T00:00:00Z', usage_bytes: 0, threshold_bytes: 1, target_bytes: 0, logical_bytes: 0, candidate_count: 0, planned_count: 0, planned_bytes: 0, physical_usage_known: true, items: [], page: 1, page_size: 8, plan_id: 'fixture-plan', plan_expires_at: '2099-01-01T00:00:00Z' },
   'GET /api/v1/admin/cache': { items: [], total: 0 },

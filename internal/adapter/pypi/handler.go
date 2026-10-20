@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	"time"
@@ -21,8 +22,11 @@ import (
 	"depsilo/internal/cache"
 	"depsilo/internal/config"
 	"depsilo/internal/db"
+	"depsilo/internal/traffic"
 	"depsilo/internal/upstream"
 )
+
+const defaultArtifactIdleTimeout = 3 * time.Minute
 
 // Handler implements the PyPI adapter.
 type Handler struct {
@@ -56,6 +60,9 @@ type Handler struct {
 	renderMemo *renderMemoState
 	// identityMemo is shared by shallow Handler copies too.
 	identityMemo *artifactIdentityMemo
+	// Large wheels may need more than the generic cache transfer deadline.
+	// Bound stalled reads instead of the total duration of a healthy transfer.
+	artifactIdleTimeout time.Duration
 }
 
 // Options configures one PyPI-compatible route while keeping the public route
@@ -113,21 +120,22 @@ func newWithOptions(cacheMgr *cache.Manager, selector upstream.Selector, cfg con
 		return nil, err
 	}
 	return &Handler{
-		cacheMgr:           cacheMgr,
-		selector:           selector,
-		cfg:                cfg,
-		db:                 database,
-		pathPrefix:         strings.TrimRight(options.PathPrefix, "/"),
-		adapterID:          options.AdapterID,
-		cacheNamespace:     options.AdapterID,
-		artifactAudience:   options.AdapterID,
-		upstreamSimplePath: simplePath,
-		artifactSigningKey: append([]byte(nil), options.ArtifactSigningKey...),
-		artifactSelector:   options.ArtifactSelector,
-		provenanceRequired: options.ProvenanceRequired,
-		blocklistCovered:   options.BlocklistCovered,
-		renderMemo:         &renderMemoState{},
-		identityMemo:       &artifactIdentityMemo{},
+		cacheMgr:            cacheMgr,
+		selector:            selector,
+		cfg:                 cfg,
+		db:                  database,
+		pathPrefix:          strings.TrimRight(options.PathPrefix, "/"),
+		adapterID:           options.AdapterID,
+		cacheNamespace:      options.AdapterID,
+		artifactAudience:    options.AdapterID,
+		upstreamSimplePath:  simplePath,
+		artifactSigningKey:  append([]byte(nil), options.ArtifactSigningKey...),
+		artifactSelector:    options.ArtifactSelector,
+		provenanceRequired:  options.ProvenanceRequired,
+		blocklistCovered:    options.BlocklistCovered,
+		renderMemo:          &renderMemoState{},
+		identityMemo:        &artifactIdentityMemo{},
+		artifactIdleTimeout: defaultArtifactIdleTimeout,
 	}, nil
 }
 
@@ -403,7 +411,13 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 	}
 	start := time.Now()
 
-	result, err := h.cacheMgr.Get(c.Request.Context(), cacheKey, h.adapterID, h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
+	transferName := path.Base(filepath)
+	if external {
+		transferName = externalTarget.filename
+	}
+	cacheContext := cache.WithFetchTimeout(traffic.WithTransferName(c.Request.Context(), transferName), 0)
+	cacheContext = cache.WithFetchIdleTimeout(cacheContext, h.artifactIdleTimeout)
+	result, err := h.cacheMgr.Get(cacheContext, cacheKey, h.adapterID, h.cfg.TTLBlob, func(ctx context.Context) (io.ReadCloser, string, int64, string, error) {
 		downloadSelector := h.selector
 		if external && h.artifactSelector != nil {
 			downloadSelector = h.artifactSelector
@@ -429,9 +443,9 @@ func (h *Handler) handleFileDownload(c *gin.Context) {
 
 		var fetchResult *upstream.FetchResult
 		if external {
-			fetchResult, err = ups.FetchURL(ctx, externalTarget.url)
+			fetchResult, err = ups.FetchArtifactURL(ctx, externalTarget.url)
 		} else {
-			fetchResult, err = ups.Fetch(ctx, filepath)
+			fetchResult, err = ups.FetchArtifact(ctx, filepath)
 		}
 		if err != nil {
 			return nil, "", 0, "", err

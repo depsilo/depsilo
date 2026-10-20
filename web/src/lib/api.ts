@@ -10,6 +10,7 @@ import type {
   AdminCascadeConfigPatch,
   AdminCascadeConfigState,
   AdminCascadeConfigUpdateResponse,
+  DockerBootstrapState,
   AdminUpstreamLatenciesResponse,
   AdminUpstreamListResponse,
   AdminUpstreamUpdateListResponse,
@@ -35,6 +36,7 @@ import type {
   CacheIndexRefreshResponse,
   CacheListResponse,
   CacheQuery,
+  CacheTransfersResponse,
   CapabilitySummary,
   CheckUpstreamResponse,
   CompileCacheCleanupResponse,
@@ -180,6 +182,8 @@ export const adminApi = {
     api.get<OnboardingStatusResponse>('/admin/onboarding/status', { ...options, params }),
   updateOnboardingStatus: (status: OnboardingTerminalStatus) =>
     api.put<{ status: OnboardingTerminalStatus }>('/admin/onboarding', { status }),
+  getDockerBootstrap: (options: ApiGetOptions = {}) => api.get<DockerBootstrapState>('/admin/docker/bootstrap', options),
+  enableDockerHub: () => api.post<DockerBootstrapState>('/admin/docker/bootstrap'),
   getRecentDownloads: (limit: number = 3, options: ApiGetOptions = {}) =>
     api.get<RecentDownloadsResponse>('/admin/dashboard/recent-downloads', { ...options, params: { limit } }),
   getDashboardTrends: (range_: string = '7d', options: ApiGetOptions = {}) =>
@@ -198,6 +202,8 @@ export const adminApi = {
   getWarmup: (id: string, options: ApiGetOptions = {}) => api.get<WarmupJobResponse>(`/admin/cache/warmup/${id}`, options),
   cancelWarmup: (id: string) => api.delete(`/admin/cache/warmup/${id}`),
   retryWarmup: (id: string) => api.post<WarmupJobResponse>(`/admin/cache/warmup/${id}/retry`),
+
+  getCacheTransfers: (options: ApiGetOptions = {}) => api.get<CacheTransfersResponse>('/admin/cache/transfers', options),
 
   // Compiler cache
   getCompileCacheStatus: (options: ApiGetOptions = {}) => api.get<CompileCacheStatusResponse>('/admin/compile-cache/status', options),

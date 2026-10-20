@@ -23,6 +23,7 @@ import AdminPage from '@/admin/components/AdminPage'
 import AdminPagination from '@/admin/components/AdminPagination'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import SnapshotSection from '@/admin/components/SnapshotSection'
+import DownloadTransfers from '@/admin/components/DownloadTransfers'
 import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { getApiError } from '@/lib/apiError'
@@ -185,6 +186,7 @@ export default function CacheManageV2() {
       ) : undefined}
     >
       <div className={distribution?.total_size === 0 ? 'space-y-8' : 'space-y-12'}>
+      <DownloadTransfers />
       {/* ── Storage overview + Treemap (no card wrappers) ─────────── */}
       {distributionQuery.isPending ? (
         <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>

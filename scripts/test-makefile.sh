@@ -168,6 +168,7 @@ printf '%s\n' depsilo-real-client-e2e-state-v1 \
 registry_dry_run=$(make -n -C "$ROOT" test-docker-docker DEPSILO_URL=http://127.0.0.1:24444)
 assert_contains "$registry_dry_run" "--build-arg DEPSILO_URL=http://127.0.0.1:24444"
 assert_contains "$registry_dry_run" "docker run --rm --privileged"
+assert_contains "$registry_dry_run" "second clean Docker client did not hit Depsilo cache"
 
 # The docker:dind entrypoint assigns DOCKER_HOST=tcp://docker:2375 before the
 # fixture starts its nested daemon. Exercise the actual generated smoke script
@@ -180,9 +181,6 @@ dind_smoke="$TMP/docker-dind-smoke.sh"
 printf '%b' "$dind_smoke_escaped" > "$dind_smoke"
 dind_log="$TMP/docker-dind-dockerd.log"
 substitute_in_file "$dind_smoke" "/var/log/dockerd.log" "$dind_log"
-dind_registry_host="$TMP/docker-dind-registry-host"
-printf '%s\n' 'depsilo.test:24444' > "$dind_registry_host"
-substitute_in_file "$dind_smoke" "/depsilo-registry-host" "$dind_registry_host"
 dind_pull_marker="$TMP/docker-dind-pull"
 if ! dind_smoke_output=$(
     export DOCKER_HOST=tcp://docker:2375
@@ -196,8 +194,8 @@ if ! dind_smoke_output=$(
         fi
         case "$*" in
             info) ;;
-            'pull depsilo.test:24444/library/alpine:3.18') : > "$dind_pull_marker" ;;
-            'image inspect depsilo.test:24444/library/alpine:3.18') ;;
+            'pull alpine:3.18') : > "$dind_pull_marker" ;;
+            'image inspect alpine:3.18') ;;
             *) echo "unexpected docker command: $*" >&2; return 1 ;;
         esac
     }
@@ -208,7 +206,7 @@ if ! dind_smoke_output=$(
     fail "docker dind smoke did not bind its nested daemon: $dind_smoke_output"
 fi
 [[ -f "$dind_pull_marker" ]] \
-    || fail "docker dind smoke did not pull alpine:3.18 directly through Depsilo"
+    || fail "docker dind smoke did not pull an unqualified Hub image through the configured mirror"
 
 compiler_cache_dry_run=$(make -n -C "$ROOT" test-compiler-cache \
     COMPILER_CACHE_ENDPOINT=http://127.0.0.1:23333/ccache/v1/test \

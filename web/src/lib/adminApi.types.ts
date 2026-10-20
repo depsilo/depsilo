@@ -917,6 +917,15 @@ export interface AdminCascadeConfigUpdateResponse {
   restart_required: boolean
 }
 
+export interface DockerBootstrapState {
+  configured: boolean
+  effective: boolean
+  docker_hub: boolean
+  pending_restart: boolean
+  config_writable: boolean
+  blocked_by_override: boolean
+}
+
 export interface AdminUpstream extends UpstreamMutationRequest {
   id: number
   healthy: boolean
@@ -1025,3 +1034,21 @@ export interface AdminUpstreamListResponse { items: AdminUpstream[]; total: numb
 export interface DeleteUpstreamResponse { deleted_id: number; adapter_type: string }
 export interface UpstreamCheckResult { healthy: boolean; latency_ms: number; checked_at: string; error: string | null }
 export interface CheckUpstreamResponse { upstream: AdminUpstream; check: UpstreamCheckResult }
+
+
+export interface CacheTransfer {
+  id: string
+  name: string
+  ecosystem: string
+  upstream: string
+  status: 'connecting' | 'downloading' | 'resuming' | 'saving' | 'cached' | 'failed'
+  downloaded_bytes: number
+  total_bytes: number
+  resume_attempts: number
+  resume_offset: number
+  bytes_per_second: number
+  started_at: string
+  updated_at: string
+  finished_at?: string
+}
+export interface CacheTransfersResponse { items: CacheTransfer[]; limit: number }

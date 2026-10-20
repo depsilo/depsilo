@@ -11,7 +11,7 @@ role is `admin` and a token whose permission is `readwrite`.
 | --- | --- | --- |
 | Settings | `config.toml` | Log level applies immediately; Cache/Auth changes require restart |
 | Ordinary active Upstreams | Database | Registry atomically updates the next proxy request |
-| Docker registries and extra indexes | `config.toml` | Restart-managed; absent from Admin Upstream CRUD |
+| Docker registries and extra indexes | `config.toml` | Restart-managed; absent from Admin Upstream CRUD. Admin may only initialize an empty Docker configuration with the Docker Hub default |
 | Users, tokens, package rules, Webhooks, security scan policies | Database | Existing handler-specific runtime behavior |
 | Minimum-release-age thresholds, blocklist/tamper settings | `config.toml` | Loaded at startup; restart to change |
 
@@ -29,6 +29,44 @@ response field are masked by the server.
 
 The service rejects self-delete, self-disable, and self-demotion with `409 SELF_LOCKOUT`.
 It also rejects removing the final enabled administrator with `409 LAST_ADMIN`.
+
+## Docker first connection
+
+`GET /api/v1/admin/docker/bootstrap` reports the saved and running Docker
+configuration, whether a restart is pending, and whether the file can be
+written. It does not return registry endpoints or credentials. An admin may
+call `POST /api/v1/admin/docker/bootstrap` to add Docker Hub only when no
+Docker registries are configured and no Docker environment override is active.
+This writes `config.toml` with private file permissions, preserves unrelated
+settings, and requires a service restart before the proxy becomes active.
+Existing custom registries remain operator-managed; neither this route nor
+ordinary Upstream CRUD can modify them.
+
+## Cache-fill progress
+
+`GET /api/v1/admin/cache/transfers` is an authenticated Admin read endpoint.
+Its authority is the running cache manager, not SQLite: it reports up to 64
+active or recent client-triggered PyPI/PyTorch cold-cache fills, with active
+items first. Completed records are reclaimed before active records; if all 64
+slots are active, additional fills proceed without a progress record. A service
+restart clears these snapshots. Warm cache reads and other ecosystems are not
+individual download jobs in this view.
+
+Each item reports a safe file name, ecosystem, upstream name, downloaded and
+expected bytes, average byte rate, resume attempts and last resume offset.
+An unknown expected size is `-1`. States are `connecting`, `downloading`,
+`resuming`, `saving`, `cached`, and `failed`. EOF moves a transfer to `saving`;
+only a successful object and metadata commit makes it `cached`. `failed` means
+that the cache fill did not complete, even when a client download could continue
+after a storage failure. These are task outcomes, not a promise that a completed
+object remains cached forever after cleanup or policy changes.
+
+The endpoint omits raw cache keys, target URLs, credentials and upstream error
+messages. Admin polls it every two seconds while visible, labels stale snapshots
+on refresh failure, and refreshes cache listings after observing a completed
+fill. This does not add pause/resume controls or persist partial files across a
+restart; safe automatic resume still requires the existing strong-validator
+and byte-range checks.
 
 ## Operator credentials
 
