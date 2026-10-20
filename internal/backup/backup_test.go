@@ -18,6 +18,8 @@ import (
 	"depsilo/internal/db"
 )
 
+const testAuthConfig = "[auth]\njwt_secret = \"legacy-test-signing-key\"\n"
+
 func TestCreateCapturesCommittedWALDataAndRecordsChecksums(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Chmod(root, 0o700); err != nil {
@@ -26,7 +28,7 @@ func TestCreateCapturesCommittedWALDataAndRecordsChecksums(t *testing.T) {
 	configPath := filepath.Join(root, "config.toml")
 	databasePath := filepath.Join(root, "depsilo.db")
 	archivePath := filepath.Join(root, "backup.tar.gz")
-	if err := os.WriteFile(configPath, []byte("[database]\ndriver = \"sqlite\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(testAuthConfig+"[database]\ndriver = \"sqlite\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -398,7 +400,7 @@ func canonicalTestPath(t *testing.T, path string) string {
 
 func writeTestState(t *testing.T, configPath, databasePath string) {
 	t.Helper()
-	if err := os.WriteFile(configPath, []byte("[database]\ndriver = \"sqlite\"\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(testAuthConfig+"[database]\ndriver = \"sqlite\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	database, err := db.Open("sqlite", databasePath)

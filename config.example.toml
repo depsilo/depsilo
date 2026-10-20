@@ -113,14 +113,14 @@ rollup_retention_days = 365    # rollup tables sweep horizon (0 = never sweep)
 
 [auth]
 enabled    = true
-# A non-loopback listener requires at least 32 bytes with no surrounding
-# whitespace. Use the same strength behind a reverse proxy, even with a
-# loopback listener. The placeholder remains available only for loopback
-# development; npm and extra PyPI indexes then use process-local random signing
-# keys, so signed artifact URLs rotate on every restart. Rotating a configured
-# secret invalidates existing browser JWTs and signed artifact URLs.
-# Prefer an environment secret: DEPSILO_AUTH_JWT_SECRET="$(openssl rand -hex 32)"
-jwt_secret = "change-me-in-production"
+# Omit jwt_secret for automatic instance-key management. On a new instance,
+# serve generates data/secrets/jwt.key relative to this config file's directory
+# and reuses it on restart. Persist and back up that file with the database.
+# Advanced deployments may still supply DEPSILO_AUTH_JWT_SECRET or jwt_secret
+# explicitly; existing values are used unchanged. Use at least 32 random bytes
+# with no surrounding whitespace. Changing the key invalidates browser JWTs
+# and signed npm / extra PyPI artifact URLs.
+# jwt_secret = "<your-generated-instance-secret>"
 token_ttl  = "168h"         # 7天
 
 [license]

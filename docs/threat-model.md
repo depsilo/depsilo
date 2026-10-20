@@ -37,7 +37,8 @@ Assumptions, all operator-controlled:
 | Cached artifact bytes | storage dir or S3 bucket | Builds install these bytes | Tamper detection (first-seen SHA-256, mismatch alert, first-seen copy kept), upstream provenance bindings, ecosystem checksums/signatures preserved end to end |
 | Policy data (package rules, blocklist, snapshots, approvals, allow-lists) | SQLite | Decides what may be served | Authenticated admin writes, audited mutations, fail-closed gates |
 | Admin credentials and API tokens | SQLite (bcrypt password hashes, hashed tokens) | Full control plane | Read/write capability groups, Pro entitlement gates, bootstrap-token flow |
-| `jwt_secret` | config file | Mints admin sessions | Startup guard: ≥32 random bytes, placeholder restricted to loopback |
+| Instance signing key | managed `data/secrets/jwt.key` relative to the config directory, or explicit environment/config secret | Mints admin sessions and signs npm / extra PyPI artifact URLs | Automatic 256-bit generation for new instances; mode-0700 directory and mode-0600 file; restart reuse; explicit-secret startup guard |
+| Setup bootstrap token | current process and private `data/secrets/bootstrap.token` during initialization | Authorizes initial administrator creation | Mode-0600 file, refreshed before serving, removed after setup; local `depsilo setup token` requires the service to be awaiting setup; no public token-read endpoint |
 | Upstream credentials (registry username/password, extra-index keys) | config file | Upstream account | File permissions; never returned by the API |
 | Webhook URLs and SIEM collector tokens (incl. Splunk HEC) | SQLite | Outbound data path | Write-only in the API, masked for read-only principals |
 | SBOM signing key (Ed25519) | operator-provided PEM file | Provenance of CRA exports | Never read into the DB; public key travels with each signature |
@@ -140,8 +141,16 @@ first fetch; tamper detection only notices later changes.
 Passwords are bcrypt hashes; API tokens are stored hashed; SIEM/webhook
 tokens are write-only and collector URLs are masked for read-only
 principals; the license key is masked in the UI. The JWT secret has a startup
-guard, and the development placeholder forces a loopback-only server with
-process-local artifact keys.
+guard. New instances without an explicit secret generate and persist a random
+256-bit signing key; an existing database with no key or a malformed key file
+fails startup instead of silently rotating sessions and signed artifact URLs.
+Explicit environment/config secrets remain supported. The legacy development
+placeholder forces a loopback-only server with process-local artifact keys.
+
+CLI backups include the effective signing key in their archived configuration,
+including managed-file and environment-provided keys, so backup access also
+grants signing authority. Restore retains that key rather than generating a
+replacement.
 
 **Residual:** Docker registry credentials live in the config file, and
 `SECURITY.md` already calls out the bootstrap token appearing in logs during

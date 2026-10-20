@@ -56,7 +56,7 @@ func TestLoadMissingConfigUsesHomeStateDefaultsWithoutBlockingEnvironmentOverrid
 	}
 }
 
-func TestLoadMissingConfigPlacesAllLocalStateUnderHome(t *testing.T) {
+func TestLoadForServerMissingConfigPlacesAllLocalStateUnderHome(t *testing.T) {
 	home := t.TempDir()
 	t.Chdir(t.TempDir())
 	t.Setenv("HOME", home)
@@ -68,7 +68,7 @@ func TestLoadMissingConfigPlacesAllLocalStateUnderHome(t *testing.T) {
 	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "")
 	setTestJWTSecret(t)
 
-	cfg, err := Load()
+	cfg, err := LoadForServer()
 	if err != nil {
 		t.Fatalf("Load without config: %v", err)
 	}
@@ -151,6 +151,7 @@ path = "./data/cache"
 }
 
 func TestLoadPackageS3FieldsFromEnvironment(t *testing.T) {
+	setTestJWTSecret(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(configPath, []byte("config_version = 1\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -191,6 +192,7 @@ func TestLoadPackageS3FieldsFromEnvironment(t *testing.T) {
 }
 
 func TestLoadCompileCacheS3FieldsFromEnvironment(t *testing.T) {
+	setTestJWTSecret(t)
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(configPath, []byte("config_version = 1\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)

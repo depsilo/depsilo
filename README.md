@@ -154,7 +154,7 @@ ownership first, and keep the mount target at `/root/.depsilo`.
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/depsilo/depsilo/master/compose.yaml
 docker compose up -d
-docker compose logs depsilo
+docker compose exec depsilo depsilo setup token
 ```
 
 The official Compose file contains one service, one port, and one persistent
@@ -181,7 +181,8 @@ docker compose -f compose.bind.yaml up -d
 Prepare `$HOME/.local/share/depsilo/state` as described in the
 [deployment guide](docs/deployment.md#bind-mounted-state). The startup log
 reports the container listener; use the published host port in your browser
-and the logs to find the bootstrap token.
+and run `docker compose -f compose.bind.yaml exec depsilo depsilo setup token`
+to retrieve the bootstrap token.
 
 The image runs as fixed non-root UID/GID `10001:10001`. See the
 [deployment guide](docs/deployment.md) for the one-time ownership command when
@@ -192,7 +193,12 @@ compatibility path for v0.9's shipped bind-mount Compose layout.
 
 The startup summary tells you whether the server, database, and cache are ready.
 It also shows the Portal URL and, for a new interactive installation, a
-one-time bootstrap token.
+one-time bootstrap token. Retrieve the current token directly with
+`depsilo setup token` from the configuration directory, or
+`docker compose exec depsilo depsilo setup token` in Docker Compose.
+For a custom configuration path, use `depsilo setup token --config PATH`.
+Paste the command output into the setup form; `jwt.key` is the persistent
+signing key, not the bootstrap token. Retrieval stops after setup completes.
 
 1. Open the Portal and enter the bootstrap token.
 2. Create the first administrator. Depsilo has no default administrator

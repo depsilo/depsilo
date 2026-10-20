@@ -18,6 +18,12 @@ The setup flow creates the state directory and writes its generated
 `config.toml` with absolute database and local-cache paths. The compiler cache
 path is reserved under the same root but remains disabled until configured.
 
+After setup, the browser reconnects through its current scheme, hostname, and
+port. For example, an HTTPS reverse proxy can keep serving port 443 while
+Depsilo listens on HTTP port 23333 behind it. If you change Depsilo's listener
+port, update the proxy target or container port mapping as needed. With direct
+access to a changed listener, reopen the new address manually.
+
 For Docker and Compose, persist `/root/.depsilo` with one named volume. This
 keeps the generated configuration, administrator and user records, policy
 state, SQLite database, and local caches across restart and container

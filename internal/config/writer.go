@@ -18,6 +18,13 @@ type SetupRequest struct {
 		Driver string `json:"-"`
 		DSN    string `json:"-"`
 	} `json:"-" mapstructure:"-"`
+	// Auth preserves the server's effective signing key across setup. Managed
+	// keys stay in the instance secret file; explicit operator keys remain in
+	// config.toml. Neither value may be supplied by the browser.
+	Auth struct {
+		JWTSecret string `json:"-"`
+		Managed   bool   `json:"-"`
+	} `json:"-" mapstructure:"-"`
 	Server struct {
 		Port int `json:"port"`
 	} `json:"server"`
@@ -88,9 +95,16 @@ func writeConfig(path string, req SetupRequest, writer atomicFileWriter) error {
 	}
 	compileCachePath := filepath.Join(stateDataDir, "compile-cache")
 
-	jwtSecret, err := NewSecureToken()
-	if err != nil {
-		return fmt.Errorf("generate JWT secret: %w", err)
+	jwtSecret := req.Auth.JWTSecret
+	if req.Auth.Managed && jwtSecret == "" {
+		return fmt.Errorf("managed JWT secret is unavailable")
+	}
+	if !req.Auth.Managed && jwtSecret == "" {
+		// Preserve direct callers that do not carry a startup configuration.
+		jwtSecret, err = NewSecureToken()
+		if err != nil {
+			return fmt.Errorf("generate JWT secret: %w", err)
+		}
 	}
 
 	var b strings.Builder
@@ -151,7 +165,9 @@ func writeConfig(path string, req SetupRequest, writer atomicFileWriter) error {
 	// Auth section
 	b.WriteString("[auth]\n")
 	b.WriteString("enabled = true\n")
-	b.WriteString(fmt.Sprintf("jwt_secret = %q\n", jwtSecret))
+	if !req.Auth.Managed {
+		b.WriteString(fmt.Sprintf("jwt_secret = %q\n", jwtSecret))
+	}
 	b.WriteString("token_ttl = \"168h\"\n")
 	b.WriteString("\n")
 

@@ -44,6 +44,7 @@ func TestWriteStartupSummaryForFirstRun(t *testing.T) {
 		"Portal:\n  http://127.0.0.1:23333",
 		"First-time setup:",
 		"Bootstrap token: bootstrap-token",
+		"Retrieve the current bootstrap token: depsilo setup token",
 		"Open the Portal to finish setup.",
 	} {
 		if !strings.Contains(got, fragment) {
@@ -62,7 +63,7 @@ func TestWriteStartupSummaryForConfiguredServerOmitsBootstrapInstructions(t *tes
 	if !strings.Contains(got, "Depsilo dev") || !strings.Contains(got, "Portal:\n  http://127.0.0.1:23333") {
 		t.Fatalf("configured startup summary missing server details:\n%s", got)
 	}
-	for _, forbidden := range []string{"First-time setup", "Bootstrap token", "must-not-appear", "finish setup"} {
+	for _, forbidden := range []string{"First-time setup", "Bootstrap token", "must-not-appear", "finish setup", "depsilo setup token"} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("configured startup summary contains %q:\n%s", forbidden, got)
 		}

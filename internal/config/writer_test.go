@@ -134,6 +134,46 @@ func TestSetupRequestJSONCannotOverrideEffectiveDatabaseTarget(t *testing.T) {
 	}
 }
 
+func TestSetupRequestJSONCannotOverrideEffectiveSigningKey(t *testing.T) {
+	var req SetupRequest
+	if err := json.Unmarshal([]byte(`{"auth":{"jwt_secret":"attacker-key","JWTSecret":"attacker-key","managed":true,"Managed":true}}`), &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.Auth.JWTSecret != "" || req.Auth.Managed {
+		t.Fatal("browser supplied signing-key authority was accepted")
+	}
+	req.Auth.JWTSecret = "private-startup-signing-key"
+	req.Auth.Managed = true
+	encoded, err := json.Marshal(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("auth")) || bytes.Contains(encoded, []byte(req.Auth.JWTSecret)) {
+		t.Fatal("internal signing-key authority leaked into setup JSON")
+	}
+}
+
+func TestWriteConfigPreservesEffectiveSigningKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	req := SetupRequest{}
+	req.Auth.JWTSecret = "explicit-startup-signing-key-0123456789"
+	if err := WriteConfig(path, req); err != nil {
+		t.Fatalf("WriteConfig: %v", err)
+	}
+	document, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := viper.New()
+	v.SetConfigType("toml")
+	if err := v.ReadConfig(bytes.NewReader(document)); err != nil {
+		t.Fatal(err)
+	}
+	if v.GetString("auth.jwt_secret") != req.Auth.JWTSecret {
+		t.Fatal("generated config rotated the effective startup signing key")
+	}
+}
+
 func TestWriteConfigPreservesAbsoluteStoragePath(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, ".depsilo", "config.toml")

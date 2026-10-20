@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { test, expect, mockAdminApi } from './fixtures/admin-api'
+import { test, expect, mockAdminApi, setUiPreferences } from './fixtures/admin-api'
 import type { Request } from '@playwright/test'
 
 test('expired session and failed login stay in-app, then return to the deep link', { tag: '@smoke' }, async ({ page }) => {
@@ -113,6 +113,8 @@ test('single-page setup explains invalid credentials without disabling the prima
   })
 
   await page.goto('/')
+  await expect(page.getByRole('region', { name: '获取验证令牌' })).toHaveCount(0)
+  await expect(page.getByLabel('首启验证令牌')).toHaveCount(0)
   const submit = page.getByRole('button', { name: '完成初始化' })
   await expect(submit).toBeEnabled()
   await page.getByLabel('管理员密码').fill('admin-Strong-Pass123!')
@@ -123,6 +125,72 @@ test('single-page setup explains invalid credentials without disabling the prima
   await expect(page.getByLabel('管理员密码')).toBeFocused()
   expect(setupRequests).toBe(0)
 })
+
+for (const labels of [
+  {
+    locale: 'zh' as const,
+    help: '获取验证令牌',
+    dockerCopy: /复制Docker Compose代码/,
+    localCopy: /复制本机运行代码/,
+    copied: '已复制',
+    token: '首启验证令牌',
+    password: '管理员密码',
+    confirm: '确认密码',
+    submit: '完成初始化',
+  },
+  {
+    locale: 'en' as const,
+    help: 'Get your bootstrap token',
+    dockerCopy: 'Copy code for Docker Compose',
+    localCopy: 'Copy code for Local installation',
+    copied: 'Copied',
+    token: 'Bootstrap token',
+    password: 'Administrator password',
+    confirm: 'Confirm password',
+    submit: 'Complete setup',
+  },
+]) {
+  test(`setup token commands copy with the keyboard and fit a narrow screen in ${labels.locale}`, async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await page.setViewportSize({ width: 320, height: 800 })
+    await setUiPreferences(page, 'light', labels.locale)
+    await mockAdminApi(page, {
+      'GET /api/v1/setup/status': { needs_setup: true, token_required: true },
+      'POST /api/v1/setup/complete': {
+        status: 403,
+        body: { code: 'BOOTSTRAP_TOKEN_REQUIRED', message: 'A valid bootstrap token is required to complete initial setup' },
+      },
+    })
+
+    await page.goto('/')
+    const help = page.getByRole('region', { name: labels.help })
+    await expect(help).toBeVisible()
+    await expect(page.getByText(/jwt\.key/)).toBeVisible()
+    const dockerCopy = help.getByRole('button', { name: labels.dockerCopy })
+    await dockerCopy.focus()
+    await page.keyboard.press('Enter')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('docker compose exec depsilo depsilo setup token')
+    await expect(dockerCopy).toHaveText(labels.copied)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    const localCopy = help.getByRole('button', { name: labels.localCopy })
+    await localCopy.focus()
+    await page.keyboard.press('Enter')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('depsilo setup token')
+    await expect(localCopy).toHaveText(labels.copied)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    await page.getByLabel(labels.password, { exact: true }).fill('Tr0ub4dor&Correct')
+    await page.getByLabel(labels.confirm).fill('Tr0ub4dor&Correct')
+    await page.getByLabel(labels.token, { exact: true }).fill('incorrect-token')
+    await page.getByRole('button', { name: labels.submit }).click()
+    await expect(page.getByRole('alert')).toContainText('A valid bootstrap token is required')
+    await expect(page.getByLabel(labels.password, { exact: true })).toHaveValue('Tr0ub4dor&Correct')
+    await expect(page.getByLabel(labels.confirm)).toHaveValue('Tr0ub4dor&Correct')
+    await expect(page.getByLabel(labels.token, { exact: true })).toHaveValue('incorrect-token')
+    await expect(help).toBeVisible()
+  })
+}
 
 test('single-page setup passes axe with advanced settings exposed', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -146,6 +214,7 @@ test('single-page setup submits secure defaults and recovers after a reconnect t
   await page.clock.install()
   await mockAdminApi(page, {
     'GET /api/v1/setup/status': { needs_setup: true, token_required: true },
+    'POST /api/v1/auth/login': { status: 401, body: { code: 'UNAUTHORIZED' } },
     'POST /api/v1/setup/complete': async (request: Request) => {
       expect(request.headers()['x-depsilo-bootstrap-token']).toBe('bootstrap-token-from-log')
       const body = request.postDataJSON() as {
@@ -211,7 +280,8 @@ test('single-page setup submits secure defaults and recovers after a reconnect t
   await expect(page.getByRole('alert')).toContainText('超时')
   expect(healthRequests).toBeGreaterThan(0)
   expect(healthURLs.length).toBeGreaterThan(0)
-  expect(healthURLs.every(url => url === 'http://127.0.0.1:24444/health')).toBe(true)
+  const browserHealthURL = new URL('/health', page.url()).toString()
+  expect(healthURLs.every(url => url === browserHealthURL)).toBe(true)
 
   healthReady = true
   await page.getByRole('button', { name: '重试连接' }).click()
@@ -219,3 +289,52 @@ test('single-page setup submits secure defaults and recovers after a reconnect t
   await page.waitForTimeout(20)
   await expect(page.getByText('服务已就绪')).toBeVisible()
 })
+
+for (const publicOrigin of ['https://depsilo.example.test', 'https://depsilo.example.test:8443']) {
+  test(`setup reconnects through the browser HTTPS origin ${publicOrigin} behind a reverse proxy`, async ({ page, baseURL }) => {
+    const healthURLs: string[] = []
+    await page.clock.install()
+    await page.route(/^https:\/\/depsilo\.example\.test(?::\d+)?\//, async route => {
+      const url = new URL(route.request().url())
+      if (url.pathname.startsWith('/api/')) {
+        await route.fallback()
+      } else if (url.pathname === '/health') {
+        healthURLs.push(url.toString())
+        if (url.origin === publicOrigin) {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"healthy"}' })
+        } else {
+          await route.abort('connectionrefused')
+        }
+      } else if (url.pathname === '/admin/login') {
+        await route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Administrator login</h1>' })
+      } else {
+        // Load the real SPA at its public HTTPS address without requiring an
+        // external DNS name, certificate, or reverse proxy in the offline gate.
+        const response = await route.fetch({ url: new URL(url.pathname + url.search, baseURL).toString() })
+        await route.fulfill({ response })
+      }
+    })
+    await mockAdminApi(page, {
+      'GET /api/v1/setup/status': { needs_setup: true, token_required: false },
+      'POST /api/v1/setup/complete': {
+        status: 'ok',
+        reconnect_url: 'http://127.0.0.1:23333/',
+        restart_strategy: 'exec',
+      },
+      'POST /api/v1/auth/login': { status: 401, body: { code: 'UNAUTHORIZED' } },
+    })
+
+    await page.goto(publicOrigin)
+    await page.getByLabel('管理员密码').fill('Tr0ub4dor&Correct')
+    await page.getByLabel('确认密码').fill('Tr0ub4dor&Correct')
+    await page.getByRole('button', { name: '完成初始化' }).click()
+    await expect(page.getByText('正在重启服务')).toBeVisible()
+    await page.clock.fastForward(1_500)
+    await expect.poll(() => healthURLs).not.toEqual([])
+    expect(healthURLs).toEqual([`${publicOrigin}/health`])
+    await expect(page.getByText('服务已就绪')).toBeVisible()
+    await page.clock.fastForward(300)
+    await expect(page).toHaveURL(`${publicOrigin}/admin/login?next=%2Fadmin`)
+    await expect(page.getByRole('heading', { name: 'Administrator login' })).toBeVisible()
+  })
+}

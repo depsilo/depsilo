@@ -59,7 +59,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	}
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := config.LoadForServer()
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
@@ -852,6 +852,16 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 	srv.Handler = lifecycle.track(requestScope.Wrap(r))
 	if err := shutdownTrigger.Err(); err != nil {
 		return nil, fmt.Errorf("start server: %w", err)
+	}
+	// Publish the runtime token before accepting setup requests. A failed
+	// publication must fail startup rather than leave a stale token available
+	// through the CLI while a different credential authorizes the server.
+	if cfg.IsDefault {
+		if err := config.WriteBootstrapToken(cfg.ConfigPath, cfg.BootstrapToken); err != nil {
+			return nil, fmt.Errorf("publish initial setup token: %w", err)
+		}
+	} else if err := config.ClearBootstrapToken(cfg.ConfigPath); err != nil {
+		zap.L().Warn("failed to remove completed setup token", zap.Error(err))
 	}
 	registry.Start(serverCtx)
 

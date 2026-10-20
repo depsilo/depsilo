@@ -69,7 +69,7 @@ func runStart(args []string) int {
 		return 2
 	}
 	opts.ApplyEnv()
-	cfg, err := config.Load()
+	cfg, err := config.LoadForServer()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading daemon configuration: %v\n", err)
 		return 1

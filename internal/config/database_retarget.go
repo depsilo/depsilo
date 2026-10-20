@@ -49,14 +49,20 @@ func RetargetSQLiteDatabase(document []byte, target string) ([]byte, bool, error
 }
 
 func patchDatabaseDSN(document []byte, target string) ([]byte, error) {
+	return patchConfigString(document, "database", "dsn", target)
+}
+
+func patchConfigString(document []byte, section, field, target string) ([]byte, error) {
 	var parser unstable.Parser
 	parser.KeepComments = true
 	parser.Reset(document)
 	tablePath := []string(nil)
 	rootEnd := len(document)
 	foundTable := false
-	databaseSectionEnd := -1
-	databaseInline := false
+	sectionEnd := -1
+	inlineTable := false
+	inlineInsertAt := 0
+	inlineNonempty := false
 	var valueRange *unstable.Range
 
 	for parser.NextExpression() {
@@ -68,14 +74,19 @@ func patchDatabaseDSN(document []byte, target string) ([]byte, error) {
 				rootEnd = lineStartAt(document, firstKeyOffset(expression))
 				foundTable = true
 			}
-			if len(tablePath) == 1 && tablePath[0] == "database" {
-				databaseSectionEnd = lineEndAt(document, lastNodeEnd(expression))
+			if len(tablePath) == 1 && tablePath[0] == section {
+				sectionEnd = lineEndAt(document, lastNodeEnd(expression))
 			}
 		case unstable.KeyValue:
 			path := append(append([]string(nil), tablePath...), nodeKey(expression)...)
-			findDatabaseDSNValue(expression.Value(), path, &valueRange, &databaseInline)
-			if len(tablePath) == 1 && tablePath[0] == "database" {
-				databaseSectionEnd = lineEndAt(document, lastNodeEnd(expression))
+			if len(path) == 1 && path[0] == section && expression.Value().Kind == unstable.InlineTable {
+				inlineInsertAt = int(expression.Value().Raw.Offset + 1)
+				children := expression.Value().Children()
+				inlineNonempty = children.Next()
+			}
+			findConfigStringValue(expression.Value(), path, section, field, &valueRange, &inlineTable)
+			if len(tablePath) == 1 && tablePath[0] == section {
+				sectionEnd = lineEndAt(document, lastNodeEnd(expression))
 			}
 		}
 	}
@@ -93,8 +104,18 @@ func patchDatabaseDSN(document []byte, target string) ([]byte, error) {
 		updated = append(updated, document[end:]...)
 		return updated, nil
 	}
-	if databaseInline {
-		return nil, fmt.Errorf("cannot add database.dsn while database is an inline table")
+	if inlineTable {
+		if section == "auth" {
+			addition := " " + field + " = " + string(replacement)
+			if inlineNonempty {
+				addition += ","
+			}
+			addition += " "
+			updated := append([]byte(nil), document[:inlineInsertAt]...)
+			updated = append(updated, addition...)
+			return append(updated, document[inlineInsertAt:]...), nil
+		}
+		return nil, fmt.Errorf("cannot add %s.%s while %s is an inline table", section, field, section)
 	}
 
 	newline := "\n"
@@ -102,10 +123,10 @@ func patchDatabaseDSN(document []byte, target string) ([]byte, error) {
 		newline = "\r\n"
 	}
 	at := rootEnd
-	key := "database.dsn"
-	if databaseSectionEnd >= 0 {
-		at = databaseSectionEnd
-		key = "dsn"
+	key := section + "." + field
+	if sectionEnd >= 0 {
+		at = sectionEnd
+		key = field
 	}
 	var addition strings.Builder
 	if at > 0 && document[at-1] != '\n' {
@@ -119,8 +140,8 @@ func patchDatabaseDSN(document []byte, target string) ([]byte, error) {
 	return updated, nil
 }
 
-func findDatabaseDSNValue(value *unstable.Node, path []string, found **unstable.Range, databaseInline *bool) {
-	if len(path) == 2 && path[0] == "database" && path[1] == "dsn" {
+func findConfigStringValue(value *unstable.Node, path []string, section, field string, found **unstable.Range, inlineTable *bool) {
+	if len(path) == 2 && path[0] == section && path[1] == field {
 		raw := value.Raw
 		*found = &raw
 		return
@@ -128,8 +149,8 @@ func findDatabaseDSNValue(value *unstable.Node, path []string, found **unstable.
 	if value.Kind != unstable.InlineTable {
 		return
 	}
-	if len(path) == 1 && path[0] == "database" {
-		*databaseInline = true
+	if len(path) == 1 && path[0] == section {
+		*inlineTable = true
 	}
 	children := value.Children()
 	for children.Next() {
@@ -138,13 +159,12 @@ func findDatabaseDSNValue(value *unstable.Node, path []string, found **unstable.
 			continue
 		}
 		childPath := append(append([]string(nil), path...), nodeKey(child)...)
-		findDatabaseDSNValue(child.Value(), childPath, found, databaseInline)
+		findConfigStringValue(child.Value(), childPath, section, field, found, inlineTable)
 	}
 }
 
 func sqliteDocumentFilePath(dsn string) (string, error) {
-	dsn = strings.TrimSpace(dsn)
-	if dsn == "" || dsn == ":memory:" {
+	if strings.TrimSpace(dsn) == "" || dsn == ":memory:" {
 		return "", fmt.Errorf("database.dsn must name a file-backed SQLite database")
 	}
 	path := dsn
@@ -163,7 +183,10 @@ func sqliteDocumentFilePath(dsn string) (string, error) {
 		case parsed.Path != "":
 			path = parsed.Path
 		case parsed.Opaque != "":
-			path = parsed.Opaque
+			path, err = url.PathUnescape(parsed.Opaque)
+			if err != nil {
+				return "", err
+			}
 		default:
 			return "", fmt.Errorf("SQLite DSN has no database path")
 		}

@@ -20,6 +20,9 @@ ARG TARGETOS
 ARG TARGETARCH
 
 COPY go.mod go.sum ./
+# Allow builders with restricted network access to select a module proxy.
+# Go still verifies downloaded modules against go.sum and the checksum database.
+ARG GOPROXY=https://proxy.golang.org,direct
 RUN go mod download
 COPY . .
 COPY --from=frontend /app/web/dist ./web/dist

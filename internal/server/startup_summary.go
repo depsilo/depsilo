@@ -66,6 +66,7 @@ func writeStartupSummary(writer io.Writer, summary startupSummary) error {
 		} else {
 			output.WriteString("  Bootstrap token: configured via DEPSILO_BOOTSTRAP_TOKEN\n\n")
 		}
+		output.WriteString("  Retrieve the current bootstrap token: depsilo setup token\n\n")
 		output.WriteString("Open the Portal to finish setup.\n")
 	}
 	_, err := io.WriteString(writer, output.String())

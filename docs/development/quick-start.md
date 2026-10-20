@@ -44,7 +44,23 @@ CLI flag -> DEPSILO_* environment -> config file -> built-in default
 ```
 
 For local development, `scripts/run-dev.sh` creates `.dev-jwt-secret` with mode
-0600 when needed and reuses it. It is local state, not a production secret.
+0600 when needed and reuses it through `DEPSILO_AUTH_JWT_SECRET`. This remains a
+supported explicit override and is local state, not a production secret.
+
+Ordinary `depsilo serve` does not require a JWT environment variable. For a new
+instance with no explicit `DEPSILO_AUTH_JWT_SECRET` or `auth.jwt_secret`, it
+generates a 256-bit instance key at `data/secrets/jwt.key`, relative to the
+configuration file's directory, and reuses it on restart. The secrets directory
+has mode 0700 and the key file has mode 0600. Existing explicit secrets keep
+working without migration. This key also signs npm and extra PyPI artifact
+URLs, so preserve it together with the database when moving or backing up an
+instance. An existing database without its key, or an invalid key file, stops
+startup rather than silently replacing the key.
+
+CLI backups include the effective signing key in the archived `config.toml`,
+including keys supplied through the environment. Protect these archives as
+secrets. Restore keeps the same value in configuration, so a separate key file
+is not needed for that restored instance.
 
 Useful lifecycle commands:
 
@@ -80,7 +96,16 @@ Use `make stop` if the terminal is terminated without allowing cleanup to run.
 
 ## First-run and local state
 
-- Interactive first run prints a one-time bootstrap token to the server log.
+- Interactive first run requires a bootstrap token. Read the current token
+  from the deployment directory with `depsilo setup token`, or, for Docker
+  Compose, `docker compose exec depsilo depsilo setup token`. A custom native
+  configuration can use `depsilo setup token --config /path/to/config.toml`.
+  The command only returns a token while the running service needs setup.
+  Startup logs remain a fallback.
+- During setup, `data/secrets/bootstrap.token` holds the current token with
+  mode 0600. It is refreshed on server restart and removed after successful
+  initialization. It is separate from the persistent `jwt.key` signing key;
+  do not enter `jwt.key` in the setup form. No public API returns the token.
 - The setup flow creates the initial administrator; there is no default
   `admin/admin` credential.
 - Setup commits the administrator and onboarding state before atomically
@@ -89,6 +114,9 @@ Use `make stop` if the terminal is terminated without allowing cleanup to run.
   log in; a configured instance with no loginable administrator automatically
   reopens setup.
 - Default local data lives under the configured database and storage paths.
+- The managed instance key lives under the configuration directory's
+  `data/secrets/`, independently of custom cache-storage paths. Containers must
+  persist this directory as well as their database and cache.
 - `config.toml`, `.dev-jwt-secret`, `.dev.log`, `.server.pid`, `data/`, `bin/`,
   and `web/dist/` are generated or local state.
 

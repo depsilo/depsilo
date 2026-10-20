@@ -20,6 +20,30 @@ import (
 )
 
 func Load() (*Config, error) {
+	return load(readSigningKey)
+}
+
+// LoadForServer may initialize the signing key of a new instance. Read-only
+// commands use Load, which never creates or replaces a key.
+func LoadForServer() (*Config, error) {
+	return load(initializeSigningKey)
+}
+
+// LoadForRestore resolves destination paths without requiring the signing
+// identity which the archive itself is about to restore. It never creates keys.
+func LoadForRestore() (*Config, error) {
+	return load(restoreSigningKey)
+}
+
+type signingKeyLoadMode uint8
+
+const (
+	readSigningKey signingKeyLoadMode = iota
+	initializeSigningKey
+	restoreSigningKey
+)
+
+func load(keyMode signingKeyLoadMode) (*Config, error) {
 	v := viper.New()
 
 	// Environment overrides via viper. DEPSILO_SERVER_PORT overrides
@@ -116,7 +140,7 @@ func Load() (*Config, error) {
 	cfg.ExplicitUpstreamEcosystems = explicitUpstreamEcosystems(v)
 	cfg.IsDefault = isDefault
 	cfg.ConfigPath = resolvedPath
-	if isDefault {
+	if isDefault && keyMode == initializeSigningKey {
 		bootstrapToken, generated, err := resolveBootstrapToken()
 		if err != nil {
 			return nil, err
@@ -124,20 +148,16 @@ func Load() (*Config, error) {
 		cfg.BootstrapToken = bootstrapToken
 		cfg.BootstrapTokenGenerated = generated
 
-		// The placeholder must never become a usable signing key, even during
-		// setup or when an existing database survives a lost config file.
-		if cfg.Auth.JWTSecret == "change-me-in-production" {
-			cfg.Auth.JWTSecret, err = NewSecureToken()
-			if err != nil {
-				return nil, fmt.Errorf("generate temporary JWT secret: %w", err)
-			}
-		}
-
 		// The generated token is intentionally emitted only by the final startup
 		// summary, after every dependency is ready. Avoid an earlier duplicate
 		// secret-bearing log entry that can be buried in initialization noise.
 		if !generated {
 			zap.L().Info("initial setup is protected by DEPSILO_BOOTSTRAP_TOKEN")
+		}
+	}
+	if keyMode != restoreSigningKey && !v.InConfig("auth.jwt_secret") && os.Getenv("DEPSILO_AUTH_JWT_SECRET") == "" {
+		if err := resolveManagedJWTSecret(cfg, keyMode == initializeSigningKey); err != nil {
+			return nil, err
 		}
 	}
 
@@ -150,12 +170,12 @@ func Load() (*Config, error) {
 	// JWTs. Keep loopback-only development compatible, but require the same
 	// 256-bit minimum used by generated secrets anywhere remote clients can
 	// connect.
-	if !isLoopbackHost(cfg.Server.Host) {
+	if keyMode != restoreSigningKey && !isLoopbackHost(cfg.Server.Host) {
 		secret := cfg.Auth.JWTSecret
 		if secret == "change-me-in-production" || secret != strings.TrimSpace(secret) || len([]byte(secret)) < secureTokenBytes {
 			return nil, errors.New("auth.jwt_secret must be at least 32 bytes with no surrounding whitespace before listening on a non-loopback address; set DEPSILO_AUTH_JWT_SECRET to a cryptographically random value")
 		}
-	} else if cfg.Auth.JWTSecret == "change-me-in-production" {
+	} else if keyMode != restoreSigningKey && cfg.Auth.JWTSecret == "change-me-in-production" {
 		zap.L().Warn("auth.jwt_secret is using the development placeholder; the server is restricted to loopback and signed artifact URLs use process-local keys")
 	}
 

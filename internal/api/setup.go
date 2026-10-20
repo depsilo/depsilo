@@ -145,6 +145,11 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 	// including installations using DEPSILO_DATABASE_DSN.
 	req.Database.Driver = h.cfg.Database.Driver
 	req.Database.DSN = h.cfg.Database.DSN
+	// Setup must not rotate the key selected at startup. A managed key remains
+	// in its durable secret file; an explicit key is copied unchanged into the
+	// generated config so removing an environment override cannot rotate it.
+	req.Auth.JWTSecret = h.cfg.Auth.JWTSecret
+	req.Auth.Managed = h.cfg.ManagedJWTSecretPath != ""
 
 	// Commit the database before publishing config.toml. The config file is a
 	// restart marker only after the administrator is durable. SQLite normally
@@ -269,7 +274,7 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 		zap.L().Error("failed to write config after administrator commit", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code":    "WRITE_FAILED",
-			"message": err.Error(),
+			"message": "Failed to save configuration",
 		})
 		return
 	}
@@ -285,6 +290,12 @@ func (h *SetupHandler) Complete(c *gin.Context) {
 
 	h.cfg.IsDefault = false
 	h.cfg.BootstrapToken = ""
+	if err := config.ClearBootstrapToken(configPath); err != nil {
+		// Setup has already committed. The HTTP gate is closed and the next
+		// configured startup retries cleanup, so do not turn this into a failed
+		// setup response or attempt to roll back durable state.
+		zap.L().Warn("failed to remove completed setup token", zap.Error(err))
+	}
 
 	zap.L().Info("setup complete, config written", zap.String("path", configPath))
 

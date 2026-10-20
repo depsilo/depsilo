@@ -12,6 +12,7 @@ import ThemeToggle from '../components/ThemeToggle'
 import { adminApi, authApi, setupApi } from '../lib/api'
 import { adminLoginURL } from '../lib/adminLoginDestination'
 import { writeLocalStorage } from '../lib/storage'
+import CodeBlock from '../portal/components/CodeBlock'
 import { ecosystemDefaults, type UpstreamDefault } from './defaults'
 
 interface SetupWizardProps {
@@ -91,16 +92,6 @@ async function waitForReconnect(reconnectURL: string, signal: AbortSignal) {
     }
   }
   throw new Error('SETUP_RECONNECT_TIMEOUT')
-}
-
-function resolveReconnectURL(reportedURL: string) {
-  const reported = new URL(reportedURL, window.location.href)
-  const target = new URL(window.location.origin)
-  target.port = reported.port
-  target.pathname = '/'
-  target.search = ''
-  target.hash = ''
-  return target.toString()
 }
 
 const onboardingPath = '/admin/connect?new=1'
@@ -358,7 +349,9 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
         bootstrapToken.trim() || undefined,
       )
 
-      const target = resolveReconnectURL(response.data.reconnect_url)
+      // The listener's internal port does not describe the browser's route
+      // through a reverse proxy or a container port mapping.
+      const target = new URL('/', window.location.origin).toString()
       setReconnectURL(target)
       if (response.data.restart_strategy === 'supervisor_required') {
         setPhase('failed')
@@ -695,6 +688,28 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                       onChange={(event) => setConfirmPassword(event.target.value)}
                     />
                   </div>
+                  {tokenRequired && (
+                    <section aria-labelledby="setup-token-help-heading" className="mt-5 min-w-0">
+                      <h3 id="setup-token-help-heading" className="text-[13px] font-[600] text-[var(--text)]">
+                        {t('setup.bootstrap_token_help')}
+                      </h3>
+                      <p className="mb-3 mt-1 text-[12px] leading-5 text-[var(--text-muted)]">
+                        {t('setup.bootstrap_token_help_hint')}
+                      </p>
+                      <div className="space-y-3">
+                        <CodeBlock
+                          filename="Docker Compose"
+                          copyName="Docker Compose"
+                          code="docker compose exec depsilo depsilo setup token"
+                        />
+                        <CodeBlock
+                          filename={t('setup.bootstrap_token_local')}
+                          copyName={t('setup.bootstrap_token_local')}
+                          code="depsilo setup token"
+                        />
+                      </div>
+                    </section>
+                  )}
                 </section>
 
                 {renderAdvancedSettings()}

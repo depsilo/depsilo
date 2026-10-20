@@ -10,6 +10,7 @@ type Config struct {
 	ConfigVersion              int                `mapstructure:"config_version" json:"-"`
 	IsDefault                  bool               `mapstructure:"-" json:"-"` // true when no config file found
 	ConfigPath                 string             `mapstructure:"-" json:"-"` // resolved path for config file
+	ManagedJWTSecretPath       string             `mapstructure:"-" json:"-"` // runtime-only source of the instance signing key
 	BootstrapToken             string             `mapstructure:"-" json:"-"` // ephemeral first-run authorization token
 	BootstrapTokenGenerated    bool               `mapstructure:"-" json:"-"` // safe to reveal in the first-run console summary
 	ExplicitUpstreamEcosystems map[string]bool    `mapstructure:"-" json:"-"`

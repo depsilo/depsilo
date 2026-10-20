@@ -1,12 +1,14 @@
 // Package backup owns Depsilo's durable state archive format.
 //
-// The archive contains only the operator configuration and a consistent
-// SQLite snapshot. Package and compiler cache objects are deliberately outside
-// this module: they are disposable acceleration data, not control-plane state.
+// The archive contains only the portable operator configuration, including
+// the instance signing key, and a consistent SQLite snapshot. Package and
+// compiler cache objects are deliberately outside this module: they are
+// disposable acceleration data, not control-plane state.
 package backup
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -20,6 +22,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"depsilo/internal/config"
 	_ "github.com/glebarez/sqlite"
 )
 
@@ -79,6 +82,13 @@ func Create(ctx context.Context, paths Paths, output string) (Archive, error) {
 	if samePath(output, paths.Config) || samePath(output, databasePath) {
 		return Archive{}, errors.New("backup output must not replace the source config or database")
 	}
+	secretPath, err := config.ManagedJWTSecretPath(paths.Config)
+	if err != nil {
+		return Archive{}, fmt.Errorf("resolve managed signing key: %w", err)
+	}
+	if samePath(output, secretPath) {
+		return Archive{}, errors.New("backup output must not replace the managed signing key")
+	}
 
 	outputDir := filepath.Dir(output)
 	workspace, err := os.MkdirTemp(outputDir, ".depsilo-backup-work-")
@@ -89,6 +99,9 @@ func Create(ctx context.Context, paths Paths, output string) (Archive, error) {
 
 	configSnapshotPath, snapshotPath, err := snapshotStateWindow(ctx, paths, workspace)
 	if err != nil {
+		return Archive{}, err
+	}
+	if err := snapshotSigningKey(ctx, configSnapshotPath, paths.Config); err != nil {
 		return Archive{}, err
 	}
 
@@ -154,6 +167,39 @@ func Create(ctx context.Context, paths Paths, output string) (Archive, error) {
 		return Archive{}, fmt.Errorf("stat completed backup: %w", err)
 	}
 	return Archive{Path: output, Size: info.Size()}, nil
+}
+
+// snapshotSigningKey makes the archived configuration self-contained without
+// changing the source configuration or adding another restore publication step.
+func snapshotSigningKey(ctx context.Context, snapshotPath, sourceConfigPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	file, err := os.Open(snapshotPath)
+	if err != nil {
+		return fmt.Errorf("open config snapshot: %w", err)
+	}
+	document, readErr := io.ReadAll(io.LimitReader(file, maxConfigBytes+1))
+	if err := errors.Join(readErr, file.Close()); err != nil {
+		return fmt.Errorf("read config snapshot: %w", err)
+	}
+	if len(document) > maxConfigBytes {
+		return fmt.Errorf("backup config.toml exceeds the %d-byte restore limit", maxConfigBytes)
+	}
+	portable, err := config.SnapshotJWTSecret(document, sourceConfigPath)
+	if err != nil {
+		return fmt.Errorf("snapshot signing key: %w", err)
+	}
+	if len(portable) > maxConfigBytes {
+		return fmt.Errorf("portable backup config.toml exceeds the %d-byte restore limit", maxConfigBytes)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if bytes.Equal(portable, document) {
+		return nil
+	}
+	return replaceStagedConfig(snapshotPath, portable)
 }
 
 // snapshotStateWindow prevents a backup from pairing a database snapshot with

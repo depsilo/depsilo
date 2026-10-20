@@ -105,7 +105,16 @@ consequence.
 - The supported downgrade path is restoring a backup taken before the
   upgrade with `depsilo restore`; migrations are not reversed in place.
 - `depsilo backup` writes a checksummed `depsilo-backup` archive containing
-  the configuration file and a transactionally consistent SQLite snapshot.
+  a portable configuration snapshot and a transactionally consistent SQLite
+  snapshot. The archived configuration includes the effective JWT signing
+  secret, including a key managed in `data/secrets/jwt.key` or supplied through
+  `DEPSILO_AUTH_JWT_SECRET`; the source configuration is not modified. Treat
+  archives as credentials and keep them private. Restore preserves the signing
+  key as `auth.jwt_secret` in the restored configuration, so restoring to a new
+  directory does not require a separate secret-file copy. An unreadable,
+  missing, or corrupt managed key fails backup rather than generating a
+  replacement key or publishing an incomplete archive. Explicit legacy inline
+  keys remain supported when archiving older state.
   Cached artifact bytes are deliberately excluded; copy the storage directory
   or bucket out-of-band if you need them.
 - `depsilo restore` accepts the current archive version (`v2` today) and

@@ -35,7 +35,10 @@ The following are known limitations, not vulnerabilities:
 - The one-time bootstrap token and any generated initial password are printed
   to the server log during setup. Anyone who can read that log during the
   bootstrap window may be able to claim or access the initial administrator.
-  Protect logs and complete setup promptly. There is no default `admin/admin`
+  The same token is available to the service user through `depsilo setup token`
+  and the private `data/secrets/bootstrap.token` runtime file, which is removed
+  after setup. Protect logs and instance state and complete setup promptly.
+  There is no default `admin/admin`
   credential.
 - The `config.example.toml` contains placeholder values (`change-me-in-production`) — these are not real secrets.
 - SQLite data is not encrypted at rest. Depsilo does not currently support

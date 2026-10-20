@@ -146,7 +146,9 @@ func parseRestoreOptions(args []string) (restoreOptions, error) {
 }
 
 func restoreTargets(options restoreOptions) (backup.Paths, error) {
-	cfg, loadErr := config.Load()
+	// Restore resolves destinations before the archive supplies the instance's
+	// signing key. Reading targets must not require or initialize a new key.
+	cfg, loadErr := config.LoadForRestore()
 	if loadErr == nil {
 		if options.configTarget == "" {
 			options.configTarget = cfg.ConfigPath

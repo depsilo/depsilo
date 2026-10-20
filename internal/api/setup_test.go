@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"depsilo/internal/config"
 	"depsilo/internal/db"
@@ -92,6 +91,9 @@ func newSetupTestHandler(t *testing.T) (*SetupHandler, *config.Config, string, *
 		ConfigPath:     filepath.Join(root, "private", "config.toml"),
 		BootstrapToken: "bootstrap-token-0123456789abcdef",
 	}
+	if err := config.WriteBootstrapToken(cfg.ConfigPath, cfg.BootstrapToken); err != nil {
+		t.Fatalf("publish setup test token: %v", err)
+	}
 	database := newAPIAuthTestDB(t)
 	if err := database.AutoMigrate(&db.ControlPlaneState{}); err != nil {
 		t.Fatalf("migrate setup state: %v", err)
@@ -133,9 +135,16 @@ func newPersistentSetupTestHandler(t *testing.T) (*SetupHandler, *config.Config,
 	}
 	const bootstrapToken = "bootstrap-token-0123456789abcdef"
 	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", bootstrapToken)
-	configPath := filepath.Join(home, ".depsilo", "config.toml")
-	databasePath := filepath.Join(home, ".depsilo", "data", "depsilo.db")
-	database, err := db.Open("sqlite", databasePath)
+	// Initialize signing state before opening SQLite, matching server startup.
+	// Read-only reloads after a fault then see the original durable key.
+	cfg, err := config.LoadForServer()
+	if err != nil {
+		t.Fatalf("load persistent setup config: %v", err)
+	}
+	if err := config.WriteBootstrapToken(cfg.ConfigPath, cfg.BootstrapToken); err != nil {
+		t.Fatalf("publish persistent setup token: %v", err)
+	}
+	database, err := db.Open(cfg.Database.Driver, cfg.Database.DSN)
 	if err != nil {
 		t.Fatalf("open persistent setup db: %v", err)
 	}
@@ -146,14 +155,6 @@ func newPersistentSetupTestHandler(t *testing.T) (*SetupHandler, *config.Config,
 	})
 	if err := database.AutoMigrate(&db.User{}, &db.APIToken{}, &db.ControlPlaneState{}); err != nil {
 		t.Fatalf("migrate persistent setup db: %v", err)
-	}
-	cfg := &config.Config{
-		IsDefault:      true,
-		ConfigPath:     configPath,
-		BootstrapToken: bootstrapToken,
-		Server:         config.ServerConfig{Host: "127.0.0.1", Port: 23333},
-		Database:       config.DatabaseConfig{Driver: "sqlite", DSN: databasePath},
-		Auth:           config.AuthConfig{Enabled: true, JWTSecret: authTestJWTSecret, TokenTTL: time.Hour},
 	}
 	restarts := 0
 	handler := NewSetupHandler(cfg, database)
@@ -186,7 +187,7 @@ func restartSetupState(t *testing.T, database *gorm.DB) (*config.Config, *gorm.D
 	if err := sqlDatabase.Close(); err != nil {
 		t.Fatalf("close setup db before restart: %v", err)
 	}
-	restartedCfg, err := config.Load()
+	restartedCfg, err := config.LoadForServer()
 	if err != nil {
 		t.Fatalf("reload config after restart: %v", err)
 	}
@@ -255,6 +256,9 @@ func TestSetupCompleteCreatesAdminAndProtectedConfig(t *testing.T) {
 	if cfg.IsDefault || cfg.BootstrapToken != "" {
 		t.Fatalf("setup state was not consumed: %#v", cfg)
 	}
+	if _, err := config.ReadBootstrapToken(cfg.ConfigPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("completed setup retained its retrieval token: %v", err)
+	}
 	if *restarts != 1 {
 		t.Fatalf("restart count = %d, want 1", *restarts)
 	}
@@ -292,6 +296,95 @@ func TestSetupCompleteCreatesAdminAndProtectedConfig(t *testing.T) {
 	status, err := loadOnboardingStatus(t.Context(), handler.db)
 	if err != nil || status != onboardingStatusNotStarted {
 		t.Fatalf("fresh setup onboarding status = %q, err=%v, want not_started", status, err)
+	}
+}
+
+func TestSetupPreservesSigningKeyAcrossRestart(t *testing.T) {
+	for _, managed := range []bool{false, true} {
+		name := "explicit environment key"
+		if managed {
+			name = "managed instance key"
+		}
+		t.Run(name, func(t *testing.T) {
+			handler, cfg, root, restarts := newPersistentSetupTestHandler(t)
+			originalSecret := cfg.Auth.JWTSecret
+			if managed {
+				cfg.ManagedJWTSecretPath = filepath.Join(filepath.Dir(cfg.ConfigPath), "data", "secrets", "jwt.key")
+				if err := os.MkdirAll(filepath.Dir(cfg.ManagedJWTSecretPath), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(cfg.ManagedJWTSecretPath, []byte(originalSecret), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				cfg.ManagedJWTSecretPath = ""
+				t.Setenv("DEPSILO_AUTH_JWT_SECRET", originalSecret)
+			}
+			// Hidden fields must remain startup-owned even when a caller adds an
+			// auth object that is not part of the setup browser contract.
+			var body map[string]any
+			if err := json.Unmarshal(validSetupRequest(t, root), &body); err != nil {
+				t.Fatal(err)
+			}
+			body["auth"] = map[string]any{
+				"jwt_secret": "attacker-key",
+				"JWTSecret":  "attacker-key",
+				"managed":    !managed,
+				"Managed":    !managed,
+			}
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, encoded)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+			}
+			if *restarts != 1 {
+				t.Fatalf("restart count = %d, want 1", *restarts)
+			}
+			if strings.Contains(recorder.Body.String(), originalSecret) {
+				t.Fatal("setup response leaked the effective signing key")
+			}
+			document, err := os.ReadFile(cfg.ConfigPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if managed && strings.Contains(string(document), "jwt_secret") {
+				t.Fatal("setup copied the managed signing key into config.toml")
+			}
+			// Explicit overrides may be removed after setup. The restart must
+			// continue verifying already issued tokens with the original key.
+			t.Setenv("DEPSILO_AUTH_JWT_SECRET", "")
+			restartedCfg, restartedDB := restartSetupState(t, handler.db)
+			if restartedCfg.Auth.JWTSecret != originalSecret {
+				t.Fatal("setup changed the signing key after restart")
+			}
+			if managed && restartedCfg.ManagedJWTSecretPath != cfg.ManagedJWTSecretPath {
+				t.Fatal("setup changed the managed signing-key authority")
+			}
+			if login := loginRequestForSetup(t, restartedDB, restartedCfg); login.Code != http.StatusOK {
+				t.Fatalf("login after restart status = %d, body = %s", login.Code, login.Body.String())
+			}
+		})
+	}
+}
+
+func TestSetupWriteFailureDoesNotExposeInternalError(t *testing.T) {
+	handler, cfg, root, _ := newSetupTestHandler(t)
+	const privateError = "secret-bearing internal failure"
+	handler.writeConfig = func(string, config.SetupRequest, config.WriteStageHook) error {
+		return errors.New(privateError)
+	}
+	recorder := setupRequest(handler, "203.0.113.10:4321", cfg.BootstrapToken, validSetupRequest(t, root))
+	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "WRITE_FAILED") {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), privateError) {
+		t.Fatal("setup write failure exposed an internal error")
+	}
+	if token, err := config.ReadBootstrapToken(cfg.ConfigPath); err != nil || token != cfg.BootstrapToken {
+		t.Fatalf("failed setup lost its retrieval token: %v", err)
 	}
 }
 
@@ -337,6 +430,9 @@ func TestSetupFaultBoundariesAlwaysRestartIntoRecoveryOrLogin(t *testing.T) {
 			}
 			if *restarts != 0 {
 				t.Fatalf("restart count = %d, want 0 after injected stop", *restarts)
+			}
+			if token, err := config.ReadBootstrapToken(cfg.ConfigPath); err != nil || token != cfg.BootstrapToken {
+				t.Fatalf("interrupted setup lost its retrieval token: %v", err)
 			}
 			configExists := fileExists(t, cfg.ConfigPath)
 			// A real power loss immediately after rename can leave either the old
@@ -468,7 +564,7 @@ func TestSetupPersistsEffectiveDatabaseForCustomConfigPath(t *testing.T) {
 	t.Setenv("DEPSILO_BOOTSTRAP_TOKEN", "custom-path-bootstrap-token-012345")
 	t.Setenv("DEPSILO_ADMIN_USERNAME", "")
 	t.Setenv("DEPSILO_ADMIN_PASSWORD", "")
-	cfg, err := config.Load()
+	cfg, err := config.LoadForServer()
 	if err != nil {
 		t.Fatalf("load missing custom config: %v", err)
 	}

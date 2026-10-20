@@ -17,6 +17,8 @@ func Run(cmd string, args []string) int {
 	switch cmd {
 	case "status":
 		return runStatus(args)
+	case "setup":
+		return runSetup(args)
 	case "activate":
 		return runActivate(args)
 	case "start":
@@ -61,6 +63,7 @@ Commands:
     serve [flags]               Start HTTP server in foreground (see ` + "`depsilo serve --help`" + `)
     start [--daemon]            Start the server (daemon mode with --daemon)
     stop                        Stop the running daemon
+    setup token [--config path] Print the running instance's initial setup token
     status [--json]             Show server health, cache stats, upstreams
     doctor [--json]             Run end-to-end health diagnosis with hints
     diagnose [--out file]       Write a local, redacted diagnostic report

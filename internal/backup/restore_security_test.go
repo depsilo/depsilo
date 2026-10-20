@@ -106,7 +106,7 @@ func TestRestoreRetargetsArchivedSQLiteURIToCanonicalPlainPath(t *testing.T) {
 	archivePath := filepath.Join(root, "backup.tar.gz")
 	writeTestState(t, sourceConfig, sourceDatabase)
 	archivedDSN := "file:" + filepath.ToSlash(sourceDatabase) + "?mode=rwc&cache=shared"
-	if err := os.WriteFile(sourceConfig, []byte("[database]\ndriver = \"sqlite\"\ndsn = "+strconv.Quote(archivedDSN)+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(sourceConfig, []byte(testAuthConfig+"[database]\ndriver = \"sqlite\"\ndsn = "+strconv.Quote(archivedDSN)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := backup.Create(context.Background(), backup.Paths{Config: sourceConfig, Database: sourceDatabase}, archivePath); err != nil {
