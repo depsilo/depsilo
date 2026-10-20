@@ -77,7 +77,8 @@ func ComputeAuditHash(prevHash string, row db.AuditLog) string {
 // a root handle or an existing transaction; nested transactions use
 // savepoints. A concurrent writer that wins the chain head makes the unique
 // prev_hash index fail, and the append retries against the new head instead of
-// forking the chain.
+// forking the chain. Root transactions also restart when a concurrent SQLite
+// commit invalidates their read snapshot.
 func AppendAuditRows(ctx context.Context, database *gorm.DB, rows []db.AuditLog) error {
 	if database == nil || len(rows) == 0 {
 		return nil
@@ -105,7 +106,7 @@ func AppendAuditRows(ctx context.Context, database *gorm.DB, rows []db.AuditLog)
 			return nil
 		}
 		lastErr = err
-		if !isChainHeadConflict(err) {
+		if !isChainAppendConflict(err) {
 			return err
 		}
 		time.Sleep(time.Duration(attempt+1) * 2 * time.Millisecond)
@@ -126,9 +127,16 @@ func chainHead(tx *gorm.DB) (string, error) {
 	return head.Hash, nil
 }
 
-func isChainHeadConflict(err error) bool {
+func isChainAppendConflict(err error) bool {
 	if err == nil {
 		return false
+	}
+	// A concurrent writer can invalidate the WAL snapshot between chainHead
+	// and Create. Busy timeouts cannot repair SQLITE_BUSY_SNAPSHOT: rerun the
+	// whole transaction, including its chain-head read, after rollback.
+	var sqliteError interface{ Code() int }
+	if errors.As(err, &sqliteError) && sqliteError.Code()&0xff == 5 {
+		return true
 	}
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "unique") && strings.Contains(message, "prev_hash")

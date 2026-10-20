@@ -158,3 +158,56 @@ func TestComputeAuditHashIsStableAcrossLocations(t *testing.T) {
 		t.Fatal("hash ignores prev_hash")
 	}
 }
+
+func TestAppendAuditRowsRetriesStaleSQLiteSnapshot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snapshot.db")
+	database, err := db.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer, err := db.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, handle := range []*gorm.DB{database, writer} {
+		sqlDB, err := handle.DB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = sqlDB.Close() })
+	}
+	if err := database.AutoMigrate(&db.AuditLog{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec("CREATE TABLE competing_writes (value INTEGER)").Error; err != nil {
+		t.Fatal(err)
+	}
+	// A commit after chainHead's read invalidates the deferred transaction's
+	// WAL snapshot. This is the same pattern as concurrent cache/access writes.
+	committed := false
+	if err := database.Callback().Create().Before("gorm:create").Register("test:commit_competing_writer", func(tx *gorm.DB) {
+		if committed {
+			return
+		}
+		committed = true
+		if err := writer.Exec("INSERT INTO competing_writes VALUES (1)").Error; err != nil {
+			tx.AddError(err)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := AppendAuditRows(context.Background(), database, []db.AuditLog{sampleAuditRow("torch")}); err != nil {
+		t.Fatalf("append after concurrent commit: %v", err)
+	}
+	var count int64
+	if err := database.Model(&db.AuditLog{}).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("stored %d audit rows, want 1", count)
+	}
+	report, err := VerifyChain(context.Background(), database, 100)
+	if err != nil || !report.OK || report.ChainedRows != 1 {
+		t.Fatalf("chain report = %+v, error = %v", report, err)
+	}
+}

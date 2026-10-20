@@ -68,7 +68,7 @@ func (l *Logger) Start(ctx context.Context) {
 
 func (l *Logger) flush(batch []db.AuditLog) {
 	// The chain appender inserts the same batch, assigning prev_hash/hash in
-	// order; a concurrent writer is handled by its head-conflict retry.
+	// order; transient snapshot and chain-head conflicts retry the append.
 	if err := AppendAuditRows(context.Background(), l.database, batch); err != nil {
 		zap.L().Error("failed to write audit logs", zap.Int("count", len(batch)), zap.Error(err))
 	}
