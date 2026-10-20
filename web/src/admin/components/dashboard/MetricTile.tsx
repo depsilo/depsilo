@@ -53,6 +53,8 @@ interface MetricTileProps {
    * one shared surface and the tile is a cell inside it (Overview rails).
    */
   framed?: boolean
+  /** Secondary diagnostics use smaller values and neutral, unframed icons. */
+  compact?: boolean
 }
 
 function Sparkline({ series, tone }: { series: number[]; tone: MetricTone }) {
@@ -90,9 +92,8 @@ function Sparkline({ series, tone }: { series: number[]; tone: MetricTone }) {
 }
 
 /**
- * Overview metric tile: an identity-coloured icon base, a large tabular value
- * with a de-emphasized unit, an optional real progress bar and sparkline, and a
- * measurement-basis line. Main numbers stay dark; colour carries category.
+ * Tabular values with an optional real progress denominator and sampled trend.
+ * Compact tiles keep secondary diagnostics quieter than cache benefits.
  */
 export default function MetricTile({
   label,
@@ -111,6 +112,7 @@ export default function MetricTile({
   infoLabel,
   testId,
   framed = true,
+  compact = false,
 }: MetricTileProps) {
   const ratio = progress ? Math.min(1, Math.max(0, progress.ratio)) : null
   const progressTone = progress?.tone ?? tone
@@ -121,21 +123,22 @@ export default function MetricTile({
     <div
       data-dashboard-metric
       data-testid={testId}
-      className={`dash-metric flex min-w-0 items-start gap-4 px-5 py-4${framed ? ' dash-card' : ''}`}
+      aria-busy={loading}
+      className={`dash-metric flex min-w-0 items-start px-5 py-4 ${compact ? 'gap-3' : 'gap-4'}${framed ? ' dash-card' : ''}`}
     >
       {icon && (
         <span
           aria-hidden="true"
-          className="dash-metric-icon grid shrink-0 place-items-center rounded-xl"
-          style={{ background: palette.soft, color: palette.strong }}
+          className={`grid shrink-0 place-items-center ${compact ? 'size-6' : 'dash-metric-icon rounded-xl'}`}
+          style={compact ? { color: 'var(--dash-muted)' } : { background: palette.soft, color: palette.strong }}
         >
-          <Icon name={icon} />
+          <Icon name={icon} size={compact ? 'sm' : undefined} />
         </span>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>
+          <p className="min-w-0 text-[14px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>
             {label}
           </p>
           {badge && (
@@ -171,7 +174,7 @@ export default function MetricTile({
                 <>
                   <span
                     className="dash-metric-value font-mono font-semibold leading-none tabular-nums"
-                    style={{ color: 'var(--dash-ink)' }}
+                    style={{ color: 'var(--dash-ink)', ...(compact ? { fontSize: '22px' } : {}) }}
                     title={unit ? `${value} ${unit}` : value}
                   >
                     {value}
@@ -190,13 +193,13 @@ export default function MetricTile({
             <dl className="flex flex-col gap-1.5">
               {rows.map(row => (
                 <div key={row.label} className="flex min-h-5 min-w-0 items-center justify-between gap-3 leading-none">
-                  <dt className="flex min-w-0 items-center gap-1.5 text-[15px] leading-none" style={{ color: 'var(--dash-muted)' }}>
+                  <dt className="flex min-w-0 items-center gap-1.5 text-[13px] leading-snug" style={{ color: 'var(--dash-muted)' }}>
                     <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE[row.tone].strong }} />
-                    <span className="truncate">{row.label}</span>
+                    <span>{row.label}</span>
                   </dt>
                   <dd className="shrink-0 font-mono text-[16px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
-                    {row.value}
-                    {row.unit && row.value !== '—' && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
+                    {loading ? <span aria-hidden className="block h-5 w-12 animate-pulse rounded bg-[var(--dash-soft)]" /> : row.value}
+                    {!loading && row.unit && row.value !== '—' && <span className="ml-1 text-[13px] font-medium" style={{ color: 'var(--dash-muted)' }}>{row.unit}</span>}
                   </dd>
                 </div>
               ))}
@@ -213,14 +216,14 @@ export default function MetricTile({
         {ratio !== null && (
           <div
             className="h-1.5 w-full overflow-hidden rounded-full"
-            style={{ background: METRIC_TONE_PALETTE[progressTone].soft }}
+            style={{ background: 'var(--dash-soft)' }}
             aria-hidden="true"
             data-progress-label={progress?.label}
           >
-            <div
+            {ratio > 0 && <div
               className="h-full rounded-full transition-[width] duration-300"
               style={{ width: `${ratio * 100}%`, background: METRIC_TONE_PALETTE[progressTone].strong }}
-            />
+            />}
           </div>
         )}
 

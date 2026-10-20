@@ -66,6 +66,7 @@ const editableSettings: AdminSettingsResponse['editable'] = [
 ]
 
 const existingAdminApiDefaults: Record<string, JsonValue> = {
+  'GET /ready': { status: 'ready', version: 'dev', checks: { database: 'ready', storage: 'ready' } },
   'GET /api/v1/admin/docker/bootstrap': {
     configured: true, effective: true, docker_hub: true,
     pending_restart: false, config_writable: true, blocked_by_override: false,
@@ -408,7 +409,7 @@ export async function mockAdminApi(
     }
     if (!applyTheme()) window.addEventListener('DOMContentLoaded', applyTheme, { once: true })
   }, initialToken)
-  await page.route('**/api/v1/**', async route => {
+  await page.route(url => url.pathname === '/ready' || url.pathname.startsWith('/api/v1/'), async route => {
     const key = keyFor(route)
     const selected = Object.prototype.hasOwnProperty.call(state.overrides, key) ? state.overrides[key] : adminApiDefaults[key]
     if (selected === undefined) {

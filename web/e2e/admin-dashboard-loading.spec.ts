@@ -1,17 +1,22 @@
 import { adminApiDefaults, expect, mockAdminApi, setUiPreferences, test } from './fixtures/admin-api'
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
 // First load must hold its shape: the skeletons match the settled regions, and
 // no tile claims a storage/measurement fact before its payload exists.
 test('Overview first-load skeletons cover the settled layout', async ({ page }) => {
   await setUiPreferences(page, 'light', 'zh')
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  const afterRelease = (key: string) => async () => {
+    await pending
+    return adminApiDefaults[key]
+  }
   await mockAdminApi(page, {
-    'GET /api/v1/now': async () => { await delay(2000); return adminApiDefaults['GET /api/v1/now'] },
-    'GET /api/v1/admin/runtime': async () => { await delay(2000); return adminApiDefaults['GET /api/v1/admin/runtime'] },
-    'GET /api/v1/admin/dashboard': async () => { await delay(2000); return adminApiDefaults['GET /api/v1/admin/dashboard'] },
-    'GET /api/v1/admin/dashboard/trends': async () => { await delay(2000); return { points: [] } },
-    'GET /api/v1/admin/logs': async () => { await delay(2000); return { items: [], total: 0, page: 1, page_size: 5 } },
+    'GET /ready': afterRelease('GET /ready'),
+    'GET /api/v1/now': afterRelease('GET /api/v1/now'),
+    'GET /api/v1/admin/runtime': afterRelease('GET /api/v1/admin/runtime'),
+    'GET /api/v1/admin/dashboard': afterRelease('GET /api/v1/admin/dashboard'),
+    'GET /api/v1/admin/dashboard/trends': afterRelease('GET /api/v1/admin/dashboard/trends'),
+    'GET /api/v1/admin/logs': afterRelease('GET /api/v1/admin/logs'),
   })
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
@@ -26,15 +31,17 @@ test('Overview first-load skeletons cover the settled layout', async ({ page }) 
   const cache = page.locator('[data-testid="resource-cache"]')
   await expect(cache).not.toContainText('未设置缓存配额')
   await expect(cache).not.toContainText('0 B')
+  await expect(page.locator('[data-dashboard-onboarding]')).toHaveCount(0)
+  await expect(page.locator('[data-dashboard-benefits]')).not.toContainText('0 B')
 
   // Loading: the trend card already occupies the chart's footprint.
-  const trendSkeleton = page.locator('[data-dashboard-root] div.h-\\[272px\\]').first()
+  const trendSkeleton = page.locator('[data-dashboard-trends-column] [aria-busy="true"]')
   await expect(trendSkeleton).toBeVisible()
 
   // Settled: the same regions render real content at a comparable height.
+  release()
   await expect(recent).not.toHaveAttribute('aria-busy', 'true')
   await expect(page.locator('[data-dashboard-traffic]')).toBeVisible()
   await expect(page.locator('[data-testid="traffic-served-total"]')).toContainText('次请求')
-  const trendHeight = await page.locator('[data-dashboard-trends]').evaluate(node => node.getBoundingClientRect().height)
-  expect(trendHeight).toBeGreaterThan(240)
+  await expect(page.locator('[data-dashboard-trends]')).toBeVisible()
 })

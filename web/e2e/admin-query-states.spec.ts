@@ -58,15 +58,14 @@ for (const query of recoveryQueries) {
       },
     })
     await page.goto(query.path)
-    const error = page.getByRole('alert').filter({ hasText: 'fixture initial failure' })
+    const error = page.getByRole('alert').filter({ hasText: query.path === '/admin' ? '统计暂不可用' : 'fixture initial failure' })
     await expect(error).toBeVisible()
     await expectPrimarySiblingVisible(page, query.path)
     await expect.poll(() => calls).toBe(1)
     // Only the failed region is under test. Independent Dashboard regions
-    // (trends, recent requests) may legitimately show their own empty state,
-    // and the status strip legitimately says "no recent activity".
+    // (trends, recent requests) may legitimately show their own empty state.
     const emptyScope = query.path === '/admin'
-      ? page.locator('[data-query-key="dashboard-trends"], [data-dashboard-recent-requests]')
+      ? error
       : query.path === '/admin/cache'
       ? page.locator('[data-cache-list]')
       : page
@@ -295,7 +294,7 @@ test('Overview trends poll at range-specific intervals', async ({ page }) => {
   await expect.poll(() => calls['24h'] ?? 0).toBe(2)
 })
 
-test('Overview status strip keeps healthy cached data when its focus refetch fails', async ({ page }) => {
+test('Overview keeps cached measurements but does not claim health after its focus refetch fails', async ({ page }) => {
   await pausePollingClock(page)
   let calls = 0
   await mockAdminApi(page, {
@@ -364,7 +363,7 @@ test('Dashboard snapshot failure keeps independent live and analytics regions mo
   })
   await page.goto('/admin')
 
-  await expect(page.getByRole('alert').filter({ hasText: 'fixture dashboard snapshot failure' })).toBeVisible()
+  await expect(page.getByRole('alert').filter({ hasText: '统计暂不可用' })).toBeVisible()
   await expect(page.locator('[data-query-key="now"]')).toBeVisible()
   await expect(page.locator('[data-dashboard-recent-requests]')).toBeVisible()
   await expect(page.locator('[data-query-key="dashboard-trends"]')).toBeVisible()

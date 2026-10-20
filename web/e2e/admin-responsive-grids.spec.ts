@@ -63,7 +63,7 @@ test('Overview resource metrics stay readable and never overflow on mobile', asy
   await resourcesToggle.click()
   await expect(resourcesToggle).toHaveAttribute('aria-expanded', 'true')
   await expect(grid).toBeVisible()
-  await expect(grid.locator(':scope > *')).toHaveCount(4)
+  await expect(grid.locator(':scope > *')).toHaveCount(3)
   // Very narrow screens stack to one column instead of squeezing 32px values.
   expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(1)
   await expect(page.locator('[data-query-key="now"]')).not.toContainText(/NaN|undefined/)
@@ -75,21 +75,17 @@ test('Overview resource metrics stay readable and never overflow on mobile', asy
   expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(2)
 
   await page.setViewportSize({ width: 1440, height: 900 })
-  expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(4)
+  expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(/\s+/).length)).toBe(3)
 })
 
-// Resource cells are size containers: the icon and headline scale from the
-// cell's own inline size, so a long value ("1023.9 GB") keeps its slack at the
-// cell edge instead of colliding with the icon.
+// Cache inventory remains compact even when the capacity has a long value.
 function tileMetrics(locator: Locator) {
   return locator.evaluate(card => {
-    const icon = card.querySelector('.dash-metric-icon')
-    const value = card.querySelector('.dash-metric-value')
+    const value = card.querySelector('.font-mono')
     const style = getComputedStyle(card)
     const contentRight = card.getBoundingClientRect().right -
       parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth)
     return {
-      icon: icon ? Math.round(icon.getBoundingClientRect().width) : 0,
       valueFont: value ? parseFloat(getComputedStyle(value).fontSize) : 0,
       // Space left between the last glyph and the card's content edge.
       slack: value ? Math.round(contentRight - value.getBoundingClientRect().right) : 0,
@@ -97,7 +93,7 @@ function tileMetrics(locator: Locator) {
   })
 }
 
-test('Overview resource cells keep a long value inside the shared card', async ({ page }) => {
+test('Overview cache summary keeps a long capacity value readable at every width', async ({ page }) => {
   const runtime = adminApiDefaults['GET /api/v1/admin/runtime'] as RuntimeResponse
   await mockAdminApi(page, {
     'GET /api/v1/admin/runtime': {
@@ -112,13 +108,13 @@ test('Overview resource cells keep a long value inside the shared card', async (
   const cell = page.locator('[data-testid="resource-cache"]')
   await expect(cell).toContainText('1023.9 GB')
   const compact = await tileMetrics(cell)
-  expect(compact.icon).toBeLessThan(56)
+  expect(compact.valueFont).toBeGreaterThanOrEqual(16)
   expect(compact.slack).toBeGreaterThan(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 
   await page.setViewportSize({ width: 1920, height: 900 })
   const wide = await tileMetrics(cell)
-  expect(wide.icon).toBe(56)
+  expect(wide.valueFont).toBeLessThanOrEqual(24)
   expect(wide.slack).toBeGreaterThan(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1920)
 })
@@ -177,7 +173,7 @@ test('Overview mobile priorities and touch targets remain usable', async ({ page
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
 })
 
-test('Overview keeps the flow readable at 1024 and gives an empty tail no chart width', async ({ page }) => {
+test('Overview keeps the download flow readable at 1024 and the empty analytics compact', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 1024, height: 900 })
   await page.goto('/admin')
@@ -194,9 +190,12 @@ test('Overview keeps the flow readable at 1024 and gives an empty tail no chart 
   const clientRect = (await clients.boundingBox())!
   const depsiloRect = (await depsilo.boundingBox())!
   const upstreamRect = (await upstream.boundingBox())!
-  expect(clientRect.x).toBeLessThan(depsiloRect.x)
-  expect(depsiloRect.x).toBeLessThan(upstreamRect.x)
-  expect((await rail.boundingBox())!.y).toBeGreaterThan(clientRect.y + clientRect.height)
+  // The compact path stacks from source to destination when five columns no
+  // longer fit; its labels and arrows keep the same download direction.
+  expect(upstreamRect.y).toBeLessThan(depsiloRect.y)
+  expect(depsiloRect.y).toBeLessThan(clientRect.y)
+  expect((await rail.boundingBox())!.y).toBeGreaterThan(depsiloRect.y)
+  expect((await rail.boundingBox())!.y).toBeLessThan(clientRect.y)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1024)
 
   await page.setViewportSize({ width: 1440, height: 900 })
@@ -205,9 +204,10 @@ test('Overview keeps the flow readable at 1024 and gives an empty tail no chart 
   await expect(recent).toHaveAttribute('data-dashboard-recent-empty', 'true')
   const chartRect = (await chart.boundingBox())!
   const recentRect = (await recent.boundingBox())!
-  const rootRect = (await page.locator('[data-dashboard-root]').boundingBox())!
-  expect(chartRect.width).toBeGreaterThan(rootRect.width - 5)
-  expect(recentRect.y).toBeGreaterThan(chartRect.y + chartRect.height)
+  expect(chartRect.height).toBeLessThan(240)
+  expect(recentRect.height).toBeLessThan(240)
+  expect(recentRect.x).toBeGreaterThan(chartRect.x)
+  expect(Math.abs(chartRect.y - recentRect.y)).toBeLessThan(2)
 })
 
 // 1024–1279px keeps four columns from squeezing the status labels and the
@@ -275,16 +275,14 @@ test('Overview status strip and recent table keep their content at 1024 and 1440
   await expect(page.locator('[data-testid="traffic-origin-flow"]')).toContainText('上游 → Depsilo')
 })
 
-// Idle installs must stay readable too: the "no recent activity" guidance is
-// the longest string in the strip and used to truncate in the 4-column layout.
-test('Overview idle strip keeps its guidance text intact', async ({ page }) => {
+test('Overview idle health summary keeps its evidence and uptime readable', async ({ page }) => {
   await mockAdminApi(page)
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
 
   const strip = page.locator('[data-dashboard-status-strip]')
-  await expect(strip).toContainText('暂无请求')
-  await expect(strip).toContainText('接入客户端后显示最近请求')
+  await expect(strip).toContainText('数据库与存储就绪')
+  await expect(strip).toContainText('已运行时间')
   const clipped = await strip.locator('.truncate').evaluateAll(elements =>
     elements.filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.textContent),
   )
@@ -333,10 +331,10 @@ test('Overview surfaces a degraded upstream as an actionable centered dialog', a
   await expect(problemsButton).toHaveAttribute('aria-haspopup', 'dialog')
   await expect(page.locator('[data-dashboard-attention]')).toHaveCount(0)
   const status = page.locator('[data-dashboard-status-strip]')
-  const traffic = page.locator('[data-dashboard-traffic]')
-  const root = page.locator('[data-dashboard-root]')
+  const benefits = page.locator('[data-dashboard-benefits]')
+  const alerts = page.locator('[data-dashboard-alerts]')
   expect((await status.boundingBox())!.height).toBeLessThan(140)
-  expect((await traffic.boundingBox())!.y - (await root.boundingBox())!.y).toBeLessThan(330)
+  expect((await alerts.boundingBox())!.y).toBeLessThan((await benefits.boundingBox())!.y)
   await problemsButton.focus()
   await page.keyboard.press('Enter')
 

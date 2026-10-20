@@ -1,261 +1,73 @@
-import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import Icon from '@/components/Icon'
-import TooltipV2 from '@/components/Tooltip'
-import type { DashboardPeriod, OriginCoverage } from '@/lib/adminApi.types'
-import {
-  coverageDetail,
-  formatEstimatedDuration,
-  formatPercentRatio,
-  formatSignedPercent,
-  hitRateValue,
-  latencyComparison,
-  periodChange,
-  timeSavedMs,
-} from '@/lib/dashboardOverview'
+import Tooltip from '@/components/Tooltip'
+import type { DashboardPeriod } from '@/lib/adminApi.types'
+import { formatEstimatedDuration, formatPercentRatio, formatSignedPercent, hitRateValue, latencyComparison, periodChange, timeSavedMs } from '@/lib/dashboardOverview'
 import { formatBytes } from '@/lib/utils'
-
-import { HINT_TOOLTIP_DELAY_MS, type MetricTone } from './MetricTile'
-
-// Only the three identity colours this card needs; the shared tile palette
-// carries the rest.
-const TONE: Partial<Record<MetricTone, { strong: string; soft: string }>> = {
-  cpu: { strong: 'var(--dash-cpu)', soft: 'var(--dash-cpu-soft)' },
-  origin: { strong: 'var(--dash-origin)', soft: 'var(--dash-origin-soft)' },
-  memory: { strong: 'var(--dash-memory)', soft: 'var(--dash-memory-soft)' },
-}
-
-function Track({ children }: { children?: ReactNode }) {
-  return (
-    <div
-      className="flex h-1.5 w-full overflow-hidden rounded-full"
-      style={{ background: 'var(--dash-soft)' }}
-      aria-hidden="true"
-    >
-      {children}
-    </div>
-  )
-}
-
-function Fill({ ratio, color }: { ratio: number; color: string }) {
-  const percent = Math.min(1, Math.max(0, ratio)) * 100
-  return <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${percent}%`, background: color }} />
-}
-
-function BenefitColumn({
-  label,
-  icon,
-  tone,
-  info,
-  infoLabel,
-  value,
-  secondary,
-  children,
-  footnote,
-}: {
-  label: string
-  icon: 'donut_large' | 'bolt' | 'speed'
-  tone: MetricTone
-  /** Optional: only columns whose basis needs decoding carry an affordance. */
-  info?: string
-  infoLabel?: string
-  value: string
-  secondary?: ReactNode
-  children?: ReactNode
-  footnote?: ReactNode
-}) {
-  const palette = TONE[tone] ?? TONE.memory!
-  return (
-    <div className="flex min-w-0 flex-col gap-3 px-5 py-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <span
-          aria-hidden="true"
-          className="grid size-10 shrink-0 place-items-center rounded-lg"
-          style={{ background: palette.soft, color: palette.strong }}
-        >
-          <Icon name={icon} size="md" />
-        </span>
-        {/* Wraps instead of truncating: the three benefit columns are narrow at
-            1280 and "预计节省回源流量" clipped to "预计节省回…". */}
-        <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{label}</p>
-        {info && infoLabel && (
-          <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
-            <button
-              type="button"
-              aria-label={infoLabel}
-              className="dash-focus ml-auto grid size-[40px] shrink-0 place-items-center rounded-full hover:bg-[var(--dash-soft)]"
-              style={{ color: 'var(--dash-muted)' }}
-            >
-              <Icon name="info" size="sm" />
-            </button>
-          </TooltipV2>
-        )}
-      </div>
-
-      <div className="flex min-h-9 min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="font-mono text-[30px] font-semibold leading-none tabular-nums" style={{ color: 'var(--dash-ink)' }}>
-          {value}
-        </span>
-        {secondary}
-      </div>
-
-      {children}
-
-      {footnote && (
-        <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{footnote}</p>
-      )}
-    </div>
-  )
-}
-
-function LatencyRow({
-  label,
-  ms,
-  max,
-  color,
-  samplesLabel,
-}: {
-  label: string
-  ms: number | null
-  max: number
-  color: string
-  samplesLabel: string
-}) {
-  const ratio = ms !== null && max > 0 ? ms / max : 0
-  return (
-    <div className="flex min-w-0 items-center gap-2 text-[13px]">
-      <dt className="w-10 shrink-0 whitespace-nowrap" style={{ color: 'var(--dash-muted)' }}>{label}</dt>
-      <dd className="min-w-0 flex-1">
-        {ms !== null ? <Track><Fill ratio={ratio} color={color} /></Track> : <span className="block h-1.5" />}
-      </dd>
-      <dd className="w-16 shrink-0 text-right font-mono tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
-        {ms !== null ? `${ms.toFixed(0)} ms` : '—'}
-      </dd>
-      <dd className="w-16 shrink-0 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-muted)' }} title={samplesLabel}>
-        {samplesLabel}
-      </dd>
-    </div>
-  )
-}
+import { HINT_TOOLTIP_DELAY_MS } from './MetricTile'
 
 interface CacheBenefitsProps {
   period?: DashboardPeriod
   prev?: DashboardPeriod
-  rangeStart?: string
-  coverage?: OriginCoverage
+  pending?: boolean
 }
 
-export default function CacheBenefits({
-  period,
-  prev,
-  rangeStart,
-  coverage,
-}: CacheBenefitsProps) {
+/** Cumulative savings and request averages keep separate sample semantics. */
+export default function CacheBenefits({ period, prev, pending = false }: CacheBenefitsProps) {
   const { t } = useTranslation()
-
-  // ── Request hit rate ────────────────────────────────────────────────
   const hitRate = hitRateValue(period)
-  const hitRateChange = periodChange(hitRate, hitRateValue(prev))
-  const changeTone = hitRateChange === null
-    ? 'var(--dash-muted)'
-    : hitRateChange >= 0 ? 'var(--dash-ok)' : 'var(--dash-warn)'
-
-  // ── Estimated origin traffic saved ──────────────────────────────────
-  const savedBytes = period?.hit_bytes ?? 0
-  const servedBytes = savedBytes + (period?.miss_bytes ?? 0)
-  const cachedShare = servedBytes > 0 ? savedBytes / servedBytes : null
-  const coverageNote = coverageDetail(coverage, rangeStart, t)
-  const savedFootnote = cachedShare === null
-    ? undefined
-    : `${t('overview.savedShareOfServed', { percent: (cachedShare * 100).toFixed(1) })} · ${t('overview.estimatedShort')}${coverageNote ? ` · ${coverageNote}` : ''}`
-
-  // ── Response performance ────────────────────────────────────────────
+  const change = periodChange(hitRate, hitRateValue(prev))
   const latency = latencyComparison(period)
-  const maxLatency = Math.max(latency.hitMs ?? 0, latency.missMs ?? 0)
-  const sampleLabel = (count: number) => t('overview.samplesShort', { count: count.toLocaleString() })
-  // Same comparable-sample gate as the reduction percentage: the summed
-  // latency difference stays an estimate of waiting avoided, not a measured
-  // build-time saving.
   const savedTime = timeSavedMs(period)
+  const hasSamples = Boolean(period && period.total_requests > 0)
+  const metrics = [
+    {
+      id: 'saved', label: t('overview.savedBytesLabel'),
+      value: period ? formatBytes(period.hit_bytes) : '—',
+      detail: t('overview.estimatedFromHits'),
+      hint: t('overview.hintSavedBytes'), hintLabel: t('overview.savedBytesInfoLabel'),
+    },
+    {
+      id: 'hit', label: t('overview.hitRateLabel'), value: formatPercentRatio(hitRate),
+      detail: hasSamples && period
+        ? t('overview.hitRateDetail', { hits: period.hit_requests.toLocaleString(), total: period.total_requests.toLocaleString() })
+        : t('overview.noSamples'),
+      hint: t('overview.hintHitRate'), hintLabel: t('overview.hitRateInfoLabel'),
+    },
+    {
+      id: 'latency', label: t('overview.averageResponse'),
+      value: hasSamples && period ? `${period.avg_latency_ms.toFixed(0)} ms` : '—',
+      detail: hasSamples ? t('overview.responseBasis') : t('overview.noSamples'),
+      hint: `${t('overview.responseComparisonBasis')} ${t('overview.latencyHit')}: ${t('overview.samples', { count: latency.hitSamples.toLocaleString() })}; ${t('overview.latencyMiss')}: ${t('overview.samples', { count: latency.missSamples.toLocaleString() })}`, hintLabel: t('overview.responseInfoLabel'),
+    },
+  ]
 
   return (
-    <section data-dashboard-benefits aria-labelledby="overview-benefits-title" className="dash-card flex min-w-0 flex-col">
-      <header className="flex items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
-        <h2 id="overview-benefits-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
-          {t('overview.benefitsTitle')}
-        </h2>
-      </header>
-
-      <div className="grid min-w-0 grid-cols-1 divide-y divide-[var(--dash-border)] lg:grid-cols-3 lg:divide-x lg:divide-y-0">
-        <BenefitColumn
-          label={t('overview.hitRateLabel')}
-          icon="donut_large"
-          tone="cpu"
-          info={t('overview.hintHitRate')}
-          infoLabel={t('overview.hitRateInfoLabel')}
-          value={formatPercentRatio(hitRate)}
-          secondary={hitRateChange !== null && (
-            // The delta is meaningless without its baseline: say what the
-            // comparison is against instead of leaving a bare ±x.x%.
-            <span className="inline-flex items-baseline gap-1 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
-              {t('overview.changeVsPrevious')}
-              <span className="font-mono tabular-nums" style={{ color: changeTone }}>
-                {formatSignedPercent(hitRateChange)}
-              </span>
-            </span>
-          )}
-          footnote={period && period.total_requests > 0
-            ? t('overview.hitRateDetail', {
-              hits: period.hit_requests.toLocaleString(),
-              total: period.total_requests.toLocaleString(),
-            })
-            : undefined}
-        >
-          {hitRate !== null && <Track><Fill ratio={hitRate} color="var(--dash-cpu)" /></Track>}
-        </BenefitColumn>
-
-        <BenefitColumn
-          label={t('overview.savedBytesLabel')}
-          icon="bolt"
-          tone="origin"
-          info={t('overview.hintSavedBytes')}
-          infoLabel={t('overview.savedBytesInfoLabel')}
-          value={cachedShare === null ? '—' : formatBytes(savedBytes)}
-          footnote={savedFootnote}
-        >
-          {cachedShare !== null && <Track><Fill ratio={cachedShare} color="var(--dash-cpu)" /></Track>}
-        </BenefitColumn>
-
-        <BenefitColumn
-          label={t('overview.latencyLabel')}
-          icon="speed"
-          tone="memory"
-          value={latency.reductionPct !== null ? `−${latency.reductionPct.toFixed(0)}%` : '—'}
-          secondary={latency.sufficient && (
-            <span className="text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.latencyVs')}</span>
-          )}
-          footnote={savedTime !== null
-            ? t('overview.timeSavedEstimate', { duration: formatEstimatedDuration(savedTime, t) })
-            : undefined}
-        >
-          <dl className="flex flex-col gap-2">
-            <LatencyRow
-              label={t('overview.latencyHit')}
-              ms={latency.hitMs}
-              max={maxLatency}
-              color="var(--dash-memory)"
-              samplesLabel={sampleLabel(latency.hitSamples)}
-            />
-            <LatencyRow
-              label={t('overview.latencyMiss')}
-              ms={latency.missMs}
-              max={maxLatency}
-              color="var(--dash-origin)"
-              samplesLabel={sampleLabel(latency.missSamples)}
-            />
-          </dl>
-        </BenefitColumn>
+    <section data-dashboard-benefits aria-labelledby="overview-benefits-title" aria-busy={pending || undefined} className="dashboard-benefits dash-card min-w-0">
+      <h2 id="overview-benefits-title" className="px-5 pt-4 text-[16px] font-semibold">{t('overview.benefitsTitle')}</h2>
+      <div className="grid min-w-0 grid-cols-1 gap-5 p-5 pt-2 sm:grid-cols-3 sm:gap-6">
+        {metrics.map(metric => (
+          <div key={metric.id} data-benefit={metric.id} className="min-w-0">
+            <div className="flex min-h-[40px] items-center justify-between gap-1">
+              <p className="text-[14px] text-[var(--dash-muted)]">{metric.label}</p>
+              <Tooltip delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[300px] leading-relaxed">{metric.hint}</span>}>
+                <button type="button" aria-label={metric.hintLabel} className="dash-focus grid size-[40px] shrink-0 place-items-center rounded-md text-[var(--dash-muted)] hover:bg-[var(--dash-soft)]"><Icon name="info" size="sm" /></button>
+              </Tooltip>
+            </div>
+            {pending ? <span aria-hidden className="my-1 block h-8 w-28 animate-pulse rounded bg-[var(--dash-soft)]" /> : (
+              <p className={`font-mono text-[30px] font-semibold leading-tight tabular-nums ${metric.id === 'saved' && (period?.hit_bytes ?? 0) > 0 ? 'text-[var(--dash-ok)]' : 'text-[var(--dash-ink)]'}`}>{metric.value}</p>
+            )}
+            <p className="mt-2 text-[13px] leading-relaxed text-[var(--dash-muted)]">{pending ? t('overview.loadingStatistics') : metric.detail}</p>
+            {!pending && metric.id === 'hit' && change !== null && <p className="mt-1 text-[13px] text-[var(--dash-muted)]">{t('overview.changeVsPrevious')} <span className="font-mono tabular-nums">{formatSignedPercent(change)}</span></p>}
+            {!pending && metric.id === 'latency' && hasSamples && (
+              <div className="mt-2 space-y-1 text-[12px] text-[var(--dash-muted)]">
+                <p>{t('overview.latencyHit')} <span className="font-mono tabular-nums text-[var(--dash-ok)]">{latency.hitMs === null ? '—' : `${latency.hitMs.toFixed(0)} ms`}</span> · {t('overview.latencyMiss')} <span className="font-mono tabular-nums">{latency.missMs === null ? '—' : `${latency.missMs.toFixed(0)} ms`}</span></p>
+                {savedTime !== null && <p>{t('overview.timeSavedEstimate', { duration: formatEstimatedDuration(savedTime, t) })}</p>}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </section>
   )

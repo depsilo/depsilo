@@ -161,6 +161,30 @@ test('trend footnotes and latency tooltip state their aggregation', async ({ pag
   await expect(card.locator('.recharts-tooltip-wrapper')).toContainText(/n=\d/)
 })
 
+test('empty trend buckets keep zero counts but do not invent latency or error-rate samples', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('depsilo-dashboard-range', '1h'))
+  await mockAdminApi(page, {
+    'GET /api/v1/admin/dashboard/trends': {
+      points: [
+        { ...populatedTrendPoints[0], requests: 0, hits: 0, misses: 0, hit_rate: 0, bytes_served: 0, bytes_hit: 0, bytes_miss: 0, sum_latency_ms: 0, avg_latency_ms: 0, errors: 0 },
+        populatedTrendPoints[1],
+      ],
+    },
+  })
+  await page.goto('/admin')
+  const card = page.locator('[data-query-key="dashboard-trends"]')
+  const chart = card.locator('.recharts-wrapper')
+  await card.getByRole('tab', { name: '延迟', exact: true }).click()
+  // Latency has a wider Y axis than request counts; hover inside its plot.
+  await chart.hover({ position: { x: 80, y: 80 } })
+  await expect(card.locator('.recharts-tooltip-wrapper')).toContainText('暂无请求样本')
+  await expect(card.locator('.recharts-tooltip-wrapper')).not.toContainText('0 ms')
+  await card.getByRole('tab', { name: '错误', exact: true }).click()
+  await chart.hover({ position: { x: 80, y: 80 } })
+  await expect(card.locator('.recharts-tooltip-wrapper')).toContainText('暂无请求样本')
+  await expect(card.locator('.recharts-tooltip-wrapper')).toContainText('错误: 0')
+})
+
 test('30d trend tooltips distinguish same-day two-hour buckets in local time', async ({ page }) => {
   const points = populatedTrendPoints.slice(0, 2).map((point, index) => ({
     ...point,

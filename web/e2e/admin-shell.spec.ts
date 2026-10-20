@@ -336,8 +336,8 @@ test('stale cached status keeps its refresh action visible', async ({ page }) =>
   })
   await page.goto('/admin')
   const fullStatus = page.locator('main [data-query-key="now"]')
-  const staleLabel = fullStatus.getByText('数据已过期').first()
-  const refresh = fullStatus.getByRole('button', { name: '刷新' })
+  const staleLabel = fullStatus.getByText('状态待确认 · 刷新').first()
+  const refresh = fullStatus.getByRole('button', { name: '状态待确认 · 刷新', exact: true })
   await expect(staleLabel).toBeVisible({ timeout: 10_000 })
   await expect(refresh).toBeVisible()
   await expect(refresh).toBeInViewport()
@@ -347,6 +347,9 @@ test('stale cached status keeps its refresh action visible', async ({ page }) =>
     const rootBox = (root as HTMLElement).getBoundingClientRect()
     return buttonBox.right <= rootBox.right && buttonBox.left >= rootBox.left
   }, await strip.elementHandle())).toBe(true)
+  const callsBeforeRefresh = calls
+  await refresh.click()
+  await expect.poll(() => calls).toBeGreaterThan(callsBeforeRefresh)
 })
 
 test('principal failure gates the outlet until Retry succeeds', async ({ page }) => {

@@ -1,10 +1,11 @@
 import type { TFunction } from 'i18next'
 import { describe, expect, it } from 'vitest'
 
-import type { DashboardPeriod, NowResponse } from '../src/lib/adminApi.types'
+import type { DashboardPeriod, NowResponse, ReadinessResponse } from '../src/lib/adminApi.types'
 import {
   buildRequestFlow,
   deriveServiceStatus,
+  deriveUsageState,
   formatEstimatedDuration,
   hitRateValue,
   latencyComparison,
@@ -49,7 +50,25 @@ describe('hitRateValue', () => {
   })
 })
 
+describe('deriveUsageState', () => {
+  it('never invents a first-use state from an empty request window', () => {
+    expect(deriveUsageState({ period: undefined, hasHistoricalRequests: false })).toBe('unknown')
+    expect(deriveUsageState({ period: period({ total_requests: 0 }), hasHistoricalRequests: false })).toBe('no-recent-evidence')
+    expect(deriveUsageState({ period: period({ total_requests: 0 }), hasHistoricalRequests: true })).toBe('empty-period')
+    expect(deriveUsageState({ period: period(), hasHistoricalRequests: false })).toBe('active')
+  })
+})
+
 describe('latencyComparison', () => {
+  it('keeps measured zero milliseconds and withholds averages without samples', () => {
+    const zero = latencyComparison(period({ avg_hit_latency_ms: 0 }))
+    expect(zero.hitMs).toBe(0)
+    expect(zero.reductionPct).toBe(100)
+    const missing = latencyComparison(period({ hit_requests: 0, miss_requests: 0 }))
+    expect(missing.hitMs).toBeNull()
+    expect(missing.missMs).toBeNull()
+  })
+
   it('withholds a reduction when either side lacks samples', () => {
     const comparison = latencyComparison(period({ hit_requests: 3, miss_requests: 2 }))
     expect(comparison.sufficient).toBe(false)
@@ -114,6 +133,8 @@ describe('originCoverageNote', () => {
 })
 
 describe('deriveServiceStatus', () => {
+  const readiness: ReadinessResponse = { status: 'ready', version: 'dev', checks: { database: 'ready', storage: 'ready' } }
+
   it('never reports all-clear while a signal is unavailable', () => {
     const status = deriveServiceStatus({
       nowAvailable: false,
@@ -121,14 +142,45 @@ describe('deriveServiceStatus', () => {
       policyNeedsAttention: false,
     })
     expect(status.health).toBe('unknown')
-    expect(status.problems).toHaveLength(1)
+    expect(status.problems.map(problem => problem.code)).toEqual(['readiness-unavailable', 'status-unavailable'])
+    expect(deriveServiceStatus({ nowAvailable: true, upstreams: [], policyNeedsAttention: false }).health).toBe('unknown')
+    expect(deriveServiceStatus({ nowAvailable: true, readiness, upstreams: [], policyNeedsAttention: false }).health).toBe('healthy')
   })
 
-  it('distinguishes degraded upstreams from an outage', () => {
+  it('does not treat unavailable upstreams as a cache-serving outage', () => {
     const healthy = { id: 1, name: 'a', adapter: 'pypi', healthy: true, avg_latency_ms: 10, success_rate: 1 }
     const degraded = { id: 2, name: 'b', adapter: 'npm', healthy: false, avg_latency_ms: 0, success_rate: 0 }
-    expect(deriveServiceStatus({ nowAvailable: true, nowStatus: 'degraded', upstreams: [healthy, degraded], policyNeedsAttention: false }).health).toBe('partial')
-    expect(deriveServiceStatus({ nowAvailable: true, nowStatus: 'down', upstreams: [degraded], policyNeedsAttention: false }).health).toBe('unavailable')
+    expect(deriveServiceStatus({ nowAvailable: true, nowStatus: 'degraded', readiness, upstreams: [healthy, degraded], policyNeedsAttention: false }).health).toBe('partial')
+    expect(deriveServiceStatus({ nowAvailable: true, nowStatus: 'down', readiness, upstreams: [degraded], policyNeedsAttention: false }).health).toBe('partial')
+  })
+
+  it('reports reachable slow upstreams as a warning', () => {
+    const slow = { id: 1, name: 'slow', adapter: 'npm', healthy: true, avg_latency_ms: 1100, success_rate: 1 }
+    const status = deriveServiceStatus({ nowAvailable: true, readiness, upstreams: [slow], policyNeedsAttention: false })
+    expect(status.health).toBe('partial')
+    expect(status.problems).toEqual([{ code: 'upstreams-slow', severity: 'warning', count: 1, names: 'slow' }])
+  })
+
+  it.each(['database', 'storage'] as const)('retains a known %s failure when status probes fail', dependency => {
+    const status = deriveServiceStatus({
+      nowAvailable: false,
+      readiness: { ...readiness, status: 'not_ready', checks: { ...readiness.checks, [dependency]: 'unavailable' } },
+      readinessAvailable: false,
+      readinessStale: true,
+      upstreams: [],
+      policyNeedsAttention: true,
+    })
+    expect(status.health).toBe('unavailable')
+    expect(status.problems).toEqual(expect.arrayContaining([
+      { code: dependency, severity: 'danger' },
+      { code: 'readiness-stale', severity: 'warning' },
+      { code: 'status-unavailable', severity: 'warning' },
+      { code: 'policy', severity: 'warning' },
+    ]))
+  })
+
+  it('does not reuse a stale healthy readiness sample as an all-clear', () => {
+    expect(deriveServiceStatus({ nowAvailable: true, readiness, readinessStale: true, upstreams: [], policyNeedsAttention: false }).health).toBe('unknown')
   })
 
   it('collapses repeated upstream names into one counted entry', () => {
@@ -136,6 +188,7 @@ describe('deriveServiceStatus', () => {
       ({ id, name, adapter: 'npm', healthy: false, avg_latency_ms: 0, success_rate: 0 })
     const status = deriveServiceStatus({
       nowAvailable: true,
+      readiness,
       upstreams: [upstream(1, 'official'), upstream(2, 'official'), upstream(3, 'official'), upstream(4, 'tuna')],
       policyNeedsAttention: false,
     })
@@ -228,8 +281,8 @@ describe('buildRequestFlow', () => {
       rangeStart: undefined,
     })
     expect(model.hitRate).toBeNull()
-    expect(model.hitRequests).toBeNull()
-    expect(model.missRequests).toBeNull()
+    expect(model.hitRequests).toBe(0)
+    expect(model.missRequests).toBe(0)
     expect(model.servedBytes).toBe(0)
     expect(model.servedRequests).toBe(0)
   })

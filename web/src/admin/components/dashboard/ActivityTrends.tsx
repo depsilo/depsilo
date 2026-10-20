@@ -70,9 +70,9 @@ interface ChartPoint {
   originRequests: number
   serviceBytes: number
   originBytes: number
-  latency: number
+  latency: number | null
   errors: number
-  errorRatePct: number
+  errorRatePct: number | null
 }
 
 function buildPoints(raw: DashboardTrendPoint[], range: DashboardRange): ChartPoint[] {
@@ -83,9 +83,9 @@ function buildPoints(raw: DashboardTrendPoint[], range: DashboardRange): ChartPo
     originRequests: point.upstream_requests ?? 0,
     serviceBytes: point.bytes_served,
     originBytes: point.upstream_bytes ?? 0,
-    latency: Math.round(point.avg_latency_ms || 0),
+    latency: point.requests > 0 ? Math.round(point.avg_latency_ms) : null,
     errors: point.errors,
-    errorRatePct: point.requests > 0 ? Math.round((point.errors / point.requests) * 1000) / 10 : 0,
+    errorRatePct: point.requests > 0 ? Math.round((point.errors / point.requests) * 1000) / 10 : null,
   }))
 }
 
@@ -105,7 +105,8 @@ function ChartTooltip({ active, payload, label, range }: TooltipContentProps<Too
       {payload.map(entry => {
         const value = Number(entry.value)
         let display: string
-        if (entry.dataKey === 'errorRatePct') display = `${value.toFixed(1)}%`
+        if (entry.value == null) display = t('overview.noSamples')
+        else if (entry.dataKey === 'errorRatePct') display = `${value.toFixed(1)}%`
         else if (entry.dataKey === 'serviceBytes' || entry.dataKey === 'originBytes') display = formatBytes(value)
         else if (entry.dataKey === 'latency') {
           const samples = (payload[0]?.payload as { serviceRequests?: number } | undefined)?.serviceRequests
@@ -146,7 +147,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
   const points = useMemo(() => buildPoints(raw, dataRange), [raw, dataRange])
   const coarse = dataRange === '7d' || dataRange === '30d'
   const allEmpty = points.length === 0 || points.every(point => (
-    point.serviceRequests === 0 && point.originRequests === 0 && point.latency === 0 && point.errors === 0
+    point.serviceRequests === 0 && point.originRequests === 0 && point.errors === 0
   ))
 
   const tabs: { value: TrendTab; key: string }[] = [
@@ -174,7 +175,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
     >
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
         <h2 id="overview-trends-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
-          {t('overview.trendsTitle')}
+          {t('overview.trendsTitle')} <span className="ml-1 text-[13px] font-normal text-[var(--dash-muted)]">{t(`dashboard.range${dataRange}`)}</span>
         </h2>
         {/* Wraps rather than shrinking: four segments do not fit beside the
             heading on a phone, and the rail had been overflowing the card. */}
@@ -201,6 +202,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
         </div>
       </header>
 
+      {range !== dataRange && <p role="status" className="px-5 pb-2 text-[13px] text-[var(--dash-muted)]">{t('overview.switchingRange')}</p>}
       {isStale && (
         <div
           role="status"
@@ -213,12 +215,12 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
       )}
 
       {allEmpty ? (
-        <div className="flex min-h-[240px] flex-col items-center justify-center gap-2 px-5 pb-6 text-center">
+        <div className="flex min-h-[140px] flex-col items-center justify-center gap-2 px-5 pb-6 text-center">
           <span aria-hidden className="grid size-9 place-items-center rounded-full" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
             <Icon name="show_chart" size="md" />
           </span>
-          <h3 className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{t('dashboard.emptyTrendTitle')}</h3>
-          <p className="max-w-[48ch] text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('dashboard.emptyTrendHint')}</p>
+          <h3 className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{t('overview.emptyTrend')}</h3>
+          <p className="max-w-[48ch] text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.emptyTrendHint')}</p>
         </div>
       ) : (
         <div className="px-2 pb-4">
@@ -228,7 +230,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
                 <CartesianGrid stroke="var(--dash-border, var(--grid))" vertical={false} />
                 <XAxis dataKey="label" minTickGap={20} {...axisProps} />
                 {renderBarAxes(tab, t)}
-                <Tooltip content={props => <ChartTooltip {...props} range={dataRange} />} />
+                <Tooltip filterNull={false} content={props => <ChartTooltip {...props} range={dataRange} />} />
                 <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
                 {renderBars(tab, t)}
               </BarChart>
@@ -237,7 +239,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
                 <CartesianGrid stroke="var(--dash-border, var(--grid))" vertical={false} />
                 <XAxis dataKey="bucket" type="number" domain={['dataMin', 'dataMax']} minTickGap={24} tickFormatter={(value: number) => fmtAxisTime(value, dataRange)} {...axisProps} />
                 {renderLineAxes(tab, t)}
-                <Tooltip content={props => <ChartTooltip {...props} range={dataRange} />} />
+                <Tooltip filterNull={false} content={props => <ChartTooltip {...props} range={dataRange} />} />
                 <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
                 {renderLines(tab, t)}
               </ComposedChart>
@@ -245,7 +247,6 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
           </ResponsiveContainer>
           <p className="px-3 pt-1 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
             {t(TREND_FOOTNOTE_KEY[tab], { range: t(`dashboard.range${dataRange}`) })}
-            {range !== dataRange ? ` · ${t('overview.switchingRange')}` : ''}
           </p>
         </div>
       )}

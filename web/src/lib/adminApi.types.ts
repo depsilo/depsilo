@@ -37,6 +37,16 @@ export interface NowLastActivity {
   package_name?: string
 }
 
+/** Dependencies required to serve cached proxy traffic; upstreams are separate. */
+export interface ReadinessResponse {
+  status: 'ready' | 'not_ready'
+  version: string
+  checks: {
+    database: 'ready' | 'unavailable'
+    storage: 'ready' | 'unavailable'
+  }
+}
+
 export interface NowResponse {
   status: 'healthy' | 'degraded' | 'down'
   uptime_seconds: number

@@ -7,25 +7,15 @@ import RequestFlow from './RequestFlow'
 interface TrafficOverviewProps {
   now?: NowResponse
   nowPending: boolean
+  nowError?: boolean
+  nowStale?: boolean
   period?: DashboardPeriod
+  periodPending?: boolean
   rangeStart?: string
   coverage?: OriginCoverage
 }
 
-/**
- * One request-path card replaces the four metric tiles: the clients →
- * Depsilo → upstream flow with its live rails, then the selected period's
- * outcome chips. The card header follows the page's one header grammar
- * (in-card h2 + bottom border); the period itself is stated once by the scope
- * row above the cards instead of repeating in each header.
- */
-export default function TrafficOverview({
-  now,
-  nowPending,
-  period,
-  rangeStart,
-  coverage,
-}: TrafficOverviewProps) {
+export default function TrafficOverview(props: TrafficOverviewProps) {
   const { t } = useTranslation()
 
   return (
@@ -34,19 +24,14 @@ export default function TrafficOverview({
       aria-labelledby="overview-traffic-title"
       className="dash-card flex min-w-0 flex-col"
     >
-      <header className="flex min-w-0 items-center justify-between gap-2 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
-        <h2 id="overview-traffic-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+      <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-5 gap-y-1 px-5 pt-4">
+        <h2 id="overview-traffic-title" className="text-[16px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
           {t('overview.trafficTitle')}
         </h2>
+        <p className="text-[12px] leading-relaxed" style={{ color: 'var(--dash-muted)' }}>{t('overview.flowScope')}</p>
       </header>
-      <div className="min-w-0 px-5 py-4">
-        <RequestFlow
-          now={now}
-          nowPending={nowPending}
-          period={period}
-          rangeStart={rangeStart}
-          coverage={coverage}
-        />
+      <div className="min-w-0 px-5 pb-3 pt-2">
+        <RequestFlow {...props} />
       </div>
     </section>
   )

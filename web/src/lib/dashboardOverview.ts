@@ -4,6 +4,7 @@ import type {
   DashboardUpstream,
   NowResponse,
   OriginCoverage,
+  ReadinessResponse,
 } from './adminApi.types'
 import type { TFunction } from 'i18next'
 import { readLocalStorage, writeLocalStorage } from './storage'
@@ -38,6 +39,18 @@ export function hitRateValue(period: DashboardPeriod | undefined): number | null
   return period.hit_rate
 }
 
+export type DashboardUsageState = 'unknown' | 'active' | 'empty-period' | 'no-recent-evidence'
+
+/** Finite request windows can establish usage, but cannot prove a first use. */
+export function deriveUsageState({ period, hasHistoricalRequests }: {
+  period?: DashboardPeriod
+  hasHistoricalRequests: boolean
+}): DashboardUsageState {
+  if (!period || !Number.isFinite(period.total_requests) || period.total_requests < 0) return 'unknown'
+  if (period.total_requests > 0) return 'active'
+  return hasHistoricalRequests ? 'empty-period' : 'no-recent-evidence'
+}
+
 /** Minimum samples before a latency comparison is presented as a claim. */
 const MIN_LATENCY_SAMPLES = 20
 
@@ -59,8 +72,10 @@ export interface LatencyComparison {
 export function latencyComparison(period: DashboardPeriod | undefined): LatencyComparison {
   const hitSamples = period ? Math.max(0, period.hit_requests) : 0
   const missSamples = period ? Math.max(0, period.miss_requests) : 0
-  const hitMs = period && period.avg_hit_latency_ms > 0 ? period.avg_hit_latency_ms : null
-  const missMs = period && period.avg_miss_latency_ms > 0 ? period.avg_miss_latency_ms : null
+  const hitMs = period && hitSamples > 0 && Number.isFinite(period.avg_hit_latency_ms) && period.avg_hit_latency_ms >= 0
+    ? period.avg_hit_latency_ms : null
+  const missMs = period && missSamples > 0 && Number.isFinite(period.avg_miss_latency_ms) && period.avg_miss_latency_ms >= 0
+    ? period.avg_miss_latency_ms : null
   const sufficient = hitSamples >= MIN_LATENCY_SAMPLES
     && missSamples >= MIN_LATENCY_SAMPLES
     && hitMs !== null
@@ -189,8 +204,8 @@ export function buildRequestFlow(args: {
     liveServiceBytesPerSec: measured ? (now?.rate.service_bytes_per_sec ?? 0) : null,
     liveOriginBytesPerSec: measured ? (now?.rate.origin_bytes_per_sec ?? 0) : null,
     hitRate,
-    hitRequests: hitRate === null ? null : (period?.hit_requests ?? 0),
-    missRequests: hitRate === null ? null : (period?.miss_requests ?? 0),
+    hitRequests: period?.hit_requests ?? null,
+    missRequests: period?.miss_requests ?? null,
     servedBytes: period ? period.bytes_served : null,
     servedRequests: period ? period.total_requests : null,
     originBytes: period && originMeasured ? period.upstream_bytes : null,
@@ -295,7 +310,8 @@ export function sparklineHasVariance(series: number[]): boolean {
 
 export type ServiceHealth = 'healthy' | 'partial' | 'unavailable' | 'unknown'
 
-export type ServiceProblemCode = 'status-unavailable' | 'upstreams' | 'policy' | 'cache' | 'degraded'
+export type ServiceProblemCode = 'status-unavailable' | 'readiness-unavailable' | 'readiness-stale'
+  | 'database' | 'storage' | 'upstreams' | 'upstreams-slow' | 'policy' | 'cache' | 'degraded'
 
 export interface ServiceProblem {
   code: ServiceProblemCode
@@ -335,26 +351,50 @@ function summarizeUnhealthyNames(upstreams: DashboardUpstream[]): string {
 export function deriveServiceStatus(args: {
   nowAvailable: boolean
   nowStatus?: NowResponse['status']
+  readiness?: ReadinessResponse
+  readinessAvailable?: boolean
+  readinessStale?: boolean
   upstreams: DashboardUpstream[]
   policyNeedsAttention: boolean
   cacheUsagePercent?: number
 }): ServiceStatusModel {
+  const problems: ServiceProblem[] = []
+  // Keep confirmed dependency failures visible even if a different probe or
+  // the next refresh fails. A stale healthy reading cannot establish all-clear.
+  if (args.readiness?.checks.database === 'unavailable') {
+    problems.push({ code: 'database', severity: 'danger' })
+  }
+  if (args.readiness?.checks.storage === 'unavailable') {
+    problems.push({ code: 'storage', severity: 'danger' })
+  }
+  const readinessAvailable = args.readinessAvailable ?? Boolean(args.readiness)
+  const readinessKnown = readinessAvailable && args.readiness?.status === 'ready'
+    && args.readiness.checks.database === 'ready' && args.readiness.checks.storage === 'ready'
+  const readinessFailed = args.readiness?.status === 'not_ready'
+    && problems.some(problem => problem.severity === 'danger')
+  if (args.readinessStale) {
+    problems.push({ code: 'readiness-stale', severity: 'warning' })
+  } else if (!readinessKnown && !readinessFailed) {
+    problems.push({ code: 'readiness-unavailable', severity: 'warning' })
+  }
   if (!args.nowAvailable) {
-    return { health: 'unknown', problems: [{ code: 'status-unavailable', severity: 'warning' }] }
+    problems.push({ code: 'status-unavailable', severity: 'warning' })
   }
 
-  const problems: ServiceProblem[] = []
-  const unhealthy = args.upstreams.filter(item => upstreamStatus(item) !== 'healthy')
-  if (unhealthy.length > 0) {
-    const allDown = unhealthy.length === args.upstreams.length
+  const unreachable = args.upstreams.filter(item => !item.healthy)
+  const slow = args.upstreams.filter(item => item.healthy && upstreamStatus(item) === 'degraded')
+  if (unreachable.length > 0) {
     problems.push({
       code: 'upstreams',
-      severity: allDown ? 'danger' : 'warning',
-      count: unhealthy.length,
-      names: summarizeUnhealthyNames(unhealthy),
+      severity: 'warning',
+      count: unreachable.length,
+      names: summarizeUnhealthyNames(unreachable),
     })
   } else if (args.nowStatus === 'down' || args.nowStatus === 'degraded') {
-    problems.push({ code: 'degraded', severity: args.nowStatus === 'down' ? 'danger' : 'warning' })
+    problems.push({ code: 'degraded', severity: 'warning' })
+  }
+  if (slow.length > 0) {
+    problems.push({ code: 'upstreams-slow', severity: 'warning', count: slow.length, names: summarizeUnhealthyNames(slow) })
   }
   if (args.policyNeedsAttention) {
     problems.push({ code: 'policy', severity: 'warning' })
@@ -366,9 +406,10 @@ export function deriveServiceStatus(args: {
   if (problems.some(problem => problem.severity === 'danger')) {
     return { health: 'unavailable', problems }
   }
-  if (problems.length > 0) {
+  if (problems.some(problem => !['status-unavailable', 'readiness-unavailable', 'readiness-stale'].includes(problem.code))) {
     return { health: 'partial', problems }
   }
+  if (problems.length > 0) return { health: 'unknown', problems }
   return { health: 'healthy', problems: [] }
 }
 
@@ -395,8 +436,8 @@ export function requestOutcome(log: {
 
 export const REQUEST_OUTCOME_META: Record<RequestOutcome, { key: string; variant: 'success' | 'warning' | 'error' | 'neutral' }> = {
   hit: { key: 'overview.outcomeHit', variant: 'success' },
-  miss: { key: 'overview.outcomeMiss', variant: 'warning' },
-  blocked: { key: 'overview.outcomeBlocked', variant: 'error' },
+  miss: { key: 'overview.outcomeMiss', variant: 'neutral' },
+  blocked: { key: 'overview.outcomeBlocked', variant: 'warning' },
   failed: { key: 'overview.outcomeFailed', variant: 'error' },
   unknown: { key: 'overview.outcomeUnknown', variant: 'neutral' },
 }

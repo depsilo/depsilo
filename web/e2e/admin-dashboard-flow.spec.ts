@@ -41,10 +41,10 @@ const measuredNow: NowResponse = {
   sparkline: [],
 }
 
-// The request path is one card: live rails between three nodes, then the
+// The response path is one card: live rails between three nodes, then the
 // period's real outcomes. Blocked requests stay countless by design because
 // the Overview aggregate excludes them (internal/api/admin/dashboard.go).
-test('Overview request flow ties live rails and period outcomes to real data', async ({ page }) => {
+test('Overview download flow runs upstream to clients and preserves byte metrics', async ({ page }) => {
   await mockAdminApi(page, { 'GET /api/v1/now': measuredNow })
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
@@ -61,8 +61,8 @@ test('Overview request flow ties live rails and period outcomes to real data', a
   await expect(serviceRail).toContainText('Depsilo → 客户端')
 
   const depsilo = page.locator('[data-testid="traffic-depsilo"]')
-  await expect(depsilo).toContainText('92.0%')
-  await expect(depsilo).toContainText('请求命中率')
+  await expect(depsilo).toContainText('Depsilo')
+  await expect(depsilo).not.toContainText('92.0%')
 
   const originRail = page.locator('[data-testid="traffic-origin-flow"]')
   await expect(originRail).toContainText('1.5 MB/s')
@@ -71,6 +71,11 @@ test('Overview request flow ties live rails and period outcomes to real data', a
   const upstream = page.locator('[data-testid="traffic-origin-total"]')
   await expect(upstream).toContainText('63.0 MB')
   await expect(upstream).toContainText('104 次回源请求')
+  const [upstreamBox, depsiloBox, clientsBox] = await Promise.all([
+    upstream.boundingBox(), depsilo.boundingBox(), clients.boundingBox(),
+  ])
+  expect(upstreamBox!.x).toBeLessThan(depsiloBox!.x)
+  expect(depsiloBox!.x).toBeLessThan(clientsBox!.x)
 
   const outcomes = page.locator('[data-dashboard-flow-outcomes]')
   await expect(outcomes).toContainText('缓存命中')
@@ -84,7 +89,7 @@ test('Overview request flow ties live rails and period outcomes to real data', a
 })
 
 // An empty period is not the same as an unmetered one: measured zeros stay
-// zeros, missing hit/miss samples stay dashes, and the live rails still read.
+// zeros, missing response samples stay dashes, and the live rails still read.
 test('Overview flow separates a measured zero from a missing sample', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/now': measuredNow,
@@ -107,16 +112,15 @@ test('Overview flow separates a measured zero from a missing sample', async ({ p
   await expect(clients).toContainText('0 B')
   await expect(clients).toContainText('0 次请求')
 
-  const depsilo = page.locator('[data-testid="traffic-depsilo"]')
-  await expect(depsilo).toContainText('—')
-
   const upstream = page.locator('[data-testid="traffic-origin-total"]')
   await expect(upstream).toContainText('0 B')
   await expect(upstream).toContainText('0 次回源请求')
 
   const outcomes = page.locator('[data-dashboard-flow-outcomes]')
   await expect(outcomes).toContainText('缓存命中')
-  await expect(outcomes).toContainText('—')
+  await expect(outcomes).toContainText('0')
+  await expect(outcomes).not.toContainText('—')
+  await expect(page.locator('[data-dashboard-benefits]')).toContainText('暂无请求样本')
 
   // Live rails are measured independently of the period aggregate.
   await expect(page.locator('[data-testid="traffic-service-flow"]')).toContainText('110.3 KB/s')

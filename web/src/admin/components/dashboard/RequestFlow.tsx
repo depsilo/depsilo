@@ -7,7 +7,7 @@ import Logo from '@/components/Logo'
 import TooltipV2 from '@/components/Tooltip'
 import { getAdminRouteHref } from '@/admin/routes'
 import type { DashboardPeriod, NowResponse, OriginCoverage } from '@/lib/adminApi.types'
-import { buildRequestFlow, coverageDetail, formatPercentRatio } from '@/lib/dashboardOverview'
+import { buildRequestFlow, coverageDetail } from '@/lib/dashboardOverview'
 import { formatBps, formatBytes } from '@/lib/utils'
 
 import { HINT_TOOLTIP_DELAY_MS } from './MetricTile'
@@ -16,91 +16,100 @@ import { METRIC_TONE_PALETTE, type MetricTone } from './metricTone'
 interface RequestFlowProps {
   now?: NowResponse
   nowPending: boolean
+  nowError?: boolean
+  nowStale?: boolean
   period?: DashboardPeriod
+  periodPending?: boolean
   rangeStart?: string
   coverage?: OriginCoverage
 }
 
-/**
- * The Overview's request path: who is asking, what Depsilo did with the
- * request, and where the origin traffic went. Live rails carry the 60s byte
- * rates; the nodes carry the selected period's totals. Every value keeps its
- * honest state (未采集 / — / 平台不支持) and a measurement-basis hint.
- */
+/** Download bytes flow from upstream through Depsilo to the client. Nodes
+ * carry selected-period totals; connectors carry the unchanged 60s mean rate. */
 export default function RequestFlow({
   now,
   nowPending,
+  nowError = false,
+  nowStale = false,
   period,
+  periodPending = false,
   rangeStart,
   coverage,
 }: RequestFlowProps) {
   const { t } = useTranslation()
   const flow = buildRequestFlow({ now, period, coverage, rangeStart })
   const livePending = nowPending && !now
+  const totalsPending = periodPending && !period
+  const liveUnavailable = nowError && !now
   const coverageNote = coverageDetail(coverage, rangeStart, t)
   const originRequestsDetail = flow.originMeasured
-    ? t('overview.originRequestsTotal', { count: (flow.originRequests ?? 0).toLocaleString() })
+    ? (flow.originRequests === null ? undefined : t('overview.originRequestsTotal', { count: flow.originRequests.toLocaleString() }))
     : t('overview.notCollected')
-  const originDetail = flow.originMeasured && coverageNote
-    ? `${t('overview.originPartialShort')} · ${originRequestsDetail}`
-    : originRequestsDetail
+  const originDetail = totalsPending
+    ? t('loading')
+    : flow.originMeasured && coverageNote
+      ? `${t('overview.originPartialShort')} · ${originRequestsDetail ?? ''}`
+      : originRequestsDetail
+  const rateDetail = (direction: string, rate: number | null) => livePending
+    ? t('loading')
+    : liveUnavailable
+      ? t('overview.flowRateUnavailable')
+      : rate === null ? t('overview.notCollected') : direction
+  const rateBadge = nowStale ? t('overview.flowRateStale') : t('overview.rateWindow')
 
   return (
     <div
       data-dashboard-request-flow
       role="group"
       aria-label={t('overview.flowAria')}
-      className="flex min-w-0 flex-col gap-4"
+      className="@container flex min-w-0 flex-col gap-4"
     >
-      <div className="dashboard-flow-grid grid min-w-0 grid-cols-1 items-center gap-3 lg:grid-cols-6 lg:gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(120px,0.7fr)_minmax(0,1fr)_minmax(120px,0.7fr)_minmax(0,1fr)]">
+      <div className="dashboard-flow-grid grid min-w-0 grid-cols-1 items-center gap-3 @[760px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.15fr)] @[760px]:gap-4">
         <FlowNode
-          testId="traffic-served-total"
-          tone="memory"
-          icon="computer"
-          title={t('overview.flowClients')}
-          value={flow.servedBytes === null ? '—' : formatBytes(flow.servedBytes)}
-          detail={flow.servedRequests === null
-            ? undefined
-            : t('overview.servedRequests', { count: flow.servedRequests.toLocaleString() })}
-        />
-
-        <FlowRail
-          testId="traffic-service-flow"
-          label={t('overview.serviceFlow')}
-          badge={t('overview.liveBadge')}
-          value={flow.liveServiceBytesPerSec === null ? '—' : formatBps(flow.liveServiceBytesPerSec)}
-          pending={livePending}
-          detail={flow.liveServiceBytesPerSec === null ? t('overview.notCollected') : t('overview.directionService')}
-        />
-
-        <FlowNode
-          testId="traffic-depsilo"
-          mark={<Logo size={30} />}
-          title="Depsilo"
-          value={formatPercentRatio(flow.hitRate)}
-          detail={t('overview.hitRateLabel')}
-          info={t('overview.hintHitRate')}
-          infoLabel={t('overview.hitRateInfoLabel')}
+          testId="traffic-origin-total"
+          icon="cloud_sync"
+          title={t('overview.flowUpstream')}
+          value={flow.originBytes === null ? '—' : formatBytes(flow.originBytes)}
+          detail={originDetail}
+          pending={totalsPending}
+          info={t('overview.hintOriginTotal')}
+          infoLabel={t('overview.originTotalInfoLabel')}
         />
 
         <FlowRail
           testId="traffic-origin-flow"
           label={t('overview.originFlow')}
-          badge={t('overview.liveBadge')}
+          badge={rateBadge}
           value={flow.liveOriginBytesPerSec === null ? '—' : formatBps(flow.liveOriginBytesPerSec)}
           pending={livePending}
-          detail={flow.liveOriginBytesPerSec === null ? t('overview.notCollected') : t('overview.directionOrigin')}
+          detail={rateDetail(t('overview.directionOrigin'), flow.liveOriginBytesPerSec)}
         />
 
         <FlowNode
-          testId="traffic-origin-total"
-          tone="origin"
-          icon="cloud_sync"
-          title={t('overview.flowUpstream')}
-          value={flow.originBytes === null ? '—' : formatBytes(flow.originBytes)}
-          detail={originDetail}
-          info={t('overview.hintOriginTotal')}
-          infoLabel={t('overview.originTotalInfoLabel')}
+          testId="traffic-depsilo"
+          mark={<Logo size={26} />}
+          title="Depsilo"
+          detail={t('overview.flowLocalCache')}
+        />
+
+        <FlowRail
+          testId="traffic-service-flow"
+          label={t('overview.serviceFlow')}
+          badge={rateBadge}
+          value={flow.liveServiceBytesPerSec === null ? '—' : formatBps(flow.liveServiceBytesPerSec)}
+          pending={livePending}
+          detail={rateDetail(t('overview.directionService'), flow.liveServiceBytesPerSec)}
+        />
+
+        <FlowNode
+          testId="traffic-served-total"
+          icon="computer"
+          title={t('overview.flowClients')}
+          value={flow.servedBytes === null ? '—' : formatBytes(flow.servedBytes)}
+          pending={totalsPending}
+          detail={totalsPending ? t('loading') : flow.servedRequests === null
+            ? undefined
+            : t('overview.servedRequests', { count: flow.servedRequests.toLocaleString() })}
         />
       </div>
 
@@ -108,18 +117,20 @@ export default function RequestFlow({
         data-dashboard-flow-outcomes
         role="group"
         aria-label={t('overview.flowOutcomesLabel')}
-        className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3"
+        className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t pt-3"
         style={{ borderColor: 'var(--dash-border)' }}
       >
         <OutcomeChip
-          tone="cpu"
+          tone="ok"
           label={t('overview.outcomeHit')}
           value={flow.hitRequests === null ? '—' : flow.hitRequests.toLocaleString()}
+          pending={totalsPending}
         />
         <OutcomeChip
-          tone="origin"
+          tone="accent"
           label={t('overview.outcomeMiss')}
           value={flow.missRequests === null ? '—' : flow.missRequests.toLocaleString()}
+          pending={totalsPending}
         />
         <TooltipV2
           delay={HINT_TOOLTIP_DELAY_MS}
@@ -128,9 +139,9 @@ export default function RequestFlow({
           <Link
             to={getAdminRouteHref('security')}
             aria-label={t('overview.flowBlockedLinkLabel')}
-            className="dash-focus inline-flex min-h-8 min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] no-underline transition-colors duration-150 hover:bg-[var(--dash-soft)]"
+            className="dash-focus inline-flex min-h-[40px] min-w-0 items-center gap-2 rounded-md px-1.5 text-[13px] no-underline transition-colors duration-150 hover:bg-[var(--dash-soft)]"
           >
-            <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE.danger.strong }} />
+            <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: 'var(--dash-muted)' }} />
             <span style={{ color: 'var(--dash-muted)' }}>{t('overview.outcomeBlocked')}</span>
             <Icon name="chevron_right" size="sm" style={{ color: 'var(--dash-muted)' }} />
           </Link>
@@ -147,130 +158,78 @@ function FlowNode({
   detail,
   info,
   infoLabel,
-  tone,
+  pending = false,
   icon,
   mark,
 }: {
   testId: string
   title: string
-  value: string
+  value?: string
   detail?: string
-  /** Optional: only hints that add a real measurement basis get an affordance. */
   info?: string
   infoLabel?: string
-  tone?: MetricTone
+  pending?: boolean
   icon?: IconName
-  /** Custom leading mark (the brand mark for Depsilo); wins over icon/tone. */
   mark?: ReactNode
 }) {
   return (
-    <div data-testid={testId} className="flex min-w-0 items-start gap-3">
-      {mark ?? (
-        <span
-          aria-hidden
-          className="grid size-10 shrink-0 place-items-center rounded-lg"
-          style={{
-            background: METRIC_TONE_PALETTE[tone ?? 'default'].soft,
-            color: METRIC_TONE_PALETTE[tone ?? 'default'].strong,
-          }}
-        >
-          {icon && <Icon name={icon} size="md" />}
-        </span>
-      )}
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <div className="flex min-w-0 items-center gap-1.5">
-          {/* Wraps instead of truncating: "开发者 / CI / Agent" cannot fit the
-              node column at 1280, and the three audiences are all real. */}
-          <p className="min-w-0 text-[15px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{title}</p>
+    <div data-testid={testId} aria-busy={pending} className="flex min-w-0 items-center gap-3 @[760px]:flex-col @[760px]:items-start @[760px]:gap-2">
+      <span aria-hidden className="grid size-8 shrink-0 place-items-center" style={{ color: 'var(--dash-muted)' }}>
+        {mark ?? (icon && <Icon name={icon} size="md" />)}
+      </span>
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="min-w-0 text-[14px] font-medium leading-snug" style={{ color: 'var(--dash-ink)' }}>{title}</p>
           {info && infoLabel && <InfoHint text={info} label={infoLabel} />}
         </div>
-        <p className="font-mono text-[22px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>
-        {detail && (
-          <p className="min-w-0 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
-        )}
+        {value !== undefined && (pending
+          ? <span aria-hidden className="block h-[26px] w-20 animate-pulse rounded bg-[var(--dash-soft)]" />
+          : <p className="font-mono text-[22px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>)}
+        {detail && <p className="min-w-0 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>}
       </div>
     </div>
   )
 }
 
-/**
- * The connector between two nodes. Desktop draws the horizontal rail with its
- * label above and the measured direction below; narrow screens stack the same
- * facts under a short vertical connector.
- */
-function FlowRail({
-  testId,
-  label,
-  badge,
-  value,
-  pending,
-  detail,
-  info,
-  infoLabel,
-}: {
+/** The same semantic order becomes a downward path below the container breakpoint. */
+function FlowRail({ testId, label, badge, value, pending, detail }: {
   testId: string
   label: string
   badge: string
   value: string
   pending: boolean
-  /** Direction of the measured bytes, or the honest "not collected" label. */
   detail: string
-  /** Optional: the live rate already states its own direction and window. */
-  info?: string
-  infoLabel?: string
 }) {
-  const valueNode = pending
-    ? <span aria-hidden className="block h-6 w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
-    : (
-      <span className="font-mono text-[18px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>
-        {value}
-      </span>
-    )
-
-  const labelRow = (
-    <div className="flex min-w-0 items-center gap-1.5">
-      <span className="min-w-0 text-[13px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{label}</span>
-      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[12px] font-medium" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
-        {badge}
-      </span>
-      {info && infoLabel && <InfoHint text={info} label={infoLabel} />}
-    </div>
-  )
-
   return (
-    <div data-testid={testId} className="min-w-0">
-      {/* Desktop: label → value → rail → measured direction. */}
-      <div className="hidden min-w-0 flex-col gap-1 lg:flex">
-        {labelRow}
-        {valueNode}
-        <div aria-hidden className="flex items-center gap-1">
+    <div data-testid={testId} aria-busy={pending} className="flex min-w-0 items-center gap-3 pl-3 @[760px]:block @[760px]:pl-0">
+      <div aria-hidden className="flex shrink-0 flex-col items-center @[760px]:hidden">
+        <span className="h-6 w-px" style={{ background: 'var(--dash-border)' }} />
+        <Icon name="expand_more" size="sm" style={{ color: 'var(--dash-muted)' }} />
+      </div>
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-[13px] font-medium leading-snug" style={{ color: 'var(--dash-muted)' }}>{label}</span>
+        {pending
+          ? <span aria-hidden className="block h-[23px] w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
+          : <span className="font-mono text-[18px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>}
+        <div aria-hidden className="hidden items-center gap-1 @[760px]:flex">
           <span className="h-px flex-1" style={{ background: 'var(--dash-border)' }} />
           <Icon name="arrow_forward" size="sm" style={{ color: 'var(--dash-muted)' }} />
         </div>
-        <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
-      </div>
-      {/* Narrow screens: short vertical connector + the same facts. */}
-      <div className="flex min-w-0 items-start gap-3 pl-4 lg:hidden">
-        <div aria-hidden className="flex shrink-0 flex-col items-center pt-1">
-          <span className="h-4 w-px" style={{ background: 'var(--dash-border)' }} />
-          <Icon name="expand_more" size="sm" style={{ color: 'var(--dash-muted)' }} />
-        </div>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          {labelRow}
-          {valueNode}
-          <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
-        </div>
+        <p className="text-[12px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
+        <span className="text-[12px] leading-snug" style={{ color: 'var(--dash-muted)' }}>{badge}</span>
       </div>
     </div>
   )
 }
 
-function OutcomeChip({ tone, label, value }: { tone: MetricTone; label: string; value: string }) {
+function OutcomeChip({ tone, label, value, pending }: { tone: MetricTone; label: string; value: string; pending: boolean }) {
   return (
-    <p className="inline-flex min-h-8 min-w-0 items-center gap-2 text-[13px]">
+    <p aria-busy={pending} className="inline-flex min-h-8 min-w-0 items-center gap-2 text-[13px]">
       <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: METRIC_TONE_PALETTE[tone].strong }} />
       <span style={{ color: 'var(--dash-muted)' }}>{label}</span>
-      <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>
+      {pending
+        ? <span aria-hidden className="block h-5 w-10 animate-pulse rounded bg-[var(--dash-soft)]" />
+        : <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>}
     </p>
   )
 }

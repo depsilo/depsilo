@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import type { UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
+import Button from '@/components/Button'
 import BadgeV2 from '@/components/Badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
@@ -13,9 +14,8 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { REQUEST_OUTCOME_META, requestOutcome } from '@/lib/dashboardOverview'
 import { formatBytes, formatLatency, formatTime } from '@/lib/utils'
 
-const REFRESH_MS = 5_000
-
 interface RecentRequestsProps {
+  query: UseQueryResult<Awaited<ReturnType<typeof adminApi.listLogs>>>
   limit?: number
   onOpenDetails: (id: number) => void
 }
@@ -25,17 +25,8 @@ interface RecentRequestsProps {
  * statistics range, which the caption states explicitly so operators do not
  * read it as range-scoped data.
  */
-export default function RecentRequests({ limit = 5, onOpenDetails }: RecentRequestsProps) {
+export default function RecentRequests({ query, limit = 5, onOpenDetails }: RecentRequestsProps) {
   const { t } = useTranslation()
-  const query = useQuery({
-    queryKey: ['admin', 'dashboard', 'recent-requests', limit],
-    queryFn: ({ signal }) => adminApi.listLogs({ page: 1, page_size: limit }, { signal }),
-    refetchInterval: REFRESH_MS,
-    refetchIntervalInBackground: false,
-    staleTime: REFRESH_MS - 1_000,
-    retry: false,
-  })
-
   const items = query.data?.data.items ?? []
   const isStale = query.isRefetchError && query.data !== undefined
   const initialError = query.isError && query.data === undefined
@@ -83,15 +74,15 @@ export default function RecentRequests({ limit = 5, onOpenDetails }: RecentReque
           ))}
         </div>
       ) : initialError ? (
-        <p role="alert" className="px-5 pb-5 text-[14px]" style={{ color: 'var(--dash-warn)' }}>
-          {getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}
-        </p>
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 px-5 pb-5 text-[14px]" style={{ color: 'var(--dash-warn)' }}>
+          <span>{getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}</span><Button variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('overview.refresh')}</Button>
+        </div>
       ) : items.length === 0 ? (
         <div className="flex min-h-[96px] flex-col items-center justify-center gap-2 px-5 pb-5 text-center">
           <span aria-hidden className="grid size-9 place-items-center rounded-full" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
             <Icon name="download" size="md" />
           </span>
-          <p className="text-[14px]" style={{ color: 'var(--dash-muted)' }}>{t('recentDownloads.empty')}</p>
+          <p className="text-[14px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.recentEmpty')}</p>
         </div>
       ) : (
         <TableViewport label={t('overview.recentRequestsTitle')} minWidth={600}>
