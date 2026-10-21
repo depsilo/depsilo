@@ -1,13 +1,10 @@
 import { useId, type ReactNode } from 'react'
 
 import Icon, { type IconName } from '@/components/Icon'
-import TooltipV2 from '@/components/Tooltip'
 import { sparklineGeometry, sparklineHasVariance } from '@/lib/dashboardOverview'
 
 import { METRIC_TONE_PALETTE, type MetricTone } from './metricTone'
-
-/** Dense Overview hints open fast; other surfaces keep the app-wide 350ms. */
-export const HINT_TOOLTIP_DELAY_MS = 120
+import DashboardMetricHelp from './DashboardMetricHelp'
 
 export type { MetricTone }
 
@@ -138,9 +135,9 @@ export default function MetricTile({
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="min-w-0 text-[14px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>
-            {label}
-          </p>
+          <div className="min-w-0 text-[14px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>
+            {info && infoLabel ? <DashboardMetricHelp label={label} ariaLabel={infoLabel}><p>{info}</p></DashboardMetricHelp> : <p>{label}</p>}
+          </div>
           {badge && (
             <span
               className="shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium"
@@ -148,18 +145,6 @@ export default function MetricTile({
             >
               {badge}
             </span>
-          )}
-          {info && (
-            <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{info}</span>}>
-              <button
-                type="button"
-                aria-label={infoLabel}
-                className="dash-focus ml-auto grid size-[40px] shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-                style={{ color: 'var(--dash-muted)' }}
-              >
-                <Icon name="info" size="sm" />
-              </button>
-            </TooltipV2>
           )}
         </div>
 

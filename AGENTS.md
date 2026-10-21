@@ -102,6 +102,9 @@ part of `make verify`.
   output are local state. Never commit secrets or generated credentials.
 - Use focused tests while iterating and expand verification in proportion to
   the changed seam. Protocol changes require the relevant real-client E2E.
+- After verified code changes, or when operating the `mcs` debug service, follow
+  [the deployment guide](docs/development/mcs-debug.md) for its authorized
+  automatic upgrade and state-preservation procedure.
 
 ## Agent skills
 

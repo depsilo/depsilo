@@ -1,11 +1,9 @@
 import { useTranslation } from 'react-i18next'
 
-import Icon from '@/components/Icon'
-import Tooltip from '@/components/Tooltip'
 import type { DashboardPeriod } from '@/lib/adminApi.types'
 import { formatEstimatedDuration, formatPercentRatio, formatSignedPercent, hitRateValue, latencyComparison, periodChange, timeSavedMs } from '@/lib/dashboardOverview'
 import { formatBytes } from '@/lib/utils'
-import { HINT_TOOLTIP_DELAY_MS } from './MetricTile'
+import DashboardMetricHelp from './DashboardMetricHelp'
 
 interface CacheBenefitsProps {
   period?: DashboardPeriod
@@ -39,29 +37,34 @@ export default function CacheBenefits({ period, prev, pending = false }: CacheBe
       id: 'latency', label: t('overview.averageResponse'),
       value: hasSamples && period ? `${period.avg_latency_ms.toFixed(0)} ms` : '—',
       detail: hasSamples ? t('overview.responseBasis') : t('overview.noSamples'),
-      hint: `${t('overview.responseComparisonBasis')} ${t('overview.latencyHit')}: ${t('overview.samples', { count: latency.hitSamples.toLocaleString() })}; ${t('overview.latencyMiss')}: ${t('overview.samples', { count: latency.missSamples.toLocaleString() })}`, hintLabel: t('overview.responseInfoLabel'),
+      hint: t('overview.responseComparisonBasis'), hintLabel: t('overview.responseInfoLabel'),
     },
   ]
 
   return (
-    <section data-dashboard-benefits aria-labelledby="overview-benefits-title" aria-busy={pending || undefined} className="dashboard-benefits dash-card min-w-0">
-      <h2 id="overview-benefits-title" className="px-5 pt-4 text-[16px] font-semibold">{t('overview.benefitsTitle')}</h2>
-      <div className="grid min-w-0 grid-cols-1 gap-5 p-5 pt-2 sm:grid-cols-3 sm:gap-6">
+    <section data-dashboard-benefits aria-labelledby="overview-benefits-title" aria-busy={pending || undefined} className="dashboard-benefits min-w-0">
+      <h2 id="overview-benefits-title" className="px-5 pt-3 text-[16px] font-semibold">{t('overview.benefitsTitle')}</h2>
+      <div className="grid min-w-0 grid-cols-1 gap-4 px-5 pb-3 sm:grid-cols-3 sm:gap-6">
         {metrics.map(metric => (
           <div key={metric.id} data-benefit={metric.id} className="min-w-0">
-            <div className="flex min-h-[40px] items-center justify-between gap-1">
-              <p className="text-[14px] text-[var(--dash-muted)]">{metric.label}</p>
-              <Tooltip delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[300px] leading-relaxed">{metric.hint}</span>}>
-                <button type="button" aria-label={metric.hintLabel} className="dash-focus grid size-[40px] shrink-0 place-items-center rounded-md text-[var(--dash-muted)] hover:bg-[var(--dash-soft)]"><Icon name="info" size="sm" /></button>
-              </Tooltip>
+            <div className="flex min-h-[40px] items-center text-[14px] text-[var(--dash-muted)]">
+              <DashboardMetricHelp label={metric.label} ariaLabel={metric.hintLabel}>
+                <p>{metric.hint}</p>
+                {metric.id === 'latency' && (pending ? <p>{t('overview.loadingStatistics')}</p> : (
+                  <dl className="dashboard-help-samples">
+                    <div><dt>{t('overview.latencyHit')}</dt><dd>{latency.hitSamples > 0 ? t('overview.samples', { count: latency.hitSamples.toLocaleString() }) : t('overview.noSamples')}</dd></div>
+                    <div><dt>{t('overview.latencyMiss')}</dt><dd>{latency.missSamples > 0 ? t('overview.samples', { count: latency.missSamples.toLocaleString() }) : t('overview.noSamples')}</dd></div>
+                  </dl>
+                ))}
+              </DashboardMetricHelp>
             </div>
             {pending ? <span aria-hidden className="my-1 block h-8 w-28 animate-pulse rounded bg-[var(--dash-soft)]" /> : (
               <p className={`font-mono text-[30px] font-semibold leading-tight tabular-nums ${metric.id === 'saved' && (period?.hit_bytes ?? 0) > 0 ? 'text-[var(--dash-ok)]' : 'text-[var(--dash-ink)]'}`}>{metric.value}</p>
             )}
-            <p className="mt-2 text-[13px] leading-relaxed text-[var(--dash-muted)]">{pending ? t('overview.loadingStatistics') : metric.detail}</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--dash-muted)]">{pending ? t('overview.loadingStatistics') : metric.detail}</p>
             {!pending && metric.id === 'hit' && change !== null && <p className="mt-1 text-[13px] text-[var(--dash-muted)]">{t('overview.changeVsPrevious')} <span className="font-mono tabular-nums">{formatSignedPercent(change)}</span></p>}
             {!pending && metric.id === 'latency' && hasSamples && (
-              <div className="mt-2 space-y-1 text-[12px] text-[var(--dash-muted)]">
+              <div className="mt-1 space-y-1 text-[12px] text-[var(--dash-muted)]">
                 <p>{t('overview.latencyHit')} <span className="font-mono tabular-nums text-[var(--dash-ok)]">{latency.hitMs === null ? '—' : `${latency.hitMs.toFixed(0)} ms`}</span> · {t('overview.latencyMiss')} <span className="font-mono tabular-nums">{latency.missMs === null ? '—' : `${latency.missMs.toFixed(0)} ms`}</span></p>
                 {savedTime !== null && <p>{t('overview.timeSavedEstimate', { duration: formatEstimatedDuration(savedTime, t) })}</p>}
               </div>

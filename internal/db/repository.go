@@ -124,7 +124,7 @@ func Open(driver, dsn string) (*gorm.DB, error) {
 // CurrentSchemaVersion is the newest database schema understood by this
 // binary. Every schema-changing release must add a numbered migration rather
 // than relying on GORM to infer an upgrade from the latest model definitions.
-const CurrentSchemaVersion = 10
+const CurrentSchemaVersion = 11
 
 type schemaMigrationRecord struct {
 	Version   int       `gorm:"primaryKey;autoIncrement:false"`
@@ -151,6 +151,7 @@ var schemaMigrations = []schemaMigration{
 	{version: 8, name: "tamper-evident audit chain", apply: migrateAuditChain},
 	{version: 9, name: "docker image observations", apply: migrateDockerObservations},
 	{version: 10, name: "cascade upstream egress", apply: migrateCascadeUpstreamEgress},
+	{version: 11, name: "lifetime dependency usage", apply: migrateDependencyUsage},
 }
 
 // AutoMigrate applies each numbered schema migration exactly once. Databases
@@ -159,6 +160,12 @@ var schemaMigrations = []schemaMigration{
 // A database written by a newer binary is rejected to prevent a downgrade from
 // silently mutating a schema it does not understand.
 func AutoMigrate(database *gorm.DB) error {
+	// Only a truly empty SQLite database has complete lifetime coverage. A
+	// pre-ledger legacy database or interrupted migration is historical unknown.
+	var existingTables int64
+	if err := database.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").Scan(&existingTables).Error; err != nil {
+		return fmt.Errorf("inspect initial database: %w", err)
+	}
 	if err := database.AutoMigrate(&schemaMigrationRecord{}); err != nil {
 		return fmt.Errorf("create schema migration ledger: %w", err)
 	}
@@ -196,7 +203,13 @@ func AutoMigrate(database *gorm.DB) error {
 	// they repair interrupted index swaps and rows left partially backfilled by
 	// older binaries. Keeping them outside the one-shot ledger means a later
 	// startup can heal that drift without pretending a new schema version exists.
-	return ensureCurrentSchemaInvariants(database)
+	if err := ensureCurrentSchemaInvariants(database); err != nil {
+		return err
+	}
+	if existingTables == 0 {
+		return writeDependencyUsageRecord(database, dependencyUsageRecord{DependencyUsage: DependencyUsage{State: DependencyNeverUsed}})
+	}
+	return nil
 }
 
 func applySchemaMigration(database *gorm.DB, migration schemaMigration, appliedAt time.Time) error {

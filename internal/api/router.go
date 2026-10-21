@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"depsilo/internal/accesslog"
 	"depsilo/internal/api/admin"
 	"depsilo/internal/api/public"
 	"depsilo/internal/asyncruntime"
@@ -94,6 +95,8 @@ type Deps struct {
 	// TrafficMeter is the process-wide client/origin byte-rate meter. Nil in
 	// isolated tests; the /now response falls back to legacy client-side values.
 	TrafficMeter *traffic.Meter
+	// DependencyUsage reports lifecycle evidence outside the retained log windows.
+	DependencyUsage accesslog.UsageReader
 	// Runtime is the shared process/storage sampler owned by the server.
 	Runtime *sysmetrics.Sampler
 }
@@ -213,7 +216,7 @@ func RegisterRoutes(r *gin.Engine, deps Deps) {
 	adminWrite.POST("/docker/bootstrap", dockerBootstrapHandler.Enable)
 
 	// Dashboard
-	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Pools, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled, deps.Config.Cache.MaxSizeGB)
+	dashHandler := admin.NewDashboardHandler(deps.DB, deps.Pools, deps.Ecosystems, deps.Config.AccessLog.RollupEnabled, deps.Config.Cache.MaxSizeGB, deps.DependencyUsage)
 	adminRead.GET("/dashboard", dashHandler.GetDashboard)
 	adminRead.GET("/dashboard/recent-downloads", dashHandler.GetRecentDownloads)
 	adminRead.GET("/dashboard/trends", dashHandler.GetTrends)

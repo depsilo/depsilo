@@ -353,6 +353,7 @@ func TestRecorder_NullVariant_ConcurrentRecordAndClose(t *testing.T) {
 
 func TestRecorder_NullVariant_CanceledCloseDoesNotAbandonDrain(t *testing.T) {
 	d := newTestDB(t)
+	r := NewRecorder(d, Config{Enabled: false, BatchSize: 1000, BatchInterval: time.Hour})
 
 	// MaxOpenConns=1 lets this transaction hold the only connection, making
 	// the worker's write wait until we release it below.
@@ -360,7 +361,6 @@ func TestRecorder_NullVariant_CanceledCloseDoesNotAbandonDrain(t *testing.T) {
 	if tx.Error != nil {
 		t.Fatalf("begin blocking transaction: %v", tx.Error)
 	}
-	r := NewRecorder(d, Config{Enabled: false, BatchSize: 1000, BatchInterval: time.Hour})
 	r.Record(mkEvent("pypi", "numpy", true, mustParse(t, "2026-06-26T10:00:00Z")))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -444,6 +444,7 @@ func TestRecorder_BatchedVariant_ConcurrentRecordAndClose(t *testing.T) {
 
 func TestRecorder_BatchedVariant_CanceledCloseDoesNotAbandonDrain(t *testing.T) {
 	d := newTestDB(t)
+	r := NewRecorder(d, Config{Enabled: true, BatchSize: 1000, BatchInterval: time.Hour})
 
 	// Hold the only database connection so the recorder's final flush cannot
 	// finish until after the first, already-canceled Close returns.
@@ -451,7 +452,6 @@ func TestRecorder_BatchedVariant_CanceledCloseDoesNotAbandonDrain(t *testing.T) 
 	if tx.Error != nil {
 		t.Fatalf("begin blocking transaction: %v", tx.Error)
 	}
-	r := NewRecorder(d, Config{Enabled: true, BatchSize: 1000, BatchInterval: time.Hour})
 	r.Record(mkEvent("pypi", "numpy", true, mustParse(t, "2026-06-26T10:00:00Z")))
 
 	ctx, cancel := context.WithCancel(context.Background())

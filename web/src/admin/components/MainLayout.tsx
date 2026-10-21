@@ -19,8 +19,8 @@ import ThemeToggle from '@/components/ThemeToggle'
 import { usePrincipal } from '@/hooks/usePrincipal'
 import { authApi, statsApi } from '@/lib/api'
 import { removeLocalStorage } from '@/lib/storage'
-import { formatVersion } from '@/lib/utils'
 import { adminNavigationGroups, resolveAdminRoute } from '../routes'
+import SidebarVersion from './SidebarVersion'
 import '../admin-shell.css'
 
 interface NavSection {
@@ -77,13 +77,7 @@ function SidebarContent({
             Depsilo
           </span>
         </Link>
-        <span
-          className="ml-auto inline-flex min-w-16 max-w-[76px] items-center justify-center truncate whitespace-nowrap rounded-sm border px-1.5 py-0.5 font-mono text-[11px] tabular-nums"
-          title={version}
-          style={{ background: 'var(--bg-hover)', color: 'var(--text-soft)', borderColor: 'var(--border)' }}
-        >
-          {formatVersion(version)}
-        </span>
+        <SidebarVersion version={version} />
       </div>
 
       <nav

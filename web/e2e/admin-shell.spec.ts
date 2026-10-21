@@ -55,6 +55,9 @@ test('closed mobile drawer has no focusable offscreen links', async ({ page }) =
   const longVersion = '0.2.0-126-g43ca7fe-dirty'
   await mockAdminApi(page, {
     'GET /api/v1/stats': { service: { version: longVersion, status: 'healthy' }, week: {}, upstreams: [] },
+    'GET /api/v1/admin/capabilities/summary': {
+      version: longVersion, commit: '43ca7fe1234567890abcdef1234567890abcdef123', build_date: '2026-10-20T08:12:45Z',
+    },
   })
   await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/admin')
@@ -64,9 +67,9 @@ test('closed mobile drawer has no focusable offscreen links', async ({ page }) =
   await page.keyboard.press('Enter')
   const drawer = page.getByRole('dialog', { name: /管理导航/ })
   await expect(drawer).toBeVisible()
-  const version = drawer.getByTitle(longVersion)
+  const version = drawer.locator('[data-admin-version]')
   const close = drawer.getByRole('button', { name: '关闭' })
-  await expect(version).toBeVisible()
+  await expect(version).toHaveText('dev·43ca7fe')
   await expect(close).toBeVisible()
   const boxes = await Promise.all([version.boundingBox(), close.boundingBox()])
   expect(boxes[0]).not.toBeNull()
@@ -79,8 +82,66 @@ test('closed mobile drawer has no focusable offscreen links', async ({ page }) =
     || closeBox.y + closeBox.height <= versionBox.y
   )
   expect(intersects).toBe(false)
+  await version.focus()
+  const details = page.getByRole('tooltip')
+  await expect(details).toContainText(longVersion)
+  await expect(details).toContainText('43ca7fe1234567890abcdef1234567890abcdef123')
+  await expect(details).toContainText('2026-10-20T08:12:45Z')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: /打开导航/ })).toBeFocused()
+})
+
+test('sidebar release version remains readable and its complete build details are keyboard accessible', async ({ page }) => {
+  const version = '1.12.30-rc.2'
+  const commit = 'a1234567890bcdef1234567890bcdef1234567890b'
+  const buildDate = '2026-10-20T08:12:45Z'
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': { service: { version: '0.8.0', status: 'healthy' }, week: {}, upstreams: [] },
+    'GET /api/v1/admin/capabilities/summary': { version, commit, build_date: buildDate },
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin')
+  const sidebar = page.locator('aside')
+  const badge = sidebar.locator('[data-admin-version]')
+  await expect(badge).toHaveText(`v${version}`)
+  await sidebar.locator('[data-admin-brand-link]').focus()
+  await page.keyboard.press('Tab')
+  await expect(badge).toBeFocused()
+  const details = page.getByRole('tooltip')
+  await expect(details).toContainText(version)
+  await expect(details).toContainText(commit)
+  await expect(details).toContainText(buildDate)
+  expect(await badge.evaluate(element => {
+    const text = element.querySelector('span')!
+    const rect = element.getBoundingClientRect()
+    return rect.height >= 40 && rect.width >= 40
+      && text.scrollWidth <= text.clientWidth
+      && rect.right <= element.closest('aside')!.getBoundingClientRect().right
+  })).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(details).toBeHidden()
+  await expect(badge).toBeFocused()
+})
+
+test('sidebar version falls back to reported service version and stays unknown when both sources fail', async ({ page }) => {
+  let statsAvailable = true
+  await mockAdminApi(page, {
+    'GET /api/v1/stats': () => statsAvailable
+      ? { service: { version: '0.9.1', status: 'healthy' }, week: {}, upstreams: [] }
+      : { status: 500, body: { message: 'stats unavailable' } },
+    'GET /api/v1/admin/capabilities/summary': { status: 500, body: { message: 'build metadata unavailable' } },
+  })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/admin')
+  const badge = page.locator('aside [data-admin-version]')
+  await expect(badge).toHaveText('v0.9.1')
+  await badge.focus()
+  await expect(page.getByRole('tooltip')).toContainText('0.9.1')
+  statsAvailable = false
+  await page.reload()
+  await expect(badge).toHaveText('—')
+  await expect(badge).not.toHaveAttribute('aria-busy', 'true')
 })
 
 test('desktop navigation shows only workspaces and keeps destinations in page tabs', async ({ page }) => {
@@ -323,7 +384,7 @@ test('failed now request never displays healthy', async ({ page }) => {
   await expect(fullStatus.getByText(/服务正常|已就绪/)).toHaveCount(0)
 })
 
-test('stale cached status keeps its refresh action visible', async ({ page }) => {
+test('stale cached status opens an accessible refresh action on mobile', async ({ page }) => {
   let calls = 0
   await page.setViewportSize({ width: 390, height: 844 })
   await mockAdminApi(page, {
@@ -335,18 +396,19 @@ test('stale cached status keeps its refresh action visible', async ({ page }) =>
     },
   })
   await page.goto('/admin')
-  const fullStatus = page.locator('main [data-query-key="now"]')
-  const staleLabel = fullStatus.getByText('状态待确认 · 刷新').first()
-  const refresh = fullStatus.getByRole('button', { name: '状态待确认 · 刷新', exact: true })
-  await expect(staleLabel).toBeVisible({ timeout: 10_000 })
+  const fullStatus = page.locator('[data-dashboard-status]')
+  await expect(fullStatus).toHaveText('状态未知', { timeout: 10_000 })
+  await expect(fullStatus).toBeInViewport()
+  await fullStatus.click()
+  const details = page.getByRole('dialog', { name: '服务状态详情' })
+  const refresh = details.getByRole('button', { name: '刷新状态', exact: true })
   await expect(refresh).toBeVisible()
   await expect(refresh).toBeInViewport()
-  const strip = fullStatus
   expect(await refresh.evaluate((button, root) => {
     const buttonBox = button.getBoundingClientRect()
     const rootBox = (root as HTMLElement).getBoundingClientRect()
     return buttonBox.right <= rootBox.right && buttonBox.left >= rootBox.left
-  }, await strip.elementHandle())).toBe(true)
+  }, await details.elementHandle())).toBe(true)
   const callsBeforeRefresh = calls
   await refresh.click()
   await expect.poll(() => calls).toBeGreaterThan(callsBeforeRefresh)

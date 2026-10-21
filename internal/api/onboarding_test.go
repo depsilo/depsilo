@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 func newOnboardingTestHandler(t *testing.T, startedAt time.Time) (*OnboardingHandler, *gorm.DB) {
 	t.Helper()
 	database := newAPIAuthTestDB(t)
-	if err := database.AutoMigrate(&db.ControlPlaneState{}, &db.AuditLog{}); err != nil {
+	if err := database.AutoMigrate(&db.ControlPlaneState{}, &db.AuditLog{}, &db.AccessLog{}); err != nil {
 		t.Fatalf("migrate onboarding models: %v", err)
 	}
 	handler := NewOnboardingHandler(database)
@@ -219,5 +220,85 @@ func TestOnboardingUpdatePersistsOnlyTerminalStatus(t *testing.T) {
 		if response.Code != http.StatusBadRequest {
 			t.Errorf("PUT body %s status = %d, want 400", body, response.Code)
 		}
+	}
+}
+
+func TestOnboardingCompletionSurvivesDelayedSkipInEitherOrder(t *testing.T) {
+	for _, order := range [][]string{
+		{onboardingStatusSkipped, onboardingStatusCompleted},
+		{onboardingStatusCompleted, onboardingStatusSkipped},
+	} {
+		t.Run(fmt.Sprintf("%s_then_%s", order[0], order[1]), func(t *testing.T) {
+			handler, database := newOnboardingTestHandler(t, time.Now())
+			if err := saveOnboardingStatus(t.Context(), database, onboardingStatusNotStarted); err != nil {
+				t.Fatal(err)
+			}
+			router := gin.New()
+			router.PUT("/onboarding", handler.Update)
+			completed := false
+			for _, status := range order {
+				response := httptest.NewRecorder()
+				request := httptest.NewRequest(http.MethodPut, "/onboarding",
+					bytes.NewBufferString(`{"status":"`+status+`"}`))
+				request.Header.Set("Content-Type", "application/json")
+				router.ServeHTTP(response, request)
+				if response.Code != http.StatusOK {
+					t.Fatalf("PUT status=%d body=%s", response.Code, response.Body.String())
+				}
+				completed = completed || status == onboardingStatusCompleted
+				want := status
+				if completed {
+					want = onboardingStatusCompleted
+				}
+				var actual onboardingStatusUpdate
+				if err := json.Unmarshal(response.Body.Bytes(), &actual); err != nil {
+					t.Fatal(err)
+				}
+				if actual.Status != want {
+					t.Fatalf("response reported requested rather than retained status: got=%s want=%s", actual.Status, want)
+				}
+			}
+			status, err := loadOnboardingStatus(t.Context(), database)
+			if err != nil || status != onboardingStatusCompleted {
+				t.Fatalf("delayed preference downgraded completion: %s, %v", status, err)
+			}
+		})
+	}
+}
+
+func TestOnboardingConcurrentTerminalChoicesPreserveCompletion(t *testing.T) {
+	handler, database := newOnboardingTestHandler(t, time.Now())
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// SQLite has one writer; use a single connection to exercise transaction
+	// ordering without turning this API test into a busy-timeout policy test.
+	sqlDB.SetMaxOpenConns(1)
+	if err := saveOnboardingStatus(t.Context(), database, onboardingStatusNotStarted); err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	router.PUT("/onboarding", handler.Update)
+	start := make(chan struct{})
+	var writers sync.WaitGroup
+	for _, status := range []string{onboardingStatusSkipped, onboardingStatusCompleted} {
+		writers.Go(func() {
+			<-start
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPut, "/onboarding",
+				bytes.NewBufferString(`{"status":"`+status+`"}`))
+			request.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Errorf("concurrent %s status=%d body=%s", status, response.Code, response.Body.String())
+			}
+		})
+	}
+	close(start)
+	writers.Wait()
+	status, err := loadOnboardingStatus(t.Context(), database)
+	if err != nil || status != onboardingStatusCompleted {
+		t.Fatalf("concurrent preferences lost completion: %s, %v", status, err)
 	}
 }

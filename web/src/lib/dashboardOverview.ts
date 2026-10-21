@@ -2,13 +2,13 @@ import type {
   DashboardPeriod,
   DashboardRange,
   DashboardUpstream,
+  DashboardUsage,
   NowResponse,
   OriginCoverage,
   ReadinessResponse,
 } from './adminApi.types'
 import type { TFunction } from 'i18next'
 import { readLocalStorage, writeLocalStorage } from './storage'
-import { upstreamStatus } from './upstreamStatus'
 
 export const DASHBOARD_RANGES: readonly DashboardRange[] = ['1h', '24h', '7d', '30d']
 
@@ -39,16 +39,22 @@ export function hitRateValue(period: DashboardPeriod | undefined): number | null
   return period.hit_rate
 }
 
-export type DashboardUsageState = 'unknown' | 'active' | 'empty-period' | 'no-recent-evidence'
+export type DashboardUsageState = 'unknown' | 'active' | 'empty-period' | 'no-recent-evidence' | 'waiting-first-request'
 
-/** Finite request windows can establish usage, but cannot prove a first use. */
-export function deriveUsageState({ period, hasHistoricalRequests }: {
+/** Only durable, complete history can establish that no request has succeeded. */
+export function deriveUsageState({ period, hasHistoricalRequests, hasSuccessfulRequest = false, usage }: {
   period?: DashboardPeriod
   hasHistoricalRequests: boolean
+  /** Prior durable "used" evidence; generic request records do not suffice. */
+  hasSuccessfulRequest?: boolean
+  usage?: DashboardUsage
 }): DashboardUsageState {
   if (!period || !Number.isFinite(period.total_requests) || period.total_requests < 0) return 'unknown'
+  // Generic requests include metadata, failures, and HEAD probes. They cannot
+  // override complete evidence that no artifact download has succeeded yet.
+  if (usage?.state === 'never-used' && !hasSuccessfulRequest) return 'waiting-first-request'
   if (period.total_requests > 0) return 'active'
-  return hasHistoricalRequests ? 'empty-period' : 'no-recent-evidence'
+  return hasSuccessfulRequest || hasHistoricalRequests || usage?.state === 'used' ? 'empty-period' : 'no-recent-evidence'
 }
 
 /** Minimum samples before a latency comparison is presented as a claim. */
@@ -311,6 +317,7 @@ export function sparklineHasVariance(series: number[]): boolean {
 export type ServiceHealth = 'healthy' | 'partial' | 'unavailable' | 'unknown'
 
 export type ServiceProblemCode = 'status-unavailable' | 'readiness-unavailable' | 'readiness-stale'
+  | 'upstream-status-unavailable' | 'upstream-status-stale' | 'policy-status-unavailable' | 'policy-status-stale'
   | 'database' | 'storage' | 'upstreams' | 'upstreams-slow' | 'policy' | 'cache' | 'degraded'
 
 export interface ServiceProblem {
@@ -324,24 +331,64 @@ export interface ServiceProblem {
 export interface ServiceStatusModel {
   health: ServiceHealth
   problems: ServiceProblem[]
+  upstreams: UpstreamHealthStatus[]
+  upstreamIssues: UpstreamHealthStatus[]
+  affectedUpstreamCount: number
+  upstreamCheckCount: number
+  /** Individual upstream checks plus the remaining service/signal issues. */
+  checkCount: number
+}
+
+export type UpstreamHealthCheck = 'unavailable' | 'slow'
+
+export interface UpstreamHealthStatus extends DashboardUpstream {
+  /** Persisted IDs identify objects. Unidentified legacy rows stay separate. */
+  key: string
+  state: 'healthy' | 'slow' | 'unavailable'
+  checks: UpstreamHealthCheck[]
 }
 
 /**
- * Distinct unhealthy upstream names with a repeat count, capped so the tile
- * line stays short. A deployment can bind several upstreams under the same
- * name, and "official, official, official" read as a rendering bug instead of
- * a fact; the count keeps the real number visible.
+ * The endpoint returns one current runtime snapshot per persisted upstream ID.
+ * Names are labels, not identity: several ecosystems can each have "official".
+ * Both checks remain visible when an unavailable upstream also has a high
+ * latency average. The average is an EMA, not the selected statistics window.
  */
-function summarizeUnhealthyNames(upstreams: DashboardUpstream[]): string {
-  const counts = new Map<string, number>()
-  for (const upstream of upstreams) {
-    counts.set(upstream.name, (counts.get(upstream.name) ?? 0) + 1)
+export function buildUpstreamHealth(upstreams: DashboardUpstream[]): UpstreamHealthStatus[] {
+  const objects = new Map<string, UpstreamHealthStatus>()
+  for (const [index, upstream] of upstreams.entries()) {
+    const key = Number.isSafeInteger(upstream.id) && upstream.id > 0
+      ? `upstream:${upstream.id}` : `unidentified:${index}`
+    if (objects.has(key)) continue
+    const checks: UpstreamHealthCheck[] = []
+    if (!upstream.healthy) checks.push('unavailable')
+    // Match the one-second threshold in upstreamStatus, independently from
+    // its single presentation status that prioritizes availability.
+    if (Number.isFinite(upstream.avg_latency_ms) && upstream.avg_latency_ms >= 1000) checks.push('slow')
+    objects.set(key, {
+      ...upstream,
+      key,
+      state: checks.includes('unavailable') ? 'unavailable' : checks.includes('slow') ? 'slow' : 'healthy',
+      checks,
+    })
   }
-  return [...counts.entries()]
-    .slice(0, 3)
-    .map(([name, count]) => (count > 1 ? `${name} ×${count}` : name))
+  return [...objects.values()].sort((a, b) => {
+    const priority = { unavailable: 0, slow: 1, healthy: 2 }
+    return priority[a.state] - priority[b.state] || a.id - b.id
+  })
+}
+
+/** Compact compatibility label; full diagnostic rows use the object model. */
+function summarizeUpstreamNames(upstreams: UpstreamHealthStatus[]): string {
+  return upstreams.slice(0, 3)
+    .map(item => `${item.name} (${item.adapter}${item.id > 0 ? ` #${item.id}` : ''})`)
     .join(', ')
 }
+
+const SIGNAL_PROBLEM_CODES: ReadonlySet<ServiceProblemCode> = new Set([
+  'status-unavailable', 'readiness-unavailable', 'readiness-stale',
+  'upstream-status-unavailable', 'upstream-status-stale', 'policy-status-unavailable', 'policy-status-stale',
+])
 
 /**
  * Combines availability, upstream health, and policy-snapshot state into one
@@ -355,7 +402,13 @@ export function deriveServiceStatus(args: {
   readinessAvailable?: boolean
   readinessStale?: boolean
   upstreams: DashboardUpstream[]
+  /** Whether a payload exists, independently from whether its refresh failed. */
+  upstreamsAvailable?: boolean
+  upstreamsStale?: boolean
+  /** Confirmed payload state, not a transport error synthesized as a failure. */
   policyNeedsAttention: boolean
+  policyAvailable?: boolean
+  policyStale?: boolean
   cacheUsagePercent?: number
 }): ServiceStatusModel {
   const problems: ServiceProblem[] = []
@@ -380,21 +433,33 @@ export function deriveServiceStatus(args: {
   if (!args.nowAvailable) {
     problems.push({ code: 'status-unavailable', severity: 'warning' })
   }
+  if (args.upstreamsStale) {
+    problems.push({ code: 'upstream-status-stale', severity: 'warning' })
+  } else if (args.upstreamsAvailable === false) {
+    problems.push({ code: 'upstream-status-unavailable', severity: 'warning' })
+  }
+  if (args.policyStale) {
+    problems.push({ code: 'policy-status-stale', severity: 'warning' })
+  } else if (args.policyAvailable === false) {
+    problems.push({ code: 'policy-status-unavailable', severity: 'warning' })
+  }
 
-  const unreachable = args.upstreams.filter(item => !item.healthy)
-  const slow = args.upstreams.filter(item => item.healthy && upstreamStatus(item) === 'degraded')
+  const upstreams = buildUpstreamHealth(args.upstreams)
+  const upstreamIssues = upstreams.filter(item => item.checks.length > 0)
+  const unreachable = upstreamIssues.filter(item => item.checks.includes('unavailable'))
+  const slow = upstreamIssues.filter(item => item.checks.includes('slow'))
   if (unreachable.length > 0) {
     problems.push({
       code: 'upstreams',
       severity: 'warning',
       count: unreachable.length,
-      names: summarizeUnhealthyNames(unreachable),
+      names: summarizeUpstreamNames(unreachable),
     })
   } else if (args.nowStatus === 'down' || args.nowStatus === 'degraded') {
     problems.push({ code: 'degraded', severity: 'warning' })
   }
   if (slow.length > 0) {
-    problems.push({ code: 'upstreams-slow', severity: 'warning', count: slow.length, names: summarizeUnhealthyNames(slow) })
+    problems.push({ code: 'upstreams-slow', severity: 'warning', count: slow.length, names: summarizeUpstreamNames(slow) })
   }
   if (args.policyNeedsAttention) {
     problems.push({ code: 'policy', severity: 'warning' })
@@ -403,14 +468,21 @@ export function deriveServiceStatus(args: {
     problems.push({ code: 'cache', severity: 'warning', percent: args.cacheUsagePercent })
   }
 
-  if (problems.some(problem => problem.severity === 'danger')) {
-    return { health: 'unavailable', problems }
+  const upstreamCheckCount = upstreamIssues.reduce((count, item) => count + item.checks.length, 0)
+  const health: ServiceHealth = problems.some(problem => problem.severity === 'danger')
+    ? 'unavailable'
+    : problems.some(problem => !SIGNAL_PROBLEM_CODES.has(problem.code))
+      ? 'partial'
+      : problems.length > 0 ? 'unknown' : 'healthy'
+  return {
+    health,
+    problems,
+    upstreams,
+    upstreamIssues,
+    affectedUpstreamCount: upstreamIssues.length,
+    upstreamCheckCount,
+    checkCount: upstreamCheckCount + problems.filter(problem => problem.code !== 'upstreams' && problem.code !== 'upstreams-slow').length,
   }
-  if (problems.some(problem => !['status-unavailable', 'readiness-unavailable', 'readiness-stale'].includes(problem.code))) {
-    return { health: 'partial', problems }
-  }
-  if (problems.length > 0) return { health: 'unknown', problems }
-  return { health: 'healthy', problems: [] }
 }
 
 export type RequestOutcome = 'hit' | 'miss' | 'blocked' | 'failed' | 'unknown'

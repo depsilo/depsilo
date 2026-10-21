@@ -1,28 +1,28 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Bar,
-  BarChart,
+  Area,
   CartesianGrid,
   ComposedChart,
-  Legend,
   Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
-import type { TooltipContentProps, TooltipValueType } from 'recharts'
+import type { DotItemDotProps, TooltipContentProps, TooltipValueType } from 'recharts'
 
 import ButtonV2 from '@/components/Button'
-import Icon from '@/components/Icon'
 import type { DashboardRange, DashboardTrendPoint } from '@/lib/adminApi.types'
 import { formatBytes } from '@/lib/utils'
 
+import DashboardEmptyState from './DashboardEmptyState'
+import DashboardMetricHelp from './DashboardMetricHelp'
+
 export type TrendTab = 'requests' | 'bandwidth' | 'latency' | 'errors'
 
-/** Each metric aggregates differently; the footnote must say which. */
-const TREND_FOOTNOTE_KEY: Record<TrendTab, string> = {
+/** Each metric aggregates differently; the measurement notes must say which. */
+const TREND_MEASUREMENT_KEY: Record<TrendTab, string> = {
   requests: 'overview.trendAggregationRequests',
   bandwidth: 'overview.trendAggregationTraffic',
   latency: 'overview.trendAggregationLatency',
@@ -36,22 +36,17 @@ const ORIGIN = 'var(--dash-origin, var(--warn-text))'
 const WARN = 'var(--dash-warn, var(--warn-text))'
 const DANGER = 'var(--dash-danger, var(--danger))'
 
-function fmtAxisTime(bucket: number, range: DashboardRange): string {
+function fmtRangeTime(bucket: number, range: DashboardRange, locale: string): string {
   const d = new Date(bucket * 1000)
   if (range === '1h') {
-    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: TZ })
+    return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: TZ })
   }
-  if (range === '30d' || range === '7d') {
-    // Coarse ranges use bar categories; include the time so same-day buckets
-    // stay distinct instead of collapsing onto one category label.
-    return d.toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ })
-  }
-  return d.toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ })
+  return d.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ })
 }
 
-function fmtTooltipTime(bucket: number, range: DashboardRange): string {
+function fmtTooltipTime(bucket: number, range: DashboardRange, locale: string): string {
   const d = new Date(bucket * 1000)
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(locale, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -63,9 +58,32 @@ function fmtTooltipTime(bucket: number, range: DashboardRange): string {
   })
 }
 
+function trendTotals(raw: DashboardTrendPoint[]): Omit<ChartPoint, 'bucket'> {
+  const total = raw.reduce((sum, point) => ({
+    serviceRequests: sum.serviceRequests + point.requests,
+    originRequests: sum.originRequests + (point.upstream_requests ?? 0),
+    serviceBytes: sum.serviceBytes + point.bytes_served,
+    originBytes: sum.originBytes + (point.upstream_bytes ?? 0),
+    latencySum: sum.latencySum + point.sum_latency_ms,
+    errors: sum.errors + point.errors,
+  }), { serviceRequests: 0, originRequests: 0, serviceBytes: 0, originBytes: 0, latencySum: 0, errors: 0 })
+  return {
+    ...total,
+    latency: total.serviceRequests > 0 ? Math.round(total.latencySum / total.serviceRequests) : null,
+    errorRatePct: total.serviceRequests > 0 ? total.errors / total.serviceRequests * 100 : null,
+  }
+}
+
+function formatTrendValue(key: TrendDataKey, value: number | null, locale: string, t: Translator): string {
+  if (value == null) return '—'
+  if (key === 'errorRatePct') return `${value.toFixed(1)}%`
+  if (key === 'serviceBytes' || key === 'originBytes') return formatBytes(value)
+  if (key === 'latency') return `${value.toLocaleString(locale)} ${t('dashboard.msUnit')}`
+  return value.toLocaleString(locale)
+}
+
 interface ChartPoint {
   bucket: number
-  label: string
   serviceRequests: number
   originRequests: number
   serviceBytes: number
@@ -75,10 +93,9 @@ interface ChartPoint {
   errorRatePct: number | null
 }
 
-function buildPoints(raw: DashboardTrendPoint[], range: DashboardRange): ChartPoint[] {
+function buildPoints(raw: DashboardTrendPoint[]): ChartPoint[] {
   return raw.map(point => ({
     bucket: point.bucket,
-    label: fmtAxisTime(point.bucket, range),
     serviceRequests: point.requests,
     originRequests: point.upstream_requests ?? 0,
     serviceBytes: point.bytes_served,
@@ -90,15 +107,16 @@ function buildPoints(raw: DashboardTrendPoint[], range: DashboardRange): ChartPo
 }
 
 function ChartTooltip({ active, payload, label, range }: TooltipContentProps<TooltipValueType, string | number> & { range: DashboardRange }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en'
   if (!active || !payload?.length) return null
   const payloadBucket = (payload[0]?.payload as { bucket?: number } | undefined)?.bucket
   const formatted = typeof payloadBucket === 'number'
-    ? fmtTooltipTime(payloadBucket, range)
-    : (typeof label === 'number' ? fmtTooltipTime(label, range) : label)
+    ? fmtTooltipTime(payloadBucket, range, locale)
+    : (typeof label === 'number' ? fmtTooltipTime(label, range, locale) : label)
   return (
     <div
-      className="rounded-md px-3 py-2 text-[13px]"
+      className="dashboard-trend-tooltip rounded-md border border-[var(--border)] px-3 py-2 text-[14px] leading-[1.65]"
       style={{ background: 'var(--bg-card)', color: 'var(--text)', boxShadow: 'var(--shadow-pop)' }}
     >
       <p className="mb-1 font-medium">{formatted}</p>
@@ -110,12 +128,12 @@ function ChartTooltip({ active, payload, label, range }: TooltipContentProps<Too
         else if (entry.dataKey === 'serviceBytes' || entry.dataKey === 'originBytes') display = formatBytes(value)
         else if (entry.dataKey === 'latency') {
           const samples = (payload[0]?.payload as { serviceRequests?: number } | undefined)?.serviceRequests
-          display = `${value.toLocaleString()} ${t('dashboard.msUnit')}`
+          display = `${value.toLocaleString(locale)} ${t('dashboard.msUnit')}`
           if (samples && samples > 0) {
-            display += ` · ${t('overview.samplesShort', { count: samples.toLocaleString() })}`
+            display += ` · ${t('overview.samplesShort', { count: samples.toLocaleString(locale) })}`
           }
         }
-        else display = value.toLocaleString()
+        else display = value.toLocaleString(locale)
         return (
           <p key={String(entry.dataKey)} className="font-mono tabular-nums" style={{ color: entry.color }}>
             {entry.name}: {display}
@@ -124,12 +142,6 @@ function ChartTooltip({ active, payload, label, range }: TooltipContentProps<Too
       })}
     </div>
   )
-}
-
-const axisProps = {
-  tick: { fill: 'var(--dash-muted, var(--text-soft))', fontSize: 12 },
-  axisLine: false as const,
-  tickLine: false as const,
 }
 
 interface ActivityTrendsProps {
@@ -141,11 +153,14 @@ interface ActivityTrendsProps {
 }
 
 export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry }: ActivityTrendsProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.resolvedLanguage?.startsWith('zh') ? 'zh-CN' : 'en'
   const [tab, setTab] = useState<TrendTab>('requests')
+  const gradientId = useId()
 
-  const points = useMemo(() => buildPoints(raw, dataRange), [raw, dataRange])
-  const coarse = dataRange === '7d' || dataRange === '30d'
+  const points = useMemo(() => buildPoints(raw), [raw])
+  const totals = useMemo(() => trendTotals(raw), [raw])
+  const series = trendSeries(tab, t)
   const allEmpty = points.length === 0 || points.every(point => (
     point.serviceRequests === 0 && point.originRequests === 0 && point.errors === 0
   ))
@@ -157,10 +172,6 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
     { value: 'errors', key: 'trendTabErrors' },
   ]
   const activeTab = tabs.find(item => item.value === tab) ?? tabs[0]
-  const chartDescription = t('dashboard.trendChartDescription', {
-    metric: t(`dashboard.${activeTab.key}`),
-    range: t(`dashboard.range${dataRange}`),
-  })
 
   return (
     <section
@@ -171,12 +182,19 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
       data-trend-pending={range !== dataRange ? 'true' : undefined}
       aria-labelledby="overview-trends-title"
       aria-busy={isStale || range !== dataRange || undefined}
-      className="dash-card flex min-w-0 flex-col"
+      className="dash-card flex h-full min-w-0 flex-1 flex-col"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
-        <h2 id="overview-trends-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
-          {t('overview.trendsTitle')} <span className="ml-1 text-[13px] font-normal text-[var(--dash-muted)]">{t(`dashboard.range${dataRange}`)}</span>
-        </h2>
+      <header className="dashboard-panel-header flex flex-wrap justify-between gap-x-3 gap-y-2" style={{ borderColor: 'var(--dash-border)' }}>
+        <div className="flex flex-wrap items-center gap-x-2">
+          <h2 id="overview-trends-title" className="text-[16px] font-semibold" style={{ color: 'var(--dash-ink)', paddingTop: 0 }}>
+            <DashboardMetricHelp label={t('overview.trendsTitle')} ariaLabel={t('overview.trendMeasurementInfo')}>
+              <p>{t('overview.trendSummaryBasis')}</p>
+              <p>{t(TREND_MEASUREMENT_KEY[tab], { range: t(`dashboard.range${dataRange}`) })}</p>
+              <p>{t('overview.trendScaleHint')}</p>
+            </DashboardMetricHelp>
+          </h2>
+          <span className="text-[13px] text-[var(--dash-muted)]">{t(`dashboard.range${dataRange}`)}</span>
+        </div>
         {/* Wraps rather than shrinking: four segments do not fit beside the
             heading on a phone, and the rail had been overflowing the card. */}
         <div role="tablist" aria-label={t('overview.trendsTitle')} className="flex flex-wrap items-center gap-1">
@@ -215,39 +233,80 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
       )}
 
       {allEmpty ? (
-        <div className="flex min-h-[140px] flex-col items-center justify-center gap-2 px-5 pb-6 text-center">
-          <span aria-hidden className="grid size-9 place-items-center rounded-full" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
-            <Icon name="show_chart" size="md" />
-          </span>
-          <h3 className="text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>{t('overview.emptyTrend')}</h3>
-          <p className="max-w-[48ch] text-[13px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.emptyTrendHint')}</p>
-        </div>
+        <DashboardEmptyState icon="show_chart" title={t('overview.emptyTrend')} description={t('overview.emptyTrendHint')} />
       ) : (
-        <div className="px-2 pb-4">
-          <ResponsiveContainer width="100%" height={272}>
-            {coarse ? (
-              <BarChart data={points} margin={{ top: 6, right: 16, bottom: 0, left: 0 }} desc={chartDescription}>
-                <CartesianGrid stroke="var(--dash-border, var(--grid))" vertical={false} />
-                <XAxis dataKey="label" minTickGap={20} {...axisProps} />
-                {renderBarAxes(tab, t)}
-                <Tooltip filterNull={false} content={props => <ChartTooltip {...props} range={dataRange} />} />
-                <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
-                {renderBars(tab, t)}
-              </BarChart>
-            ) : (
-              <ComposedChart data={points} margin={{ top: 6, right: 16, bottom: 0, left: 0 }} desc={chartDescription}>
-                <CartesianGrid stroke="var(--dash-border, var(--grid))" vertical={false} />
-                <XAxis dataKey="bucket" type="number" domain={['dataMin', 'dataMax']} minTickGap={24} tickFormatter={(value: number) => fmtAxisTime(value, dataRange)} {...axisProps} />
-                {renderLineAxes(tab, t)}
-                <Tooltip filterNull={false} content={props => <ChartTooltip {...props} range={dataRange} />} />
-                <Legend wrapperStyle={{ fontSize: 13, paddingTop: 8 }} />
-                {renderLines(tab, t)}
+        <div className="dashboard-trend-content pb-3">
+          <dl aria-label={t('overview.trendSummary')} className="dashboard-trend-summary px-5 pb-3">
+            {series.map(item => (
+              <div key={item.key} data-trend-series={item.key} className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                <dt className="flex items-center gap-2 text-[13px] text-[var(--dash-muted)]">
+                  <span aria-hidden className="w-3 shrink-0 border-t-2" style={{ borderColor: item.color, borderStyle: item.key === 'errorRatePct' ? 'dashed' : 'solid' }} />
+                  {item.name}
+                </dt>
+                <dd data-trend-value={item.key} className="font-mono text-[16px] font-semibold leading-tight tabular-nums text-[var(--dash-ink)]">
+                  {formatTrendValue(item.key, totals[item.key], locale, t)}
+                </dd>
+                {totals[item.key] == null && <dd className="mt-1 text-[12px] text-[var(--dash-muted)]">{t('overview.noSamples')}</dd>}
+              </div>
+            ))}
+          </dl>
+          <div data-trend-chart className="dashboard-trend-chart px-3">
+            <ResponsiveContainer width="100%" height={250}>
+              <ComposedChart data={points} margin={{ top: 12, right: 12, bottom: 4, left: 12 }} desc={t('dashboard.trendChartDescription', { metric: t(`dashboard.${activeTab.key}`), range: t(`dashboard.range${dataRange}`) })}>
+                <defs>
+                  {series.filter(item => item.key !== 'errorRatePct').map(item => (
+                    <linearGradient key={item.key} id={`${gradientId}-${item.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={item.color} stopOpacity={0.5} />
+                      <stop offset="100%" stopColor={item.color} stopOpacity={0.04} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid yAxisId="value" vertical={false} stroke="var(--dash-border)" strokeOpacity={0.55} />
+                <XAxis
+                  dataKey="bucket"
+                  type="number"
+                  domain={['dataMin', 'dataMax']}
+                  interval="preserveStartEnd"
+                  minTickGap={40}
+                  tickMargin={10}
+                  tick={{ fill: 'var(--dash-muted)', fontSize: 12 }}
+                  tickFormatter={(value: number) => fmtRangeTime(value, dataRange, locale)}
+                  tickLine={false}
+                  axisLine={false}
+                  height={32}
+                />
+                <YAxis yAxisId="value" hide={tab !== 'errors'} width={30} domain={[0, 'auto']} tickCount={4} allowDecimals={tab === 'bandwidth' || tab === 'latency'} tick={{ fill: 'var(--dash-muted)', fontSize: 12 }} tickLine={false} axisLine={false} />
+                {tab === 'errors' && <YAxis yAxisId="rate" orientation="right" width={42} domain={[0, 100]} ticks={[0, 50, 100]} tickFormatter={(value: number) => `${value}%`} tick={{ fill: 'var(--dash-muted)', fontSize: 12 }} tickLine={false} axisLine={false} />}
+                <Tooltip
+                  filterNull={false}
+                  cursor={false}
+                  isAnimationActive={false}
+                  wrapperStyle={{ left: 'auto', right: 8, top: 8, transform: 'none' }}
+                  content={props => <ChartTooltip {...props} range={dataRange} />}
+                />
+                {series.map(item => {
+                  const props = {
+                    type: 'monotone' as const,
+                    dataKey: item.key,
+                    name: item.name,
+                    stroke: item.color,
+                    strokeWidth: 1.75,
+                    strokeLinecap: 'round' as const,
+                    strokeLinejoin: 'round' as const,
+                    connectNulls: false,
+                    dot: trendDot(points, item.key, item.color),
+                    activeDot: { r: 4, stroke: 'var(--dash-card)', strokeWidth: 2 },
+                    isAnimationActive: false,
+                  }
+                  // Overlay independent quantities; stacking would add origin
+                  // traffic to already-delivered traffic and invent a total.
+                  return item.key === 'errorRatePct'
+                    ? <Line key={item.key} {...props} yAxisId="rate" strokeDasharray="4 3" />
+                    : <Area key={item.key} {...props} yAxisId="value" baseValue={0} fill={`url(#${gradientId}-${item.key})`} fillOpacity={1} />
+                })}
               </ComposedChart>
-            )}
-          </ResponsiveContainer>
-          <p className="px-3 pt-1 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
-            {t(TREND_FOOTNOTE_KEY[tab], { range: t(`dashboard.range${dataRange}`) })}
-          </p>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
     </section>
@@ -256,80 +315,43 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
 
 type Translator = (key: string) => string
 
-function renderLineAxes(tab: TrendTab, t: Translator) {
-  if (tab === 'bandwidth') {
-    return <YAxis yAxisId="value" width={64} tickFormatter={(value: number) => formatBytes(value)} {...axisProps} />
-  }
-  if (tab === 'latency') {
-    return <YAxis yAxisId="value" width={58} tickFormatter={(value: number) => `${value} ${t('dashboard.msUnit')}`} {...axisProps} />
-  }
-  if (tab === 'errors') {
-    return (
-      <>
-        <YAxis yAxisId="value" width={44} {...axisProps} />
-        <YAxis yAxisId="rate" orientation="right" width={48} tickFormatter={(value: number) => `${value}%`} {...axisProps} />
-      </>
-    )
-  }
-  return <YAxis yAxisId="value" width={44} {...axisProps} />
+// Same-unit series share a zero baseline and time axis. Monotone interpolation
+// smooths the joins without overshooting the observed values; gaps stay gaps.
+type TrendDataKey = Exclude<keyof ChartPoint, 'bucket'>
+interface TrendSeries {
+  key: TrendDataKey
+  name: string
+  color: string
 }
 
-function renderBarAxes(tab: TrendTab, t: Translator) {
-  return renderLineAxes(tab, t)
-}
-
-function renderLines(tab: TrendTab, t: Translator) {
+function trendSeries(tab: TrendTab, t: Translator): TrendSeries[] {
   switch (tab) {
     case 'bandwidth':
-      return (
-        <>
-          <Line yAxisId="value" type="linear" dataKey="serviceBytes" stroke={ACCENT} strokeWidth={2} dot={false} name={t('overview.serviceFlow')} isAnimationActive={false} />
-          <Line yAxisId="value" type="linear" dataKey="originBytes" stroke={ORIGIN} strokeWidth={2} dot={false} name={t('overview.originFlow')} isAnimationActive={false} />
-        </>
-      )
+      return [
+        { key: 'serviceBytes', name: t('overview.serviceFlow'), color: ACCENT },
+        { key: 'originBytes', name: t('overview.originFlow'), color: ORIGIN },
+      ]
     case 'latency':
-      return <Line yAxisId="value" type="linear" dataKey="latency" stroke={ACCENT} strokeWidth={2} dot={false} name={t('overview.clientLatency')} isAnimationActive={false} />
+      return [{ key: 'latency', name: t('overview.clientLatency'), color: ACCENT }]
     case 'errors':
-      return (
-        <>
-          <Line yAxisId="value" type="linear" dataKey="errors" stroke={DANGER} strokeWidth={2} dot={false} name={t('dashboard.trendTabErrors')} isAnimationActive={false} />
-          <Line yAxisId="rate" type="linear" dataKey="errorRatePct" stroke={WARN} strokeWidth={1.6} dot={false} strokeDasharray="4 3" name={t('dashboard.errorRate')} isAnimationActive={false} />
-        </>
-      )
+      return [
+        { key: 'errors', name: t('dashboard.trendTabErrors'), color: DANGER },
+        { key: 'errorRatePct', name: t('dashboard.errorRate'), color: WARN },
+      ]
     default:
-      return (
-        <>
-          <Line yAxisId="value" type="linear" dataKey="serviceRequests" stroke={ACCENT} strokeWidth={2} dot={false} name={t('overview.serviceRequests')} isAnimationActive={false} />
-          <Line yAxisId="value" type="linear" dataKey="originRequests" stroke={ORIGIN} strokeWidth={2} dot={false} name={t('overview.originRequests')} isAnimationActive={false} />
-        </>
-      )
+      return [
+        { key: 'serviceRequests', name: t('overview.serviceRequests'), color: ACCENT },
+        { key: 'originRequests', name: t('overview.originRequests'), color: ORIGIN },
+      ]
   }
 }
 
-function renderBars(tab: TrendTab, t: Translator) {
-  switch (tab) {
-    case 'bandwidth':
-      return (
-        <>
-          <Bar yAxisId="value" dataKey="serviceBytes" fill={ACCENT} radius={[3, 3, 0, 0]} name={t('overview.serviceFlow')} isAnimationActive={false} />
-          <Bar yAxisId="value" dataKey="originBytes" fill={ORIGIN} radius={[3, 3, 0, 0]} name={t('overview.originFlow')} isAnimationActive={false} />
-        </>
-      )
-    case 'latency':
-      return <Bar yAxisId="value" dataKey="latency" fill={ACCENT} radius={[3, 3, 0, 0]} name={t('overview.clientLatency')} isAnimationActive={false} />
-    case 'errors':
-      return (
-        <>
-          <Bar yAxisId="value" dataKey="errors" fill={DANGER} radius={[3, 3, 0, 0]} name={t('dashboard.trendTabErrors')} isAnimationActive={false} />
-          <Line yAxisId="rate" type="linear" dataKey="errorRatePct" stroke={WARN} strokeWidth={1.6} dot={false} strokeDasharray="4 3" name={t('dashboard.errorRate')} isAnimationActive={false} />
-        </>
-      )
-    default:
-      return (
-        <>
-          <Bar yAxisId="value" dataKey="serviceRequests" fill={ACCENT} radius={[3, 3, 0, 0]} name={t('overview.serviceRequests')} isAnimationActive={false} />
-          <Bar yAxisId="value" dataKey="originRequests" fill={ORIGIN} radius={[3, 3, 0, 0]} name={t('overview.originRequests')} isAnimationActive={false} />
-        </>
-      )
+function trendDot(points: ChartPoint[], key: TrendDataKey, color: string) {
+  return ({ index, cx, cy }: DotItemDotProps) => {
+    const value = points[index]?.[key]
+    if (value == null || !Number.isFinite(value) || cx == null || cy == null) return null
+    const isolated = points[index - 1]?.[key] == null && points[index + 1]?.[key] == null
+    if (index !== points.length - 1 && !isolated) return null
+    return <circle key={`${key}-${index}`} className="dashboard-trend-dot" data-series={key} cx={cx} cy={cy} r={2.2} fill={color} />
   }
 }

@@ -13,8 +13,18 @@ test('a policy engine awaiting its first evaluation is informative, not an activ
   await page.goto('/admin')
   await policyResponse
 
-  await expect(page.locator('[data-dashboard-status-strip]')).toContainText('服务正常')
-  await expect(page.locator('[data-dashboard-status-issues]')).toHaveCount(0)
+  const status = page.locator('[data-dashboard-status]')
+  await expect(status).toHaveText('服务正常')
+  await expect(status).toHaveAttribute('data-health', 'healthy')
+  await status.click()
+  const details = page.getByRole('dialog', { name: '服务状态详情' })
+  await expect(details).toHaveCount(1)
+  await expect(details).toBeVisible()
+  await expect(details).not.toContainText('包规则状态暂时不可用')
+  await expect(details).not.toContainText('包规则正在使用旧快照')
+  await expect(details.getByRole('button', { name: '刷新状态', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(status).toBeFocused()
 
   await page.goto('/admin/rules')
   await expect(page.locator('[data-admin-policy-status-banner]')).toHaveCount(0)
@@ -84,24 +94,40 @@ test('Admin does not present an unavailable policy probe as healthy', async ({ p
   await expect(banner).not.toContainText('Policy rules are using a stale snapshot.')
 
   await page.goto('/admin')
-  const issues = page.locator('[data-dashboard-status-issues]')
-  await expect(issues).toBeVisible()
-  await issues.click()
-  await expect(page.locator('[data-dashboard-info-dialog]')).toContainText('Policy status is temporarily unavailable')
+  const status = page.locator('[data-dashboard-status]')
+  await expect(status).toHaveAttribute('data-health', 'partial')
+  await status.click()
+  const details = page.getByRole('dialog', { name: 'Service status details' })
+  await expect(details).toHaveCount(1)
+  await expect(details).toContainText('Policy status is temporarily unavailable')
+  await expect(details).not.toContainText('Policy rules are using a stale snapshot')
+  await expect(details.getByRole('link', { name: 'Review rules' })).toHaveAttribute('href', '/admin/rules')
   await expect(page.locator('[data-admin-policy-idle]')).toHaveCount(0)
 })
 
 test('a failed policy status request remains actionable', async ({ page }) => {
+  let calls = 0
   await mockAdminApi(page, {
-    'GET /api/v1/admin/policy/status': { status: 503, body: { error: 'unavailable' } },
+    'GET /api/v1/admin/policy/status': () => {
+      calls += 1
+      return { status: 503, body: { error: 'unavailable' } }
+    },
   })
   await setUiPreferences(page, 'light', 'zh')
   await page.goto('/admin')
 
-  const issues = page.locator('[data-dashboard-status-issues]')
-  await expect(issues).toBeVisible()
-  await issues.click()
-  await expect(page.locator('[data-dashboard-info-dialog]')).toContainText('包规则状态暂时不可用')
+  const status = page.locator('[data-dashboard-status]')
+  await expect(status).toHaveText('状态未知')
+  await expect(status).toHaveAttribute('data-health', 'unknown')
+  await status.click()
+  const details = page.getByRole('dialog', { name: '服务状态详情' })
+  await expect(details).toHaveCount(1)
+  await expect(details).toContainText('包规则健康状态暂不可用')
+  await expect(details).not.toContainText('包规则正在使用旧快照')
+  const previousCalls = calls
+  await details.getByRole('button', { name: '刷新状态', exact: true }).click()
+  await expect.poll(() => calls).toBeGreaterThan(previousCalls)
+  await expect(status).toHaveAttribute('data-health', 'unknown')
   await page.goto('/admin/rules')
   await expect(page.locator('[data-admin-policy-status-banner]')).toBeVisible()
   await expect(page.locator('[data-admin-policy-idle]')).toHaveCount(0)
@@ -132,12 +158,13 @@ test('policy status belongs to Overview and Governance, including client-side na
 
   const navigation = page.locator('[data-admin-nav-surface="sidebar"]')
   await navigation.locator('a[href="/admin"]').click()
-  // Overview surfaces policy status from the service status cell, without a
+  // Overview surfaces policy status from the permanent status button, without a
   // separate panel ahead of the traffic and benefit sections.
-  const issues = page.locator('[data-dashboard-status-issues]')
-  await expect(issues).toBeVisible()
-  await issues.click()
-  const problemDialog = page.locator('[data-slot="dialog-content"]')
+  const status = page.locator('[data-dashboard-status]')
+  await expect(status).toHaveAttribute('data-health', 'partial')
+  await status.click()
+  const problemDialog = page.getByRole('dialog', { name: 'Service status details' })
+  await expect(problemDialog).toHaveCount(1)
   await expect(problemDialog).toContainText('using a stale snapshot')
   await expect(problemDialog.getByRole('link', { name: 'Review rules' })).toHaveAttribute('href', '/admin/rules')
   await page.keyboard.press('Escape')

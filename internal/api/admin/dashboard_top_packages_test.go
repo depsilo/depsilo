@@ -122,15 +122,14 @@ func TestDashboardCacheUsagePercentIsOptional(t *testing.T) {
 		}
 	})
 
-	t.Run("omits percentage when metadata query fails", func(t *testing.T) {
+	t.Run("reports failure when metadata query fails", func(t *testing.T) {
 		database, router := newDashboardResponseTestServer(t, false, 20)
 		if err := database.Migrator().DropTable(&db.CacheEntry{}); err != nil {
 			t.Fatalf("drop cache_entries: %v", err)
 		}
-		response := getDashboardCacheUsageResponse(t, router)
-		if response.CacheUsagePercent != nil {
-			t.Fatalf("cache_usage_percent = %v, want omitted", *response.CacheUsagePercent)
-		}
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/dashboard", nil))
+		assertDashboardDatabaseError(t, recorder)
 	})
 }
 
@@ -168,6 +167,7 @@ func newDashboardResponseTestServer(t *testing.T, useRollup bool, maxSizeGB int)
 		&db.AccessLog{},
 		&db.AccessLogHourly{},
 		&db.AccessLogPackageDaily{},
+		&db.ControlPlaneState{},
 	); err != nil {
 		t.Fatalf("migrate dashboard database: %v", err)
 	}

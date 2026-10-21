@@ -1,4 +1,3 @@
-import { type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -10,7 +9,7 @@ import type { DashboardPeriod, NowResponse, OriginCoverage } from '@/lib/adminAp
 import { buildRequestFlow, coverageDetail } from '@/lib/dashboardOverview'
 import { formatBps, formatBytes } from '@/lib/utils'
 
-import { HINT_TOOLTIP_DELAY_MS } from './MetricTile'
+import DashboardMetricHelp from './DashboardMetricHelp'
 import { METRIC_TONE_PALETTE, type MetricTone } from './metricTone'
 
 interface RequestFlowProps {
@@ -50,21 +49,21 @@ export default function RequestFlow({
     : flow.originMeasured && coverageNote
       ? `${t('overview.originPartialShort')} · ${originRequestsDetail ?? ''}`
       : originRequestsDetail
-  const rateDetail = (direction: string, rate: number | null) => livePending
+  const rateDetail = (rate: number | null) => livePending
     ? t('loading')
     : liveUnavailable
       ? t('overview.flowRateUnavailable')
-      : rate === null ? t('overview.notCollected') : direction
-  const rateBadge = nowStale ? t('overview.flowRateStale') : t('overview.rateWindow')
+      : rate === null ? t('overview.notCollected') : undefined
+  const rateBadge = nowStale ? t('overview.flowRateStale') : undefined
 
   return (
     <div
       data-dashboard-request-flow
       role="group"
       aria-label={t('overview.flowAria')}
-      className="@container flex min-w-0 flex-col gap-4"
+      className="dashboard-request-flow flex min-w-0 flex-col gap-2"
     >
-      <div className="dashboard-flow-grid grid min-w-0 grid-cols-1 items-center gap-3 @[760px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.15fr)] @[760px]:gap-4">
+      <div className="dashboard-flow-grid grid min-w-0 items-start">
         <FlowNode
           testId="traffic-origin-total"
           icon="cloud_sync"
@@ -78,27 +77,33 @@ export default function RequestFlow({
 
         <FlowRail
           testId="traffic-origin-flow"
-          label={t('overview.originFlow')}
+          label={t('overview.originRate')}
           badge={rateBadge}
           value={flow.liveOriginBytesPerSec === null ? '—' : formatBps(flow.liveOriginBytesPerSec)}
           pending={livePending}
-          detail={rateDetail(t('overview.directionOrigin'), flow.liveOriginBytesPerSec)}
+          direction={t('overview.directionOrigin')}
+          detail={rateDetail(flow.liveOriginBytesPerSec)}
         />
 
-        <FlowNode
-          testId="traffic-depsilo"
-          mark={<Logo size={26} />}
-          title="Depsilo"
-          detail={t('overview.flowLocalCache')}
-        />
+        <div data-testid="traffic-depsilo" className="flex min-w-0 flex-col gap-1">
+          <div className="dashboard-flow-proxy-heading flex min-h-[40px] items-center gap-2">
+            <span aria-hidden className="dashboard-flow-mobile-mark grid size-7 shrink-0 place-items-center"><Logo size={26} /></span>
+            <p className="text-[14px] font-medium leading-snug" style={{ color: 'var(--dash-ink)' }}>Depsilo</p>
+          </div>
+          <p className="dashboard-flow-proxy-detail min-h-[28px] pt-1 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{t('overview.flowLocalCache')}</p>
+          {/* The proxy mark shares the rails' final row, so the download path
+              remains connected without moving the endpoint value baselines. */}
+          <div data-flow-axis aria-hidden className="dashboard-flow-axis justify-center"><Logo size={26} /></div>
+        </div>
 
         <FlowRail
           testId="traffic-service-flow"
-          label={t('overview.serviceFlow')}
+          label={t('overview.clientDeliveryRate')}
           badge={rateBadge}
           value={flow.liveServiceBytesPerSec === null ? '—' : formatBps(flow.liveServiceBytesPerSec)}
           pending={livePending}
-          detail={rateDetail(t('overview.directionService'), flow.liveServiceBytesPerSec)}
+          direction={t('overview.directionService')}
+          detail={rateDetail(flow.liveServiceBytesPerSec)}
         />
 
         <FlowNode
@@ -117,7 +122,7 @@ export default function RequestFlow({
         data-dashboard-flow-outcomes
         role="group"
         aria-label={t('overview.flowOutcomesLabel')}
-        className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t pt-3"
+        className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t pt-1"
         style={{ borderColor: 'var(--dash-border)' }}
       >
         <OutcomeChip
@@ -133,8 +138,7 @@ export default function RequestFlow({
           pending={totalsPending}
         />
         <TooltipV2
-          delay={HINT_TOOLTIP_DELAY_MS}
-          content={<span className="block max-w-[260px] leading-[1.5]">{t('overview.flowBlockedHint')}</span>}
+          content={<span className="block max-w-[260px] text-[14px] leading-[1.65]">{t('overview.flowBlockedHint')}</span>}
         >
           <Link
             to={getAdminRouteHref('security')}
@@ -160,7 +164,6 @@ function FlowNode({
   infoLabel,
   pending = false,
   icon,
-  mark,
 }: {
   testId: string
   title: string
@@ -170,53 +173,58 @@ function FlowNode({
   infoLabel?: string
   pending?: boolean
   icon?: IconName
-  mark?: ReactNode
 }) {
   return (
-    <div data-testid={testId} aria-busy={pending} className="flex min-w-0 items-center gap-3 @[760px]:flex-col @[760px]:items-start @[760px]:gap-2">
-      <span aria-hidden className="grid size-8 shrink-0 place-items-center" style={{ color: 'var(--dash-muted)' }}>
-        {mark ?? (icon && <Icon name={icon} size="md" />)}
-      </span>
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex min-w-0 items-center gap-1">
-          <p className="min-w-0 text-[14px] font-medium leading-snug" style={{ color: 'var(--dash-ink)' }}>{title}</p>
-          {info && infoLabel && <InfoHint text={info} label={infoLabel} />}
+    <div data-testid={testId} aria-busy={pending} className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-h-[40px] min-w-0 items-center gap-2">
+        <span aria-hidden className="grid size-7 shrink-0 place-items-center" style={{ color: 'var(--dash-muted)' }}>
+          {icon && <Icon name={icon} size="md" />}
+        </span>
+        <div className="min-w-0 text-[14px] font-medium leading-snug" style={{ color: 'var(--dash-ink)' }}>
+          {info && infoLabel ? <DashboardMetricHelp label={title} ariaLabel={infoLabel}><p>{info}</p></DashboardMetricHelp> : <p>{title}</p>}
         </div>
-        {value !== undefined && (pending
-          ? <span aria-hidden className="block h-[26px] w-20 animate-pulse rounded bg-[var(--dash-soft)]" />
-          : <p className="font-mono text-[22px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>)}
-        {detail && <p className="min-w-0 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>}
       </div>
+      <div className="flex min-h-[28px] min-w-0 items-baseline">
+        {value !== undefined ? (pending
+          ? <span aria-hidden className="block h-[26px] w-20 animate-pulse rounded bg-[var(--dash-soft)]" />
+          : <p className="font-mono text-[22px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</p>)
+          : <p className="pt-1 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>}
+      </div>
+      {value !== undefined && detail && <p className="min-w-0 text-[13px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>}
     </div>
   )
 }
 
 /** The same semantic order becomes a downward path below the container breakpoint. */
-function FlowRail({ testId, label, badge, value, pending, detail }: {
+function FlowRail({ testId, label, badge, value, pending, direction, detail }: {
   testId: string
   label: string
-  badge: string
+  badge?: string
   value: string
   pending: boolean
-  detail: string
+  direction: string
+  detail?: string
 }) {
   return (
-    <div data-testid={testId} aria-busy={pending} className="flex min-w-0 items-center gap-3 pl-3 @[760px]:block @[760px]:pl-0">
-      <div aria-hidden className="flex shrink-0 flex-col items-center @[760px]:hidden">
+    <div data-testid={testId} aria-busy={pending} className="dashboard-flow-rail min-w-0 items-center gap-3">
+      <div aria-hidden className="dashboard-flow-mobile-mark flex shrink-0 flex-col items-center">
         <span className="h-6 w-px" style={{ background: 'var(--dash-border)' }} />
         <Icon name="expand_more" size="sm" style={{ color: 'var(--dash-muted)' }} />
       </div>
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-[13px] font-medium leading-snug" style={{ color: 'var(--dash-muted)' }}>{label}</span>
-        {pending
-          ? <span aria-hidden className="block h-[23px] w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
-          : <span className="font-mono text-[18px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>}
-        <div aria-hidden className="hidden items-center gap-1 @[760px]:flex">
+        <span className="dashboard-flow-rate-label flex items-center text-[13px] font-medium leading-snug" style={{ color: 'var(--dash-muted)' }}>{label}</span>
+        <div className="flex min-h-[28px] items-baseline">
+          {pending
+            ? <span aria-hidden className="block h-[23px] w-24 animate-pulse rounded bg-[var(--dash-soft)]" />
+            : <span className="font-mono text-[18px] font-semibold leading-tight tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>}
+        </div>
+        <div data-flow-axis aria-hidden className="dashboard-flow-axis gap-1">
           <span className="h-px flex-1" style={{ background: 'var(--dash-border)' }} />
           <Icon name="arrow_forward" size="sm" style={{ color: 'var(--dash-muted)' }} />
         </div>
-        <p className="text-[12px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>
-        <span className="text-[12px] leading-snug" style={{ color: 'var(--dash-muted)' }}>{badge}</span>
+        <span className="sr-only">{direction}</span>
+        {detail && <p className="text-[12px] leading-[1.5]" style={{ color: 'var(--dash-muted)' }}>{detail}</p>}
+        {badge && <span className="text-[12px] leading-snug" style={{ color: 'var(--dash-muted)' }}>{badge}</span>}
       </div>
     </div>
   )
@@ -231,20 +239,5 @@ function OutcomeChip({ tone, label, value, pending }: { tone: MetricTone; label:
         ? <span aria-hidden className="block h-5 w-10 animate-pulse rounded bg-[var(--dash-soft)]" />
         : <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--dash-ink)' }}>{value}</span>}
     </p>
-  )
-}
-
-function InfoHint({ text, label }: { text: string; label: string }) {
-  return (
-    <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[240px] leading-[1.5]">{text}</span>}>
-      <button
-        type="button"
-        aria-label={label}
-        className="dash-focus grid size-[40px] shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-        style={{ color: 'var(--dash-muted)' }}
-      >
-        <Icon name="info" size="sm" />
-      </button>
-    </TooltipV2>
   )
 }

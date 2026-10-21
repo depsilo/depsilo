@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"depsilo/internal/db"
 )
@@ -41,20 +42,25 @@ func NewOnboardingHandler(database *gorm.DB) *OnboardingHandler {
 
 type onboardingEvent struct {
 	ID          uint      `json:"id"`
+	RequestID   string    `json:"request_id"`
 	Ecosystem   string    `json:"ecosystem"`
 	PackageName string    `json:"package_name"`
 	Version     string    `json:"version"`
+	Action      string    `json:"action"`
 	Outcome     string    `json:"outcome"`
 	StatusCode  int       `json:"status_code"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
 type onboardingStatusResponse struct {
-	Status      string            `json:"status"`
-	StartedAt   time.Time         `json:"started_at"`
-	Events      []onboardingEvent `json:"events"`
-	NextAfterID uint              `json:"next_after_id"`
-	HasMore     bool              `json:"has_more"`
+	Status              string                    `json:"status"`
+	StartedAt           time.Time                 `json:"started_at"`
+	Events              []onboardingEvent         `json:"events"`
+	NextAfterID         uint                      `json:"next_after_id"`
+	HasMore             bool                      `json:"has_more"`
+	DeliveryEvents      []onboardingDeliveryEvent `json:"delivery_events"`
+	NextDeliveryAfterID string                    `json:"next_delivery_after_id"`
+	DeliveriesHasMore   bool                      `json:"deliveries_has_more"`
 }
 
 // Status starts or advances a client-owned onboarding cursor. The initial
@@ -79,16 +85,26 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 
 	rawAfterID, hasAfterID := c.GetQuery("after_id")
 	rawStartedAt, hasStartedAt := c.GetQuery("started_at")
-	if !hasAfterID && !hasStartedAt {
+	rawDeliveryCursor, hasDeliveryCursor := c.GetQuery("delivery_after_id")
+	if !hasAfterID && !hasStartedAt && !hasDeliveryCursor {
+		accessMax, err := onboardingAccessMaxID(c.Request.Context(), h.db)
+		if err != nil {
+			writeOnboardingDatabaseError(c)
+			return
+		}
 		// Capture time after the ID snapshot to form a gap-free barrier:
 		// events inserted before MAX(id) are behind the cursor, while events
 		// inserted afterward must also have started on or after this boundary.
 		requestStartedAt := h.now().UTC()
 		c.JSON(http.StatusOK, onboardingStatusResponse{
-			Status:      status,
-			StartedAt:   requestStartedAt,
-			Events:      []onboardingEvent{},
-			NextAfterID: maxID,
+			Status:         status,
+			StartedAt:      requestStartedAt,
+			Events:         []onboardingEvent{},
+			NextAfterID:    maxID,
+			DeliveryEvents: []onboardingDeliveryEvent{},
+			NextDeliveryAfterID: (onboardingDeliveryCursor{
+				Version: 1, AuditAfter: maxID, AccessAfter: accessMax,
+			}).encode(),
 		})
 		return
 	}
@@ -114,11 +130,20 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 		return
 	}
 
+	var deliveryCursor onboardingDeliveryCursor
+	if hasDeliveryCursor {
+		deliveryCursor, err = parseOnboardingDeliveryCursor(rawDeliveryCursor)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": "INVALID_CURSOR", "message": err.Error()})
+			return
+		}
+	}
+
 	rows := make([]onboardingEvent, 0, onboardingEventPageSize+1)
 	if maxID > afterID {
 		err = h.db.WithContext(c.Request.Context()).
 			Model(&db.AuditLog{}).
-			Select("id, ecosystem, package_name, version, cache_result AS outcome, status_code, created_at").
+			Select("id, request_id, ecosystem, package_name, version, action, cache_result AS outcome, status_code, created_at").
 			Where("id > ? AND id <= ?", afterID, maxID).
 			Where("created_at >= ?", sessionStartedAt.UTC()).
 			Where("action IN ?", onboardingAuditActions).
@@ -140,13 +165,23 @@ func (h *OnboardingHandler) Status(c *gin.Context) {
 	if hasMore {
 		nextAfterID = rows[len(rows)-1].ID
 	}
-	c.JSON(http.StatusOK, onboardingStatusResponse{
-		Status:      status,
-		StartedAt:   sessionStartedAt.UTC(),
-		Events:      rows,
-		NextAfterID: nextAfterID,
-		HasMore:     hasMore,
-	})
+	response := onboardingStatusResponse{
+		Status:         status,
+		StartedAt:      sessionStartedAt.UTC(),
+		Events:         rows,
+		NextAfterID:    nextAfterID,
+		HasMore:        hasMore,
+		DeliveryEvents: []onboardingDeliveryEvent{},
+	}
+	if hasDeliveryCursor {
+		response.DeliveryEvents, response.NextDeliveryAfterID, response.DeliveriesHasMore, err =
+			h.deliveryPage(c.Request.Context(), deliveryCursor, sessionStartedAt, maxID)
+		if err != nil {
+			writeOnboardingDatabaseError(c)
+			return
+		}
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 type onboardingStatusUpdate struct {
@@ -171,11 +206,12 @@ func (h *OnboardingHandler) Update(c *gin.Context) {
 		})
 		return
 	}
-	if err := saveOnboardingStatus(c.Request.Context(), h.db, request.Status); err != nil {
+	status, err := saveOnboardingTerminalStatus(c.Request.Context(), h.db, request.Status)
+	if err != nil {
 		writeOnboardingDatabaseError(c)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": request.Status})
+	c.JSON(http.StatusOK, gin.H{"status": status})
 }
 
 func parseOnboardingAfterID(value string) (uint, error) {
@@ -222,6 +258,30 @@ func saveOnboardingStatus(ctx context.Context, database *gorm.DB, status string)
 		Key:   onboardingStatusStateKey,
 		Value: status,
 	}).Error
+}
+
+// Completion is a durable terminal choice. A delayed skip from another tab or
+// a workspace being left must never overwrite it. The conditional UPSERT and
+// response read share one transaction, without a read-then-write race.
+func saveOnboardingTerminalStatus(ctx context.Context, database *gorm.DB, status string) (string, error) {
+	var saved string
+	err := database.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "key"}},
+			DoUpdates: clause.AssignmentColumns([]string{"value", "updated_at"}),
+			Where: clause.Where{Exprs: []clause.Expression{
+				clause.Neq{Column: "value", Value: onboardingStatusCompleted},
+			}},
+		}).Create(&db.ControlPlaneState{
+			Key: onboardingStatusStateKey, Value: status, UpdatedAt: time.Now().UTC(),
+		}).Error; err != nil {
+			return err
+		}
+		var err error
+		saved, err = loadOnboardingStatus(ctx, tx)
+		return err
+	})
+	return saved, err
 }
 
 func writeOnboardingDatabaseError(c *gin.Context) {

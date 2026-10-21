@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -8,8 +7,7 @@ import AdminPage from '@/admin/components/AdminPage'
 import ActivityTrends from '@/admin/components/dashboard/ActivityTrends'
 import ConnectionGuide from '@/admin/components/dashboard/ConnectionGuide'
 import CacheBenefits from '@/admin/components/dashboard/CacheBenefits'
-import DashboardInfoDialog from '@/admin/components/dashboard/DashboardInfoDialog'
-import DashboardStatusStrip from '@/admin/components/dashboard/DashboardStatusStrip'
+import DashboardServiceStatus from '@/admin/components/dashboard/DashboardServiceStatus'
 import RecentRequests from '@/admin/components/dashboard/RecentRequests'
 import RequestDetailsDialog from '@/admin/components/dashboard/RequestDetailsDialog'
 import RuntimeResources, { CacheStorageOverview } from '@/admin/components/dashboard/RuntimeResources'
@@ -27,9 +25,6 @@ import {
   deriveServiceStatus,
   deriveUsageState,
   readDashboardRange,
-  type ServiceProblem,
-  type ServiceProblemCode,
-  type ServiceStatusModel,
   writeDashboardRange,
 } from '@/lib/dashboardOverview'
 import { formatTime } from '@/lib/utils'
@@ -132,7 +127,24 @@ export default function Dashboard() {
   const overview = overviewQuery.data?.data ?? retainedOverview
   const overviewRange = overview?.range?.key ?? range
   const swapped = overviewRange !== range
-  const upstreams = overview?.upstreams ?? []
+  // Health is independent of the selected statistics range. An older cached
+  // range response must never replace a more recent upstream observation.
+  const [healthSnapshot, setHealthSnapshot] = useState<{ data: DashboardResponse; updatedAt: number }>()
+  if (overviewQuery.data?.data && !overviewQuery.isPlaceholderData
+    && (!healthSnapshot || overviewQuery.dataUpdatedAt > healthSnapshot.updatedAt)) {
+    // Structural sharing can preserve an identical payload's object identity;
+    // a successful read still renews its retrieval time and resolves staleness.
+    setHealthSnapshot({ data: overviewQuery.data.data, updatedAt: overviewQuery.dataUpdatedAt })
+  }
+  const [healthErrorAt, setHealthErrorAt] = useState(0)
+  if (overviewQuery.errorUpdatedAt > healthErrorAt) {
+    setHealthErrorAt(overviewQuery.errorUpdatedAt)
+  }
+  // Changing range can expose another cached query's "success" state. Only a
+  // health payload retrieved after the failed read can establish all-clear.
+  const healthStale = Boolean(healthSnapshot
+    && (overviewQuery.isError || healthErrorAt > healthSnapshot.updatedAt))
+  const upstreams = healthSnapshot?.data.upstreams ?? []
   const now = nowQuery.data
 
   const nowInitialError = nowQuery.isError && !now
@@ -156,6 +168,8 @@ export default function Dashboard() {
   const overviewStale = Boolean(overview && overviewQuery.isError)
 
   const [hasObservedRequests, setHasObservedRequests] = useState(false)
+  const [hasObservedSuccessfulRequest, setHasObservedSuccessfulRequest] = useState(false)
+  const successfulRequestEvidence = overview?.usage?.state === 'used'
   const historyEvidence = Boolean(now?.last_activity)
     || (now?.rate.measured === true && now.rate.has_data)
     || (overview?.window?.total_requests ?? 0) > 0
@@ -163,13 +177,25 @@ export default function Dashboard() {
     || (overview?.last_24h?.total_requests ?? 0) > 0
     || (overview?.prev_24h?.total_requests ?? 0) > 0
     || (recentQuery.data?.data.items.length ?? 0) > 0
-  // Positive evidence is sticky for this visit; lack of retained history never
-  // proves that an instance has never served a dependency request.
+  // Keep fallback activity separate from confirmed downloads: metadata and
+  // failed requests must not override a complete never-used lifecycle record.
   if (historyEvidence && !hasObservedRequests) setHasObservedRequests(true)
-  const usage = deriveUsageState({ period: overview?.window, hasHistoricalRequests: hasObservedRequests || historyEvidence })
-  const showConnectionGuide = usage === 'no-recent-evidence' && !swapped && !overviewStale
+  if (successfulRequestEvidence && !hasObservedSuccessfulRequest) setHasObservedSuccessfulRequest(true)
+  const usage = deriveUsageState({
+    period: overview?.window,
+    hasHistoricalRequests: hasObservedRequests || historyEvidence,
+    hasSuccessfulRequest: hasObservedSuccessfulRequest || successfulRequestEvidence,
+    usage: overview?.usage,
+  })
+  const showConnectionGuide = (usage === 'no-recent-evidence' || usage === 'waiting-first-request') && !swapped && !overviewStale
     && !nowQuery.isPending && !recentQuery.isPending
   const overviewPending = overviewQuery.isPending && !overview
+  // Idle is a property of the last policy payload. A failed transport refresh
+  // makes it stale, but cannot turn a never-loaded snapshot into a failure.
+  const policyPayloadIdle = policy.status?.status === 'unavailable'
+    && policy.status.degraded === false && policy.status.refresh_failures === 0
+    && !(policy.status.snapshot_loaded_at ?? policy.status.last_successful_refresh)
+    && !policy.status.using_stale_snapshot
 
   const status = deriveServiceStatus({
     readiness: readinessQuery.data,
@@ -178,9 +204,16 @@ export default function Dashboard() {
     nowAvailable: Boolean(now) && !nowQuery.isError,
     nowStatus: now?.status,
     upstreams,
-    policyNeedsAttention: policy.needsAttention === true,
-    cacheUsagePercent: overview?.cache_usage_percent,
+    upstreamsAvailable: Boolean(healthSnapshot),
+    upstreamsStale: healthStale,
+    policyAvailable: Boolean(policy.status),
+    policyStale: policy.unavailable && Boolean(policy.status),
+    policyNeedsAttention: Boolean(policy.status) && (policy.isStale || (!policyPayloadIdle
+      && policy.status?.status !== 'healthy' && policy.status?.status !== 'ready')),
+    cacheUsagePercent: healthSnapshot?.data.cache_usage_percent,
   })
+  const healthPending = (readinessQuery.isPending || nowPending || overviewPending || (!policy.status && !policy.unavailable))
+    && status.health !== 'partial' && status.health !== 'unavailable'
 
   const lastUpdated = Math.max(
     overviewQuery.dataUpdatedAt,
@@ -203,6 +236,13 @@ export default function Dashboard() {
     void trendsQuery.refetch()
   }
 
+  function refreshStatus() {
+    void readinessQuery.refetch()
+    void overviewQuery.refetch()
+    void nowQuery.refetch()
+    policy.refresh()
+  }
+
   const lastUpdatedLabel = lastUpdated > 0 ? formatTime(new Date(lastUpdated).toISOString(), 'time') : '—'
 
   return (
@@ -210,6 +250,19 @@ export default function Dashboard() {
     <AdminPage
       actions={(
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <DashboardServiceStatus
+            open={showProblems}
+            onOpenChange={setShowProblems}
+            status={status}
+            pending={healthPending}
+            refreshing={readinessQuery.isFetching || overviewQuery.isFetching || nowQuery.isFetching || policy.refreshing}
+            readiness={readinessQuery.data}
+            now={now}
+            policyStale={policy.isStale}
+            upstreamsStale={healthStale}
+            upstreamsUpdatedAt={healthSnapshot?.updatedAt ?? 0}
+            onRefresh={refreshStatus}
+          />
           <span className="inline-flex items-center gap-1.5 text-[13px]" style={{ color: 'var(--text-soft)' }}>
             <Icon name="history" size="sm" />
             {t('overview.updatedAt', { time: lastUpdatedLabel })}
@@ -233,24 +286,19 @@ export default function Dashboard() {
         data-dashboard-health
         className="dashboard-surface flex min-w-0 flex-col gap-4"
       >
-          <DashboardStatusStrip
-            healthPending={(readinessQuery.isPending || nowPending) && !readinessQuery.isError && !nowQuery.isError && status.health !== 'unavailable'}
-            now={now}
-            nowPending={nowPending}
-            nowStale={nowStale}
-            nowError={nowInitialError}
-            status={status}
-            onRefresh={refreshAll}
-            onOpenProblems={() => setShowProblems(true)}
-          />
-
-          <ServiceAlerts status={status} policyStale={policy.isStale} nowPending={nowPending} readinessPending={readinessQuery.isPending} onRefresh={refreshAll} />
-          {showConnectionGuide && <ConnectionGuide blocked={status.health === 'unavailable'} />}
+          {showConnectionGuide && <ConnectionGuide blocked={status.health === 'unavailable'} firstUse={usage === 'waiting-first-request'} onOpenStatus={() => setShowProblems(true)} />}
+          {!showConnectionGuide && status.health === 'unavailable' && (
+            <p role="alert" className="flex flex-wrap items-center gap-x-3 text-[13px] text-[var(--dash-danger)]">
+              {t('overview.connectionBlocked')}
+              <button type="button" className="dash-focus min-h-[40px] rounded-md font-medium" onClick={() => setShowProblems(true)}>{t('overview.viewStatus')}</button>
+            </p>
+          )}
           {!showConnectionGuide && usage === 'active' && overview?.window?.hit_requests === 0 && (
             <p className="flex flex-wrap items-center gap-x-3 text-[13px] text-[var(--dash-muted)]">{t('overview.verifyCacheHint')}<Link className="dash-focus inline-flex min-h-[40px] items-center rounded-md text-[var(--dash-accent)]" to={getAdminRouteHref('connect')}>{t('overview.verifyCacheAction')}</Link></p>
           )}
 
           <div data-dashboard-period data-period-range={overviewRange} className="flex min-w-0 flex-col gap-4">
+          <div className="dashboard-period-summary">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <p className="min-w-0 text-[15px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
               {t('overview.periodTitle')} · {t(RANGE_KEY[overviewRange])}
@@ -291,31 +339,33 @@ export default function Dashboard() {
               {range !== '30d' && <button className="dash-focus min-h-[40px] rounded-md text-[13px] font-medium text-[var(--dash-accent)]" onClick={() => handleRangeChange('30d')}>{t('overview.expandRange')}</button>}
             </div>
           )}
+          <div className="dashboard-cache-card dash-card min-w-0">
           {overviewInitialError ? (
-            <div className="dash-card p-5" data-dashboard-statistics-error>
+            <div className="p-5" data-dashboard-statistics-error>
               <QueryErrorState message={overviewError?.status === 403 ? t('common.permissionDenied') : t('overview.statisticsUnavailable')} onRetry={() => { void overviewQuery.refetch() }} />
               <p className="mt-2 text-[13px] text-[var(--dash-muted)]">{t('overview.statisticsFailureImpact')} <Link className="dash-focus inline-flex min-h-[40px] items-center rounded-md text-[var(--dash-accent)]" to={getAdminRouteHref('connect')}>{t('overview.connectClient')}</Link></p>
             </div>
           ) : <CacheBenefits period={overview?.window} prev={overview?.prev} pending={overviewPending} />}
           <div className="dashboard-cache-summary">
             <CacheStorageOverview runtime={runtimeQuery.data} runtimePending={runtimePending} />
-            <Link className="dash-focus inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-md px-3 text-[13px] font-medium text-[var(--dash-accent)] no-underline" to={getAdminRouteHref('cache')}>{t('dashboard.manageCache')}<Icon name="chevron_right" size="sm" /></Link>
+            <Link className="dash-focus ml-auto inline-flex min-h-[40px] shrink-0 items-center gap-1 rounded-md px-3 text-[13px] font-medium text-[var(--dash-accent)] no-underline" to={getAdminRouteHref('cache')}>{t('dashboard.manageCache')}<Icon name="chevron_right" size="sm" /></Link>
           </div>
-          {runtimeQuery.isError && <p role="status" className="text-[13px] text-[var(--dash-warn)]">{t(runtimeQuery.data ? 'overview.resourcesStale' : 'overview.resourcesUnavailable')} <button className="dash-focus min-h-[40px] rounded-md px-2 font-medium" onClick={() => { void runtimeQuery.refetch() }}>{t('overview.refresh')}</button></p>}
+          {runtimeQuery.isError && <p role="status" className="px-5 pb-3 text-[13px] text-[var(--dash-warn)]">{t(runtimeQuery.data ? 'overview.resourcesStale' : 'overview.resourcesUnavailable')} <button className="dash-focus min-h-[40px] rounded-md px-2 font-medium" onClick={() => { void runtimeQuery.refetch() }}>{t('overview.refresh')}</button></p>}
+          </div>
+          </div>
           {!overviewInitialError && <TrafficOverview now={now} nowPending={nowPending} nowError={nowInitialError} nowStale={nowStale} periodPending={overviewPending} period={overview?.window} rangeStart={overview?.range?.start} coverage={overview?.origin_coverage} />}
           {/* Trends and the recent-request tail are independent queries, so a
               period-aggregate failure never blanks them. */}
-          {/* Chart and request table share a row only while the table can keep
-              its readable minimum width; otherwise the table wraps full-width
-              onto the next line instead of squeezing into an unreadable column. */}
-          <div className="dashboard-lower-grid flex min-w-0 flex-wrap items-start gap-5">
-            <div data-dashboard-trends-column className="min-w-[min(420px,100%)] grow basis-[480px]">
+          {/* Give the area chart a continuous, full-width time axis. The latest
+              request tail stays separate from these range-scoped aggregates. */}
+          <div className="dashboard-lower-grid flex min-w-0 flex-col gap-4">
+            <div data-dashboard-trends-column className="flex min-w-0">
               {trendsLoading ? (
-                <div className="dash-card p-5" aria-busy="true" aria-label={t('overview.loadingStatistics')}>
+                <div className="dash-card w-full p-5" aria-busy="true" aria-label={t('overview.loadingStatistics')}>
                   <div aria-hidden className="h-[272px] animate-pulse rounded-md" style={{ background: 'var(--dash-soft)' }} />
                 </div>
               ) : trendsInitialError ? (
-                <div className="dash-card p-5">
+                <div className="dash-card w-full p-5">
                   <QueryErrorState
                     message={getApiError(trendsQuery.error).status === 403 ? t('common.permissionDenied') : t('overview.statisticsUnavailable')}
                     onRetry={() => { void trendsQuery.refetch() }}
@@ -331,7 +381,7 @@ export default function Dashboard() {
                 />
               )}
             </div>
-            <div className="min-w-[min(600px,100%)] grow basis-[600px]">
+            <div className="flex min-w-0">
               <RecentRequests query={recentQuery} limit={5} onOpenDetails={setDetailsLogId} />
             </div>
           </div>
@@ -364,109 +414,8 @@ export default function Dashboard() {
           </section>
       </div>
 
-      <ProblemsDialog open={showProblems} onClose={() => setShowProblems(false)} status={status} policyStale={policy.isStale} />
       <RequestDetailsDialog logId={detailsLogId} onClose={() => setDetailsLogId(null)} />
     </AdminPage>
     </div>
-  )
-}
-
-/** Category text for one issue in the service-status dialog. */
-function problemTitle(problem: ServiceProblem, t: TFunction, policyStale: boolean): string {
-  switch (problem.code) {
-    case 'database': return t('overview.problemDatabase')
-    case 'storage': return t('overview.problemStorage')
-    case 'readiness-unavailable': return t('overview.problemReadinessUnavailable')
-    case 'readiness-stale': return t('overview.problemReadinessStale')
-    case 'upstreams-slow': return t('overview.problemUpstreamsSlow', { count: problem.count ?? 0, names: problem.names ?? '' })
-    case 'upstreams': return t('overview.problemUpstreams', { count: problem.count ?? 0, names: problem.names ?? '' })
-    case 'policy': return t(policyStale ? 'overview.problemPolicyStale' : 'overview.problemPolicy')
-    case 'cache': return t('overview.problemCache', { percent: (problem.percent ?? 0).toFixed(1) })
-    case 'status-unavailable': return t('overview.problemUnavailable')
-    default: return t('overview.problemDegraded')
-  }
-}
-
-/** Existing page that owns each issue category. */
-function problemEntry(code: ServiceProblemCode): { href: string; labelKey: string } | null {
-  switch (code) {
-    case 'database':
-    case 'storage': return { href: getAdminRouteHref('settings'), labelKey: 'overview.viewSettings' }
-    case 'upstreams-slow':
-    case 'degraded':
-    case 'upstreams': return { href: getAdminRouteHref('upstreams'), labelKey: 'dashboard.viewUpstreams' }
-    case 'cache': return { href: getAdminRouteHref('cache'), labelKey: 'dashboard.manageCache' }
-    case 'policy': return { href: getAdminRouteHref('rules'), labelKey: 'policy.reviewRules' }
-    default: return null
-  }
-}
-
-function problemImpact(code: ServiceProblemCode, t: TFunction): string {
-  switch (code) {
-    case 'database': case 'storage': return t('overview.readinessImpact')
-    case 'upstreams': case 'upstreams-slow': case 'degraded': return t('overview.upstreamImpact')
-    case 'policy': return t('overview.policyImpact')
-    case 'cache': return t('overview.cacheImpact')
-    default: return t('overview.healthUnknownImpact')
-  }
-}
-
-function ServiceAlerts({ status, policyStale, nowPending, readinessPending, onRefresh }: { status: ServiceStatusModel; policyStale: boolean; nowPending: boolean; readinessPending: boolean; onRefresh: () => void }) {
-  const { t } = useTranslation()
-  const problems = status.problems.filter(problem => !(nowPending && problem.code === 'status-unavailable') && !(readinessPending && problem.code === 'readiness-unavailable'))
-  if (problems.length === 0) return null
-  return <div data-dashboard-alerts className="flex min-w-0 flex-col gap-2">
-    {problems.map(problem => {
-      const entry = problemEntry(problem.code)
-      return <div key={problem.code} role={problem.severity === 'danger' ? 'alert' : 'status'} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-md border px-4 py-3" style={{ borderColor: `var(--dash-${problem.severity === 'danger' ? 'danger' : 'warn'})`, background: `var(--dash-${problem.severity === 'danger' ? 'danger' : 'warn'}-soft)` }}>
-        <div className="min-w-0 flex-1 basis-64"><p className="text-[14px] font-semibold">{problemTitle(problem, t, policyStale)}</p><p className="mt-1 text-[13px] text-[var(--dash-muted)]">{problemImpact(problem.code, t)}</p></div>
-        {entry ? <Link className="dash-focus inline-flex min-h-[40px] items-center gap-1 rounded-md px-2 text-[13px] font-medium text-[var(--dash-accent)] no-underline" to={entry.href}>{t(entry.labelKey)}<Icon name="chevron_right" size="sm" /></Link> : null}
-        <button type="button" className="dash-focus min-h-[40px] rounded-md px-2 text-[13px] font-medium" onClick={onRefresh}>{t('overview.refresh')}</button>
-      </div>
-    })}
-  </div>
-}
-
-/** Centered service-status detail; metric tiles use hover tooltips. */
-function ProblemsDialog({
-  open,
-  onClose,
-  status,
-  policyStale,
-}: {
-  open: boolean
-  onClose: () => void
-  status: ServiceStatusModel
-  policyStale: boolean
-}) {
-  const { t } = useTranslation()
-  return (
-    <DashboardInfoDialog
-      open={open}
-      onClose={onClose}
-      title={t('overview.problemsTitle')}
-      description={t('overview.problemsDescription')}
-    >
-      <ul className="flex flex-col gap-3">
-        {status.problems.map(problem => (
-          <li key={problem.code} className="rounded-md border px-3 py-2" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-[14px] font-semibold" style={{ color: 'var(--text)' }}>
-              {problemTitle(problem, t, policyStale)}
-            </p>
-            <p className="mt-1 text-[13px]" style={{ color: 'var(--text-soft)' }}>{problemImpact(problem.code, t)}</p>
-            {problemEntry(problem.code) && (
-              <Link
-                to={problemEntry(problem.code)!.href}
-                onClick={onClose}
-                className="dash-focus mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] no-underline"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-              >
-                {t(problemEntry(problem.code)!.labelKey)}
-              </Link>
-            )}
-          </li>
-        ))}
-      </ul>
-    </DashboardInfoDialog>
   )
 }

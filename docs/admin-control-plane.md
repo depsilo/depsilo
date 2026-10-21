@@ -42,6 +42,31 @@ settings, and requires a service restart before the proxy becomes active.
 Existing custom registries remain operator-managed; neither this route nor
 ordinary Upstream CRUD can modify them.
 
+## Dashboard statistics and usage
+
+`GET /api/v1/admin/dashboard` reports `usage` independently of the selected
+statistics range. `state` is `never-used` only when observation covers the
+instance's complete lifetime and no completed artifact download has been
+observed. `used` records a completed artifact GET with a successful HTTP
+status and a nonempty response body; metadata, HEAD, policy blocks, failed
+transfers and internal maintenance requests do not establish this evidence.
+`unknown` covers older installations and gaps in observation. The optional
+frontend contract also treats an older server without `usage` as unknown.
+
+Usage evidence survives request-log and cache retention. A
+`first_successful_request_at` timestamp is reported only when the first
+successful download is known across the instance's lifetime; otherwise it is
+null, including an older instance's first newly observed download. An unclean
+shutdown before durable evidence is recorded invalidates the claim that the
+instance was never used. A later completed download can still establish
+`used`. These facts are recorded separately from the lossy access-log queue.
+
+Dashboard aggregates and authenticated `GET /api/v1/now` return HTTP 500 with
+`code: DB_ERROR` when a required query fails. A successful query with no rows
+still returns real zero counts. The frontend can therefore distinguish an
+empty period from unavailable statistics. Database error details remain in
+server logs.
+
 ## Cache-fill progress
 
 `GET /api/v1/admin/cache/transfers` is an authenticated Admin read endpoint.
@@ -180,6 +205,42 @@ records and the live Pool snapshot agree.
 The unauthenticated `GET /api/v1/stats` response exposes only
 `scheme://host[:port]` for each upstream. It never returns URL userinfo, paths, queries,
 or fragments.
+
+## Client connection verification
+
+The authenticated `/admin/connect` workspace is reusable. Its selected client,
+configuration scope, shell, observation cursors, and results survive a reload
+together; changing the selection or starting a new check creates a new baseline.
+The service origin comes from the browser's current origin. Configuration is
+applied on the client device, not on the Depsilo server.
+
+`GET /api/v1/admin/onboarding/status` retains its audit `events`, numeric
+`after_id`, and `has_more` contract. The additional `delivery_events`,
+`delivery_after_id` / `next_delivery_after_id`, and `deliveries_has_more` fields
+provide completed-response evidence. The delivery cursor is opaque and tracks
+both independently committed log streams; clients must preserve it verbatim.
+Joined records use the server request ID and the audit request-start timestamp,
+so a response to a request that began before the observation cannot complete it.
+This is an observation of related requests, not a unique client identity.
+
+A successful download requires a GET artifact response, 2xx status, positive
+bytes, a completed stream, and a hit/miss result. A 206 confirms delivery of the
+requested range, not the entire artifact. Metadata hits, HEAD responses, policy
+blocks, errors, and interrupted or unknown delivery results do not qualify.
+Cache verification requires a successful hit for the same cache key as the
+observed successful download; an initial successful hit also qualifies.
+
+The onboarding `completed` / `skipped` preference is separate from durable
+Dashboard usage evidence. The UI records completion after successful artifact
+delivery, and the update endpoint never downgrades `completed` to `skipped`;
+its response contains the effective persisted state. Returning to operations
+remains possible when the preference API is unavailable.
+
+Docker's current logs can associate an image manifest with its repository/tag
+but do not bind blob deliveries to that tag. The workspace states this limit
+and does not promote manifest hits to verified image downloads. pip and npm
+provide isolated small-artifact download commands using the configured source;
+other clients explicitly distinguish metadata checks from artifact downloads.
 
 ## Verification
 

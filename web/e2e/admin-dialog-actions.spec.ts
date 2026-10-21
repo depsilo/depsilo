@@ -15,7 +15,7 @@ test('dialog traps focus and restores its trigger', async ({ page }) => {
 
   const closeButton = dialog.locator('[data-icon-button]:visible')
   await closeButton.focus()
-  const tooltip = page.getByRole('tooltip')
+  const tooltip = page.getByRole('tooltip', { name: '关闭', exact: true })
   await expect(tooltip).toContainText(/关闭/)
   await expect(tooltip).toHaveCSS('background-color', 'oklch(0.985 0 0)')
   await expect(tooltip).toHaveCSS('color', 'oklch(0.145 0 0)')
@@ -37,7 +37,7 @@ test('every visible icon action is named and at least 40px', async ({ page }) =>
   await expect.poll(async () => (await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(40)
 
   await button.hover()
-  await expect(page.getByRole('tooltip')).toContainText(/关闭/)
+  await expect(page.getByRole('tooltip', { name: '关闭', exact: true })).toContainText(/关闭/)
 })
 
 test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
@@ -45,11 +45,15 @@ test('icon action exposes its tooltip on keyboard focus', async ({ page }) => {
   await page.goto('/admin/users')
   await page.getByRole('button', { name: /添加用户/ }).click()
 
-  const button = page.getByRole('dialog').locator('[data-icon-button]:visible')
+  const dialog = page.getByRole('dialog')
+  const button = dialog.locator('[data-icon-button]:visible')
+  // Opening a dialog schedules its initial focus. Begin reverse tabbing only
+  // once the first field owns focus, rather than racing that handoff.
+  await expect(dialog.getByRole('textbox', { name: '用户名', exact: true })).toBeFocused()
   await page.keyboard.press('Shift+Tab')
 
   await expect(button).toBeFocused()
-  const tooltip = page.getByRole('tooltip')
+  const tooltip = page.getByRole('tooltip', { name: '关闭', exact: true })
   await expect(tooltip).toContainText(/关闭/)
   await expect(tooltip).toHaveCSS('background-color', 'oklch(0.145 0 0)')
   await expect(tooltip).toHaveCSS('color', 'oklch(1 0 0)')

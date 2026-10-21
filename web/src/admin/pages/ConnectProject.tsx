@@ -1,439 +1,283 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
-
 import AdminPage from '@/admin/components/AdminPage'
 import DockerBootstrap from '@/admin/components/DockerBootstrap'
-import { operatorEcosystems } from '@/admin/operatorEcosystems'
 import { getAdminRouteHref } from '@/admin/routes'
+import { useConnectionVerification } from '@/admin/useConnectionVerification'
 import Button from '@/components/Button'
-import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
-import QueryErrorState from '@/components/QueryErrorState'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { adminApi } from '@/lib/api'
-import type { OnboardingEvent, OnboardingStatus, OnboardingStatusResponse } from '@/lib/adminApi.types'
-import { LANGUAGES, ONBOARDING_LANGUAGES } from '@/lib/ecosystemData'
+import type { OnboardingStatusResponse } from '@/lib/adminApi.types'
 import {
-  advanceOnboardingSession,
-  ONBOARDING_GATE_QUERY_KEY,
-  onboardingOutcomeKind,
-  ONBOARDING_SESSION_KEY,
-  parseOnboardingSession,
-  startOnboardingSession,
-  type OnboardingSession,
+  CLIENT_CONNECTION_LANGUAGES, getClientConnection,
+  type ClientConnection, type ConnectionShell, type PipScope,
+} from '@/lib/clientConnection'
+import {
+  ONBOARDING_GATE_QUERY_KEY, ONBOARDING_SESSION_KEY, onboardingOutcomeKind,
+  parseOnboardingSession, type OnboardingSession,
 } from '@/lib/onboarding'
-import { renderManagerTemplate, resolveServiceOrigin } from '@/lib/packageManagerConfig'
-import {
-  readSessionStorage,
-  removeSessionStorage,
-  writeSessionStorage,
-} from '@/lib/storage'
+import { resolveServiceOrigin } from '@/lib/packageManagerConfig'
+import { getReadiness } from '@/lib/readiness'
+import { readSessionStorage, removeSessionStorage } from '@/lib/storage'
 import CodeBlock from '@/portal/components/CodeBlock'
+import './ConnectProject.css'
 
-const pollIntervalMs = 2_500
-const troubleshootingDelayMs = 30_000
-const dockerTestImage = 'library/alpine'
-const dockerTestTag = '3.19'
-
-function eventLabel(event: OnboardingEvent) {
-  return [event.package_name, event.version].filter(Boolean).join('@')
-}
-
-function eventEcosystemLabel(event: OnboardingEvent) {
-  return operatorEcosystems.find(ecosystem => ecosystem.id === event.ecosystem)?.label ?? event.ecosystem
-}
-
-function restoredOnboardingSession(): OnboardingSession | null {
+function restoreSession(): OnboardingSession | null {
   const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-  let loadedPath = ''
   try {
-    loadedPath = navigation?.name ? new URL(navigation.name, window.location.href).pathname : ''
-  } catch {
-    loadedPath = ''
-  }
-  if (navigation?.type !== 'reload' || loadedPath !== getAdminRouteHref('connect')) {
-    removeSessionStorage(ONBOARDING_SESSION_KEY)
-    return null
-  }
-  return parseOnboardingSession(readSessionStorage(ONBOARDING_SESSION_KEY))
+    if (navigation?.type === 'reload' && new URL(navigation.name).pathname === getAdminRouteHref('connect')) {
+      return parseOnboardingSession(readSessionStorage(ONBOARDING_SESSION_KEY))
+    }
+  } catch { /* Invalid navigation metadata starts a fresh observation. */ }
+  removeSessionStorage(ONBOARDING_SESSION_KEY)
+  return null
+}
+
+function ConnectionHealth({ ecosystem, onNavigate }: { ecosystem: string; onNavigate: (destination: 'dashboard' | 'upstreams') => void }) {
+  const { t } = useTranslation()
+  const ready = useQuery({ queryKey: ['admin', 'readiness'], queryFn: async ({ signal }) => (await getReadiness({ signal })).data, refetchInterval: 30_000, retry: false })
+  const upstreams = useQuery({ queryKey: ['admin', 'connect-upstreams'], queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data, refetchInterval: 30_000, retry: false })
+  const affected = upstreams.data?.items.filter(upstream => upstream.adapter_type === ecosystem && upstream.healthy === false)
+  return <>
+    {ready.data?.status === 'not_ready' && <p role="alert" className="connection-notice connection-danger"><Icon name="warning" size="sm" /><span>
+      {ready.isError && `${t('onboarding.lastKnownHealth')} `}
+      {t('onboarding.proxyUnavailable')} <button type="button" onClick={() => onNavigate('dashboard')}>{t('onboarding.viewServiceStatus')}</button>
+    </span></p>}
+    {Boolean(affected?.length) && <p className="connection-notice connection-warning"><Icon name="warning" size="sm" /><span>
+      {upstreams.isError && `${t('onboarding.lastKnownHealth')} `}
+      {t('onboarding.upstreamAttention', { names: affected!.map(upstream => upstream.name).join(', ') })} <button type="button" onClick={() => onNavigate('upstreams')}>{t('onboarding.viewUpstreams')}</button>
+    </span></p>}
+    {(ready.isError || upstreams.isError) && <p className="connection-note">{t('onboarding.healthUnknown')} <button type="button" onClick={() => onNavigate('dashboard')}>{t('onboarding.viewServiceStatus')}</button></p>}
+  </>
+}
+
+function ConnectionSelect<Value extends string>({ label, value, options, disabled, onValueChange }: {
+  label: string; value: Value; options: { value: Value; label: string }[]
+  disabled: boolean; onValueChange: (value: Value) => void
+}) {
+  const id = useId()
+  return <div>
+    <Label htmlFor={id} className="mb-1 block">{label}</Label>
+    <Select value={value} items={options} disabled={disabled} onValueChange={next => {
+      if (next !== null && next !== value) onValueChange(next)
+    }}>
+      <SelectTrigger id={id} className="min-h-10 min-w-0 text-foreground">
+        <SelectValue className="min-w-0 whitespace-normal break-words" />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  </div>
 }
 
 export default function ConnectProject() {
   const { t } = useTranslation()
+  const [restored] = useState(restoreSession)
+  const [selection, setSelection] = useState(() => ({
+    languageId: restored?.languageId ?? 'python', managerId: restored?.managerId ?? 'pip',
+    pipScope: (restored?.configurationScope === 'temporary' ? 'temporary' : restored?.configurationScope === 'venv' ? 'venv' : 'user') as PipScope,
+    shell: (restored?.shell === 'powershell' ? 'powershell' : 'posix') as ConnectionShell,
+  }))
+  const [attempt, setAttempt] = useState(0)
+  const endpoint = resolveServiceOrigin()
+  const language = CLIENT_CONNECTION_LANGUAGES.find(language => language.id === selection.languageId)!
+  const manager = language.managers.find(manager => manager.id === selection.managerId)!
+  const connection = useMemo(() => getClientConnection(selection.languageId, selection.managerId, endpoint, selection)!, [selection, endpoint])
+  const key = [selection.languageId, selection.managerId, connection.scope.id, connection.shell, attempt].join(':')
+  const restoredMatches = restored?.languageId === selection.languageId && restored.managerId === selection.managerId &&
+    restored.configurationScope === connection.scope.id && restored.shell === connection.shell &&
+    restored.targetPackage === connection.test.targetPackage && restored.targetVersion === connection.test.targetVersion && attempt === 0
+  const select = (next: typeof selection) => {
+    removeSessionStorage(ONBOARDING_SESSION_KEY)
+    setAttempt(value => value + 1)
+    setSelection(next)
+  }
+  return <div className="connection-page">
+    <ConnectionWorkspace observationId={key} connection={connection} restored={restoredMatches ? restored : null}
+      managerName={manager.name} onRestart={() => { removeSessionStorage(ONBOARDING_SESSION_KEY); setAttempt(value => value + 1) }}
+      selectors={disabled => <section className="connection-selector" aria-label={t('onboarding.chooseClient')}>
+        <div className="connection-selector-fields">
+          <ConnectionSelect label={t('onboarding.ecosystem')} value={selection.languageId} disabled={disabled}
+            options={CLIENT_CONNECTION_LANGUAGES.map(language => ({ value: language.id, label: language.name }))} onValueChange={value => {
+            const language = CLIENT_CONNECTION_LANGUAGES.find(language => language.id === value)!
+            select({ ...selection, languageId: language.id, managerId: language.managers[0].id })
+          }} />
+          <ConnectionSelect label={t('onboarding.managerLabel')} value={selection.managerId} disabled={disabled}
+            options={language.managers.map(manager => ({ value: manager.id, label: manager.name }))}
+            onValueChange={value => select({ ...selection, managerId: value })} />
+          {selection.managerId === 'pip' && <ConnectionSelect<PipScope> label={t('onboarding.configurationScope')} value={selection.pipScope} disabled={disabled}
+            options={[{ value: 'temporary', label: t('onboarding.scopeTemporary') }, { value: 'user', label: t('onboarding.scopeUser') }, { value: 'venv', label: t('onboarding.scopeVenv') }]}
+            onValueChange={value => select({ ...selection, pipScope: value })} />}
+          {connection.shellOptions.length > 1 && <ConnectionSelect<ConnectionShell> label={t('onboarding.shell')} value={connection.shell} disabled={disabled}
+            options={[{ value: 'posix', label: t('onboarding.shellPosix') }, { value: 'powershell', label: 'PowerShell' }]}
+            onValueChange={value => select({ ...selection, shell: value })} />}
+        </div>
+        <p className="connection-origin"><span>{t('onboarding.instanceAddress')}</span><code>{endpoint}</code></p>
+      </section>} />
+  </div>
+}
+
+function ConnectionWorkspace({ connection, restored, managerName, selectors, onRestart, observationId }: {
+  connection: ClientConnection; restored: OnboardingSession | null; managerName: string
+  selectors: (disabled: boolean) => React.ReactNode; onRestart: () => void; observationId: string
+}) {
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [showAll, setShowAll] = useState(false)
-  const [languageId, setLanguageId] = useState(ONBOARDING_LANGUAGES[0]?.id ?? LANGUAGES[0]?.id ?? '')
-  const language = LANGUAGES.find(candidate => candidate.id === languageId) ?? LANGUAGES[0]
-  const [managerId, setManagerId] = useState(language?.managers[0]?.id ?? '')
-  const manager = language?.managers.find(candidate => candidate.id === managerId) ?? language?.managers[0]
-  // Reloads resume the same baseline. Every new/manual route entry starts a
-  // fresh cursor so a historical HIT can never complete a new walkthrough.
-  const [session, setSession] = useState<OnboardingSession | null>(restoredOnboardingSession)
-  const [durableStatus, setDurableStatus] = useState<OnboardingStatus | null>(() => (
-    queryClient.getQueryData<OnboardingStatusResponse>(ONBOARDING_GATE_QUERY_KEY)?.status ?? null
-  ))
-  const sessionRef = useRef(session)
-  const completionStartedRef = useRef(Boolean(session?.firstRequest))
-  const [initialError, setInitialError] = useState<unknown>(null)
-  const [pollError, setPollError] = useState(false)
-  const [savingChoice, setSavingChoice] = useState(false)
-  const [choiceError, setChoiceError] = useState(false)
-  const [showTroubleshooting, setShowTroubleshooting] = useState(Boolean(session?.firstRequest))
-  const [announcement, setAnnouncement] = useState('')
-
-  const endpoint = resolveServiceOrigin()
-  const visibleLanguages = showAll ? LANGUAGES : ONBOARDING_LANGUAGES
-  const firstRequest = session?.firstRequest
-  const firstCacheHit = session?.firstCacheHit
-  const sessionActive = Boolean(session && !firstCacheHit)
-
+  const [leaving, setLeaving] = useState(false)
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const verification = useConnectionVerification({
+    ...connection.selection, configurationScope: connection.scope.id, shell: connection.shell,
+    targetPackage: connection.test.targetPackage, targetVersion: connection.test.targetVersion,
+  }, restored, observationId, leaving)
+  const { session } = verification
+  const completedRequest = useRef<string | null>(null)
+  const save = useMutation({
+    scope: { id: 'onboarding-preference' },
+    mutationFn: (status: 'completed' | 'skipped') => adminApi.updateOnboardingStatus(status),
+    onSuccess: response => queryClient.setQueryData<OnboardingStatusResponse>(ONBOARDING_GATE_QUERY_KEY,
+      previous => previous ? { ...previous, status: response.data.status } : previous),
+  })
+  const complete = save.mutate
+  const resetSave = save.reset
+  useEffect(() => { resetSave() }, [observationId, resetSave])
   useEffect(() => {
-    setManagerId(language?.managers[0]?.id ?? '')
-  }, [language?.id, language?.managers])
-
-  const toggleAllEcosystems = () => {
-    setShowAll(current => {
-      if (current && !ONBOARDING_LANGUAGES.some(candidate => candidate.id === languageId)) {
-        setLanguageId(ONBOARDING_LANGUAGES[0]?.id ?? LANGUAGES[0]?.id ?? '')
-      }
-      return !current
-    })
-  }
-
-  useEffect(() => {
-    sessionRef.current = session
-    if (session) writeSessionStorage(ONBOARDING_SESSION_KEY, JSON.stringify(session))
-  }, [session])
-
-  useEffect(() => () => {
-    window.setTimeout(() => {
-      if (window.location.pathname !== getAdminRouteHref('connect')) {
-        removeSessionStorage(ONBOARDING_SESSION_KEY)
-      }
-    }, 0)
-  }, [])
-
-  const recordTerminalStatus = useCallback(async (status: 'completed' | 'skipped') => {
-    await adminApi.updateOnboardingStatus(status)
-    setDurableStatus(status)
-    queryClient.setQueryData(
-      ONBOARDING_GATE_QUERY_KEY,
-      (previous: OnboardingStatusResponse | undefined) => previous ? { ...previous, status } : previous,
-    )
-  }, [queryClient])
-
-  const acceptResponse = useCallback((response: OnboardingStatusResponse) => {
-    const current = sessionRef.current
-    if (!current) return
-    const selectedEvents = languageId === 'container'
-      ? response.events.filter(event => event.ecosystem === 'docker' && event.package_name === dockerTestImage && event.version === dockerTestTag)
-      : response.events
-    const next = advanceOnboardingSession(current, { ...response, events: selectedEvents })
-    const receivedFirstRequest = !current.firstRequest && Boolean(next.firstRequest)
-    const receivedFirstHit = !current.firstCacheHit && Boolean(next.firstCacheHit)
-    sessionRef.current = next
-    setSession(next)
-    setPollError(false)
-
-    if (receivedFirstRequest) {
-      setAnnouncement(t('onboarding.requestReceivedAnnouncement'))
-      if (!completionStartedRef.current) {
-        completionStartedRef.current = true
-        void recordTerminalStatus('completed').catch(() => setChoiceError(true))
-      }
+    const request = session?.successfulDownload?.request_id
+    const completion = request ? `${observationId}:${request}` : null
+    if (!leaving && completion && completedRequest.current !== completion) {
+      completedRequest.current = completion
+      if (verification.data?.status !== 'completed') complete('completed')
     }
-    if (receivedFirstHit) setAnnouncement(t('onboarding.cacheHitAnnouncement'))
-  }, [languageId, recordTerminalStatus, t])
+  }, [observationId, session?.successfulDownload?.request_id, verification.data?.status, complete, leaving])
 
-  const startSession = useCallback(async (signal?: AbortSignal) => {
-    setInitialError(null)
+  const leave = async (destination: 'dashboard' | 'upstreams' | 'accessLogs' = 'dashboard') => {
+    if (leaving) return
+    setLeaving(true)
+    await verification.stop()
+    const durable = queryClient.getQueryData<OnboardingStatusResponse>(ONBOARDING_GATE_QUERY_KEY)?.status ?? verification.data?.status
+    let status = durable === 'completed' || session?.successfulDownload ? 'completed' as const : 'skipped' as const
     try {
-      const response = await adminApi.getOnboardingStatus({}, { signal })
-      const next = startOnboardingSession(response.data)
-      setDurableStatus(response.data.status)
-      sessionRef.current = next
-      setSession(next)
-    } catch (error) {
-      if (!signal?.aborted) setInitialError(error)
+      if (durable !== status) status = (await save.mutateAsync(status)).data.status
+    } catch { /* Optional onboarding preferences never trap an operator. */ }
+    if (!mounted.current) return
+    queryClient.setQueryData<OnboardingStatusResponse>(ONBOARDING_GATE_QUERY_KEY, previous => previous
+      ? { ...previous, status }
+      : { status, started_at: new Date().toISOString(), next_after_id: 0, events: [], has_more: false })
+    for (const area of ['overview', 'trends', 'now', 'dashboard']) {
+      void queryClient.invalidateQueries({ queryKey: ['admin', area], refetchType: 'none' })
     }
-  }, [])
-
-  useEffect(() => {
-    if (session) return
-    const controller = new AbortController()
-    void startSession(controller.signal)
-    return () => controller.abort()
-  }, [session, startSession])
-
-  useEffect(() => {
-    if (!sessionActive) return
-    const controller = new AbortController()
-    let timer: number | undefined
-    let running = false
-
-    const schedule = (delay = pollIntervalMs) => {
-      window.clearTimeout(timer)
-      timer = window.setTimeout(() => { void poll() }, delay)
-    }
-    const poll = async () => {
-      if (controller.signal.aborted || running) return
-      if (document.hidden) {
-        return
-      }
-      const current = sessionRef.current
-      if (!current || current.firstCacheHit) return
-      running = true
-      try {
-        const response = await adminApi.getOnboardingStatus({
-          after_id: current.afterId,
-          started_at: current.startedAt,
-        }, { signal: controller.signal })
-        acceptResponse(response.data)
-        if (!response.data.events.some(event => event.outcome === 'hit' && (languageId !== 'container' || (event.ecosystem === 'docker' && event.package_name === dockerTestImage && event.version === dockerTestTag)))) {
-          schedule(response.data.has_more ? 0 : pollIntervalMs)
-        }
-      } catch {
-        if (!controller.signal.aborted) {
-          setPollError(true)
-          schedule()
-        }
-      } finally {
-        running = false
-      }
-    }
-    const handleVisibility = () => {
-      if (!document.hidden) {
-        window.clearTimeout(timer)
-        void poll()
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibility)
-    schedule(0)
-    return () => {
-      controller.abort()
-      window.clearTimeout(timer)
-      document.removeEventListener('visibilitychange', handleVisibility)
-    }
-  }, [acceptResponse, languageId, sessionActive])
-
-  useEffect(() => {
-    if (firstRequest) return
-    const timer = window.setTimeout(() => setShowTroubleshooting(true), troubleshootingDelayMs)
-    return () => window.clearTimeout(timer)
-  }, [firstRequest])
-
-  const openDashboard = (status: 'completed' | 'skipped') => {
-    // This in-memory value keeps a stale not_started gate from trapping the
-    // operator when the optional onboarding API is temporarily unavailable.
-    // The durable server value is still rechecked in a later browser session.
-    queryClient.setQueryData<OnboardingStatusResponse>(
-      ONBOARDING_GATE_QUERY_KEY,
-      previous => previous
-        ? { ...previous, status }
-        : {
-            status,
-            started_at: new Date().toISOString(),
-            next_after_id: 0,
-            events: [],
-            has_more: false,
-          },
-    )
     removeSessionStorage(ONBOARDING_SESSION_KEY)
-    navigate(getAdminRouteHref('dashboard'), { replace: true })
+    navigate(getAdminRouteHref(destination), { replace: true })
   }
-
-  const finish = async () => {
-    setSavingChoice(true)
-    setChoiceError(false)
-    const status = firstRequest ? 'completed' : 'skipped'
-    try {
-      if (durableStatus === 'not_started' || durableStatus === null) {
-        await recordTerminalStatus(status)
-      }
-    } catch {
-      // Onboarding is optional. A failed preference write must never block
-      // access to the operational Dashboard.
-    } finally {
-      setSavingChoice(false)
-    }
-    openDashboard(status)
-  }
-
-  const requestKind = firstRequest ? onboardingOutcomeKind(firstRequest) : null
-  const configuration = manager?.configure ?? manager?.persistent
-  const config = useMemo(() => configuration ? renderManagerTemplate(configuration.body, endpoint) : '', [configuration, endpoint])
-  const testCommand = useMemo(() => manager?.test ? renderManagerTemplate(manager.test.body, endpoint) : null, [endpoint, manager])
-
-  if (initialError && !session) {
-    return (
-      <AdminPage
-        width="readable"
-        title={t('onboarding.title')}
-        actions={(
-          <Button className="whitespace-nowrap" onClick={() => openDashboard('skipped')}>
-            {t('onboarding.goDashboard')}
-          </Button>
-        )}
-      >
-        <QueryErrorState message={t('onboarding.loadError')} onRetry={() => { void startSession() }} />
-      </AdminPage>
-    )
-  }
-
-  return (
-    <AdminPage
-      width="readable"
-      title={t('onboarding.title')}
-      description={t('onboarding.subtitle')}
-      actions={(
-        <Button className="whitespace-nowrap" variant="ghost" onClick={() => { void finish() }} disabled={savingChoice}>
-          {t('onboarding.goDashboard')}
-        </Button>
-      )}
-    >
-      <ol aria-label={t('onboarding.progressLabel')} className="mb-7 grid grid-cols-3 border-y border-[var(--border)] py-3">
-        {(['account', 'connect', 'verify'] as const).map((step, index) => {
-          const complete = step === 'account' || (step === 'connect' && Boolean(firstRequest)) || (step === 'verify' && Boolean(firstCacheHit))
-          const current = (step === 'connect' && !firstRequest) || (step === 'verify' && Boolean(firstRequest) && !firstCacheHit)
-          return (
-            <li key={step} aria-current={current ? 'step' : undefined} className="flex min-w-0 items-center gap-2 text-[12px] text-[var(--text-muted)]">
-              <span className={`grid size-6 shrink-0 place-items-center rounded-full font-mono text-[11px] ${complete || current ? 'bg-[var(--brand-soft)] text-[var(--brand-text)]' : 'bg-[var(--bg-soft)]'}`}>
-                {complete ? <Icon name="check" size="sm" /> : index + 1}
-              </span>
-              <span className="truncate">{t(`onboarding.steps.${step}`)}</span>
-            </li>
-          )
-        })}
-      </ol>
-
-      <section aria-labelledby="onboarding-ecosystem-title">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 id="onboarding-ecosystem-title" className="text-[16px] font-[660] text-[var(--text)]">{t('onboarding.chooseEcosystem')}</h2>
-            <p className="mt-1 text-[13px] text-[var(--text-muted)]">{t('onboarding.chooseEcosystemHint')}</p>
-          </div>
-          <button type="button" className="stripe-focus-ring min-h-10 rounded-sm px-2 text-[12px] font-[600] text-[var(--brand-text)] hover:bg-[var(--bg-hover)]" onClick={toggleAllEcosystems} aria-expanded={showAll}>
-            {showAll ? t('onboarding.showFeatured') : t('onboarding.viewAll')}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {visibleLanguages.map(candidate => (
-            <button
-              key={candidate.id}
-              type="button"
-              aria-pressed={candidate.id === language?.id}
-              onClick={() => { setLanguageId(candidate.id); setSession(null) }}
-              className="stripe-focus-ring flex min-h-12 min-w-0 items-center gap-2 rounded-md border px-3 text-left text-[13px] font-[600] transition-[background,border-color,color] duration-150"
-              style={{
-                background: candidate.id === language?.id ? 'var(--brand-soft)' : 'var(--bg-card)',
-                borderColor: candidate.id === language?.id ? 'var(--brand-border)' : 'var(--border)',
-                color: candidate.id === language?.id ? 'var(--brand-text)' : 'var(--text)',
-              }}
-            >
-              <EcosystemIcon type={candidate.iconAdapter} size={18} useColor />
-              <span className="truncate">{candidate.name}</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {language?.id === 'container' && <DockerBootstrap />}
-
-      {language && manager && (
-        <section aria-labelledby="onboarding-manager-title" className="mt-7 border-t border-[var(--border)] pt-6">
-          <h2 id="onboarding-manager-title" className="text-[16px] font-[660] text-[var(--text)]">{t('onboarding.chooseManager', { ecosystem: language.name })}</h2>
-          <div role="group" aria-label={t('onboarding.managerLabel')} className="mt-3 flex max-w-full gap-1 overflow-x-auto rounded-md bg-[var(--bg-soft)] p-1">
-            {language.managers.map(candidate => (
-              <button key={candidate.id} type="button" aria-pressed={candidate.id === manager.id} onClick={() => setManagerId(candidate.id)} className="stripe-focus-ring min-h-10 shrink-0 rounded-sm px-3 text-[13px] font-[600]" style={{ background: candidate.id === manager.id ? 'var(--bg-card)' : 'transparent', color: candidate.id === manager.id ? 'var(--brand-text)' : 'var(--text-muted)', boxShadow: candidate.id === manager.id ? 'var(--shadow-surface)' : 'none' }}>
-                {candidate.name}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-6 space-y-6">
-            <div className="min-w-0">
-              <h3 className="text-[14px] font-[650] text-[var(--text)]">{t('onboarding.configureManager', { manager: manager.name })}</h3>
-              <p className="mb-3 mt-1 break-words text-[12px] text-[var(--text-muted)]">
-                {manager.configure ? t('onboarding.configCommand') : t('onboarding.configFile', { file: manager.persistent.file })}
-              </p>
-              <CodeBlock filename={manager.configure ? undefined : manager.persistent.file} code={config} language={configuration.lang} copyName={t('onboarding.configuration')} tone="ink" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-[14px] font-[650] text-[var(--text)]">{t('onboarding.testIt')}</h3>
-              <p className={`${testCommand ? 'mb-3' : 'mb-0'} mt-1 text-[12px] leading-5 text-[var(--text-muted)]`}>
-                {testCommand ? t('onboarding.testHint') : t('onboarding.normalDependencyCommand')}
-              </p>
-              {testCommand && manager.test && (
-                <CodeBlock code={testCommand} language={manager.test.lang} copyName={t('onboarding.testCommand')} />
-              )}
-              {language.id === 'container' && manager.id === 'docker' && (
-                <div className="mt-4">
-                  <p className="mb-2 text-[12px] leading-5 text-[var(--text-muted)]">{t('onboarding.docker.mirrorTest')}</p>
-                  <CodeBlock code={`docker pull alpine:${dockerTestTag}`} language="sh" copyName={t('onboarding.docker.mirrorCommand')} />
-                </div>
-              )}
-              {language.id === 'container' && (
-                <p className="mt-2 text-[12px] leading-5 text-[var(--text-muted)]">{t('onboarding.docker.clientNotes')}</p>
-              )}
-            </div>
-          </div>
+  const configuration = connection.configuration?.command ?? connection.configuration
+  const temporary = connection.scope.id === 'temporary'
+  const latestRequest = session?.latestRequest
+  const latestDelivery = session?.latestDelivery
+  const latest = latestDelivery && (!latestRequest || Date.parse(latestDelivery.created_at) >= Date.parse(latestRequest.created_at))
+    ? latestDelivery : latestRequest
+  const outcome = latest ? onboardingOutcomeKind(latest) : null
+  const deliveryFailed = latest === latestDelivery && latestDelivery && latestDelivery.dependency_kind === 'artifact' &&
+    (latestDelivery.delivery_result === 'failed' || latestDelivery.delivery_result === 'cancelled' || latestDelivery.status_code >= 400)
+  const failed = outcome === 'error' || deliveryFailed
+  const blocked = outcome === 'blocked'
+  const result = verification.isError ? 'verificationUnavailable'
+    : !session ? 'preparing'
+    : blocked ? 'requestBlocked'
+    : failed ? 'requestFailed'
+    : session.firstCacheHit ? 'cacheConfirmed'
+    : session.successfulDownload ? 'artifactDelivered'
+    : session.firstRequest ? 'relatedRequest'
+    : 'waitingTitle'
+  const success = Boolean(session?.successfulDownload)
+  const resultEvent = blocked || failed ? latest : session?.firstCacheHit ?? session?.successfulDownload ?? latestRequest
+  const tone = verification.isError || blocked ? 'warning' : failed ? 'danger' : success ? 'success' : 'neutral'
+  return <AdminPage title={t('onboarding.title')} description={t('onboarding.subtitle')} actions={
+    <Button variant="ghost" onClick={() => { void leave() }} disabled={leaving}><Icon name="arrow_back" size="sm" />{t('onboarding.backOverview')}</Button>
+  }>
+    <fieldset disabled={leaving}>{selectors(leaving)}
+      <ConnectionHealth ecosystem={connection.selection.ecosystem} onNavigate={destination => { void leave(destination) }} />
+    </fieldset>
+    {connection.selection.ecosystem === 'docker' && <DockerBootstrap />}
+    <div className="connection-workspace">
+      <div className="connection-instructions">
+        <section className="connection-section" aria-labelledby="connection-config-title">
+          <header className="connection-section-heading"><span className="connection-number" aria-hidden="true">1</span><div>
+            <h2 id="connection-config-title">{t(temporary ? 'onboarding.temporarySource' : 'onboarding.configureManager', { manager: managerName })}</h2>
+            <p>{t('onboarding.runOnClient')} · {t(connection.scope.labelKey)}</p>
+          </div></header>
+          {configuration && <CodeBlock key={configuration.body} wrap filename={connection.configuration?.command ? t(connection.shell === 'powershell' ? 'onboarding.terminalPowerShell' : 'onboarding.terminal') : connection.configuration?.file}
+            code={configuration.body} language={configuration.lang} copyLabel={t('onboarding.copyConfiguration')} />}
+          <p className="connection-note">{temporary || connection.configuration?.command ? t(connection.scope.hintKey) : t('onboarding.saveConfigFile', { file: connection.configuration?.file })}</p>
+          <details className="connection-details">
+            <summary>{t('onboarding.inspectConfig')}</summary>
+            <p>{t(temporary ? 'onboarding.temporarySourcePrecedence' : 'onboarding.configPrecedence')}</p>
+            {connection.verifyConfig && <CodeBlock key={connection.verifyConfig.body} wrap filename={t('onboarding.terminal')} code={connection.verifyConfig.body} copyName={t('onboarding.inspectConfig')} />}
+            {!connection.verifyConfig && connection.configuration && <p>{t('onboarding.inspectFile', { file: connection.configuration.file })}</p>}
+            <p>{t('onboarding.nothingYet')}</p>
+            <Link to="/" target="_blank" rel="noreferrer">{t('onboarding.connectionDocs')}<Icon name="arrow_forward" size="sm" /></Link>
+          </details>
         </section>
-      )}
-
-      <section aria-label={t('onboarding.steps.verify')} className="mt-7 border-t border-[var(--border)] pt-6">
-        <div className="rounded-md border border-[var(--border-strong)] bg-[var(--bg-card)] p-4 sm:p-5">
-          {!session ? (
-            <div role="status" aria-busy="true" className="flex items-center gap-3 text-[13px] text-[var(--text-muted)]">
-              <Icon name="progress_activity" size="sm" className="animate-spin motion-reduce:animate-none" />
-              {t('onboarding.preparing')}
-            </div>
-          ) : firstCacheHit ? (
-            <div>
-              <div className="flex items-center gap-2 text-[var(--ok-text)]"><Icon name="check_circle" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstCacheHit')}</h2></div>
-              <p className="mt-2 font-mono text-[13px] text-[var(--text)]">{eventLabel(firstCacheHit)}</p>
-              <p className="mt-1 text-[13px] text-[var(--text-muted)]">{t('onboarding.servedFromCache')}</p>
-              <p className="mt-4 text-[13px] font-[600] text-[var(--text)]">{t('onboarding.ready')}</p>
-            </div>
-          ) : firstRequest ? (
-            <div>
-              <div className="flex items-center gap-2 text-[var(--ok-text)]"><Icon name="check_circle" /><h2 id="onboarding-verify-title" className="text-[17px] font-[680]">{t('onboarding.firstRequest')}</h2></div>
-              <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[13px]">
-                <dt className="text-[var(--text-subtle)]">{t('onboarding.package')}</dt><dd className="min-w-0 truncate font-mono text-[var(--text)]">{eventLabel(firstRequest)}</dd>
-                <dt className="text-[var(--text-subtle)]">{t('onboarding.ecosystem')}</dt><dd className="text-[var(--text)]">{eventEcosystemLabel(firstRequest)}</dd>
-                <dt className="text-[var(--text-subtle)]">{t('onboarding.result')}</dt><dd className="text-[var(--text)]">{t(`onboarding.outcomes.${requestKind}`)}</dd>
-              </dl>
-              <p className="mt-4 text-[13px] text-[var(--text-muted)]">{requestKind === 'blocked' ? t('onboarding.blockedHint') : requestKind === 'error' ? t('onboarding.errorHint') : testCommand ? t('onboarding.runAgain') : t('onboarding.runAgainNormal')}</p>
-              {requestKind === 'error' && (
-                <Link to={getAdminRouteHref('accessLogs')} className="stripe-focus-ring mt-3 inline-flex min-h-10 items-center rounded-sm px-2 text-[12px] font-[650] text-[var(--brand-text)] no-underline hover:bg-[var(--bg-hover)]">
-                  {t('onboarding.viewAccessLogs')}
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center gap-3">
-                <span aria-hidden="true" className="size-2 rounded-full bg-[var(--brand)] animate-pulse motion-reduce:animate-none" />
-                <h2 id="onboarding-verify-title" className="text-[17px] font-[680] text-[var(--text)]">{t('onboarding.waitingTitle')}</h2>
-              </div>
-              <p className="mt-2 text-[13px] text-[var(--text-muted)]">{testCommand ? t('onboarding.waitingHint') : t('onboarding.waitingNormalHint')}</p>
-              {showTroubleshooting && <p className="mt-4 border-t border-[var(--border)] pt-4 text-[12px] text-[var(--text-muted)]">{t('onboarding.nothingYet')}</p>}
-            </div>
-          )}
-          {pollError && <p role="status" className="mt-3 text-[12px] text-[var(--warn-text)]">{t('onboarding.pollError')}</p>}
-        </div>
-      </section>
-
-      <p className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</p>
-      {choiceError && <p role="alert" className="mt-4 text-[12px] text-[var(--danger-text)]">{t('onboarding.saveError')}</p>}
-      <div className="mt-5 flex justify-end">
-        <Button onClick={() => { void finish() }} disabled={savingChoice}>
-          {savingChoice ? t('saving') : firstCacheHit ? t('onboarding.goDashboard') : t('onboarding.continueDashboard')}
-          <Icon name="arrow_forward" size="sm" />
-        </Button>
+        <section className="connection-section" aria-labelledby="connection-test-title">
+          <header className="connection-section-heading"><span className="connection-number" aria-hidden="true">2</span><div>
+            <h2 id="connection-test-title">{t(connection.test.purpose === 'metadata' ? 'onboarding.testMetadata' : 'onboarding.testDownload')}</h2>
+            <p>{t(connection.test.hintKey)}</p>
+          </div></header>
+          {connection.test.command && <CodeBlock key={connection.test.command.body} wrap filename={t(connection.shell === 'powershell' ? 'onboarding.terminalPowerShell' : 'onboarding.terminal')}
+            code={connection.test.command.body} language={connection.test.command.lang} copyLabel={t('onboarding.copyTest')}
+            copyDisabled={!session || verification.isError} />}
+          {!session && <p role="status" className="connection-note">{t(verification.isError ? 'onboarding.verificationUnavailable' : 'onboarding.preparing')}</p>}
+          {connection.selection.ecosystem === 'docker' && <p className="connection-note">{t('onboarding.docker.clientNotes')}</p>}
+          <details className="connection-details">
+            <summary>{t('onboarding.cacheOptional')}</summary>
+            {connection.test.hintKey === 'onboarding.testIsolatedArtifactHint' && <p>{t('onboarding.isolatedCacheRepeat')}</p>}
+            <p>{t('onboarding.cacheConditions')}</p>
+            {connection.test.purpose === 'metadata' && <p>{t('onboarding.metadataNext')}</p>}
+            <Link to="/" target="_blank" rel="noreferrer">{t('onboarding.connectionDocs')}<Icon name="arrow_forward" size="sm" /></Link>
+          </details>
+        </section>
       </div>
-    </AdminPage>
-  )
+      <aside className="connection-verification" aria-label={t('onboarding.verificationResult')}>
+        <div className={`connection-result connection-result-${tone}`}>
+          <p className="connection-eyebrow">{t('onboarding.verificationResult')}</p>
+          <div className="connection-result-title" role="status" aria-live="polite" aria-atomic="true">
+            <Icon name={verification.isError || blocked || failed ? 'warning' : success ? 'check_circle' : !session ? 'progress_activity' : 'radar'} size="sm" />
+            <h2>{t(`onboarding.${result}`)}</h2>
+          </div>
+          <p className="connection-result-hint">{t(verification.isError ? 'onboarding.pollError' : blocked ? 'onboarding.blockedHint' : failed ? 'onboarding.errorHint' : session?.firstCacheHit ? 'onboarding.servedFromCache' : success ? 'onboarding.downloadConfirmedHint' : session?.firstRequest ? 'onboarding.requestOnlyHint' : 'onboarding.waitingHint')}</p>
+          <ol className="connection-evidence">
+            {([
+              ['relatedRequest', Boolean(session?.firstRequest || success)],
+              ['artifactDelivered', success],
+              ['cacheConfirmed', Boolean(session?.firstCacheHit)],
+            ] as const).map(([label, done]) => <li key={label} data-complete={done}>
+              {done ? <Icon name="check_circle" size="sm" /> : <span className="connection-pending-dot" aria-hidden="true" />}<span>{t(`onboarding.${label}`)}</span><span className="sr-only">{t(done ? 'onboarding.confirmed' : 'onboarding.notConfirmed')}</span>
+            </li>)}
+          </ol>
+          {resultEvent && <dl className="connection-event"><dt>{t('onboarding.package')}</dt><dd>{[resultEvent.package_name, resultEvent.version].filter(Boolean).join('@')}</dd>
+            <dt>{t('onboarding.result')}</dt><dd>{t(`onboarding.outcomes.${onboardingOutcomeKind(resultEvent)}`)} · HTTP {resultEvent.status_code}</dd>
+            <dt>{t('onboarding.requestStarted')}</dt><dd><time dateTime={resultEvent.created_at}>{new Date(resultEvent.created_at).toLocaleString(i18n.language)}</time></dd>
+          </dl>}
+          {resultEvent?.status_code === 206 && <p className="connection-note">{t('onboarding.partialDelivery')}</p>}
+          <p className="connection-note">{t('onboarding.observationScope', { package: connection.test.targetPackage ?? managerName })}</p>
+          {session && !session.deliveryAfterId && <p className="connection-note">{t('onboarding.deliveryUnsupported')}</p>}
+          {connection.selection.ecosystem === 'docker' && <p className="connection-note">{t('onboarding.testDockerHint')}</p>}
+          {success && !session?.firstCacheHit && <p className="connection-note">{t('onboarding.cacheNext')}</p>}
+          {save.isError && <p role="alert" className="connection-note connection-warning">{t('onboarding.saveError')}</p>}
+          <div className="connection-result-actions">
+            {save.isError && success && <Button variant="secondary" disabled={save.isPending || leaving} onClick={() => complete('completed')}>{t('common.retry')}</Button>}
+            {verification.isError && <Button onClick={() => { void verification.refetch() }} disabled={verification.isFetching}>{t('onboarding.retryVerification')}</Button>}
+            <Button variant={success ? 'primary' : 'ghost'} className={success ? 'connection-primary' : 'connection-return-unverified'} disabled={leaving} onClick={() => { void leave() }}>{t(success ? 'onboarding.viewOverview' : 'onboarding.returnUnverified')}<Icon name="arrow_forward" size="sm" /></Button>
+            <Button variant="ghost" disabled={leaving} onClick={onRestart}>{t('onboarding.restartCheck')}</Button>
+            {(session?.firstRequest || success) && <Button variant="ghost" disabled={leaving} onClick={() => { void leave('accessLogs') }}>{t('onboarding.viewAccessLogs')}</Button>}
+          </div>
+        </div>
+      </aside>
+    </div>
+  </AdminPage>
 }

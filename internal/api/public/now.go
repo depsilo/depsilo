@@ -1,10 +1,12 @@
 package public
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"depsilo/internal/db"
@@ -72,8 +74,8 @@ type rateBlock struct {
 
 	WindowSeconds int `json:"window_seconds"`
 
-	// Explicit measured rates. Service* is client→Depsilo, Origin* is
-	// Depsilo→upstream. They are separate request paths and are never summed.
+	// Request rates follow client→Depsilo→upstream. Byte rates follow the
+	// response direction upstream→Depsilo→client. The two legs are never summed.
 	ServiceRequestsPerSec float64 `json:"service_requests_per_sec"`
 	ServiceBytesPerSec    float64 `json:"service_bytes_per_sec"`
 	OriginRequestsPerSec  float64 `json:"origin_requests_per_sec"`
@@ -93,18 +95,42 @@ type sparklinePoint struct {
 
 func (h *NowHandler) Get(c *gin.Context) {
 	now := time.Now().UTC()
+	ctx := c.Request.Context()
+	sparkline, err := h.sparkline(ctx, now)
+	if err != nil {
+		nowDatabaseError(c, err)
+		return
+	}
+	lastActivity, err := h.lastActivity(ctx, now)
+	if err != nil {
+		nowDatabaseError(c, err)
+		return
+	}
+	rate, err := h.rate(ctx, now)
+	if err != nil {
+		nowDatabaseError(c, err)
+		return
+	}
 	resp := nowResponse{
 		UptimeSeconds: int64(time.Since(h.startTime).Seconds()),
 		NowUnix:       now.Unix(),
 		Version:       version.Version,
 		Upstreams:     h.upstreamRollup(),
-		Sparkline:     h.sparkline(now),
+		Sparkline:     sparkline,
+		LastActivity:  lastActivity,
+		Rate:          rate,
 	}
-	resp.LastActivity = h.lastActivity(now)
-	resp.Rate = h.rate(now)
 	resp.Status = h.computeStatus(resp.Upstreams, resp.Rate)
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func nowDatabaseError(c *gin.Context, err error) {
+	zap.L().Error("load current request statistics", zap.Error(err))
+	c.JSON(http.StatusInternalServerError, gin.H{
+		"code":    "DB_ERROR",
+		"message": "failed to load current request statistics",
+	})
 }
 
 // upstreamRollup tallies healthy vs total across every wired pool. The pool
@@ -128,21 +154,24 @@ func (h *NowHandler) upstreamRollup() upstreamRollup {
 
 // lastActivity returns the most recent access_log row as a relative timestamp
 // + a tiny bit of context (which ecosystem, was it a hit). Returns nil when
-// the table is empty — the frontend renders the onboarding hint in that case.
-func (h *NowHandler) lastActivity(now time.Time) *lastActivity {
+// the table is empty. Retained logs do not establish lifetime usage history.
+func (h *NowHandler) lastActivity(ctx context.Context, now time.Time) (*lastActivity, error) {
 	var row struct {
 		CreatedAt   time.Time
 		AdapterType string
 		Hit         bool
 		PackageName string
 	}
-	err := h.db.Model(&db.AccessLog{}).
+	err := h.db.WithContext(ctx).Model(&db.AccessLog{}).
 		Select("created_at, adapter_type, hit, package_name").
 		Order("id DESC").
 		Limit(1).
 		Scan(&row).Error
-	if err != nil || row.CreatedAt.IsZero() {
-		return nil
+	if err != nil {
+		return nil, err
+	}
+	if row.CreatedAt.IsZero() {
+		return nil, nil
 	}
 	secondsAgo := int64(now.Sub(row.CreatedAt.UTC()).Seconds())
 	if secondsAgo < 0 {
@@ -153,26 +182,29 @@ func (h *NowHandler) lastActivity(now time.Time) *lastActivity {
 		AdapterType: row.AdapterType,
 		Hit:         row.Hit,
 		PackageName: row.PackageName,
-	}
+	}, nil
 }
 
 // rate computes the rolling 60-second rates. The request count comes from a
 // bounded scan of raw access_logs; the byte rates come from the shared meter,
 // which counts delivered-to-client bytes and measured upstream-read bytes
 // independently. Without a meter (isolated tests) the legacy DB proxy is kept.
-func (h *NowHandler) rate(now time.Time) rateBlock {
+func (h *NowHandler) rate(ctx context.Context, now time.Time) (rateBlock, error) {
 	since := now.Add(-60 * time.Second)
 	var agg struct {
 		Requests int64
 		Egress   int64
 		Ingress  int64
 	}
-	h.db.Model(&db.AccessLog{}).
+	err := h.db.WithContext(ctx).Model(&db.AccessLog{}).
 		Select(`COUNT(*) AS requests,
 			COALESCE(SUM(bytes_sent), 0) AS egress,
 			COALESCE(SUM(CASE WHEN hit = 0 THEN bytes_sent ELSE 0 END), 0) AS ingress`).
 		Where("created_at >= ?", since).
-		Scan(&agg)
+		Scan(&agg).Error
+	if err != nil {
+		return rateBlock{}, err
+	}
 
 	out := rateBlock{
 		RequestsPerMin: agg.Requests,
@@ -188,19 +220,19 @@ func (h *NowHandler) rate(now time.Time) rateBlock {
 		out.OriginBytesPerSec = measured.OriginBytesPerSec()
 		out.EgressBps = out.ServiceBytesPerSec
 		out.IngressBps = out.OriginBytesPerSec
-		return out
+		return out, nil
 	}
 	// Compatibility fallback for callers constructing the handler without a
 	// meter. These are client-side totals, not measured origin traffic.
 	out.EgressBps = float64(agg.Egress) / 60.0
 	out.IngressBps = float64(agg.Ingress) / 60.0
-	return out
+	return out, nil
 }
 
 // sparkline returns 30 one-minute buckets ending at the current minute.
 // Empty buckets are present in the response with zero counters so the
 // frontend can render a continuous timeline without filling holes itself.
-func (h *NowHandler) sparkline(now time.Time) []sparklinePoint {
+func (h *NowHandler) sparkline(ctx context.Context, now time.Time) ([]sparklinePoint, error) {
 	const buckets = 30
 	const intervalSec = 60
 
@@ -212,7 +244,7 @@ func (h *NowHandler) sparkline(now time.Time) []sparklinePoint {
 	var rows []bucketRow
 
 	since := now.Add(-buckets * time.Minute)
-	h.db.Model(&db.AccessLog{}).
+	err := h.db.WithContext(ctx).Model(&db.AccessLog{}).
 		Select(`(CAST(strftime('%s', created_at) AS INTEGER) / ?) * ? AS bucket,
 			COUNT(*) AS requests,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits`,
@@ -220,7 +252,10 @@ func (h *NowHandler) sparkline(now time.Time) []sparklinePoint {
 		Where("created_at >= ?", since).
 		Group("bucket").
 		Order("bucket ASC").
-		Scan(&rows)
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
 
 	lookup := make(map[int64]bucketRow, len(rows))
 	for _, r := range rows {
@@ -238,7 +273,7 @@ func (h *NowHandler) sparkline(now time.Time) []sparklinePoint {
 		}
 		out = append(out, p)
 	}
-	return out
+	return out, nil
 }
 
 // computeStatus is a deliberately coarse signal — the strip only cares about

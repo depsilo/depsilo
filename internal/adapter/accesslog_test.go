@@ -439,3 +439,25 @@ func TestSuppressAccessLoggingSkipsRawAndInstalledHooks(t *testing.T) {
 		t.Fatalf("suppressed request reached installed hooks: recorder=%v audit=%v", calls.recorder, calls.audit)
 	}
 }
+
+func TestLogAccessDeliveryCarriesArtifactKindAndActualCompletion(t *testing.T) {
+	accessHooks.Store(nil)
+	t.Cleanup(func() { accessHooks.Store(nil) })
+	recorder := &timestampAccessRecorder{}
+	InstallAccessHooks(recorder, nil)
+	for _, test := range []struct {
+		key    string
+		err    error
+		kind   string
+		result string
+	}{
+		{"npm/pkg/-/pkg-1.0.0.tgz", nil, db.CacheKindArtifact, "completed"},
+		{"npm/pkg/-/pkg-1.0.0.tgz", fmt.Errorf("client disconnected"), db.CacheKindArtifact, "failed"},
+		{"npm/pkg/metadata.json", nil, db.CacheKindMetadata, "completed"},
+	} {
+		LogAccessDelivery(context.Background(), nil, "npm", "GET", test.key, false, "npmjs", time.Millisecond, http.StatusOK, "127.0.0.1", 100, test.err)
+		if recorder.event.DependencyKind != test.kind || recorder.event.DeliveryResult != test.result {
+			t.Fatalf("event = %+v, want kind %s result %s", recorder.event, test.kind, test.result)
+		}
+	}
+}

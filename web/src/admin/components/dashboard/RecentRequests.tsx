@@ -14,6 +14,8 @@ import { isAdminEcosystem } from '@/lib/adminApi.types'
 import { REQUEST_OUTCOME_META, requestOutcome } from '@/lib/dashboardOverview'
 import { formatBytes, formatLatency, formatTime } from '@/lib/utils'
 
+import DashboardEmptyState from './DashboardEmptyState'
+
 interface RecentRequestsProps {
   query: UseQueryResult<Awaited<ReturnType<typeof adminApi.listLogs>>>
   limit?: number
@@ -37,11 +39,11 @@ export default function RecentRequests({ query, limit = 5, onOpenDetails }: Rece
       data-dashboard-recent-empty={!query.isPending && !initialError && items.length === 0 ? 'true' : undefined}
       aria-labelledby="overview-recent-title"
       aria-busy={query.isPending || undefined}
-      className="dash-card flex min-w-0 flex-col"
+      className="dash-card flex h-full min-w-0 flex-1 flex-col"
     >
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-4" style={{ borderColor: 'var(--dash-border)' }}>
+      <header className="dashboard-panel-header flex flex-wrap justify-between gap-x-3 gap-y-2" style={{ borderColor: 'var(--dash-border)' }}>
         <div className="min-w-0">
-          <h2 id="overview-recent-title" className="text-[20px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
+          <h2 id="overview-recent-title" className="text-[16px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
             {t('overview.recentRequestsTitle')}
           </h2>
           <p className="mt-0.5 text-[13px]" style={{ color: 'var(--dash-muted)' }}>
@@ -78,12 +80,7 @@ export default function RecentRequests({ query, limit = 5, onOpenDetails }: Rece
           <span>{getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}</span><Button variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('overview.refresh')}</Button>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex min-h-[96px] flex-col items-center justify-center gap-2 px-5 pb-5 text-center">
-          <span aria-hidden className="grid size-9 place-items-center rounded-full" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>
-            <Icon name="download" size="md" />
-          </span>
-          <p className="text-[14px]" style={{ color: 'var(--dash-muted)' }}>{t('overview.recentEmpty')}</p>
-        </div>
+        <DashboardEmptyState icon="download" title={t('overview.recentEmpty')} description={t('overview.recentEmptyHint')} />
       ) : (
         <TableViewport label={t('overview.recentRequestsTitle')} minWidth={600}>
           <table className="w-full border-collapse text-left">

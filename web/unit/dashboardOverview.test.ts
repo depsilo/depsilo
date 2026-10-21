@@ -1,9 +1,10 @@
 import type { TFunction } from 'i18next'
 import { describe, expect, it } from 'vitest'
 
-import type { DashboardPeriod, NowResponse, ReadinessResponse } from '../src/lib/adminApi.types'
+import type { DashboardPeriod, DashboardUpstream, NowResponse, ReadinessResponse } from '../src/lib/adminApi.types'
 import {
   buildRequestFlow,
+  buildUpstreamHealth,
   deriveServiceStatus,
   deriveUsageState,
   formatEstimatedDuration,
@@ -56,6 +57,49 @@ describe('deriveUsageState', () => {
     expect(deriveUsageState({ period: period({ total_requests: 0 }), hasHistoricalRequests: false })).toBe('no-recent-evidence')
     expect(deriveUsageState({ period: period({ total_requests: 0 }), hasHistoricalRequests: true })).toBe('empty-period')
     expect(deriveUsageState({ period: period(), hasHistoricalRequests: false })).toBe('active')
+  })
+
+  it.each([
+    ['never-used', 'waiting-first-request'],
+    ['used', 'empty-period'],
+    ['unknown', 'no-recent-evidence'],
+  ] as const)('uses durable %s evidence independently of retained request history', (state, expected) => {
+    expect(deriveUsageState({
+      period: period({ total_requests: 0 }),
+      hasHistoricalRequests: false,
+      usage: { state, first_successful_request_at: null },
+    })).toBe(expected)
+  })
+
+  it('does not mistake generic request activity for a successful artifact download', () => {
+    expect(deriveUsageState({
+      period: period(),
+      hasHistoricalRequests: true,
+      usage: { state: 'never-used', first_successful_request_at: null },
+    })).toBe('waiting-first-request')
+  })
+
+  it('keeps confirmed successful usage ahead of an older never-used response', () => {
+    expect(deriveUsageState({
+      period: period({ total_requests: 0 }),
+      hasHistoricalRequests: true,
+      hasSuccessfulRequest: true,
+      usage: { state: 'never-used', first_successful_request_at: null },
+    })).toBe('empty-period')
+    expect(deriveUsageState({
+      period: period(),
+      hasHistoricalRequests: false,
+      hasSuccessfulRequest: true,
+      usage: { state: 'never-used', first_successful_request_at: null },
+    })).toBe('active')
+  })
+
+  it.each([undefined, period({ total_requests: Number.NaN }), period({ total_requests: -1 })])('does not turn missing or invalid statistics into first use', missing => {
+    expect(deriveUsageState({
+      period: missing,
+      hasHistoricalRequests: false,
+      usage: { state: 'never-used', first_successful_request_at: null },
+    })).toBe('unknown')
   })
 })
 
@@ -158,7 +202,7 @@ describe('deriveServiceStatus', () => {
     const slow = { id: 1, name: 'slow', adapter: 'npm', healthy: true, avg_latency_ms: 1100, success_rate: 1 }
     const status = deriveServiceStatus({ nowAvailable: true, readiness, upstreams: [slow], policyNeedsAttention: false })
     expect(status.health).toBe('partial')
-    expect(status.problems).toEqual([{ code: 'upstreams-slow', severity: 'warning', count: 1, names: 'slow' }])
+    expect(status.problems).toEqual([{ code: 'upstreams-slow', severity: 'warning', count: 1, names: 'slow (npm #1)' }])
   })
 
   it.each(['database', 'storage'] as const)('retains a known %s failure when status probes fail', dependency => {
@@ -183,7 +227,7 @@ describe('deriveServiceStatus', () => {
     expect(deriveServiceStatus({ nowAvailable: true, readiness, readinessStale: true, upstreams: [], policyNeedsAttention: false }).health).toBe('unknown')
   })
 
-  it('collapses repeated upstream names into one counted entry', () => {
+  it('keeps same-name upstreams as distinct objects identified by ID', () => {
     const upstream = (id: number, name: string) =>
       ({ id, name, adapter: 'npm', healthy: false, avg_latency_ms: 0, success_rate: 0 })
     const status = deriveServiceStatus({
@@ -192,7 +236,108 @@ describe('deriveServiceStatus', () => {
       upstreams: [upstream(1, 'official'), upstream(2, 'official'), upstream(3, 'official'), upstream(4, 'tuna')],
       policyNeedsAttention: false,
     })
-    expect(status.problems[0]).toMatchObject({ code: 'upstreams', count: 4, names: 'official ×3, tuna' })
+    expect(status.problems[0]).toMatchObject({
+      code: 'upstreams', count: 4, names: 'official (npm #1), official (npm #2), official (npm #3)',
+    })
+    expect(status.upstreamIssues.map(item => item.id)).toEqual([1, 2, 3, 4])
+    expect(status.affectedUpstreamCount).toBe(4)
+    expect(status.upstreamCheckCount).toBe(4)
+  })
+
+  it('retains unavailable and slow checks for one object without double-counting the object', () => {
+    const item = { id: 12, name: 'official', adapter: 'npm', healthy: false, avg_latency_ms: 1300, success_rate: 0.2 }
+    const status = deriveServiceStatus({
+      nowAvailable: true, readiness, upstreams: [item, item], policyNeedsAttention: false,
+    })
+    expect(status.health).toBe('partial')
+    expect(status.upstreamIssues).toEqual([{
+      ...item, key: 'upstream:12', state: 'unavailable', checks: ['unavailable', 'slow'],
+    }])
+    expect(status.problems.map(problem => problem.code)).toEqual(['upstreams', 'upstreams-slow'])
+    expect(status.affectedUpstreamCount).toBe(1)
+    expect(status.upstreamCheckCount).toBe(2)
+    expect(status.checkCount).toBe(2)
+  })
+
+  it.each([
+    { flags: { upstreamsAvailable: false }, code: 'upstream-status-unavailable' },
+    { flags: { upstreamsStale: true }, code: 'upstream-status-stale' },
+    { flags: { policyAvailable: false }, code: 'policy-status-unavailable' },
+    { flags: { policyStale: true }, code: 'policy-status-stale' },
+  ])('keeps $code distinct from a confirmed failure', ({ flags, code }) => {
+    const status = deriveServiceStatus({
+      nowAvailable: true, readiness, upstreams: [], policyNeedsAttention: false, ...flags,
+    })
+    expect(status.health).toBe('unknown')
+    expect(status.problems).toEqual([{ code, severity: 'warning' }])
+    expect(status.upstreamCheckCount).toBe(0)
+    expect(status.checkCount).toBe(1)
+  })
+
+  it('retains confirmed upstream and policy failures while another signal is loading or stale', () => {
+    const status = deriveServiceStatus({
+      nowAvailable: false,
+      upstreams: [{ id: 9, name: 'mirror', adapter: 'pypi', healthy: false, avg_latency_ms: 1200, success_rate: 0.1 }],
+      upstreamsAvailable: true,
+      upstreamsStale: true,
+      policyNeedsAttention: true,
+      policyStale: true,
+    })
+    expect(status.health).toBe('partial')
+    expect(status.upstreamIssues[0].checks).toEqual(['unavailable', 'slow'])
+    expect(status.problems.map(problem => problem.code)).toEqual([
+      'readiness-unavailable', 'status-unavailable', 'upstream-status-stale', 'policy-status-stale',
+      'upstreams', 'upstreams-slow', 'policy',
+    ])
+    expect(status.affectedUpstreamCount).toBe(1)
+    expect(status.upstreamCheckCount).toBe(2)
+    expect(status.checkCount).toBe(7)
+  })
+
+  it('retains all healthy objects for the always-available status details', () => {
+    const upstream = { id: 3, name: 'official', adapter: 'npm', healthy: true, avg_latency_ms: 40, success_rate: 1 }
+    const status = deriveServiceStatus({
+      nowAvailable: true, readiness, upstreams: [upstream], policyNeedsAttention: false,
+      upstreamsAvailable: true, policyAvailable: true,
+    })
+    expect(status.health).toBe('healthy')
+    expect(status.upstreams).toEqual([{ ...upstream, key: 'upstream:3', state: 'healthy', checks: [] }])
+    expect(status.upstreamIssues).toEqual([])
+    expect(status.affectedUpstreamCount).toBe(0)
+    expect(status.checkCount).toBe(0)
+  })
+})
+
+describe('buildUpstreamHealth', () => {
+  function upstream(overrides: Partial<DashboardUpstream> = {}): DashboardUpstream {
+    return { id: 1, name: 'official', adapter: 'npm', healthy: true, avg_latency_ms: 10, success_rate: 1, ...overrides }
+  }
+
+  it('preserves unidentified legacy rows instead of merging them by zero ID or name', () => {
+    const objects = buildUpstreamHealth([
+      upstream({ id: 0, healthy: false }),
+      upstream({ id: 0, adapter: 'pypi', healthy: false }),
+    ])
+    expect(objects.map(item => item.key)).toEqual(['unidentified:0', 'unidentified:1'])
+    expect(objects).toHaveLength(2)
+  })
+
+  it('orders affected objects before healthy ones, preserving stable identities and raw metrics', () => {
+    const healthy = upstream({ id: 8 })
+    const slow = upstream({ id: 9, avg_latency_ms: 1000, success_rate: 0.8 })
+    const failed = upstream({ id: 10, healthy: false, avg_latency_ms: 300, success_rate: 0.2 })
+    const objects = buildUpstreamHealth([healthy, slow, failed])
+    expect(objects.map(item => item.id)).toEqual([10, 9, 8])
+    expect(objects[1]).toEqual({ ...slow, key: 'upstream:9', state: 'slow', checks: ['slow'] })
+  })
+
+  it('keeps the one-second threshold independent from availability', () => {
+    const objects = buildUpstreamHealth([
+      upstream({ id: 1, avg_latency_ms: 999 }),
+      upstream({ id: 2, healthy: false, avg_latency_ms: 1000 }),
+    ])
+    expect(objects.find(item => item.id === 1)?.checks).toEqual([])
+    expect(objects.find(item => item.id === 2)?.checks).toEqual(['unavailable', 'slow'])
   })
 })
 

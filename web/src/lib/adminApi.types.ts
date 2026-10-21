@@ -637,6 +637,13 @@ export interface OriginCoverage {
 
 export interface DashboardTopPackage { name: string; hit_count: number }
 export interface DashboardUpstream { id: number; name: string; adapter: string; healthy: boolean; avg_latency_ms: number; success_rate: number }
+/** Completed artifact GET history, independent of statistics ranges and retention.
+ * "never-used" requires full lifecycle coverage; legacy uncertainty is "unknown". */
+export interface DashboardUsage {
+  state: 'never-used' | 'used' | 'unknown'
+  /** May be null even for known usage when its original timestamp is unknown. */
+  first_successful_request_at: string | null
+}
 export interface DashboardResponse {
   last_24h: DashboardWindow
   prev_24h: DashboardWindow
@@ -649,6 +656,8 @@ export interface DashboardResponse {
   window?: DashboardPeriod
   prev?: DashboardPeriod
   origin_coverage?: OriginCoverage
+  /** Older servers omit usage; absence cannot establish a first use. */
+  usage?: DashboardUsage
 }
 export interface DashboardTrendPoint {
   bucket: number
@@ -1019,6 +1028,8 @@ export type OnboardingTerminalStatus = Exclude<OnboardingStatus, 'not_started'>
 
 export interface OnboardingEvent {
   id: number
+  request_id?: string
+  action?: string
   ecosystem: string
   package_name: string
   version: string
@@ -1027,17 +1038,32 @@ export interface OnboardingEvent {
   created_at: string
 }
 
+export interface OnboardingDeliveryEvent extends OnboardingEvent {
+  request_id: string
+  cache_key: string
+  method: string
+  dependency_kind: string
+  delivery_result: string
+  bytes_sent: number
+  successful_artifact_download: boolean
+}
+
 export interface OnboardingStatusResponse {
   status: OnboardingStatus
   started_at: string
   next_after_id: number
   events: OnboardingEvent[]
   has_more: boolean
+  /** Optional for compatibility with servers predating delivery evidence. */
+  next_delivery_after_id?: string
+  delivery_events?: OnboardingDeliveryEvent[]
+  deliveries_has_more?: boolean
 }
 
 export interface OnboardingStatusQuery {
   after_id?: number
   started_at?: string
+  delivery_after_id?: string
 }
 
 export interface AdminUpstreamListResponse { items: AdminUpstream[]; total: number }

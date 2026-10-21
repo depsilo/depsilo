@@ -118,6 +118,11 @@ func TestHandlerCachesResolvedLFSAndServesOffline(t *testing.T) {
 	if logs[0].Hit || logs[0].Upstream != "mock-huggingface" {
 		t.Fatalf("miss access log = %+v", logs[0])
 	}
+	for _, log := range logs {
+		if log.DeliveryResult != "completed" || log.DeliveryReason != "response_body_completed" {
+			t.Fatalf("completed download access log = %+v", log)
+		}
+	}
 	for _, log := range logs[1:] {
 		if !log.Hit || log.Upstream != "" || log.StatusCode != http.StatusOK {
 			t.Fatalf("hit access log = %+v", log)

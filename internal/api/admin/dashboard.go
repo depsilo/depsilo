@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -21,10 +22,11 @@ type DashboardHandler struct {
 	useRollup  bool
 	maxSizeGB  int
 	now        func() time.Time
+	usage      accesslog.UsageReader
 }
 
-func NewDashboardHandler(database *gorm.DB, pools map[string]*upstream.Pool, ecosystems []string, useRollup bool, maxSizeGB int) *DashboardHandler {
-	return &DashboardHandler{
+func NewDashboardHandler(database *gorm.DB, pools map[string]*upstream.Pool, ecosystems []string, useRollup bool, maxSizeGB int, usageReaders ...accesslog.UsageReader) *DashboardHandler {
+	handler := &DashboardHandler{
 		db:         database,
 		pools:      pools,
 		ecosystems: ecosystems,
@@ -32,31 +34,66 @@ func NewDashboardHandler(database *gorm.DB, pools map[string]*upstream.Pool, eco
 		maxSizeGB:  maxSizeGB,
 		now:        time.Now,
 	}
+	if len(usageReaders) > 0 {
+		handler.usage = usageReaders[0]
+	}
+	return handler
 }
 
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	now := time.Now().UTC()
+	ctx := c.Request.Context()
+	database := h.db.WithContext(ctx)
 
 	// Rolling windows replace the calendar-day "today" concept. The headline
 	// cards report the last 24 hours; the change indicators below them
 	// compare against the preceding 24 hours (i.e. now-48h..now-24h).
-	last24h := h.aggWindow(now.Add(-24*time.Hour), now)
-	prev24h := h.aggWindow(now.Add(-48*time.Hour), now.Add(-24*time.Hour))
+	last24h, err := h.aggWindow(ctx, now.Add(-24*time.Hour), now)
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
+	}
+	prev24h, err := h.aggWindow(ctx, now.Add(-48*time.Hour), now.Add(-24*time.Hour))
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
+	}
 
 	// Selected Overview range. 1h/24h read raw rows for exact boundaries;
 	// 7d/30d read the hourly rollup so polling stays bounded. Both cover the
 	// same request set: hit, miss, and legacy pre-diagnostics rows.
 	windowSpec := normalizeWindowRange(c.Query("range"))
 	windowFrom := now.Add(-windowSpec.duration)
-	var windowAgg, prevWindowAgg aggSnapshot
+	aggregateWindow := h.aggWindow
 	if windowSpec.rollup && h.useRollup {
-		windowAgg = h.aggWindowHourly(windowFrom, now)
-		prevWindowAgg = h.aggWindowHourly(windowFrom.Add(-windowSpec.duration), windowFrom)
-	} else {
-		windowAgg = h.aggWindow(windowFrom, now)
-		prevWindowAgg = h.aggWindow(windowFrom.Add(-windowSpec.duration), windowFrom)
+		aggregateWindow = h.aggWindowHourly
 	}
-	coverageStart, coverageMeasured := h.originCoverageStart()
+	windowAgg, err := aggregateWindow(ctx, windowFrom, now)
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
+	}
+	prevWindowAgg, err := aggregateWindow(ctx, windowFrom.Add(-windowSpec.duration), windowFrom)
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
+	}
+	coverageStart, coverageMeasured, err := h.originCoverageStart(ctx)
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
+	}
+
+	var usage db.DependencyUsage
+	if h.usage != nil {
+		usage, err = h.usage.DependencyUsage(ctx)
+	} else {
+		usage, err = db.ReadDependencyUsage(ctx, h.db)
+	}
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
+	}
 
 	totalRequests := last24h.Total
 	hitCount := last24h.Hits
@@ -87,18 +124,22 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 		// partial-hour data is included — daily lags until the nightly
 		// compactor runs and would render today as 0.
 		sevenDaysAgoDate := now.AddDate(0, 0, -7).Format("2006-01-02")
-		h.db.Table("access_log_hourly").
+		err = database.Table("access_log_hourly").
 			Select("date, adapter_type, COALESCE(SUM(request_count),0) AS count").
 			Where("date >= ?", sevenDaysAgoDate).
 			Group("date, adapter_type").Order("date").
-			Scan(&dailyStats)
+			Scan(&dailyStats).Error
 	} else {
 		sevenDaysAgo := now.AddDate(0, 0, -7)
-		h.db.Model(&db.AccessLog{}).
+		err = database.Model(&db.AccessLog{}).
 			Select("DATE(created_at) as date, adapter_type, COUNT(*) as count").
 			Where("datetime(created_at) >= datetime(?)", sevenDaysAgo).
 			Group("date, adapter_type").Order("date").
-			Scan(&dailyStats)
+			Scan(&dailyStats).Error
+	}
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
 	}
 
 	upstreams := make([]gin.H, 0)
@@ -132,21 +173,25 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 	var topRows []topPkgRow
 	if h.useRollup {
-		h.db.Table("access_log_package_daily").
+		err = database.Table("access_log_package_daily").
 			Select("adapter_type, package_name, COALESCE(SUM(request_count),0) AS hit_count").
 			Where("package_name != ''").
 			Group("adapter_type, package_name").
 			Order("hit_count DESC, adapter_type ASC, package_name ASC").
 			Limit(10).
-			Scan(&topRows)
+			Scan(&topRows).Error
 	} else {
-		h.db.Model(&db.AccessLog{}).
+		err = database.Model(&db.AccessLog{}).
 			Select("adapter_type, package_name, COUNT(*) AS hit_count").
 			Where("package_name != ''").
 			Group("adapter_type, package_name").
 			Order("hit_count DESC, adapter_type ASC, package_name ASC").
 			Limit(10).
-			Scan(&topRows)
+			Scan(&topRows).Error
+	}
+	if err != nil {
+		dashboardDatabaseError(c, err)
+		return
 	}
 	topPackages := make(map[string][]topPkg)
 	for _, row := range topRows {
@@ -157,6 +202,7 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 
 	response := gin.H{
+		"usage": usage,
 		"range": gin.H{
 			"key":   windowSpec.key,
 			"start": windowFrom.UTC().Format(time.RFC3339),
@@ -193,18 +239,26 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 	if h.maxSizeGB > 0 {
 		var totalSize int64
-		result := h.db.Model(&db.CacheEntry{}).
+		result := database.Model(&db.CacheEntry{}).
 			Select("COALESCE(SUM(size), 0)").
 			Scan(&totalSize)
 		if result.Error != nil {
-			zap.L().Warn("load dashboard cache usage", zap.Error(result.Error))
-		} else {
-			const bytesPerGiB = 1024 * 1024 * 1024
-			response["cache_usage_percent"] = float64(totalSize) / (float64(h.maxSizeGB) * bytesPerGiB) * 100
+			dashboardDatabaseError(c, result.Error)
+			return
 		}
+		const bytesPerGiB = 1024 * 1024 * 1024
+		response["cache_usage_percent"] = float64(totalSize) / (float64(h.maxSizeGB) * bytesPerGiB) * 100
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func dashboardDatabaseError(c *gin.Context, err error) {
+	zap.L().Error("load dashboard statistics", zap.Error(err))
+	c.JSON(http.StatusInternalServerError, gin.H{
+		"code":    "DB_ERROR",
+		"message": "failed to load dashboard statistics",
+	})
 }
 
 // aggSnapshot is the cross-cutting count/SUM tuple every rolling-window
@@ -251,9 +305,9 @@ func (s aggSnapshot) avgMissLatency() float64 {
 // granularity would force snap-to-hour which silently dropped the partial
 // most-recent hour. 24h of raw rows scans cheaply (~thousands of rows on a
 // busy server) and the same query also covers the prev-24h comparison.
-func (h *DashboardHandler) aggWindow(from, to time.Time) aggSnapshot {
+func (h *DashboardHandler) aggWindow(ctx context.Context, from, to time.Time) (aggSnapshot, error) {
 	var out aggSnapshot
-	h.db.Model(&db.AccessLog{}).
+	err := h.db.WithContext(ctx).Model(&db.AccessLog{}).
 		Select(`COUNT(*) AS total,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN 1 ELSE 0 END), 0) AS hits,
 			COALESCE(SUM(bytes_sent), 0) AS bytes,
@@ -269,18 +323,18 @@ func (h *DashboardHandler) aggWindow(from, to time.Time) aggSnapshot {
 		// diagnostic rows use "unknown" for blocked/incomplete outcomes;
 		// those must not inflate the hit-rate denominator or served bytes.
 		Where("created_at >= ? AND created_at < ? AND (cache_result IN (?, ?) OR cache_result = '')", from, to, "hit", "miss").
-		Scan(&out)
-	return out
+		Scan(&out).Error
+	return out, err
 }
 
 // aggWindowHourly is the coarse-range equivalent of aggWindow. It reads the
 // hourly rollup (retained for a year by default) instead of scanning raw rows,
 // so a 30d Overview refresh never walks the access log. The recorder folds only
 // hit/miss/legacy rows into rollups, matching the raw filter above.
-func (h *DashboardHandler) aggWindowHourly(from, to time.Time) aggSnapshot {
+func (h *DashboardHandler) aggWindowHourly(ctx context.Context, from, to time.Time) (aggSnapshot, error) {
 	var out aggSnapshot
 	from, to = from.UTC(), to.UTC()
-	h.db.Table("access_log_hourly").
+	err := h.db.WithContext(ctx).Table("access_log_hourly").
 		Select(`COALESCE(SUM(request_count), 0) AS total,
 			COALESCE(SUM(CASE WHEN hit = 1 THEN request_count ELSE 0 END), 0) AS hits,
 			COALESCE(SUM(total_bytes), 0) AS bytes,
@@ -296,8 +350,8 @@ func (h *DashboardHandler) aggWindowHourly(from, to time.Time) aggSnapshot {
 			AND (date < ? OR (date = ? AND hour <= ?))`,
 			from.Format("2006-01-02"), from.Format("2006-01-02"), from.Hour(),
 			to.Format("2006-01-02"), to.Format("2006-01-02"), to.Hour()).
-		Scan(&out)
-	return out
+		Scan(&out).Error
+	return out, err
 }
 
 // windowRange describes one Overview period. Ranges beyond a day use the
@@ -365,16 +419,19 @@ func windowPayload(s aggSnapshot) gin.H {
 // originCoverageStart reports when measured origin traffic began. A window that
 // starts before this instant cannot present origin totals as complete measured
 // data.
-func (h *DashboardHandler) originCoverageStart() (time.Time, bool) {
+func (h *DashboardHandler) originCoverageStart(ctx context.Context) (time.Time, bool, error) {
 	var state db.ControlPlaneState
-	if err := h.db.Where("key = ?", db.OriginTrafficCoverageKey).First(&state).Error; err != nil {
-		return time.Time{}, false
+	if err := h.db.WithContext(ctx).Where("key = ?", db.OriginTrafficCoverageKey).First(&state).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return time.Time{}, false, nil
+		}
+		return time.Time{}, false, err
 	}
 	parsed, err := time.Parse(time.RFC3339, state.Value)
 	if err != nil {
-		return time.Time{}, false
+		return time.Time{}, false, err
 	}
-	return parsed.UTC(), true
+	return parsed.UTC(), true, nil
 }
 
 type trendSpec struct {

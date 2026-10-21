@@ -5,6 +5,7 @@
 // verification steps the user can copy into their own project.
 
 import type { EcosystemType } from '@/lib/ecosystemTypes'
+import { getIsolatedArtifactCommand } from './artifactTestCommands'
 
 // NOTE: These snippet paths use the actual Depsilo backend routes (/pypi/simple/, /rubygems/),
 // which differ from the design reference data.jsx that had incorrect paths (/pip/simple/, /gem/).
@@ -24,8 +25,14 @@ export interface ManagerConfig {
   configure?: { lang: string; body: string }
   methods?: { label: string; lang: string; body: string }[]
   persistent: { file: string; lang: string; body: string }
-  /** A small, real package request suitable for first-run verification. */
-  test?: { lang: string; body: string }
+  /** The command's intent; metadata checks do not prove an artifact download. */
+  test?: {
+    lang: string
+    body: string
+    purpose: 'artifact' | 'metadata'
+    targetPackage?: string
+    targetVersion?: string
+  }
   verify: { lang: string; body: string }
   paths: ManagerPath[]
   tutorial: string[]
@@ -66,7 +73,8 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         id: 'pip', name: 'pip', hint: 'PyPA package installer',
         quick:      { lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
         configure:  { lang: 'sh', body: 'pip config set global.index-url {URL}/pypi/simple/\npip config set global.trusted-host {HOST}' },
-        test:       { lang: 'sh', body: 'pip install --dry-run --ignore-installed --no-cache-dir --no-deps --index-url {URL}/pypi/simple/ six' },
+        test:       { purpose: 'artifact', targetPackage: 'six', targetVersion: '1.17.0',
+          ...getIsolatedArtifactCommand('pip') },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pip install -i {URL}/pypi/simple/ requests' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'PIP_INDEX_URL={URL}/pypi/simple/ pip install requests' },
@@ -90,7 +98,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'uv', name: 'uv', hint: 'astral.sh fast resolver',
         quick:      { lang: 'sh', body: 'UV_INDEX_URL={URL}/pypi/simple/ uv pip install requests' },
-        test:       { lang: 'sh', body: "printf 'six\\n' | uv pip compile --default-index {URL}/pypi/simple/ --no-cache --no-deps -" },
+        test:       { lang: 'sh', purpose: 'metadata', targetPackage: 'six', body: "printf 'six\\n' | uv pip compile --no-cache --no-deps -" },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'uv pip install --index-url {URL}/pypi/simple/ requests' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'UV_INDEX_URL={URL}/pypi/simple/ uv pip install requests' },
@@ -113,7 +121,8 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'venv', name: 'venv', hint: 'Project-local virtualenv',
         quick:      { lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate && pip install -i {URL}/pypi/simple/ requests' },
-        test:       { lang: 'sh', body: 'pip install --dry-run --ignore-installed --no-cache-dir --no-deps --index-url {URL}/pypi/simple/ six' },
+        test:       { purpose: 'artifact', targetPackage: 'six', targetVersion: '1.17.0',
+          ...getIsolatedArtifactCommand('pip') },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'python -m venv .venv && source .venv/bin/activate\npip install -i {URL}/pypi/simple/ requests' },
         ],
@@ -135,7 +144,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         id: 'poetry', name: 'Poetry', hint: 'Dependency manager',
         quick:      { lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
         configure:  { lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
-        test:       { lang: 'sh', body: 'poetry --no-cache add --dry-run six' },
+        test:       { lang: 'sh', purpose: 'metadata', targetPackage: 'six', body: 'poetry --no-cache add --dry-run six' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'poetry source add --priority=primary depsilo {URL}/pypi/simple/' },
         ],
@@ -176,7 +185,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         id: 'pdm', name: 'PDM', hint: 'PEP 517 manager',
         quick:      { lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
         configure:  { lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
-        test:       { lang: 'sh', body: 'pdm --no-cache add --dry-run six' },
+        test:       { lang: 'sh', purpose: 'metadata', targetPackage: 'six', body: 'pdm --no-cache add --dry-run six' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pdm config pypi.url {URL}/pypi/simple/' },
         ],
@@ -226,7 +235,8 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         id: 'npm', name: 'npm', hint: 'Default Node registry client',
         quick:      { lang: 'sh', body: 'npm install --registry={URL}/npm/ lodash' },
         configure:  { lang: 'sh', body: 'npm config set registry {URL}/npm/' },
-        test:       { lang: 'sh', body: 'npm view --registry={URL}/npm/ --prefer-online is-number version' },
+        test:       { purpose: 'artifact', targetPackage: 'is-number', targetVersion: '7.0.0',
+          ...getIsolatedArtifactCommand('npm') },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'npm install --registry={URL}/npm/ lodash' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ npm install lodash' },
@@ -251,7 +261,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         id: 'pnpm', name: 'pnpm', hint: 'Hard-linked store',
         quick:      { lang: 'sh', body: 'pnpm install --registry={URL}/npm/ lodash' },
         configure:  { lang: 'sh', body: 'pnpm config set registry {URL}/npm/' },
-        test:       { lang: 'sh', body: 'pnpm view --registry={URL}/npm/ is-number version' },
+        test:       { lang: 'sh', purpose: 'metadata', targetPackage: 'is-number', body: 'pnpm view is-number version' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'pnpm install --registry={URL}/npm/ lodash' },
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'NPM_CONFIG_REGISTRY={URL}/npm/ pnpm install lodash' },
@@ -316,7 +326,8 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'maven', name: 'Maven', hint: 'Apache Maven',
         quick:      { lang: 'sh', body: 'mvn -B dependency:get -Dartifact=com.google.guava:guava:32.1.3-jre' },
-        test:       { lang: 'sh', body: 'mvn -B -U dependency:get -Dartifact=org.slf4j:slf4j-api:2.0.16 -Dtransitive=false' },
+        test:       { lang: 'sh', purpose: 'artifact', targetPackage: 'org.slf4j:slf4j-api', targetVersion: '2.0.16',
+          body: 'mvn -B -U dependency:get -Dartifact=org.slf4j:slf4j-api:2.0.16 -Dtransitive=false' },
         methods: [],
         persistent: { file: '~/.m2/settings.xml', lang: 'xml',
           body: '<settings>\n  <mirrors>\n    <mirror>\n      <id>depsilo</id>\n      <url>{URL}/maven/</url>\n      <mirrorOf>*</mirrorOf>\n    </mirror>\n  </mirrors>\n</settings>' },
@@ -376,7 +387,6 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'cargo', name: 'Cargo', hint: 'Rust package manager',
         quick:      { lang: 'sh', body: 'cargo install --index sparse+{URL}/crates/ ripgrep' },
-        test:       { lang: 'sh', body: 'cargo info --index sparse+{URL}/crates/ itoa' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'cargo install --index sparse+{URL}/crates/ ripgrep' },
         ],
@@ -404,7 +414,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
         id: 'goenv', name: 'go env', hint: 'Persistent Go proxy setting',
         quick:      { lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
         configure:  { lang: 'sh', body: 'go env -w GOPROXY={URL}/go/,direct' },
-        test:       { lang: 'sh', body: 'GOPROXY={URL}/go/ go list -m -versions rsc.io/quote' },
+        test:       { lang: 'sh', purpose: 'metadata', targetPackage: 'rsc.io/quote', body: 'go list -m -versions rsc.io/quote' },
         methods: [
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go install golang.org/x/tools/cmd/godoc@latest' },
         ],
@@ -424,7 +434,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'shell', name: 'GOPROXY env', hint: 'Shell-level',
         quick:      { lang: 'sh', body: 'GOPROXY={URL}/go/,direct go build ./...' },
-        test:       { lang: 'sh', body: 'GOPROXY={URL}/go/ go list -m -versions rsc.io/quote' },
+        test:       { lang: 'sh', purpose: 'metadata', targetPackage: 'rsc.io/quote', body: 'go list -m -versions rsc.io/quote' },
         methods: [
           { label: 'quickstart.method.envvar', lang: 'sh', body: 'GOPROXY={URL}/go/,direct go build ./...' },
         ],
@@ -450,7 +460,7 @@ const LANGUAGE_DEFINITIONS: Language[] = [
       {
         id: 'docker', name: 'Docker', hint: 'Daemon registry mirror',
         quick:      { lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
-        test:       { lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
+        test:       { lang: 'sh', purpose: 'artifact', targetPackage: 'library/alpine', targetVersion: '3.19', body: 'docker pull alpine:3.19' },
         methods: [
           { label: 'quickstart.method.cmdline', lang: 'sh', body: 'docker pull {HOST}/library/alpine:3.19' },
         ],

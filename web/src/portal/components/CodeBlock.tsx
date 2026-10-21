@@ -8,6 +8,9 @@ interface CodeBlockProps {
   code: string
   language?: string
   copyName?: string
+  copyLabel?: string
+  copyDisabled?: boolean
+  wrap?: boolean
   tone?: 'light' | 'ink'
 }
 
@@ -63,6 +66,9 @@ export default function CodeBlock({
   filename,
   code,
   copyName,
+  copyLabel,
+  copyDisabled = false,
+  wrap = false,
   tone = 'light',
 }: CodeBlockProps) {
   const { t } = useTranslation()
@@ -113,12 +119,13 @@ export default function CodeBlock({
         </span>
         <button
           type="button"
+          disabled={copyDisabled}
           onClick={handleCopy}
           className="code-copy-control active:scale-[0.96] stripe-focus-ring"
           aria-label={
-            copyName
+            copyLabel ?? (copyName
               ? t('quickstart.copyNamedCode', { name: copyName })
-              : t('quickstart.copyCode')
+              : t('quickstart.copyCode'))
           }
           style={{
             color: copied
@@ -134,7 +141,8 @@ export default function CodeBlock({
                   : 'var(--text-muted)',
             background: 'none',
             border: 'none',
-            cursor: 'pointer',
+            cursor: copyDisabled ? 'not-allowed' : 'pointer',
+            opacity: copyDisabled ? 0.5 : 1,
             minHeight: 40,
             padding: '4px 8px',
             borderRadius: 4,
@@ -198,7 +206,7 @@ export default function CodeBlock({
             ? t('quickstart.copied')
             : copyState === 'failed'
               ? t('quickstart.copyFailed')
-              : t('quickstart.copy')}
+              : copyLabel ?? t('quickstart.copy')}
         </button>
         <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           {copyState === 'copied'
@@ -219,6 +227,8 @@ export default function CodeBlock({
           lineHeight: ink ? 1.68 : 1.6,
           color: ink ? 'var(--code-fg)' : 'var(--text)',
           overflowX: 'auto',
+          whiteSpace: wrap ? 'pre-wrap' : undefined,
+          overflowWrap: wrap ? 'anywhere' : undefined,
           // No background here: .code-scroll paints its own, which the edge
           // fade needs to hide the shadow at each end of the scroll.
         }}

@@ -41,9 +41,11 @@ func NewRecorder(database *gorm.DB, cfg Config) Recorder {
 	if cfg.BatchInterval <= 0 {
 		cfg.BatchInterval = 5 * time.Second
 	}
+	usage := newUsageTracker(database)
 	if !cfg.Enabled {
 		r := &nullRecorder{
 			db:            database,
+			usage:         usage,
 			in:            make(chan Event, 4096),
 			batchSize:     cfg.BatchSize,
 			flushInterval: cfg.BatchInterval,
@@ -56,6 +58,7 @@ func NewRecorder(database *gorm.DB, cfg Config) Recorder {
 	}
 	r := &batchedRecorder{
 		db:              database,
+		usage:           usage,
 		in:              make(chan Event, 4096),
 		batchSize:       cfg.BatchSize,
 		flushInterval:   cfg.BatchInterval,
@@ -76,6 +79,7 @@ func NewRecorder(database *gorm.DB, cfg Config) Recorder {
 // number of goroutines when SQLite is slow.
 type nullRecorder struct {
 	db            *gorm.DB
+	usage         *usageTracker
 	in            chan Event
 	batchSize     int
 	flushInterval time.Duration
@@ -103,6 +107,7 @@ func (n *nullRecorder) Record(e Event) {
 		n.dropped.Add(1)
 		return
 	}
+	n.usage.observe(e)
 	select {
 	case n.in <- e:
 	default:
@@ -124,6 +129,7 @@ func (n *nullRecorder) loop() {
 
 	buf := make([]db.AccessLog, 0, n.batchSize)
 	flush := func(ctx context.Context) {
+		_ = n.usage.flush(ctx, false)
 		if len(buf) == 0 {
 			return
 		}
@@ -151,6 +157,7 @@ func (n *nullRecorder) loop() {
 		select {
 		case <-n.stop:
 			drain(context.Background())
+			_ = n.usage.flush(context.Background(), true)
 			return
 		case e := <-n.in:
 			buf = append(buf, toAccessLog(e))
@@ -175,7 +182,7 @@ func (n *nullRecorder) Flush(ctx context.Context) error {
 		n.stateMu.RUnlock()
 		select {
 		case <-n.done:
-			return nil
+			return n.usage.err()
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -187,7 +194,7 @@ func (n *nullRecorder) Flush(ctx context.Context) error {
 		n.stateMu.RUnlock()
 	case <-n.done:
 		n.stateMu.RUnlock()
-		return nil
+		return n.usage.err()
 	case <-ctx.Done():
 		n.stateMu.RUnlock()
 		return ctx.Err()
@@ -195,9 +202,9 @@ func (n *nullRecorder) Flush(ctx context.Context) error {
 
 	select {
 	case <-done:
-		return nil
+		return n.usage.err()
 	case <-n.done:
-		return nil
+		return n.usage.err()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -216,7 +223,7 @@ func (n *nullRecorder) Close(ctx context.Context) error {
 	})
 	select {
 	case <-n.done:
-		return nil
+		return n.usage.finishClose(ctx)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -229,6 +236,7 @@ func (n *nullRecorder) Close(ctx context.Context) error {
 // drops events with a warn log instead of slowing the proxy.
 type batchedRecorder struct {
 	db            *gorm.DB
+	usage         *usageTracker
 	in            chan Event
 	batchSize     int
 	flushInterval time.Duration
@@ -273,6 +281,7 @@ func (r *batchedRecorder) Record(e Event) {
 		r.dropped.Add(1)
 		return
 	}
+	r.usage.observe(e)
 	select {
 	case r.in <- e:
 	default:
@@ -292,6 +301,7 @@ func (r *batchedRecorder) loop() {
 		case <-r.stop:
 			// Drain anything queued just before Close, flush, exit.
 			r.drainAndFlush(context.Background())
+			_ = r.usage.flush(context.Background(), true)
 			return
 		case e := <-r.in:
 			r.ingest(e)
@@ -363,6 +373,7 @@ func (r *batchedRecorder) rawLen() int {
 // failure in any write is warn-logged but doesn't abort
 // the others — partial progress is preferable to "all or nothing".
 func (r *batchedRecorder) flushAll(ctx context.Context) {
+	_ = r.usage.flush(ctx, false)
 	r.mu.Lock()
 	rawBuf := r.rawBuf
 	aggFive := r.aggFiveMinutely
@@ -411,7 +422,7 @@ func (r *batchedRecorder) Flush(ctx context.Context) error {
 		r.stateMu.RUnlock()
 		select {
 		case <-r.done:
-			return nil
+			return r.usage.err()
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -423,16 +434,16 @@ func (r *batchedRecorder) Flush(ctx context.Context) error {
 		r.stateMu.RUnlock()
 	case <-r.done:
 		r.stateMu.RUnlock()
-		return nil
+		return r.usage.err()
 	case <-ctx.Done():
 		r.stateMu.RUnlock()
 		return ctx.Err()
 	}
 	select {
 	case <-done:
-		return nil
+		return r.usage.err()
 	case <-r.done:
-		return nil
+		return r.usage.err()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -450,7 +461,7 @@ func (r *batchedRecorder) Close(ctx context.Context) error {
 	})
 	select {
 	case <-r.done:
-		return nil
+		return r.usage.finishClose(ctx)
 	case <-ctx.Done():
 		return ctx.Err()
 	}

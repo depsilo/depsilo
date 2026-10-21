@@ -1,0 +1,70 @@
+.connection-page { max-width: 1320px; margin: 0 auto; --connect-accent: #2563eb; }
+.dark .connection-page, [data-theme="dark"] .connection-page { --connect-accent: #60a5fa; }
+.connection-page a { color: var(--connect-accent); }
+.connection-page a:focus-visible, .connection-page summary:focus-visible, .connection-notice button:focus-visible, .connection-note button:focus-visible { outline: 2px solid var(--connect-accent); outline-offset: 4px; border-radius: 3px; }
+.connection-page [data-admin-page-description] { font-size: 14px; }
+.connection-selector { margin: 18px 0 0; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.connection-selector-fields { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px; }
+.connection-selector-fields > div { min-width: 160px; flex: 0 1 190px; }
+.connection-selector-fields [data-slot="label"] { font-size: 13px; line-height: 1.4; margin-bottom: 6px; }
+.connection-selector-fields [data-slot="select-trigger"] { width: 100%; height: auto; min-height: 40px; }
+.connection-origin { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--text-muted); font-size: 13px; margin-top: 10px; }
+.connection-origin code { overflow-wrap: anywhere; color: var(--text); }
+.connection-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 24px; margin-top: 20px; }
+.connection-instructions { min-width: 0; }
+.connection-section { margin-bottom: 20px; }
+.connection-section:last-child { margin-bottom: 0; }
+.connection-section-heading { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.connection-section-heading h2 { font-size: 16px; font-weight: 650; line-height: 1.5; }
+.connection-section-heading p { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin-top: 4px; }
+.connection-number { display: grid; flex-shrink: 0; place-items: center; width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 50%; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.connection-page .code-block { --bg-soft: var(--bg-card); border-radius: 8px !important; }
+/* The shared code block uses inline defaults; keep these overrides local to connection guidance. */
+.connection-page .code-scroll { font-size: 14px !important; line-height: 1.55 !important; }
+.connection-page .code-copy-control { color: var(--connect-accent) !important; background: color-mix(in oklab, var(--connect-accent) 8%, transparent) !important; border: 1px solid color-mix(in oklab, var(--connect-accent) 24%, transparent) !important; border-radius: 6px !important; font-size: 13px !important; font-weight: 600; white-space: nowrap; }
+.connection-page .code-copy-control:disabled { background: transparent !important; border-color: var(--border) !important; }
+@media (hover: hover) {
+  .connection-page .code-block .code-copy-control:hover:not(:disabled) { background: color-mix(in oklab, var(--connect-accent) 14%, transparent) !important; }
+}
+.connection-note { font-size: 13px; line-height: 1.6; margin-top: 8px; color: var(--text-muted); overflow-wrap: anywhere; }
+.connection-details { font-size: 13px; margin-top: 8px; }
+.connection-details summary { cursor: pointer; min-height: 40px; align-content: center; color: var(--text-muted); }
+.connection-details p { color: var(--text-muted); line-height: 1.7; margin: 8px 0; }
+.connection-details a { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; }
+.connection-verification { min-width: 0; position: sticky; top: 24px; }
+.connection-result { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+.connection-eyebrow { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+.connection-result-title { display: flex; align-items: center; gap: 8px; }
+.connection-result-title h2 { font-size: 17px; font-weight: 650; line-height: 1.5; }
+.connection-result-success .connection-result-title { color: var(--ok-text); }
+.connection-result-warning .connection-result-title, .connection-warning { color: var(--warn-text); }
+.connection-result-danger .connection-result-title, .connection-danger { color: var(--danger-text); }
+.connection-result-hint { margin-top: 8px; font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+.connection-evidence { display: grid; gap: 12px; margin: 16px 0; padding: 14px 0; border-block: 1px solid var(--border); }
+.connection-evidence li { display: flex; align-items: center; gap: 9px; color: var(--text-muted); font-size: 13px; }
+.connection-evidence li[data-complete="true"] { color: var(--ok-text); }
+.connection-pending-dot { width: 16px; height: 16px; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 50%; }
+.connection-event { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 13px; }
+.connection-event dt { color: var(--text-muted); }
+.connection-event dd { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.connection-result-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.connection-result-actions button, .connection-result-actions a { min-height: 40px; justify-content: center; font-size: 13px; }
+.connection-return-unverified { color: var(--text-muted); font-weight: 500; }
+.connection-result-actions a { display: inline-flex; align-items: center; font-size: 13px; }
+.connection-primary { background: #2563eb !important; color: white !important; border-color: transparent !important; }
+.connection-notice { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; font-size: 13px; line-height: 1.6; }
+.connection-notice > svg { flex-shrink: 0; margin-top: 3px; }
+.connection-notice button, .connection-note button { color: var(--connect-accent); min-height: 40px; }
+@media (max-width: 1100px) {
+  .connection-workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .connection-verification { position: static; }
+  .connection-result { max-width: none; }
+}
+@media (max-width: 560px) {
+  .connection-selector-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .connection-selector-fields > div { min-width: 0; }
+  .connection-page .code-block > div:first-child { flex-wrap: wrap; gap: 4px 12px; padding: 4px 8px 4px 12px !important; }
+  .connection-page .code-block > div:first-child > span:first-child { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .connection-page .code-copy-control { margin-left: auto; }
+  .connection-result { padding: 16px; }
+}

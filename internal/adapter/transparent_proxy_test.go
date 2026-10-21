@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -81,6 +82,31 @@ func TestTransparentProxyOwnsFetchCacheStreamAndAccessLogPipeline(t *testing.T) 
 	if len(logs) != 2 || logs[0].Hit || !logs[1].Hit {
 		t.Fatalf("access logs = %+v, want miss then hit", logs)
 	}
+	for _, log := range logs {
+		if log.DeliveryResult != "completed" {
+			t.Fatalf("successful transfer delivery = %q", log.DeliveryResult)
+		}
+	}
+
+	// A 200 header and a cache hit do not prove a completed client download.
+	interrupted := &disconnectedWriter{ResponseRecorder: httptest.NewRecorder()}
+	engine.ServeHTTP(interrupted, httptest.NewRequest(http.MethodGet, "/fixture/packages/example.bin", nil))
+	var failed db.AccessLog
+	if err := database.Order("id DESC").First(&failed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if failed.DeliveryResult != "failed" {
+		t.Fatalf("interrupted cache hit delivery = %q", failed.DeliveryResult)
+	}
+}
+
+type disconnectedWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (writer *disconnectedWriter) Write(body []byte) (int, error) {
+	written, _ := writer.ResponseRecorder.Write(body[:1])
+	return written, errors.New("client disconnected")
 }
 
 func TestTransparentProxyRecordsFailedUpstreamRequest(t *testing.T) {

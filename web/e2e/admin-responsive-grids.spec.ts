@@ -81,7 +81,7 @@ test('Overview resource metrics stay readable and never overflow on mobile', asy
 // Cache inventory remains compact even when the capacity has a long value.
 function tileMetrics(locator: Locator) {
   return locator.evaluate(card => {
-    const value = card.querySelector('.font-mono')
+    const value = card.querySelector('.dash-metric-value')
     const style = getComputedStyle(card)
     const contentRight = card.getBoundingClientRect().right -
       parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth)
@@ -142,17 +142,20 @@ test('Overview mobile priorities and touch targets remain usable', async ({ page
   await page.setViewportSize({ width: 320, height: 844 })
   await page.goto('/admin')
 
-  const issues = page.locator('[data-dashboard-status-issues]')
+  const issues = page.locator('[data-dashboard-status]')
   const flow = page.locator('[data-dashboard-request-flow]')
   await expect(issues).toBeVisible()
-  await expect(issues).toContainText('查看问题')
+  await expect(issues).toContainText('服务状态 · 需关注')
+  await expect(issues).toHaveAttribute('aria-haspopup', 'dialog')
   await expect(flow).toBeVisible()
   expect((await issues.boundingBox())!.y).toBeLessThan((await flow.boundingBox())!.y)
   expect((await issues.boundingBox())!.height).toBeGreaterThanOrEqual(40)
   await expect(page.locator('[data-dashboard-attention]')).toHaveCount(0)
   await issues.click()
+  await expect(page.getByRole('dialog')).toContainText('服务状态详情')
   await expect(page.locator('[data-dashboard-info-dialog]')).toContainText('包规则')
   await page.keyboard.press('Escape')
+  await expect(issues).toBeFocused()
   await expect(page.locator('[data-dashboard-kpis]')).toBeHidden()
   const resources = page.locator('[data-dashboard-resources-panel]')
   const recent = page.locator('[data-dashboard-recent-requests]')
@@ -206,14 +209,16 @@ test('Overview keeps the download flow readable at 1024 and the empty analytics 
   const recentRect = (await recent.boundingBox())!
   expect(chartRect.height).toBeLessThan(240)
   expect(recentRect.height).toBeLessThan(240)
-  expect(recentRect.x).toBeGreaterThan(chartRect.x)
-  expect(Math.abs(chartRect.y - recentRect.y)).toBeLessThan(2)
+  expect(Math.abs(chartRect.width - recentRect.width)).toBeLessThan(2)
+  expect(Math.abs(chartRect.x - recentRect.x)).toBeLessThan(2)
+  expect(recentRect.y).toBeGreaterThanOrEqual(chartRect.y + chartRect.height)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440)
 })
 
 // 1024–1279px keeps four columns from squeezing the status labels and the
 // request table from clipping its time column; both were visible regressions
 // when the strip used the lg breakpoint and the table demanded 680px.
-test('Overview status strip and recent table keep their content at 1024 and 1440', async ({ page }) => {
+test('Overview status entry, its details and recent table stay readable at 1024 and 1440', async ({ page }) => {
   await mockAdminApi(page, {
     'GET /api/v1/now': {
       status: 'degraded',
@@ -257,13 +262,16 @@ test('Overview status strip and recent table keep their content at 1024 and 1440
   await page.setViewportSize({ width: 1024, height: 900 })
   await page.goto('/admin')
 
-  const strip = page.locator('[data-dashboard-status-strip]')
-  await expect(strip).toContainText('部分能力异常')
-  // Every truncating label inside the strip must fit its box at 1024.
-  const clippedStrip = await strip.locator('.truncate').evaluateAll(elements =>
-    elements.filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.textContent),
-  )
-  expect(clippedStrip).toEqual([])
+  const status = page.locator('[data-dashboard-status]')
+  await expect(status).toContainText('1 个上游需关注')
+  expect(await status.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+  await status.click()
+  const details = page.getByRole('dialog')
+  await expect(details).toContainText('ruby-china')
+  await expect(details).toContainText('rubygems · #1')
+  expect((await details.boundingBox())!.width).toBeLessThan(1024)
+  await page.keyboard.press('Escape')
+  await expect(status).toBeFocused()
 
   await page.setViewportSize({ width: 1440, height: 900 })
   const table = page.locator('[data-table-viewport]').filter({ hasText: '包名及版本' })
@@ -280,13 +288,18 @@ test('Overview idle health summary keeps its evidence and uptime readable', asyn
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
 
-  const strip = page.locator('[data-dashboard-status-strip]')
-  await expect(strip).toContainText('数据库与存储就绪')
-  await expect(strip).toContainText('已运行时间')
-  const clipped = await strip.locator('.truncate').evaluateAll(elements =>
-    elements.filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.textContent),
-  )
-  expect(clipped).toEqual([])
+  const status = page.locator('[data-dashboard-status]')
+  await expect(status).toHaveAttribute('data-health', 'healthy')
+  await expect(status).toContainText('服务正常')
+  await status.click()
+  const details = page.getByRole('dialog')
+  await expect(details).toContainText('数据库与存储就绪')
+  await expect(details).toContainText('已运行时间')
+  await expect(details.getByText('数据库', { exact: true })).toBeVisible()
+  await expect(details.getByText('缓存存储', { exact: true })).toBeVisible()
+  expect(await details.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(status).toBeFocused()
 })
 
 test('Overview surfaces a degraded upstream as an actionable centered dialog', async ({ page }) => {
@@ -322,25 +335,25 @@ test('Overview surfaces a degraded upstream as an actionable centered dialog', a
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/admin')
 
-  await expect(page.locator('[data-dashboard-status-strip]')).toContainText('部分能力异常')
-  // The strip counts problem categories, while the dialog lists affected
-  // upstreams; do not present the two counts as the same unit.
-  await expect(page.locator('[data-dashboard-status-strip]')).toContainText('1 类问题需要关注')
-  const problemsButton = page.locator('[data-dashboard-status-issues]')
+  const problemsButton = page.locator('[data-dashboard-status]')
+  // The entry counts distinct affected upstream IDs; the dialog keeps the
+  // underlying checks visible without counting them as additional upstreams.
+  await expect(problemsButton).toContainText('1 个上游需关注')
   await expect(problemsButton).toBeVisible()
   await expect(problemsButton).toHaveAttribute('aria-haspopup', 'dialog')
   await expect(page.locator('[data-dashboard-attention]')).toHaveCount(0)
-  const status = page.locator('[data-dashboard-status-strip]')
   const benefits = page.locator('[data-dashboard-benefits]')
-  const alerts = page.locator('[data-dashboard-alerts]')
-  expect((await status.boundingBox())!.height).toBeLessThan(140)
-  expect((await alerts.boundingBox())!.y).toBeLessThan((await benefits.boundingBox())!.y)
+  expect((await problemsButton.boundingBox())!.height).toBeLessThan(80)
+  expect((await problemsButton.boundingBox())!.y).toBeLessThan((await benefits.boundingBox())!.y)
   await problemsButton.focus()
   await page.keyboard.press('Enter')
 
   const dialog = page.locator('[data-slot="dialog-content"]').filter({ has: page.locator('[data-dashboard-info-dialog]') })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText(/npmjs/)).toBeVisible()
+  await expect(dialog).toContainText('1 个上游需关注 · 1 项异常检查')
+  await expect(dialog.locator('[data-upstream-health-id="1"]')).toContainText('npm · #1')
+  await expect(dialog.getByRole('link', { name: '查看上游' })).toHaveAttribute('href', '/admin/upstreams')
   await expect(page.locator('[data-slot="sheet-content"]')).toHaveCount(0)
 
   const geometry = await dialog.evaluate(element => {

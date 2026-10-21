@@ -211,6 +211,13 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		BatchInterval: cfg.AccessLog.BatchInterval,
 	})
 	resources.accessRecorder = accessRecorder
+	usageReader, ok := accessRecorder.(accesslog.UsageReader)
+	if !ok {
+		return nil, fmt.Errorf("access recorder does not expose dependency usage")
+	}
+	if _, err := usageReader.DependencyUsage(serverCtx); err != nil {
+		return nil, fmt.Errorf("initialize dependency usage observation: %w", err)
+	}
 	if err := submitBackground("access log compactor", func(ctx context.Context) {
 		accesslog.StartCompactor(ctx, database)
 	}); err != nil {
@@ -699,6 +706,7 @@ func StartServer(ctx context.Context, logLevel zap.AtomicLevel) (_ *http.Server,
 		AuditAnchor:                auditAnchor,
 		Tasks:                      background,
 		TrafficMeter:               trafficMeter,
+		DependencyUsage:            usageReader,
 		Runtime:                    resourceSampler,
 	})
 

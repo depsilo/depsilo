@@ -8,6 +8,10 @@ import { cn } from '@/lib/utils'
 // A one-column grid keeps the chevron aligned without an absolutely
 // positioned wrapper, so the select stretches to the row and caller sizing
 // classes (min-h-10, sm:w-auto) keep working.
+//
+// Pair the popup's foreground with an opaque background on every option,
+// including plain <option> children. Native menus can otherwise combine our
+// light text with a platform-provided white surface despite color-scheme.
 function NativeSelect({ className, ...props }: React.ComponentProps<'select'>) {
   return (
     <div
@@ -18,7 +22,7 @@ function NativeSelect({ className, ...props }: React.ComponentProps<'select'>) {
     >
       <select
         data-slot="native-select"
-        className="col-start-1 row-start-1 h-9 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-base text-foreground transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50"
+        className="col-start-1 row-start-1 h-9 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-input bg-transparent py-1 pr-8 pl-3 text-base text-foreground transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 [&_option]:bg-popover [&_option:enabled]:text-popover-foreground [&_optgroup]:bg-popover [&_optgroup:enabled]:text-popover-foreground"
         {...props}
       />
       <ChevronDown
@@ -37,7 +41,7 @@ function NativeSelectOption({
   return (
     <option
       data-slot="native-select-option"
-      className={cn('bg-[Canvas] text-[CanvasText]', className)}
+      className={cn('bg-popover enabled:text-popover-foreground', className)}
       {...props}
     />
   )
@@ -50,7 +54,7 @@ function NativeSelectOptGroup({
   return (
     <optgroup
       data-slot="native-select-optgroup"
-      className={cn('bg-[Canvas] text-[CanvasText]', className)}
+      className={cn('bg-popover enabled:text-popover-foreground', className)}
       {...props}
     />
   )

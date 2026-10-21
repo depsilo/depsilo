@@ -670,7 +670,7 @@ func TestDashboardUsesSnapshotUpstreamIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := database.AutoMigrate(&db.AccessLog{}, &db.UpstreamRecord{}); err != nil {
+	if err := database.AutoMigrate(&db.AccessLog{}, &db.UpstreamRecord{}, &db.ControlPlaneState{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	for _, record := range []db.UpstreamRecord{

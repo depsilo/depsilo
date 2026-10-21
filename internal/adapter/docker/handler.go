@@ -368,5 +368,5 @@ func (h *Handler) streamResponse(c *gin.Context, result *cache.GetResult, cacheK
 		zap.L().Warn("copy to client failed", zap.String("key", cacheKey), zap.Error(copyErr))
 	}
 
-	adapter.LogAccess(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	adapter.LogAccessDelivery(c.Request.Context(), h.db, "docker", c.Request.Method, cacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written, copyErr)
 }

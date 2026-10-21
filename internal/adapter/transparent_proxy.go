@@ -117,5 +117,5 @@ func (proxy *TransparentProxy) Serve(c *gin.Context, plan TransparentPlan) {
 		)
 	}
 
-	LogAccess(c.Request.Context(), proxy.database, proxy.adapterType, c.Request.Method, plan.CacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written)
+	LogAccessDelivery(c.Request.Context(), proxy.database, proxy.adapterType, c.Request.Method, plan.CacheKey, result.Hit, result.Upstream, time.Since(start), http.StatusOK, c.ClientIP(), written, copyErr)
 }

@@ -192,7 +192,7 @@ test('Overview keeps the previous trend while an uncached range loads', async ({
 
   await page.goto('/admin')
   const trends = page.locator('[data-query-key="dashboard-trends"]')
-  const chart = trends.locator('.recharts-wrapper')
+  const chart = trends.locator('[data-trend-chart] .recharts-wrapper')
   const ranges = page.getByRole('group', { name: '统计周期' })
   const nextRange = ranges.getByRole('button', { name: '1 小时' })
   await expect(chart).toBeVisible()
@@ -228,7 +228,7 @@ test('Overview keeps the previous trend and warns when an uncached range fails',
 
   await page.goto('/admin')
   const trends = page.locator('[data-query-key="dashboard-trends"]')
-  const chart = trends.locator('.recharts-wrapper')
+  const chart = trends.locator('[data-trend-chart] .recharts-wrapper')
   const ranges = page.getByRole('group', { name: '统计周期' })
   const nextRange = ranges.getByRole('button', { name: '1 小时' })
   await expect(chart).toBeVisible()
@@ -324,7 +324,7 @@ test('Overview keeps cached measurements but does not claim health after its foc
   await expect.poll(() => calls).toBe(2)
   await page.waitForLoadState('networkidle')
   await page.clock.runFor(100)
-  await expect(now).toContainText('状态待确认')
+  await expect(now).toContainText('状态未知')
   await expect(now).not.toContainText('服务正常')
 })
 

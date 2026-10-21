@@ -1,12 +1,12 @@
 import { useTranslation } from 'react-i18next'
 
 import Icon from '@/components/Icon'
-import TooltipV2 from '@/components/Tooltip'
 import type { NowResponse, RuntimeResponse } from '@/lib/adminApi.types'
 import { useSampleSeries } from '@/hooks/useSampleSeries'
 import { formatBytes } from '@/lib/utils'
 
-import MetricTile, { HINT_TOOLTIP_DELAY_MS } from './MetricTile'
+import MetricTile from './MetricTile'
+import DashboardMetricHelp from './DashboardMetricHelp'
 
 interface RuntimeResourcesProps {
   runtime?: RuntimeResponse
@@ -48,51 +48,49 @@ export function CacheStorageOverview({ runtime, runtimePending }: Pick<RuntimeRe
       data-testid="resource-cache"
       aria-label={t('overview.cacheLabel')}
       aria-busy={loading}
-      className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2 py-3"
+      className="flex min-w-0 items-center gap-2"
       style={{ flex: '1 1 480px' }}
     >
-      <div className="flex min-w-0 items-center gap-3">
-        <Icon name="storage" size="sm" style={{ color: 'var(--dash-muted)' }} />
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h2 className="text-[13px] font-medium leading-tight" style={{ color: 'var(--dash-muted)' }}>{t('overview.cacheLabel')}</h2>
-            <span className="rounded px-1.5 py-0.5 text-[11px] leading-none" style={{ background: 'var(--dash-soft)', color: 'var(--dash-muted)' }}>{t('overview.liveBadge')}</span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h2 className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--dash-muted)]">
+            <Icon name="storage" size="sm" />
+            <DashboardMetricHelp label={t('overview.cacheLabel')} ariaLabel={t('overview.cacheInfoLabel')}>
+              <p>{t('overview.hintCache')}</p>
+              <p>{t('overview.hintCacheInventory')}</p>
+            </DashboardMetricHelp>
+          </h2>
+          <div data-cache-capacity-group className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+            {loading
+              ? <span aria-hidden className="block h-[26px] w-40 animate-pulse rounded bg-[var(--dash-soft)]" />
+              : <p className="flex flex-wrap items-baseline gap-1.5 tabular-nums">
+                <span className="dash-metric-value whitespace-nowrap font-semibold leading-tight text-[var(--dash-ink)]" style={{ fontSize: '20px' }}>{inventoryKnown ? formatBytes(cache.logical_bytes) : '—'}</span>
+                {quota != null && quota > 0 && <span className="whitespace-nowrap text-[13px] text-[var(--dash-muted)]" aria-label={t('overview.cacheQuota', { value: formatBytes(quota) })}>/ {formatBytes(quota)}</span>}
+              </p>}
+            {ratio !== null && <div className="flex items-center gap-2">
+              <div
+                role="progressbar"
+                aria-label={t('overview.cacheLabel')}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(ratio * 1000) / 10}
+                aria-valuetext={t('overview.cacheUsagePercentage', { percent: (cacheRatio! * 100).toFixed(1) })}
+                data-progress-ratio={ratio}
+                className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--dash-soft)]"
+              >
+                {ratio > 0 && <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${ratio * 100}%`, background: 'var(--dash-accent)' }} />}
+              </div>
+              <span className="text-[12px] tabular-nums text-[var(--dash-muted)]">{(cacheRatio! * 100).toFixed(1)}%</span>
+            </div>}
           </div>
-          {loading
-            ? <span aria-hidden className="block h-[26px] w-20 animate-pulse rounded bg-[var(--dash-soft)]" />
-            : <p className="dash-metric-value whitespace-nowrap font-mono font-semibold leading-tight tabular-nums" style={{ fontSize: '22px', color: 'var(--dash-ink)' }}>{inventoryKnown ? formatBytes(cache.logical_bytes) : '—'}</p>}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-relaxed text-[var(--dash-muted)]">
+          {loading ? <><span className="sr-only">{t('loading')}</span><span aria-hidden className="block h-4 w-40 max-w-full animate-pulse rounded bg-[var(--dash-soft)]" /></> : <>
+            {inventoryDetail && <p>{inventoryDetail}</p>}
+            {(quota == null || quota <= 0) && quotaDetail && <p>{quotaDetail}</p>}
+          </>}
         </div>
       </div>
-      <div className="min-w-0 grow basis-[180px] text-[13px] leading-relaxed" style={{ color: 'var(--dash-muted)' }}>
-        {loading ? <>
-          <span className="sr-only">{t('loading')}</span>
-          <span aria-hidden className="mb-1 block h-4 w-40 max-w-full animate-pulse rounded bg-[var(--dash-soft)]" />
-          <span aria-hidden className="block h-4 w-28 max-w-full animate-pulse rounded bg-[var(--dash-soft)]" />
-        </> : <>
-          {inventoryDetail && <p>{inventoryDetail}</p>}
-          {quotaDetail && <p>{quotaDetail}</p>}
-        </>}
-      </div>
-      {ratio !== null && (
-        <div
-          aria-hidden
-          data-progress-ratio={ratio}
-          className="h-1.5 w-32 max-w-[160px] overflow-hidden rounded-full"
-          style={{ background: 'var(--dash-soft)' }}
-        >
-          {ratio > 0 && <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${ratio * 100}%`, background: 'var(--dash-accent)' }} />}
-        </div>
-      )}
-      <TooltipV2 delay={HINT_TOOLTIP_DELAY_MS} content={<span className="block max-w-[260px] leading-relaxed">{t('overview.hintCache')}</span>}>
-        <button
-          type="button"
-          aria-label={t('overview.cacheInfoLabel')}
-          className="dash-focus grid size-[40px] shrink-0 place-items-center rounded-full transition-colors duration-150 hover:bg-[var(--dash-soft)]"
-          style={{ color: 'var(--dash-muted)' }}
-        >
-          <Icon name="info" size="sm" />
-        </button>
-      </TooltipV2>
     </section>
   )
 }

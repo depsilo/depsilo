@@ -88,6 +88,20 @@ func updateAccessHooks(update func(*accessHookSnapshot)) {
 // LogAccess submits an access log entry to the request's recorder snapshot.
 // When ctx has no RequestScope, the process-wide compatibility hooks are used.
 func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64) {
+	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, "unknown", "response_completion_not_recorded")
+}
+
+// LogAccessDelivery records the actual stream completion separately from the
+// HTTP status (which may already be 200 when a client disconnects).
+func LogAccessDelivery(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64, deliveryErr error) {
+	result, reason := "completed", "response_body_completed"
+	if deliveryErr != nil {
+		result, reason = "failed", "response_body_incomplete"
+	}
+	logAccess(ctx, database, adapterType, method, cacheKey, hit, upstreamName, latency, statusCode, clientIP, bytesSent, result, reason)
+}
+
+func logAccess(ctx context.Context, database *gorm.DB, adapterType, method, cacheKey string, hit bool, upstreamName string, latency time.Duration, statusCode int, clientIP string, bytesSent int64, deliveryResult, deliveryReason string) {
 	if ctx != nil {
 		if suppressed, _ := ctx.Value(suppressAccessLoggingContextKey{}).(bool); suppressed {
 			return
@@ -103,7 +117,6 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 	now := time.Now().UTC()
 	requestID := requestid.FromContext(ctx)
 	cacheResult, cacheReason := accessCacheOutcome(hit, statusCode)
-	deliveryResult, deliveryReason := "unknown", "response_completion_not_recorded"
 	originRequests, originBytes := traffic.AttributionFromContext(ctx).OriginTotals()
 	hooks := accessHooks.Load()
 	var observer RequestObserver
@@ -130,6 +143,7 @@ func LogAccess(ctx context.Context, database *gorm.DB, adapterType, method, cach
 			AdapterType:      adapterType,
 			Method:           method,
 			CacheKey:         cacheKey,
+			DependencyKind:   accesslog.DependencyRequestKind(adapterType, cacheKey),
 			PackageName:      pkgName,
 			Upstream:         upstreamName,
 			ClientIP:         clientIP,

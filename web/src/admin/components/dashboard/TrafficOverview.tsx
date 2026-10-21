@@ -24,13 +24,13 @@ export default function TrafficOverview(props: TrafficOverviewProps) {
       aria-labelledby="overview-traffic-title"
       className="dash-card flex min-w-0 flex-col"
     >
-      <header className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-5 gap-y-1 px-5 pt-4">
+      <header className="dashboard-traffic-header flex min-w-0 flex-wrap items-baseline justify-between gap-x-5 gap-y-1 px-5">
         <h2 id="overview-traffic-title" className="text-[16px] font-semibold" style={{ color: 'var(--dash-ink)' }}>
           {t('overview.trafficTitle')}
         </h2>
         <p className="text-[12px] leading-relaxed" style={{ color: 'var(--dash-muted)' }}>{t('overview.flowScope')}</p>
       </header>
-      <div className="min-w-0 px-5 pb-3 pt-2">
+      <div className="min-w-0 px-5 pb-2">
         <RequestFlow {...props} />
       </div>
     </section>

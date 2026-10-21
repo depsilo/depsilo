@@ -15,17 +15,18 @@ import "time"
 // observed; all rollup key derivation goes through e.At.UTC() so callers
 // don't have to remember to normalize.
 type Event struct {
-	RequestID   string
-	AdapterType string
-	Method      string
-	CacheKey    string
-	PackageName string
-	Upstream    string
-	ClientIP    string
-	Hit         bool
-	LatencyMs   int64
-	StatusCode  int
-	BytesSent   int64
+	RequestID      string
+	AdapterType    string
+	Method         string
+	CacheKey       string
+	DependencyKind string // artifact, metadata, or unknown; independent of cache TTL classification
+	PackageName    string
+	Upstream       string
+	ClientIP       string
+	Hit            bool
+	LatencyMs      int64
+	StatusCode     int
+	BytesSent      int64
 	// UpstreamRequests/UpstreamBytes are real Depsilo→upstream exchanges and
 	// bytes read for this client request. They stay zero on rows recorded
 	// before origin metering existed (coverage is tracked separately), and they

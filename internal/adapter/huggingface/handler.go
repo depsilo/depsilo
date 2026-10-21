@@ -25,7 +25,26 @@ import (
 const (
 	maxBufferedErrorBody                  = 1 << 20
 	defaultHuggingFaceArtifactIdleTimeout = 3 * time.Minute
+	deliveryObservationKey                = "depsilo.huggingface.delivery"
 )
+
+// Nested response writers share one request-local observation. HTTP 200 alone
+// cannot establish delivery because a streaming read or client write may fail
+// after the headers have been sent.
+type deliveryObservation struct {
+	observed bool
+	err      error
+}
+
+func recordDelivery(c *gin.Context, err error) {
+	value, exists := c.Get(deliveryObservationKey)
+	if !exists {
+		return
+	}
+	observation := value.(*deliveryObservation)
+	observation.observed = true
+	observation.err = err
+}
 
 // Handler owns request classification, cache policy, and access accounting.
 // Resolver owns the Hugging Face redirect protocol; upstream.Upstream owns
@@ -77,10 +96,29 @@ func (h *Handler) handleRequest(c *gin.Context) {
 	logKey := "huggingface/unknown"
 	cacheHit := false
 	upstreamName := ""
+	delivery := &deliveryObservation{}
+	c.Set(deliveryObservationKey, delivery)
 	defer func() {
 		bytesSent := int64(c.Writer.Size())
 		if bytesSent < 0 {
 			bytesSent = 0
+		}
+		if delivery.observed {
+			adapter.LogAccessDelivery(
+				c.Request.Context(),
+				h.db,
+				"huggingface",
+				c.Request.Method,
+				logKey,
+				cacheHit,
+				upstreamName,
+				time.Since(start),
+				c.Writer.Status(),
+				c.ClientIP(),
+				bytesSent,
+				delivery.err,
+			)
+			return
 		}
 		adapter.LogAccess(
 			c.Request.Context(),
@@ -594,7 +632,9 @@ func (h *Handler) writeCachedResult(c *gin.Context, result *cache.GetResult) {
 		c.Header("Content-Length", strconv.FormatInt(result.Size, 10))
 	}
 	c.Status(http.StatusOK)
-	if _, err := io.Copy(c.Writer, result.Reader); err != nil {
+	_, err := io.Copy(c.Writer, result.Reader)
+	recordDelivery(c, err)
+	if err != nil {
 		path, _ := escapedHuggingFacePath(c.Request)
 		zap.L().Warn("Hugging Face cached response stream interrupted",
 			zap.String("key", CacheKey(ParseRequestPath(path))),
@@ -642,7 +682,9 @@ func (h *Handler) writeResolved(c *gin.Context, resolved *resolvedResponse) {
 	if c.Request.Method == http.MethodHead {
 		return
 	}
-	if _, err := io.Copy(c.Writer, resolved.Body); err != nil {
+	_, err := io.Copy(c.Writer, resolved.Body)
+	recordDelivery(c, err)
+	if err != nil {
 		zap.L().Warn("Hugging Face response stream interrupted", zap.Error(err))
 	}
 }
