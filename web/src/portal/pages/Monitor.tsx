@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { statsApi } from '@/lib/api'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import EmptyState from '@/components/EmptyState'
 import Icon from '@/components/Icon'
 import InlineNotice from '@/components/InlineNotice'
@@ -545,9 +545,9 @@ export default function MonitorPage() {
               <InlineNotice tone="warning">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>{t('monitor.refreshUnavailable')}</span>
-                  <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void statsQuery.refetch() }}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => { void statsQuery.refetch() }}>
                     {t('common.retry')}
-                  </ButtonV2>
+                  </Button>
                 </div>
               </InlineNotice>
             )}
@@ -555,9 +555,9 @@ export default function MonitorPage() {
               <InlineNotice tone="warning">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>{t('monitor.historyUnavailable')}</span>
-                  <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void latencyQuery.refetch() }}>
+                  <Button type="button" variant="outline" size="sm" onClick={() => { void latencyQuery.refetch() }}>
                     {t('common.retry')}
-                  </ButtonV2>
+                  </Button>
                 </div>
               </InlineNotice>
             )}

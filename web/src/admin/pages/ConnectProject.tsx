@@ -6,7 +6,7 @@ import AdminPage from '@/admin/components/AdminPage'
 import DockerBootstrap from '@/admin/components/DockerBootstrap'
 import { getAdminRouteHref } from '@/admin/routes'
 import { useConnectionVerification } from '@/admin/useConnectionVerification'
-import Button from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -270,9 +270,9 @@ function ConnectionWorkspace({ connection, restored, managerName, selectors, onR
           {success && !session?.firstCacheHit && <p className="connection-note">{t('onboarding.cacheNext')}</p>}
           {save.isError && <p role="alert" className="connection-note connection-warning">{t('onboarding.saveError')}</p>}
           <div className="connection-result-actions">
-            {save.isError && success && <Button variant="secondary" disabled={save.isPending || leaving} onClick={() => complete('completed')}>{t('common.retry')}</Button>}
+            {save.isError && success && <Button variant="outline" disabled={save.isPending || leaving} onClick={() => complete('completed')}>{t('common.retry')}</Button>}
             {verification.isError && <Button onClick={() => { void verification.refetch() }} disabled={verification.isFetching}>{t('onboarding.retryVerification')}</Button>}
-            <Button variant={success ? 'primary' : 'ghost'} className={success ? 'connection-primary' : 'connection-return-unverified'} disabled={leaving} onClick={() => { void leave() }}>{t(success ? 'onboarding.viewOverview' : 'onboarding.returnUnverified')}<Icon name="arrow_forward" size="sm" /></Button>
+            <Button variant={success ? "default" : 'ghost'} className={success ? 'connection-primary' : 'connection-return-unverified'} disabled={leaving} onClick={() => { void leave() }}>{t(success ? 'onboarding.viewOverview' : 'onboarding.returnUnverified')}<Icon name="arrow_forward" size="sm" /></Button>
             <Button variant="ghost" disabled={leaving} onClick={onRestart}>{t('onboarding.restartCheck')}</Button>
             {(session?.firstRequest || success) && <Button variant="ghost" disabled={leaving} onClick={() => { void leave('accessLogs') }}>{t('onboarding.viewAccessLogs')}</Button>}
           </div>

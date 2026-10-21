@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import WebhookTab from '@/admin/components/WebhookTab'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
 import InlineNotice from '@/components/InlineNotice'
 import InputV2 from '@/components/Input'
@@ -374,10 +374,10 @@ export default function SettingsV2() {
     <AdminPage
       description={t('settings.subtitle')}
       actions={configurationTab ? (
-        <ButtonV2 type="submit" form={`settings-form-${activeTab}`} size="sm" aria-busy={updateMutation.isPending || undefined} disabled={globallyReadOnly || updateMutation.isPending}>
+        <Button type="submit" form={`settings-form-${activeTab}`} size="sm" aria-busy={updateMutation.isPending || undefined} disabled={globallyReadOnly || updateMutation.isPending}>
           <Icon name="save" size="sm" />
           {updateMutation.isPending ? t('saving') : t('save')}
-        </ButtonV2>
+        </Button>
       ) : undefined}
     >
     <div className="min-w-0 space-y-4">

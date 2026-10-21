@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 
-import Badge from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import { prefetchAdminRoute } from '../lazyRoutes'
 import { resolveAdminRoute, type AdminNavigationGroup } from '../routes'
 

@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next'
 import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { standardUpstreamEcosystems } from '@/admin/operatorEcosystems'
-import Badge from '@/components/Badge'
-import Button from '@/components/Button'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import EmptyState from '@/components/EmptyState'
 import Icon from '@/components/Icon'
@@ -201,7 +201,7 @@ export default function UpstreamUpdates() {
   function resultBadge(result: UpstreamUpdateResult) {
     return (
       <Badge
-        variant={result === 'error' ? 'error' : result === 'updated' ? 'success' : 'neutral'}
+        variant={result === 'error' ? 'destructive' : result === 'updated' ? 'success' : 'neutral'}
         className="shrink-0 whitespace-nowrap"
       >
         {resultLabels[result]}
@@ -278,7 +278,7 @@ export default function UpstreamUpdates() {
       actions={(
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           className="min-h-[40px] sm:min-h-8"
           aria-busy={backgroundRefreshing || undefined}
@@ -363,7 +363,7 @@ export default function UpstreamUpdates() {
             {hasFilters && (
               <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 className="min-h-10 sm:min-h-8"
                 onClick={clearFilters}
@@ -433,7 +433,7 @@ export default function UpstreamUpdates() {
               : t('upstreamUpdates.emptyHint')}
             minHeight={240}
             action={hasFilters ? (
-              <Button type="button" variant="secondary" className="min-h-10" onClick={clearFilters}>
+              <Button type="button" variant="outline" className="min-h-10" onClick={clearFilters}>
                 {t('upstreamUpdates.clearFilters')}
               </Button>
             ) : undefined}
@@ -550,7 +550,7 @@ export default function UpstreamUpdates() {
                 <div className="flex justify-center">
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                     className="min-h-10"
                     disabled={query.isFetchingNextPage}
                     aria-busy={query.isFetchingNextPage || undefined}

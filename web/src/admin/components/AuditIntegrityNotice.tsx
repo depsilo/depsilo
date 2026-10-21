@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InlineNotice from '@/components/InlineNotice'
 
 function shortHash(hash: string) {
@@ -25,16 +25,16 @@ export default function AuditIntegrityNotice() {
   const feed = query.data?.data.anchor_feed
 
   const verifyButton = (
-    <ButtonV2
+    <Button
       type="button"
-      variant="secondary"
+      variant="outline"
       size="sm"
       aria-busy={query.isFetching || undefined}
       disabled={query.isFetching}
       onClick={() => { void query.refetch() }}
     >
       {query.isFetching ? t('auditIntegrity.verifying') : t('auditIntegrity.verify')}
-    </ButtonV2>
+    </Button>
   )
 
   if (query.isPending && !report) {

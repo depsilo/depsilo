@@ -4,8 +4,8 @@ import { Link } from 'react-router'
 
 import AdminPage from '@/admin/components/AdminPage'
 import { getAdminRouteHref } from '@/admin/routes'
-import BadgeV2 from '@/components/Badge'
-import ButtonV2 from '@/components/Button'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import EmptyState from '@/components/EmptyState'
 import Icon, { type IconName } from '@/components/Icon'
@@ -59,7 +59,7 @@ function QueueItem({ icon, title, detail, count, tone, href, action }: QueueItem
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-[13px] font-[600] text-[var(--text)]">{title}</h3>
             {count !== undefined && (
-              <BadgeV2 variant={tone === 'danger' ? 'error' : 'warning'}>{count.toLocaleString()}</BadgeV2>
+              <Badge variant={tone === 'danger' ? "destructive" : 'warning'}>{count.toLocaleString()}</Badge>
             )}
           </div>
           <p className="mt-1 max-w-2xl text-[12px] leading-5 text-[var(--text-soft)]">{detail}</p>
@@ -150,16 +150,16 @@ export default function Attention() {
                 <InlineNotice tone="danger">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.queueUnavailable')}</span>
-                    <ButtonV2
+                    <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
                       aria-busy={dashboardQuery.isFetching || suggestionsQuery.isFetching || undefined}
                       disabled={dashboardQuery.isFetching || suggestionsQuery.isFetching}
                       onClick={refreshQueue}
                     >
                       {t('attention.retry')}
-                    </ButtonV2>
+                    </Button>
                   </div>
                 </InlineNotice>
               )}
@@ -167,16 +167,16 @@ export default function Attention() {
                 <InlineNotice tone="warning">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.queueStale')}</span>
-                    <ButtonV2
+                    <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
                       aria-busy={dashboardQuery.isFetching || suggestionsQuery.isFetching || undefined}
                       disabled={dashboardQuery.isFetching || suggestionsQuery.isFetching}
                       onClick={refreshQueue}
                     >
                       {t('attention.retry')}
-                    </ButtonV2>
+                    </Button>
                   </div>
                 </InlineNotice>
               )}
@@ -251,16 +251,16 @@ export default function Attention() {
                 <InlineNotice tone="danger">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.recentUnavailable')}</span>
-                    <ButtonV2
+                    <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
                       aria-busy={quarantineQuery.isFetching || undefined}
                       disabled={quarantineQuery.isFetching}
                       onClick={() => { void quarantineQuery.refetch() }}
                     >
                       {t('attention.retryRecent')}
-                    </ButtonV2>
+                    </Button>
                   </div>
                 </InlineNotice>
               )}
@@ -268,16 +268,16 @@ export default function Attention() {
                 <InlineNotice tone="warning">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span>{t('attention.recentStale')}</span>
-                    <ButtonV2
+                    <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
                       aria-busy={quarantineQuery.isFetching || undefined}
                       disabled={quarantineQuery.isFetching}
                       onClick={() => { void quarantineQuery.refetch() }}
                     >
                       {t('attention.retryRecent')}
-                    </ButtonV2>
+                    </Button>
                   </div>
                 </InlineNotice>
               )}
@@ -311,9 +311,9 @@ export default function Attention() {
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center justify-between gap-3 pl-6 sm:justify-end sm:pl-0">
-                        <BadgeV2 variant={event.action.includes('blocked') || event.action === 'tamper_detected' ? 'error' : 'warning'}>
+                        <Badge variant={event.action.includes('blocked') || event.action === 'tamper_detected' ? "destructive" : 'warning'}>
                           {t(`quarantine.action.${event.action}`)}
-                        </BadgeV2>
+                        </Badge>
                         <time className="font-mono text-[11px] tabular-nums text-[var(--text-subtle)]" dateTime={event.created_at}>
                           {formatTime(event.created_at)}
                         </time>

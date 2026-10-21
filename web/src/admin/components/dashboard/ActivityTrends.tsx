@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import type { DotItemDotProps, TooltipContentProps, TooltipValueType } from 'recharts'
 
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import type { DashboardRange, DashboardTrendPoint } from '@/lib/adminApi.types'
 import { formatBytes } from '@/lib/utils'
 
@@ -228,7 +228,7 @@ export default function ActivityTrends({ raw, range, dataRange, isStale, onRetry
           style={{ background: 'var(--dash-warn-soft)', color: 'var(--dash-warn)' }}
         >
           <span>{t('overview.dataStale')}</span>
-          <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRetry}>{t('now.refresh')}</ButtonV2>
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>{t('now.refresh')}</Button>
         </div>
       )}
 

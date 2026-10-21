@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import Button from '@/components/Button'
+import { Button } from '@/components/ui/button'
 
 type RouteSurface = 'content' | 'page'
 

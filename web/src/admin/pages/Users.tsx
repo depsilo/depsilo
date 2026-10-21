@@ -5,8 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 import { copyText } from '@/lib/clipboard'
-import ButtonV2 from '@/components/Button'
-import BadgeV2 from '@/components/Badge'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
 import Icon from '@/components/Icon'
@@ -181,8 +181,8 @@ export default function UsersV2() {
 
   const userColumns = [
     { key: 'username', label: t('users.user'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => (<div className="flex items-center gap-3"><div className="flex h-8 w-8 items-center justify-center rounded-md text-[13px] font-[500] shrink-0" style={{ background: 'var(--hit)', color: 'var(--on-hit)' }}>{row.username?.[0]?.toUpperCase() || '?'}</div><span className="font-[500]" style={{ color: 'var(--text)' }}>{row.username}</span></div>) },
-    { key: 'role', label: t('users.role'), render: (v: unknown) => <BadgeV2 variant={(v as string) === 'admin' ? 'ecosystem' : 'default'}>{t((v as string) === 'admin' ? 'users.admin' : 'users.readonly')}</BadgeV2> },
-    { key: 'enabled', label: t('status'), render: (v: unknown) => <BadgeV2 variant={v ? 'success' : 'error'}>{v ? t('users.enabled') : t('users.disabled')}</BadgeV2> },
+    { key: 'role', label: t('users.role'), render: (v: unknown) => <Badge variant={(v as string) === 'admin' ? "default" : 'default'}>{t((v as string) === 'admin' ? 'users.admin' : 'users.readonly')}</Badge> },
+    { key: 'enabled', label: t('status'), render: (v: unknown) => <Badge variant={v ? 'success' : "destructive"}>{v ? t('users.enabled') : t('users.disabled')}</Badge> },
     { key: 'last_login_at', label: t('users.lastLogin'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'id', label: t('actions'), render: (_v: unknown, row: AdminUser & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('users.editNamed', { name: row.username })} onClick={(e) => { e.stopPropagation(); openEditUser(row) }} />{!isSelf(row) && <IconButton icon={row.enabled ? 'person_off' : 'person'} label={t(row.enabled ? 'users.disableNamed' : 'users.enableNamed', { name: row.username })} loading={togglingUserIds.has(row.id)} onClick={(e) => { e.stopPropagation(); if (row.enabled) openDisableDialog(row); else enableUser(row) }} />}</div>) : null },
@@ -190,10 +190,10 @@ export default function UsersV2() {
 
   const tokenColumns = [
     { key: 'name', label: t('name'), render: (v: unknown) => <span className="font-[500]" style={{ color: 'var(--text)' }}>{v as string}</span> },
-    { key: 'permissions', label: t('users.permissions'), render: (v: unknown) => <BadgeV2>{t((v as string) === 'readwrite' ? 'users.readwrite' : 'users.readonly')}</BadgeV2> },
+    { key: 'permissions', label: t('users.permissions'), render: (v: unknown) => <Badge>{t((v as string) === 'readwrite' ? 'users.readwrite' : 'users.readonly')}</Badge> },
     { key: 'last_used_at', label: t('users.lastUsed'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string)}</span> },
     { key: 'expires_at', label: t('users.expiresAt'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{v ? formatTime(v as string) : t('users.neverExpires')}</span> },
-    { key: 'id', label: t('actions'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => canWrite ? <ButtonV2 variant="ghost" size="sm" className="!text-[12px]" style={{ color: 'var(--danger)' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openRevokeDialog(row) }}>{t('users.revoke')}</ButtonV2> : null },
+    { key: 'id', label: t('actions'), render: (_v: unknown, row: APITokenSummary & Record<string, unknown>) => canWrite ? <Button variant="ghost" size="sm" className="!text-[12px]" style={{ color: 'var(--danger)' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); openRevokeDialog(row) }}>{t('users.revoke')}</Button> : null },
   ]
 
   return (
@@ -203,7 +203,7 @@ export default function UsersV2() {
       <section>
         <SectionHeader
           title={t('users.title')}
-          action={canWrite ? <ButtonV2 onClick={openCreateUser} size="sm"><Icon name="person_add" size="sm" />{t('users.addUser')}</ButtonV2> : undefined}
+          action={canWrite ? <Button onClick={openCreateUser} size="sm"><Icon name="person_add" size="sm" />{t('users.addUser')}</Button> : undefined}
         />
         {usersQuery.isPending ? (
           <div aria-busy="true" className="py-8 text-center text-[13px] text-[var(--text-soft)]"><span aria-hidden="true">{t('loading')}</span></div>
@@ -211,7 +211,7 @@ export default function UsersV2() {
           <QueryErrorState message={usersApiError.status === 403 ? t('common.permissionDenied') : usersApiError.message} onRetry={() => { void usersQuery.refetch() }} />
         ) : (
           <div className="space-y-3">
-            {usersData && usersQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void usersQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+            {usersData && usersQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void usersQuery.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
             {enableFailure && (
               <InlineNotice
                 tone="danger"
@@ -220,16 +220,16 @@ export default function UsersV2() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span>{getApiError(enableFailure.error).message}</span>
                   <div className="flex flex-wrap gap-2">
-                    <ButtonV2
+                    <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
                       disabled={togglingUserIds.has(enableFailure.user.id)}
                       onClick={() => enableUser(enableFailure.user)}
                     >
                       {t('common.retry')}
-                    </ButtonV2>
-                    <ButtonV2
+                    </Button>
+                    <Button
                       type="button"
                       variant="ghost"
                       size="sm"
@@ -237,7 +237,7 @@ export default function UsersV2() {
                       onClick={() => setEnableFailure(null)}
                     >
                       {t('common.close')}
-                    </ButtonV2>
+                    </Button>
                   </div>
                 </div>
               </InlineNotice>
@@ -261,7 +261,7 @@ export default function UsersV2() {
       <section>
         <SectionHeader
           title={t('users.apiTokensTitle')}
-          action={canWrite ? <ButtonV2 variant="secondary" size="sm" onClick={openTokenDialog}><Icon name="key" size="sm" />{t('users.generateToken')}</ButtonV2> : undefined}
+          action={canWrite ? <Button variant="outline" size="sm" onClick={openTokenDialog}><Icon name="key" size="sm" />{t('users.generateToken')}</Button> : undefined}
         />
         {tokensQuery.isPending ? (
           <div aria-busy="true" className="py-8 text-center text-[13px]" style={{ color: 'var(--text-soft)' }}><span aria-hidden="true">{t('loading')}</span></div>
@@ -269,7 +269,7 @@ export default function UsersV2() {
           <QueryErrorState message={tokensApiError.status === 403 ? t('common.permissionDenied') : tokensApiError.message} onRetry={() => { void tokensQuery.refetch() }} />
         ) : (
           <div className="space-y-3">
-          {tokensData && tokensQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void tokensQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+          {tokensData && tokensQuery.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void tokensQuery.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
           {tokens.length === 0 ? <EmptyState icon="key" title={t('users.noTokens')} minHeight={180} /> : <DataTableV2
             columns={tokenColumns}
             data={tokens.map((token) => ({ ...token }))}
@@ -287,7 +287,7 @@ export default function UsersV2() {
           <InputV2 label={editUserId ? t('users.newPasswordHint') : t('login.password')} hint={t('users.passwordPolicy')} type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={!editUserId} />
           <SelectV2 label={t('users.role')} value={userForm.role} disabled={editUserId === principal?.id} onChange={(e) => setUserForm({ ...userForm, role: e.target.value as UserRole })}><option value="admin">{t('users.admin')}</option><option value="readonly">{t('users.readonly')}</option></SelectV2>
           {userSaveError && <InlineNotice tone="danger">{getApiError(userSaveError).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={isUserSaving} onClick={closeUserDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</ButtonV2></div>
+          <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={isUserSaving} onClick={closeUserDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={isUserSaving || undefined} disabled={isUserSaving || !canWrite}>{isUserSaving ? t('saving') : t('save')}</Button></div>
         </form>
       </ModalV2>
 
@@ -303,7 +303,7 @@ export default function UsersV2() {
           <SelectV2 label={t('users.permissions')} value={tokenForm.permissions} onChange={(e) => setTokenForm({ ...tokenForm, permissions: e.target.value as TokenPermissions })}><option value="readonly">{t('users.readonly')}</option><option value="readwrite">{t('users.readwrite')}</option></SelectV2>
           <SelectV2 label={t('users.validity')} value={tokenForm.ttl} onChange={(e) => setTokenForm({ ...tokenForm, ttl: e.target.value as CreateAPITokenRequest['ttl'] })}><option value="7d">{t('users.days7')}</option><option value="30d">{t('users.days30')}</option><option value="90d">{t('users.days90')}</option><option value="never">{t('users.neverExpires')}</option></SelectV2>
           {createTokenMutation.isError && <InlineNotice tone="danger">{getApiError(createTokenMutation.error).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={createTokenMutation.isPending} onClick={closeTokenDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</ButtonV2></div>
+          <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={createTokenMutation.isPending} onClick={closeTokenDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={createTokenMutation.isPending || undefined} disabled={createTokenMutation.isPending || !canWrite}>{createTokenMutation.isPending ? t('users.generating') : t('users.generate')}</Button></div>
         </form>
       </ModalV2>
 
@@ -314,7 +314,7 @@ export default function UsersV2() {
           <IconButton icon={copied ? 'check' : 'content_copy'} label={t('users.copyToken')} onClick={copyToken} />
         </div>
         <p className="text-[12px] mt-2" style={{ color: 'var(--danger-text)' }}>{t('users.tokenSaveWarning')}</p>
-        <div className="flex justify-end mt-4"><ButtonV2 onClick={closeTokenResult}>{t('confirm')}</ButtonV2></div>
+        <div className="flex justify-end mt-4"><Button onClick={closeTokenResult}>{t('confirm')}</Button></div>
       </ModalV2>
 
       <ConfirmActionDialog

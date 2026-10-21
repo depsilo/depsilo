@@ -4,8 +4,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
-import ButtonV2 from '@/components/Button'
-import BadgeV2 from '@/components/Badge'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
@@ -31,12 +31,12 @@ function latencyColor(ms: number): string {
 }
 
 function resultBadge(result: string, t: (k: string) => string) {
-  if (result === 'hit') return <BadgeV2 variant="success">{t('audit.hit')}</BadgeV2>
-  if (result === 'success') return <BadgeV2 variant="success">{t('audit.success')}</BadgeV2>
-  if (result === 'error') return <BadgeV2 variant="error">{t('audit.error')}</BadgeV2>
-  if (result === 'blocked') return <BadgeV2 variant="warning">{t('audit.blocked')}</BadgeV2>
-  if (result === 'miss') return <BadgeV2>{t('audit.miss')}</BadgeV2>
-  return <BadgeV2>{result || '-'}</BadgeV2>
+  if (result === 'hit') return <Badge variant="success">{t('audit.hit')}</Badge>
+  if (result === 'success') return <Badge variant="success">{t('audit.success')}</Badge>
+  if (result === 'error') return <Badge variant="destructive">{t('audit.error')}</Badge>
+  if (result === 'blocked') return <Badge variant="warning">{t('audit.blocked')}</Badge>
+  if (result === 'miss') return <Badge>{t('audit.miss')}</Badge>
+  return <Badge>{result || '-'}</Badge>
 }
 
 function getTimeRange(preset: string) {
@@ -191,9 +191,9 @@ export default function AuditLogsV2() {
     <AdminPage
       description={t('audit.subtitle')}
       actions={(
-        <ButtonV2
+        <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           aria-busy={exportMutation.isPending || undefined}
           disabled={exportMutation.isPending}
@@ -201,7 +201,7 @@ export default function AuditLogsV2() {
         >
           <Icon name="download" size="sm" />
           {exportMutation.isPending ? t('audit.exporting') : t('audit.exportCsv')}
-        </ButtonV2>
+        </Button>
       )}
     >
       <div className="space-y-6">
@@ -279,13 +279,13 @@ export default function AuditLogsV2() {
           ))}
         </fieldset>
 
-        <ButtonV2 type="submit" variant="primary" size="sm" className="min-h-10 self-start sm:min-h-0">
+        <Button type="submit" variant="default" size="sm" className="min-h-10 self-start sm:min-h-0">
           {t('search')}
-        </ButtonV2>
+        </Button>
         {hasFilters && (
-          <ButtonV2 type="button" variant="secondary" size="sm" className="min-h-10 self-start sm:min-h-0" onClick={clearFilters}>
+          <Button type="button" variant="outline" size="sm" className="min-h-10 self-start sm:min-h-0" onClick={clearFilters}>
             {t('audit.clearFilters')}
-          </ButtonV2>
+          </Button>
         )}
       </form>
 

@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
 import InputV2 from '@/components/Input'
-import BadgeV2 from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
 import InlineNotice from '@/components/InlineNotice'
@@ -117,23 +117,23 @@ export default function SnapshotSection() {
         <InlineNotice tone="warning">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span>{t('snapshot.activeNotice', { name: activeName })}</span>
-            <ButtonV2 variant="secondary" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
+            <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
               {t('snapshot.deactivate')}
-            </ButtonV2>
+            </Button>
           </div>
         </InlineNotice>
       )}
       <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] sm:items-end">
         <InputV2 label={t('snapshot.name')} value={name} onChange={(event) => setName(event.target.value)} placeholder={t('snapshot.namePlaceholder')} />
         <InputV2 label={t('snapshot.note')} value={note} onChange={(event) => setNote(event.target.value)} />
-        <ButtonV2
+        <Button
           className="w-full sm:w-auto"
           onClick={() => createMutation.mutate()}
           disabled={createMutation.isPending || name.trim() === ''}
         >
           <Icon name="storage" size="sm" />
           {createMutation.isPending ? t('snapshot.creating') : t('snapshot.create')}
-        </ButtonV2>
+        </Button>
       </div>
       <p className="mt-2 text-[13px] text-[var(--text-soft)]">{t('snapshot.createHint')}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -149,10 +149,10 @@ export default function SnapshotSection() {
             event.target.value = ''
           }}
         />
-        <ButtonV2 variant="secondary" size="sm" onClick={() => fileInput.current?.click()} disabled={importMutation.isPending}>
+        <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()} disabled={importMutation.isPending}>
           <Icon name="upload_file" size="sm" />
           {importMutation.isPending ? t('snapshot.importing') : t('snapshot.import')}
-        </ButtonV2>
+        </Button>
       </div>
 
       <div className="mt-4">
@@ -182,7 +182,7 @@ export default function SnapshotSection() {
                     <td className="px-2 py-2">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate" style={{ color: 'var(--text)' }}>{snapshot.name}</span>
-                        {snapshot.id === activeId && <BadgeV2 variant="success">{t('snapshot.active')}</BadgeV2>}
+                        {snapshot.id === activeId && <Badge variant="success">{t('snapshot.active')}</Badge>}
                       </div>
                       {snapshot.note && <p className="mt-0.5 truncate text-[12px] text-[var(--text-soft)]">{snapshot.note}</p>}
                     </td>
@@ -192,22 +192,22 @@ export default function SnapshotSection() {
                     <td className="px-2 py-2">
                       <div className="flex justify-end gap-1.5">
                         {snapshot.id === activeId ? (
-                          <ButtonV2 variant="secondary" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
+                          <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(0)} disabled={activateMutation.isPending}>
                             {t('snapshot.deactivate')}
-                          </ButtonV2>
+                          </Button>
                         ) : (
-                          <ButtonV2 variant="secondary" size="sm" onClick={() => activateMutation.mutate(snapshot.id)} disabled={activateMutation.isPending}>
+                          <Button variant="outline" size="sm" onClick={() => activateMutation.mutate(snapshot.id)} disabled={activateMutation.isPending}>
                             {t('snapshot.activate')}
-                          </ButtonV2>
+                          </Button>
                         )}
-                        <ButtonV2 variant="secondary" size="sm" onClick={() => { void handleExport(snapshot) }}>
+                        <Button variant="outline" size="sm" onClick={() => { void handleExport(snapshot) }}>
                           <Icon name="download" size="sm" />
                           {t('snapshot.export')}
-                        </ButtonV2>
-                        <ButtonV2 variant="secondary" size="sm" onClick={() => setDeleteTarget(snapshot)}>
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setDeleteTarget(snapshot)}>
                           <Icon name="delete" size="sm" />
                           {t('delete')}
-                        </ButtonV2>
+                        </Button>
                       </div>
                     </td>
                   </tr>

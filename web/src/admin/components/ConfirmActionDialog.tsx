@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InlineNotice from '@/components/InlineNotice'
 import ModalV2 from '@/components/Modal'
 
@@ -66,25 +66,25 @@ export default function ConfirmActionDialog({
         {errorMessage && <InlineNotice tone="danger">{errorMessage}</InlineNotice>}
 
         <div className="flex flex-wrap justify-end gap-3">
-          <ButtonV2
+          <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             className="min-h-10"
             disabled={pending}
             onClick={onClose}
           >
             {cancelLabel}
-          </ButtonV2>
-          <ButtonV2
+          </Button>
+          <Button
             type="button"
-            variant={confirmVariant}
+            variant={confirmVariant === 'danger' ? 'destructive' : 'default'}
             className="min-h-10"
             aria-busy={pending || undefined}
             disabled={pending}
             onClick={onConfirm}
           >
             {pending ? pendingLabel : confirmLabel}
-          </ButtonV2>
+          </Button>
         </div>
       </div>
     </ModalV2>

@@ -2,8 +2,8 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import Button from '@/components/Button'
-import BadgeV2 from '@/components/Badge'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import TableViewport from '@/components/TableViewport'
@@ -77,7 +77,7 @@ export default function RecentRequests({ query, limit = 5, onOpenDetails }: Rece
         </div>
       ) : initialError ? (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 px-5 pb-5 text-[14px]" style={{ color: 'var(--dash-warn)' }}>
-          <span>{getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}</span><Button variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('overview.refresh')}</Button>
+          <span>{getApiError(query.error).status === 403 ? t('common.permissionDenied') : t('overview.recentRequestsUnavailable')}</span><Button variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('overview.refresh')}</Button>
         </div>
       ) : items.length === 0 ? (
         <DashboardEmptyState icon="download" title={t('overview.recentEmpty')} description={t('overview.recentEmptyHint')} />
@@ -126,7 +126,7 @@ export default function RecentRequests({ query, limit = 5, onOpenDetails }: Rece
                       </span>
                     </td>
                     <td className="px-3 py-4">
-                      <BadgeV2 variant={meta.variant}>{t(meta.key)}</BadgeV2>
+                      <Badge variant={meta.variant}>{t(meta.key)}</Badge>
                     </td>
                     <td className="px-3 py-4 text-right font-mono text-[13px] tabular-nums whitespace-nowrap" style={{ color: 'var(--dash-ink)' }}>
                       {formatBytes(item.bytes_sent)}

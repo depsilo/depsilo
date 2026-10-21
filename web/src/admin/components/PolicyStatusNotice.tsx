@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InlineNotice from '@/components/InlineNotice'
 import { usePolicyStatus } from '../usePolicyStatus'
 
@@ -42,16 +42,16 @@ export default function PolicyStatusNotice() {
               </p>
             )}
           </div>
-          <ButtonV2
+          <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             size="sm"
             aria-busy={policy.refreshing || undefined}
             disabled={policy.refreshing}
             onClick={policy.refresh}
           >
             {policy.refreshing ? t('policy.refreshing') : t('policy.refresh')}
-          </ButtonV2>
+          </Button>
         </div>
       </InlineNotice>
     </div>

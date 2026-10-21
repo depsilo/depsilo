@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
 import IconButton from '@/components/IconButton'
 import InlineNotice from '@/components/InlineNotice'
@@ -155,7 +155,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
           <legend className="text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
             {t('cascade.config.peersSection')}
           </legend>
-          <ButtonV2
+          <Button
             type="button"
             variant="ghost"
             size="sm"
@@ -166,7 +166,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
           >
             <Icon name="add" size="sm" />
             {t('cascade.config.addPeer')}
-          </ButtonV2>
+          </Button>
         </div>
         {draft.peers.length === 0 ? (
           <p className="text-[12px]" style={{ color: 'var(--text-soft)' }}>
@@ -285,7 +285,7 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
             {t('cascade.config.unsaved')}
           </span>
           <div className="flex items-center gap-2">
-            <ButtonV2
+            <Button
               type="button"
               variant="ghost"
               size="sm"
@@ -293,15 +293,15 @@ export default function CascadeConfigForm({ state, canWrite, onSaved }: CascadeC
               onClick={discard}
             >
               {t('cascade.config.discard')}
-            </ButtonV2>
-            <ButtonV2
+            </Button>
+            <Button
               type="submit"
               size="sm"
               aria-busy={saveMutation.isPending || undefined}
               disabled={saveMutation.isPending || disabled}
             >
               {saveMutation.isPending ? t('saving') : t('save')}
-            </ButtonV2>
+            </Button>
           </div>
         </div>
       )}

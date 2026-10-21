@@ -4,7 +4,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
-import BadgeV2 from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
@@ -126,7 +126,7 @@ function LogTab({ detail, t }: { detail: AccessLogDetail; t: TFunction }) {
       {detail.audit_events.map(event => (
         <li key={event.id} className="flex min-w-0 flex-col gap-1 rounded-md px-3 py-2" style={{ background: 'var(--bg-soft)' }}>
           <div className="flex flex-wrap items-center gap-2">
-            <BadgeV2 variant="neutral">{event.action}</BadgeV2>
+            <Badge variant="neutral">{event.action}</Badge>
             <span className="font-mono text-[13px]" style={{ color: 'var(--text)' }}>
               {event.package_name}{event.version ? `@${event.version}` : ''}
             </span>
@@ -198,8 +198,8 @@ export default function RequestDetailsDialog({ logId, onClose }: RequestDetailsD
               {detail.package_name || t('recentDownloads.unknownPackage')}
               {detail.version && <span style={{ color: 'var(--text-soft)' }}>@{detail.version}</span>}
             </span>
-            <BadgeV2 variant="neutral">{detail.adapter_type || '—'}</BadgeV2>
-            <BadgeV2 variant={outcomeMeta.variant}>{t(outcomeMeta.key)}</BadgeV2>
+            <Badge variant="neutral">{detail.adapter_type || '—'}</Badge>
+            <Badge variant={outcomeMeta.variant}>{t(outcomeMeta.key)}</Badge>
           </div>
         )}
         {body}

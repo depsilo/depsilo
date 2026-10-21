@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import Button from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
 import Input from '@/components/Input'
 import Logo from '@/components/Logo'

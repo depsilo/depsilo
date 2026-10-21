@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import Button from '../components/Button'
+import { Button } from '@/components/ui/button'
 import EcosystemIcon, { type EcosystemType } from '../components/EcosystemIcon'
 import Icon from '../components/Icon'
 import Input from '../components/Input'
@@ -572,7 +572,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                             />
                             <Button
                               type="button"
-                              variant="danger"
+                              variant="destructive"
                               size="sm"
                               className="min-h-[40px] min-w-[40px] px-2"
                               disabled={submitting}
@@ -587,7 +587,7 @@ export default function SetupWizard({ tokenRequired = false }: SetupWizardProps)
                         ))}
                         <Button
                           type="button"
-                          variant="secondary"
+                          variant="outline"
                           size="sm"
                           disabled={submitting}
                           onClick={() => addUpstream(ecosystem.key)}

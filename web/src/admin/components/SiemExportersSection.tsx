@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { getApiError } from '@/lib/apiError'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
 import InputV2 from '@/components/Input'
-import BadgeV2 from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import SelectV2 from '@/components/Select'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
@@ -119,14 +119,14 @@ export default function SiemExportersSection() {
           />
           <InputV2 label={t('siem.token')} type="password" value={form.token} onChange={event => setForm(value => ({ ...value, token: event.target.value }))} placeholder={t('siem.tokenOptional')} />
           <InputV2 label={t('siem.events')} value={form.events} onChange={event => setForm(value => ({ ...value, events: event.target.value }))} placeholder="*" />
-          <ButtonV2
+          <Button
             className="w-full"
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || form.name.trim() === '' || form.url.trim() === ''}
           >
             <Icon name="add" size="sm" />
             {createMutation.isPending ? t('siem.creating') : t('siem.create')}
-          </ButtonV2>
+          </Button>
         </div>
       )}
       <p className="mt-2 text-[13px] text-[var(--text-soft)]">{t('siem.filterHint')}</p>
@@ -169,9 +169,9 @@ export default function SiemExportersSection() {
                       {exporter.token_set && <span className="ml-1"><Icon name="key" size="sm" /></span>}
                     </td>
                     <td className="px-2 py-3">
-                      <BadgeV2 variant={exporter.enabled ? 'success' : 'neutral'}>
+                      <Badge variant={exporter.enabled ? 'success' : 'neutral'}>
                         {exporter.enabled ? t('siem.enabled') : t('siem.disabled')}
-                      </BadgeV2>
+                      </Badge>
                     </td>
                     <td className="px-2 py-3 font-mono" style={{ color: 'var(--text-soft)' }}>{exporter.events}</td>
                     <td className="px-2 py-3 text-right font-mono tabular-nums" style={{ color: 'var(--text)' }}>
@@ -191,19 +191,19 @@ export default function SiemExportersSection() {
                     </td>
                     <td className="px-2 py-3">
                       <div className="flex justify-end gap-1.5">
-                        <ButtonV2 variant="secondary" size="sm" onClick={() => testMutation.mutate(exporter.id)} disabled={testMutation.isPending}>
+                        <Button variant="outline" size="sm" onClick={() => testMutation.mutate(exporter.id)} disabled={testMutation.isPending}>
                           {t('siem.test')}
-                        </ButtonV2>
+                        </Button>
                         {canWrite && (
-                          <ButtonV2 variant="secondary" size="sm" onClick={() => toggleMutation.mutate(exporter)} disabled={toggleMutation.isPending}>
+                          <Button variant="outline" size="sm" onClick={() => toggleMutation.mutate(exporter)} disabled={toggleMutation.isPending}>
                             {exporter.enabled ? t('siem.disable') : t('siem.enable')}
-                          </ButtonV2>
+                          </Button>
                         )}
                         {canWrite && (
-                          <ButtonV2 variant="secondary" size="sm" onClick={() => setDeleteTarget(exporter)}>
+                          <Button variant="outline" size="sm" onClick={() => setDeleteTarget(exporter)}>
                             <Icon name="delete" size="sm" />
                             {t('delete')}
-                          </ButtonV2>
+                          </Button>
                         )}
                       </div>
                     </td>

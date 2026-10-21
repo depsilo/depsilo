@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import Badge from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import Icon from '@/components/Icon'
 import Input from '@/components/Input'
 import CodeBlock from '@/portal/components/CodeBlock'

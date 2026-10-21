@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next'
 
 import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
-import BadgeV2 from '@/components/Badge'
-import ButtonV2 from '@/components/Button'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import DataTableV2 from '@/components/DataTable'
 import EmptyState from '@/components/EmptyState'
 import Icon from '@/components/Icon'
@@ -190,9 +190,9 @@ export default function CompileCache() {
       render: (value: unknown) => {
         const permissions = value as CompileCachePermissions
         return (
-          <BadgeV2 variant={permissions === 'readwrite' ? 'success' : 'default'}>
+          <Badge variant={permissions === 'readwrite' ? 'success' : 'default'}>
             {t(permissions === 'readwrite' ? 'compileCache.readwrite' : 'compileCache.readonly')}
-          </BadgeV2>
+          </Badge>
         )
       },
     },
@@ -218,9 +218,9 @@ export default function CompileCache() {
       key: 'id',
       label: t('actions'),
       render: (_value: unknown, row: CompileCacheCredential & Record<string, unknown>) => canWrite ? (
-        <ButtonV2
+        <Button
           type="button"
-          variant="danger"
+          variant="destructive"
           size="sm"
           disabled={revokeMutation.isPending}
           aria-label={t('compileCache.revokeNamed', { name: row.name })}
@@ -231,7 +231,7 @@ export default function CompileCache() {
           }}
         >
           {t('compileCache.revoke')}
-        </ButtonV2>
+        </Button>
       ) : null,
     },
   ]
@@ -241,9 +241,9 @@ export default function CompileCache() {
       description={t('compileCache.subtitle')}
       actions={(
         <>
-          <ButtonV2
+          <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             size="sm"
             aria-busy={isRefreshing || undefined}
             disabled={isRefreshing}
@@ -251,11 +251,11 @@ export default function CompileCache() {
           >
             <Icon name={isRefreshing ? 'progress_activity' : 'refresh'} size="sm" />
             {t(isRefreshing ? 'compileCache.refreshing' : 'compileCache.refresh')}
-          </ButtonV2>
+          </Button>
           {canWrite && (
-            <ButtonV2
+            <Button
               type="button"
-              variant="danger"
+              variant="destructive"
               size="sm"
               disabled={!status?.enabled}
               onClick={() => {
@@ -265,7 +265,7 @@ export default function CompileCache() {
             >
               <Icon name="delete_sweep" size="sm" />
               {t('compileCache.cleanup')}
-            </ButtonV2>
+            </Button>
           )}
         </>
       )}
@@ -278,9 +278,9 @@ export default function CompileCache() {
           <SectionHeader
             title={t('compileCache.statusTitle')}
             action={status ? (
-              <BadgeV2 variant={status.enabled ? 'success' : 'warning'}>
+              <Badge variant={status.enabled ? 'success' : 'warning'}>
                 {t(status.enabled ? 'compileCache.enabled' : 'compileCache.disabled')}
-              </BadgeV2>
+              </Badge>
             ) : undefined}
           />
           <span id="compile-cache-status-heading" className="sr-only">{t('compileCache.statusTitle')}</span>
@@ -387,10 +387,10 @@ export default function CompileCache() {
             title={t('compileCache.credentialsTitle')}
             hint={t('compileCache.credentialsHint')}
             action={canWrite ? (
-              <ButtonV2 type="button" size="sm" disabled={!status?.enabled} onClick={openCreateDialog}>
+              <Button type="button" size="sm" disabled={!status?.enabled} onClick={openCreateDialog}>
                 <Icon name="add" size="sm" />
                 {t('compileCache.createCredential')}
-              </ButtonV2>
+              </Button>
             ) : undefined}
           />
 
@@ -482,16 +482,16 @@ export default function CompileCache() {
             <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>
           )}
           <div className="flex justify-end gap-3 pt-2">
-            <ButtonV2 type="button" variant="secondary" disabled={createMutation.isPending} onClick={closeCreateDialog}>
+            <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={closeCreateDialog}>
               {t('cancel')}
-            </ButtonV2>
-            <ButtonV2
+            </Button>
+            <Button
               type="submit"
               aria-busy={createMutation.isPending || undefined}
               disabled={!formValid || createMutation.isPending || !canWrite}
             >
               {t(createMutation.isPending ? 'compileCache.creating' : 'compileCache.create')}
-            </ButtonV2>
+            </Button>
           </div>
         </form>
       </ModalV2>
@@ -522,9 +522,9 @@ export default function CompileCache() {
                         {item.value}
                       </code>
                     </div>
-                    <ButtonV2
+                    <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       className="mt-3 self-start"
                       aria-label={t(item.client === 'ccache' ? 'compileCache.copyCCacheConfig' : 'compileCache.copySCCacheConfig')}
                       onClick={() => { void copyValue(item.value, target) }}
@@ -535,14 +535,14 @@ export default function CompileCache() {
                         : item.client === 'ccache'
                           ? 'compileCache.copyCCacheConfig'
                           : 'compileCache.copySCCacheConfig')}
-                    </ButtonV2>
+                    </Button>
                   </section>
                 )
               })}
             </div>
           )}
           <div className="flex flex-wrap justify-end gap-3">
-            <ButtonV2 type="button" onClick={closeClientConfigurations}>{t('common.close')}</ButtonV2>
+            <Button type="button" onClick={closeClientConfigurations}>{t('common.close')}</Button>
           </div>
         </div>
       </ModalV2>
@@ -563,23 +563,23 @@ export default function CompileCache() {
           <div className="mt-4"><InlineNotice tone="danger">{getApiError(revokeMutation.error).message}</InlineNotice></div>
         )}
         <div className="mt-5 flex justify-end gap-3">
-          <ButtonV2
+          <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             disabled={revokeMutation.isPending}
             onClick={() => setRevokeTarget(null)}
           >
             {t('cancel')}
-          </ButtonV2>
-          <ButtonV2
+          </Button>
+          <Button
             type="button"
-            variant="danger"
+            variant="destructive"
             aria-busy={revokeMutation.isPending || undefined}
             disabled={!revokeTarget || revokeMutation.isPending || !canWrite}
             onClick={() => revokeTarget && revokeMutation.mutate(revokeTarget.id)}
           >
             {t(revokeMutation.isPending ? 'compileCache.revoking' : 'compileCache.confirmRevoke')}
-          </ButtonV2>
+          </Button>
         </div>
       </ModalV2>
 
@@ -597,23 +597,23 @@ export default function CompileCache() {
           <div className="mt-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>
         )}
         <div className="mt-5 flex justify-end gap-3">
-          <ButtonV2
+          <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             disabled={cleanupMutation.isPending}
             onClick={() => setCleanupOpen(false)}
           >
             {t('cancel')}
-          </ButtonV2>
-          <ButtonV2
+          </Button>
+          <Button
             type="button"
-            variant="danger"
+            variant="destructive"
             aria-busy={cleanupMutation.isPending || undefined}
             disabled={cleanupMutation.isPending || !status?.enabled || !canWrite}
             onClick={() => cleanupMutation.mutate()}
           >
             {t(cleanupMutation.isPending ? 'compileCache.cleaning' : 'compileCache.confirmCleanup')}
-          </ButtonV2>
+          </Button>
         </div>
       </ModalV2>
     </AdminPage>

@@ -506,11 +506,11 @@ export function requestOutcome(log: {
   return 'unknown'
 }
 
-export const REQUEST_OUTCOME_META: Record<RequestOutcome, { key: string; variant: 'success' | 'warning' | 'error' | 'neutral' }> = {
+export const REQUEST_OUTCOME_META: Record<RequestOutcome, { key: string; variant: 'success' | 'warning' | 'destructive' | 'neutral' }> = {
   hit: { key: 'overview.outcomeHit', variant: 'success' },
   miss: { key: 'overview.outcomeMiss', variant: 'neutral' },
   blocked: { key: 'overview.outcomeBlocked', variant: 'warning' },
-  failed: { key: 'overview.outcomeFailed', variant: 'error' },
+  failed: { key: 'overview.outcomeFailed', variant: 'destructive' },
   unknown: { key: 'overview.outcomeUnknown', variant: 'neutral' },
 }
 

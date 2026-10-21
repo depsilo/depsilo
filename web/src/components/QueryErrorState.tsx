@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import ButtonV2 from './Button'
+import { Button } from '@/components/ui/button'
 import InlineNotice from './InlineNotice'
 
 interface QueryErrorStateProps {
@@ -13,9 +13,9 @@ export default function QueryErrorState({ message, onRetry }: QueryErrorStatePro
     <InlineNotice tone="danger">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>{message}</span>
-        <ButtonV2 type="button" variant="secondary" size="sm" onClick={onRetry}>
+        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
           {t('common.retry')}
-        </ButtonV2>
+        </Button>
       </div>
     </InlineNotice>
   )

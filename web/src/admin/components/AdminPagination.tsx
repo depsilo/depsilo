@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 
 interface AdminPaginationProps {
   page: number
@@ -50,15 +50,15 @@ export default function AdminPagination({
         {t('pagination.summary', { from, to, total: safeTotal })}
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
-        <ButtonV2
+        <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           disabled={currentPage <= 1}
           onClick={() => changePage(currentPage - 1)}
         >
           {t('prevPage')}
-        </ButtonV2>
+        </Button>
         <span
           aria-live="polite"
           className="px-1 text-[12px] font-mono tabular-nums"
@@ -66,15 +66,15 @@ export default function AdminPagination({
         >
           {t('pagination.page', { page: currentPage, totalPages })}
         </span>
-        <ButtonV2
+        <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           disabled={currentPage >= totalPages}
           onClick={() => changePage(currentPage + 1)}
         >
           {t('nextPage')}
-        </ButtonV2>
+        </Button>
       </div>
     </nav>
   )

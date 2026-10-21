@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InlineNotice from '@/components/InlineNotice'
 
 interface StaleDataNoticeProps {
@@ -22,16 +22,16 @@ export default function StaleDataNotice({
     <InlineNotice tone="warning">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span>{message ?? t('now.staleData')}</span>
-        <ButtonV2
+        <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           aria-busy={refreshing || undefined}
           disabled={refreshing}
           onClick={() => { void onRefresh() }}
         >
           {t('now.refresh')}
-        </ButtonV2>
+        </Button>
       </div>
     </InlineNotice>
   )

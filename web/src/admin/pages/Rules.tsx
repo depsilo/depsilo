@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InputV2 from '@/components/Input'
 import TextareaV2 from '@/components/Textarea'
 import Icon from '@/components/Icon'
-import BadgeV2 from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import ModalV2 from '@/components/Modal'
 import DataTableV2 from '@/components/DataTable'
 import SelectV2 from '@/components/Select'
@@ -165,7 +165,7 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
         <section aria-label={t('rules.candidateRules')} data-rule-test-candidates>
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-[13px] font-[500]" style={{ color: 'var(--text)' }}>{t('rules.candidateRules')}</h3>
-            <BadgeV2 variant="neutral">{candidates.length}</BadgeV2>
+            <Badge variant="neutral">{candidates.length}</Badge>
           </div>
           <ol className="space-y-2">
             {candidates.map((candidate, index) => {
@@ -192,11 +192,11 @@ function RuleTestResultView({ result }: { result: RuleTestResponse }) {
                       {ruleSelector(candidate.rule)}
                     </span>
                     <div className="flex shrink-0 flex-wrap items-center gap-1">
-                      <BadgeV2 variant={action === 'allow' ? 'success' : 'error'}>
+                      <Badge variant={action === 'allow' ? 'success' : "destructive"}>
                         {action === 'allow' ? t('rules.allow') : t('rules.deny')}
-                      </BadgeV2>
-                      {selected && <BadgeV2 variant="success">{t('rules.selected')}</BadgeV2>}
-                      {!matched && <BadgeV2 variant="neutral">{t('rules.notMatched')}</BadgeV2>}
+                      </Badge>
+                      {selected && <Badge variant="success">{t('rules.selected')}</Badge>}
+                      {!matched && <Badge variant="neutral">{t('rules.notMatched')}</Badge>}
                     </div>
                   </div>
                   <div className="mt-2 grid min-w-0 grid-cols-1 gap-1 text-[11px] sm:grid-cols-3" data-rule-test-levels>
@@ -300,10 +300,10 @@ export default function RulesV2() {
   // 402s, so there is no Pro paywall branch to render.
 
   const columns = [
-    { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<BadgeV2 variant="ecosystem">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystem.toUpperCase()}</BadgeV2></div> } },
+    { key: 'ecosystem', label: t('rules.ecosystem'), render: (v: unknown) => { const ecosystem = typeof v === 'string' ? v : ''; return <div className="flex items-center gap-1.5">{isAdminEcosystem(ecosystem) && <EcosystemIcon type={ecosystem} size={14} />}<Badge variant="default">{ecosystem === '*' ? t('rules.allEcosystems') : ecosystem.toUpperCase()}</Badge></div> } },
     { key: 'package_name', label: t('rules.packageName'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text)' }}>{v as string}</span> },
     { key: 'version', label: t('rules.version'), render: (v: unknown) => <span className="font-mono text-[12px]" style={{ color: 'var(--text-soft)' }}>{(v as string) === '*' ? t('rules.allVersions') : (v as string)}</span> },
-    { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <BadgeV2 variant="success">{t('rules.allow')}</BadgeV2> : <BadgeV2 variant="error">{t('rules.deny')}</BadgeV2> },
+    { key: 'action', label: t('rules.action'), render: (v: unknown) => (v as string) === 'allow' ? <Badge variant="success">{t('rules.allow')}</Badge> : <Badge variant="destructive">{t('rules.deny')}</Badge> },
     { key: 'reason', label: t('rules.reason'), render: (v: unknown) => <span className="text-[12px] truncate block max-w-[200px]" style={{ color: 'var(--text-soft)' }} title={v as string}>{(v as string) || '-'}</span> },
     { key: 'created_at', label: t('users.createdAt'), render: (v: unknown) => <span className="text-[12px] whitespace-nowrap" style={{ color: 'var(--text-soft)' }}>{formatTime(v as string, 'relative')}</span> },
     { key: 'id', label: t('actions'), render: (_v: unknown, row: RuleRecord & Record<string, unknown>) => canWrite ? (<div className="flex gap-1"><IconButton icon="edit" label={t('rules.editNamed', { name: row.package_name })} onClick={() => openEdit(row)} /><IconButton icon="delete" label={t('rules.deleteNamed', { name: row.package_name })} tone="danger" onClick={() => openDeleteDialog(row)} /></div>) : null },
@@ -314,8 +314,8 @@ export default function RulesV2() {
       description={t('rules.subtitle')}
       actions={(
         <>
-          <ButtonV2 variant="ghost" size="sm" onClick={() => { setTestOpen(true); setTestResult(null) }}><Icon name="science" size="sm" />{t('rules.testRule')}</ButtonV2>
-          {canWrite && <ButtonV2 onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</ButtonV2>}
+          <Button variant="ghost" size="sm" onClick={() => { setTestOpen(true); setTestResult(null) }}><Icon name="science" size="sm" />{t('rules.testRule')}</Button>
+          {canWrite && <Button onClick={openCreate}><Icon name="add" size="sm" />{t('rules.addRule')}</Button>}
         </>
       )}
     >
@@ -326,7 +326,7 @@ export default function RulesV2() {
         <QueryErrorState message={apiError.status === 403 ? t('common.permissionDenied') : apiError.message} onRetry={() => { void query.refetch() }} />
       ) : (
         <div className="space-y-3">
-        {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>}
+        {data && query.isRefetchError && <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>}
         {items.length === 0 ? <EmptyState icon="rule" title={t('rules.noRules')} minHeight={200} /> : <DataTableV2
           columns={columns}
           data={items.map((rule) => ({ ...rule }))}
@@ -372,7 +372,7 @@ export default function RulesV2() {
           </fieldset>
           <TextareaV2 label={t('rules.reason')} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder={t('rules.reasonPlaceholder')} rows={2} className="resize-none" />
           {saveError && <InlineNotice tone="danger">{getApiError(saveError).message}</InlineNotice>}
-          <div className="flex justify-end gap-3 pt-2"><ButtonV2 type="button" variant="secondary" disabled={isSaving} onClick={closeDialog}>{t('cancel')}</ButtonV2><ButtonV2 type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</ButtonV2></div>
+          <div className="flex justify-end gap-3 pt-2"><Button type="button" variant="outline" disabled={isSaving} onClick={closeDialog}>{t('cancel')}</Button><Button type="submit" aria-busy={isSaving || undefined} disabled={isSaving || !canWrite}>{isSaving ? t('saving') : t('save')}</Button></div>
         </form>
       </ModalV2>
 
@@ -401,7 +401,7 @@ export default function RulesV2() {
           <SelectV2 label={t('rules.ecosystem')} value={testForm.ecosystem} disabled={testLoading} onChange={(e) => updateTestField('ecosystem', e.target.value)}>{ECOSYSTEM_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</SelectV2>
           <InputV2 label={t('rules.packageName')} mono value={testForm.package} disabled={testLoading} onChange={(e) => updateTestField('package', e.target.value)} placeholder={testPackagePlaceholder} />
           <InputV2 label={t('rules.version')} mono value={testForm.version} disabled={testLoading} onChange={(e) => updateTestField('version', e.target.value)} placeholder={t('rules.testVersionPlaceholder')} />
-          <ButtonV2 type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</ButtonV2>
+          <Button type="button" onClick={handleTest} aria-busy={testLoading || undefined} disabled={testLoading || !testForm.package} className="w-full">{testLoading ? t('rules.testing') : t('rules.testBtn')}</Button>
           {testResult && !('error' in testResult) && <RuleTestResultView result={testResult} />}
           {testResult && 'error' in testResult && <div role="alert" className="rounded-sm p-4" style={{ background: 'var(--danger-fill)', border: '1px solid var(--danger)' }}><p className="text-[14px]" style={{ color: 'var(--danger)' }}>{testResult.error}</p></div>}
         </div>

@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InputV2 from '@/components/Input'
 import Icon from '@/components/Icon'
-import BadgeV2 from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import ModalV2 from '@/components/Modal'
 import DataTableV2 from '@/components/DataTable'
 import SelectV2 from '@/components/Select'
@@ -255,7 +255,7 @@ export default function ProjectsV2() {
         render: (v: unknown) => (
           <div className="flex items-center gap-1.5">
             {typeof v === 'string' && isAdminEcosystem(v) && <EcosystemIcon type={v} size={14} />}
-            <BadgeV2 variant="ecosystem">{(v as string)?.toUpperCase()}</BadgeV2>
+            <Badge variant="default">{(v as string)?.toUpperCase()}</Badge>
           </div>
         ),
       },
@@ -346,10 +346,10 @@ export default function ProjectsV2() {
                 <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
               ))}
             </SelectV2>
-            <ButtonV2 className="w-full sm:w-auto" onClick={handleSbomDownload} disabled={sbomLoading}>
+            <Button className="w-full sm:w-auto" onClick={handleSbomDownload} disabled={sbomLoading}>
               <Icon name="download" size="sm" />
               {sbomLoading ? t('sbom.generating') : t('sbom.download')}
-            </ButtonV2>
+            </Button>
           </div>
           <div className="mt-3 grid gap-2">
             <label className="flex cursor-pointer items-start gap-2 text-[14px] text-[var(--text-soft)]">
@@ -440,7 +440,7 @@ export default function ProjectsV2() {
       label: t('actions'),
       render: (_v: unknown, row: ProjectSummary & Record<string, unknown>) => (
         <div className="flex gap-1">
-          <ButtonV2
+          <Button
             variant="ghost"
             size="sm"
             type="button"
@@ -449,7 +449,7 @@ export default function ProjectsV2() {
           >
             <Icon name="visibility" size="sm" />
             {t('projects.view')}
-          </ButtonV2>
+          </Button>
           {canWrite && <IconButton icon="delete" label={t('projects.deleteNamed', { name: row.name })} tone="danger" onClick={(e) => { e.stopPropagation(); openDeleteDialog(row) }} />}
         </div>
       ),
@@ -460,9 +460,9 @@ export default function ProjectsV2() {
     <AdminPage
       description={t('projects.subtitle')}
       actions={canWrite ? (
-        <ButtonV2 onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
+        <Button onClick={() => { createMutation.reset(); setCreateOpen(true) }}>
           <Icon name="add" size="sm" />{t('projects.create')}
-        </ButtonV2>
+        </Button>
       ) : undefined}
     >
     <div className="space-y-6">
@@ -505,10 +505,10 @@ export default function ProjectsV2() {
           />
           {createMutation.isError && <InlineNotice tone="danger">{getApiError(createMutation.error).message}</InlineNotice>}
           <div className="flex justify-end gap-3 pt-2">
-            <ButtonV2 type="button" variant="secondary" disabled={createMutation.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</ButtonV2>
-            <ButtonV2 type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>
+            <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={() => setCreateOpen(false)}>{t('cancel')}</Button>
+            <Button type="submit" aria-busy={createMutation.isPending || undefined} disabled={createMutation.isPending || !canWrite}>
               {createMutation.isPending ? t('saving') : t('save')}
-            </ButtonV2>
+            </Button>
           </div>
         </form>
       </ModalV2>
@@ -542,7 +542,7 @@ export default function ProjectsV2() {
               </div>
             </div>
             <div className="flex justify-end pt-2">
-              <ButtonV2 onClick={() => setTokenData(null)}>{t('confirm')}</ButtonV2>
+              <Button onClick={() => setTokenData(null)}>{t('confirm')}</Button>
             </div>
           </div>
         )}

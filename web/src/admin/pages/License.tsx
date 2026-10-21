@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { licenseApi } from '@/lib/api'
 import type { EntitlementStatus } from '@/lib/api'
 import { proAccessUrl } from '@/lib/buy'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InputV2 from '@/components/Input'
 import Icon, { type IconName } from '@/components/Icon'
 import ModalV2 from '@/components/Modal'
@@ -156,7 +156,7 @@ export default function License() {
     <AdminPage width="readable" description={t('license.subtitle')}>
     <div className="space-y-10">
       {statusQuery.isRefetchError && (
-        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</ButtonV2></div></InlineNotice>
+        <InlineNotice tone="warning"><div className="flex flex-wrap items-center justify-between gap-3"><span>{t('now.staleData')}</span><Button type="button" variant="outline" size="sm" onClick={() => { void statusQuery.refetch() }}>{t('now.refresh')}</Button></div></InlineNotice>
       )}
       {/* ── State panel ────────────────────────────── */}
       {/* Commercial terms are intentionally absent until the product model
@@ -169,16 +169,16 @@ export default function License() {
           description={t('license.trial.start_explainer')}
         >
           <div className="flex flex-wrap gap-2">
-            {canWrite && <ButtonV2
+            {canWrite && <Button
               onClick={() => activateTrial.mutate()}
               aria-busy={activateTrial.isPending || undefined}
               disabled={activateTrial.isPending}
             >
               {t('license.trial.start_button')}
-            </ButtonV2>}
-            <ButtonV2 variant="secondary" onClick={() => window.open(proAccessUrl())}>
+            </Button>}
+            <Button variant="outline" onClick={() => window.open(proAccessUrl())}>
               {t('license.buy_lifetime')}
-            </ButtonV2>
+            </Button>
           </div>
           {activateTrial.isError && (
             <div className="mt-3">
@@ -195,9 +195,9 @@ export default function License() {
           title={`${t('license.status.pro')} · ${t('license.status.trial')}`}
           description={`${t('license.trial.days_left', { count: status.days_left })} · ${t('license.trial.expires_at', { date: formatDate(status.expires_at) })}`}
         >
-          <ButtonV2 onClick={() => window.open(proAccessUrl())}>
+          <Button onClick={() => window.open(proAccessUrl())}>
             {t('license.buy_lifetime')}
-          </ButtonV2>
+          </Button>
         </StatePanel>
       )}
 
@@ -207,9 +207,9 @@ export default function License() {
           icon="warning"
           title={t('license.trial.expired_message', { date: formatDate(status.expires_at) })}
         >
-          <ButtonV2 onClick={() => window.open(proAccessUrl())}>
+          <Button onClick={() => window.open(proAccessUrl())}>
             {t('license.buy_lifetime')}
-          </ButtonV2>
+          </Button>
         </StatePanel>
       )}
 
@@ -237,15 +237,15 @@ export default function License() {
               </div>
             ))}
           </div>
-          {canWrite && <ButtonV2
-            variant="secondary"
+          {canWrite && <Button
+            variant="outline"
             onClick={() => revalidate.mutate()}
             disabled={revalidate.isPending}
             className="mt-4"
           >
             <Icon name="refresh" size="sm" />
             {t('license.revalidate')}
-          </ButtonV2>}
+          </Button>}
           {revalidate.isError && (
             <div className="mt-3">
               <InlineNotice tone="danger">{getApiError(revalidate.error).message}</InlineNotice>
@@ -294,13 +294,13 @@ export default function License() {
                     disabled={setKey.isPending}
                     mono
                   />
-                  <ButtonV2
+                  <Button
                     type="submit"
                     aria-busy={setKey.isPending || undefined}
                     disabled={setKey.isPending || keyInput.trim() === ''}
                   >
                     {replacingKey ? t('license.key.save_button') : t('license.key.activate_button')}
-                  </ButtonV2>
+                  </Button>
                 </div>
                 {setKey.data && setKey.data.source !== 'paid' && (
                   <div className="space-y-1">
@@ -313,23 +313,23 @@ export default function License() {
                       </p>
                     )}
                     <div className="flex gap-2">
-                      <ButtonV2
+                      <Button
                         type="button"
-                        variant="secondary"
+                        variant="outline"
                         size="sm"
                         onClick={() => revalidate.mutate()}
                         disabled={revalidate.isPending}
                       >
                         {t('license.key.try_revalidate')}
-                      </ButtonV2>
+                      </Button>
                     </div>
                   </div>
                 )}
                 {setKey.isError && <InlineNotice tone="danger">{getApiError(setKey.error).message}</InlineNotice>}
                 {replacingKey && (
-                  <ButtonV2
+                  <Button
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                     onClick={() => {
                       setReplacingKey(false)
                       setKeyInput('')
@@ -338,15 +338,15 @@ export default function License() {
                     disabled={setKey.isPending}
                   >
                     {t('cancel')}
-                  </ButtonV2>
+                  </Button>
                 )}
               </form>
             )}
             {status.license_key_masked && (
               <div className="flex flex-wrap gap-2">
                 {source === 'paid' && canWrite && !replacingKey && (
-                  <ButtonV2
-                    variant="secondary"
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       setKey.reset()
                       setKeyInput('')
@@ -355,17 +355,17 @@ export default function License() {
                     }}
                   >
                     {t('license.key.change_button')}
-                  </ButtonV2>
+                  </Button>
                 )}
-                {canWrite && !replacingKey && <ButtonV2
-                  variant="danger"
+                {canWrite && !replacingKey && <Button
+                  variant="destructive"
                   onClick={() => {
                     clearKey.reset()
                     setRemoveOpen(true)
                   }}
                 >
                   {t('license.key.remove_button')}
-                </ButtonV2>}
+                </Button>}
               </div>
             )}
           </div>
@@ -422,11 +422,11 @@ export default function License() {
           </div>
         )}
         <div className="flex justify-end gap-3">
-          <ButtonV2 variant="secondary" onClick={() => setRemoveOpen(false)} disabled={clearKey.isPending}>
+          <Button variant="outline" onClick={() => setRemoveOpen(false)} disabled={clearKey.isPending}>
             {t('license.paywall.dismiss')}
-          </ButtonV2>
-          <ButtonV2
-            variant="danger"
+          </Button>
+          <Button
+            variant="destructive"
             aria-busy={clearKey.isPending || undefined}
             onClick={() => {
               clearKey.mutate()
@@ -434,7 +434,7 @@ export default function License() {
             disabled={clearKey.isPending || !canWrite}
           >
             {t('license.key.remove_button')}
-          </ButtonV2>
+          </Button>
         </div>
       </ModalV2>
     </div>

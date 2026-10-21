@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import BadgeV2 from '@/components/Badge'
-import ButtonV2 from '@/components/Button'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import EmptyState from '@/components/EmptyState'
 import Icon from '@/components/Icon'
@@ -197,9 +197,9 @@ export default function CacheIndexes() {
             <option value="stale">{t('cacheIndexes.statusStale')}</option>
           </SelectV2>
         </div>
-        <ButtonV2 type="submit" variant="primary" size="sm" className="min-h-10 self-start sm:min-h-0">
+        <Button type="submit" variant="default" size="sm" className="min-h-10 self-start sm:min-h-0">
           {t('search')}
-        </ButtonV2>
+        </Button>
       </form>
 
       {items.length === 0 ? (
@@ -209,9 +209,9 @@ export default function CacheIndexes() {
           hint={t(hasFilters ? 'cacheIndexes.emptyHint' : 'cacheIndexes.emptyUnfilteredHint')}
           minHeight={160}
           action={hasFilters ? (
-            <ButtonV2 type="button" variant="secondary" size="sm" onClick={clearFilters}>
+            <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
               {t('cacheIndexes.clearFilters')}
-            </ButtonV2>
+            </Button>
           ) : undefined}
         />
       ) : (
@@ -266,9 +266,9 @@ export default function CacheIndexes() {
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <BadgeV2 variant={statusBadgeVariant(item.status)}>
+                    <Badge variant={statusBadgeVariant(item.status)}>
                       {item.status === 'fresh' ? t('cacheIndexes.statusFresh') : t('cacheIndexes.statusStale')}
-                    </BadgeV2>
+                    </Badge>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono tabular-nums" style={{ color: 'var(--text)' }}>
                     {formatBytes(item.size)}

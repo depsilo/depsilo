@@ -5,12 +5,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatDate, formatTime } from '@/lib/utils'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
 import SwitchV2 from '@/components/Switch'
 import Icon from '@/components/Icon'
-import BadgeV2 from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import Metric from '@/components/Metric'
 import SectionHeader from '@/components/SectionHeader'
 import EmptyState from '@/components/EmptyState'
@@ -35,8 +35,8 @@ import type {
   CapabilityFact,
 } from '@/lib/adminApi.types'
 
-const SEVERITY_BADGE_MAP: Record<string, 'error' | 'warning' | 'default' | 'success'> = {
-  critical: 'error',
+const SEVERITY_BADGE_MAP: Record<string, 'destructive' | 'warning' | 'default' | 'success'> = {
+  critical: 'destructive',
   high: 'warning',
   medium: 'default',
   low: 'success',
@@ -189,7 +189,7 @@ function OverviewTab() {
         <SectionHeader
           title={t('security.scanStatus')}
           action={canWrite ?
-            <ButtonV2
+            <Button
               onClick={() => scanMutation.mutate()}
               aria-busy={scanInProgress || undefined}
               disabled={scanInProgress}
@@ -197,7 +197,7 @@ function OverviewTab() {
             >
               <Icon name="radar" size="sm" />
               {scanInProgress ? t('security.scanning') : t('security.scanNow')}
-            </ButtonV2>
+            </Button>
           : undefined}
         />
         {scanMutation.isSuccess && <div className="mb-3"><InlineNotice tone="success">{t('security.scanStarted')}</InlineNotice></div>}
@@ -223,7 +223,7 @@ function OverviewTab() {
               return (
                 <div key={item.severity} className="flex items-center gap-3">
                   <div className="w-20 shrink-0">
-                    <BadgeV2 variant={variant}>{item.severity.toUpperCase()}</BadgeV2>
+                    <Badge variant={variant}>{item.severity.toUpperCase()}</Badge>
                   </div>
                   <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--bg-soft)' }}>
                     <div
@@ -290,7 +290,7 @@ function VulnerabilitiesTab() {
       render: (v: unknown) => (
         <div className="flex items-center gap-1.5">
           <EcosystemIcon type={v as EcosystemName} size={14} />
-          <BadgeV2 variant="ecosystem">{(v as string)?.toUpperCase()}</BadgeV2>
+          <Badge variant="default">{(v as string)?.toUpperCase()}</Badge>
         </div>
       ),
     },
@@ -307,7 +307,7 @@ function VulnerabilitiesTab() {
       render: (v: unknown) => {
         const s = v as string
         const variant = SEVERITY_BADGE_MAP[s] || 'default'
-        return <BadgeV2 variant={variant}>{s?.toUpperCase()}</BadgeV2>
+        return <Badge variant={variant}>{s?.toUpperCase()}</Badge>
       },
     },
     {
@@ -363,10 +363,10 @@ function VulnerabilitiesTab() {
             mono
           />
         </div>
-        <ButtonV2 type="submit" size="sm">
+        <Button type="submit" size="sm">
           <Icon name="search" size="sm" />
           {t('search')}
-        </ButtonV2>
+        </Button>
       </form>
 
       {/* Table — bare (no Card wrap) */}
@@ -478,7 +478,7 @@ function SuggestionsTab() {
                   <span className="font-mono text-[13px] font-[500]" style={{ color: 'var(--text)' }}>
                     {item.osv_id}
                   </span>
-                  <BadgeV2 variant={severityVariant}>{item.severity?.toUpperCase()}</BadgeV2>
+                  <Badge variant={severityVariant}>{item.severity?.toUpperCase()}</Badge>
                   {item.cvss_score != null && (
                     <span className="font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-soft)' }}>
                       CVSS {Number(item.cvss_score).toFixed(1)}
@@ -493,7 +493,7 @@ function SuggestionsTab() {
                 </div>
               </div>
               {canWrite && <div className="flex shrink-0 flex-wrap gap-2 self-end sm:self-start">
-                <ButtonV2
+                <Button
                   variant="ghost"
                   size="sm"
                   disabled={isActing}
@@ -501,7 +501,7 @@ function SuggestionsTab() {
                 >
                   <Icon name="close" size="sm" />
                   {t('security.dismiss')}
-                </ButtonV2>
+                </Button>
               </div>}
             </div>
           )
@@ -801,14 +801,14 @@ function PoliciesTab() {
               }))}
               mono
             />
-            <ButtonV2
+            <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               onClick={applyBulkPolicy}
               disabled={isBatchSaving || hasPolicyWrites}
             >
               {t('security.applyToAll')}
-            </ButtonV2>
+            </Button>
           </div>
         )}
         <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-3">
@@ -824,7 +824,7 @@ function PoliciesTab() {
           </div>
           {canWrite && (
             <div className="flex flex-wrap items-center gap-2">
-              <ButtonV2
+              <Button
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -832,8 +832,8 @@ function PoliciesTab() {
                 disabled={dirtyEcosystems.length === 0 || isBatchSaving || hasPolicyWrites}
               >
                 {t('security.resetChanges')}
-              </ButtonV2>
-              <ButtonV2
+              </Button>
+              <Button
                 type="button"
                 size="sm"
                 aria-busy={isBatchSaving || undefined}
@@ -845,7 +845,7 @@ function PoliciesTab() {
                 disabled={dirtyEcosystems.length === 0 || isBatchSaving || hasPolicyWrites}
               >
                 {isBatchSaving ? t('security.savingAll') : t('security.saveAll')}
-              </ButtonV2>
+              </Button>
             </div>
           )}
         </div>
@@ -888,7 +888,7 @@ function PoliciesTab() {
                     <span className="min-w-0 truncate text-[13px] font-[500]" title={eco.toUpperCase()} style={{ color: 'var(--text)' }}>
                       {eco.toUpperCase()}
                     </span>
-                    {isDirty && <BadgeV2 variant="warning">{t('security.unsaved')}</BadgeV2>}
+                    {isDirty && <Badge variant="warning">{t('security.unsaved')}</Badge>}
                   </div>
 
                   <div className="justify-self-end text-[var(--text-soft)] sm:justify-self-start">
@@ -919,8 +919,8 @@ function PoliciesTab() {
                   </div>
 
                   {canWrite && <div data-security-policy-save className="justify-self-end">
-                    <ButtonV2
-                      variant="secondary"
+                    <Button
+                      variant="outline"
                       size="sm"
                       aria-label={`${eco.toUpperCase()} ${t('save')}`}
                       aria-busy={isSaving || undefined}
@@ -928,7 +928,7 @@ function PoliciesTab() {
                       onClick={() => { void handleSave(eco) }}
                     >
                       {isSaving ? t('saving') : isDirty ? t('save') : t('security.saved')}
-                    </ButtonV2>
+                    </Button>
                   </div>}
                 </div>
                 {!autoBlockSupported && (

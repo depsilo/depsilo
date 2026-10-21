@@ -4,8 +4,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { adminApi } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
-import ButtonV2 from '@/components/Button'
-import BadgeV2 from '@/components/Badge'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import EcosystemIcon from '@/components/EcosystemIcon'
 import Icon from '@/components/Icon'
 import EmptyState from '@/components/EmptyState'
@@ -192,9 +192,9 @@ export default function AccessLogsV2() {
     <AdminPage
       description={t('logs.subtitle')}
       actions={(
-        <ButtonV2
+        <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           aria-busy={exportMutation.isPending || undefined}
           disabled={exportMutation.isPending}
@@ -202,7 +202,7 @@ export default function AccessLogsV2() {
         >
           <Icon name="download" size="sm" />
           {exportMutation.isPending ? t('logs.exporting') : t('logs.export')}
-        </ButtonV2>
+        </Button>
       )}
     >
       <div className="space-y-6">
@@ -253,13 +253,13 @@ export default function AccessLogsV2() {
           </SelectV2>
         </div>
 
-        <ButtonV2 type="submit" variant="primary" size="sm" className="min-h-10 self-start sm:min-h-0">
+        <Button type="submit" variant="default" size="sm" className="min-h-10 self-start sm:min-h-0">
           {t('search')}
-        </ButtonV2>
+        </Button>
         {hasFilters && (
-          <ButtonV2 type="button" variant="secondary" size="sm" className="min-h-10 self-start sm:min-h-0" onClick={clearFilters}>
+          <Button type="button" variant="outline" size="sm" className="min-h-10 self-start sm:min-h-0" onClick={clearFilters}>
             {t('logs.clearFilters')}
-          </ButtonV2>
+          </Button>
         )}
       </form>
 
@@ -315,9 +315,9 @@ export default function AccessLogsV2() {
                   {/* Result */}
                   <td className="py-2 px-3">
                     <span title={t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}>
-                      <BadgeV2 variant={cacheResult(row) === 'hit' ? 'success' : 'neutral'}>
+                      <Badge variant={cacheResult(row) === 'hit' ? 'success' : 'neutral'}>
                         {cacheResult(row) === 'hit' ? 'HIT' : cacheResult(row) === 'miss' ? 'MISS' : 'UNKNOWN'}
-                      </BadgeV2>
+                      </Badge>
                       <span className="sr-only">{t(cacheResult(row) === 'hit' ? 'logs.hitHint' : cacheResult(row) === 'miss' ? 'logs.missHint' : 'logs.unknownHint')}</span>
                     </span>
                   </td>

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import BadgeV2 from '@/components/Badge'
-import ButtonV2 from '@/components/Button'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import EmptyState from '@/components/EmptyState'
 import IconButton from '@/components/IconButton'
 import InputV2 from '@/components/Input'
@@ -178,7 +178,7 @@ export default function WebhookTab() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="min-w-0 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.description')}</p>
         {canWrite && (
-          <ButtonV2 type="button" onClick={openCreate}>{t('webhook.addWebhook')}</ButtonV2>
+          <Button type="button" onClick={openCreate}>{t('webhook.addWebhook')}</Button>
         )}
       </div>
 
@@ -200,8 +200,8 @@ export default function WebhookTab() {
                 <div className="min-w-0 flex-1">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <strong className="text-[14px] font-[600] text-[var(--text)]">{webhook.name}</strong>
-                    <BadgeV2>{t(`webhook.platforms.${webhook.platform}`)}</BadgeV2>
-                    {!webhook.enabled && <BadgeV2 variant="warning">{t('webhook.disabled')}</BadgeV2>}
+                    <Badge>{t(`webhook.platforms.${webhook.platform}`)}</Badge>
+                    {!webhook.enabled && <Badge variant="warning">{t('webhook.disabled')}</Badge>}
                   </div>
                   <p className="break-all font-mono text-[12px] leading-5 text-[var(--text-soft)]">{webhook.url}</p>
                   <dl className="mt-2 flex min-w-0 flex-col gap-1 text-[12px] text-[var(--text-muted)] sm:flex-row sm:flex-wrap sm:gap-x-4">
@@ -212,9 +212,9 @@ export default function WebhookTab() {
                 </div>
                 {canWrite && (
                   <div className="flex shrink-0 items-center gap-1 self-end md:self-start">
-                    <ButtonV2
+                    <Button
                       type="button"
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
                       className="min-h-10 min-w-[72px]"
                       aria-label={t('webhook.testNamed', { name: webhook.name })}
@@ -223,7 +223,7 @@ export default function WebhookTab() {
                       onClick={() => testMutation.mutate(webhook.id)}
                     >
                       {t('webhook.test')}
-                    </ButtonV2>
+                    </Button>
                     <IconButton icon="edit" label={t('webhook.editNamed', { name: webhook.name })} onClick={() => openEdit(webhook)} />
                     <IconButton
                       icon="delete"
@@ -281,8 +281,8 @@ export default function WebhookTab() {
           </fieldset>
           <InputV2 label={t('webhook.cooldown')} type="number" value={form.cooldown_minutes} min={5} max={1440} onChange={event => setForm(current => ({ ...current, cooldown_minutes: Number(event.target.value) || 30 }))} />
           <div className="flex justify-end gap-2 pt-1">
-            <ButtonV2 type="button" variant="secondary" disabled={saving} onClick={closeForm}>{t('cancel')}</ButtonV2>
-            <ButtonV2 type="button" aria-busy={saving || undefined} disabled={saving || !form.name.trim() || !form.url.trim() || !hasEvents} onClick={save}>{saving ? t('saving') : t('save')}</ButtonV2>
+            <Button type="button" variant="outline" disabled={saving} onClick={closeForm}>{t('cancel')}</Button>
+            <Button type="button" aria-busy={saving || undefined} disabled={saving || !form.name.trim() || !form.url.trim() || !hasEvents} onClick={save}>{saving ? t('saving') : t('save')}</Button>
           </div>
         </div>
       </ModalV2>
@@ -296,10 +296,10 @@ export default function WebhookTab() {
       >
         <p className="mb-5 text-[13px] leading-5 text-[var(--text-soft)]">{t('webhook.deleteWarning')}</p>
         <div className="flex justify-end gap-2">
-          <ButtonV2 type="button" variant="secondary" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</ButtonV2>
-          <ButtonV2 type="button" variant="danger" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>
+          <Button type="button" variant="outline" disabled={deleteMutation.isPending} onClick={() => setDeleteId(null)}>{t('cancel')}</Button>
+          <Button type="button" variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending} onClick={() => { if (deleteId !== null) deleteMutation.mutate(deleteId) }}>
             {deleteMutation.isPending ? t('deleting') : t('delete')}
-          </ButtonV2>
+          </Button>
         </div>
       </ModalV2>
     </div>

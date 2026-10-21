@@ -5,8 +5,8 @@ import { Treemap, ResponsiveContainer, Tooltip } from 'recharts'
 import type { TooltipContentProps, TooltipValueType, TreemapNode } from 'recharts'
 import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
-import ButtonV2 from '@/components/Button'
-import BadgeV2 from '@/components/Badge'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import SelectV2 from '@/components/Select'
 import TextareaV2 from '@/components/Textarea'
 import Icon from '@/components/Icon'
@@ -174,14 +174,14 @@ export default function CacheManageV2() {
       description={t('cache.subtitle')}
       actions={canWrite ? (
         <>
-          <ButtonV2 type="button" variant="secondary" size="sm" onClick={() => { setWarmupOpen(true); setWarmupState({ status: 'idle' }) }}>
+          <Button type="button" variant="outline" size="sm" onClick={() => { setWarmupOpen(true); setWarmupState({ status: 'idle' }) }}>
             <Icon name="download" size="sm" />
             {t('cache.warmup')}
-          </ButtonV2>
-          <ButtonV2 type="button" variant="danger" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupResult(null); setCleanupSession(value => value + 1); setCleanupOpen(true) }}>
+          </Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => { cleanupMutation.reset(); setCleanupResult(null); setCleanupSession(value => value + 1); setCleanupOpen(true) }}>
             <Icon name="delete_sweep" size="sm" />
             {t('cache.cleanExpired')}
-          </ButtonV2>
+          </Button>
         </>
       ) : undefined}
     >
@@ -351,7 +351,7 @@ export default function CacheManageV2() {
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {isAdminEcosystem(row.adapter_type) && <EcosystemIcon type={row.adapter_type} size={13} />}
-                      <BadgeV2 variant="ecosystem">{row.adapter_type?.toUpperCase()}</BadgeV2>
+                      <Badge variant="default">{row.adapter_type?.toUpperCase()}</Badge>
                     </div>
                   </td>
                   <td className="py-2 px-3">
@@ -393,13 +393,13 @@ export default function CacheManageV2() {
         <p className="text-[14px] mb-6" style={{ color: 'var(--text-soft)' }}>{t('cache.confirmDeleteMsg')}</p>
         {deleteMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(deleteMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
-          <ButtonV2 variant="secondary" disabled={deleteMutation.isPending} onClick={() => {
+          <Button variant="outline" disabled={deleteMutation.isPending} onClick={() => {
             deleteMutation.reset()
             setDeleteTarget(null)
-          }}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending || !canWrite} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
+          }}>{t('cancel')}</Button>
+          <Button variant="destructive" aria-busy={deleteMutation.isPending || undefined} disabled={deleteMutation.isPending || !canWrite} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>
             {deleteMutation.isPending ? t('deleting') : t('delete')}
-          </ButtonV2>
+          </Button>
         </div>
       </ModalV2>
 
@@ -457,14 +457,14 @@ export default function CacheManageV2() {
         )}
         {cleanupMutation.isError && <div className="mb-4"><InlineNotice tone="danger">{getApiError(cleanupMutation.error).message}</InlineNotice></div>}
         <div className="flex justify-end gap-3">
-          <ButtonV2 variant="secondary" disabled={cleanupMutation.isPending} onClick={() => {
+          <Button variant="outline" disabled={cleanupMutation.isPending} onClick={() => {
             cleanupMutation.reset()
             setCleanupResult(null)
             setCleanupOpen(false)
-          }}>{t('cancel')}</ButtonV2>
-          <ButtonV2 variant="danger" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !!cleanupResult || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
+          }}>{t('cancel')}</Button>
+          <Button variant="destructive" aria-busy={cleanupMutation.isPending || undefined} disabled={cleanupMutation.isPending || !!cleanupResult || !canWrite || !cleanupPreviewQuery.data?.data.plan_id} onClick={() => cleanupMutation.mutate()}>
             {cleanupMutation.isPending ? t('cache.cleaning') : t('cache.confirmClean')}
-          </ButtonV2>
+          </Button>
         </div>
       </ModalV2>
 
@@ -503,20 +503,20 @@ export default function CacheManageV2() {
                 ))}
               </ul>
               {['queued', 'running', 'cancelling'].includes(warmupJobQuery.data.data.status) && canWrite && (
-                <ButtonV2 type="button" variant="secondary" size="sm" disabled={cancelWarmupMutation.isPending} onClick={() => { if (window.confirm(t('cache.warmupCancelConfirm'))) cancelWarmupMutation.mutate() }}>
+                <Button type="button" variant="outline" size="sm" disabled={cancelWarmupMutation.isPending} onClick={() => { if (window.confirm(t('cache.warmupCancelConfirm'))) cancelWarmupMutation.mutate() }}>
                   {t('cache.warmupCancel')}
-                </ButtonV2>
+                </Button>
               )}
               {['partial', 'failed', 'cancelled', 'interrupted'].includes(warmupJobQuery.data.data.status) && canWrite && warmupJobQuery.data.data.items.some(item => item.status === 'failed') && (
-                <ButtonV2 type="button" variant="secondary" size="sm" disabled={retryWarmupMutation.isPending} onClick={() => retryWarmupMutation.mutate()}>
+                <Button type="button" variant="outline" size="sm" disabled={retryWarmupMutation.isPending} onClick={() => retryWarmupMutation.mutate()}>
                   {t('cache.warmupRetryFailed')}
-                </ButtonV2>
+                </Button>
               )}
             </div>
           )}
           <div className="flex justify-end gap-3">
-            <ButtonV2 variant="secondary" disabled={warmupState.status === 'submitting'} onClick={() => setWarmupOpen(false)}>{t('cancel')}</ButtonV2>
-            <ButtonV2
+            <Button variant="outline" disabled={warmupState.status === 'submitting'} onClick={() => setWarmupOpen(false)}>{t('cancel')}</Button>
+            <Button
               disabled={warmupState.status === 'submitting' || warmupText.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).length === 0}
               onClick={async () => {
                 setWarmupState({ status: 'submitting' })
@@ -533,7 +533,7 @@ export default function CacheManageV2() {
             >
               <Icon name="download" size="sm" />
               {warmupState.status === 'submitting' ? t('cache.warmupLoading') : t('cache.warmupStart')}
-            </ButtonV2>
+            </Button>
           </div>
         </div>
       </ModalV2>

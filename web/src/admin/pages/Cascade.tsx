@@ -9,8 +9,8 @@ import CascadeTopology from '@/admin/cascade/CascadeTopology'
 import AdminPage from '@/admin/components/AdminPage'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
 import { getAdminRouteHref } from '@/admin/routes'
-import BadgeV2 from '@/components/Badge'
-import ButtonV2 from '@/components/Button'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import Icon from '@/components/Icon'
 import InlineNotice from '@/components/InlineNotice'
 import QueryErrorState from '@/components/QueryErrorState'
@@ -117,9 +117,9 @@ export default function Cascade() {
   return (
     <AdminPage
       actions={(
-        <ButtonV2
+        <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
           aria-busy={infoQuery.isFetching || undefined}
           disabled={infoQuery.isFetching}
@@ -131,7 +131,7 @@ export default function Cascade() {
         >
           <Icon name={infoQuery.isFetching ? 'progress_activity' : 'refresh'} size="sm" />
           {t(infoQuery.isFetching ? 'cascade.refreshing' : 'cascade.refresh')}
-        </ButtonV2>
+        </Button>
       )}
     >
       <div className="space-y-5">
@@ -281,7 +281,7 @@ export default function Cascade() {
                                   {missing && <option value={via}>{t('cascade.viaMissing', { peer: via })}</option>}
                                 </SelectV2>
                               ) : missing ? (
-                                <BadgeV2 variant="warning">{t('cascade.viaMissing', { peer: via })}</BadgeV2>
+                                <Badge variant="warning">{t('cascade.viaMissing', { peer: via })}</Badge>
                               ) : (
                                 <span className="font-mono" style={{ color: 'var(--text)' }}>{via}</span>
                               )}

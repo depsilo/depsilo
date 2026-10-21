@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { adminApi } from '@/lib/api'
 import { formatBytes, formatTime } from '@/lib/utils'
 import { getApiError } from '@/lib/apiError'
-import BadgeV2 from '@/components/Badge'
+import { Badge } from '@/components/ui/badge'
 import SectionHeader from '@/components/SectionHeader'
 import QueryErrorState from '@/components/QueryErrorState'
 import StaleDataNotice from '@/admin/components/StaleDataNotice'
@@ -45,7 +45,7 @@ export default function DownloadTransfers() {
                 return <li key={item.id} className="min-w-0 space-y-2 py-4">
                   <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
                     <p className="min-w-0 flex-1 break-all font-mono text-[12px] text-[var(--text)]">{item.name}</p>
-                    <BadgeV2 variant={item.status === 'cached' ? 'success' : item.status === 'failed' ? 'error' : item.status === 'resuming' ? 'warning' : 'neutral'}>{t(`cache.transfers.${item.status}`)}</BadgeV2>
+                    <Badge variant={item.status === 'cached' ? 'success' : item.status === 'failed' ? "destructive" : item.status === 'resuming' ? 'warning' : 'neutral'}>{t(`cache.transfers.${item.status}`)}</Badge>
                   </div>
                   <div role="progressbar" aria-label={t('cache.transfers.progress', { name: item.name })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={size} className="h-1.5 overflow-hidden rounded-full bg-[var(--bg-soft)]">
                     <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: percent === undefined ? '25%' : `${percent}%` }} />

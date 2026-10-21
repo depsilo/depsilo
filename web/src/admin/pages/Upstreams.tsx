@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api'
-import ButtonV2 from '@/components/Button'
+import { Button } from '@/components/ui/button'
 import EmptyState from '@/components/EmptyState'
 import InputV2 from '@/components/Input'
 import SelectV2 from '@/components/Select'
@@ -471,9 +471,9 @@ export default function UpstreamsV2() {
       description={t('upstreams.subtitle')}
       actions={canWrite ? (
         <>
-          <ButtonV2
+          <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             size="sm"
             className="min-h-[40px] w-[132px] sm:min-h-8"
             aria-busy={checking || undefined}
@@ -482,8 +482,8 @@ export default function UpstreamsV2() {
           >
             <Icon name="refresh" size="sm" />
             {checking ? t('upstreams.checkingProgress', checkProgress) : t('upstreams.checkAll')}
-          </ButtonV2>
-          <ButtonV2
+          </Button>
+          <Button
             type="button"
             size="sm"
             className="min-h-[40px] sm:min-h-8"
@@ -491,7 +491,7 @@ export default function UpstreamsV2() {
           >
             <Icon name="add" size="sm" />
             {t('upstreams.addUpstream')}
-          </ButtonV2>
+          </Button>
         </>
       ) : undefined}
     >
@@ -634,9 +634,9 @@ export default function UpstreamsV2() {
                 hint={t('upstreams.noMatchHint')}
                 minHeight={220}
                 action={(
-                  <ButtonV2
+                  <Button
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                     className="min-h-[40px]"
                     onClick={() => {
                       setSearch('')
@@ -644,7 +644,7 @@ export default function UpstreamsV2() {
                     }}
                   >
                     {t('upstreams.clearFilters')}
-                  </ButtonV2>
+                  </Button>
                 )}
               />
             ) : (
@@ -872,23 +872,23 @@ export default function UpstreamsV2() {
               <InlineNotice tone="danger">{upstreamErrorMessage(saveError, t)}</InlineNotice>
             )}
             <div className="flex justify-end gap-3 pt-1">
-              <ButtonV2
+              <Button
                 type="button"
-                variant="secondary"
+                variant="outline"
                 className="min-h-[40px]"
                 disabled={isSaving}
                 onClick={closeDialog}
               >
                 {t('cancel')}
-              </ButtonV2>
-              <ButtonV2
+              </Button>
+              <Button
                 type="submit"
                 className="min-h-[40px]"
                 aria-busy={isSaving || undefined}
                 disabled={isSaving || !canWrite}
               >
                 {isSaving ? t('saving') : t('save')}
-              </ButtonV2>
+              </Button>
             </div>
           </form>
         </ModalV2>
@@ -933,25 +933,25 @@ export default function UpstreamsV2() {
                 </InlineNotice>
               )}
               <div className="flex justify-end gap-3">
-                <ButtonV2
+                <Button
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   className="min-h-[40px]"
                   disabled={deleteMutation.isPending}
                   onClick={closeDeleteDialog}
                 >
                   {t('cancel')}
-                </ButtonV2>
-                <ButtonV2
+                </Button>
+                <Button
                   type="button"
-                  variant="danger"
+                  variant="destructive"
                   className="min-h-[40px]"
                   aria-busy={deleteMutation.isPending || undefined}
                   disabled={deleteMutation.isPending}
                   onClick={() => deleteMutation.mutate(deleteTarget.id)}
                 >
                   {deleteMutation.isPending ? t('deleting') : t('delete')}
-                </ButtonV2>
+                </Button>
               </div>
             </div>
           )}
