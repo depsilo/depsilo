@@ -15,6 +15,23 @@ role is `admin` and a token whose permission is `readwrite`.
 | Users, tokens, package rules, Webhooks, security scan policies | Database | Existing handler-specific runtime behavior |
 | Minimum-release-age thresholds, blocklist/tamper settings | `config.toml` | Loaded at startup; restart to change |
 
+## Upstream observations
+
+Admin Upstream responses include `has_observations`, independently of the
+`healthy` routing flag, and `runtime_sample_count`. Observation evidence means
+the current runtime object has recorded request/probe outcomes or a persisted
+probe timestamp is available. The count covers this runtime object only and
+resets on restart or configuration replacement; it is neither lifetime usage
+nor a 24-hour statistic. Passive-only evidence without a persisted probe can
+be lost on restart. A false evidence flag means no available observation, not
+that the source has never been used. Existing failures remain visible even
+without evidence; new routing defaults do not establish measured health.
+
+The Admin list refreshes status every minute while idle. Manual checks expose
+their own result separately from runtime eligibility: a successful probe does
+not clear protocol-integrity restrictions or guarantee artifact delivery.
+The latest manual results are retained in the open page, not across navigation.
+
 ## Permissions
 
 Principal capability groups allow both `admin` and `readonly` principals to call every

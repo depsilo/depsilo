@@ -32,6 +32,8 @@ type RuntimeUpstream struct {
 	AvgLatencyMS             int64
 	SuccessRate              float64
 	LastCheckedAt            time.Time
+	HasObservations          bool
+	RuntimeSampleCount       int64
 	WorkerRunning            bool
 	CreatedAt, UpdatedAt     time.Time
 }
@@ -262,6 +264,7 @@ func (r *Registry) runtimeUpstream(u *Upstream) RuntimeUpstream {
 		Via: u.Via, Priority: u.Priority, ProbeMode: u.ProbeMode, ProbeInterval: u.ProbeInterval.String(),
 		Healthy: health.Healthy, AvgLatencyMS: health.AvgLatency.Milliseconds(),
 		SuccessRate: health.SuccessRate, LastCheckedAt: health.LastCheckedAt,
+		HasObservations: health.HasObservations, RuntimeSampleCount: health.RuntimeSampleCount,
 		WorkerRunning: r.WorkerRunning(u.ID), CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,
 	}
 }

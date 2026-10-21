@@ -161,22 +161,24 @@ func writeBadUpstreamRequest(c *gin.Context, err error) {
 }
 
 type adminUpstreamResponse struct {
-	ID            uint       `json:"id"`
-	AdapterType   string     `json:"adapter_type"`
-	Name          string     `json:"name"`
-	URL           string     `json:"url"`
-	Proxy         string     `json:"proxy"`
-	Priority      int        `json:"priority"`
-	ProbeMode     string     `json:"probe_mode"`
-	ProbeInterval string     `json:"probe_interval"`
-	Via           string     `json:"via"`
-	Healthy       bool       `json:"healthy"`
-	AvgLatencyMS  int64      `json:"avg_latency_ms"`
-	SuccessRate   float64    `json:"success_rate"`
-	LastCheckedAt *time.Time `json:"last_checked_at"`
-	WorkerRunning bool       `json:"worker_running"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ID                 uint       `json:"id"`
+	AdapterType        string     `json:"adapter_type"`
+	Name               string     `json:"name"`
+	URL                string     `json:"url"`
+	Proxy              string     `json:"proxy"`
+	Priority           int        `json:"priority"`
+	ProbeMode          string     `json:"probe_mode"`
+	ProbeInterval      string     `json:"probe_interval"`
+	Via                string     `json:"via"`
+	Healthy            bool       `json:"healthy"`
+	AvgLatencyMS       int64      `json:"avg_latency_ms"`
+	SuccessRate        float64    `json:"success_rate"`
+	LastCheckedAt      *time.Time `json:"last_checked_at"`
+	HasObservations    bool       `json:"has_observations"`
+	RuntimeSampleCount int64      `json:"runtime_sample_count"`
+	WorkerRunning      bool       `json:"worker_running"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type upstreamListResponse struct {
@@ -215,22 +217,24 @@ func mapAdminUpstream(item upstream.RuntimeUpstream, canViewCredentials bool) ad
 	}
 
 	return adminUpstreamResponse{
-		ID:            item.ID,
-		AdapterType:   item.AdapterType,
-		Name:          item.Name,
-		URL:           urlValue,
-		Proxy:         proxyValue,
-		Priority:      item.Priority,
-		ProbeMode:     item.ProbeMode,
-		ProbeInterval: item.ProbeInterval,
-		Via:           item.Via,
-		Healthy:       item.Healthy,
-		AvgLatencyMS:  item.AvgLatencyMS,
-		SuccessRate:   item.SuccessRate,
-		LastCheckedAt: checkedAt,
-		WorkerRunning: item.WorkerRunning,
-		CreatedAt:     item.CreatedAt,
-		UpdatedAt:     item.UpdatedAt,
+		ID:                 item.ID,
+		AdapterType:        item.AdapterType,
+		Name:               item.Name,
+		URL:                urlValue,
+		Proxy:              proxyValue,
+		Priority:           item.Priority,
+		ProbeMode:          item.ProbeMode,
+		ProbeInterval:      item.ProbeInterval,
+		Via:                item.Via,
+		Healthy:            item.Healthy,
+		AvgLatencyMS:       item.AvgLatencyMS,
+		SuccessRate:        item.SuccessRate,
+		LastCheckedAt:      checkedAt,
+		HasObservations:    item.HasObservations,
+		RuntimeSampleCount: item.RuntimeSampleCount,
+		WorkerRunning:      item.WorkerRunning,
+		CreatedAt:          item.CreatedAt,
+		UpdatedAt:          item.UpdatedAt,
 	}
 }
 

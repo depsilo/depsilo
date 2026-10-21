@@ -76,6 +76,12 @@ type HealthSnapshot struct {
 	AvgLatency    time.Duration
 	SuccessRate   float64
 	LastCheckedAt time.Time
+	// HasObservations distinguishes routing defaults from a health result. A
+	// persisted probe timestamp remains evidence after runtime counters reset.
+	HasObservations bool
+	// RuntimeSampleCount counts request and probe outcomes for this runtime
+	// object, not a time window or the lifetime of the persisted Upstream.
+	RuntimeSampleCount int64
 }
 
 // ProbeResult captures one active health-check outcome.
@@ -605,10 +611,12 @@ func (u *Upstream) HealthSnapshot() HealthSnapshot {
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 	return HealthSnapshot{
-		Healthy:       u.health.healthy,
-		AvgLatency:    u.health.avgLatency,
-		SuccessRate:   u.health.successRate,
-		LastCheckedAt: u.health.lastCheckedAt,
+		Healthy:            u.health.healthy,
+		AvgLatency:         u.health.avgLatency,
+		SuccessRate:        u.health.successRate,
+		LastCheckedAt:      u.health.lastCheckedAt,
+		HasObservations:    u.health.totalReqs > 0 || !u.health.lastCheckedAt.IsZero(),
+		RuntimeSampleCount: u.health.totalReqs,
 	}
 }
 

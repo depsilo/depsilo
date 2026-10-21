@@ -29,13 +29,15 @@ import { upstreamStatus } from '@/lib/upstreamStatus'
 import {
   createUpstreamRuntimeModel,
   type RuntimeCheckOutcome,
-  type RuntimeCheckReconciliation,
 } from '@/admin/upstreams/runtimeModel'
 import type {
   AdminUpstream,
   AdminUpstreamListResponse,
   UpstreamMutationRequest,
 } from '@/lib/adminApi.types'
+
+import { normalizeProbeInterval, probeIntervals } from '@/admin/upstreams/probeInterval'
+import { CheckResults, type CheckRecord } from '@/admin/upstreams/CheckResults'
 
 type UpstreamHealth = ReturnType<typeof upstreamStatus>
 type UpstreamStatusFilter = 'all' | UpstreamHealth
@@ -134,6 +136,8 @@ export default function Upstreams() {
   const [checkProgress, setCheckProgress] = useState({ completed: 0, total: 0 })
   const [checkFailures, setCheckFailures] = useState<ReadonlySet<number>>(() => new Set())
   const [bulkCheckSummary, setBulkCheckSummary] = useState<BulkCheckSummary | null>(null)
+  const [checkRecords, setCheckRecords] = useState<CheckRecord[]>([])
+  const [resultsOpen, setResultsOpen] = useState(false)
 
   // Retrieval state. Filtering stays client-side because the list payload is
   // already the source of truth for every group and status count.
@@ -156,12 +160,14 @@ export default function Upstreams() {
     return () => document.removeEventListener('keydown', focusSearch)
   }, [])
 
-  const { data, error, isPending, isError, isRefetchError, refetch } = useQuery({
+  const { data, error, isPending, isError, isRefetchError, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ['admin', 'upstreams'],
     queryFn: async ({ signal }) => (await adminApi.listUpstreams({ signal })).data,
     retry: false,
+    refetchInterval: checking || checkingIds.size > 0 || dialogOpen || deleteTarget ? false : 60_000,
+    refetchOnWindowFocus: !checking && checkingIds.size === 0 && !dialogOpen && !deleteTarget,
   })
-  const { data: cascadeInfo } = useQuery({
+  const { data: cascadeInfo, isPending: cascadePending, isError: cascadeError, refetch: refetchCascade } = useQuery({
     queryKey: ['admin', 'cascade'],
     queryFn: async ({ signal }) => (await adminApi.getCascadeInfo({ signal })).data,
     retry: false,
@@ -175,6 +181,8 @@ export default function Upstreams() {
     name: item.name,
     adapter: item.adapter_type,
     healthy: item.healthy,
+    has_observations: item.has_observations,
+    runtime_sample_count: item.runtime_sample_count,
     avg_latency_ms: item.avg_latency_ms,
     success_rate: item.success_rate,
     url: item.url,
@@ -188,7 +196,7 @@ export default function Upstreams() {
   })), [allUpstreams])
 
   const statusCounts = useMemo(() => {
-    const counts: Record<UpstreamHealth, number> = { healthy: 0, degraded: 0, failed: 0 }
+    const counts: Record<UpstreamHealth, number> = { healthy: 0, degraded: 0, failed: 0, unknown: 0 }
     for (const item of upstreamItems) counts[upstreamStatus(item)] += 1
     return counts
   }, [upstreamItems])
@@ -207,10 +215,14 @@ export default function Upstreams() {
       item.adapter,
       item.url ?? '',
       item.proxy ?? '',
+      item.via ?? '',
     ].some(value => value.toLowerCase().includes(normalizedSearch))
   }), [normalizedSearch, statusFilter, upstreamItems])
 
+  const cancelListRead = () => queryClient.cancelQueries({ queryKey: ['admin', 'upstreams'], exact: true })
+
   const createMutation = useMutation({
+    onMutate: cancelListRead,
     mutationFn: (request: UpstreamMutationRequest) => adminApi.createUpstream(request),
     onSuccess: ({ data: runtime }) => {
       setBulkCheckSummary(null)
@@ -223,6 +235,7 @@ export default function Upstreams() {
     },
   })
   const updateMutation = useMutation({
+    onMutate: cancelListRead,
     mutationFn: ({ id, request }: { id: number; request: UpstreamMutationRequest }) => adminApi.updateUpstream(id, request),
     onSuccess: ({ data: runtime }) => {
       setBulkCheckSummary(null)
@@ -236,6 +249,7 @@ export default function Upstreams() {
     },
   })
   const deleteMutation = useMutation({
+    onMutate: cancelListRead,
     mutationFn: (id: number) => adminApi.deleteUpstream(id),
     onSuccess: ({ data }) => {
       setBulkCheckSummary(null)
@@ -251,6 +265,7 @@ export default function Upstreams() {
   })
 
   function removeCheckFailure(id: number) {
+    setCheckRecords(current => current.filter(record => record.upstream.id !== id))
     setCheckFailures((current) => {
       if (!current.has(id)) return current
       const next = new Set(current)
@@ -272,7 +287,7 @@ export default function Upstreams() {
   }
 
   function openCreate() {
-    const ecosystem = standardUpstreamEcosystems[0].id
+    const ecosystem = allUpstreams[0]?.adapter_type ?? standardUpstreamEcosystems[0].id
     createMutation.reset()
     setForm(emptyForm(ecosystem))
     setFieldErrors({})
@@ -286,7 +301,7 @@ export default function Upstreams() {
     updateMutation.reset()
     setFieldErrors({})
     setEditId(runtime.id)
-    setForm({ adapter_type: runtime.adapter_type, name: runtime.name, url: runtime.url, proxy: runtime.proxy, priority: runtime.priority, probe_mode: runtime.probe_mode, probe_interval: runtime.probe_interval, via: runtime.via ?? '' })
+    setForm({ adapter_type: runtime.adapter_type, name: runtime.name, url: runtime.url, proxy: runtime.proxy, priority: runtime.priority, probe_mode: runtime.probe_mode, probe_interval: normalizeProbeInterval(runtime.probe_interval), via: runtime.via ?? '' })
     setDialogOpen(true)
   }
 
@@ -321,13 +336,43 @@ export default function Upstreams() {
     else createMutation.mutate(normalized)
   }
 
+  function rememberChecks(outcomes: RuntimeCheckOutcome[]) {
+    const latest = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
+    const reconciliation = runtimeModel.applyChecks(latest, outcomes)
+    if (reconciliation.data) queryClient.setQueryData(['admin', 'upstreams'], reconciliation.data)
+    const receivedAt = new Date().toISOString()
+    const records: CheckRecord[] = reconciliation.accepted.map(result => ({ upstream: result.upstream, result, receivedAt }))
+    for (const failure of reconciliation.failures) {
+      const upstream = latest?.items.find(item => item.id === failure.upstreamId)
+      if (upstream) records.push({ upstream, receivedAt, requestError: upstreamErrorMessage(failure.reason, t) })
+    }
+    if (records.length) {
+      setCheckRecords(current => {
+        const next = new Map(current.map(record => [record.upstream.id, record]))
+        for (const record of records) next.set(record.upstream.id, record)
+        return [...next.values()]
+      })
+    }
+    return reconciliation
+  }
+
+  async function refreshStatus() {
+    await Promise.allSettled([
+      refetch(),
+      refetchCascade(),
+      queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams', 'latencies', '24h'] }),
+    ])
+  }
+
   async function checkAll() {
     if (checking || checkingIds.size > 0 || allUpstreams.length === 0) return
     setChecking(true)
     setBulkCheckSummary(null)
     setCheckFailures(new Set())
+    setCheckRecords([])
     setCheckProgress({ completed: 0, total: allUpstreams.length })
     try {
+      await cancelListRead()
       const batch = allUpstreams.map((upstream) => ({
         upstream,
         ticket: runtimeModel.beginCheck(upstream),
@@ -350,6 +395,7 @@ export default function Upstreams() {
           } catch (reason) {
             outcomes[index] = { status: 'rejected', ticket, reason }
           } finally {
+            rememberChecks([outcomes[index]])
             setCheckProgress((current) => ({
               ...current,
               completed: current.completed + 1,
@@ -359,7 +405,7 @@ export default function Upstreams() {
       })
       await Promise.all(workers)
       const latest = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
-      const reconciliation: RuntimeCheckReconciliation = runtimeModel.applyChecks(latest, outcomes)
+      const reconciliation = runtimeModel.applyChecks(latest, outcomes)
       if (reconciliation.data) {
         queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], reconciliation.data)
       }
@@ -389,34 +435,22 @@ export default function Upstreams() {
     removeCheckFailure(id)
     setCheckingIds((current) => new Set(current).add(id))
     try {
+      await cancelListRead()
       const { data: result } = await adminApi.checkUpstream(id)
-      const latest = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
-      const reconciliation = runtimeModel.applyChecks(latest, [{ status: 'fulfilled', ticket, result }])
+      const reconciliation = rememberChecks([{ status: 'fulfilled', ticket, result }])
       const acceptedResult = reconciliation.accepted[0]
       if (!acceptedResult || !reconciliation.data) return
       queryClient.setQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'], reconciliation.data)
       void queryClient.invalidateQueries({ queryKey: ['admin', 'upstreams', 'latencies', '24h'] })
-      const resultStatus = upstreamStatus(acceptedResult.upstream)
+      const probe = acceptedResult.check
       toast.show({
-        tone: resultStatus === 'healthy' ? 'success' : 'warning',
-        message: resultStatus === 'healthy'
-          ? t('upstreams.checkHealthy', {
-              name: upstream.name,
-              latency: acceptedResult.check.latency_ms,
-            })
-          : resultStatus === 'degraded'
-            ? t('upstreams.checkDegraded', {
-                name: upstream.name,
-                latency: acceptedResult.check.latency_ms,
-              })
-            : t('upstreams.checkUnhealthy', {
-              name: upstream.name,
-              reason: acceptedResult.check.error || t('upstreams.unreachable'),
-            }),
+        tone: probe.healthy ? 'success' : 'warning',
+        message: probe.healthy
+          ? t('upstreams.checkHealthy', { name: upstream.name, latency: probe.latency_ms })
+          : t('upstreams.checkUnhealthy', { name: upstream.name, reason: probe.error || t('upstreams.checkReasonUnavailable') }),
       })
     } catch (checkError) {
-      const latest = queryClient.getQueryData<AdminUpstreamListResponse>(['admin', 'upstreams'])
-      const reconciliation = runtimeModel.applyChecks(latest, [{
+      const reconciliation = rememberChecks([{
         status: 'rejected',
         ticket,
         reason: checkError,
@@ -469,18 +503,26 @@ export default function Upstreams() {
     { value: 'healthy', label: t('monitor.healthy'), count: statusCounts.healthy, dot: 'healthy' },
     { value: 'degraded', label: t('monitor.degraded'), count: statusCounts.degraded, dot: 'degraded' },
     { value: 'failed', label: t('monitor.failed'), count: statusCounts.failed, dot: 'failed' },
+    ...(statusCounts.unknown > 0 || statusFilter === 'unknown' ? [{ value: 'unknown' as const, label: t('monitor.unknown'), count: statusCounts.unknown, dot: 'unknown' as const }] : []),
   ]
 
   return (
     <AdminPage
       description={t('upstreams.subtitle')}
-      actions={canWrite ? (
+      actions={(
         <>
+          {dataUpdatedAt > 0 && <span className="text-[12px] text-muted-foreground">{t('upstreams.updatedAt', { time: checkedAtFormatter.format(new Date(dataUpdatedAt)) })}</span>}
+          {checkRecords.length > 0 && <Button variant="outline" className="min-h-[40px] text-[13px]" onClick={() => setResultsOpen(true)}>{t('upstreams.checkResults')} · {checkRecords.length}</Button>}
+          <Button type="button" variant="ghost" className="min-h-[40px] text-[13px]" onClick={() => { void refreshStatus() }} disabled={isFetching || checking || checkingIds.size > 0}>
+            <Icon name="refresh" size="sm" className={isFetching ? 'animate-spin motion-reduce:animate-none' : ''} />
+            {t('upstreams.refreshStatus')}
+          </Button>
+          {canWrite && <>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="min-h-[40px] w-[132px] sm:min-h-8"
+            className="min-h-[40px] text-[13px]"
             aria-busy={checking || undefined}
             onClick={checkAll}
             disabled={checking || checkingIds.size > 0 || allUpstreams.length === 0}
@@ -491,14 +533,15 @@ export default function Upstreams() {
           <Button
             type="button"
             size="sm"
-            className="min-h-[40px] sm:min-h-8"
+            className="min-h-[40px] text-[13px]"
             onClick={openCreate}
           >
             <Icon name="add" size="sm" />
             {t('upstreams.addUpstream')}
           </Button>
+          </>}
         </>
-      ) : undefined}
+      )}
     >
       <div className="space-y-6">
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -538,7 +581,7 @@ export default function Upstreams() {
                 <div
                   role="group"
                   aria-label={t('upstreams.statusFilterLabel')}
-                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-md border border-[var(--border)] bg-[var(--bg-soft)] p-[3px] sm:inline-grid sm:grid-cols-4"
+                  className="grid min-w-0 grid-cols-2 gap-0.5 rounded-md border border-[var(--border)] bg-[var(--bg-soft)] p-[3px] sm:flex sm:flex-wrap"
                 >
                   {statusOptions.map((option) => {
                     const active = statusFilter === option.value
@@ -547,7 +590,7 @@ export default function Upstreams() {
                         key={option.value}
                         type="button"
                         pressed={active}
-                        className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-2.5 text-[12px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
+                        className="stripe-focus-ring inline-flex min-h-[40px] min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-sm border px-3 text-[13px] transition-[background,color,border-color,transform] duration-150 active:scale-[0.96]"
                         style={{
                           background: active ? 'var(--bg-card)' : 'transparent',
                           borderColor: active ? 'var(--border-strong)' : 'transparent',
@@ -632,7 +675,7 @@ export default function Upstreams() {
             )}
 
             {upstreamItems.length === 0 ? (
-              <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"hub"} size="sm" /></EmptyMedia><EmptyTitle>{t('upstreams.emptyTitle')}</EmptyTitle>{canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint') && <EmptyDescription>{canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}</EmptyDescription>}</EmptyHeader></Empty>
+              <Empty style={{ minHeight: 160 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"hub"} size="sm" /></EmptyMedia><EmptyTitle>{t('upstreams.emptyTitle')}</EmptyTitle><EmptyDescription>{canWrite ? t('upstreams.emptyHint') : t('upstreams.emptyReadonlyHint')}</EmptyDescription></EmptyHeader></Empty>
             ) : visibleUpstreams.length === 0 ? (
               <Empty style={{ minHeight: 220 }}><EmptyHeader><EmptyMedia variant="icon"><Icon name={"search"} size="sm" /></EmptyMedia><EmptyTitle>{normalizedSearch
                   ? t('upstreams.noMatch', { query: summarizedSearch })
@@ -654,53 +697,32 @@ export default function Upstreams() {
                 upstreams={visibleUpstreams}
                 layout="adaptive"
                 renderMetadata={(upstream) => (
-                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                    <span
-                      className="max-w-[34ch] truncate font-mono"
-                      title={upstreamEndpointLabel(upstream.url ?? '')}
-                    >
-                      {upstreamEndpointLabel(upstream.url ?? '')}
-                    </span>
-                    <span>{t('upstreams.priorityValue', { priority: upstream.priority ?? 1 })}</span>
-                    <span>
-                      {upstream.probeMode === 'active' && upstream.workerRunning === false
+                  <div className="space-y-2 text-[13px] leading-relaxed">
+                    <p className="break-all font-mono text-[12px]" title={upstreamEndpointLabel(upstream.url ?? '')}>{upstreamEndpointLabel(upstream.url ?? '')}</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <span>{t('upstreams.priorityValue', { priority: upstream.priority ?? 1 })}</span>
+                      <span>{upstream.probeMode === 'active' && upstream.workerRunning === false
                         ? t('upstreams.probeStopped')
                         : upstream.probeMode === 'active'
-                          ? t('upstreams.activeProbeValue', { interval: upstream.probeInterval ?? '—' })
-                        : t('upstreams.passiveProbeValue')}
-                    </span>
-                    <span>
-                      {t('upstreams.successRateValue', {
-                        rate: Math.round((upstream.success_rate ?? 0) * 100),
-                      })}
-                    </span>
-                    {upstream.lastCheckedAt ? (
-                      <time dateTime={upstream.lastCheckedAt}>
-                        {t('upstreams.lastCheckedValue', {
-                          time: checkedAtFormatter.format(new Date(upstream.lastCheckedAt)),
-                        })}
-                      </time>
-                    ) : <span>{t('upstreams.neverChecked')}</span>}
-                    {upstream.proxy && <span>{t('upstreams.proxyEnabled')}</span>}
-                    {upstream.via && (
-                      <span style={cascadeInfo && !cascadeInfo.peers.some(peer => peer.name === upstream.via)
-                        ? { color: 'var(--warn-text)' }
-                        : undefined}
-                      >
-                        {t(
-                          cascadeInfo && !cascadeInfo.peers.some(peer => peer.name === upstream.via)
-                            ? 'upstreams.viaValueMissing'
-                            : 'upstreams.viaValue',
-                          { peer: upstream.via },
-                        )}
-                      </span>
-                    )}
-                    {upstream.id && checkFailures.has(upstream.id) && (
-                      <span style={{ color: 'var(--danger-text)' }}>
-                        {t('upstreams.checkRequestFailedShort')}
-                      </span>
-                    )}
-                  </span>
+                          ? t('upstreams.activeProbeValue', { interval: normalizeProbeInterval(upstream.probeInterval ?? '—') })
+                          : t('upstreams.passiveProbeValue')}</span>
+                      {upstream.lastCheckedAt ? <time dateTime={upstream.lastCheckedAt}>{t('upstreams.lastCheckedValue', { time: checkedAtFormatter.format(new Date(upstream.lastCheckedAt)) })}</time> : <span>{t('upstreams.neverChecked')}</span>}
+                    </div>
+                    <details className="group">
+                      <summary className="w-fit cursor-pointer rounded-sm text-[12px] focus-visible:outline-2 focus-visible:outline-ring">{t('upstreams.connectionDetails')}</summary>
+                      <div className="mt-2 space-y-1 text-[12px]">
+                        <p>{upstream.has_observations === false ? t('upstreams.successRateUnknown') : t('upstreams.successRateValue', { rate: Math.round((upstream.success_rate ?? 0) * 100) })}</p>
+                        <p>{t('upstreams.successRateHint')}</p>
+                        <p>{upstream.proxy ? t('upstreams.proxyEnabled') : t('upstreams.proxyNotConfigured')}</p>
+                        <p>{!upstream.via ? t('upstreams.viaDirect')
+                          : cascadePending || cascadeError ? t('upstreams.viaUnknown', { peer: upstream.via })
+                          : !cascadeInfo?.enabled ? t('upstreams.viaDisabled', { peer: upstream.via })
+                          : !cascadeInfo.peers.some(peer => peer.name === upstream.via) ? t('upstreams.viaNotConfigured', { peer: upstream.via })
+                          : t('upstreams.viaValue', { peer: upstream.via })}</p>
+                      </div>
+                    </details>
+                    {upstream.id && checkFailures.has(upstream.id) && <p className="text-destructive">{t('upstreams.checkRequestFailedShort')}</p>}
+                  </div>
                 )}
                 renderActions={canWrite ? (upstream) => (
                   <div className="ml-1 flex gap-0.5">
@@ -747,7 +769,7 @@ export default function Upstreams() {
                             size="icon"
                             data-icon-button
                             aria-label={t('upstreams.deleteNamed', { name: upstream.name })}
-                            style={{ color: 'var(--danger-text)' }}
+                            className="text-muted-foreground hover:text-destructive"
                           />
                         }>
                           <Icon name={"delete"} size="sm" />
@@ -762,12 +784,14 @@ export default function Upstreams() {
           </div>
         )}
 
+        <CheckResults open={resultsOpen} onOpenChange={setResultsOpen} records={checkRecords} />
+
         <Dialog open={dialogOpen} onOpenChange={(nextOpen) => { if (!nextOpen && !isSaving) closeDialog() }} modal>
-          <DialogContent style={{ maxWidth: 520 }} finalFocus={true} closeDisabled={isSaving}>
-            <DialogTitle className="pr-10">{editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}</DialogTitle>
+          <DialogContent style={{ maxWidth: 560 }} className="text-[14px] [&_input]:h-[40px] [&_input]:text-[14px] [&_select]:h-[40px] [&_select]:text-[14px] [&_[data-slot=field-label]]:text-[13px] [&_[data-slot=field-description]]:text-[13px] [&_[data-slot=field-description]]:leading-relaxed [&_[data-slot=field-error]]:text-[13px] [&_button]:text-[13px]" finalFocus={true} closeDisabled={isSaving}>
+            <DialogTitle className="pr-10 text-[18px]">{editId ? t('upstreams.editUpstream') : t('upstreams.addUpstream')}</DialogTitle>
             <form onSubmit={handleSubmit} className="space-y-5">
               <fieldset className="space-y-3" disabled={isSaving}>
-                <legend className="mb-3 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+                <legend className="mb-3 text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
                   {t('upstreams.connectionSection')}
                 </legend>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -782,7 +806,7 @@ export default function Upstreams() {
                         <option key={ecosystem.id} value={ecosystem.id}>{ecosystem.label}</option>
                       ))}
                     </NativeSelect>
-                    {(editId ? t('upstreams.ecosystemLockedHint') : undefined) && <FieldDescription>{editId ? t('upstreams.ecosystemLockedHint') : undefined}</FieldDescription>}
+                    <FieldDescription>{editId ? t('upstreams.ecosystemLockedHint') : t('upstreams.ecosystemActivationHint')}</FieldDescription>
                   </Field>
                   <Field>
                     <FieldLabel>{t('upstreams.priority')}</FieldLabel>
@@ -824,7 +848,7 @@ export default function Upstreams() {
                       setForm({ ...form, url: event.target.value })
                       setFieldErrors((current) => ({ ...current, url: undefined }))
                     }}
-                    placeholder="https://pypi.example/simple"
+                    placeholder={form.adapter_type === 'pypi' ? 'https://pypi.example/simple/' : 'https://mirror.example/'}
                     required
                   />
                   {(fieldErrors.url) && <FieldError match>{fieldErrors.url}</FieldError>}
@@ -843,34 +867,24 @@ export default function Upstreams() {
                   />
                   {(fieldErrors.proxy) ? <FieldError match>{fieldErrors.proxy}</FieldError> : (t('upstreams.proxyHint')) ? <FieldDescription>{t('upstreams.proxyHint')}</FieldDescription> : null}
                 </Field>
-                {cascadeInfo?.enabled && cascadeInfo.peers.length > 0 ? (
-                  <Field>
-                    <FieldLabel>{t('upstreams.via')}</FieldLabel>
-                    <NativeSelect
-                      value={form.via ?? ''}
-                      onChange={(event) => setForm({ ...form, via: event.target.value })}
-                    >
-                      <option value="">{t('upstreams.viaDirect')}</option>
-                      {cascadeInfo.peers.map(peer => (
-                        <option key={peer.name} value={peer.name}>
-                          {t('upstreams.viaPeerOption', { name: peer.name, url: peer.url })}
-                        </option>
-                      ))}
-                      {form.via && !cascadeInfo.peers.some(peer => peer.name === form.via) && (
-                        <option value={form.via}>{t('upstreams.viaMissing', { name: form.via })}</option>
-                      )}
-                    </NativeSelect>
-                    {(t('upstreams.viaHint')) && <FieldDescription>{t('upstreams.viaHint')}</FieldDescription>}
-                  </Field>
-                ) : form.via ? (
-                  <Alert variant={"warning"}><AlertDescription>
-                    {t('upstreams.viaNotConfigured', { peer: form.via })}
-                  </AlertDescription></Alert>
-                ) : null}
+                <Field>
+                  <FieldLabel>{t('upstreams.via')}</FieldLabel>
+                  <NativeSelect value={form.via ?? ''} onChange={(event) => setForm({ ...form, via: event.target.value })}>
+                    <option value="">{t('upstreams.viaDirect')}</option>
+                    {!cascadeError && cascadeInfo?.enabled && cascadeInfo.peers.map(peer => <option key={peer.name} value={peer.name}>{t('upstreams.viaPeerOption', { name: peer.name, url: peer.url })}</option>)}
+                    {form.via && (cascadeError || !cascadeInfo?.enabled || !cascadeInfo.peers.some(peer => peer.name === form.via)) && <option value={form.via}>{t('upstreams.viaSaved', { peer: form.via })}</option>}
+                  </NativeSelect>
+                  <FieldDescription>{cascadePending ? t('upstreams.cascadeLoading')
+                    : cascadeError ? t('upstreams.cascadeUnavailable')
+                    : form.via && !cascadeInfo?.enabled ? t('upstreams.viaDisabled', { peer: form.via })
+                    : form.via && !cascadeInfo?.peers.some(peer => peer.name === form.via) ? t('upstreams.viaNotConfigured', { peer: form.via })
+                    : t('upstreams.viaHint')}</FieldDescription>
+                  {cascadeError && <Button type="button" variant="outline" className="w-fit min-h-[36px]" onClick={() => { void refetchCascade() }}>{t('upstreams.refreshStatus')}</Button>}
+                </Field>
               </fieldset>
 
               <fieldset className="space-y-3 border-t border-[var(--border)] pt-4" disabled={isSaving}>
-                <legend className="px-1 text-[12px] font-[600]" style={{ color: 'var(--text)' }}>
+                <legend className="px-1 text-[14px] font-[600]" style={{ color: 'var(--text)' }}>
                   {t('upstreams.healthSection')}
                 </legend>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -895,13 +909,8 @@ export default function Upstreams() {
                         value={form.probe_interval}
                         onChange={(event) => setForm({ ...form, probe_interval: event.target.value })}
                       >
-                        <option value="15s">15s</option>
-                        <option value="30s">30s</option>
-                        <option value="1m">1m</option>
-                        <option value="5m">5m</option>
-                        <option value="10m">10m</option>
-                        <option value="30m">30m</option>
-                        <option value="1h">1h</option>
+                        {probeIntervals.map(interval => <option key={interval} value={interval}>{interval}</option>)}
+                        {!probeIntervals.some(interval => interval === form.probe_interval) && <option value={form.probe_interval}>{form.probe_interval}</option>}
                       </NativeSelect>
                     </Field>
                   )}
@@ -936,7 +945,7 @@ export default function Upstreams() {
 
         <Dialog open={deleteTarget !== null} onOpenChange={(nextOpen) => { if (!nextOpen && !deleteMutation.isPending) closeDeleteDialog() }} modal>
           <DialogContent style={{ maxWidth: 440 }} finalFocus={true} closeDisabled={deleteMutation.isPending}>
-            <DialogTitle className="pr-10">{deleteTarget
+            <DialogTitle className="pr-10 text-[18px]">{deleteTarget
               ? t('upstreams.confirmDeleteNamed', { name: deleteTarget.name })
               : t('upstreams.confirmDelete')}</DialogTitle>
             {deleteTarget && (

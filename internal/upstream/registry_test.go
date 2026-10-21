@@ -95,6 +95,9 @@ func TestRegistryListAndGetReturnRuntimeState(t *testing.T) {
 	if got.ID != record.ID || got.AdapterType != "pypi" || got.Name != "one" || got.URL != "https://one.example" || got.Proxy != "http://proxy.example" || got.Priority != 2 || got.ProbeMode != "passive" || got.ProbeInterval != "45s" || !got.Healthy || got.AvgLatencyMS != 17 || got.SuccessRate != 0.75 || !got.LastCheckedAt.Equal(checkedAt) || got.WorkerRunning {
 		t.Fatalf("runtime=%#v", got)
 	}
+	if !got.HasObservations || got.RuntimeSampleCount != 0 {
+		t.Fatalf("restored probe evidence must survive without inventing runtime samples: %#v", got)
+	}
 	listed := registry.List()
 	if len(listed) != 1 || !reflect.DeepEqual(listed[0], got) {
 		t.Fatalf("list=%#v get=%#v", listed, got)

@@ -948,6 +948,10 @@ export interface DockerBootstrapState {
 export interface AdminUpstream extends UpstreamMutationRequest {
   id: number
   healthy: boolean
+  /** Observation evidence, independent of eligibility for request selection. */
+  has_observations?: boolean
+  /** Outcomes counted by this runtime object; resets on restart/reconfiguration. */
+  runtime_sample_count?: number
   avg_latency_ms: number
   success_rate: number
   last_checked_at: string | null

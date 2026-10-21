@@ -1,4 +1,6 @@
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Info } from 'lucide-react'
 /**
  * Shared upstream display component with heartbeat bars.
  * Used by: Monitor, Dashboard, Upstreams
@@ -21,6 +23,7 @@ export interface UpstreamItem {
   healthy: boolean
   avg_latency_ms: number
   success_rate: number
+  has_observations?: boolean
   url?: string
   proxy?: string
   via?: string
@@ -115,7 +118,7 @@ function normalizeBeats(
   }
 }
 
-function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
+function HeartbeatBar({ upstream, showEmptyLabel = false }: { upstream: UpstreamItem; showEmptyLabel?: boolean }) {
   const { t } = useTranslation()
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
@@ -208,6 +211,11 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
       <span id={instructionsId} className="sr-only">
         {t('monitor.latencyHistoryInstructions')}
       </span>
+      {showEmptyLabel && beats.length === 0 && (
+        <span className="absolute inset-x-0 top-1 text-[12px] text-muted-foreground">
+          {t('monitor.noObservations')}
+        </span>
+      )}
       <div
         className="absolute inset-x-0 bottom-1 grid items-end"
         style={{
@@ -254,7 +262,7 @@ function HeartbeatBar({ upstream }: { upstream: UpstreamItem }) {
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="absolute bottom-full mb-1 px-2 py-0.5 rounded-sm text-[12px] font-mono whitespace-nowrap pointer-events-none z-10"
+          className="absolute bottom-full mb-1 px-2 py-1 rounded-sm text-[13px] font-mono whitespace-nowrap pointer-events-none z-10"
           style={{ background: 'var(--inverse)', color: 'var(--on-inverse)', left: tooltipLeft, transform: tooltipTransform }}
         >
           {activeDetail}
@@ -270,18 +278,24 @@ function UpstreamRow({
   upstream,
   actions,
   metadata,
+  operational = false,
+  historyReady = true,
 }: {
   upstream: UpstreamItem
   actions?: React.ReactNode
   metadata?: React.ReactNode
+  operational?: boolean
+  historyReady?: boolean
 }) {
   const { t } = useTranslation()
   const status = upstreamStatus(upstream)
   const hasActions = actions !== undefined && actions !== null && actions !== false
-  const latency = (upstream.avg_latency_ms || 0) <= 1 ? '--' : `${upstream.avg_latency_ms}ms`
+  const latency = upstream.has_observations === false || (upstream.has_observations === undefined && upstream.avg_latency_ms <= 1)
+    ? '—'
+    : `${upstream.avg_latency_ms} ms`
   const statusIndicator = (
     <span
-      className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-[550]"
+      className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-medium"
       style={{ color: 'var(--text-muted)' }}
     >
       <StatusDot status={status} />
@@ -290,16 +304,34 @@ function UpstreamRow({
   )
   const latencyIndicator = (
     <span
-      className="shrink-0 font-mono text-[12.5px] tabular-nums"
+      className="shrink-0 text-[13px] tabular-nums"
       style={{ color: 'var(--text-muted)' }}
     >
-      {latency}
+      {operational ? t('monitor.averageLatency', { value: latency }) : latency}
     </span>
   )
 
   return (
     <div data-upstream-row data-upstream-status={status} className="min-w-0">
-      {hasActions ? (
+      {operational ? (
+        <>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="min-w-0 flex-1 truncate text-[14px] font-semibold" title={upstream.name}>
+              {upstream.name}
+            </span>
+            {hasActions && <div className="flex shrink-0 items-center">{actions}</div>}
+          </div>
+          <div data-upstream-operational-line className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            {statusIndicator}
+            {latencyIndicator}
+          </div>
+          {metadata !== undefined && metadata !== null && metadata !== false && (
+            <div data-upstream-metadata className="mb-1 min-w-0 text-[13px] leading-relaxed text-muted-foreground">
+              {metadata}
+            </div>
+          )}
+        </>
+      ) : hasActions ? (
         <>
           <div className="flex min-w-0 items-center justify-between gap-2">
             <span
@@ -352,7 +384,7 @@ function UpstreamRow({
           )}
         </>
       )}
-      <HeartbeatBar upstream={upstream} />
+      <HeartbeatBar upstream={upstream} showEmptyLabel={operational && historyReady} />
     </div>
   )
 }
@@ -387,6 +419,7 @@ export function UpstreamGroupedPanel({
     data: latencyResponse,
     isError: isLatencyError,
     isRefetchError: isLatencyRefetchError,
+    isSuccess: isLatencySuccess,
     refetch: refetchLatencies,
   } = useQuery({
     queryKey: ['admin', 'upstreams', 'latencies', '24h'],
@@ -427,9 +460,24 @@ export function UpstreamGroupedPanel({
 
   const isCards = variant === 'cards'
   const showLatencyError = heartbeatUpstreamIDs.length > 0 && (isLatencyError || isLatencyRefetchError)
+  const isOperational = layout === 'adaptive'
+  // An adaptive operator panel stops at two columns, even on large monitors.
+  // Portal tiles retain their existing compact responsive layout.
+  const adaptiveColumns = 'repeat(auto-fit, minmax(min(100%, max(360px, calc((100% - 32px) / 2))), 1fr))'
 
   return (
     <>
+      {isOperational && (
+        <div className="mb-3 flex min-w-0 items-center gap-1 text-[13px] text-muted-foreground">
+          <span>{t('monitor.historyWindow', { count: HEARTBEAT_LIMIT })}</span>
+          <Tooltip>
+            <TooltipTrigger render={<Button variant="ghost" size="icon" className="size-10 shrink-0" aria-label={t('monitor.historyWindow', { count: HEARTBEAT_LIMIT })} />}>
+              <Info className="size-4" aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[min(360px,calc(100vw-32px))]">{t('monitor.historyLegend')}</TooltipContent>
+          </Tooltip>
+        </div>
+      )}
       {showLatencyError && (
         <div
           data-upstream-history-error
@@ -453,8 +501,8 @@ export function UpstreamGroupedPanel({
         data-upstream-panel-layout={layout}
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minColumnWidth}px), 1fr))`,
-          gap: isCards ? 12 : '24px 40px',
+          gridTemplateColumns: isOperational ? adaptiveColumns : `repeat(auto-fit, minmax(min(100%, ${minColumnWidth}px), 1fr))`,
+          gap: isCards ? 12 : '24px 32px',
           minWidth: 0,
           width: '100%',
         }}
@@ -483,23 +531,23 @@ export function UpstreamGroupedPanel({
                 >
                   <h2
                     id={headingId}
-                    className="flex min-w-0 items-center gap-2 text-[12.5px] font-mono font-[600] uppercase tracking-[0.1em]"
+                    className="flex min-w-0 items-center gap-2 text-[13px] font-semibold uppercase tracking-wide"
                     style={{ color: 'var(--text)' }}
                   >
                     {isEcosystemType(adapter) && <EcosystemIcon type={adapter} size={14} useColor decorative />}
                     <span className="min-w-0 truncate">{adapter}</span>
                   </h2>
                   <span className="ml-auto shrink-0 text-[12.5px] font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                    {t('monitor.historySummary', { count: checkCount })} · {t('monitor.healthySummary', { healthy: healthyCount, total: items.length })}
+                    {!isOperational && <>{t('monitor.historySummary', { count: checkCount })} · </>}{t('monitor.healthySummary', { healthy: healthyCount, total: items.length })}
                   </span>
                 </div>
                 <div
                   data-upstream-item-grid={usesAdaptiveItemGrid ? 'auto-fill' : 'stack'}
-                  className={usesAdaptiveItemGrid ? undefined : 'space-y-3'}
+                  className={usesAdaptiveItemGrid ? undefined : 'space-y-5'}
                   style={usesAdaptiveItemGrid ? {
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 350px), 1fr))',
-                    gap: '12px 24px',
+                    gridTemplateColumns: adaptiveColumns,
+                    gap: '20px 32px',
                     minWidth: 0,
                   } : undefined}
                 >
@@ -509,6 +557,8 @@ export function UpstreamGroupedPanel({
                       upstream={u}
                       actions={renderActions?.(u)}
                       metadata={renderMetadata?.(u)}
+                      operational={isOperational}
+                      historyReady={u.id === undefined || upstreams.find(item => item.id === u.id)?.beats !== undefined || isLatencySuccess}
                     />
                   ))}
                 </div>

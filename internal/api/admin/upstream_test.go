@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"depsilo/internal/db"
 	"depsilo/internal/middleware"
@@ -88,7 +89,7 @@ func TestUpstreamHandlerListEnvelopeAndCreateContract(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
 	}
-	if created.ID == 0 || created.AdapterType != "pypi" || created.WorkerRunning || created.LastCheckedAt != nil {
+	if created.ID == 0 || created.AdapterType != "pypi" || created.WorkerRunning || created.LastCheckedAt != nil || created.HasObservations || created.RuntimeSampleCount != 0 {
 		t.Fatalf("created=%#v", created)
 	}
 	if _, ok := registry.Pools()["pypi"].Find(created.ID); !ok {
@@ -105,6 +106,66 @@ func TestUpstreamHandlerListEnvelopeAndCreateContract(t *testing.T) {
 	}
 	if list.Total != 2 || len(list.Items) != 2 {
 		t.Fatalf("list=%#v", list)
+	}
+}
+
+func TestUpstreamHandlerObservationEvidenceLifecycle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	registry, router := upstreamRouterFixtureWithURL(t, server.URL)
+
+	// Routing defaults are exposed unchanged, with explicit evidence fields so
+	// a client does not mistake those defaults for a successful observation.
+	w := performJSON(router, http.MethodGet, "/upstreams", "")
+	var initial struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &initial); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || len(initial.Items) != 1 {
+		t.Fatalf("initial status=%d body=%s", w.Code, w.Body.String())
+	}
+	if item := initial.Items[0]; item["has_observations"] != false || item["runtime_sample_count"] != float64(0) || item["healthy"] != true {
+		t.Fatalf("initial evidence=%#v", item)
+	}
+
+	// Passive traffic is evidence even though it does not set last_checked_at.
+	u := registry.Pools()["pypi"].Snapshot()[0]
+	u.Report(12*time.Millisecond, true)
+	w = performJSON(router, http.MethodGet, "/upstreams", "")
+	var listed upstreamListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || len(listed.Items) != 1 {
+		t.Fatalf("passive status=%d body=%s", w.Code, w.Body.String())
+	}
+	if item := listed.Items[0]; !item.HasObservations || item.RuntimeSampleCount != 1 || item.LastCheckedAt != nil || !item.Healthy {
+		t.Fatalf("passive evidence=%#v", item)
+	}
+
+	w = performJSON(router, http.MethodPost, "/upstreams/1/check", "")
+	var checked checkUpstreamResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &checked); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || !checked.Check.Healthy || !checked.Upstream.HasObservations || checked.Upstream.RuntimeSampleCount != 2 || checked.Upstream.LastCheckedAt == nil {
+		t.Fatalf("probe status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	// Replacing the runtime object restores durable probe evidence, but its
+	// request/probe counter starts from zero rather than claiming lifetime data.
+	body := fmt.Sprintf(`{"adapter_type":"pypi","name":"source-1","url":%q,"proxy":"","priority":2,"probe_mode":"passive","probe_interval":"30m"}`, server.URL)
+	w = performJSON(router, http.MethodPut, "/upstreams/1", body)
+	var updated adminUpstreamResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusOK || !updated.HasObservations || updated.RuntimeSampleCount != 0 || updated.LastCheckedAt == nil || !updated.LastCheckedAt.Equal(*checked.Upstream.LastCheckedAt) {
+		t.Fatalf("restored status=%d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -250,6 +311,9 @@ func TestUpstreamHandlerCheckReturns200ForUnhealthyNetwork(t *testing.T) {
 	}
 	if response.Check.Healthy {
 		t.Fatal("check unexpectedly healthy")
+	}
+	if response.Upstream.Healthy || !response.Upstream.HasObservations || response.Upstream.RuntimeSampleCount != 1 {
+		t.Fatalf("failed probe evidence=%#v", response.Upstream)
 	}
 	if response.Check.Error == nil || *response.Check.Error == "" {
 		t.Fatal("missing network error")
